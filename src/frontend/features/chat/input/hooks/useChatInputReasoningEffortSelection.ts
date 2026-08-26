@@ -8,54 +8,41 @@ import {
 } from '../utils/chatInputReasoning';
 
 type ReasoningEffortOverride = {
-  /** The assistant the pick was made on; a different one starts over. */
-  assistantId: string | null;
+  agentId: string | null;
   reasoningEffort: ChatInputReasoningEffort;
 };
 
 /**
- * The reasoning effort behind the composer gauge and the next message, plus
- * whether the user picked it themselves rather than inheriting it from the
- * assistant. It is chat's own state, not the composer's — painting has no such
- * concept — so it lives here and reaches the overlay as a value.
- *
- * Only the user's pick is state. Everything else is derived on read, which is
- * what keeps the gauge and the next message from ever disagreeing: the model's
- * stops change asynchronously, and a value mirrored into state through an
- * effect would be stale for exactly as long as it takes React to catch up.
+ * Owns the composer's per-turn reasoning selection. Agent configuration is an
+ * inherited fallback only and is never mutated by this state.
  */
 export function useChatInputReasoningEffortSelection(
   reasoningEfforts: readonly ChatInputReasoningEffort[],
-  assistantReasoningEffort: ReasoningEffortOption = CHAT_INPUT_DEFAULT_REASONING_EFFORT,
-  assistantId?: string | null,
+  agentReasoningEffort: ReasoningEffortOption = CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+  agentId?: string | null,
 ) {
   const [override, setOverride] = useState<ReasoningEffortOverride | null>(null);
 
-  // Retire the override during render, not from an effect: a model with no
-  // reasoning stops has nothing to override, and a pick made on one assistant
-  // must not follow the user to the next one.
   let activeOverride = override;
   if (
     activeOverride &&
-    (activeOverride.assistantId !== (assistantId ?? null) || reasoningEfforts.length === 0)
+    (activeOverride.agentId !== (agentId ?? null) || reasoningEfforts.length === 0)
   ) {
     activeOverride = null;
     setOverride(null);
   }
 
   const selectReasoningEffort = useCallback(
-    (nextReasoningEffort: ChatInputReasoningEffort) => {
-      setOverride({ assistantId: assistantId ?? null, reasoningEffort: nextReasoningEffort });
+    (reasoningEffort: ChatInputReasoningEffort) => {
+      setOverride({ agentId: agentId ?? null, reasoningEffort });
     },
-    [assistantId],
+    [agentId],
   );
 
   return {
     isReasoningEffortSelected: activeOverride !== null,
-    // Snapped to what the model actually offers, whichever source it came from:
-    // switching models can drop the stop that was picked.
     reasoningEffort: resolveAvailableChatInputReasoningEffort(
-      activeOverride?.reasoningEffort ?? assistantReasoningEffort,
+      activeOverride?.reasoningEffort ?? agentReasoningEffort,
       reasoningEfforts,
     ),
     selectReasoningEffort,

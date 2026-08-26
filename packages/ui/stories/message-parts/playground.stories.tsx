@@ -13,7 +13,6 @@ const onSourcePress = fn();
 const onFileError = fn();
 
 const fileLabels = {
-  loading: 'Loading attachment',
   openWith: 'Open with',
   unavailable: 'Attachment unavailable',
 };
@@ -163,9 +162,6 @@ export const AllStates: Story = {
                   onError={onFileError}
                   size={104}
                 />
-              </StoryExample>
-              <StoryExample title="Loading">
-                <FilePreview isLoading labels={fileLabels} size={104} />
               </StoryExample>
               <StoryExample title="Unavailable">
                 <FilePreview labels={fileLabels} size={104} />

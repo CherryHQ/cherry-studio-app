@@ -14,10 +14,10 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../useDockMetrics';
 import { SidebarNavRow } from './SidebarNavRow';
-import { SidebarTopicList } from './SidebarTopicList';
+import { SidebarSessionList } from './SidebarSessionList';
 
 /**
- * The sidebar's only scroller: nav rows and the recent topics scroll together
+ * The sidebar's only scroller: nav rows and the recent sessions scroll together
  * under the floating header and footer, which is why the content padding clears
  * both. `ScrollShadow` dissolves rows into the sidebar surface at the top, and
  * the header's blur lives in its `SidebarFade` layer. Children replace the
@@ -58,7 +58,7 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAssistants, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
 
   return (
     <>
@@ -69,11 +69,7 @@ function SidebarBodyDefault() {
           label={t('navigation.library')}
           onPress={openLibrary}
         />
-        <SidebarNavRow
-          icon={BotIcon}
-          label={t('navigation.assistants')}
-          onPress={navigateAssistants}
-        />
+        <SidebarNavRow icon={BotIcon} label={t('navigation.agents')} onPress={navigateAgents} />
         <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
       </View>
 
@@ -91,7 +87,7 @@ function SidebarBodyDefault() {
           <FilterIcon className="size-4 text-muted-foreground" />
         </Pressable>
       </View>
-      <SidebarTopicList />
+      <SidebarSessionList />
     </>
   );
 }

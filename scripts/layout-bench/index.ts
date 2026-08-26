@@ -1,19 +1,9 @@
 /**
- * `pnpm bench:layout` —— 聊天列表布局/跳动的本地基准。
+ * Retired legacy Chat layout benchmark implementation.
  *
- * 形态是「回归基准 + 诊断工具」，不是 CI 门禁：它驱动模拟器跑固定场景，把 app 内探针发出的
- * 轨迹跑一遍交互与布局判据，产出结构化结果、检查点截图与人读摘要。断言默认全绿，已知未修的
- * 问题写进 known-issues.json。
- *
- * 前置条件（缺一不可，脚本会尽量给出可执行的报错）：
- * - dev 构建的 app 已装在目标模拟器上，并已连上 Metro（探针只在 __DEV__ 下发）；
- * - `agent-device` 在 PATH 上；
- * - 目标模拟器唯一在跑，或用 `--udid` / `LAYOUT_BENCH_UDID` 指定。
- *
- * 用法：
- *   pnpm bench:layout
- *   pnpm bench:layout --scenario send-anchor,stream-scroll
- *   pnpm bench:layout --udid <UDID> --out artifacts/layout-bench/baseline
+ * The package command and operational documentation were removed with the legacy Chat seeders.
+ * Keep this source only as historical input for an Agent Session-native replacement; its scenarios
+ * still require the removed `layout-bench-assistant` and must not be executed directly.
  */
 
 import * as fs from 'fs';

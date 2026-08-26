@@ -7,11 +7,11 @@
  *
  * @example
  * // Producer
- * private readonly _onTurnSettled = new Emitter<string>();
- * readonly onTurnSettled: Event<string> = this._onTurnSettled.event;
+ * private readonly _onChanged = new Emitter<string>();
+ * readonly onChanged: Event<string> = this._onChanged.event;
  *
  * // Consumer
- * this.registerDisposable(chatRuntime.onTurnSettled((topicId) => { ... }));
+ * this.registerDisposable(service.onChanged((id) => { ... }));
  */
 
 /**

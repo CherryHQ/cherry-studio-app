@@ -1,9 +1,14 @@
 import { resolveEffectiveEndpoint } from '@cherrystudio/ai-runtime/provider';
+import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { FetchFunction, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import type { PiModelResolution, PiRuntimeDependencies } from '@/backend/ai/agent';
+import type {
+  PiModelResolution,
+  PiRuntimeDependencies,
+  RuntimeUsageContext,
+} from '@/backend/ai/agent';
 import { resolveProviderAiSdkConfig } from '@/backend/ai/provider/config';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
@@ -34,7 +39,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
 
       assertPiModelSupported(provider, model);
-      const { config } = await resolveProviderAiSdkConfig(provider, model, {
+      const { config, credentialReceipt } = await resolveProviderAiSdkConfig(provider, model, {
         fetch: expoFetch as FetchFunction,
         getAuthConfig: (providerId) => providerService.getAuthConfig(providerId),
         resolveApiKey: (providerId, override) =>
@@ -44,6 +49,29 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         throw new Error('Pi Runtime does not support a separate custom endpoint path.');
       }
       const settings = readPiProviderSettings(config.providerSettings);
+      const modelId = model.apiModelId ?? model.modelId;
+      const capturedContext = createAiUsageCaptureContext({
+        credentialReceipt,
+        messageRef: null,
+        modelId,
+        modelName: model.name,
+        pricing: model.pricing,
+        providerId: provider.id,
+        providerName: provider.name,
+        reportedCostCurrency: provider.reportedCostCurrency,
+        source: null,
+        trustProviderReportedCost: provider.apiFeatures.reportsActualCost,
+      });
+      const usageContext: RuntimeUsageContext = {
+        credentialReceipt: capturedContext.credentialReceipt,
+        modelId: capturedContext.modelId,
+        modelName: capturedContext.modelName,
+        pricingSnapshot: capturedContext.pricingSnapshot,
+        providerId: capturedContext.providerId,
+        providerName: capturedContext.providerName,
+        reportedCostCurrency: capturedContext.reportedCostCurrency,
+        trustProviderReportedCost: capturedContext.trustProviderReportedCost,
+      };
 
       return {
         apiKey: settings.apiKey,
@@ -57,7 +85,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
           contextWindow: model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW,
           cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
           headers: mergeHeaders(settings),
-          id: model.apiModelId ?? model.modelId,
+          id: modelId,
           input: ['text'],
           maxTokens: model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS,
           name: model.name,
@@ -66,6 +94,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         },
         supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
         timeoutMs: DEFAULT_PI_TIMEOUT_MS,
+        usageContext,
       };
     },
   };

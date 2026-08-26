@@ -13,7 +13,10 @@
  * static shape cannot drift.
  */
 
+import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk';
 import * as z from 'zod';
+
+import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -212,6 +215,7 @@ export const AgentMessageDeltaSchema = z.union([
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('session.updated'), session: AgentSessionViewSchema }),
   z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
   z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
   z.strictObject({
@@ -255,7 +259,12 @@ export const AgentDeleteSessionInputSchema = z.strictObject({
 export const AgentSubmitMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   parts: z.array(AgentInputPartSchema).min(1),
+  /** Snapshots the composer's selected model while its Agent mutation settles. */
+  modelId: UniqueModelIdSchema.optional(),
+  /** Per-turn only; this value is never persisted back to the Agent. */
+  reasoningEffort: ReasoningEffortOptionSchema.optional(),
 });
+export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
@@ -292,10 +301,9 @@ export interface AgentProtocol {
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 
-  submitMessage(input: {
-    sessionId: string;
-    parts: AgentInputPart[];
-  }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
+  submitMessage(
+    input: AgentSubmitMessageInput,
+  ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
 

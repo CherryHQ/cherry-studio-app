@@ -32,7 +32,7 @@ describe('AiService.generateText AI SDK contract', () => {
   });
 
   test('uses the explicit system prompt and returns text with recorded usage', async () => {
-    const fixture = createContractFixture({ assistantPrompt: 'Assistant-owned prompt.' });
+    const fixture = createContractFixture();
     const languageModel = new MockLanguageModelV3({
       doGenerate: textGenerateResult('Contract title'),
       modelId: fixture.model.modelId,
@@ -41,9 +41,9 @@ describe('AiService.generateText AI SDK contract', () => {
     restoreProvider = installMockProvider({ language: languageModel });
 
     const result = await new AiService(fixture.services).generateText({
-      assistantId: fixture.assistant.id,
       prompt: 'Name this conversation.',
       system: 'Return a short title.',
+      uniqueModelId: fixture.model.id,
     });
 
     expect(projectLanguageCall(languageModel.doGenerateCalls[0])).toMatchSnapshot('prompt call');

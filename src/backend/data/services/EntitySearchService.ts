@@ -2,7 +2,7 @@ import { loggerService } from '@logger';
 import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
-import { assistantTable, topicTable } from '@/backend/data/db/schemas';
+import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory, isDataApiError, toDataApiError } from '@/shared/data/api/errors';
 import {
   ENTITY_SEARCH_MAX_LIMIT_PER_TYPE,
@@ -83,10 +83,10 @@ export class EntitySearchService {
     updatedAtFrom: number | undefined,
   ): Promise<EntitySearchGroup> {
     switch (type) {
-      case 'assistant':
-        return { items: await this.searchAssistants(q, limit, updatedAtFrom), type };
-      case 'topic':
-        return { items: await this.searchTopics(q, limit, updatedAtFrom), type };
+      case 'agent':
+        return { items: await this.searchAgents(q, limit, updatedAtFrom), type };
+      case 'session':
+        return { items: await this.searchSessions(q, limit, updatedAtFrom), type };
       default: {
         const exhaustive: never = type;
         throw new Error(`Unknown entity search type: ${exhaustive}`);
@@ -94,72 +94,71 @@ export class EntitySearchService {
     }
   }
 
-  private async searchAssistants(q: string, limit: number, updatedAtFrom?: number) {
+  private async searchAgents(q: string, limit: number, updatedAtFrom?: number) {
     const pattern = likePattern(q);
-    const conditions: SQL[] = [isNull(assistantTable.deletedAt)];
+    const conditions: SQL[] = [isNull(agentTable.deletedAt)];
     const search = or(
-      sql`${assistantTable.name} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${assistantTable.description} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${agentTable.description} LIKE ${pattern} ESCAPE '\\'`,
     );
     if (search) conditions.push(search);
-    if (updatedAtFrom !== undefined) conditions.push(gte(assistantTable.updatedAt, updatedAtFrom));
+    if (updatedAtFrom !== undefined) conditions.push(gte(agentTable.updatedAt, updatedAtFrom));
     const rows = await this.db
       .select({
-        description: assistantTable.description,
-        emoji: assistantTable.emoji,
-        id: assistantTable.id,
-        name: assistantTable.name,
-        updatedAt: assistantTable.updatedAt,
+        description: agentTable.description,
+        id: agentTable.id,
+        name: agentTable.name,
+        updatedAt: agentTable.updatedAt,
       })
-      .from(assistantTable)
+      .from(agentTable)
       .where(and(...conditions))
-      .orderBy(desc(assistantTable.updatedAt), asc(assistantTable.id))
+      .orderBy(desc(agentTable.updatedAt), asc(agentTable.id))
       .limit(limit);
     return rows.map(
-      (row): Extract<EntitySearchItem, { type: 'assistant' }> => ({
-        emoji: row.emoji,
+      (row): Extract<EntitySearchItem, { type: 'agent' }> => ({
         id: row.id,
         subtitle: row.description || undefined,
-        target: { assistantId: row.id },
+        target: { agentId: row.id },
         title: row.name,
-        type: 'assistant',
+        type: 'agent',
         updatedAt: timestampToISO(row.updatedAt),
       }),
     );
   }
 
-  private async searchTopics(q: string, limit: number, updatedAtFrom?: number) {
+  private async searchSessions(q: string, limit: number, updatedAtFrom?: number) {
     const pattern = likePattern(q);
-    const conditions: SQL[] = [
-      isNull(topicTable.deletedAt),
-      sql`${topicTable.name} LIKE ${pattern} ESCAPE '\\'`,
-    ];
-    if (updatedAtFrom !== undefined) conditions.push(gte(topicTable.updatedAt, updatedAtFrom));
+    const conditions: SQL[] = [sql`${agentSessionTable.title} LIKE ${pattern} ESCAPE '\\'`];
+    if (updatedAtFrom !== undefined) {
+      conditions.push(gte(agentSessionTable.updatedAt, updatedAtFrom));
+    }
     const rows = await this.db
       .select({
-        assistantId: topicTable.assistantId,
+        agentId: agentSessionTable.agentId,
         // Expo SQLite exposes positional raw rows, while sqlite-proxy starts from keyed rows.
         // Alias duplicate `name` columns explicitly so both drivers preserve every value.
-        assistantName: sql<null | string>`${assistantTable.name}`.as('assistant_name'),
-        id: topicTable.id,
-        name: topicTable.name,
-        updatedAt: topicTable.updatedAt,
+        agentName: sql<null | string>`${agentTable.name}`.as('agent_name'),
+        id: agentSessionTable.id,
+        lastActivityAt: agentSessionTable.lastActivityAt,
+        title: agentSessionTable.title,
+        updatedAt: agentSessionTable.updatedAt,
       })
-      .from(topicTable)
+      .from(agentSessionTable)
       .leftJoin(
-        assistantTable,
-        and(eq(topicTable.assistantId, assistantTable.id), isNull(assistantTable.deletedAt)),
+        agentTable,
+        and(eq(agentSessionTable.agentId, agentTable.id), isNull(agentTable.deletedAt)),
       )
       .where(and(...conditions))
-      .orderBy(desc(topicTable.updatedAt), asc(topicTable.id))
+      .orderBy(desc(agentSessionTable.lastActivityAt), asc(agentSessionTable.id))
       .limit(limit);
     return rows.map(
-      (row): Extract<EntitySearchItem, { type: 'topic' }> => ({
+      (row): Extract<EntitySearchItem, { type: 'session' }> => ({
         id: row.id,
-        subtitle: row.assistantName ?? undefined,
-        target: { assistantId: row.assistantId ?? undefined, topicId: row.id },
-        title: row.name,
-        type: 'topic',
+        lastActivityAt: timestampToISO(row.lastActivityAt),
+        subtitle: row.agentName ?? undefined,
+        target: { agentId: row.agentId, sessionId: row.id },
+        title: row.title,
+        type: 'session',
         updatedAt: timestampToISO(row.updatedAt),
       }),
     );

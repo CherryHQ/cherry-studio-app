@@ -6,6 +6,7 @@ import type {
   AssistantMessage,
   Message as PiMessage,
   ToolResultMessage,
+  Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
 import {
@@ -23,7 +24,7 @@ import {
   type PiRuntimeAgentFactory,
 } from '../PiRuntime';
 
-const ERROR_SECRET = 'pi-provider-secret-token';
+const ERROR_SECRET = 'test-key';
 
 type TestAgentContext = {
   emit(event: PiAgentEvent): Promise<void>;
@@ -101,6 +102,20 @@ function createResolution(): PiModelResolution {
     },
     supportsTools: true,
     timeoutMs: 60_000,
+    usageContext: {
+      credentialReceipt: {
+        attribution: 'explicit',
+        id: 'credential-1',
+        masked: 'sk-…test',
+      },
+      modelId: 'mock-model',
+      modelName: 'Mock Model',
+      pricingSnapshot: null,
+      providerId: 'mock-provider',
+      providerName: 'Mock Provider',
+      reportedCostCurrency: null,
+      trustProviderReportedCost: false,
+    },
   };
 }
 
@@ -123,14 +138,21 @@ function arrange(runtime: AgentRuntime, program: TestAgentProgram): RuntimeHolde
   return holder;
 }
 
-function usage(input: number, output: number) {
+function usage(
+  input: number,
+  output: number,
+  details: { cacheRead?: number; cacheWrite?: number; reasoning?: number } = {},
+): PiUsage {
+  const cacheRead = details.cacheRead ?? 0;
+  const cacheWrite = details.cacheWrite ?? 0;
   return {
-    cacheRead: 0,
-    cacheWrite: 0,
+    cacheRead,
+    cacheWrite,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
     input,
     output,
-    totalTokens: input + output,
+    ...(details.reasoning !== undefined ? { reasoning: details.reasoning } : {}),
+    totalTokens: input + cacheRead + cacheWrite + output,
   };
 }
 
@@ -326,6 +348,50 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
 }
 
 describe('PiRuntime mapping', () => {
+  test('surfaces provider errors after redacting resolved credentials', async () => {
+    const runtime = createTestRuntime();
+    arrange(runtime, async (context) => {
+      const failed = assistantMessage({
+        errorMessage: `OpenAI API error (403): access denied for ${ERROR_SECRET}`,
+        stopReason: 'error',
+      });
+      await context.emit({ type: 'turn_end', message: failed, toolResults: [] });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-provider-error')));
+
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      error: {
+        code: 'runtime_error',
+        message: 'OpenAI API error (403): access denied for [REDACTED]',
+        retryable: false,
+      },
+    });
+    await session.close();
+  });
+
+  test('surfaces thrown runtime errors without stack traces', async () => {
+    const runtime = createTestRuntime();
+    arrange(runtime, () => {
+      throw new Error('Provider configuration is unsupported.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-thrown-error')));
+
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      error: {
+        code: 'runtime_error',
+        message: 'Provider configuration is unsupported.',
+        retryable: false,
+      },
+    });
+    await session.close();
+  });
+
   test('maps complete context, Agent options, stream parts, and usage', async () => {
     const runtime = createTestRuntime();
     const holder = arrange(runtime, async (context) => {
@@ -334,7 +400,7 @@ describe('PiRuntime mapping', () => {
         message: assistantMessage({
           content: [],
           stopReason: 'toolUse',
-          usage: usage(2, 1),
+          usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
         }),
         toolResults: [],
       });
@@ -379,7 +445,17 @@ describe('PiRuntime mapping', () => {
     ]);
     expect(events.at(-2)).toEqual({
       type: 'usage',
-      usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+      completedAt: expect.any(Number),
+      context: holder.resolution.usageContext,
+      usage: {
+        cacheReadTokens: 3,
+        cacheWriteTokens: 1,
+        inputTokens: 9,
+        noCacheTokens: 5,
+        outputTokens: 3,
+        reasoningTokens: 1,
+        totalTokens: 12,
+      },
     });
     expect(holder.lastOptions?.initialState).toMatchObject({
       messages: [

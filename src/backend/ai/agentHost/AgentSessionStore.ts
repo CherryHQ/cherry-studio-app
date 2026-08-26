@@ -38,6 +38,12 @@ export interface AgentSessionStore {
   createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
+  /** Renames only when the current title still matches the caller's auto-title snapshot. */
+  autoRenameSession(
+    sessionId: string,
+    expectedTitle: string,
+    title: string,
+  ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
 

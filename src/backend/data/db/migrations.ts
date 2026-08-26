@@ -3,6 +3,7 @@ import m0001 from '../../../../migrations/sqlite-drizzle/0001_mcp-disabled-tools
 import m0002 from '../../../../migrations/sqlite-drizzle/0002_file-entry-mobile-model.sql';
 import m0003 from '../../../../migrations/sqlite-drizzle/0003_retire-oauth-provider-auth.sql';
 import m0004 from '../../../../migrations/sqlite-drizzle/0004_agent-sessions.sql';
+import m0005 from '../../../../migrations/sqlite-drizzle/0005_remove_legacy_chat.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -17,5 +18,6 @@ export const migrations = {
     m0002,
     m0003,
     m0004,
+    m0005,
   },
 };

@@ -1,10 +1,13 @@
 import { useAlert } from '@cherrystudio/ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import type { Model } from '@/shared/data/types/model';
+
+import { refreshAgentQueriesAfterModelRemoval } from '../utils/refreshProviderModelQueries';
 
 /**
  * Removing models from their provider. The list removes by selection rather
@@ -18,11 +21,13 @@ import type { Model } from '@/shared/data/types/model';
 export function useProviderModelRemove() {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const queryClient = useQueryClient();
   const removeModelsMutation = useMutation('DELETE', '/models', {
+    onSuccess: () => refreshAgentQueriesAfterModelRemoval(queryClient),
     refresh: ['/models'],
   });
   const deleteModels = removeModelsMutation.trigger;
-  const [defaultModelId] = usePreference('chat.default_model_id');
+  const [defaultModelId] = usePreference('agent.default_model_id');
 
   const removeModels = useCallback(
     async (models: Model[]) => {

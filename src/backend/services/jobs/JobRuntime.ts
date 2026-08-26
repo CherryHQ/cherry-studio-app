@@ -101,7 +101,7 @@ const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
  * Bounded drain on teardown: long enough for an aborted handler to reject and
  * write one terminal transaction, short enough not to stall a Fast Refresh
  * unmount. Handlers may legitimately ignore the signal, so this can never be
- * an unbounded wait (unlike `ChatRuntime`, whose tasks all honor abort).
+ * an unbounded wait.
  */
 export const DISPOSE_DRAIN_TIMEOUT_MS = 5_000;
 

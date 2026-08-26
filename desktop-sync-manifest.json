@@ -159,6 +159,8 @@
         "src/shared/ai/tool.ts",
         "src/shared/ai/transport/applyApprovalDecisions.ts",
         "src/shared/ai/transport/deferredToolResult.ts",
+        "src/shared/ai/transport/index.ts",
+        "src/shared/ai/transport/stream.ts",
         "src/shared/ai/transport/turnState.ts"
       ],
       "shapeOnlyPorts": [
@@ -169,11 +171,6 @@
         }
       ],
       "mobileExtensions": [
-        {
-          "path": "packages/universal/src/ai/transport/toolApprovals.ts",
-          "keeps": "nothing, there is no desktop counterpart",
-          "adds": "mobile's own approval settlement helpers. Desktop's transport/applyApprovalDecisions.ts was ported here once, stayed barrel-only dead code, and has been deleted with the rest of the unconsumed transport mirrors; the desktop file is an explicit exclusion now"
-        },
         {
           "path": "packages/universal/src/ai/tools/mcpResult.ts",
           "keeps": "desktop's implementation verbatim",

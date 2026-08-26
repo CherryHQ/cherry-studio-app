@@ -7,6 +7,8 @@ const mockInputHeightShared = { value: 122 };
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
 let dockProps: Record<string, unknown> | undefined;
+let mockSessionData: { agentId: string; id: string } | undefined;
+let mockSessionIsLoading: boolean;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   Composer: {
@@ -30,23 +32,27 @@ jest.mock('@/frontend/components/composer', () => ({
 
 jest.mock('expo-router', () => ({
   useIsPreview: () => false,
-  useLocalSearchParams: () => ({ assistantId: 'assistant-1', topicId: 'topic-1' }),
+  useLocalSearchParams: () => ({ agentId: 'agent-1', sessionId: 'session-1' }),
 }));
 
 jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
 
-jest.mock('@/frontend/hooks/chat', () => ({
-  useMessages: () => ({ isLoadingInitial: false, messages: [] }),
-  useTopic: () => ({ data: { id: 'topic-1' }, isError: false, isLoading: false }),
-}));
-
-jest.mock('@/shared/core/logger/LoggerService', () => ({
-  loggerService: { withContext: () => ({ debug: jest.fn() }) },
-}));
-
-jest.mock('@/shared/devBench/layoutBenchProbe', () => ({
-  armLayoutBenchProbe: jest.fn(),
-  LAYOUT_BENCH_ASSISTANT_ID: 'benchmark-assistant',
+jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentApiById: (agentId: string | undefined) => ({
+    agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
+    isLoading: false,
+  }),
+  useAgentMessageHistoryWindow: () => ({
+    isLoadingInitial: false,
+    isLoadingOlder: false,
+    loadOlder: jest.fn(),
+    messages: [],
+    retry: jest.fn(),
+  }),
+  useAgentSession: () => ({
+    data: mockSessionData,
+    isLoading: mockSessionIsLoading,
+  }),
 }));
 
 jest.mock('../input', () => ({
@@ -71,6 +77,8 @@ describe('ChatScreen composer dock wiring', () => {
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
     dockProps = undefined;
+    mockSessionData = { agentId: 'agent-1', id: 'session-1' };
+    mockSessionIsLoading = false;
   });
 
   afterEach(() => {
@@ -92,9 +100,23 @@ describe('ChatScreen composer dock wiring', () => {
       onHeightChange: mockHandleInputHeightChange,
     });
     expect(chatInputProps).toMatchObject({
-      assistantId: 'assistant-1',
+      agentId: 'agent-1',
       dismissKeyboardOnSend: false,
-      topicId: 'topic-1',
+      sessionId: 'session-1',
+    });
+  });
+
+  it('keeps the route Agent while a newly created Session is loading', () => {
+    mockSessionData = undefined;
+    mockSessionIsLoading = true;
+
+    act(() => {
+      renderer = create(<ChatScreen />);
+    });
+
+    expect(chatInputProps).toMatchObject({
+      agentId: 'agent-1',
+      sessionId: 'session-1',
     });
   });
 });

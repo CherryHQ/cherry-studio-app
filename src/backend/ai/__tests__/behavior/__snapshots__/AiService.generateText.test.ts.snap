@@ -57,9 +57,6 @@ exports[`AiService.generateText AI SDK contract uses the explicit system prompt 
       "role": "user",
     },
   ],
-  "providerOptions": {
-    "contract-provider": {},
-  },
 }
 `;
 

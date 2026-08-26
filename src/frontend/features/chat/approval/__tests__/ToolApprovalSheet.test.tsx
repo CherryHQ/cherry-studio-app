@@ -3,8 +3,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
-import { ToolApprovalSheet } from '../ToolApprovalSheet';
+import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

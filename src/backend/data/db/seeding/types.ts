@@ -7,8 +7,6 @@ export type DatabaseSeeder = {
   readonly version: string;
   /** Human-readable description for logging. */
   readonly description: string;
-  /** Bootstrap-only seeders never run after the first successful seeding pass. */
-  readonly executionPolicy?: 'bootstrap-only';
   /** Execute the seed operation. */
   run: (dbService: DbService) => Promise<void>;
 };

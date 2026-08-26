@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
@@ -470,6 +471,10 @@ export class ModelService {
     await this.assertNotUsedAsDefault(id, `delete model ${id}`);
 
     await this.dbService.withWriteTx(async (tx) => {
+      await tx
+        .update(agentTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+        .where(eq(agentTable.modelId, id));
       const rows = await tx
         .delete(userModelTable)
         .where(and(eq(userModelTable.providerId, providerId), eq(userModelTable.modelId, modelId)))
@@ -512,6 +517,12 @@ export class ModelService {
       }
 
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
+        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+          .where(inArray(agentTable.modelId, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx.delete(userModelTable).where(inArray(userModelTable.id, idChunk));
       }
@@ -672,6 +683,12 @@ export class ModelService {
       );
       const removedIds: string[] = [];
       for (const idChunk of chunks(removableIds, sqliteBatchSize)) {
+        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
+        await tx
+          .update(agentTable)
+          .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+          .where(inArray(agentTable.modelId, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         const rows = await tx
           .delete(userModelTable)
@@ -735,7 +752,7 @@ export class ModelService {
 
   private async getUserDefaultModelIds(): Promise<Set<string>> {
     const values = await Promise.all([
-      this.preferenceService.get('chat.default_model_id'),
+      this.preferenceService.get('agent.default_model_id'),
       this.preferenceService.get('feature.paintings.default_model_id'),
       this.preferenceService.get('feature.quick_assistant.model_id'),
       this.preferenceService.get('feature.translate.model_id'),

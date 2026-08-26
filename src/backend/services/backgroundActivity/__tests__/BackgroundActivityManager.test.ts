@@ -70,7 +70,7 @@ describe('BackgroundActivityManager', () => {
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
     const session = manager.startSession({
-      deepLinkUrl: 'cherrystudio://topics?topicId=t-1',
+      deepLinkUrl: 'cherrystudio:///?agentId=agent-1&sessionId=session-1',
       presenter,
       props: makeProps('preparing'),
       tag: 'chat.topic-1',
@@ -82,7 +82,7 @@ describe('BackgroundActivityManager', () => {
         detail: 'preparing',
         logoUri: 'file:///widgets/cherry-studio-logo.png',
       }),
-      'cherrystudio://topics?topicId=t-1',
+      'cherrystudio:///?agentId=agent-1&sessionId=session-1',
     );
     appStateListener?.('inactive');
     appStateListener?.('background');

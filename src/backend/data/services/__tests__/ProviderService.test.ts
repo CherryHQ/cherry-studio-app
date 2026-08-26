@@ -177,7 +177,11 @@ describe('ProviderService', () => {
 
     await service.delete('custom-provider');
 
+    expect(tx.update).toHaveBeenCalledTimes(1);
     expect(tx.delete).toHaveBeenCalledTimes(1);
+    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
   });
 
   test('allows deleting a user clone of a registry provider', async () => {
@@ -420,6 +424,9 @@ function createDeleteTransaction(input: { presetProviderId: string | null; provi
           limit: jest.fn(async () => [{ presetProviderId: input.presetProviderId }]),
         })),
       })),
+    })),
+    update: jest.fn(() => ({
+      set: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
     })),
   };
 }

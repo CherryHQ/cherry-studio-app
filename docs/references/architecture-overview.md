@@ -22,17 +22,17 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/app` | Thin Expo Router route files |
 | `src/bootstrap/preboot` | Ordered global runtime patches required before composition |
 | `src/bootstrap/composition` | Concrete backend graph and workflow wiring |
-| `src/bootstrap/runtime` | Initialization, startup gate, splash, post-ready work, and disposal |
+| `src/bootstrap/runtime` | Initialization, startup gate, splash, host PostReady start, and disposal |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
-| `src/backend/ai` | Pi conversation integration, transitional AI SDK adapters, MCP runtime, tools, and message conversion |
+| `src/backend/ai` | Pi Agent Host, non-conversation AI SDK generation, provider adapters, and MCP runtime |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Workflow module factories, device adapters, external clients, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, runtime projections, sessions, events, and results |
 | `src/shared/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@/shared/data`) |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
-| `packages/universal/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/universal/ai`) |
-| `packages/universal/src/data/types` | Transitional home of the entity types `packages/ai-runtime` still imports (`@cherrystudio/universal/data/types`) |
+| `packages/universal/src/ai` | Portable AI vocabulary still shared with workspace packages (`@cherrystudio/universal/ai`) |
+| `packages/universal/src/data/types` | Transitional home of data types `packages/ai-runtime` still imports (`@cherrystudio/universal/data/types`) |
 | `packages/universal/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/universal/{types,utils}`) |
 
 Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
@@ -76,7 +76,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
 - [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
-- [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): `ChatRuntime`, overlay, and persistence.
+- [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): Agent Protocol observation,
+  transcript windows, live projection, and rendering.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
 - [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
 - [UI Components](./ui-components.md): shared controls and feature-local UI.
@@ -93,12 +94,13 @@ compatibility adapter or generic frontend selector for persistence services.
   hooks, and the frontend `CacheService`.
 - `backend/data` owns an independent backend `CacheService` used by the private service graph.
 - `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.
-- Chat uses one app-owned `ChatRuntime`; route providers only subscribe and project Topic state.
-- `AiService` currently offers transitional Pi and AI SDK streaming paths. Pi is the target sole
-  local conversation engine; the current AI SDK fallback remains until Pi provider and tool coverage
-  is complete.
+- Agent chat uses one app-owned `MobileAgentHost`; the route provider observes Session state through
+  `Backend.agent` and combines it with Data API transcript reads.
+- Pi is the only local Agent Runtime. `AiService` serves explicit-model, non-conversation
+  generation and provider utilities; no parallel Topic/Chat runtime remains.
 - Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
-- App shutdown aborts and awaits Chat before disposing MCP, web search, cache, and SQLite.
+- App shutdown closes Agent Runtime sessions and awaits tracked Agent turns before disposing lower
+  infrastructure.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.
 - `expo-screen-corner-radius` remains the bottom-sheet device adapter; context menus use Expo UI directly.
 

@@ -113,10 +113,7 @@ export function useMcpServerMutations() {
     async (id: string) => {
       await deleteServerRequest({ params: { id } });
       queryClient.removeQueries({ queryKey: queryKeys.mcpServers.detail(id) });
-      void Promise.allSettled([
-        queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.assistants.all() }),
-      ]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
     },
     [deleteServerRequest, queryClient],
   );

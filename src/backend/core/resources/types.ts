@@ -4,12 +4,11 @@
  * Design: docs/references/lifecycle/resource-scope.md.
  *
  * Deliberately thin on domain meaning. `ScopeKind` is the one place a domain
- * word appears, and only as a namespace for ids — nothing here knows what a
- * topic is or how one is deleted.
+ * word appears, and only as a namespace for ids.
  */
 
 /** A domain resource that owns cancellable work. */
-export type ScopeKind = 'topic' | 'assistant' | 'painting';
+export type ScopeKind = 'painting';
 
 export type ResourceScope = {
   readonly kind: ScopeKind;
@@ -30,7 +29,7 @@ export const CANCEL_REASON_DELETED: CancelReason = 'resource-deleted';
 export const CANCEL_REASON_INVALIDATED: CancelReason = 'resource-invalidated';
 
 export type OperationRegistration = {
-  /** Diagnostic identity, e.g. `chat.turn`, `job.painting.generate`. */
+  /** Diagnostic identity, e.g. `job.painting.generate`. */
   readonly kind: string;
   /** Every scope this operation belongs to. Any one of them cleans it up, once. */
   readonly scopes: readonly ResourceScope[];

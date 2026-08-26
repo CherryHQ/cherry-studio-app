@@ -3,6 +3,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import { agentTable, monotonicUpdateTimestamp, userModelTable } from '@/backend/data/db/schemas';
 import type {
   InsertUserProviderRow,
   UserProviderRow,
@@ -537,6 +538,15 @@ export class ProviderService {
       ) {
         throw DataApiErrorFactory.invalidOperation(`Cannot delete preset provider '${providerId}'`);
       }
+
+      const providerModelIds = tx
+        .select({ id: userModelTable.id })
+        .from(userModelTable)
+        .where(eq(userModelTable.providerId, providerId));
+      await tx
+        .update(agentTable)
+        .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
+        .where(inArray(agentTable.modelId, providerModelIds));
 
       const deletedProviders = await tx
         .delete(userProviderTable)

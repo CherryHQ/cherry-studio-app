@@ -7,16 +7,16 @@
 
 import * as z from 'zod';
 
-import type { TopicMessageSearchRole } from '@/shared/data/types/message';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 
 export type EntitySearchTarget =
-  | { type: 'assistant'; target: { assistantId: string } }
-  | { type: 'topic'; target: { topicId: string; assistantId?: string } };
+  | { type: 'agent'; target: { agentId: string } }
+  | { type: 'session'; target: { sessionId: string; agentId: string } };
 
 export type EntitySearchType = EntitySearchTarget['type'];
 export const entitySearchTypes = [
-  'assistant',
-  'topic',
+  'agent',
+  'session',
 ] as const satisfies readonly EntitySearchType[];
 export const EntitySearchTypeSchema = z.enum(entitySearchTypes);
 export const ENTITY_SEARCH_MAX_LIMIT_PER_TYPE = 200;
@@ -34,7 +34,7 @@ export type EntitySearchItem = {
   id: string;
   title: string;
   subtitle?: string;
-  emoji?: string;
+  lastActivityAt?: string;
   updatedAt?: string;
 } & EntitySearchTarget;
 
@@ -63,35 +63,40 @@ export const CONTENT_SEARCH_DEFAULT_LIMIT = 50;
 export const CONTENT_SEARCH_MAX_LIMIT = 1000;
 
 /**
- * Content search reads one source — topic messages over FTS. The former
- * multi-source shell (`sources` array, per-source cursor/filter records)
- * described desktop surfaces mobile never had.
+ * Content search reads one source — Agent Session messages over FTS. The
+ * former multi-source shell described desktop surfaces mobile never had.
  */
 export const ContentSearchQuerySchema = z.strictObject({
   q: z.string().trim().min(1),
   cursor: z.string().min(1).optional(),
-  topicId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
   limit: z.coerce.number().int().positive().max(CONTENT_SEARCH_MAX_LIMIT).optional(),
   createdAtFrom: z.iso.datetime().optional(),
 });
 export type ContentSearchQueryParams = z.input<typeof ContentSearchQuerySchema>;
 export type ContentSearchQuery = z.output<typeof ContentSearchQuerySchema>;
 
-export interface TopicMessageContentSearchItem {
+export const SESSION_MESSAGE_SEARCH_ROLES = [
+  'user',
+  'assistant',
+  'system',
+] as const satisfies readonly AgentMessageView['role'][];
+export type SessionMessageSearchRole = (typeof SESSION_MESSAGE_SEARCH_ROLES)[number];
+
+export interface SessionMessageContentSearchItem {
   messageId: string;
-  topicId: string;
-  topicName: string;
-  topicAssistantId?: string;
-  role?: TopicMessageSearchRole;
-  topicCreatedAt: string;
-  topicUpdatedAt: string;
+  sessionId: string;
+  sessionTitle: string;
+  agentId: string;
+  agentName?: string;
+  role?: SessionMessageSearchRole;
   snippet: string;
   createdAt: string;
 }
 
 export type ContentSearchResponse = {
   query: string;
-  items: TopicMessageContentSearchItem[];
+  items: SessionMessageContentSearchItem[];
   nextCursor?: string;
 };
 

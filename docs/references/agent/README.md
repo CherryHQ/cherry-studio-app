@@ -1,7 +1,7 @@
 # Agent Architecture
 
-Status: **Phase 1–4 backend foundation implemented; frontend integration remains**. Version 1 is
-local-only.
+Status: **Agent and Agent Session backend/frontend integration implemented**. Version 1 is
+local-only and tool-less.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
@@ -23,7 +23,7 @@ Pi Runtime
   backend Mobile Agent Host. It defines Sessions, the local execution target, turns, messages,
   commands, snapshots, and events.
 - The **Mobile Agent Host** owns Agent lookup, Session persistence, message history,
-  execution admission, tool resolution and policy, streaming overlay, and lifecycle recovery.
+  execution admission, streaming overlay, and lifecycle recovery.
 - An **Agent Runtime** receives prepared execution input and emits normalized execution events. It
   does not know Cherry Agent rows, Session rows, SQLite, React, Expo, or application protocol types.
 - **Pi** is the only Host-private local Runtime implementation. The Agent Client sees only the Agent
@@ -51,9 +51,8 @@ app and move to a package when a real independent consumer exists.
 - Route remounts and foreground transitions recover from a Host snapshot.
 - A process death cannot resume a local turn. Startup reconciliation marks unfinished work as
   interrupted.
-- Before each turn, the Host resolves an immutable tool snapshot from the current Agent
-  configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop.
+- The Host supplies `tools: []` for every Version 1 turn. Tool configuration and policy require a
+  separate application-owned contract before Pi's tool loop can be exposed.
 
 Branching is also a future direction with its model already decided: Sessions never branch in
 place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
@@ -65,8 +64,8 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   one application-owned configuration model with per-tool approval policy. Pi must receive only the
   resolved per-turn snapshot and must not read that storage directly.
 - **Provider coverage** for the Pi model layer currently starts with API-key-authenticated OpenAI
-  Responses endpoints. It must expand before the transitional AI SDK chat path can be removed.
-  Provider coverage is an adapter concern, not a reason to retain a second Agent Runtime.
+  Responses endpoints. Expanding it is separate provider work and is not a reason to retain a
+  second conversation runtime.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that structured record into the actual model prompt — selection, formatting, and
@@ -87,11 +86,12 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 The Runtime contract, Fake Runtime, Pi Runtime, Protocol contract, and Mobile Agent Host are
 implemented. The Host binds `local` directly to Pi, consumes the message-centric
-`AgentSessionStore` port, owns the Turn projection, and forwards Agent inference settings into each
-execution. The durable `SqliteAgentSessionStore` is the production store binding over the
+`AgentSessionStore` port, owns the Turn projection, and merges immutable composer model/reasoning
+snapshots over the current Agent definition for each execution. These snapshots are not persisted
+by the Agent Protocol. The durable `SqliteAgentSessionStore` is the production store binding over the
 `agent`/`agent_session`/`agent_session_message` tables. Agent CRUD and static Session/transcript
 reads are exposed through the Data API, and the Host resolves definitions from the `agent` table.
-The table intentionally starts empty: no assistant data is migrated or copied. See
+The table intentionally starts empty: retired Assistant data is not migrated or copied. See
 [Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
@@ -102,21 +102,17 @@ onto the Runtime contract. Agent tool configuration is still deferred, so the Ho
 supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
 file resolver lands.
 
-No frontend currently consumes the Agent Data API or `Backend.agent`. These additive data slices do
-not replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a
-transitional Pi adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defaults to Pi and other
-builds default to AI SDK. That adapter currently handles text/reasoning only and rejects
-tool-bearing requests. It is not the final Pi Agent Runtime described here.
+The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
+own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
+tables, management screens, and Chat Runtime have been removed.
 
-The next integration is the Agent frontend over `Backend.agent`, followed by the application-owned
-tool configuration/resolution model and broader Pi provider coverage. Attachments, the avatar
-workflow, context compaction, and removal of the transitional Chat path remain separate follow-up
-work.
+Application-owned tool configuration/resolution and broader Pi provider coverage remain follow-up
+work. Attachments, the avatar workflow, and context compaction are also separate follow-ups.
 
 ## Related
 
 - [Architecture Overview](../architecture-overview.md) — dependency direction and layer boundaries
 - [Runtime Ownership](../runtime-ownership.md) — app-owned runtime lifetime and background limits
-- [Chat Streaming And Rendering](../chat/streaming-and-rendering.md) — current Chat Runtime behavior
+- [Chat Streaming And Rendering](../chat/streaming-and-rendering.md) — Agent Session observation and rendering
 - [`@cherrystudio/ai-runtime`](../../../packages/ai-runtime/README.md) — portable desktop-aligned AI
   helpers; it is not the local Agent Runtime

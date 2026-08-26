@@ -10,7 +10,7 @@
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "c38a8394475ec01384516446067bb4c436b2faf4174784f998d2c83d6a35cd61"
+        "targetSha256": "00930d0269300cc323e2403b8e8b22cb8f15182084abf6eb6b5d9122251f9d6f"
       },
       {
         "classification": "semantic-port",
@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "a5b747e0188bf4c3f68d4c526aaf167283d614303956c45f05385dafa144c404"
+        "targetSha256": "d55e0cea1b86e3c0f12ad21b12b0f94c63a05a92e2e9515aeef0ee5185035300"
       },
       {
         "classification": "blocked",
@@ -807,7 +807,7 @@
         "source": "src/main/ai/mcp/McpRuntimeService.ts",
         "sourceSha256": "aae2fd272c971b475b47de51d51a68cdc7515daa8a5c80ab2d1ab935f66d46d9",
         "target": "src/backend/ai/mcp/McpRuntimeService.ts",
-        "targetSha256": "9ffe56b1b1c5bb35840c5cde68da2f1d348e3ced3396419428e6086788b816f9"
+        "targetSha256": "69a13e81b2e7c1b6f8d79a266aa9e58afbd2b8d23434d1a08dc6b4a1adbb40af"
       },
       {
         "classification": "blocked",
@@ -837,7 +837,7 @@
         "source": "src/main/ai/mcp/__tests__/McpRuntimeService.test.ts",
         "sourceSha256": "d98b9c43be3c19482f00566f1ece7853917c513509d987837e6e0d2282f3be1d",
         "target": "src/backend/ai/mcp/__tests__/McpRuntimeService.test.ts",
-        "targetSha256": "23960517b2dfbaeee2588d3e6ea177b0bdd3a5a629a089a16ad5ac9a8db7a632"
+        "targetSha256": "b9511f18567edbf366a5d5992593f7b308ee29cf840ad39fda21d237a03074d9"
       },
       {
         "classification": "blocked",
@@ -1399,13 +1399,11 @@
         "sourceSha256": "22c85dd05b20b15f41c0054b59430cc1ee3fe6a8dd9efb4adbf05159cbae99b3"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/messages/fileProcessor.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/messages/fileProcessor.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/messages/fileProcessor.ts",
-        "sourceSha256": "7a8d7b776ba3ca316da73584f6567c678ea1103a1cee90a484a89ebaf03d1852",
-        "target": "src/backend/ai/messages/fileProcessor.ts",
-        "targetSha256": "589ba58710b705c6066c2c0a6017ec39ecdf8d961730c69eec6f0ea575617197"
+        "sourceSha256": "7a8d7b776ba3ca316da73584f6567c678ea1103a1cee90a484a89ebaf03d1852"
       },
       {
         "classification": "semantic-port",
@@ -1666,7 +1664,7 @@
         "source": "src/main/ai/provider/__tests__/config.test.ts",
         "sourceSha256": "db84d5b4a9c61c9693bb4e6b2478051a577a6f2fb899baebc93a392f271078be",
         "target": "src/backend/ai/provider/__tests__/config.test.ts",
-        "targetSha256": "fbd0a04e3a0c415618a983d2c9dee03194c2348c4f2f0973a5215ac163e1a8d4"
+        "targetSha256": "cc2c43679c34d9e8d3ca44f44ef206150964aee954d776f54a68a6898a2ee26b"
       },
       {
         "classification": "semantic-port",
@@ -1780,7 +1778,7 @@
         "source": "src/main/ai/provider/config.ts",
         "sourceSha256": "c68f0aa51b7b888e7d18c5827947f2b358165da3afac9a4f4ee6bdfd568e8d36",
         "target": "src/backend/ai/provider/config.ts",
-        "targetSha256": "81708c7e166191c88e6ab7cb91885260db19bec5b7e744e4ff6bb9242e7cea64"
+        "targetSha256": "2fab904ca4a159e5b2a8743f18682db9cab71ebe3fff8f05048d5ce4d1a5039f"
       },
       {
         "classification": "semantic-port",
@@ -2659,7 +2657,7 @@
         "source": "src/main/ai/provider/custom/tasks/__tests__/imageGenerationJobHandler.test.ts",
         "sourceSha256": "c83f82341b3e016ff6f6c168ee5b47682c7865b7759f3c202a4c02c42451e2b0",
         "target": "src/backend/services/paintings/__tests__/createPaintingsModule.test.ts",
-        "targetSha256": "2e040d13a6de68d25d7bd6e05e142406dc559a12b6da52c6a174fa244a6a3cbc"
+        "targetSha256": "9ca20a2e08815b3bbdf5101c8399f932bc9a73f65c341220a5a75d651cd54874"
       },
       {
         "classification": "semantic-port",
@@ -2668,7 +2666,7 @@
         "source": "src/main/ai/provider/custom/tasks/imageGenerationJobHandler.ts",
         "sourceSha256": "37c92c733c01d4f23963892a72ff4b8969a7f558bc80c4ad276899ae6d649f69",
         "target": "src/backend/services/paintings/createPaintingsModule.ts",
-        "targetSha256": "baa5a4415ef41c0f24168122ca382db34853efc7de0aefb42ed9503a17d216e5"
+        "targetSha256": "456428ecbbdc259453cee5a567f258bd2f9a668971e6af7a8994b15c0220a3b3"
       },
       {
         "classification": "semantic-port",
@@ -2677,7 +2675,7 @@
         "source": "src/main/ai/provider/custom/tasks/jobTypes.ts",
         "sourceSha256": "c675dd72c5097cd645404120abd50cc7321f5cf8d1b03e37dacc3ec6f88c7675",
         "target": "src/shared/contracts/paintings.ts",
-        "targetSha256": "bfa02836c0dd159182041dc7fcb9c91146cd807bf6c4459c4cddcadcf5349ab8"
+        "targetSha256": "2121fff6038cc66cc6565b95452a147ac575bb68992aab824cf396fd715074a6"
       },
       {
         "classification": "semantic-port",
@@ -2834,7 +2832,7 @@
         "source": "src/main/ai/runtime/aiSdk/Agent.ts",
         "sourceSha256": "7c0024a4f7f8985c8a60f759d8af3e7337d9fcc38d2a1fe0b7b129f199e02fc3",
         "target": "src/backend/ai/runtime/aiSdk/Agent.ts",
-        "targetSha256": "96e3632ecc5d80c17593c10b90e5301df896bb4937a6e7e1cf2a8c1ad8cbb5f8"
+        "targetSha256": "c58bc1a5c8ae6a8440a84a54016ed11548219a4a8495d4217cbf87c3bd7c929b"
       },
       {
         "classification": "semantic-port",
@@ -2919,26 +2917,18 @@
         "targetSha256": "84cfa52e5751ea6165a34584cba2af54952bd9c837f82d33472eb83dcea79ffc"
       },
       {
-        "classification": "semantic-port",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/runtime/aiSdk/observers/__tests__/usage.test.ts"
-        ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/runtime/aiSdk/observers/__tests__/usage.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/runtime/aiSdk/observers/__tests__/usage.test.ts",
-        "sourceSha256": "f501914da2b1ad84a45d4236c5c7ad7a36a5b45167ab8f7fc9fe0abde2bb2466",
-        "target": "packages/ai-runtime/src/runtime/aiSdk/observers/__tests__/usage.test.ts",
-        "targetSha256": "d6aa87a4b8a02c57b9a03f93f7753f1185f22c9a98b21b95ddbf907c1eafa3b4"
+        "sourceSha256": "f501914da2b1ad84a45d4236c5c7ad7a36a5b45167ab8f7fc9fe0abde2bb2466"
       },
       {
-        "classification": "semantic-port",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/runtime/aiSdk/observers/__tests__/usage.test.ts"
-        ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/runtime/aiSdk/observers/usage.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/runtime/aiSdk/observers/usage.ts",
-        "sourceSha256": "251026843041739b05be47a286672939bd62fd37276ea1ed4dd897e93a693942",
-        "target": "packages/ai-runtime/src/runtime/aiSdk/observers/usage.ts",
-        "targetSha256": "8e9796bdf787d18e604a4d74f6483951ad8dc68f4929c5638171dc0519ef7b39"
+        "sourceSha256": "251026843041739b05be47a286672939bd62fd37276ea1ed4dd897e93a693942"
       },
       {
         "classification": "blocked",
@@ -2965,7 +2955,7 @@
         "source": "src/main/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
         "sourceSha256": "be731212fa494976f697112939c61ceaa8b5d66a66c330ec755b727bd5596939",
         "target": "src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
-        "targetSha256": "15b7d7eefdfc4c41a51039a4e5029658e249b589904ba5474191acd122097d60"
+        "targetSha256": "539c43b980859a5268d27150c27acef8900ac932d90f44d774dc62d5fb6366fe"
       },
       {
         "classification": "semantic-port",
@@ -3028,7 +3018,7 @@
         "source": "src/main/ai/runtime/aiSdk/params/buildAgentParams.ts",
         "sourceSha256": "fb3df0bf6f17740fc7637b4609fdaabf6956e44e66ab7777325ce8512b3e6846",
         "target": "src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts",
-        "targetSha256": "ef835b7af96f283aded1976e22437d3649c9d11b8f477f7d5fefc750fb9a4037"
+        "targetSha256": "e15777a60a042afc9bc806d93bced9b0f443f21fe2e2009c3ab152bbaf94cc97"
       },
       {
         "classification": "blocked",
@@ -3046,7 +3036,7 @@
         "source": "src/main/ai/runtime/aiSdk/params/capabilities.ts",
         "sourceSha256": "8e692bf9f00ccf1c001e1104e44613aa4a0efcdf0240b25599c8a8756c30d70a",
         "target": "packages/ai-runtime/src/runtime/aiSdk/params/capabilities.ts",
-        "targetSha256": "2cc37e04489ff2ade324ed5296df96f7a699c2131b4e22277b89bc5f73c72851"
+        "targetSha256": "24b027b6b306cf863c61cc81209f04cfaad42e9189b1b5bdb316d489d6d18982"
       },
       {
         "classification": "blocked",
@@ -3763,15 +3753,11 @@
         "sourceSha256": "8396e2e4fc838d1b55ee0ee226fbd7b12f3e7b8acab893c31655886bfb1b2c70"
       },
       {
-        "classification": "semantic-port",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
-        ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/streamManager/MessageRuntimeTimingCollector.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/streamManager/MessageRuntimeTimingCollector.ts",
-        "sourceSha256": "a1fa4234177a8778f8c0b37a57cf8176db6df114c7c5c6c24620542f1dbe6c12",
-        "target": "packages/ai-runtime/src/streamManager/MessageRuntimeTimingCollector.ts",
-        "targetSha256": "381704806e625255bf8b534d2ca9826faf06510e37567cc2c1a433c251c6ff50"
+        "sourceSha256": "a1fa4234177a8778f8c0b37a57cf8176db6df114c7c5c6c24620542f1dbe6c12"
       },
       {
         "classification": "blocked",
@@ -3797,15 +3783,13 @@
         "sourceSha256": "cb82e002901d7beec617e68a27419c208a0defe6ef4d52e02e0987d0d5102b0c"
       },
       {
-        "classification": "semantic-port",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
+          "desktop:src/main/ai/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
         ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts",
-        "sourceSha256": "b2805976b5d79133703c79065eb3d397959ae1972ea2021fa2d25c3cd88ee1bc",
-        "target": "packages/ai-runtime/src/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts",
-        "targetSha256": "d3078ebdbd6fa649c2c227b7b3362c3c5e7a8b2d3382197838f12f1d337c5128"
+        "sourceSha256": "b2805976b5d79133703c79065eb3d397959ae1972ea2021fa2d25c3cd88ee1bc"
       },
       {
         "classification": "explicit-exclusion",
@@ -3815,15 +3799,13 @@
         "sourceSha256": "13b09174fa02b97716f8ab9200f06dcf6ba8e214299545e82cbbcc05d968dd12"
       },
       {
-        "classification": "semantic-port",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
+          "desktop:src/main/ai/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
         ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/streamManager/__tests__/withReasoningTimingMetadata.test.ts",
-        "sourceSha256": "edace0942e939391413f171bf4d23d6b2843a023da02eb961a4295fecb65147c",
-        "target": "packages/ai-runtime/src/streamManager/__tests__/withReasoningTimingMetadata.test.ts",
-        "targetSha256": "5b827790e77966a50c4cf2f5611c9bb7236f47a094bef9e79efe0961f469825e"
+        "sourceSha256": "edace0942e939391413f171bf4d23d6b2843a023da02eb961a4295fecb65147c"
       },
       {
         "classification": "blocked",
@@ -4152,15 +4134,11 @@
         "sourceSha256": "19ef30f6285bf8ac327d6ea0d02edf230812b8209b841be8c29d1ffb086c3fcf"
       },
       {
-        "classification": "semantic-port",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
-        ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/streamManager/withReasoningTimingMetadata.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/streamManager/withReasoningTimingMetadata.ts",
-        "sourceSha256": "cfa48478df0276cfc778e948e46d4e3de4da5292e526c77107cc96cdacf6978c",
-        "target": "packages/ai-runtime/src/streamManager/withReasoningTimingMetadata.ts",
-        "targetSha256": "620dfffd7348e5d4fff4aae816c7c0ab395ba34c00b923564f99e7e869d24ac8"
+        "sourceSha256": "cfa48478df0276cfc778e948e46d4e3de4da5292e526c77107cc96cdacf6978c"
       },
       {
         "classification": "blocked",
@@ -4301,22 +4279,18 @@
         "sourceSha256": "c9267bd0aaf1ee36da542c3d1b761933a8523962e063fdc6199a9b6e2b34fcf5"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
-        "sourceSha256": "cc200bae36acb0b9de5557ac11456de29f2a70e7b7279b111aeab5c9ec9bbba1",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
-        "targetSha256": "dab9f75455cff03a78e53bbe713a3ae6ac1aed7735a0ce1227bbbdd64151e679"
+        "sourceSha256": "cc200bae36acb0b9de5557ac11456de29f2a70e7b7279b111aeab5c9ec9bbba1"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
-        "sourceSha256": "59c7c86e9a0782d6ad54ea11ad48d10d9ddbe4ca245697e8700feeea540e90ed",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
-        "targetSha256": "3087b0f2d2a66f380da27ee2317d89bd8f6636e0257c225987e78791329e41e5"
+        "sourceSha256": "59c7c86e9a0782d6ad54ea11ad48d10d9ddbe4ca245697e8700feeea540e90ed"
       },
       {
         "classification": "blocked",
@@ -4382,35 +4356,29 @@
         "sourceSha256": "bb3769b9137e03b7b74344d0e85232ae9760b92d7eecc18d2c7747e5fe9fef2c"
       },
       {
-        "classification": "semantic-port",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts"
+          "desktop:src/main/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts"
         ],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
-        "sourceSha256": "f78d7d32eaa2dd5fa38a9b739ac7f91e0c42871d0b71bd4fe0503a3a91ad8340",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
-        "targetSha256": "eb0dccc89271ca5ce4e228d6db276212e972ee653ce73b02edeaab5d18f5948a"
+        "sourceSha256": "f78d7d32eaa2dd5fa38a9b739ac7f91e0c42871d0b71bd4fe0503a3a91ad8340"
       },
       {
-        "classification": "semantic-port",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
+          "desktop:src/main/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
         ],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
-        "sourceSha256": "d03f7fb40cca5ebca853905f07facc00d6f56d13d586e145b8500c87e556438c",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
-        "targetSha256": "fc3b076e70b09c4606f0502424cbc20627b668c96081e4dbeb749a5b6654f8d4"
+        "sourceSha256": "d03f7fb40cca5ebca853905f07facc00d6f56d13d586e145b8500c87e556438c"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
-        "sourceSha256": "f4ea6288e9a3ff469d1911bf3ae5b5d959048d1e9987dcd0ab8f8d9f1ae2ca35",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
-        "targetSha256": "41ec78dc3da17804acf2cd31c50012dd46ab1b8bda6965cfb43ef65367946afb"
+        "sourceSha256": "f4ea6288e9a3ff469d1911bf3ae5b5d959048d1e9987dcd0ab8f8d9f1ae2ca35"
       },
       {
         "classification": "semantic-port",
@@ -4764,13 +4732,11 @@
         "sourceSha256": "79825f6fa6a5b06581503ada8fe4ca059ee45dbb0c5ba1946de5328609ea936e"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/tools/webLookup.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "classification": "explicit-exclusion",
+        "evidence": ["desktop:src/main/ai/tools/webLookup.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/main/ai/tools/webLookup.ts",
-        "sourceSha256": "9ae0a49c63aff5f457b9df2a6e1ee80c7352ca4d6b0345a43228f1dce7e8ddaa",
-        "target": "src/backend/ai/tools/webLookup.ts",
-        "targetSha256": "feb1abdfaa09d4e9ee7ea7ef679653d63a05e1a05906d41acd3000938e0abbdc"
+        "sourceSha256": "9ae0a49c63aff5f457b9df2a6e1ee80c7352ca4d6b0345a43228f1dce7e8ddaa"
       },
       {
         "classification": "semantic-port",
@@ -4806,7 +4772,7 @@
         "source": "src/main/ai/types/requests.ts",
         "sourceSha256": "4dfa1bf844e93713ed355f6fc3f8b64249277bff95bafa3450065ff9e719187a",
         "target": "packages/ai-runtime/src/types/requests.ts",
-        "targetSha256": "4bec5fb950b5b1f75b9ade42126555fbd08be8e595396585a53f827d9c2aadb2"
+        "targetSha256": "bd1679c7337d3133cf6c9add9e11c1aab0b0d813f59fa045746da32c9413b428"
       },
       {
         "classification": "semantic-port",
@@ -4815,7 +4781,7 @@
         "source": "src/main/ai/utils/__tests__/anthropicHeaders.test.ts",
         "sourceSha256": "6a4914e49460f1e9bfd6ceba0e451851079f0bc5ea459089cfbb0fe001854c9d",
         "target": "packages/ai-runtime/src/utils/__tests__/anthropicHeaders.test.ts",
-        "targetSha256": "21acc456525939f6c977c301a14b3a0e64159313cea7556e12f94f90be500ae9"
+        "targetSha256": "4945801b4b12cb1d65ff80bf3c467e1c1ef072307f1779251aa324316dbb6a60"
       },
       {
         "classification": "semantic-port",
@@ -4865,7 +4831,7 @@
         "source": "src/main/ai/utils/__tests__/modelParameters.test.ts",
         "sourceSha256": "ff06e0bce11dd6d06b55b897485c806cb5554ca71c3feb78784986fa5fd193d0",
         "target": "packages/ai-runtime/src/utils/__tests__/modelParameters.test.ts",
-        "targetSha256": "abc13a0641a3d6ecfc1da7a39cceacb3ab572df5d6c2dbb1258cdad78bfec920"
+        "targetSha256": "a7c5e66fc2a5ca336fcb2dfe1ff505e0a8932521e7130b0ff3729edea36e4675"
       },
       {
         "classification": "semantic-port",
@@ -4910,7 +4876,7 @@
         "source": "src/main/ai/utils/__tests__/websearch.test.ts",
         "sourceSha256": "e120f950ac5a787c2bacdcd202e76200231584e547f875f6880faadc9e31631a",
         "target": "packages/ai-runtime/src/utils/__tests__/websearch.test.ts",
-        "targetSha256": "a91e737879e85d6d52103b6907d0e5a988cbc7b114013d4628809ebdf25d3494"
+        "targetSha256": "c96bc07663c36859f8b5f8e2ad9558dc9e1bc8ada7a36e57ff886be6fc1b9958"
       },
       {
         "classification": "blocked",
@@ -5055,7 +5021,7 @@
         "source": "src/main/ai/utils/websearch.ts",
         "sourceSha256": "802c4c32c9e4fc745fcaa5cde6c51b58ce1cf4fbe3b1369fb88af5020d59f0db",
         "target": "packages/ai-runtime/src/utils/websearch.ts",
-        "targetSha256": "d4872b1f8df82e14aecc5594526f78e97d7a246c7d097e6b9529c16cf66bcb36"
+        "targetSha256": "2431203f34250e13be7ef9de36be70bd5a0bd100b7e87644a2e14feaadf9587d"
       }
     ],
     "repository": "https://github.com/CherryHQ/cherry-studio.git",
@@ -5079,7 +5045,7 @@
         "source": "src/backend/ai/README.md",
         "sourceSha256": "cd729d4624b906e0215330f5dd4233c36245552c68aed897df163fdf5e31bf68",
         "target": "src/backend/ai/README.md",
-        "targetSha256": "e253d398305d1d7de7a5f847c292a1e2bb595ae6e3835dfa476e53091bcd7ba9"
+        "targetSha256": "d99b35bb2c40aed66bf41aa95cf35e6188ac1d9f35ee028cc76057776512a514"
       },
       {
         "classification": "semantic-port",
@@ -5096,7 +5062,7 @@
         "source": "src/backend/ai/__tests__/_harness/contracts.ts",
         "sourceSha256": "01cafeb98e62325cbc0b92bb4e189ce66283ad17104c2ba1f7326f3f9465b6ad",
         "target": "src/backend/ai/__tests__/_harness/contracts.ts",
-        "targetSha256": "01cafeb98e62325cbc0b92bb4e189ce66283ad17104c2ba1f7326f3f9465b6ad"
+        "targetSha256": "d3e4836d4040bd6e890719eb4aa0a1a7bd419a530f512b0e4c8f909769595605"
       },
       {
         "classification": "mobile-extension",
@@ -5114,7 +5080,7 @@
         "source": "src/backend/ai/__tests__/_harness/services.ts",
         "sourceSha256": "e47026f29130b1827c46979f751cec32eb6faad122ff85f9cb6f6048ca2bf186",
         "target": "src/backend/ai/__tests__/_harness/services.ts",
-        "targetSha256": "21587802d018139404c574331b387c7464b32b622376e275e270f80321a7ed59"
+        "targetSha256": "fe5697971397e01274e81ae337c0505279c91c0d2199b2d1698cce591515041b"
       },
       {
         "classification": "mobile-extension",
@@ -5141,34 +5107,28 @@
         "source": "src/backend/ai/__tests__/behavior/AiService.generateText.test.ts",
         "sourceSha256": "a2c968c315a11c9967129169397e09a85b23fc4947115743be4c078b1488a9c9",
         "target": "src/backend/ai/__tests__/behavior/AiService.generateText.test.ts",
-        "targetSha256": "a2c968c315a11c9967129169397e09a85b23fc4947115743be4c078b1488a9c9"
+        "targetSha256": "24b0aa1fcbada6d6215d782d662a8b7aeaf72d844ed6453b277cfae0873e9280"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/__tests__/behavior/AiService.streamText.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/behavior/AiService.streamText.test.ts",
-        "sourceSha256": "ed578fd0d56be423c1eee65b42f66c7d0c7a74124aeb8401de46a35a75a73044",
-        "target": "src/backend/ai/__tests__/behavior/AiService.streamText.test.ts",
-        "targetSha256": "ed578fd0d56be423c1eee65b42f66c7d0c7a74124aeb8401de46a35a75a73044"
+        "sourceSha256": "ed578fd0d56be423c1eee65b42f66c7d0c7a74124aeb8401de46a35a75a73044"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/__tests__/behavior/AiService.termination.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/behavior/AiService.termination.test.ts",
-        "sourceSha256": "5fab1e6ede915251406ba3ba087a9728848cabc6422dda6e933ea144dfd131c9",
-        "target": "src/backend/ai/__tests__/behavior/AiService.termination.test.ts",
-        "targetSha256": "5fab1e6ede915251406ba3ba087a9728848cabc6422dda6e933ea144dfd131c9"
+        "sourceSha256": "5fab1e6ede915251406ba3ba087a9728848cabc6422dda6e933ea144dfd131c9"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/__tests__/behavior/AiService.tools.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/behavior/AiService.tools.test.ts",
-        "sourceSha256": "d9435d9a96b45860c984b2667bcaeb976a2a7b51d7a3ed3adba0258c2a8fa102",
-        "target": "src/backend/ai/__tests__/behavior/AiService.tools.test.ts",
-        "targetSha256": "0c19d3d793294505ebb36365f7c9f4a8f4bac659e9dde97bdafe2a34718663b3"
+        "sourceSha256": "d9435d9a96b45860c984b2667bcaeb976a2a7b51d7a3ed3adba0258c2a8fa102"
       },
       {
         "classification": "mobile-extension",
@@ -5177,7 +5137,7 @@
         "source": "src/backend/ai/__tests__/behavior/README.md",
         "sourceSha256": "3a3a58c81e705dce610905327ca9cfff7576fdbe0595ac0cf5ae8d7d7e9f6724",
         "target": "src/backend/ai/__tests__/behavior/README.md",
-        "targetSha256": "3a3a58c81e705dce610905327ca9cfff7576fdbe0595ac0cf5ae8d7d7e9f6724"
+        "targetSha256": "2bcb6e40f1443df81c0d73a2696efa4655d755ba12fad711d17ea6d1f5f34e0e"
       },
       {
         "classification": "mobile-extension",
@@ -5210,29 +5170,25 @@
         "source": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.generateText.test.ts.snap",
         "sourceSha256": "dac7884212be2e121a19173f6f73d7b2bf9a61f537f5394e298445042c938368",
         "target": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.generateText.test.ts.snap",
-        "targetSha256": "dac7884212be2e121a19173f6f73d7b2bf9a61f537f5394e298445042c938368"
+        "targetSha256": "f018cc6cec6b2ac165819421ef23e52f3d23d836c9ad83baefe401bdf5b27821"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/__tests__/behavior/__snapshots__/AiService.streamText.test.ts.snap"
         ],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.streamText.test.ts.snap",
-        "sourceSha256": "04eb57e0f02d0ec579c7c8c4101db532903345270bbdb0e5ce9fab1f6a6b70c2",
-        "target": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.streamText.test.ts.snap",
-        "targetSha256": "04eb57e0f02d0ec579c7c8c4101db532903345270bbdb0e5ce9fab1f6a6b70c2"
+        "sourceSha256": "04eb57e0f02d0ec579c7c8c4101db532903345270bbdb0e5ce9fab1f6a6b70c2"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/__tests__/behavior/__snapshots__/AiService.tools.test.ts.snap"
         ],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.tools.test.ts.snap",
-        "sourceSha256": "c12721679270f854063389f11a1df3709da5d687a9859b670bdb30f4a7b1bbee",
-        "target": "src/backend/ai/__tests__/behavior/__snapshots__/AiService.tools.test.ts.snap",
-        "targetSha256": "c12721679270f854063389f11a1df3709da5d687a9859b670bdb30f4a7b1bbee"
+        "sourceSha256": "c12721679270f854063389f11a1df3709da5d687a9859b670bdb30f4a7b1bbee"
       },
       {
         "classification": "semantic-port",
@@ -5243,15 +5199,11 @@
         "sourceSha256": "c6c7a7ff51b1c2b773b1d0655bd9a8c4e44b8e7e0a90bf791466e3a9b346dacf"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/tools/__tests__/toolApprovalSdkContract.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/__tests__/toolApprovalSdkContract.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/__tests__/toolApprovalSdkContract.test.ts",
-        "sourceSha256": "166dedfc9558c0d7408143f790b7162bcd4479c6bff483eb1e1841cd31a2da92",
-        "target": "packages/ai-runtime/src/tools/__tests__/toolApprovalSdkContract.test.ts",
-        "targetSha256": "f872df9fa1562d78ae7bf3248c25ab26fea28863dbceaaa5c426b8f47f9bf531"
+        "sourceSha256": "166dedfc9558c0d7408143f790b7162bcd4479c6bff483eb1e1841cd31a2da92"
       },
       {
         "classification": "semantic-port",
@@ -5294,15 +5246,11 @@
         "sourceSha256": "23960517b2dfbaeee2588d3e6ea177b0bdd3a5a629a089a16ad5ac9a8db7a632"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/mcp/__tests__/resolveAssistantMcpServers.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/mcp/__tests__/resolveAssistantMcpServers.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/mcp/__tests__/resolveAssistantMcpServers.test.ts",
-        "sourceSha256": "2daa9ad7c5c60f773b29255eae51da7143b43732f0dddb8a3e3c57048bf9e051",
-        "target": "packages/ai-runtime/src/mcp/__tests__/resolveAssistantMcpServers.test.ts",
-        "targetSha256": "2daa9ad7c5c60f773b29255eae51da7143b43732f0dddb8a3e3c57048bf9e051"
+        "sourceSha256": "2daa9ad7c5c60f773b29255eae51da7143b43732f0dddb8a3e3c57048bf9e051"
       },
       {
         "classification": "mobile-extension",
@@ -5323,15 +5271,11 @@
         "targetSha256": "19423ef3a56414096bea293109316272ca66de4b0f19004a61f853f6a4c3f5d7"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/mcp/__tests__/resolveAssistantMcpServers.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/mcp/resolveAssistantMcpServers.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/mcp/resolveAssistantMcpServers.ts",
-        "sourceSha256": "17c1ca29792d260cf6f84bdab9d7e02e19b9f9f8745f53a73da0cb9e16ee325f",
-        "target": "packages/ai-runtime/src/mcp/resolveAssistantMcpServers.ts",
-        "targetSha256": "17c1ca29792d260cf6f84bdab9d7e02e19b9f9f8745f53a73da0cb9e16ee325f"
+        "sourceSha256": "17c1ca29792d260cf6f84bdab9d7e02e19b9f9f8745f53a73da0cb9e16ee325f"
       },
       {
         "classification": "semantic-port",
@@ -5344,13 +5288,11 @@
         "sourceSha256": "e5045f7875e33836edd487a5ad2a894ffd51a4fba274811b8b467043134d99af"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/messages/__tests__/attachmentRouting.test.ts"],
-        "reason": "Mobile Expo attachment routing remains backend-owned; unused UI message conversion was removed.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/messages/__tests__/messageConverter.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/messages/__tests__/messageConverter.test.ts",
-        "sourceSha256": "fee6b282ed1241b3f81ec1c1674c15d6399226c4be631f099ad2dc9fec8fecfe",
-        "target": "src/backend/ai/messages/__tests__/attachmentRouting.test.ts",
-        "targetSha256": "a1fd9d61d6419c58c289dafbd5451206df3d99aa028d1e9d48bebc79d58b348b"
+        "sourceSha256": "fee6b282ed1241b3f81ec1c1674c15d6399226c4be631f099ad2dc9fec8fecfe"
       },
       {
         "classification": "semantic-port",
@@ -5361,10 +5303,9 @@
         "sourceSha256": "d97192c932a2dd0ffd58a6e91d57e740b6e82ea425ce0dbdd9309ca5cd74a90d"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/messages/fileProcessor.ts",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/messages/fileProcessor.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/messages/fileProcessor.ts",
         "sourceSha256": "589ba58710b705c6066c2c0a6017ec39ecdf8d961730c69eec6f0ea575617197"
       },
@@ -5379,13 +5320,11 @@
         "sourceSha256": "8dd88ae14f0e773ad5811b3aef16b042a2c3a0e354591481ab5495d7f10f9d68"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/messages/__tests__/attachmentRouting.test.ts"],
-        "reason": "Mobile Expo attachment routing remains backend-owned; unused UI message conversion was removed.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/messages/messageConverter.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/messages/messageConverter.ts",
-        "sourceSha256": "d501647194edcdce6c6dd57b48ab5ad8ea9172ecb52efc513c1dd38125a8356b",
-        "target": "src/backend/ai/messages/attachmentRouting.ts",
-        "targetSha256": "30964db02821ca1581439921164c91c4ff0bed6075e04f82b5a64cb2e045ac36"
+        "sourceSha256": "d501647194edcdce6c6dd57b48ab5ad8ea9172ecb52efc513c1dd38125a8356b"
       },
       {
         "classification": "semantic-port",
@@ -5427,7 +5366,7 @@
         "source": "src/backend/ai/provider/__tests__/listModels.test.ts",
         "sourceSha256": "6ba1556f8f68b13334b9df6911d1e79e464d5a8053e024c3756a35364d2b791c",
         "target": "src/backend/ai/provider/__tests__/listModels.test.ts",
-        "targetSha256": "935fb46264fe8e01553163411aa6faa9c6db2ef8684cc5d100a0934c5d4bc241"
+        "targetSha256": "1859abca29b4cbdf317fbe18cff6b00706d1fe7e284c8eb7bc605cef3e05336f"
       },
       {
         "classification": "mobile-extension",
@@ -5571,7 +5510,7 @@
         "source": "src/backend/ai/provider/listModels.ts",
         "sourceSha256": "cb0a1d1a055e899a9c063ab07659460a2cc3b45dec1bfc2123b3f8e30b4b1392",
         "target": "src/backend/ai/provider/listModels.ts",
-        "targetSha256": "15f3c834fbd3f51561844a3a91ba68b26b2dfb4d75bd18ebbcf877e5b27bbaf8"
+        "targetSha256": "996602e5677a7b7bb1dccad7d1544db1a373a6c832806dd1ab4a744d6ecf4d21"
       },
       {
         "classification": "semantic-port",
@@ -5604,7 +5543,7 @@
         "source": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
         "sourceSha256": "4fd1716689a1f593e5f21dcf05ad2de89541089219a658e45a974b1ae6e5ea11",
         "target": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
-        "targetSha256": "1e0effb7549513c863872f1dbe1337dfe4e175b6e1e30ea836c818e4da64c73a"
+        "targetSha256": "72ba69d745cc918cc55044c0f66e7970f0975afab6138542ce68270a8abd5dd8"
       },
       {
         "classification": "semantic-port",
@@ -5675,22 +5614,16 @@
         "sourceSha256": "84cfa52e5751ea6165a34584cba2af54952bd9c837f82d33472eb83dcea79ffc"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/runtime/aiSdk/observers/__tests__/usage.test.ts",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/runtime/aiSdk/observers/__tests__/usage.test.ts"
-        ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/observers/__tests__/usage.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/runtime/aiSdk/observers/__tests__/usage.test.ts",
         "sourceSha256": "d6aa87a4b8a02c57b9a03f93f7753f1185f22c9a98b21b95ddbf907c1eafa3b4"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/runtime/aiSdk/observers/usage.ts",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/runtime/aiSdk/observers/__tests__/usage.test.ts"
-        ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/observers/usage.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/runtime/aiSdk/observers/usage.ts",
         "sourceSha256": "8e9796bdf787d18e604a4d74f6483951ad8dc68f4929c5638171dc0519ef7b39"
       },
@@ -5967,162 +5900,120 @@
         "sourceSha256": "e0524857542cbb47e2da6ff9b1d3ec562c588836952b2c8b62c23252338bb663"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/ChatRuntime.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/ChatRuntime.ts",
-        "sourceSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315",
-        "target": "src/backend/ai/streamManager/ChatRuntime.ts",
-        "targetSha256": "db0f95c709d3636020c454c9b6d5f0f762cca2d0b5d6fecbdad39055d06bfd82"
+        "sourceSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/ChatRuntimeDependencies.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/ChatRuntimeDependencies.ts",
-        "sourceSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069",
-        "target": "src/backend/ai/streamManager/ChatRuntimeDependencies.ts",
-        "targetSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069"
+        "sourceSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/chatRuntimeMessages.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/IdleTimeoutController.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/IdleTimeoutController.ts",
-        "sourceSha256": "df80a1c259c7f4bb4f0ef229028f8ade832a53395f51ea4079ea0075aa271a1a",
-        "target": "packages/ai-runtime/src/streamManager/IdleTimeoutController.ts",
-        "targetSha256": "df80a1c259c7f4bb4f0ef229028f8ade832a53395f51ea4079ea0075aa271a1a"
+        "sourceSha256": "df80a1c259c7f4bb4f0ef229028f8ade832a53395f51ea4079ea0075aa271a1a"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/streamManager/MessageRuntimeTimingCollector.ts",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
-        ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/MessageRuntimeTimingCollector.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/MessageRuntimeTimingCollector.ts",
         "sourceSha256": "381704806e625255bf8b534d2ca9826faf06510e37567cc2c1a433c251c6ff50"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts",
-        "sourceSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125",
-        "target": "src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts",
-        "targetSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125"
+        "sourceSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
+          "mobile:src/backend/ai/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts"
         ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/__tests__/MessageRuntimeTimingCollector.test.ts",
         "sourceSha256": "d3078ebdbd6fa649c2c227b7b3362c3c5e7a8b2d3382197838f12f1d337c5128"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/chatRuntimeMessages.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/__tests__/chatRuntimeMessages.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/__tests__/chatRuntimeMessages.test.ts",
-        "sourceSha256": "f9fcc0357961b2f62b70945b13824900c6999c33783ec5a940ec5957f60e834d",
-        "target": "packages/ai-runtime/src/streamManager/__tests__/chatRuntimeMessages.test.ts",
-        "targetSha256": "c36a0371c5d3a88b61698ec6dd4c2159f0bd45fd10993905db68a34db575d771"
+        "sourceSha256": "f9fcc0357961b2f62b70945b13824900c6999c33783ec5a940ec5957f60e834d"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/__tests__/topicNaming.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/__tests__/topicNaming.test.ts",
-        "sourceSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0",
-        "target": "src/backend/ai/streamManager/__tests__/topicNaming.test.ts",
-        "targetSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0"
+        "sourceSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withIdleTimeout.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/__tests__/withIdleTimeout.test.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/__tests__/withIdleTimeout.test.ts",
-        "sourceSha256": "b54ddf482d124d0ab56fb0a8f540f340867e7957b7887ce48f204ead424e8a68",
-        "target": "packages/ai-runtime/src/streamManager/__tests__/withIdleTimeout.test.ts",
-        "targetSha256": "937d4389978a003defc77540e52f7afa3f36eabaea2096f4ac867ed548da98ab"
+        "sourceSha256": "b54ddf482d124d0ab56fb0a8f540f340867e7957b7887ce48f204ead424e8a68"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/streamManager/__tests__/withReasoningTimingMetadata.test.ts",
+        "classification": "explicit-exclusion",
         "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
+          "mobile:src/backend/ai/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
         ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/__tests__/withReasoningTimingMetadata.test.ts",
         "sourceSha256": "63bbd214ba0ce3aaa6c4c57740d06b1f4fb0041574d784cbb4104fc201640823"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/chatRuntimeMessages.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/chatRuntimeMessages.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/chatRuntimeMessages.ts",
-        "sourceSha256": "08827dd148529a9a605bedc746ecb55ee6f01d9d4edbcb0066e523b6c2dd3c1c",
-        "target": "packages/ai-runtime/src/streamManager/chatRuntimeMessages.ts",
-        "targetSha256": "08827dd148529a9a605bedc746ecb55ee6f01d9d4edbcb0066e523b6c2dd3c1c"
+        "sourceSha256": "08827dd148529a9a605bedc746ecb55ee6f01d9d4edbcb0066e523b6c2dd3c1c"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/topicNaming.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/topicNaming.ts",
-        "sourceSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba",
-        "target": "src/backend/ai/streamManager/topicNaming.ts",
-        "targetSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba"
+        "sourceSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withIdleTimeout.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/withIdleTimeout.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/withIdleTimeout.ts",
-        "sourceSha256": "5db7d4ed1ab66d2e4d2cbabf45d38d6f02775f4a72818f54dc54d849bd986581",
-        "target": "packages/ai-runtime/src/streamManager/withIdleTimeout.ts",
-        "targetSha256": "5db7d4ed1ab66d2e4d2cbabf45d38d6f02775f4a72818f54dc54d849bd986581"
+        "sourceSha256": "5db7d4ed1ab66d2e4d2cbabf45d38d6f02775f4a72818f54dc54d849bd986581"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/streamManager/withReasoningTimingMetadata.ts",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/streamManager/__tests__/withReasoningTimingMetadata.test.ts"
-        ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/streamManager/withReasoningTimingMetadata.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/streamManager/withReasoningTimingMetadata.ts",
         "sourceSha256": "11ccc92ec29c651e2d2147c7e04e82b4a9103fffd060adc128c3a85e0f2a75b1"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/ToolResolver.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/ToolResolver.ts",
-        "sourceSha256": "ba05c1895d703be861e6d3ece6c167ee7d900012efef79df9187d26412ad8120",
-        "target": "src/backend/ai/tools/ToolResolver.ts",
-        "targetSha256": "52198c68ce74a6f91854fdc58329c9d840fa34b6df04c2d8adcd5ed11f05c62e"
+        "sourceSha256": "ba05c1895d703be861e6d3ece6c167ee7d900012efef79df9187d26412ad8120"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/__tests__/ToolResolver.test.ts",
-        "sourceSha256": "8006629e28399668b43215745cd48e9bea4eb13023e976722bc8c135026718aa",
-        "target": "src/backend/ai/tools/__tests__/ToolResolver.test.ts",
-        "targetSha256": "2810f9fda48dc2e0890d4a97ab15d5eaec8862e28c05f906e2bf3d13c2272af6"
+        "sourceSha256": "8006629e28399668b43215745cd48e9bea4eb13023e976722bc8c135026718aa"
       },
       {
         "classification": "semantic-port",
@@ -6155,124 +6046,103 @@
         "sourceSha256": "cd965ddd66791da4626ff7a6177d27136684e1cea650623e697672726fa93ce6"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
         "sourceSha256": "b94954cf8512dfd7d38c000e85bcf2d70310ec03f2530ae474b31435f1ea298d"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
         "sourceSha256": "0842572ed0f9fb75226046fe76a142b57a1734edc4a45aabea6fecd54a169d9d"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts"
         ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
         "sourceSha256": "488f41761382a3dc9b96199036e36da07f54d3d6e123469359cb3ea87ab823a4"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/calendarTools.test.ts"
         ],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/calendarTools.test.ts",
-        "sourceSha256": "7ff141948c05abc93293eb94460773804e3abe806d586710d20a01c0889ec12c",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/calendarTools.test.ts",
-        "targetSha256": "7ff141948c05abc93293eb94460773804e3abe806d586710d20a01c0889ec12c"
+        "sourceSha256": "7ff141948c05abc93293eb94460773804e3abe806d586710d20a01c0889ec12c"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/locationHealthTools.test.ts"
         ],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/locationHealthTools.test.ts",
-        "sourceSha256": "77901a12e77398275daa6410689dff8b2680e3309ad57ac86ed8156945fd99ca",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/locationHealthTools.test.ts",
-        "targetSha256": "77901a12e77398275daa6410689dff8b2680e3309ad57ac86ed8156945fd99ca"
+        "sourceSha256": "77901a12e77398275daa6410689dff8b2680e3309ad57ac86ed8156945fd99ca"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
+        "classification": "explicit-exclusion",
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
         ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
         "sourceSha256": "5e79d4674bf677abbe5461c06900d8b8de7ebb9a616cddc7d7aa555710e47af4"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/calendarTools.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/calendarTools.ts",
-        "sourceSha256": "616b17a406fc36c0cd4d0c81e99b3687ce95a3b9054f95daf91d88686cf7f965",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/calendarTools.ts",
-        "targetSha256": "616b17a406fc36c0cd4d0c81e99b3687ce95a3b9054f95daf91d88686cf7f965"
+        "sourceSha256": "616b17a406fc36c0cd4d0c81e99b3687ce95a3b9054f95daf91d88686cf7f965"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/deviceToolSupport.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/deviceToolSupport.ts",
-        "sourceSha256": "41311a209148d7666255c28db07453291f3451fda6d93a4548146012e5f7519d",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/deviceToolSupport.ts",
-        "targetSha256": "634db3369722d70dc62606db32492414e0eea6af741680ea26ff7d81a8726ef4"
+        "sourceSha256": "41311a209148d7666255c28db07453291f3451fda6d93a4548146012e5f7519d"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/healthTools.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/healthTools.ts",
-        "sourceSha256": "49bf52945fdb752f034258ee1b399fe8335b46b7ce9e43c47c0e0da8ad4a51b6",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/healthTools.ts",
-        "targetSha256": "49bf52945fdb752f034258ee1b399fe8335b46b7ce9e43c47c0e0da8ad4a51b6"
+        "sourceSha256": "49bf52945fdb752f034258ee1b399fe8335b46b7ce9e43c47c0e0da8ad4a51b6"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/locationTools.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/locationTools.ts",
-        "sourceSha256": "5613dae9ef9fd7a95a1ff4aa49e40930b957f73c14c070e30e9ee237ed7794f3",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/locationTools.ts",
-        "targetSha256": "5613dae9ef9fd7a95a1ff4aa49e40930b957f73c14c070e30e9ee237ed7794f3"
+        "sourceSha256": "5613dae9ef9fd7a95a1ff4aa49e40930b957f73c14c070e30e9ee237ed7794f3"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/outputSchemas.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/outputSchemas.ts",
-        "sourceSha256": "f6d1e126d45c8b26bbee23f21472cac8365a32f3b8ff408aee692cae83784a8f",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/outputSchemas.ts",
-        "targetSha256": "f6d1e126d45c8b26bbee23f21472cac8365a32f3b8ff408aee692cae83784a8f"
+        "sourceSha256": "f6d1e126d45c8b26bbee23f21472cac8365a32f3b8ff408aee692cae83784a8f"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
         "sourceSha256": "f415ab01683779cad91436b7f11cd605887c7a9668a33eaca92124a022898fa1"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/toolNames.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/toolNames.ts",
-        "sourceSha256": "f19057aa4f8859600cdb4abc7398902fe0ae5d05ccf12761d2afb46170fa035b",
-        "target": "src/backend/ai/tools/adapters/aiSdk/builtin/toolNames.ts",
-        "targetSha256": "f19057aa4f8859600cdb4abc7398902fe0ae5d05ccf12761d2afb46170fa035b"
+        "sourceSha256": "f19057aa4f8859600cdb4abc7398902fe0ae5d05ccf12761d2afb46170fa035b"
       },
       {
         "classification": "semantic-port",
@@ -6406,66 +6276,51 @@
         "sourceSha256": "d40f69e14c6640d84abe19632de446a7e7d6cae1fd15fa93e8b7dcb3ed8bde67"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": [
-          "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
-        ],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/types.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/adapters/aiSdk/types.ts",
-        "sourceSha256": "aa38a6610c89355f1fcd29573048bbbebd98a4bed20ef355fcbdab8333783447",
-        "target": "src/backend/ai/tools/types.ts",
-        "targetSha256": "c765b6240979937572ddc52138cf6c2c32baa9e3b31f8479b7b7c292d3a1e749"
+        "sourceSha256": "aa38a6610c89355f1fcd29573048bbbebd98a4bed20ef355fcbdab8333783447"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/device/calendar.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/device/calendar.ts",
-        "sourceSha256": "33acddd0f7356ace7acbea331dbee810031d0b41d48fb1b24858e17c6619764e",
-        "target": "src/backend/ai/tools/device/calendar.ts",
-        "targetSha256": "33acddd0f7356ace7acbea331dbee810031d0b41d48fb1b24858e17c6619764e"
+        "sourceSha256": "33acddd0f7356ace7acbea331dbee810031d0b41d48fb1b24858e17c6619764e"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/device/health.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/device/health.ts",
-        "sourceSha256": "c6143530989c79fd3302315eb23d1ed9946fa713962d7b3c57d785ab6212565e",
-        "target": "src/backend/ai/tools/device/health.ts",
-        "targetSha256": "c6143530989c79fd3302315eb23d1ed9946fa713962d7b3c57d785ab6212565e"
+        "sourceSha256": "c6143530989c79fd3302315eb23d1ed9946fa713962d7b3c57d785ab6212565e"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/device/location.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/device/location.ts",
-        "sourceSha256": "f68346a8714d50d6f9cc83d6950d72431e7746d448af8dc6ee29eb504090384c",
-        "target": "src/backend/ai/tools/device/location.ts",
-        "targetSha256": "f68346a8714d50d6f9cc83d6950d72431e7746d448af8dc6ee29eb504090384c"
+        "sourceSha256": "f68346a8714d50d6f9cc83d6950d72431e7746d448af8dc6ee29eb504090384c"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/device/utils.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/device/utils.ts",
-        "sourceSha256": "e4389ff810844e5c2a3a9b914a22a0f0d3190144a42d0940d6d3ef78b19dfee4",
-        "target": "src/backend/ai/tools/device/utils.ts",
-        "targetSha256": "e4389ff810844e5c2a3a9b914a22a0f0d3190144a42d0940d6d3ef78b19dfee4"
+        "sourceSha256": "e4389ff810844e5c2a3a9b914a22a0f0d3190144a42d0940d6d3ef78b19dfee4"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/ai/tools/index.ts"],
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/index.ts",
-        "sourceSha256": "05f044c0f6afcd388b038fb2882de1855c0f53428f12ea6c97f4c9d4a78ea90d",
-        "target": "src/backend/ai/tools/index.ts",
-        "targetSha256": "a0bf916077e32d2de28005108ee03a424c7cefd2078601c8eaf4e8bd63f47e6a"
+        "sourceSha256": "05f044c0f6afcd388b038fb2882de1855c0f53428f12ea6c97f4c9d4a78ea90d"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/webLookup.ts",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/tools/webLookup.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Legacy Assistant/Topic AI SDK Chat behavior was retired after Agent Sessions became the only mobile conversation path.",
         "source": "src/backend/ai/tools/webLookup.ts",
         "sourceSha256": "feb1abdfaa09d4e9ee7ea7ef679653d63a05e1a05906d41acd3000938e0abbdc"
       },
@@ -6592,7 +6447,7 @@
         "source": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
         "sourceSha256": "26ac323f68b02a4fa5b0468b016c23b1b047ca563e2b1e7fb9d340a2a225f7bb",
         "target": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
-        "targetSha256": "66c937e745d51ffb60219de3be41f33031e359c53c1597497ae1d12ac40919c5"
+        "targetSha256": "3c0d9a1ced8085aea84e98ed8d421fd93152290a20a71605610026b45c71ed41"
       },
       {
         "classification": "semantic-port",
@@ -6786,6 +6641,13 @@
     },
     {
       "classification": "mobile-extension",
+      "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/openaiImageUrlPatch.test.ts"],
+      "reason": "Package-owned portable behavior has no one-to-one reviewed desktop source.",
+      "target": "packages/ai-runtime/src/provider/__tests__/openaiImageUrlPatch.test.ts",
+      "targetSha256": "08981aae6a162ea46452e6df247d2285e1fc00c6d6d5ccef0f07a5127130b392"
+    },
+    {
+      "classification": "mobile-extension",
       "evidence": ["mobile:packages/ai-runtime/src/provider/diagnostics.ts"],
       "reason": "Portable package support code has no one-to-one desktop source and is covered by package tests.",
       "target": "packages/ai-runtime/src/provider/diagnostics.ts",
@@ -6812,7 +6674,7 @@
       "evidence": ["mobile:packages/ai-runtime/src/runtime/index.ts"],
       "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
       "target": "packages/ai-runtime/src/runtime/index.ts",
-      "targetSha256": "ec69a598b1cf0b587c64f4c2e8c9517d2252a864ae21636210c512b6652d075c"
+      "targetSha256": "478282c1c870adae3021de3e69e152f6763790eecaf4f0fbfcb03d2e8696e5a7"
     },
     {
       "classification": "mobile-extension",
@@ -6830,7 +6692,7 @@
       ],
       "reason": "Package public tools barrel has no one-to-one desktop source file.",
       "target": "packages/ai-runtime/src/tools/index.ts",
-      "targetSha256": "428f4b6513b80a69dd042ea2dd92704f053e93b55d853be9077d660bd1cdf21f"
+      "targetSha256": "9a6b04455cfd70e1a8023c794edf61d03074721094c3035d43207ea2fd32f594"
     },
     {
       "classification": "mobile-extension",
@@ -6857,10 +6719,201 @@
   "backendOwned": [
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/provider/VertexAuthClient.ts"],
-      "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
-      "target": "src/backend/ai/provider/VertexAuthClient.ts",
-      "targetSha256": "6d814814a034a43febdcde53a7bdfcdaa0f6f1fa7bdb6e11bb554e558ed31d9a"
+      "evidence": ["mobile:src/backend/ai/agent/__tests__/_runtimeConformance.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/__tests__/_runtimeConformance.ts",
+      "targetSha256": "a6adf76a04fbb0830b5f7e5bac523b02175f5c3e517580b6a3b49697755e380a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/__tests__/FakeRuntime.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/__tests__/FakeRuntime.test.ts",
+      "targetSha256": "7fd78413c04bf23b7d84d12cc45325f95c0f1acb3c49e81bf04615f8559ab812"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/FakeRuntime.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/FakeRuntime.ts",
+      "targetSha256": "023417cee0b968b06b01e96cbdcfbd95093b7d58f33927769872d713112fe465"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/index.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/index.ts",
+      "targetSha256": "8a879ba71eadf53ba3236b8663beae0f07addcd3985d042736e0579f6ad4b5f8"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/pi/__tests__/PiRuntime.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/pi/__tests__/PiRuntime.test.ts",
+      "targetSha256": "e3eef66b2a3f47f132c77e76c0ce341e855d80d3f375ae7d31e62b4acd94c5e5"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/pi/modelMessages.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/pi/modelMessages.ts",
+      "targetSha256": "4469b55b417988115e4a8fa2c7968197bef70ff5ed2863a8d6c22d36b4d9079a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/pi/PiRuntime.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/pi/PiRuntime.ts",
+      "targetSha256": "bbf131a80fb2231cc0825ca26f0e7f0516c3de9cddc767864f020b0c40cca256"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/RuntimeEventChannel.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/RuntimeEventChannel.ts",
+      "targetSha256": "6f8ac48f299e2a6d7649f6f2f5db26c100178ca07955b2a110288ac20a4c5f85"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/types.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/types.ts",
+      "targetSha256": "7fd8657fbc0af78d62f5037381df937f043ff481ce0bcd8084e03011433812d8"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": [
+        "mobile:src/backend/ai/agentHost/__tests__/agentDefinitions.integration.test.ts"
+      ],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/agentDefinitions.integration.test.ts",
+      "targetSha256": "e50cdbaf510ed17bd46e1f5db05a1cd28235d6c3849eebabbc2a879a6ae44577"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionNaming.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/AgentSessionNaming.test.ts",
+      "targetSha256": "6bd5d3a598360867d79c12ee69a3f4870e3167ea54c2023a175abbc456e8b43a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionStore.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/AgentSessionStore.test.ts",
+      "targetSha256": "9b45d1ea03c1df5aedd2fc268e3e155aa2759565ce3481c6265d6b10151378c3"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionUsageRecorder.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/AgentSessionUsageRecorder.test.ts",
+      "targetSha256": "b7f704c6cc098e2502b2a8fc52626e0ca061a6b92968f2e7bc4e3e262335b3f8"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/mapping.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/mapping.test.ts",
+      "targetSha256": "3b18520358f920380dc92f2bc54f595a06880346e8a89fe37fc0192d2f34e233"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/MobileAgentHost.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/__tests__/MobileAgentHost.test.ts",
+      "targetSha256": "1a7fc6431601ec12895c2614f9e990a8c39159812b8f96d4bde0f8b5baed977c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/agentDefinitions.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/agentDefinitions.ts",
+      "targetSha256": "bf1cfd880fb3e47bf707cfd2d88b4f3b6a02d3281dda4c0fbcf11c26f066b2a8"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionNaming.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/AgentSessionNaming.ts",
+      "targetSha256": "7a97046ec37e5d0de54a967bbec0d9630455c5fa849d049d1fc41f275ef348f3"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/AgentSessionStore.ts",
+      "targetSha256": "157a181d2364d7133e16887714fdc88e68cf11e98ae464b147a3b8eeec43404c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionUsageRecorder.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/AgentSessionUsageRecorder.ts",
+      "targetSha256": "a3bebba1bf8d926940c8a7df60b0348d8b70ddba46ea95cdb91ea5b24badd609"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/InMemoryAgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/InMemoryAgentSessionStore.ts",
+      "targetSha256": "b768ea950d88f35d392726a47d12e51d44c004fc6a37cecfc672300e6f7d4479"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/mapping.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/mapping.ts",
+      "targetSha256": "2d285c99a57b952964dd182b80f5664b68a880b0471fa798b09b1f598cde1016"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/MobileAgentHost.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/MobileAgentHost.ts",
+      "targetSha256": "b61ab85457d6e208945ca680f3384dcda2d33deba5510c7939d016df249dc8c7"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/piModelResolver.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/piModelResolver.ts",
+      "targetSha256": "c6f1d0a0c3b2471a9d11c18c7689f25f7ba3a945a198605402834372388f01a3"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agentHost/SqliteAgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agentHost/SqliteAgentSessionStore.ts",
+      "targetSha256": "9eb6d827991c2cd0d9cf781c9c153cd04a6e27f8b958200c7de98d49e6d26000"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/devBench/benchModel.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/devBench/benchModel.ts",
+      "targetSha256": "8feb48888a49df7aa3f2cc91a217b8b696c70fb9b5342aa6854e3d51345297b2"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/devBench/benchRequest.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/devBench/benchRequest.ts",
+      "targetSha256": "5a71ec2afe511cf5e97d30d9addc03c6222c176e424a7695ea1838479d8c91b0"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/devBench/fixtures.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/devBench/fixtures.ts",
+      "targetSha256": "7936e5ef6bc12706aa554b2080ec4bd987034d2c9f59cff11e9c6f70efdc1df6"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/devBench/installBenchMockProvider.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/devBench/installBenchMockProvider.ts",
+      "targetSha256": "090ab3880d2b16cf9594fc4e5b860bdee1d556970062b83aa15cfe727041e1f5"
     },
     {
       "classification": "mobile-extension",
@@ -6871,10 +6924,17 @@
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
-      "reason": "Mobile logging adapts portable tool diagnostics without introducing an app dependency.",
-      "target": "src/backend/ai/tools/toolRuntimeDiagnostics.ts",
-      "targetSha256": "85275cf470c2e054baecb6755217e9bb404402f180d6423cf5944b68621aa26a"
+      "evidence": ["mobile:src/backend/ai/provider/VertexAuthClient.ts"],
+      "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
+      "target": "src/backend/ai/provider/VertexAuthClient.ts",
+      "targetSha256": "6d814814a034a43febdcde53a7bdfcdaa0f6f1fa7bdb6e11bb554e558ed31d9a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/runtime/pi/__tests__/piReactNativePatches.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/runtime/pi/__tests__/piReactNativePatches.test.ts",
+      "targetSha256": "593b7ab0d1d26a8d4736432fcaf50150551fc29afdb3a607485c8f9231fe63c6"
     }
   ]
 }

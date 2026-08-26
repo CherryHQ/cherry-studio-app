@@ -154,32 +154,4 @@ describe('McpServerService', () => {
     });
     await expect(service.delete('missing')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
-
-  it('takes assistant associations down with the deleted server', async () => {
-    const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Linked' });
-    insertAssistant(sqlite, 'assistant-1');
-    sqlite
-      .prepare(
-        `INSERT INTO assistant_mcp_server (
-          assistant_id, mcp_server_id, created_at, updated_at
-        ) VALUES ('assistant-1', ?, 1, 1)`,
-      )
-      .run(server.id);
-
-    await service.delete(server.id);
-
-    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM assistant_mcp_server').get()).toEqual({
-      count: 0,
-    });
-    await expect(service.getById(server.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  });
 });
-
-function insertAssistant(database: DatabaseSync, id: string) {
-  database
-    .prepare(
-      `INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
-       VALUES (?, 'Assistant', 'x', '{}', 'a0', 1, 1)`,
-    )
-    .run(id);
-}

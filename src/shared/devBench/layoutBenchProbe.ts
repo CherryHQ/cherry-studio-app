@@ -9,10 +9,7 @@
  * 为什么默认关闭：`onScroll` 按 `scrollEventThrottle={16}` 每帧一条，正常开发时会把
  * Metro 控制台淹掉。所以 arm 必须由「只有跑基准时才会发生的事」触发，而不是任何 UI 开关。
  *
- * 触发点是 harness 自己的入口——它带着 `LAYOUT_BENCH_ASSISTANT_ID` 深链接进聊天屏，日常
- * 开发一次都不会命中。**不能**再像早先那样由假模型在构造时 arm：假模型直到 `streamText`
- * 才被构造，而入场动画的装填与开火发生在那之前（这一轮把发布挪到了落库之前，首轮的
- * arm/launch 因此全部落在 arm 之前，判据对第一条消息完全失明）。
+ * 探针只在布局基准的假模型被创建时 arm，日常开发不会命中。
  *
  * 载荷刻意压成一行 JSON 而不是走 logger 的结构化参数：harness 用固定前缀正则提取，
  * 多行或对象展开都会让解析变脆。
@@ -25,15 +22,6 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
  * 渲染成 `[LBP] `），所以载荷里不要再重复拼一次。
  */
 export const LAYOUT_BENCH_PROBE_PREFIX = '[LBP]';
-
-/**
- * harness 进应用时深链接里带的助手 id（见 `scripts/layout-bench/scenarios.ts`）。
- *
- * 它同时是种子助手的行 id（`src/backend/data/fixtures/layoutBench.ts` 从这里取），放在
- * shared 层是因为聊天屏要拿它当「这是一轮基准」的信号来 arm 探针，而屏幕不该 import
- * backend fixtures。
- */
-export const LAYOUT_BENCH_ASSISTANT_ID = 'layout-bench-assistant';
 
 export type LayoutBenchProbeEvent =
   /** 内容总高变化；`ready` 为真表示遮罩已撤，此后的高度修正会泄漏成可见跳动。 */

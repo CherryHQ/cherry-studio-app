@@ -25,6 +25,7 @@ import type {
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeUsage,
+  RuntimeUsageContext,
 } from '../types';
 import { toPiConversation } from './modelMessages';
 
@@ -37,6 +38,7 @@ export type PiModelResolution = {
   model: PiModel<'openai-responses'>;
   supportsTools: boolean;
   timeoutMs: number;
+  usageContext: RuntimeUsageContext;
 };
 
 export interface PiRuntimeDependencies {
@@ -78,6 +80,10 @@ const TOOL_EXECUTION_ERROR: RuntimeError = {
   retryable: false,
 };
 
+const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
+const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
+const REDACTED_SECRET = '[REDACTED]';
+
 const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
 
 type ApprovalWaiter = {
@@ -105,7 +111,7 @@ type ActiveTurn = {
   terminated: boolean;
   toolParts: Map<string, ToolPartBase>;
   turnId: string;
-  usage: Required<RuntimeUsage>;
+  usage: RuntimeUsage;
 };
 
 async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent> {
@@ -128,21 +134,70 @@ function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null 
   return null;
 }
 
-function normalizeExecutionError(): RuntimeError {
+function normalizeExecutionError(error: unknown, secrets: readonly string[] = []): RuntimeError {
+  const rawMessage =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'object' &&
+            error !== null &&
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
+          : '';
+  const stackStart = rawMessage.search(/\n\s+at\s+/);
+  let message = (stackStart >= 0 ? rawMessage.slice(0, stackStart) : rawMessage).trim();
+
+  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
+    if (secret) message = message.replaceAll(secret, REDACTED_SECRET);
+  }
+
+  if (message.length > MAX_EXECUTION_ERROR_MESSAGE_CHARS) {
+    message = `${message.slice(0, MAX_EXECUTION_ERROR_MESSAGE_CHARS)}…`;
+  }
+
   return {
     code: 'runtime_error',
-    message: 'The model provider call failed.',
+    message: message || DEFAULT_EXECUTION_ERROR_MESSAGE,
     retryable: false,
   };
+}
+
+function sensitiveValues(resolution: PiModelResolution): string[] {
+  const values = [resolution.apiKey];
+  for (const [name, value] of Object.entries(resolution.headers ?? {})) {
+    if (/authorization|api[-_]key|token|secret/i.test(name)) values.push(value);
+  }
+  return values;
 }
 
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return {
+    cacheReadTokens: usage.cacheRead,
+    cacheWriteTokens: usage.cacheWrite,
     inputTokens,
+    noCacheTokens: usage.input,
     outputTokens: usage.output,
+    ...(usage.reasoning !== undefined ? { reasoningTokens: usage.reasoning } : {}),
     totalTokens: usage.totalTokens || inputTokens + usage.output,
   };
+}
+
+function mergeRuntimeUsage(current: RuntimeUsage, next: RuntimeUsage): RuntimeUsage {
+  const merged: RuntimeUsage = {
+    cacheReadTokens: (current.cacheReadTokens ?? 0) + (next.cacheReadTokens ?? 0),
+    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + (next.cacheWriteTokens ?? 0),
+    inputTokens: (current.inputTokens ?? 0) + (next.inputTokens ?? 0),
+    noCacheTokens: (current.noCacheTokens ?? 0) + (next.noCacheTokens ?? 0),
+    outputTokens: (current.outputTokens ?? 0) + (next.outputTokens ?? 0),
+    totalTokens: (current.totalTokens ?? 0) + (next.totalTokens ?? 0),
+  };
+  if (current.reasoningTokens !== undefined || next.reasoningTokens !== undefined) {
+    merged.reasoningTokens = (current.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0);
+  }
+  return merged;
 }
 
 function resolveThinkingLevel(
@@ -201,7 +256,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       terminated: false,
       toolParts: new Map(),
       turnId: request.turnId,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      usage: {
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        inputTokens: 0,
+        noCacheTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      },
     };
     this.activeTurn = turn;
     void this.run(request, turn);
@@ -247,8 +309,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
+    let secrets: readonly string[] = [];
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
+      secrets = sensitiveValues(resolution);
       if (turn.terminated) return;
       if (request.tools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
@@ -314,7 +378,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
 
-      this.emit(turn, { type: 'usage', usage: turn.usage });
+      this.emit(turn, {
+        type: 'usage',
+        completedAt: Date.now(),
+        context: resolution.usageContext,
+        usage: turn.usage,
+      });
       switch (terminal.stopReason) {
         case 'stop':
         case 'length':
@@ -324,7 +393,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
           this.emit(turn, { type: 'cancelled' });
           break;
         case 'error':
-          this.emit(turn, { type: 'failed', error: normalizeExecutionError() });
+          this.emit(turn, {
+            type: 'failed',
+            error: normalizeExecutionError(terminal.errorMessage, secrets),
+          });
           break;
         case 'toolUse':
         case 'deferred':
@@ -339,13 +411,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
           });
           break;
       }
-    } catch {
+    } catch (error) {
       if (!turn.terminated) {
         this.emit(
           turn,
           turn.cancelRequested
             ? { type: 'cancelled' }
-            : { type: 'failed', error: normalizeExecutionError() },
+            : { type: 'failed', error: normalizeExecutionError(error, secrets) },
         );
       }
     } finally {
@@ -370,10 +442,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
-          const usage = toRuntimeUsage(event.message.usage);
-          turn.usage.inputTokens += usage.inputTokens ?? 0;
-          turn.usage.outputTokens += usage.outputTokens ?? 0;
-          turn.usage.totalTokens += usage.totalTokens ?? 0;
+          turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;

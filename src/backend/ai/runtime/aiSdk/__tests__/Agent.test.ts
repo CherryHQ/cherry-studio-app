@@ -3,7 +3,6 @@ import {
   createToolCallLimitStopCondition,
   markTrustedLocalToolTerminalFailure,
 } from '@cherrystudio/ai-runtime/runtime';
-import type { UIMessageChunk } from 'ai';
 
 import { Agent } from '../Agent';
 
@@ -26,7 +25,7 @@ describe('Agent tool request wiring', () => {
   });
 
   test('passes request context and repair through ToolLoopAgent settings', async () => {
-    const context = { chatId: 'topic-1', requestId: 'request-1' };
+    const context = { requestId: 'request-1' };
     const repairToolCall = jest.fn();
     const agent = new Agent({
       context,
@@ -133,43 +132,5 @@ describe('Agent tool request wiring', () => {
       i18nKey: 'tool_call_limit_reached',
       name: 'ToolLoopTerminalError',
     });
-  });
-
-  test('preserves the original terminal provider error after an earlier tool error', async () => {
-    const toolError = new Error('Invalid tool input');
-    const providerError = new Error('Upstream unavailable');
-    (createAgent as jest.Mock).mockResolvedValueOnce({
-      stream: jest.fn(async () => ({
-        steps: Promise.resolve([]),
-        toUIMessageStream: (options: { onError: (error: unknown) => string }) => {
-          const toolErrorText = options.onError(toolError);
-          const providerErrorText = options.onError(providerError);
-          return new ReadableStream<UIMessageChunk>({
-            start(controller) {
-              controller.enqueue({
-                errorText: toolErrorText,
-                input: {},
-                toolCallId: 'tool-1',
-                toolName: 'search',
-                type: 'tool-input-error',
-              } as UIMessageChunk);
-              controller.enqueue({ type: 'error', errorText: providerErrorText });
-            },
-          });
-        },
-      })),
-    });
-    const agent = new Agent({
-      modelId: 'test-model',
-      providerId: 'openai-compatible',
-      providerSettings: { apiKey: 'test', baseURL: 'https://example.com', name: 'test' },
-    });
-    const reader = agent.stream([], new AbortController().signal).getReader();
-
-    await expect(reader.read()).resolves.toMatchObject({
-      done: false,
-      value: { type: 'tool-input-error' },
-    });
-    await expect(reader.read()).rejects.toBe(providerError);
   });
 });

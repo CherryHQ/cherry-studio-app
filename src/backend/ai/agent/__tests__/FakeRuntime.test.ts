@@ -8,6 +8,7 @@ import type {
   RuntimeExecutionRequest,
   RuntimeJsonValue,
   RuntimeTool,
+  RuntimeUsageContext,
 } from '../types';
 import {
   type ArrangedApprovalRequest,
@@ -18,6 +19,17 @@ import {
 } from './_runtimeConformance';
 
 const ERROR_SECRET = 'sk-live-super-secret-9f83b2';
+
+const USAGE_CONTEXT: RuntimeUsageContext = {
+  credentialReceipt: { attribution: 'unknown' },
+  modelId: 'fake-model',
+  modelName: 'Fake Model',
+  pricingSnapshot: null,
+  providerId: 'fake-provider',
+  providerName: 'Fake Provider',
+  reportedCostCurrency: null,
+  trustProviderReportedCost: false,
+};
 
 function baseRequest(
   turnId: string,
@@ -48,7 +60,12 @@ function successProgram(): FakeRuntimeProgram {
       type: 'part.replace',
       part: { id: 'text-0', type: 'text', text: 'Hi there', state: 'done' },
     });
-    controller.emit({ type: 'usage', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } });
+    controller.emit({
+      type: 'usage',
+      completedAt: 1_000,
+      context: USAGE_CONTEXT,
+      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+    });
     controller.emit({ type: 'completed' });
   };
 }

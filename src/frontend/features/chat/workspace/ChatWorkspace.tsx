@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { ContentState, useAlert } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,16 +7,16 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation';
-import type { MessagesViewModel } from '@/frontend/hooks/chat';
+import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { Message } from '@/shared/data/types/message';
 
-import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
-import { useChat, useChatTopic } from '../runtime/ChatProvider';
+import { type PendingToolApproval, ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import {
-  getPendingToolApprovals,
-  mergeMessagesWithOverlay,
-} from '../runtime/chatRuntimeProjection';
+  mergeAgentMessageViews,
+  toAgentMessageListItems,
+  useAgentChatActions,
+  useAgentChatSession,
+} from '../runtime';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
@@ -26,9 +26,8 @@ import {
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
 
-const logger = loggerService.withContext('ChatWorkspace');
-// 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
-const gateLog = loggerService.withContext('ChatGate');
+const logger = loggerService.withContext('AgentChatWorkspace');
+const gateLog = loggerService.withContext('AgentChatGate');
 
 function renderChatMessage(message: MessageListItem) {
   return <ChatMessage message={message} />;
@@ -36,16 +35,12 @@ function renderChatMessage(message: MessageListItem) {
 
 type ChatWorkspaceProps = {
   isAssistantToolbarEnabled: boolean;
-  /** 输入框实测高度，用于定位悬浮按钮；预览态没有输入框，留空即可。 */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   keyboardOffset: number;
-  messageWindow: Pick<
-    MessagesViewModel,
-    'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages'
-  >;
+  messageWindow: AgentMessageHistoryWindow;
   renderGateKey: string;
-  topicId: string;
+  sessionId: string;
 };
 
 export function ChatWorkspace({
@@ -55,40 +50,47 @@ export function ChatWorkspace({
   messageWindow,
   renderGateKey,
   isAssistantToolbarEnabled,
-  topicId,
+  sessionId,
 }: ChatWorkspaceProps) {
-  const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
-  const chatTopic = useChatTopic(topicId);
+  const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
+  const live = useAgentChatSession(sessionId);
+  const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
-  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
-  const listMessages = useMemo(
-    () =>
-      visibleMessages.filter(
-        (message): message is Message & MessageListItem =>
-          message.role === 'user' || message.role === 'assistant',
-      ),
-    [visibleMessages],
+  const mergedMessages = useMemo(
+    () => mergeAgentMessageViews(messages, live.liveMessages),
+    [live.liveMessages, messages],
   );
-  const chat = useChat();
-  // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
-  const pendingApprovals = getPendingToolApprovals(visibleMessages);
-  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatTopic.status !== 'streaming';
+  const listMessages = useMemo(() => toAgentMessageListItems(mergedMessages), [mergedMessages]);
+  const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
+    () =>
+      live.pendingApprovals.map((approval) => ({
+        approvalId: approval.id,
+        input: approval.input,
+        messageId: live.activeTurn?.assistantMessageId ?? '',
+        toolCallId: approval.toolCallId,
+        toolName: approval.toolName,
+      })),
+    [live.activeTurn?.assistantMessageId, live.pendingApprovals],
+  );
   const handleApprovalRespond = useCallback(
-    async (input: { approvalId: string; approved: boolean; messageId: string }) => {
+    async (input: { approvalId: string; approved: boolean }) => {
       try {
-        await chat.respondToolApproval({ ...input, topicId });
-      } catch (error) {
-        logger.error('Tool approval response failed', error as Error);
+        await client.respondApproval(
+          sessionId,
+          input.approvalId,
+          input.approved ? 'approve' : 'deny',
+        );
+      } catch (approvalError) {
+        logger.error('Tool approval response failed', approvalError as Error);
         alert.show({ title: t('chat.tool.approval.failed') });
       }
     },
-    [alert, chat, t, topicId],
+    [alert, client, sessionId, t],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,
+    hasHistoryBeforePendingTurn: undefined,
     isLoadingInitial,
     messageCount: messages.length,
   });
@@ -98,7 +100,6 @@ export function ChatWorkspace({
   });
   const contentTopInset = resolveHeaderContentInset(headerHeight);
 
-  // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
     gateLog.debug('[GATE] state', {
       isLoadingInitial,
@@ -108,11 +109,21 @@ export function ChatWorkspace({
     });
   }, [isLoadingInitial, isCoverVisible, listMessages.length]);
 
+  if (error && !isLoadingInitial && listMessages.length === 0) {
+    return (
+      <ContentState.Error
+        className="flex-1 px-8 py-16"
+        primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
+        title={t('chat.history.loadFailed')}
+      />
+    );
+  }
+
   return (
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
-        key={topicId}
+        key={sessionId}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
       >
         <MessageList
@@ -120,7 +131,7 @@ export function ChatWorkspace({
           bottomAccessoryHeight={bottomAccessoryHeight}
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
-          enteringMessageId={chatTopic.pendingUserMessage?.id}
+          enteringMessageId={live.enteringUserMessageId}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}
@@ -131,7 +142,7 @@ export function ChatWorkspace({
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
         approvals={pendingApprovals}
-        isOpen={isApprovalSheetOpen}
+        isOpen={pendingApprovals.length > 0}
         onRespond={handleApprovalRespond}
       />
     </View>

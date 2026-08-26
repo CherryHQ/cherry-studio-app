@@ -3,7 +3,6 @@ import { Uniwind } from 'uniwind';
 import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
-import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
 import { serviceList } from '@/backend/core/application/serviceRegistry';
@@ -19,7 +18,6 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
-import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import AssistantActivity from '@/frontend/features/chat/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/features/paintings/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
@@ -58,7 +56,6 @@ export function createAppBootstrapRuntime(
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
-  const chat = host.container.get<ChatRuntime>('ChatRuntime');
   const dbService = host.container.get<DbService>('DbService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
@@ -68,7 +65,6 @@ export function createAppBootstrapRuntime(
     agent,
     ai,
     cache,
-    chat,
     jobRuntime,
     mcpRuntime,
     preference,
@@ -83,18 +79,15 @@ export function createAppBootstrapRuntime(
       agentSessionMutations: services.agent,
       agentSessions: services.agentSession,
       aiUsageRecords: services.aiUsageRecord,
-      assistants: services.assistant,
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
       mcpServerMutations: dataApiDependencies.mcpServerMutations,
       mcpServers: services.mcpServer,
-      messages: services.message,
       models: services.model,
       paintings: services.painting,
       providers: services.provider,
-      topics: services.topic,
     }),
   );
 
@@ -103,9 +96,8 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
-      // Nothing to drain ahead of the host any more: `ChatRuntime` and
-      // `JobRuntime` are services, so reverse-order teardown settles them before
-      // the database they write through.
+      // Nothing to drain ahead of the host: `JobRuntime` is a service, so
+      // reverse-order teardown settles it before the database it writes through.
       disposePromise ??= (async () => {
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
@@ -127,7 +119,6 @@ export function createAppBootstrapRuntime(
       // best-effort and off the first-paint path; the host logs its own
       // failures rather than surfacing them here.
       host.runPostReady();
-      await runPostReadyTasks(services);
     },
   };
 }

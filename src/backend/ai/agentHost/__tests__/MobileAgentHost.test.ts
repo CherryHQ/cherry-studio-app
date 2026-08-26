@@ -4,14 +4,37 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
-import { FakeRuntime, type RuntimeExecutionRequest } from '@/backend/ai/agent';
-import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
+import {
+  FakeRuntime,
+  type RuntimeExecutionRequest,
+  type RuntimeUsageContext,
+} from '@/backend/ai/agent';
+import type { AiService } from '@/backend/ai/AiService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import {
+  AgentEventSchema,
+  AgentProtocolError,
+  type AgentEvent,
+  type AgentSessionView,
+} from '@/shared/contracts/agent';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
 
 const AGENT_ID = 'agent-under-test';
+
+const USAGE_CONTEXT: RuntimeUsageContext = {
+  credentialReceipt: { attribution: 'unknown' },
+  modelId: 'mock-model',
+  modelName: 'Mock Model',
+  pricingSnapshot: null,
+  providerId: 'mock-provider',
+  providerName: 'Mock Provider',
+  reportedCostCurrency: null,
+  trustProviderReportedCost: false,
+};
 
 const agents: AgentDefinitionSource = {
   async getAgent(agentId) {
@@ -34,6 +57,48 @@ const FAKE_DESCRIPTOR = {
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
 } as const;
 
+const unusedAiService = {} as AiService;
+const unusedPreferenceService = {} as PreferenceService;
+type NamingOverride = Pick<
+  AgentSessionNaming,
+  'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
+>;
+
+const noOpNaming: NamingOverride = {
+  drain: async () => undefined,
+  maybeRenameFromConversationSummary: async () => null,
+  maybeRenameFromFirstUserMessage: async () => null,
+};
+const backgroundReplyTurn = {
+  awaitApproval: jest.fn(),
+  finish: jest.fn(),
+  update: jest.fn(),
+};
+const backgroundReply = {
+  clearSession: jest.fn(),
+  startTurn: jest.fn(() => backgroundReplyTurn),
+  updateSessionTitle: jest.fn(),
+};
+const usage = {
+  drain: jest.fn(async () => undefined),
+  record: jest.fn(),
+};
+
+function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): MobileAgentHost {
+  return new MobileAgentHost(
+    store,
+    unusedAiService,
+    unusedPreferenceService,
+    backgroundReply,
+    runtime,
+    {
+      agents,
+      naming,
+      usage,
+    },
+  );
+}
+
 function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
   const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
   for (const text of texts) {
@@ -53,12 +118,14 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       });
       controller.emit({
         type: 'usage',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       });
       controller.emit({ type: 'completed' });
     });
   }
-  return new MobileAgentHost(store, runtime, { agents });
+  return createHost(runtime);
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -100,6 +167,7 @@ let store: InMemoryAgentSessionStore;
 
 describe('MobileAgentHost', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
 
@@ -152,6 +220,28 @@ describe('MobileAgentHost', () => {
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
     expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
+      agentName: 'Test Agent',
+      sessionId: session.id,
+      sessionTitle: '',
+    });
+    expect(backgroundReplyTurn.update).toHaveBeenCalled();
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('completed', {
+      waitFor: expect.any(Promise),
+    });
+    expect(usage.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: AGENT_ID }),
+        assistantMessageId: submitted.assistantMessageId,
+        report: {
+          completedAt: 1_500,
+          context: USAGE_CONTEXT,
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        },
+        turnId: submitted.turnId,
+      }),
+    );
 
     const terminal = terminalTurnEvent(events);
     expect(terminal?.turn.status).toBe('completed');
@@ -185,6 +275,54 @@ describe('MobileAgentHost', () => {
     expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 
+  test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['One', 'Two', 'Three'], requests);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const completedTurnCount = () =>
+      events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
+        .length;
+
+    await host.submitMessage({
+      modelId: 'override-provider::override-model',
+      parts: [{ type: 'text', text: 'Override both.' }],
+      reasoningEffort: 'max',
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 1, 'the override turn');
+    expect(requests[0]).toMatchObject({
+      model: { modelId: 'override-model', providerId: 'override-provider' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'max', temperature: 0.2 },
+    });
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Use the model default.' }],
+      reasoningEffort: 'default',
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 2, 'the default-effort turn');
+    expect(requests[1]).toMatchObject({
+      model: { modelId: 'mock-model', providerId: 'mock-provider' },
+      options: { maxOutputTokens: 512, temperature: 0.2 },
+    });
+    expect(requests[1]?.options).not.toHaveProperty('reasoningEffort');
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Use the Agent configuration again.' }],
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 3, 'the inherited Agent turn');
+    expect(requests[2]).toMatchObject({
+      model: { modelId: 'mock-model', providerId: 'mock-provider' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
+    });
+  });
+
   test('cancel settles the turn as cancelled and is idempotent', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
       controller.emit({
@@ -197,7 +335,7 @@ describe('MobileAgentHost', () => {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    const host = new MobileAgentHost(store, runtime, { agents });
+    const host = createHost(runtime);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -246,6 +384,93 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('updates an active background reply when its Session is renamed', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const submitted = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await started.promise;
+
+    await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+  });
+
+  test('applies summary naming after the turn leaves active Host state', async () => {
+    let resolveSummary!: (session: AgentSessionView | null) => void;
+    const summaryName = new Promise<AgentSessionView | null>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = createHost(runtime, {
+      drain: async () => undefined,
+      maybeRenameFromConversationSummary: () => summaryName,
+      maybeRenameFromFirstUserMessage: async () => null,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+    const renamed = await store.autoRenameSession(session.id, '', 'Summary title');
+    resolveSummary(renamed);
+    await waitFor(
+      () => backgroundReply.updateSessionTitle.mock.calls.length > 0,
+      'the background title to update',
+    );
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Summary title');
+  });
+
+  test('applies a manual rename while terminal background content awaits naming', async () => {
+    let resolveSummary!: (session: AgentSessionView | null) => void;
+    const summaryName = new Promise<AgentSessionView | null>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = createHost(runtime, {
+      drain: async () => undefined,
+      maybeRenameFromConversationSummary: () => summaryName,
+      maybeRenameFromFirstUserMessage: async () => null,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+
+    await host.renameSession({ sessionId: session.id, title: 'Manual title' });
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Manual title');
+    resolveSummary(null);
+  });
+
   test('reconciliation marks preloaded unfinished messages interrupted', async () => {
     // Preload the reference adapter with the state a durable adapter would
     // restore after a process death.
@@ -281,7 +506,7 @@ describe('MobileAgentHost', () => {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
     const remove = jest.spyOn(store, 'deleteSession');
     const session = await host.createSession({
@@ -309,7 +534,7 @@ describe('MobileAgentHost', () => {
     const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
       { type: 'completed' },
     ]);
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -363,7 +588,7 @@ describe('MobileAgentHost', () => {
         executionCount += 1;
         controller.emit({ type: 'completed' });
       });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -456,7 +681,7 @@ describe('MobileAgentHost', () => {
       });
       controller.emit({ type: 'completed' });
     });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
 
     const session = await host.createSession({
       agentId: AGENT_ID,

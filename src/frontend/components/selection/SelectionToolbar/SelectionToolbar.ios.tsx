@@ -14,8 +14,8 @@ export function SelectionToolbar({
   const { t } = useTranslation();
   const selectionLabel =
     selectedCount === 0
-      ? t('topic.selection.selectAll')
-      : t('topic.selection.count', { count: selectedCount });
+      ? t('common.selection.selectAll')
+      : t('common.selection.count', { count: selectedCount });
 
   return (
     <Stack.Toolbar placement="bottom">

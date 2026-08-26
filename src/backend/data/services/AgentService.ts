@@ -1,7 +1,12 @@
 import { and, asc, desc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
-import { type AgentRow, agentTable, userModelTable } from '@/backend/data/db/schemas';
+import {
+  type AgentRow,
+  agentTable,
+  monotonicUpdateTimestamp,
+  userModelTable,
+} from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   type CreateAgentDto,
@@ -188,7 +193,10 @@ export class AgentService {
 
       const [updated] = await tx
         .update(agentTable)
-        .set(updates)
+        .set({
+          ...updates,
+          updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+        })
         .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
         .returning();
       if (!updated) {
@@ -214,7 +222,10 @@ export class AgentService {
     const deleted = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentTable)
-        .set({ deletedAt: Date.now() })
+        .set({
+          deletedAt: Date.now(),
+          updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+        })
         .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
         .returning({ id: agentTable.id });
       return Boolean(row);
@@ -240,6 +251,7 @@ export class AgentService {
       }
 
       await applyMoves(tx, agentTable, [{ anchor, id }], {
+        monotonicUpdatedAtColumn: agentTable.updatedAt,
         pkColumn: agentTable.id,
         scope: isNull(agentTable.deletedAt),
       });
@@ -265,6 +277,7 @@ export class AgentService {
       }
 
       await applyMoves(tx, agentTable, moves, {
+        monotonicUpdatedAtColumn: agentTable.updatedAt,
         pkColumn: agentTable.id,
         scope: isNull(agentTable.deletedAt),
       });
@@ -285,7 +298,7 @@ export class AgentService {
       return dtoModelId;
     }
 
-    const preferred = await this.preferenceService.get('chat.default_model_id');
+    const preferred = await this.preferenceService.get('agent.default_model_id');
     if (!preferred) {
       return null;
     }

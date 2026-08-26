@@ -30,30 +30,32 @@ describe('optimistic query updates', () => {
       pageParams: [undefined, 'cursor-2'],
       pages: [firstPage, secondPage],
     };
-    queryClient.setQueryData(['/topics', { limit: 50 }], list);
-    queryClient.setQueryData(['/topics', { limit: 50, q: 'a' }], {
+    queryClient.setQueryData(['/agent-sessions', { limit: 50 }], list);
+    queryClient.setQueryData(['/agent-sessions', { agentId: 'agent-1', limit: 50 }], {
       pageParams: [undefined],
       pages: [firstPage],
     });
-    queryClient.setQueryData(['/topics/a'], item('a'));
+    queryClient.setQueryData(['/agent-sessions/a'], item('a'));
 
     const snapshot = await updateQueriesOptimistically<
       InfiniteData<CursorPaginationResponse<Item>, string | undefined>
-    >(queryClient, dataApiCollectionFilters('/topics'), (current) =>
+    >(queryClient, dataApiCollectionFilters('/agent-sessions'), (current) =>
       removeItemsFromInfiniteData(current, new Set(['a'])),
     );
 
-    expect(readInfiniteIds(queryClient.getQueryData(['/topics', { limit: 50 }]))).toEqual([
+    expect(readInfiniteIds(queryClient.getQueryData(['/agent-sessions', { limit: 50 }]))).toEqual([
       'b',
       'c',
     ]);
-    expect(readInfiniteIds(queryClient.getQueryData(['/topics', { limit: 50, q: 'a' }]))).toEqual([
-      'b',
-    ]);
-    expect(queryClient.getQueryData(['/topics/a'])).toEqual(item('a'));
+    expect(
+      readInfiniteIds(
+        queryClient.getQueryData(['/agent-sessions', { agentId: 'agent-1', limit: 50 }]),
+      ),
+    ).toEqual(['b']);
+    expect(queryClient.getQueryData(['/agent-sessions/a'])).toEqual(item('a'));
 
     restoreQuerySnapshot(queryClient, snapshot);
-    expect(readInfiniteIds(queryClient.getQueryData(['/topics', { limit: 50 }]))).toEqual([
+    expect(readInfiniteIds(queryClient.getQueryData(['/agent-sessions', { limit: 50 }]))).toEqual([
       'a',
       'b',
       'c',

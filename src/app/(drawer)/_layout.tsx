@@ -54,7 +54,7 @@ export default function DrawerLayout() {
         <Drawer.Screen name="(chat)" />
         <Drawer.Screen name="home" />
         <Drawer.Screen name="library" />
-        <Drawer.Screen name="assistants" />
+        <Drawer.Screen name="agents" />
         <Drawer.Screen name="drawings" />
       </Drawer>
     </RouteHeaderProvider>

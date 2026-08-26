@@ -1,7 +1,6 @@
 import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
-import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -23,7 +22,6 @@ export type BackendInfrastructure = {
   agent: MobileAgentHost;
   ai: AiService;
   cache: CacheService;
-  chat: ChatRuntime;
   jobRuntime: JobRuntime;
   mcpRuntime: McpRuntimeService;
   preference: PreferenceService;
@@ -34,7 +32,6 @@ export function createBackendServices({
   agent,
   ai,
   cache,
-  chat,
   jobRuntime,
   mcpRuntime,
   preference,
@@ -44,7 +41,6 @@ export function createBackendServices({
     ...createDataServices({ cache, preference }),
     agent,
     ai,
-    chat,
     // Module singletons, spread here only so the routing table reads one object.
     devicePermissions,
     fileContent,

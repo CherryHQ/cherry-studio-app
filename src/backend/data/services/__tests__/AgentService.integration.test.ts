@@ -120,6 +120,32 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('advances the Agent version when updates share one wall-clock millisecond', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    const agent = await agentService.create({ name: 'Researcher' });
+
+    const firstUpdate = await agentService.update(agent.id, { description: 'First' });
+    const secondUpdate = await agentService.update(agent.id, { description: 'Second' });
+
+    expect(Date.parse(firstUpdate.updatedAt)).toBeGreaterThan(Date.parse(agent.updatedAt));
+    expect(Date.parse(secondUpdate.updatedAt)).toBeGreaterThan(Date.parse(firstUpdate.updatedAt));
+  });
+
+  it('clears a stored setting when the patch carries the key as explicit undefined', async () => {
+    const agent = await agentService.create({
+      name: 'Researcher',
+      settings: { futureSetting: true, temperature: 0.2 },
+    });
+
+    const updated = await agentService.update(agent.id, {
+      settings: { temperature: undefined },
+    });
+
+    expect(updated.settings).toEqual({ futureSetting: true });
+    // The JSON column must not resurrect the key on a fresh read.
+    expect((await agentService.getById(agent.id)).settings).toEqual({ futureSetting: true });
+  });
+
   it('filters by search and persists explicit ordering changes', async () => {
     const researcher = await agentService.create({
       description: 'Finds primary sources',

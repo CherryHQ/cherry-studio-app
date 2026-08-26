@@ -6,13 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAction } from '../components/HeaderAction';
 import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
-import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
+import { MainHeaderAgentButton, useMainHeaderAgent } from './MainHeaderAgentButton';
 
 export function MainHeader() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const leadingAction = useRouteHeaderLeadingAction();
-  const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
+  const { agent, openAgent, openNewSession } = useMainHeaderAgent();
 
   return (
     <>
@@ -29,13 +29,11 @@ export function MainHeader() {
                 accessibilityLabel: t('navigation.newChat'),
                 icon: SquarePenIcon,
                 key: 'new-chat',
-                onPress: openNewTopic,
+                onPress: openNewSession,
                 type: 'icon',
               }}
             />
-            {assistant ? (
-              <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
-            ) : null}
+            {agent ? <MainHeaderAgentButton agent={agent} onPress={openAgent} /> : null}
           </View>
         </View>
       </View>
