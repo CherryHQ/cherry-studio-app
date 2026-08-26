@@ -60,9 +60,13 @@ export function useAgentMutations() {
     refresh: ({ args }) => ['/agents', ...(args ? [`/agents/${args.params.id}`] : [])],
   });
   const deleteMutation = useMutation('DELETE', '/agents/:id');
+  const setAvatarMutation = useMutation('PUT', '/agents/:id/avatar', {
+    refresh: ({ args }) => ['/agents', ...(args ? [`/agents/${args.params.id}`] : [])],
+  });
   const createAgentRequest = createMutation.trigger;
   const updateAgentRequest = updateMutation.trigger;
   const deleteAgentRequest = deleteMutation.trigger;
+  const setAgentAvatarRequest = setAvatarMutation.trigger;
 
   const createAgent = useCallback(
     (dto: CreateAgentDto) => createAgentRequest({ body: dto }),
@@ -77,6 +81,21 @@ export function useAgentMutations() {
       return updateAgentRequest({ body: patch, params: { id } });
     },
     [updateAgentRequest],
+  );
+
+  /**
+   * The avatar is a managed file, not a mutable agent field, so it has its own
+   * endpoint and is written after the record exists — on create that means
+   * after the POST returns an id.
+   */
+  const setAgentAvatar = useCallback(
+    (id: string, sourceUri: string) => {
+      if (!id) {
+        throw new Error('setAgentAvatar called with empty id');
+      }
+      return setAgentAvatarRequest({ body: { sourceUri }, params: { id } });
+    },
+    [setAgentAvatarRequest],
   );
 
   const deleteAgents = useCallback(
@@ -131,10 +150,12 @@ export function useAgentMutations() {
   return {
     createAgent,
     updateAgent,
+    setAgentAvatar,
     deleteAgent,
     deleteAgents,
     isCreating: createMutation.isLoading,
     isUpdating: updateMutation.isLoading,
+    isSettingAvatar: setAvatarMutation.isLoading,
     isDeleting: deleteMutation.isLoading,
     createMutation,
     updateMutation,

@@ -21,17 +21,24 @@ type BrandAvatarProps = {
    */
   children?: ReactNode;
   label: string;
+  /**
+   * `rounded` is the brand default — a logo reads as a mark, not a face. Editing
+   * forms use `circle`, where the avatar is the subject rather than one entry in
+   * a list of brands.
+   */
+  shape?: 'circle' | 'rounded';
   size?: number;
   testID?: string;
 };
 
 /**
- * Square, hairline-framed brand logo, shared by provider settings and the usage
+ * Hairline-framed brand logo, shared by provider settings and the usage
  * ranking. Sizing lives here so the content components can scale against it.
  */
 export function BrandAvatar({
   children,
   label,
+  shape = 'rounded',
   size = BRAND_AVATAR_SIZE,
   testID,
 }: BrandAvatarProps) {
@@ -40,13 +47,14 @@ export function BrandAvatar({
   // not constants: the same avatar is rendered at 26 in lists and at form-hero
   // sizes in the provider form, and a fixed 6pt radius reads as a square there.
   // At the default size these resolve to the plain 6/5/14 they replaced.
-  const frameRadius = (size * BRAND_AVATAR_FRAME_RADIUS) / BRAND_AVATAR_SIZE;
+  const frameRadius =
+    shape === 'circle' ? size / 2 : (size * BRAND_AVATAR_FRAME_RADIUS) / BRAND_AVATAR_SIZE;
 
   return (
     <Avatar
       accessibilityLabel={label}
       radius={frameRadius}
-      shape="rounded"
+      shape={shape}
       size={size}
       testID={testID}
     >

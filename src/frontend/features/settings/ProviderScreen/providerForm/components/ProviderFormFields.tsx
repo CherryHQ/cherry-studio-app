@@ -3,23 +3,25 @@ import { useTranslation } from 'react-i18next';
 
 import { normalizeApiKeySingleLine } from '../../apiService/utils/providerApiServiceApiKeys';
 import { useProviderForm } from '../context';
-import { ProviderFormField } from './ProviderFormField';
 
+/**
+ * The fields carry no visible label: the placeholder names the field, the way
+ * the Agent editor does it. Required-ness is expressed by Save staying disabled
+ * rather than by an asterisk, so there is nothing left for a label line to say.
+ */
 export function ProviderFormName() {
   const { t } = useTranslation();
   const { actions, state } = useProviderForm('ProviderForm.Name');
 
   return (
-    <ProviderFormField label={t('settings.provider.add.name')} required>
-      <Input
-        accessibilityLabel={t('settings.provider.add.name')}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onChangeText={actions.setName}
-        placeholder={t('settings.provider.add.namePlaceholder')}
-        value={state.name}
-      />
-    </ProviderFormField>
+    <Input
+      accessibilityLabel={t('settings.provider.add.name')}
+      autoCapitalize="none"
+      autoCorrect={false}
+      onChangeText={actions.setName}
+      placeholder={t('settings.provider.add.name')}
+      value={state.name}
+    />
   );
 }
 
@@ -35,23 +37,21 @@ export function ProviderFormApiKey() {
   const { actions, state } = useProviderForm('ProviderForm.ApiKey');
 
   return (
-    <ProviderFormField label={t('settings.provider.apiService.apiKey')}>
-      <Input
-        accessibilityLabel={t('settings.provider.apiService.apiKey')}
-        lineBreakModeIOS="clip"
-        numberOfLines={1}
-        onChangeText={(value) => actions.setApiKey(normalizeApiKeySingleLine(value))}
-        placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-        returnKeyType="done"
-        scrollEnabled={false}
-        type="password"
-        value={state.apiKey}
-        visibilityAccessibilityLabels={{
-          hide: t('settings.provider.apiService.hideApiKeys'),
-          show: t('settings.provider.apiService.showApiKeys'),
-        }}
-      />
-    </ProviderFormField>
+    <Input
+      accessibilityLabel={t('settings.provider.apiService.apiKey')}
+      lineBreakModeIOS="clip"
+      numberOfLines={1}
+      onChangeText={(value) => actions.setApiKey(normalizeApiKeySingleLine(value))}
+      placeholder={t('settings.provider.apiService.apiKey')}
+      returnKeyType="done"
+      scrollEnabled={false}
+      type="password"
+      value={state.apiKey}
+      visibilityAccessibilityLabels={{
+        hide: t('settings.provider.apiService.hideApiKeys'),
+        show: t('settings.provider.apiService.showApiKeys'),
+      }}
+    />
   );
 }
 

@@ -9,6 +9,8 @@ type ProviderAvatarProps = {
   presetProviderId?: string;
   providerId: string;
   providerName: string;
+  /** Passed straight to {@link BrandAvatar}; lists keep the brand default. */
+  shape?: 'circle' | 'rounded';
   size?: number;
 };
 
@@ -21,13 +23,14 @@ export function ProviderAvatar({
   presetProviderId,
   providerId,
   providerName,
+  shape,
   size,
 }: ProviderAvatarProps) {
   const avatarUri = useProviderAvatar(providerId);
 
   if (avatarUri) {
     return (
-      <BrandAvatar label={providerName} size={size}>
+      <BrandAvatar label={providerName} shape={shape} size={size}>
         <BrandAvatarPhoto uri={avatarUri} />
       </BrandAvatar>
     );
@@ -38,6 +41,7 @@ export function ProviderAvatar({
       presetProviderId={presetProviderId}
       providerId={providerId}
       providerName={providerName}
+      shape={shape}
       size={size}
     />
   );
@@ -53,6 +57,7 @@ export function ProviderBrandAvatar({
   presetProviderId,
   providerId,
   providerName,
+  shape,
   size,
 }: ProviderAvatarProps) {
   const { theme } = useUniwind();
@@ -62,7 +67,7 @@ export function ProviderBrandAvatar({
 
   if (iconSource) {
     return (
-      <BrandAvatar label={providerName} size={size}>
+      <BrandAvatar label={providerName} shape={shape} size={size}>
         <BrandAvatarIcon
           iconId={displayIconId}
           recyclingKey={providerId}
@@ -72,5 +77,5 @@ export function ProviderBrandAvatar({
     );
   }
 
-  return <BrandAvatar label={providerName} size={size} />;
+  return <BrandAvatar label={providerName} shape={shape} size={size} />;
 }

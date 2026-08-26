@@ -1,11 +1,15 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
+import { AgentAvatar } from '@/frontend/components/avatar';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
 import { HeaderIconButton } from '../components/HeaderAction/HeaderIconButton';
+
+// Smaller than the 40-point button so the avatar keeps a ring of the button's
+// own surface around it, the way the line icons beside it sit inset.
+const agentButtonAvatarSize = 28;
 
 export function useMainHeaderAgent() {
   const router = useRouter();
@@ -47,7 +51,12 @@ export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPres
       onPress={onPress}
       testID="current-agent-button"
     >
-      <BotIcon className="size-5 text-foreground" />
+      <AgentAvatar
+        accessibilityLabel={agent.name}
+        name={agent.name}
+        size={agentButtonAvatarSize}
+        uri={agent.avatarUri}
+      />
     </HeaderIconButton>
   );
 }

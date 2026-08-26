@@ -3,6 +3,12 @@ import type { Agent } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
+  /**
+   * Draft avatar image URI. Seeded from the record's resolved `avatarUri`, so a
+   * value that still equals the seed means "unchanged" and needs no file write.
+   * Never part of the DTO: the avatar has its own endpoint.
+   */
+  avatarUri: string | null;
   instructions: string;
   modelId: UniqueModelId | null;
   name: string;
@@ -15,6 +21,7 @@ type BuildAgentDtoOptions = {
 
 export function createAgentFormState(agent?: Agent): AgentFormState {
   return {
+    avatarUri: agent?.avatarUri ?? null,
     instructions: agent?.instructions ?? '',
     modelId: agent?.modelId ?? null,
     name: agent?.name ?? '',

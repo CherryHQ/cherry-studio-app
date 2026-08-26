@@ -1,6 +1,10 @@
 import { loggerService } from '@logger';
 
-import type { UserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
+import {
+  STORED_NAME_UUID_FRAGMENT,
+  type UserContentImageStorage,
+  type UserContentImageStorageConfig,
+} from '@/backend/services/file/userContentImageStorage';
 
 const logger = loggerService.withContext('UserAvatarStorage');
 /**
@@ -10,6 +14,12 @@ const logger = loggerService.withContext('UserAvatarStorage');
  */
 const STORED_AVATAR_PREFIX = 'avatar-file:';
 const DIRECT_IMAGE_URI_PATTERN = /^(?:blob:|content:\/\/|data:image\/|file:\/\/|https?:\/\/)/i;
+
+/** One owner, so the stored name is the bare uuid: `{uuid}.webp`. */
+export const USER_AVATAR_IMAGE_CONFIG: UserContentImageStorageConfig = {
+  directoryName: 'user-avatar',
+  storedNamePattern: new RegExp(`^${STORED_NAME_UUID_FRAGMENT}\\.webp$`, 'i'),
+};
 
 type PersistAvatar = (avatar: string) => Promise<void>;
 
