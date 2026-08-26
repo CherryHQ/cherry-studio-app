@@ -157,7 +157,9 @@ explicitly attach the same managed entry again, or the model may read it through
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
 the Agent turn. Background tool continuation and later turn reattachment require a separate
-protocol design and are not implied by the durable job ledger.
+protocol design and are not implied by the durable job ledger; that design must use the
+OS-sanctioned continuation mechanisms recorded in
+[Agent Architecture](./README.md#open-questions).
 
 ## Office Files
 

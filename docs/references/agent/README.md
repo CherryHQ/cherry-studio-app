@@ -95,6 +95,15 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Provider coverage** for the Pi model layer currently starts with API-key-authenticated OpenAI
   Responses endpoints. Expanding it is separate provider work and is not a reason to retain a
   second conversation runtime.
+- **Background turn continuation** is undesigned, but its platform direction is settled: only
+  OS-sanctioned mechanisms may keep a turn running when the app leaves the foreground —
+  `BGContinuedProcessingTask` with its system progress UI on iOS 26+, and typed foreground services
+  with a persistent notification on Android (`shortService` to finish a streaming reply;
+  `dataSync`/`mediaProcessing` within their 6-hour budgets for longer tool work). Keep-alive hacks
+  (silent audio, overlay-based revival, mutual process wakeup, 1-pixel activities) are excluded.
+  Both platforms can still terminate continued work, and older iOS versions offer no equivalent, so
+  today's interrupted-turn reconciliation remains the contract floor; continuation additionally
+  needs a protocol design for re-attaching an observed Session to a still-running turn.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that structured record into the actual model prompt — selection, formatting, and
