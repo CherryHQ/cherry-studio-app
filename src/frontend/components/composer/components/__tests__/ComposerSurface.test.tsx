@@ -24,6 +24,7 @@ type MockComposerProps = {
 const mockToastShow = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerError = jest.fn();
+const mockLoggerWarn = jest.fn();
 let mockComposerProps: MockComposerProps | undefined;
 let mockComposerActions: ReturnType<typeof useComposerActions> | undefined;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
@@ -58,6 +59,7 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
     withContext: () => ({
       debug: (...args: unknown[]) => mockLoggerDebug(...args),
       error: (...args: unknown[]) => mockLoggerError(...args),
+      warn: (...args: unknown[]) => mockLoggerWarn(...args),
     }),
   },
 }));
@@ -199,6 +201,29 @@ describe('ComposerSurface', () => {
 
     expect(renderer?.root.findAllByType(ActivityIndicator)).toHaveLength(0);
     expect(mockComposerProps?.canSend).toBe(true);
+  });
+
+  it('fails closed if an unready attachment reaches the imperative send boundary', async () => {
+    const onSend = jest.fn(async () => undefined);
+    const importingAttachment: ComposerAttachmentDraft = {
+      id: 'file:uploading',
+      kind: 'file',
+      mediaType: 'application/pdf',
+      name: 'uploading.pdf',
+      status: 'importing',
+      uri: 'file:///source/uploading.pdf',
+    };
+    render(<ComposerSurface onSend={onSend} onStop={jest.fn()} streaming={false} />, 'send later', [
+      importingAttachment,
+    ]);
+
+    await act(async () => mockComposerProps?.onSend());
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.input.sendFailed',
+      variant: 'danger',
+    });
   });
 
   function render(

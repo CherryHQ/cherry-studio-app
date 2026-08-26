@@ -1,7 +1,7 @@
 # Agent Persistence
 
-Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, and frontend
-integration active in production**. Version 1 is local-only.
+Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, managed attachment
+references, and frontend integration active in production**. Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout

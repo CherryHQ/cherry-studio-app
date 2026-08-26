@@ -35,6 +35,7 @@ import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnV
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { toAgentInputParts } from './utils/agentInputParts';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -57,7 +58,7 @@ const focusTransitionMotion = {
 
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
-  const { cancel, isBusy, sendText } = useAgentChatControls({ agentId, sessionId });
+  const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData();
@@ -175,12 +176,13 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   );
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
+      const parts = toAgentInputParts({ attachments, text });
       if (attachments.length > 0) {
         throw new AgentAttachmentsUnsupportedError();
       }
 
-      return sendText({
-        text,
+      return sendMessage({
+        parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
           ? {
@@ -200,7 +202,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       reasoningEffort,
       reasoningEfforts,
       selectedModelId,
-      sendText,
+      sendMessage,
     ],
   );
   const getSendErrorLabel = useCallback(
@@ -228,7 +230,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             streaming={isBusy}
           >
             {/* Pasted attachments remain visible and removable, but sending fails closed until
-                the Host-side file resolver enables the protocol capability. */}
+                the image Runtime-input slice enables the protocol capability. */}
             <ComposerAttachments />
             <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
               <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
