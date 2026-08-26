@@ -23,6 +23,8 @@ import type {
   RuntimeError,
   RuntimeEvent,
   RuntimeExecutionRequest,
+  RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeOutputPart,
 } from './types';
 
@@ -120,8 +122,8 @@ function validateRequest(
   }
   if (!capabilities.attachments) {
     const inputHasFile = request.input.some((part) => part.type === 'file');
-    const historyHasFile = request.history.some((message) =>
-      message.parts.some((part) => part.type === 'file'),
+    const historyHasFile = request.history.some((turn) =>
+      turn.messages.some((message) => message.parts.some((part) => part.type === 'file')),
     );
     if (inputHasFile || historyHasFile) {
       return {
@@ -319,14 +321,29 @@ const defaultProgram: FakeRuntimeProgram = (controller) => {
 
 export type FakeRuntimeOptions = {
   descriptor?: RuntimeDescriptor;
+  modelPreflight?: RuntimeModelPreflight;
 };
 
 export class FakeRuntime implements AgentRuntime {
   readonly descriptor: RuntimeDescriptor;
   private readonly programs: FakeRuntimeProgram[] = [];
+  private readonly modelPreflight: RuntimeModelPreflight;
 
   constructor(options: FakeRuntimeOptions = {}) {
     this.descriptor = options.descriptor ?? DEFAULT_DESCRIPTOR;
+    this.modelPreflight =
+      options.modelPreflight ??
+      createDefaultModelPreflight(
+        this.descriptor.capabilities.attachments,
+        this.descriptor.capabilities.tools,
+      );
+  }
+
+  async preflightModel(_model: RuntimeModel): Promise<RuntimeModelPreflight> {
+    return {
+      ...this.modelPreflight,
+      inputModalities: [...this.modelPreflight.inputModalities],
+    };
   }
 
   /** Enqueue a program consumed by the next `execute()` call, FIFO. */
@@ -353,4 +370,17 @@ export class FakeRuntime implements AgentRuntime {
     // between executes, and each execute dequeues the next one.
     return new FakeRuntimeSession(this.descriptor.capabilities, this.programs);
   }
+}
+
+function createDefaultModelPreflight(
+  supportsImages: boolean,
+  supportsTools: boolean,
+): RuntimeModelPreflight {
+  return {
+    contextWindow: 128_000,
+    inputModalities: supportsImages ? ['text', 'image'] : ['text'],
+    maxInputTokens: 120_000,
+    maxOutputTokens: 8_000,
+    supportsTools,
+  };
 }

@@ -90,9 +90,7 @@ const holders = new WeakMap<AgentRuntime, RuntimeHolder>();
 
 function createResolution(): PiModelResolution {
   return {
-    apiKey: 'test-key',
     defaultThinkingLevel: 'medium',
-    maxRetries: 0,
     model: {
       api: 'openai-responses',
       baseUrl: 'https://provider.example/v1',
@@ -105,8 +103,11 @@ function createResolution(): PiModelResolution {
       provider: 'mock-provider',
       reasoning: true,
     },
+    redactionValues: [ERROR_SECRET],
+    streamFn: () => {
+      throw new Error('The fake Pi agent must not call the provider stream.');
+    },
     supportsTools: true,
-    timeoutMs: 60_000,
     usageContext: {
       credentialReceipt: {
         attribution: 'explicit',
@@ -131,7 +132,20 @@ function createTestRuntime(limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS):
     if (!holder.program) throw new Error('Test Pi Agent program was not configured.');
     return new TestPiAgent(options, holder.program);
   };
-  const runtime = new PiRuntime({ resolveModel: () => holder.resolution }, factory, limits);
+  const runtime = new PiRuntime(
+    {
+      preflightModel: () => ({
+        contextWindow: holder.resolution.model.contextWindow,
+        inputModalities: [...holder.resolution.model.input],
+        maxInputTokens: holder.resolution.model.contextWindow - holder.resolution.model.maxTokens,
+        maxOutputTokens: holder.resolution.model.maxTokens,
+        supportsTools: holder.resolution.supportsTools,
+      }),
+      resolveModel: () => holder.resolution,
+    },
+    factory,
+    limits,
+  );
   holders.set(runtime, holder);
   return runtime;
 }
@@ -212,6 +226,7 @@ function baseRequest(
     instructions: 'Be helpful.',
     model: { providerId: 'mock-provider', modelId: 'mock-model' },
     history: [],
+    contextCheckpoint: null,
     input: [{ type: 'text', text: 'Hello.' }],
     options: {},
     tools: [],
@@ -371,6 +386,58 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('preflights and maps current and historical inline images without retaining data URLs', async () => {
+    const runtime = createTestRuntime();
+    const holder = holders.get(runtime);
+    if (!holder) throw new Error('missing Runtime holder');
+    holder.resolution = {
+      ...holder.resolution,
+      model: { ...holder.resolution.model, input: ['text', 'image'] },
+    };
+    let prompt: PiMessage | undefined;
+    const arranged = arrange(runtime, async (context) => {
+      prompt = context.prompt;
+      await emitText(context, 'I see both images.');
+    });
+    const session = await runtime.open();
+    const image = {
+      type: 'file' as const,
+      mediaType: 'image/png',
+      name: 'image.png',
+      uri: 'data:image/png;base64,AAAA',
+    };
+
+    expect(await runtime.preflightModel(baseRequest('preflight').model)).toMatchObject({
+      inputModalities: ['text', 'image'],
+    });
+    await collect(
+      session.execute(
+        baseRequest('turn-images', {
+          history: [{ turnId: 'turn-before-images', messages: [{ role: 'user', parts: [image] }] }],
+          input: [{ type: 'text', text: 'Compare these.' }, image],
+        }),
+      ),
+    );
+
+    expect(arranged.lastOptions?.initialState?.model?.input).toEqual(['text', 'image']);
+    expect(arranged.lastOptions?.initialState?.messages).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }],
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(prompt).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Compare these.' },
+        { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+      ],
+      timestamp: expect.any(Number),
+    });
+    await session.close();
+  });
+
   test('surfaces provider errors after redacting resolved credentials', async () => {
     const runtime = createTestRuntime();
     arrange(runtime, async (context) => {
@@ -432,25 +499,30 @@ describe('PiRuntime mapping', () => {
     const session = await runtime.open();
     const request = baseRequest('turn-context', {
       history: [
-        { role: 'system', parts: [{ type: 'text', text: 'Prior system note.' }] },
-        { role: 'user', parts: [{ type: 'text', text: 'Earlier question.' }] },
-        { role: 'assistant', parts: [{ type: 'reasoning', text: 'Earlier thought.' }] },
-        { role: 'assistant', parts: [{ type: 'text', text: 'Earlier answer.' }] },
         {
-          role: 'assistant',
-          parts: [
+          turnId: 'turn-history',
+          messages: [
+            { role: 'system', parts: [{ type: 'text', text: 'Prior system note.' }] },
+            { role: 'user', parts: [{ type: 'text', text: 'Earlier question.' }] },
+            { role: 'assistant', parts: [{ type: 'reasoning', text: 'Earlier thought.' }] },
+            { role: 'assistant', parts: [{ type: 'text', text: 'Earlier answer.' }] },
             {
-              type: 'tool-call',
-              toolCallId: 'historic-call',
-              toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
-              providerName: 'mcp_server_2_lookup_c3d4',
-              input: { query: 'Cherry Studio' },
-            },
-            {
-              type: 'tool-result',
-              toolCallId: 'historic-call',
-              output: { value: { found: true }, artifacts: [] },
-              isError: false,
+              role: 'assistant',
+              parts: [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'historic-call',
+                  toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
+                  providerName: 'mcp_server_2_lookup_c3d4',
+                  input: { query: 'Cherry Studio' },
+                },
+                {
+                  type: 'tool-result',
+                  toolCallId: 'historic-call',
+                  output: { value: { found: true }, artifacts: [] },
+                  isError: false,
+                },
+              ],
             },
           ],
         },
@@ -507,6 +579,8 @@ describe('PiRuntime mapping', () => {
       systemPrompt: 'Be helpful.\n\nPrior system note.',
       thinkingLevel: 'high',
     });
+    expect(holder.lastOptions?.streamFn).toBe(holder.resolution.streamFn);
+    expect(holder.lastOptions?.getApiKey).toBeUndefined();
     await session.close();
   });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `agent_session_message` ADD `context_checkpoint` text;

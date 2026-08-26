@@ -242,6 +242,11 @@ describe.each([
       ],
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' },
+      contextCheckpoint: {
+        version: 1,
+        anchorTurnId: reserved.turnId,
+        payload: { mustNotPersist: true },
+      },
     });
 
     expect(finalized.status).toBe('error');
@@ -252,6 +257,7 @@ describe.each([
 
     const transcript = await store.listMessages(session.id);
     expect(transcript[1]).toEqual(finalized);
+    expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
     await expect(
       store.finalizeAssistantMessage({
         assistantMessageId: 'missing',
@@ -259,6 +265,7 @@ describe.each([
         parts: [],
         usage: null,
         error: null,
+        contextCheckpoint: null,
       }),
     ).rejects.toThrow();
   });
@@ -277,6 +284,7 @@ describe.each([
         parts: [{ id: 'text-1', type: 'text', text: `re: ${text}`, state: 'done' }],
         usage: null,
         error: null,
+        contextCheckpoint: null,
       });
     }
 
@@ -297,6 +305,33 @@ describe.each([
     expect(transcript[0]?.turnId).toBe(transcript[1]?.turnId);
     expect(transcript[2]?.turnId).toBe(transcript[3]?.turnId);
     expect(transcript[0]?.turnId).not.toBe(transcript[2]?.turnId);
+  });
+
+  test('stores a checkpoint on the assistant terminal write and reads the newest candidate', async () => {
+    const session = await store.createSession({ agentId });
+    const first = await store.reserveSubmission({
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+    });
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: first.turnId,
+      payload: { summary: 'one' },
+    };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+    });
+
+    expect(await store.getLatestContextCheckpoint(session.id)).toEqual({
+      assistantMessageId: first.assistantMessage.id,
+      checkpoint,
+    });
+    expect(await store.getLatestContextCheckpoint('missing')).toBeNull();
   });
 
   test('reconcileInterrupted settles unsettled assistant placeholders once', async () => {
@@ -374,6 +409,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       parts: [],
       usage: null,
       error: null,
+      contextCheckpoint: null,
     });
     await expect(
       store.reserveSubmission({
@@ -403,6 +439,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       ],
       usage: null,
       error: null,
+      contextCheckpoint: null,
     });
 
     const search = (term: string) =>
@@ -441,6 +478,34 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       .prepare('SELECT last_activity_at FROM agent_session WHERE id = ?')
       .get(session.id) as { last_activity_at: number };
     expect(sessionRow.last_activity_at).toBeGreaterThan(0);
+  });
+
+  test('returns a corrupt checkpoint candidate for Host-side classification', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await store.createSession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+    });
+    raw
+      .prepare('UPDATE agent_session_message SET context_checkpoint = ? WHERE id = ?')
+      .run('not-json', reserved.assistantMessage.id);
+
+    await expect(store.getLatestContextCheckpoint(session.id)).resolves.toEqual({
+      assistantMessageId: reserved.assistantMessage.id,
+      checkpoint: 'not-json',
+    });
   });
 
   test('keeps the inference snapshot after its selected model is deleted', async () => {

@@ -9,8 +9,8 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Existing Sessions submit through the live `AgentProtocol` client owned by `ChatProvider`.
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
   presentation.
-- The Agent Host currently reports `attachments: false`. Chat exposes no attachment picker; pasted
-  attachments remain removable but sending them fails with an explicit unsupported message.
+- Image attachments are imported into managed storage before send. The Host revalidates their
+  authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
 - The resting composer is one row. Focusing it reveals the model pill and reasoning-effort gauge on
   the toolbar below without remounting the field, draft, or send control.

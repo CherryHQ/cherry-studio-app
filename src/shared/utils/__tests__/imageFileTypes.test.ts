@@ -1,4 +1,5 @@
 import {
+  AI_IMAGE_INPUT_MAX_COUNT,
   AI_SUPPORTED_IMAGE_MEDIA_TYPES,
   generatedImageExtension,
   imageMediaTypeFromExtension,
@@ -30,6 +31,7 @@ describe('image file types', () => {
   });
 
   it('recognizes only model-supported image media types', () => {
+    expect(AI_IMAGE_INPUT_MAX_COUNT).toBe(9);
     expect(AI_SUPPORTED_IMAGE_MEDIA_TYPES).toEqual([
       'image/jpeg',
       'image/png',

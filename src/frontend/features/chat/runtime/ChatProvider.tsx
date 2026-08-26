@@ -20,14 +20,14 @@ import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessi
 type AgentChatSendInput = {
   agentId?: string;
   modelId?: AgentSubmitMessageInput['modelId'];
+  parts: AgentInputPart[];
   reasoningEffort?: AgentSubmitMessageInput['reasoningEffort'];
   sessionId?: string;
-  text: string;
 };
 
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
-  sendText: (input: AgentChatSendInput) => Promise<void>;
+  sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
 const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
@@ -79,8 +79,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
   }, [client]);
   useEffect(() => () => client.dispose(), [client]);
 
-  const sendText = useCallback(
-    async ({ agentId, modelId, reasoningEffort, sessionId, text }: AgentChatSendInput) => {
+  const sendMessage = useCallback(
+    async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
       if (!targetSessionId) {
         if (!agentId) {
@@ -94,7 +94,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
       }
 
-      const parts: AgentInputPart[] = [{ text, type: 'text' }];
       await client.submitMessage(targetSessionId, parts, {
         ...(modelId !== undefined ? { modelId } : {}),
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
@@ -102,7 +101,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
     },
     [client, navigation, queryClient],
   );
-  const value = useMemo(() => ({ client, sendText }), [client, sendText]);
+  const value = useMemo(() => ({ client, sendMessage }), [client, sendMessage]);
 
   return <AgentChatContext value={value}>{children}</AgentChatContext>;
 }
@@ -143,7 +142,7 @@ export function useAgentChatSession(sessionId: string | undefined): AgentSession
 }
 
 export function useAgentChatControls(input: { agentId?: string; sessionId?: string }) {
-  const { client, sendText } = useAgentChatContext();
+  const { client, sendMessage } = useAgentChatContext();
   const { agentId, sessionId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const cancel = useCallback(() => {
@@ -154,8 +153,8 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
   }, [client, sessionId]);
   const send = useCallback(
     (message: Omit<AgentChatSendInput, 'agentId' | 'sessionId'>) =>
-      sendText({ agentId, sessionId, ...message }),
-    [agentId, sendText, sessionId],
+      sendMessage({ agentId, sessionId, ...message }),
+    [agentId, sendMessage, sessionId],
   );
 
   return {
@@ -166,7 +165,7 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
       activeTurnStatus !== 'failed' &&
       activeTurnStatus !== 'cancelled' &&
       activeTurnStatus !== 'interrupted',
-    sendText: send,
+    sendMessage: send,
   };
 }
 

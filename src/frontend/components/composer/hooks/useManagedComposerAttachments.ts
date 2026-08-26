@@ -38,6 +38,7 @@ export function useManagedComposerAttachments(
   const importTokensRef = useRef(new Map<string, symbol>());
   const cancelledImportTokensRef = useRef(new Set<symbol>());
   const ownedEntryIdsRef = useRef(new Set<ComposerAttachmentReady['fileEntryId']>());
+  const releasedOwnedEntryIdsRef = useRef(new Set<ComposerAttachmentReady['fileEntryId']>());
   const [attachments, setAttachmentState] = useState<ComposerAttachmentDraft[]>(() =>
     initialAttachmentState.accepted.map((attachment) =>
       isComposerAttachmentReady(attachment)
@@ -108,6 +109,8 @@ export function useManagedComposerAttachments(
               ? {
                   ...source,
                   fileEntryId: resolved.entry.id,
+                  mediaType: resolved.entry.mediaType,
+                  name: resolved.entry.filename,
                   size: importedSize,
                   status: 'ready' as const,
                   uri: resolved.uri,
@@ -116,7 +119,7 @@ export function useManagedComposerAttachments(
           ),
         );
         return finishImport('ready');
-      } catch (error) {
+      } catch {
         if (cancelledImportTokensRef.current.delete(token)) {
           return finishImport('ignored');
         }
@@ -126,9 +129,9 @@ export function useManagedComposerAttachments(
 
         importTokensRef.current.delete(source.id);
         commitAttachments(removeComposerAttachment(attachmentsRef.current, source.id));
-        logger.warn('Failed to import an attachment', toError(error), {
-          name: source.name,
-          uri: source.uri,
+        logger.warn('Failed to import an attachment', {
+          kind: source.kind,
+          size: importedSize ?? null,
         });
         return finishImport('failed');
       }
@@ -207,12 +210,31 @@ export function useManagedComposerAttachments(
 
   const clearAttachments = useCallback(() => {
     importTokensRef.current.clear();
+    // ComposerSurface clears before awaiting send. Release temporary ownership
+    // now; setAttachments rolls it back only when that send rejects.
+    releasedOwnedEntryIdsRef.current = new Set(
+      attachmentsRef.current.flatMap((attachment) =>
+        isComposerAttachmentReady(attachment) &&
+        ownedEntryIdsRef.current.delete(attachment.fileEntryId)
+          ? [attachment.fileEntryId]
+          : [],
+      ),
+    );
     commitAttachments([]);
   }, [commitAttachments]);
 
   const setAttachments = useCallback(
     (nextAttachments: ComposerAttachmentDraft[]) => {
       importTokensRef.current.clear();
+      for (const attachment of nextAttachments) {
+        if (
+          isComposerAttachmentReady(attachment) &&
+          releasedOwnedEntryIdsRef.current.has(attachment.fileEntryId)
+        ) {
+          ownedEntryIdsRef.current.add(attachment.fileEntryId);
+        }
+      }
+      releasedOwnedEntryIdsRef.current.clear();
       commitAttachments([...nextAttachments]);
     },
     [commitAttachments],

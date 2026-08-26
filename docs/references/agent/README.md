@@ -57,8 +57,9 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. Persisted MCP bindings are
-  projected only when their Streamable HTTP server and raw discovered tool remain executable.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host combines its fixed
+  built-in tools with persisted MCP bindings whose Streamable HTTP server and raw discovered tool
+  remain executable.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -100,13 +101,12 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   store policy before one becomes architecture. Today both platforms may suspend or terminate local
   work, so interrupted-turn reconciliation remains the contract floor. Any continuation design also
   needs a protocol for re-attaching an observed Session to a still-running turn.
-- **Context compaction** is undesigned. The ownership split is decided: the durable conversation
-  record belongs to the Host (it must survive process death and back transcript reads), while
-  turning that structured record into the actual model prompt — selection, formatting, and
-  eventually compaction — is Pi-owned engine strategy. Compaction needs a contract collaboration
-  point because its artifacts must persist and a Runtime cannot write application storage (for
-  example, a context-artifact event the Host stores and replays into later turns). Design it
-  together with the Pi Runtime.
+- **Context compaction policy** belongs to Pi. The collaboration contract is now settled: Runtime
+  history is grouped by durable `turnId`, the Runtime may emit a versioned opaque context
+  checkpoint, and the Host validates, persists, and replays that artifact with complete turns after
+  its anchor. The Host never interprets the payload or truncates history itself. Pi compaction
+  generation remains a follow-up built on this contract; see [Agent Runtime](./agent-runtime.md)
+  and [Agent Persistence](./agent-persistence.md).
 
 ## Documents
 
@@ -135,20 +135,23 @@ The table intentionally starts empty: retired Assistant data is not migrated or 
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
-The production Pi model adapter currently accepts API-key-authenticated OpenAI Responses endpoints.
-Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and approval decisions
-onto the Runtime contract. Agent tool bindings are durable and exposed through the typed Data API.
-The HTTP MCP adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks,
-and the Host resolves their effective policy into a frozen per-turn catalog before reserving
-messages. File attachments are rejected before provider execution until the Host-side file resolver
+The production Pi model adapter currently accepts API-key-authenticated Anthropic Messages, Google
+Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Pi maps text, reasoning,
+cumulative usage, cancellation, native tool loops, and approval decisions onto the Runtime
+contract. Agent tool bindings are durable and exposed through the typed Data API. The HTTP MCP
+adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks, and the Host
+resolves their effective policy alongside its fixed application-owned catalog into a frozen
+per-turn snapshot before reserving messages. The Host resolves bounded managed images for supported
+image-capable models; text attachments remain deferred. It also persists and replays versioned
+Runtime context checkpoints; Pi does not produce or consume them until its compaction integration
 lands.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Mobile Skill configuration/loading and broader Pi provider coverage remain follow-up work. Managed
-attachments and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+Mobile Skill configuration/loading, text attachment conversion and the controlled resource ledger,
+the avatar workflow, and Pi context compaction remain separate follow-ups.
 
 ## Related
 

@@ -1,8 +1,9 @@
 /**
  * Minimal Agent configuration source.
  *
- * Tool bindings are persisted and resolved separately from the definition.
- * Agent lookup stays limited to id/name/model/instructions/inference options.
+ * Tool bindings and the fixed built-in catalog are resolved separately from the
+ * definition. Agent lookup stays limited to id/name/model/instructions/inference
+ * options.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';

@@ -4,15 +4,19 @@ export type {
   RuntimeApproval,
   RuntimeArtifact,
   RuntimeCapabilities,
+  RuntimeContextCheckpoint,
   RuntimeDescriptor,
   RuntimeError,
   RuntimeEvent,
   RuntimeExecutionRequest,
+  RuntimeHistoryTurn,
   RuntimeInputPart,
+  RuntimeInputModality,
   RuntimeJsonValue,
   RuntimeMessage,
   RuntimeMessagePart,
   RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeOptions,
   RuntimeOutputPart,
   RuntimeTool,
@@ -22,6 +26,8 @@ export type {
   RuntimeUsageContext,
   RuntimeUsageReport,
 } from './types';
+
+export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
 
 export type {
   FakeExecutionController,

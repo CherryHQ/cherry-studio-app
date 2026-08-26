@@ -1,7 +1,8 @@
 # Agent Persistence
 
-Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, and frontend
-integration active in production**. Version 1 is local-only.
+Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, managed attachment
+references, Runtime context checkpoint storage, and frontend integration active in production**.
+Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -25,10 +26,10 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Out of scope: branching columns, background turns, Runtime tool projection/execution, Mobile Skill
+Out of scope: branching columns, background turns, persisted tool binding projection, Mobile Skill
 configuration/loading, and broader Pi provider coverage. The retired `assistant`/`topic`/`message`
-tables were removed separately after Agent surfaces became authoritative. Persisted bindings do not
-make the current Host tool-capable: it still supplies an empty Runtime tool snapshot.
+tables were removed separately after Agent surfaces became authoritative. Persisted bindings are
+not yet projected into the Runtime snapshot; the current Host supplies a fixed `write_file` tool.
 
 ## Current limitations
 
@@ -54,6 +55,10 @@ deliberately discarded rather than converted between incompatible models.
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Version 1 has one execution target and one local engine: `local → Pi`. Application composition
 injects Pi directly into the Host, so there is no local implementation choice to persist.
+`contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
+artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
+or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
+active turn.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
@@ -204,6 +209,7 @@ Future additive columns (not created now): `forkedFromSessionId`, `forkedFromMes
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`; projected into `AgentTurnView.error`, not part of the message view |
+| `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
@@ -243,8 +249,13 @@ projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, usage, turn-level error — in one write (invariant 5). `deleteSession` is one
-  cascading delete.
+  status, parts, usage, turn-level error, and an optional validated context checkpoint — in one
+  write (invariant 5). Failed, cancelled, and interrupted terminal rows force the checkpoint to
+  `NULL`. `deleteSession` is one cascading delete.
+- The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
+  schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
+  oversized, or orphaned candidates are classified in logs and ignored; execution receives full
+  history instead.
 - Turn reads and live-status transitions leave the store: the Host holds the active turn's live
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`
   from it plus the assistant message row. Terminal statuses derive from the message row alone,
@@ -286,7 +297,7 @@ storage boundary moves.
    separate slice.
 8. **Follow-ups (separate implementation slices).** Avatar workflow (generalizing
    `userAvatarStorage`), Skill binding persistence, managed attachment and artifact projection,
-   fork columns, context compaction, and broader Pi provider coverage.
+   fork columns, Pi context compaction generation, and broader Pi provider coverage.
 
 ## Rejected alternatives
 
