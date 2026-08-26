@@ -408,7 +408,7 @@ describe('PiRuntime mapping', () => {
       ),
     );
 
-    expect(arranged.lastOptions?.initialState?.model.input).toEqual(['text', 'image']);
+    expect(arranged.lastOptions?.initialState?.model?.input).toEqual(['text', 'image']);
     expect(arranged.lastOptions?.initialState?.messages).toEqual([
       {
         role: 'user',

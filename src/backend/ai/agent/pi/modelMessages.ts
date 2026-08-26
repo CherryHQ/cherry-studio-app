@@ -62,9 +62,7 @@ export function toPiConversation(
   };
 }
 
-function collectUserContent(
-  parts: RuntimeExecutionRequest['input'] | RuntimeMessagePart[],
-): UserMessage['content'] {
+function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['content'] {
   const content: (TextContent | ImageContent)[] = parts.flatMap((part) => {
     if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
@@ -97,7 +95,7 @@ function collectProviderNames(request: RuntimeExecutionRequest): Map<string, str
   return result;
 }
 
-function collectText(parts: RuntimeMessagePart[]): string {
+function collectText(parts: readonly RuntimeMessagePart[]): string {
   return parts
     .flatMap((part) => (part.type === 'text' || part.type === 'reasoning' ? [part.text] : []))
     .join('\n');
