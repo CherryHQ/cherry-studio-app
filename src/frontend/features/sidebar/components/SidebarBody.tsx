@@ -1,6 +1,6 @@
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import FilterIcon from '@cherrystudio/app-icons/icons/filter';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,10 +13,10 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../useDockMetrics';
 import { SidebarNavRow } from './SidebarNavRow';
-import { SidebarTopicList } from './SidebarTopicList';
+import { SidebarSessionList } from './SidebarSessionList';
 
 /**
- * The sidebar's only scroller: nav rows and the recent topics scroll together
+ * The sidebar's only scroller: nav rows and the recent sessions scroll together
  * under the floating header and footer, which is why the content padding clears
  * both. `ScrollShadow` dissolves rows into the sidebar surface at the top, and
  * the header's blur lives in its `SidebarFade` layer. Children replace the
@@ -57,17 +57,13 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAssistants, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openPaintings } = useSidebarActions('Sidebar.Body');
 
   return (
     <>
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
-        <SidebarNavRow
-          icon={LibraryBigIcon}
-          label={t('navigation.assistants')}
-          onPress={navigateAssistants}
-        />
+        <SidebarNavRow icon={BotIcon} label={t('navigation.agents')} onPress={navigateAgents} />
         <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
       </View>
 
@@ -85,7 +81,7 @@ function SidebarBodyDefault() {
           <FilterIcon className="size-4 text-muted-foreground" />
         </Pressable>
       </View>
-      <SidebarTopicList />
+      <SidebarSessionList />
     </>
   );
 }

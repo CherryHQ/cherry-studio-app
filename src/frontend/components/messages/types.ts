@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { Message } from '@/shared/data/types/message';
+import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
 
-export type MessageListItem = Readonly<
-  Pick<Message, 'data' | 'id' | 'status'> & {
-    role: 'assistant' | 'user';
-  }
->;
+export type MessageListItem = Readonly<{
+  data: Readonly<{ parts?: readonly CherryMessagePart[] }>;
+  id: string;
+  role: 'assistant' | 'user';
+  status: MessageStatus;
+}>;
 
 export type MessageListProps = {
   bottomAccessoryHeight?: SharedValue<number>;

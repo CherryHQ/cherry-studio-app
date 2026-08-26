@@ -1,6 +1,8 @@
 # Cherry Agent Runtime
 
-Status: **Pi-first target design; integration not yet complete**. Version 1 is local-only.
+Status: **Pi Runtime active behind the Mobile Agent Host**; the tool contract shapes
+(`RuntimeToolRef`, `RuntimeToolResult`, the `interrupted` tool state) are settled design landing
+with tool configuration. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -39,6 +41,20 @@ The Agent's application-owned instructions, model, and tools are resolved afresh
 Enabled description-only Skills are resolved into instructions at the same boundary but are not
 tools. The injected Pi Runtime remains stable for the Host lifetime.
 
+## Production Pi binding
+
+The production Host binds `local` directly to Pi and injects provider/model resolution through an
+application adapter. The Runtime itself imports neither Expo transport nor application data
+services. Current provider coverage is intentionally narrow: API-key-authenticated OpenAI Responses
+endpoints. Unsupported endpoint or authentication types fail before partial execution; expanding
+that adapter is follow-up work.
+
+Pi receives the complete structured transcript and Agent inference options on each execution. It
+maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
+multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
+supplies `tools: []` until the application-owned tool configuration model lands. Attachments remain
+disabled pending Host-side file resolution.
+
 ## Descriptor and lifecycle
 
 ```ts
@@ -74,8 +90,8 @@ interface AgentRuntimeSession {
 
 Capabilities describe what the engine contract can represent. In particular, `tools: true` means
 Pi can run a tool loop; it does not mean the current Agent has any tools configured. The Host derives
-the effective tools for each turn and separately checks whether the selected model supports native
-tool calling.
+the effective tools for each turn, and the Pi model adapter separately checks whether the selected
+model supports native tool calling.
 
 The Host owns one `AgentRuntimeSession` for each active application Session. The Runtime session may
 hold provider clients and execution-local state, but every `execute` request contains the complete
@@ -218,8 +234,8 @@ tool result; a Runtime never looks up and executes an arbitrary application tool
 
 Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
 not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
-the Host rejects the turn with `CAPABILITY_UNSUPPORTED` before partial execution instead of silently
-degrading to prompt-encoded pseudo calls.
+the Pi Runtime rejects the turn with a normalized unsupported-tools failure before partial execution
+instead of silently degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied`, persists
@@ -265,7 +281,12 @@ type RuntimeEvent =
   | { type: 'part.replace'; part: RuntimeOutputPart }
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
-  | { type: 'usage'; usage: RuntimeUsage }
+  | {
+      type: 'usage'
+      usage: RuntimeUsage
+      context: RuntimeUsageContext
+      completedAt: number
+    }
   | { type: 'completed' }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
@@ -320,7 +341,13 @@ type RuntimeUsage = {
   inputTokens?: number
   outputTokens?: number
   totalTokens?: number
+  reasoningTokens?: number
+  noCacheTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
 }
+
+type RuntimeUsageContext = Omit<AiUsageCaptureContext, 'source' | 'messageRef'>
 
 type RuntimeError = {
   code: string
@@ -337,8 +364,14 @@ terminal event. Runtime-native errors are normalized and must not expose credent
 traces.
 
 `usage` values are cumulative for the execution; the last report before the terminal event is
-authoritative. A Runtime that cannot report usage emits no `usage` event, and the assistant
-message's protocol `usage` stays `null`.
+authoritative. Detailed cache and reasoning counts remain available for pricing even though the
+Agent Protocol message projects only the input, output, and total counts. `context` is the immutable
+provider, served-model, pricing, and credential-attribution snapshot captured when the provider is
+resolved, before execution starts. `completedAt` is recorded at the Runtime provider boundary. The
+Host adds the Agent source and Session message reference without re-reading mutable provider/model
+configuration. It does not synthesize provider timing from the broader Host turn lifetime. A
+Runtime that cannot report usage emits no `usage` event, and the assistant message's protocol
+`usage` stays `null`.
 
 ## Host execution flow
 

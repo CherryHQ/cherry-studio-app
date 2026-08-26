@@ -147,6 +147,15 @@ describe.each([
     expect(renamed?.titleIsManual).toBe(true);
     expect(await store.renameSession('missing', 'x')).toBeNull();
 
+    const autoNamed = await store.autoRenameSession(titled.id, 'Named', 'Summary');
+    expect(autoNamed).toBeNull();
+
+    const autoTitle = await store.createSession({ agentId });
+    const firstTitle = await store.autoRenameSession(autoTitle.id, '', 'First message');
+    expect(firstTitle?.title).toBe('First message');
+    expect(firstTitle?.titleIsManual).toBe(false);
+    expect(await store.autoRenameSession(autoTitle.id, '', 'Stale write')).toBeNull();
+
     expect(await store.deleteSession(created.id)).toBe(true);
     expect(await store.deleteSession(created.id)).toBe(false);
     expect(await store.getSession(created.id)).toBeNull();
@@ -401,7 +410,7 @@ function applyMigrations(database: DatabaseSync) {
 
 /**
  * Positional for drizzle's column mapper, named for raw `db.all` fallbacks —
- * the proxy answers in both shapes at once (see MessageService.integration).
+ * the proxy answers in both shapes at once.
  */
 function hybridRow(row: Record<string, unknown>): unknown[] {
   return Object.assign(Object.values(row), row);

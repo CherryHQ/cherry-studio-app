@@ -36,18 +36,20 @@ import {
 
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
+const FINISH_TITLE_GRACE_MS = 5_000;
 const logger = loggerService.withContext('BackgroundReply');
 
 type ChatActivitySession = BackgroundActivitySession<BackgroundReplyActivityProps>;
 
 type TurnRecord = {
-  assistantName: string;
+  actorName: string;
   content: BackgroundReplyContent;
+  conversationTitle: string;
+  deepLinkUrl: string;
   generation: number;
+  key: string;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
-  topicId: string;
-  topicTitle: string;
 };
 
 type BackgroundActivityPort = {
@@ -68,7 +70,7 @@ type EnvironmentPort = {
 
 /**
  * Chat's domain adapter over the background-activity mechanism: it owns the
- * per-topic turn state machine, derives presentable content from chat
+ * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
  * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
  * behind the injected session manager.
@@ -131,28 +133,30 @@ export class BackgroundReplyRuntime
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
     if (Platform.OS !== 'ios' || this.disposed) return noOpTurn;
 
-    const existing = this.turns.get(input.topicId);
+    const normalized = normalizeTurnInput(input);
+    const existing = this.turns.get(normalized.key);
     const generation = ++this.generation;
     const content = deriveBackgroundReplyContent(undefined, this.environment.translate);
-    const assistantName =
-      input.assistantName.trim() || this.environment.translate('chat.backgroundReply.assistant');
+    const actorName =
+      normalized.actorName.trim() || this.environment.translate('chat.backgroundReply.assistant');
     const record: TurnRecord = {
-      assistantName,
+      actorName,
       content,
+      conversationTitle: normalized.conversationTitle.trim(),
+      deepLinkUrl: normalized.deepLinkUrl,
       generation,
+      key: normalized.key,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
-      topicId: input.topicId,
-      topicTitle: input.topicTitle.trim(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
-    this.turns.set(input.topicId, record);
+    this.turns.set(record.key, record);
     this.ensureSession(record);
 
     return {
       awaitApproval: (message) =>
-        this.runTurnCallback(input.topicId, 'mark approval pending', () => {
-          if (!this.isCurrent(input.topicId, generation)) return;
-          const current = this.turns.get(input.topicId);
+        this.runTurnCallback(record.key, 'mark approval pending', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          const current = this.turns.get(record.key);
           if (!current) return;
           const latest = deriveBackgroundReplyContent(message, this.environment.translate);
           current.content = {
@@ -165,25 +169,46 @@ export class BackgroundReplyRuntime
             urgent: true,
           });
         }),
-      finish: (outcome) =>
-        this.runTurnCallback(input.topicId, 'finish turn', () => {
-          this.finishTurn(input.topicId, generation, outcome);
-        }),
+      finish: (outcome, options) => {
+        void this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
+          (error: unknown) => {
+            logger.error('Background reply failed to finish turn', error as Error, {
+              key: record.key,
+            });
+          },
+        );
+      },
       update: (message) =>
-        this.runTurnCallback(input.topicId, 'update turn', () => {
-          this.updateTurn(input.topicId, generation, message);
+        this.runTurnCallback(record.key, 'update turn', () => {
+          this.updateTurn(record.key, generation, message);
         }),
     };
   };
 
-  clearTopic = (topicId: string): void => {
-    const record = this.turns.get(topicId);
+  clearSession = (sessionId: string): void => {
+    this.clearTurn(sessionId);
+  };
+
+  updateSessionTitle = (sessionId: string, title: string): void => {
+    this.runTurnCallback(sessionId, 'update Agent Session title', () => {
+      const record = this.turns.get(sessionId);
+      if (!record) return;
+      record.conversationTitle = title.trim();
+      record.session?.update(this.toActivityProps(record), {
+        keepAlive: isGeneratingPhase(record.content.phase),
+        urgent: true,
+      });
+    });
+  };
+
+  private clearTurn(key: string): void {
+    const record = this.turns.get(key);
     if (!record) return;
 
-    this.turns.delete(topicId);
+    this.turns.delete(key);
     record.session?.cancel();
     record.session = undefined;
-  };
+  }
 
   protected async onStop(): Promise<void> {
     if (this.disposed) return;
@@ -208,12 +233,12 @@ export class BackgroundReplyRuntime
   }
 
   private updateTurn(
-    topicId: string,
+    key: string,
     generation: number,
     message: Parameters<BackgroundReplyTurn['update']>[0],
   ) {
-    if (!this.isCurrent(topicId, generation)) return;
-    const record = this.turns.get(topicId);
+    if (!this.isCurrent(key, generation)) return;
+    const record = this.turns.get(key);
     if (!record) return;
 
     const nextContent = deriveBackgroundReplyContent(message, this.environment.translate);
@@ -225,9 +250,14 @@ export class BackgroundReplyRuntime
     });
   }
 
-  private finishTurn(topicId: string, generation: number, outcome: BackgroundReplyOutcome): void {
-    if (!this.isCurrent(topicId, generation)) return;
-    const record = this.turns.get(topicId);
+  private async finishTurn(
+    key: string,
+    generation: number,
+    outcome: BackgroundReplyOutcome,
+    waitFor?: Promise<unknown>,
+  ): Promise<void> {
+    if (!this.isCurrent(key, generation)) return;
+    const record = this.turns.get(key);
     if (!record) return;
 
     record.content = getTerminalBackgroundReplyContent(
@@ -235,18 +265,44 @@ export class BackgroundReplyRuntime
       record.content.preview,
       this.environment.translate,
     );
-    // Deferred so a continuation turn started in the same tick (approval
-    // resume, regenerate) inherits the live session instead of watching it
-    // end and restart.
-    void this.enqueue(async () => {
+    record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
+    if (waitFor) {
+      await this.waitForFinishDependency(key, waitFor);
+    }
+    // Keep terminal content updateable until any final title projection settles.
+    // A continuation that supersedes this generation inherits the live session.
+    await this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
       record.session?.finish(this.toActivityProps(record));
       record.session = undefined;
-      if (this.turns.get(topicId) === record) this.turns.delete(topicId);
+      if (this.turns.get(key) === record) this.turns.delete(key);
     });
   }
 
-  /** Starts the topic's session, or re-syncs an inherited one, when enabled. */
+  private async waitForFinishDependency(key: string, dependency: Promise<unknown>): Promise<void> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const settled = dependency.then(
+      () => undefined,
+      (error: unknown) => {
+        logger.warn('Background reply finish dependency failed', error as Error, { key });
+      },
+    );
+    const graceExpired = new Promise<void>((resolve) => {
+      timeout = setTimeout(() => {
+        timeout = undefined;
+        logger.warn('Background reply finish dependency timed out', {
+          graceMs: FINISH_TITLE_GRACE_MS,
+          key,
+        });
+        resolve();
+      }, FINISH_TITLE_GRACE_MS);
+    });
+
+    await Promise.race([settled, graceExpired]);
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+
+  /** Starts the conversation's activity, or re-syncs an inherited one, when enabled. */
   private ensureSession(record: TurnRecord, activating = false): void {
     // `onActivate` runs before BaseService flips `isActivated`; callers during
     // normal operation use the public state as the preference gate.
@@ -258,7 +314,7 @@ export class BackgroundReplyRuntime
       return;
     }
     record.session = this.activities.startSession({
-      deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(record.topicId)}`,
+      deepLinkUrl: record.deepLinkUrl,
       keepAlive,
       presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
@@ -269,7 +325,7 @@ export class BackgroundReplyRuntime
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
-      ...(record.topicTitle ? { attribution: record.assistantName } : {}),
+      ...(record.conversationTitle ? { attribution: record.actorName } : {}),
       compactIcon: 'bubble-ellipsis',
       ...(record.content.phase === 'awaiting-approval'
         ? { compactLabel: this.environment.translate('backgroundActivity.awaitingApproval') }
@@ -283,23 +339,23 @@ export class BackgroundReplyRuntime
       detail: record.content.detail,
       icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
-      title: record.topicTitle || record.assistantName,
+      title: record.conversationTitle || record.actorName,
     };
   }
 
-  private isCurrent(topicId: string, generation: number): boolean {
-    return !this.disposed && this.turns.get(topicId)?.generation === generation;
+  private isCurrent(key: string, generation: number): boolean {
+    return !this.disposed && this.turns.get(key)?.generation === generation;
   }
 
   private isRecordCurrent(record: TurnRecord): boolean {
-    return !this.disposed && this.turns.get(record.topicId) === record;
+    return !this.disposed && this.turns.get(record.key) === record;
   }
 
-  private runTurnCallback(topicId: string, operation: string, callback: () => void): void {
+  private runTurnCallback(key: string, operation: string, callback: () => void): void {
     try {
       callback();
     } catch (error) {
-      logger.error(`Background reply failed to ${operation}`, error as Error, { topicId });
+      logger.error(`Background reply failed to ${operation}`, error as Error, { key });
     }
   }
 
@@ -308,6 +364,20 @@ export class BackgroundReplyRuntime
     this.operationTail = run.catch(() => {});
     return run;
   }
+}
+
+function normalizeTurnInput(input: BackgroundReplyTurnInput): {
+  actorName: string;
+  conversationTitle: string;
+  deepLinkUrl: string;
+  key: string;
+} {
+  return {
+    actorName: input.agentName,
+    conversationTitle: input.sessionTitle,
+    deepLinkUrl: `cherrystudio:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    key: input.sessionId,
+  };
 }
 
 const noOpTurn: BackgroundReplyTurn = {

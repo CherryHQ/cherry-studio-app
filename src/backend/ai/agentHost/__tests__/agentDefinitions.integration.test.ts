@@ -35,6 +35,7 @@ describe('agent-table definition source', () => {
       instructions: 'Be terse.',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
+      settings: { maxOutputTokens: 2048, reasoningEffort: 'high', temperature: 0.4 },
     });
 
     await expect(source.getAgent(agent.id)).resolves.toEqual({
@@ -42,6 +43,7 @@ describe('agent-table definition source', () => {
       instructions: 'Be terse.',
       model: { modelId: 'gpt-4', providerId: 'openai' },
       name: 'Researcher',
+      options: { maxOutputTokens: 2048, reasoningEffort: 'high', temperature: 0.4 },
     });
 
     const modelless = await agentService.create({ modelId: null, name: 'No Model' });

@@ -7,8 +7,8 @@ deliberate omission, not a gap.
 
 ## Scope
 
-- `types`: entity and value types. Most are declared here (`FileEntry`, `Topic`, `Painting`, web
-  search, trace). Seven — model, provider, assistant, message, uiParts, aiUsageRecord, mcpServer —
+- `types`: entity and value types. Most are declared here (`Agent`, `AgentSession`, `FileEntry`,
+  `Painting`, web search, trace). Six — model, provider, message, uiParts, aiUsageRecord, mcpServer —
   are one-line re-exports of declarations that stay in `@cherrystudio/universal/data/types` because
   `packages/ai-runtime` imports them and a workspace package must not import app code. App code
   imports every entity type from here regardless, so dissolving universal means pasting those
@@ -22,7 +22,7 @@ deliberate omission, not a gap.
   interface. The preference schema is hand-maintained and holds only the keys mobile reads.
 - `cache`: cache schemas and pure cache-key helpers; concrete cache implementations remain with
   their runtime owner.
-- `presets`: seed catalog data (default assistant, managed CherryAI provider, web search providers).
+- `presets`: seed catalog data (managed CherryAI provider and web search providers).
 
 Database tables, Drizzle row types, and migrations are not shared contracts; they stay under
 `src/backend/data/db`. Workflow-only contracts live in `src/shared/contracts`.

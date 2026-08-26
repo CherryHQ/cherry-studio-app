@@ -9,23 +9,21 @@
 > `src/bootstrap/composition/README.md`. Those documents are rewritten in Stage B.
 
 Mobile adopts Desktop's lifecycle framework rather than a mobile-specific invention. Business code
-reads identically on both platforms — `application.get('DbService')`, `@Injectable('ChatRuntime')`,
+reads identically on both platforms — `application.get('DbService')`, `@Injectable('JobRuntime')`,
 `@DependsOn([...])` — and the framework diverges only where a mobile runtime physically differs
 from an Electron main process.
 
 Two subsystems have no desktop counterpart and are designed here for the first time:
 `ApplicationHost` (swappable service generations, for tests and Fast Refresh) and
-`ResourceScopeCoordinator` (deleting a domain resource terminates the work running under it).
-Desktop lacks the second one too — its topic deletion does not abort live streams — so it is a gap
-fill on both platforms, not a port.
+`ResourceScopeCoordinator` (deleting a painting terminates the work running under it).
 
 ## Documents
 
 | Document | Contents |
 | --- | --- |
 | [lifecycle-overview.md](./lifecycle-overview.md) | Framework interfaces, phases, service states, startup/shutdown sequences, failure and timeout semantics, `application.get()` rules |
-| [resource-scope.md](./resource-scope.md) | `ResourceScopeCoordinator`, the five-step deletion sequence, the four-legged correctness model for process kills, and Chat/Job/Activity integration |
-| [lifecycle-migration.md](./lifecycle-migration.md) | Stage A→B→D→C commit plan, lint and ownership rules, testing requirements, acceptance walkthroughs |
+| [resource-scope.md](./resource-scope.md) | `ResourceScopeCoordinator`, the five-step deletion sequence, and painting-job integration |
+| [lifecycle-migration.md](./lifecycle-migration.md) | Historical A→B→D→C rollout and the decisions that remain active |
 
 ## Admission: does a module belong in lifecycle?
 
@@ -40,14 +38,14 @@ Register a module as a lifecycle service when it owns at least one of:
 | A timer or scheduled loop | job delayed-promotion timer, cache rotation |
 | A subscription or listener | `AppState` subscribers, preference change subscriptions |
 | A native surface | Live Activity presenters, the keep-alive audio session |
-| In-memory runtime state that must be released | active chat turns, in-flight job executions, API-key rotation state |
-| Work that continues after the caller returns | chat turns, job executions, model pulls |
+| In-memory runtime state that must be released | active Agent turns, in-flight job executions, API-key rotation state |
+| Work that continues after the caller returns | Agent turns, job executions, model pulls |
 
 Do **not** register:
 
 | Case | Where it lives instead |
 | --- | --- |
-| CRUD data services (`TopicService`, `MessageService`, `PaintingService`, …) | Module singletons that resolve `application.get('DbService')` per call — same shape as desktop |
+| CRUD data services (`AgentService`, `PaintingService`, `ProviderService`, …) | Module singletons that resolve `application.get('DbService')` per call — same shape as desktop |
 | Pure functions and stateless transforms | Plain modules |
 | Resources released before the method returns | The method itself |
 | React state, navigation, React Query cache, toasts | Frontend owners; see [runtime-ownership.md](../runtime-ownership.md) |
@@ -70,7 +68,7 @@ Every deviation is deliberate and load-bearing; the rationale for each lives in 
 | — | `BaseService.registerAppStateListener` | Mobile-only signal with no desktop analogue |
 | `@Conditional` + `getOptional()` dual track | Always register; select a no-op implementation | Mobile's platform differences are light (iOS-only surfaces), and no-op adapters already exist. Removes the get/getOptional split and transitive exclusion entirely. See [conditional capability](./lifecycle-overview.md#conditional-capability) |
 | 30s `process.exit(1)` shutdown fuse | Not ported | The OS owns process death on mobile; a JS-side force-exit buys nothing |
-| Topic deletion does not abort live streams | `ResourceScopeCoordinator` | A desktop gap, not a desktop feature. See [resource-scope.md](./resource-scope.md) |
+| Painting deletion may race generation | `ResourceScopeCoordinator` | Mobile job/resource coordination. See [resource-scope.md](./resource-scope.md) |
 
 ## Related
 

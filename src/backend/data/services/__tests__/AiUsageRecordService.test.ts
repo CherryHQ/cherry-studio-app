@@ -3,7 +3,7 @@ import type { DbService } from '@/backend/data/db/DbService';
 import { aiUsageRecordTable } from '@/backend/data/db/schemas';
 
 import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
-import { AiUsageRecordService, mergeMessageRuntimeStats } from '../AiUsageRecordService';
+import { AiUsageRecordService } from '../AiUsageRecordService';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
@@ -116,56 +116,6 @@ describe('AiUsageRecordService', () => {
     } finally {
       consoleError.mockRestore();
     }
-  });
-
-  it('merges continuation timing without replacing record-owned performance', () => {
-    const merged = mergeMessageRuntimeStats(
-      {
-        outputTokens: 20,
-        providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
-        timeCompletionMs: 900,
-        timeFirstTokenMs: 100,
-        runtimeTiming: {
-          startedAt: 1_000,
-          spans: [
-            {
-              id: 'tool:first',
-              kind: 'tool-execution',
-              toolCallId: 'first',
-              startedAt: 1_500,
-              completedAt: 2_000,
-            },
-          ],
-        },
-      },
-      {
-        runtimeTiming: {
-          startedAt: 1_000,
-          completedAt: 4_000,
-          spans: [
-            {
-              id: 'tool:second',
-              kind: 'tool-execution',
-              toolCallId: 'second',
-              startedAt: 3_000,
-              completedAt: 3_500,
-            },
-          ],
-        },
-      },
-    );
-
-    expect(merged).toMatchObject({
-      outputTokens: 20,
-      providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
-      runtimeTiming: {
-        startedAt: 1_000,
-        completedAt: 4_000,
-        spans: [{ id: 'tool:first' }, { id: 'tool:second' }],
-      },
-    });
-    expect(merged).not.toHaveProperty('timeFirstTokenMs');
-    expect(merged).not.toHaveProperty('timeCompletionMs');
   });
 });
 

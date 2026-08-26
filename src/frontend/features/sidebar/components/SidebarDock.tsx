@@ -15,7 +15,7 @@ type SidebarDockProps = {
   onSettingsPress: () => void;
 };
 
-// Both buttons float over the topic list rather than sitting below it, so the
+// Both buttons float over the session list rather than sitting below it, so the
 // list scrolls behind them the way it does in ChatGPT. The list owns the bottom
 // padding that keeps its last row reachable.
 //

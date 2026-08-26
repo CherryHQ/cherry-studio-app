@@ -39,7 +39,7 @@ describe('ContextMenuLink.ios', () => {
     act(() => {
       renderer = create(
         <ContextMenuLink
-          href={{ pathname: '/topics', params: { topicId: 'topic-1' } }}
+          href={{ pathname: '/sessions', params: { sessionId: 'session-1' } }}
           items={[
             {
               id: 'delete',
@@ -50,15 +50,15 @@ describe('ContextMenuLink.ios', () => {
           ]}
         >
           <Pressable>
-            <Text>Topic</Text>
+            <Text>Session</Text>
           </Pressable>
         </ContextMenuLink>,
       );
     });
 
     expect(renderer!.root.findByProps({ testID: 'link' }).props.href).toEqual({
-      pathname: '/topics',
-      params: { topicId: 'topic-1' },
+      pathname: '/sessions',
+      params: { sessionId: 'session-1' },
     });
     expect(renderer!.root.findByProps({ testID: 'link' }).props.asChild).toBe(true);
     const preview = renderer!.root.findByProps({ testID: 'link-preview' });
@@ -76,9 +76,9 @@ describe('ContextMenuLink.ios', () => {
   it('can render a native context menu without a route preview', () => {
     act(() => {
       renderer = create(
-        <ContextMenuLink href="/assistants/assistant-1" items={[]} preview={false}>
+        <ContextMenuLink href="/agents/agent-1" items={[]} preview={false}>
           <Pressable>
-            <Text>Assistant</Text>
+            <Text>Agent</Text>
           </Pressable>
         </ContextMenuLink>,
       );

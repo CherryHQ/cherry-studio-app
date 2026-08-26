@@ -6,10 +6,17 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { getBuiltInToolDisplay } from '@/frontend/components/messages';
 
-import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
-
 const TOOL_APPROVAL_SHEET_HEIGHT = 420;
 const ignoreClose = () => undefined;
+
+export type PendingToolApproval = {
+  approvalId: string;
+  input: unknown;
+  messageId: string;
+  toolCallId: string;
+  toolName: string;
+  toolType?: 'builtin' | 'mcp' | 'provider';
+};
 
 type ToolApprovalRespondInput = {
   approvalId: string;

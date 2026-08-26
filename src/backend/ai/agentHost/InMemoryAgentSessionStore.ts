@@ -96,6 +96,25 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return cloneJson(renamed);
   }
 
+  async autoRenameSession(
+    sessionId: string,
+    expectedTitle: string,
+    title: string,
+  ): Promise<AgentSessionView | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.titleIsManual || session.title !== expectedTitle) {
+      return null;
+    }
+    const renamed: AgentSessionView = {
+      ...session,
+      title,
+      titleIsManual: false,
+      updatedAt: nowIso(),
+    };
+    this.sessions.set(sessionId, renamed);
+    return cloneJson(renamed);
+  }
+
   async deleteSession(sessionId: string): Promise<boolean> {
     if (!this.sessions.delete(sessionId)) {
       return false;

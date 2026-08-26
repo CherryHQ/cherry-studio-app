@@ -30,7 +30,7 @@ export interface PreferenceSchema {
   'app.user.name': string;
 
   'chat.background_reply.enabled': boolean;
-  'chat.default_model_id': string | null;
+  'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
   'chat.web_search.default_fetch_urls_provider': WebSearchProviderId;
@@ -42,9 +42,9 @@ export interface PreferenceSchema {
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
 
-  'topic.naming.enabled': boolean;
-  'topic.naming.model_id': string | null;
-  'topic.naming_prompt': string;
+  'agent.session_naming.enabled': boolean;
+  'agent.session_naming.model_id': string | null;
+  'agent.session_naming.prompt': string;
 
   'ui.font_size_step': FontSizeStep;
   'ui.theme_mode': ThemeMode;
@@ -56,7 +56,7 @@ export const PreferenceDefaults = {
   'app.user.name': '',
 
   'chat.background_reply.enabled': true,
-  'chat.default_model_id': null,
+  'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'none',
   'chat.web_search.default_fetch_urls_provider': 'jina',
@@ -68,9 +68,9 @@ export const PreferenceDefaults = {
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
 
-  'topic.naming.enabled': true,
-  'topic.naming.model_id': null,
-  'topic.naming_prompt': '',
+  'agent.session_naming.enabled': true,
+  'agent.session_naming.model_id': null,
+  'agent.session_naming.prompt': '',
 
   'ui.font_size_step': 0,
   'ui.theme_mode': ThemeMode.system,

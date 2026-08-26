@@ -30,7 +30,7 @@ export function partitionUserMessageParts(message: MessageListItem): Partitioned
       return;
     }
 
-    if (readCherryMeta(part)?.fileEntryId) {
+    if (readCherryMeta(part as FilePart)?.fileEntryId) {
       attachments.push({ index, part });
     }
   });

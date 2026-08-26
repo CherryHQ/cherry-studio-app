@@ -4,17 +4,14 @@ import { agentService } from '@/backend/data/services/AgentService';
 import { agentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import { agentSessionService } from '@/backend/data/services/AgentSessionService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
-import { assistantService } from '@/backend/data/services/AssistantService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { jobService } from '@/backend/data/services/JobService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
-import { messageService } from '@/backend/data/services/MessageService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { topicService } from '@/backend/data/services/TopicService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
 
@@ -40,18 +37,15 @@ export function createDataServices({
     agentSession: agentSessionService,
     agentSessionMessage: agentSessionMessageService,
     aiUsageRecord: aiUsageRecordService,
-    assistant: assistantService,
     cache,
     contentSearch: contentSearchService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
     job: jobService,
     mcpServer: mcpServerService,
-    message: messageService,
     model: modelService,
     painting: paintingService,
     preference,
     provider: providerService,
-    topic: topicService,
   };
 }

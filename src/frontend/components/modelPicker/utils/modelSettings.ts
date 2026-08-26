@@ -8,7 +8,7 @@ export type ModelSettingKind = (typeof MODEL_SETTING_KINDS)[number];
 export type ModelSettingSelectionState = Record<ModelSettingKind, UniqueModelId | null>;
 
 export const MODEL_SETTING_PREFERENCE_KEYS = {
-  default: 'chat.default_model_id',
+  default: 'agent.default_model_id',
   fast: 'feature.quick_assistant.model_id',
   painting: 'feature.paintings.default_model_id',
   translate: 'feature.translate.model_id',

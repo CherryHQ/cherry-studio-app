@@ -96,7 +96,7 @@ describe('StartupRouteReadyReporter', () => {
     reporter.layout();
     expect(frames).toHaveLength(0);
 
-    mockSegments = ['topics'];
+    mockSegments = ['sessions'];
     reporter.rerender();
     act(() => frames.shift()?.());
     act(() => frames.shift()?.());

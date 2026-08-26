@@ -1,118 +1,57 @@
 # Web Search
 
-This reference defines the external web search architecture and separates it from provider-native
-web search. Terms follow [Domain Language](./domain-language.md).
+This reference defines the external web-search service and separates it from provider-native model
+features. Terms follow [Domain Language](./domain-language.md).
 
-## Two Web Search Paths
+## Current Product Boundary
 
-Cherry Mobile has two different concepts that are easy to confuse:
+Cherry Mobile retains two independent configurations:
 
-**Provider-Native Web Search**:
-Model-native web search configured through AI provider options during an AI request. This path is
-built in `src/backend/ai/utils/websearch.ts` and participates in `AiService` provider
-options.
+- **Provider-native web search** is a model/provider request option.
+- **Web Search Provider** is a preference-backed external search/fetch service implemented by
+  `WebSearchService`.
 
-**Web Search Provider**:
-An external search/fetch provider executed by `WebSearchService`. This path is preference-backed and uses its own provider registry. It is also bridged into AI requests as the `web_search` tool (see [Web Search In AI Requests](#web-search-in-ai-requests)), but its execution, registry, and persistence stay independent of AI provider options.
+The Version 1 Pi Agent path is tool-less, so neither the external provider service nor a legacy AI
+SDK `web_search` tool is attached to Agent turns. The settings workflow still configures and checks
+external providers. Future Agent search support must enter through an Agent-owned tool contract and
+Pi adapter, not by restoring the retired Chat tool resolver.
 
-Do not use "web search" without specifying which path is being discussed when architecture or persistence matters.
+## External Runtime
 
-## External Web Search Runtime
+```text
+WebSearchService -> createWebSearchProvider() -> provider driver -> post-processing
+```
 
-The external search path is:
-
-`WebSearchService -> createWebSearchProvider() -> provider driver -> post-processing`
-
-`WebSearchService` lives under `src/backend/services/webSearch` and reads web search preferences
-through `PreferenceService`. Bootstrap keeps both concrete implementations private; frontend
-preference access uses `PreferenceClient`, while provider checks use the narrow `webSearch`
-workflow module.
+`WebSearchService` lives under `src/backend/services/webSearch` and reads preferences through
+`PreferenceService`. Bootstrap keeps it private. Frontend settings reach provider health checks
+through the narrow `webSearch` workflow module and reach configuration through `PreferenceClient`.
 
 Runtime behavior:
 
-- Selects a provider by requested capability.
-- Builds runtime config from preferences.
-- Creates a provider driver from the web search registry.
-- Runs one provider request per normalized keyword/url input.
-- Merges successful results.
-- Logs partial input failures.
-- Applies post-processing and compression settings.
-
-Abort errors are propagated when the caller's signal is aborted.
-
-## Web Search In AI Requests
-
-On the current AI SDK Chat path, external web search reaches the model as an AI SDK tool, not as
-provider options.
-`src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps
-`WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200`
-self-contained query schema. Its `execute` classifies failures: permanent configuration errors
-return a do-not-retry message, transient errors return a retryable note, and abort errors are
-rethrown.
-
-`buildAgentParams` (`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`)
-arbitrates the external tool against provider-native web search (the provider-native path is
-attached as a plugin by `buildAgentPlugins` in
-`src/backend/ai/runtime/aiSdk/params/buildAgentPlugins.ts`) — they are mutually
-exclusive within one request:
-
-- Provider-native is forced for OpenRouter built-in web-search models and `sonar` models; the external tool is never attached for them.
-- Otherwise the external `web_search` tool is attached when the assistant has web search enabled, the model supports function calling, and either an external provider is configured or the model has no native web-search plugin config.
-- When the tool is attached, the request also sets `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20).
-
-This means a request carries at most one web-search mechanism. Enabling web search without a configured external provider still attaches the tool so calls fail with an explicit unsupported/not-configured error rather than silently doing nothing.
-
-The transitional Pi Chat bridge rejects web search. In the Pi-first Agent design, external web
-search becomes an application-owned `RuntimeTool` resolved by the Host and adapted into the Pi tool
-snapshot. Provider-native search remains a model/provider option. Arbitration still guarantees at
-most one mechanism per turn, but it no longer belongs to an AI SDK Agent Runtime.
+- selects a provider by requested capability;
+- builds runtime configuration from preferences;
+- executes one request per normalized keyword or URL;
+- merges successful results and logs partial failures;
+- applies configured post-processing and compression;
+- propagates caller aborts.
 
 ## Provider Registry
 
-Current mobile web search provider ids:
-
-- `zhipu`
-- `tavily`
-- `searxng`
-- `exa`
-- `bocha`
-- `querit`
-- `jina`
-
-Current unsupported mobile entries (registered as `UnsupportedProvider` in
-`src/backend/services/webSearch/providers/registry.ts`):
-
-- `exa-mcp`
-- `fetch`
-- `firecrawl`
-
-Unsupported entries are hidden from mobile settings and default-provider selectors until implemented. They remain in the provider id set and runtime registry as `UnsupportedProvider` entries so old preferences or synced desktop values fail with an explicit unsupported-provider error instead of being silently mapped or dropped.
+Current mobile provider ids are `zhipu`, `tavily`, `searxng`, `exa`, `bocha`, `querit`, and `jina`.
+`exa-mcp`, `fetch`, and `firecrawl` remain explicit unsupported entries. They are hidden from mobile
+settings and selectors, while old stored ids fail with an unsupported-provider error rather than
+being silently rewritten.
 
 ## Preferences
 
-Web search configuration is stored in preferences, not in the AI ProviderService schema.
+External web-search configuration remains separate from `ProviderService`. It includes default
+keyword and URL providers, max results, compression settings, and provider-specific overrides.
 
-Important preferences include:
-
-- default keyword-search provider.
-- default URL-fetch provider.
-- max result count.
-- compression settings.
-- provider overrides.
-
-Provider overrides hold provider-specific API configuration for the external web search path.
-
-## Zhipu Exception
-
-Zhipu is a deliberate exception: the web search API management UI routes users to the normal AI provider settings page for `zhipu`. Other external web search provider keys are managed through web search provider overrides.
-
-Document this as an exception, not evidence that WebSearchService has merged into ProviderService. Do not generalize the Zhipu bridge into a shared rule unless desktop web-search semantics change.
-
-## Post-Processing
-
-Search results pass through response post-processing before they are returned. Compression settings are part of runtime config.
+Zhipu is a deliberate UI exception: its API management entry routes to the normal AI provider
+settings. This does not merge `WebSearchService` into the AI provider subsystem.
 
 ## Reopen When
 
-- Mobile implements `exa-mcp`, `fetch`, `firecrawl`, or another desktop web-search provider.
-- A single AI request needs to combine external and provider-native web search instead of arbitrating to one.
+- Agent tools gain an application-owned contract and Pi adapter.
+- Mobile implements one of the currently unsupported external providers.
+- A request needs defined arbitration between external and provider-native search.

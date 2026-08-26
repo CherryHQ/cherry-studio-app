@@ -1,6 +1,8 @@
 # Cherry Agent Protocol
 
-Status: **design**. Version 1 is local-only.
+Status: **as built, except the settled tool and file part contract** — `AgentToolRef`, managed
+`fileEntryId` file parts with `purpose`, and the `interrupted` tool state land with tool
+configuration. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.

@@ -19,6 +19,7 @@ export * from './scroll-shadow';
 export * from './scroll-to-bottom-button';
 export * from './section';
 export * from './shimmer-text';
+export * from './skeleton';
 export * from './slider';
 export * from './switch';
 export * from './tabs';

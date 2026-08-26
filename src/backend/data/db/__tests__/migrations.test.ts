@@ -50,15 +50,11 @@ describe('bundled SQLite migrations', () => {
         'agent_session_message',
         'ai_usage_record',
         'app_state',
-        'assistant',
-        'assistant_mcp_server',
         'file_entry',
         'job',
         'mcp_server',
-        'message',
         'painting',
         'preference',
-        'topic',
         'user_model',
         'user_provider',
       ]);
@@ -97,8 +93,6 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'files',
       ]);
-      expect(columnNames(database, 'topic')).toContain('trace_id');
-      expect(columnNames(database, 'message')).not.toContain('trace_id');
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
 
       // Agent persistence (docs/references/agent/agent-persistence.md): three
@@ -144,21 +138,6 @@ describe('bundled SQLite migrations', () => {
       ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);
-      expect(indexList(database, 'message')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'message_parent_id_idx', unique: 0 }),
-          expect.objectContaining({ name: 'message_topic_created_idx', unique: 0 }),
-          expect.objectContaining({ name: 'message_status_idx', unique: 0 }),
-          expect.objectContaining({ name: 'message_topic_root_uniq', unique: 1 }),
-        ]),
-      );
-      expect(indexNames(database, 'topic')).toEqual(
-        expect.arrayContaining([
-          'topic_assistant_id_idx',
-          'topic_order_key_idx',
-          'topic_updated_at_idx',
-        ]),
-      );
       expect(indexNames(database, 'user_model')).toEqual(
         expect.arrayContaining([
           'user_model_preset_idx',
@@ -171,32 +150,29 @@ describe('bundled SQLite migrations', () => {
       expect(indexNames(database, 'painting')).toContain('painting_order_key_idx');
 
       const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
-      expect(getSchemaSql(database, 'table', 'message')).toContain('message_root_parent_check');
       // Every entry is a Cherry-owned immutable blob, so the desktop origin /
       // external-path / cleanup-policy / content-hash invariants have nothing
       // left to constrain.
       expect(fileEntryTableSql).not.toContain('CHECK');
-      expect(getSchemaSql(database, 'index', 'message_topic_root_uniq')).toContain(
-        '"deleted_at" is null',
-      );
-
-      const assistantMcpServerFks = getForeignKeys(database, 'assistant_mcp_server');
-      expect(assistantMcpServerFks).toContainEqual(
-        expect.objectContaining({ from: 'assistant_id', on_delete: 'CASCADE', table: 'assistant' }),
-      );
-      expect(assistantMcpServerFks).toContainEqual(
-        expect.objectContaining({
-          from: 'mcp_server_id',
-          on_delete: 'CASCADE',
-          table: 'mcp_server',
-        }),
-      );
-      expect(getForeignKeys(database, 'message')).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ from: 'parent_id', on_delete: 'CASCADE', table: 'message' }),
-          expect.objectContaining({ from: 'topic_id', on_delete: 'CASCADE', table: 'topic' }),
-        ]),
-      );
+      for (const retiredTable of ['assistant', 'assistant_mcp_server', 'message', 'topic']) {
+        expect(
+          database
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .get(retiredTable),
+        ).toBeUndefined();
+      }
+      for (const retiredTrigger of ['message_ai', 'message_ad', 'message_au']) {
+        expect(
+          database
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?")
+            .get(retiredTrigger),
+        ).toBeUndefined();
+      }
+      expect(
+        database
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'message_fts'")
+          .get(),
+      ).toBeUndefined();
       // No association table remains: a painting owns its file ids in `files`,
       // so deleting a file cannot rewrite the receipt that points at it.
       expect(getForeignKeys(database, 'painting')).toEqual([]);
@@ -269,20 +245,6 @@ describe('bundled SQLite migrations', () => {
         { count: 0 },
       );
       database.exec("DELETE FROM agent WHERE id = 'agent-1'");
-
-      database.exec(`
-        INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
-        VALUES ('assistant-mcp', 'Assistant', 'x', '{}', 'a0', 1, 1);
-        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
-        VALUES ('mcp-1', 'Server', 'https://example.com/mcp', 1, 1, 1);
-        INSERT INTO assistant_mcp_server (assistant_id, mcp_server_id, created_at, updated_at)
-        VALUES ('assistant-mcp', 'mcp-1', 1, 1);
-      `);
-      database.exec("DELETE FROM mcp_server WHERE id = 'mcp-1'");
-      expect(database.prepare('SELECT count(*) AS count FROM assistant_mcp_server').get()).toEqual({
-        count: 0,
-      });
-      database.exec("DELETE FROM assistant WHERE id = 'assistant-mcp'");
 
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)

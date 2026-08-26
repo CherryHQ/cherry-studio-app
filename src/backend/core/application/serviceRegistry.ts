@@ -2,7 +2,6 @@ import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import { SqliteAgentSessionStore } from '@/backend/ai/agentHost/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
-import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
@@ -44,7 +43,6 @@ export const services = {
   WebSearchService,
   McpRuntimeService,
   AiService,
-  ChatRuntime,
   AgentSessionStore: SqliteAgentSessionStore,
   MobileAgentHost,
   JobHandlerRegistry,

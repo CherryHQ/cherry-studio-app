@@ -1,6 +1,6 @@
 # Chat Screen
 
-This module owns the chat topic screen, chat input, runtime projection, and chat workspace
+This module owns the Agent Session chat screen, input, live projection, and workspace
 behavior. Structured message rendering is shared with painting through
 `@/frontend/components/messages`.
 
@@ -10,14 +10,12 @@ behavior. Structured message rendering is shared with painting through
 
 ## Organization
 
-- `ChatScreen.tsx` is header + swappable body + docked composer session. With a topic the body is
-  the conversation, without one it is the empty-state copy; the session stays mounted across that
-  swap so a draft survives the first send creating a topic.
-- `input/` owns what chat wires around the shared composer: its tools, its reasoning effort, and the
-  assistant/model bookkeeping behind both. The composer itself is
-  `@/frontend/components/composer`, shared with painting.
-- `workspace/` adapts visible Chat runtime messages into the shared `MessageList`, and owns loading
-  indicators, initial-render gating, and tool approvals.
-- `runtime/` subscribes to the app-owned `ChatModule`, projects one Topic snapshot through
-  `useChatTopic()`, and owns frontend navigation and query invalidation effects. It does not create
-  or dispose `ChatRuntime`.
+- `ChatScreen.tsx` is header + swappable body + docked composer session. With a Session the body is
+  the conversation; selecting an Agent without one shows the empty state and creates the Session on
+  first send.
+- `input/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
+  edited on the Agent screen; unsupported attachment sends fail closed.
+- `workspace/` merges persisted transcript rows with live Agent messages, adapts protocol parts into
+  the shared `MessageList`, and owns history loading, initial-render gating, and approvals.
+- `runtime/` owns the route-scoped `AgentSessionChatClient`, observes the app-owned Mobile Agent Host
+  through `Backend.agent`, and owns frontend navigation and query invalidation effects.

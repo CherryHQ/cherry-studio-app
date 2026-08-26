@@ -32,6 +32,13 @@ describe('agent api schemas', () => {
     });
   });
 
+  test('preserves explicit-undefined settings keys so a patch can clear them', () => {
+    const parsed = UpdateAgentSchema.parse({ settings: { temperature: undefined } });
+
+    expect(parsed.settings).toBeDefined();
+    expect(Object.keys(parsed.settings ?? {})).toContain('temperature');
+  });
+
   test.each([CreateAgentSchema, UpdateAgentSchema])(
     'rejects avatar writes — the avatar workflow owns that column',
     (schema) => {

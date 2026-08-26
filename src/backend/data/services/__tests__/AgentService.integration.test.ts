@@ -120,6 +120,21 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('clears a stored setting when the patch carries the key as explicit undefined', async () => {
+    const agent = await agentService.create({
+      name: 'Researcher',
+      settings: { futureSetting: true, temperature: 0.2 },
+    });
+
+    const updated = await agentService.update(agent.id, {
+      settings: { temperature: undefined },
+    });
+
+    expect(updated.settings).toEqual({ futureSetting: true });
+    // The JSON column must not resurrect the key on a fresh read.
+    expect((await agentService.getById(agent.id)).settings).toEqual({ futureSetting: true });
+  });
+
   it('filters by search and persists explicit ordering changes', async () => {
     const researcher = await agentService.create({
       description: 'Finds primary sources',

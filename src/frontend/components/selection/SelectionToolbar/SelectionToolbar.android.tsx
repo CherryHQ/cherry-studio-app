@@ -17,8 +17,8 @@ export function SelectionToolbar({
   const isDeleteDisabled = selectedCount === 0 || isDeleting;
   const selectionLabel =
     selectedCount === 0
-      ? t('topic.selection.selectAll')
-      : t('topic.selection.count', { count: selectedCount });
+      ? t('common.selection.selectAll')
+      : t('common.selection.count', { count: selectedCount });
 
   return (
     <Animated.View

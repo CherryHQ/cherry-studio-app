@@ -1,7 +1,6 @@
 import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
-import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -13,7 +12,6 @@ import { createBackendServices } from '../createBackendServices';
 
 const mockDataServices = {
   aiUsageRecord: { kind: 'ai-usage-record' },
-  assistant: { kind: 'assistant' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
   mcpServer: { kind: 'mcp-server' },
@@ -33,9 +31,6 @@ describe('createBackendServices', () => {
     const agent = { kind: 'agent' } as unknown as MobileAgentHost;
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
-    // The chat and job runtimes arrive from the host too, as of stage B's last
-    // two services.
-    const chat = { kind: 'chat' } as unknown as ChatRuntime;
     const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
     const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
     const preference = { kind: 'preference' } as unknown as PreferenceService;
@@ -45,7 +40,6 @@ describe('createBackendServices', () => {
       agent,
       ai,
       cache,
-      chat,
       jobRuntime,
       mcpRuntime,
       preference,
@@ -59,7 +53,6 @@ describe('createBackendServices', () => {
       ...mockDataServices,
       agent,
       ai,
-      chat,
       devicePermissions,
       fileContent,
       jobRuntime,

@@ -27,12 +27,9 @@ type OperationRecord = OperationRegistration & {
 /**
  * Makes deleting a resource stop the work running under it.
  *
- * The gap it closes: today a deletion mutates the row and nothing else. A topic
- * deleted mid-generation leaves the turn streaming into a topic that no longer
- * exists; a painting deleted mid-generation leaves its job running. Cancellation
- * exists — `ChatRuntime.abort`, `JobRuntime.cancel` — but it hangs off two
- * frontend buttons rather than off the deletion path, so any other caller of the
- * same Data API endpoint gets none of it.
+ * A painting deleted mid-generation would otherwise leave its job running.
+ * Cancellation exists in `JobRuntime`, but coordinating it here makes every
+ * caller of the Data API deletion path obey the same drain boundary.
  *
  * It knows no domain vocabulary beyond the scope kinds: it stores registrations
  * and calls back what it was handed. Adding a new kind of cancellable work needs
@@ -155,8 +152,8 @@ export class ResourceScopeCoordinator extends BaseService {
     options: MutationOptions,
   ): Promise<T> {
     // Deduplicated up front so a batch that names one scope twice — or an
-    // operation registered under both an assistant and one of its topics — is
-    // fenced once, cancelled once, and drained once.
+    // operation registered under more than one resource — is fenced once,
+    // cancelled once, and drained once.
     const keys = [...new Set(scopes.map(scopeKey))];
     const reason =
       options.reason ?? (mode === 'delete' ? CANCEL_REASON_DELETED : CANCEL_REASON_INVALIDATED);

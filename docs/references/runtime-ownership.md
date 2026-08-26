@@ -15,8 +15,8 @@ Use these roles for mobile-owned code:
 
 | Role | Use when the type is | Example |
 | --- | --- | --- |
-| `Module` | A frontend-visible workflow capability exposed through `Backend` | `ChatModule` |
-| `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `ChatRuntime` |
+| `Module` | A frontend-visible workflow capability exposed through `Backend` | `PaintingsModule` |
+| `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `JobRuntime` |
 | `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `PaintingGenerationSession` |
 | `Client` | A boundary to one external account, protocol, or remote API | `VertexAuthClient` |
 | `Adapter` | A translation boundary for a platform or SDK; a precise capability noun may stand alone | `DevicePermissions` |
@@ -77,47 +77,46 @@ not own SQLite, AI streams, or backend implementation classes. Endpoint hooks ca
 `ApiClient`; query keys and invalidation remain in frontend owners. `useBackendModule` is reserved
 for workflows that are not ordinary resource queries or mutations.
 
-## Chat Runtime
+## Agent Session Runtime
 
-The service registry creates one `ChatRuntime` per `ApplicationHost` generation and composition
-exposes its narrow `ChatModule` interface through `Backend.chat`. The runtime is app-owned, not
-route-owned: `ChatProvider` subscribes on mount and unsubscribes on unmount, but it never creates or
-disposes a backend object. Route unmount therefore does not terminate an active turn, and a later
-subscription reads the current snapshot.
+The service registry creates one `MobileAgentHost` per `ApplicationHost` generation and composition
+exposes its `AgentProtocol` interface through `Backend.agent`. The Host is app-owned, not
+route-owned. It owns active turns, Runtime sessions, normalized Agent events, approvals, terminal
+persistence, and process-start reconciliation of unfinished turns.
 
-The runtime owns active turn state, AbortControllers, assistant placeholder identity, stream
-reading, terminal persistence, and `ChatEvent` fan-out. It tracks turns by Topic: different Topics
-may stream concurrently, while a second turn for the same Topic is rejected. New-topic reservation
-uses `NEW_TOPIC_SNAPSHOT_KEY` until the persisted Topic id is available.
+The frontend `ChatProvider` creates one route-owned `AgentSessionChatClient`. The client observes
+only Sessions with React subscribers, composes snapshots and deltas into live state, refreshes those
+observations when the app returns to the foreground, and unsubscribes on route unmount. Removing an
+observation does not cancel the Host's turn; reopening the route installs a fresh snapshot.
 
-The frontend `ChatProvider` owns route navigation and React Query invalidation. `useChatTopic()`
-projects one Topic snapshot and sends or aborts work through the shared module. Backend code never
-imports Expo Router or TanStack Query.
+The frontend provider owns route navigation and React Query invalidation. Persisted transcripts are
+ordinary `/agent-sessions/:sessionId/messages` Data API reads; live messages and approvals come from
+the protocol snapshot/events and are merged by stable message id at the presentation boundary.
+Backend code never imports Expo Router or TanStack Query.
 
-User abort affects only the selected Topic and persists the defined paused/partial state. App
-shutdown marks the runtime disposed, rejects new tasks, aborts all active turns, and waits for every
-tracked task to settle before MCP, web search, cache, or SQLite is closed. An active stream is still
-not guaranteed to continue, checkpoint, or resume after OS suspension or termination.
+User cancellation affects only the selected Session. One Session allows at most one active turn,
+while different Sessions may run concurrently. App disposal closes Runtime sessions and waits for
+tracked turns before lower-level infrastructure closes. OS suspension or termination still does not
+guarantee continued execution or resumable streaming; the next process start marks unfinished local
+turns interrupted.
 
-## Agent Runtime And Tool Capabilities
+## Agent Tool Capabilities
 
-`ApplicationHost` owns one Mobile Agent Host and one injected Pi Runtime generation. The Agent Host
-owns Runtime sessions, per-Session turn admission, cancellation, approval state, transcript
-persistence, enabled Skill resolution, the monotonic turn resource ledger, immutable tool snapshots,
-tool terminalization, and artifact projection. Route components only observe Agent Protocol
-snapshots and issue commands; unmounting one does not dispose Pi or cancel a turn.
+When application tools land, the Agent Host additionally owns enabled Skill resolution, the
+monotonic turn resource ledger, immutable per-turn tool snapshots, tool terminalization, and
+artifact projection. The ownership split below is settled design; Version 1 still resolves an empty
+tool snapshot.
 
 Pi owns model context construction and the model → tool → result loop. It does not own system
 permissions, provider credentials, managed files, MCP clients, or side-effect policy. Each
 application capability adapter owns one narrow operation and its validation, timeout, cancellation,
 cleanup, and error redaction:
 
-- `McpRuntimeService` retains ownership of Streamable HTTP clients and discovery caches;
-- device adapters retain ownership of calendar permission and native calls;
-- Office and file adapters retain ownership of temporary bytes and copy-on-write `file_entry`
-  creation; and
-- the image capability retains ownership of `AiService`/AI SDK execution, usage, downloads, and
-  managed output import.
+- `McpRuntimeService` owns Streamable HTTP clients and discovery caches;
+- device adapters own calendar permission and native calls;
+- Office and file adapters own temporary bytes and copy-on-write `file_entry` creation; and
+- the image capability owns `AiService`/AI SDK execution, usage, downloads, and managed output
+  import.
 
 An Agent tool may delegate to `JobRuntime`, but Version 1 still waits for terminal job state inside
 the active turn. The durable job ledger does not make the Agent turn resumable after process death.
@@ -151,21 +150,21 @@ painting through any Data API caller first fences its scope and drains the job.
 then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
 repair data, or run diagnostics.
 
-`runPostReadyTasks()` starts after status becomes `ready`. It repairs crash-orphaned pending
-assistant messages while the host's PostReady phase prewarms MCP and starts the job cold-start pump.
-Both are off the first-paint path. Host-owned PostReady initialization is retained and awaited if
-that generation is disposed before it finishes.
+The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after status becomes
+`ready`. Agent reconciliation, MCP initialization, and the job cold-start pump stay off the
+first-paint path. Host-owned PostReady initialization is retained and awaited if that generation is
+disposed before it finishes.
 
-Current topic, message history windows, provider queries, and feature state load at route level after
-the bootstrap gate.
+Current Agent Session, transcript history windows, provider queries, and feature state load at route
+level after the bootstrap gate.
 
 ## Acceptance
 
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
-- Route unmount only unsubscribes from Chat; app disposal aborts and awaits all Chat turns before
-  closing infrastructure.
-- Agent route unmount only unsubscribes; app disposal cancels and awaits Pi turns before disposing
-  their MCP, device, provider, and file capability dependencies.
+- Route unmount only unsubscribes from Agent Session observations; it does not cancel active turns.
+- App disposal closes Agent Runtime sessions and awaits tracked Agent turns before closing
+  infrastructure, including the MCP, device, provider, and file capability dependencies tools rely
+  on.
 - Painting route unmount does not stop generation; explicit cancel or resource deletion reaches the
   host-owned job runtime.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.

@@ -285,7 +285,7 @@ export class AgentService {
       return dtoModelId;
     }
 
-    const preferred = await this.preferenceService.get('chat.default_model_id');
+    const preferred = await this.preferenceService.get('agent.default_model_id');
     if (!preferred) {
       return null;
     }

@@ -4,8 +4,6 @@ import { Platform, type LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Message } from '@/shared/data/types/message';
-
 import { MessageList } from '../../MessageList';
 import type { MessageSlideInFlight } from '../../motion/useMessageSlideInFlight';
 import type { MessageListProps, MessageListItem } from '../../types';
@@ -210,7 +208,7 @@ jest.mock('../../motion/MessageSlideInProvider', () => ({
 function createMessage(
   id: string,
   role: MessageListItem['role'],
-  parts: Message['data']['parts'] = [],
+  parts: MessageListItem['data']['parts'] = [],
 ): MessageListItem {
   return {
     data: { parts },
@@ -220,11 +218,11 @@ function createMessage(
   };
 }
 
-function textPart(text: string): NonNullable<Message['data']['parts']>[number] {
+function textPart(text: string): NonNullable<MessageListItem['data']['parts']>[number] {
   return { text, type: 'text' };
 }
 
-function filePart(): NonNullable<Message['data']['parts']>[number] {
+function filePart(): NonNullable<MessageListItem['data']['parts']>[number] {
   return {
     filename: 'photo.png',
     mediaType: 'image/png',

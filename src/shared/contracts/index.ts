@@ -1,6 +1,5 @@
 export * from './agent';
 export * from './backend';
-export * from './chat';
 export * from './file';
 export * from './mcp';
 export * from './models';

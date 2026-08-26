@@ -31,7 +31,6 @@
     "skills:sync": "tsx scripts/skills-sync.ts",
     "skills:check": "tsx scripts/skills-check.ts",
     "docs:check-links": "tsx scripts/check-doc-links.ts",
-    "bench:layout": "tsx scripts/layout-bench/index.ts",
     "test": "pnpm packages:build && pnpm test:packages && pnpm test:app",
     "test:ai-contract": "jest src/backend/ai/__tests__/behavior --runInBand",
     "test:app": "jest",

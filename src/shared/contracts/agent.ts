@@ -180,10 +180,10 @@ export const AgentApprovalViewSchema = z.strictObject({
 export type AgentApprovalView = z.infer<typeof AgentApprovalViewSchema>;
 
 /**
- * Projected on demand from the Session's current Agent configuration via the
- * Host-owned Router. The client may branch on these flags, never on Runtime
- * identity. Cancellation is required by the Runtime contract and is therefore
- * not a capability flag.
+ * Projected on demand from the Session's current Agent configuration and the
+ * Host's local Runtime binding. The client may branch on these flags, never on
+ * Runtime identity. Cancellation is required by the Runtime contract and is
+ * therefore not a capability flag.
  */
 export const AgentCapabilitiesSchema = z.strictObject({
   reasoning: z.boolean(),
@@ -212,6 +212,7 @@ export const AgentMessageDeltaSchema = z.union([
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('session.updated'), session: AgentSessionViewSchema }),
   z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
   z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
   z.strictObject({

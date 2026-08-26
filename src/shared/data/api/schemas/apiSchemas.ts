@@ -2,28 +2,22 @@ import type { AgentSchemas } from './agents';
 import type { AgentSessionMessageSchemas } from './agentSessionMessages';
 import type { AgentSessionSchemas } from './agentSessions';
 import type { AiUsageRecordSchemas } from './aiUsageRecords';
-import type { AssistantSchemas } from './assistants';
 import type { FileSchemas } from './files';
 import type { JobSchemas } from './jobs';
 import type { McpServerSchemas } from './mcpServers';
-import type { MessageSchemas } from './messages';
 import type { ModelSchemas } from './models';
 import type { PaintingSchemas } from './paintings';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
-import type { TopicSchemas } from './topics';
 
 export type ApiSchemas = AgentSchemas &
   AgentSessionMessageSchemas &
   AgentSessionSchemas &
   AiUsageRecordSchemas &
-  AssistantSchemas &
   FileSchemas &
   JobSchemas &
   McpServerSchemas &
-  MessageSchemas &
   ModelSchemas &
   PaintingSchemas &
   ProviderSchemas &
-  SearchSchemas &
-  TopicSchemas;
+  SearchSchemas;

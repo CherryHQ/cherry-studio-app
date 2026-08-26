@@ -75,21 +75,21 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 
 ## Current Ownership
 
-- `chat/`: chat topic screen, new-topic screen, message content, message item rows, workspace
-  behavior, and the React subscription/effect adapter for the app-owned `ChatRuntime`. `input/` and
+- `chat/`: Agent Session chat screen, new-session composer, message rows, workspace behavior, and
+  the React observation/effect adapter for the app-owned Mobile Agent Host. `input/` and
   `workspace/` are its public areas.
-- `assistants/`: assistant list and assistant editing flows.
+- `agents/`: Agent list and editor. Selecting a row enters a new chat; edit/delete remain row
+  actions.
 - `settings/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.
 - `paintings/`: painting composer (image generation), the painting history screen
   (`PaintingHistoryScreen` hosting `DrawingList`), the nested full-screen viewer
   (`PaintingViewerScreen/`) and conversation (`PaintingConversationScreen/`) screens, bundled
   prompt templates (`templates/`), and the painting data hooks (`hooks/usePaintings`).
-- `topics/`: the topic management screen (`TopicListScreen` at `/topics`) — the topic list, topic
-  actions/dialogs, the `TopicListProvider` topic data, and `useTopicSelectionSource`. The sidebar
-  reuses its data layer through the feature `index.ts`.
+- `sessions/`: Agent Session management (`SessionListScreen` at `/sessions`) — recency pagination,
+  rename/delete, and selection state. The sidebar reuses its data layer through the feature index.
 - `sidebar/`: the drawer sidebar compound (`Sidebar.Header/Body/Footer`) — navigation rows, the
-  recent-topics list, and the bottom dock.
+  recent Agent Sessions list, and the bottom dock.
 - `home/`: the home drawer scene (activity calendar) and the header-right avatar button.
 - `onboarding/`: onboarding flow and the logo draw animation.
 

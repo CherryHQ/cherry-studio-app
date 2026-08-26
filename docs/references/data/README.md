@@ -52,7 +52,8 @@ them. The entity types that `packages/ai-runtime` still imports remain temporari
 
 - `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient`.
 - `preference`: preference keys, value schemas, defaults, pure helpers, and `PreferenceClient`.
-- `types`: entities and value types such as Assistant, Topic, Message, Provider, and Model.
+- `types`: entities and value types such as Agent, Agent Session, Provider, Model, Painting, and
+  presentation message parts.
 - `presets`: shared catalog data.
 - `cache`: cache schemas, shared cache types, and pure template/equality helpers.
 
@@ -96,7 +97,7 @@ the ownership and lifecycle rules those operations follow.
 `src/shared/contracts/backend.ts` aggregates workflow-only modules. Multi-step behavior belongs in
 its owning backend domain, including:
 
-- the app-owned Chat Runtime under `src/backend/ai`;
+- the app-owned Mobile Agent Host under `src/backend/ai`;
 - painting generation sessions and incomplete receipts;
 - provider/model pull, reconcile, health, and avatar workflows;
 - MCP runtime coordination;
@@ -128,20 +129,20 @@ See [Storage Engine](./storage-engine.md) for the current engine constraints and
 
 ## Schema And Message Persistence
 
-The schema includes app state/preferences, chat, provider/model, MCP, file, painting, organization,
-and assistant relation tables. `message` stores a parent-linked tree; `topic.activeNodeId` selects
-the active branch. Message content is `data.parts`, and FTS derives searchable text from text parts.
+The active schema includes app state/preferences, Agent and Agent Session data, provider/model,
+MCP, file, painting, job, and AI usage tables. Agent Session messages are linear and use stable
+protocol message ids. The retired `assistant`, `topic`, `message`, and `assistant_mcp_server`
+tables, plus message FTS triggers and indexes, are removed by migration `0005_remove_legacy_chat`.
 
-`MessageService` persists user messages and reserves stable assistant placeholders before
-`ChatRuntime` streams. `AiService` currently normalizes either the transitional Pi path or the AI
-SDK fallback into that runtime. The runtime publishes an in-memory per-Topic overlay during
-generation and writes the terminal, paused, or error state to the placeholder.
+`MobileAgentHost` persists Agent Session reservations and terminal messages through
+`AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to
+the frontend. Live deltas are protocol events and do not write every token to SQLite.
 
 ## Service Graph
 
-`createBackendServices()` constructs concrete backend classes such as `CacheService`,
-`PreferenceService`, `ProviderService`, `MessageService`, `McpRuntimeService`, `WebSearchService`,
-`ToolResolver`, and `AiService`. The graph is private to bootstrap. `createBackend()` builds the
+`createBackendServices()` exposes concrete backend classes such as `MobileAgentHost`, `CacheService`,
+`PreferenceService`, `ProviderService`, `McpRuntimeService`, `WebSearchService`, and `AiService`.
+The graph is private to bootstrap. `createBackend()` builds the
 factory-shaped workflow modules and returns the workflow-only `Backend` plus the MCP mutation
 coordinator needed by Data API handlers.
 `createAppBootstrapRuntime()` wires those handlers into `DataApiService` and exposes
@@ -149,8 +150,9 @@ coordinator needed by Data API handlers.
 never exposed to frontend code.
 
 Lifecycle-owned services are declared once in `src/backend/core/application/serviceRegistry.ts` and
-instantiated per `ApplicationHost` generation; `ChatRuntime` is one of them, and `createBackend()`
-exposes the instance rather than constructing it. See [Lifecycle](../lifecycle/README.md).
+instantiated per `ApplicationHost` generation; `MobileAgentHost` is among them, and
+`createBackend()` exposes the instances rather than constructing them. See
+[Lifecycle](../lifecycle/README.md).
 
 There is no IPC handler layer or frontend DI container for these concrete classes. Mobile does have
 an application singleton and a lifecycle service registry — they are backend-private, and frontend
@@ -158,8 +160,9 @@ code reaches this graph only through `Backend`, `ApiClient`, and `PreferenceClie
 
 ## Seeding And Compatibility
 
-Seeders always apply default preferences and preset providers; development builds also add mock chat
-data. Seeder versions are journaled under `app_state` keys prefixed with `seed:`.
+Seeders apply default preferences, preset providers, and the managed CherryAI default model. They do
+not create Agents, Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder
+versions are journaled under `app_state` keys prefixed with `seed:`.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may
@@ -170,5 +173,5 @@ still reset development data; no legacy migration bridge is required before rele
 `AppBootstrapGate` initializes the backend cache before database seeding, then waits for database
 initialization, preference initialization, boot theme, and i18n only. The root route keeps the
 native splash visible until initialization settles.
-`runPostReadyTasks()` performs orphan pending-message repair and MCP prewarming after the gate opens;
-it is best-effort and cannot reopen or extend the gate.
+The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after the gate opens;
+Agent reconciliation, MCP initialization, jobs, and other host-owned work remain off first paint.

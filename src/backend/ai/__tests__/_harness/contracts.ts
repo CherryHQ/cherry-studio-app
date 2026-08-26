@@ -1,7 +1,4 @@
 import type { ImageModelV3CallOptions, LanguageModelV3CallOptions } from '@ai-sdk/provider';
-import { readUIMessageStream, type UIMessageChunk } from 'ai';
-
-import type { CherryUIMessage } from '@/shared/data/types/message';
 
 export function projectLanguageCall(call: LanguageModelV3CallOptions) {
   const value = {
@@ -49,36 +46,6 @@ export function projectImageCall(call: ImageModelV3CallOptions) {
 
 export function projectContractValue(value: unknown) {
   return sanitize(value, collectCitationIds(value));
-}
-
-export async function collectStreamContract(stream: ReadableStream<UIMessageChunk>) {
-  const [chunkStream, messageStream] = stream.tee();
-  const [chunks, messages] = await Promise.all([
-    collectReadable(chunkStream),
-    collectAsync(
-      readUIMessageStream<CherryUIMessage>({
-        stream: messageStream,
-        terminateOnError: true,
-      }),
-    ),
-  ]);
-  return { chunks, finalMessage: messages.at(-1) };
-}
-
-export async function collectReadable<T>(stream: ReadableStream<T>): Promise<T[]> {
-  const reader = stream.getReader();
-  const values: T[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) return values;
-    values.push(value);
-  }
-}
-
-async function collectAsync<T>(stream: AsyncIterable<T>): Promise<T[]> {
-  const values: T[] = [];
-  for await (const value of stream) values.push(value);
-  return values;
 }
 
 function projectSignal(signal: AbortSignal | undefined) {
