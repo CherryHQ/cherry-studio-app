@@ -65,6 +65,62 @@ export const AgentToolRefSchema = z.discriminatedUnion('source', [
 ]);
 export type AgentToolRef = z.infer<typeof AgentToolRefSchema>;
 
+const AgentInferenceToolSnapshotSchema = z.strictObject({
+  ref: AgentToolRefSchema,
+  providerName: z.string(),
+  displayName: z.string(),
+  approval: z.enum(['auto', 'ask', 'deny']),
+});
+
+/** Immutable, credential-free facts used to construct one Agent Runtime request. */
+export const AgentInferenceSnapshotV1Schema = z.strictObject({
+  version: z.literal(1),
+  model: z.strictObject({
+    uniqueModelId: UniqueModelIdSchema,
+    providerId: z.string().min(1),
+    modelId: z.string().min(1),
+    apiModelId: z.string().optional(),
+    name: z.string(),
+  }),
+  reasoningEffort: z.string().min(1).optional(),
+  parameters: z.strictObject({
+    temperature: z.number().finite().optional(),
+    maxOutputTokens: z.number().finite().optional(),
+  }),
+  tools: z.array(AgentInferenceToolSnapshotSchema),
+});
+export type AgentInferenceSnapshotV1 = z.infer<typeof AgentInferenceSnapshotV1Schema>;
+
+export const AgentInferenceSnapshotSchema = AgentInferenceSnapshotV1Schema;
+export type AgentInferenceSnapshot = z.infer<typeof AgentInferenceSnapshotSchema>;
+
+/**
+ * Read projection for persisted snapshots. Unknown versions remain available
+ * as raw JSON instead of making the containing historical message unreadable.
+ */
+export const AgentInferenceSnapshotViewSchema = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('supported'),
+    snapshot: AgentInferenceSnapshotSchema,
+  }),
+  z.strictObject({
+    status: z.literal('unsupported'),
+    raw: JsonValueSchema,
+  }),
+]);
+export type AgentInferenceSnapshotView = z.infer<typeof AgentInferenceSnapshotViewSchema>;
+
+export function readAgentInferenceSnapshot(value: unknown): AgentInferenceSnapshotView | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const raw = JsonValueSchema.parse(value);
+  const parsed = AgentInferenceSnapshotSchema.safeParse(raw);
+  return parsed.success
+    ? { status: 'supported', snapshot: parsed.data }
+    : { status: 'unsupported', raw };
+}
+
 export const AgentSessionViewSchema = z.strictObject({
   id: z.string().min(1),
   agentId: z.string().min(1),
@@ -230,6 +286,8 @@ export const AgentMessageViewSchema = z.strictObject({
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
   usage: AgentUsageViewSchema.nullable(),
+  modelId: UniqueModelIdSchema.nullable(),
+  inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

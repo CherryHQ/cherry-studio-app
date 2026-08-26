@@ -1,8 +1,9 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, settled tool contracts, bounded managed image input, and the Runtime context
-checkpoint contract active behind the Mobile Agent Host**; persisted per-Agent binding projection,
-Pi compaction, and text attachment resolution remain follow-up work. Version 1 is local-only.
+Status: **Pi Runtime, settled tool contracts, HTTP MCP Runtime adaptation, bounded managed image
+input, and the Runtime context checkpoint contract active behind the Mobile Agent Host**; persisted
+per-Agent binding projection, Pi compaction, and text attachment resolution remain follow-up work.
+Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -52,13 +53,13 @@ non-standard adapter family, or authentication types fail before partial executi
 
 Pi receives the grouped structured transcript, an optional opaque context checkpoint, and Agent
 inference options on each execution. It maps text, reasoning, tool parts, approvals, cancellation,
-normalized failures, and cumulative multi-call usage onto this contract. The Host currently
-supplies one fixed application-owned
-`write_file` tool to function-calling models; persisted per-Agent bindings are not yet projected
-into the Runtime snapshot. The Host resolves bounded managed images for registry-declared
-image-capable models supported by the selected Pi endpoint adapter; text attachments remain
-deferred. The current Pi adapter deliberately ignores the checkpoint and emits none, so model input
-remains the complete flattened history until Pi compaction lands.
+multi-call usage onto this contract. The Runtime tool loop and HTTP MCP capability adapter are
+implemented. The Host currently supplies one fixed application-owned `write_file` tool to
+function-calling models; persisted per-Agent bindings are not yet projected into the Runtime
+snapshot. The Host resolves bounded managed images for registry-declared image-capable models
+supported by the selected Pi endpoint adapter; text attachments remain deferred.
+The current Pi adapter deliberately ignores the checkpoint and emits none, so model input remains
+the complete flattened history until Pi compaction lands.
 
 ## Descriptor and lifecycle
 
@@ -425,13 +426,16 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 ## Host execution flow
 
 1. The Host validates that the Session is idle.
-2. It persists the user message and assistant placeholder.
-3. It validates that the Session target is `local` and resolves the current Agent configuration.
-4. The Host uses its injected Pi Runtime.
-5. The Host resolves enabled Mobile Skills, creates the turn resource ledger, loads the latest
-   valid context checkpoint, and normalizes instructions, model, grouped structured history after
-   its anchor, the immutable tool snapshot, input, and options. Invalid candidates fall back to the
-   full history.
+2. It validates that the Session target is `local` and resolves the current Agent, public model
+    facts, input, and immutable tool catalog.
+3. It builds the versioned, credential-free inference snapshot from the same model, options, and
+    tools that will be sent to the Runtime.
+4. It atomically persists the user message and assistant placeholder with the selected model id and
+    inference snapshot.
+5. The Host uses its injected Pi Runtime, creates the turn resource ledger, loads the latest valid
+   context checkpoint, and normalizes instructions, model, grouped structured history after its
+   anchor, the immutable tool snapshot, input, and options. Invalid candidates fall back to the full
+   history.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.

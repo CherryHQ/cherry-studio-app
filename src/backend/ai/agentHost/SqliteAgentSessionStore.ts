@@ -17,7 +17,6 @@ import {
 } from '@/backend/data/services/utils/agentSessionRows';
 import {
   type AgentErrorView,
-  type AgentMessagePart,
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
@@ -25,6 +24,7 @@ import {
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
 import { interruptNonTerminalToolParts } from './mapping';
@@ -117,10 +117,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
-  async reserveSubmission(input: {
-    sessionId: string;
-    userParts: AgentMessagePart[];
-  }): Promise<ReserveSubmissionResult> {
+  async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       const now = Date.now();
       const touched = await tx
@@ -150,6 +147,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           role: 'assistant',
           status: 'pending',
           data: { version: 1, parts: [] },
+          modelId: input.modelId,
+          messageSnapshot: input.inferenceSnapshot,
         })
         .returning();
       return {

@@ -1,4 +1,4 @@
-import type { ToolSet } from 'ai';
+import type { ListToolsResult } from '@ai-sdk/mcp';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
@@ -59,11 +59,10 @@ function mockSdkInitContract(...args: unknown[]): Promise<unknown> {
 }
 
 type FakeClient = {
+  callTool: jest.Mock;
   close: jest.Mock;
   listTools: jest.Mock;
   serverInfo: { name: string; title?: string; version: string };
-  tools: jest.Mock;
-  toolsFromDefinitions: jest.Mock;
 };
 
 function flush(): Promise<void> {
@@ -91,39 +90,27 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   };
 }
 
-function makeRawTools(names: string[]): ToolSet {
-  return Object.fromEntries(
-    names.map((name) => [name, { description: `desc ${name}`, inputSchema: {}, type: 'dynamic' }]),
-  ) as unknown as ToolSet;
-}
-
-function makeToolDefinitions(tools: ToolSet) {
-  return Object.entries(tools).map(([name, rawTool]) => ({
-    description: typeof rawTool.description === 'string' ? rawTool.description : undefined,
+function makeRawTools(names: string[]): ListToolsResult['tools'] {
+  return names.map((name) => ({
+    description: `desc ${name}`,
     inputSchema: { properties: {}, type: 'object' as const },
     name,
-    rawTool,
   }));
 }
 
-function makeClient(tools: ToolSet): FakeClient {
+function makeClient(tools: ListToolsResult['tools']): FakeClient {
   const client: FakeClient = {
+    callTool: jest.fn(async ({ args, name }: { args: unknown; name: string }) => ({
+      args,
+      content: [],
+      name,
+    })),
     close: jest.fn(async () => undefined),
-    listTools: jest.fn(),
+    listTools: jest.fn(async () => ({ tools })),
     serverInfo: { name: 'test-server', title: 'Test MCP', version: '1.2.3' },
-    tools: jest.fn(async () => tools),
-    toolsFromDefinitions: jest.fn(),
   };
   client.listTools.mockImplementation((args?: { options?: { signal?: AbortSignal } }) =>
-    abortable(
-      (async () => ({ tools: makeToolDefinitions(await client.tools()) }))(),
-      args?.options?.signal,
-      'Request was aborted',
-    ),
-  );
-  client.toolsFromDefinitions.mockImplementation(
-    ({ tools: definitions }: { tools: ReturnType<typeof makeToolDefinitions> }) =>
-      Object.fromEntries(definitions.map((definition) => [definition.name, definition.rawTool])),
+    abortable(Promise.resolve({ tools }), args?.options?.signal, 'Request was aborted'),
   );
   return client;
 }
@@ -160,7 +147,7 @@ describe('getServerInfo', () => {
       version: '1.2.3',
     });
     expect(client.close).toHaveBeenCalled();
-    expect(client.tools).not.toHaveBeenCalled();
+    expect(client.listTools).not.toHaveBeenCalled();
   });
 
   it('bounds initialization and closes a client that connects late', async () => {
@@ -208,7 +195,7 @@ describe('listTools', () => {
 
   it('reconnects once when a pooled client has gone stale', async () => {
     const stale = makeClient(makeRawTools(['search']));
-    stale.tools.mockRejectedValue(new Error('session expired'));
+    stale.listTools.mockRejectedValue(new Error('session expired'));
     const fresh = makeClient(makeRawTools(['search']));
     mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(fresh);
     const server = makeServer();
@@ -226,9 +213,9 @@ describe('listTools', () => {
     client.listTools
       .mockResolvedValueOnce({
         nextCursor: 'page-2',
-        tools: makeToolDefinitions(makeRawTools(['search'])),
+        tools: makeRawTools(['search']),
       })
-      .mockResolvedValueOnce({ tools: makeToolDefinitions(makeRawTools(['open'])) });
+      .mockResolvedValueOnce({ tools: makeRawTools(['open']) });
     mockCreateMCPClient.mockResolvedValue(client);
     const server = makeServer();
     const { service } = makeService([server]);
@@ -244,9 +231,9 @@ describe('listTools', () => {
   });
 
   it('reuses one pooled connection across concurrent listings', async () => {
-    const tools = deferred<ToolSet>();
+    const tools = deferred<ListToolsResult>();
     const client = makeClient(makeRawTools(['search']));
-    client.tools.mockReturnValue(tools.promise);
+    client.listTools.mockReturnValue(tools.promise);
     mockCreateMCPClient.mockResolvedValue(client);
     const server = makeServer();
     const { service } = makeService([server]);
@@ -254,7 +241,7 @@ describe('listTools', () => {
     const first = service.listTools(server.id);
     await flush();
     const second = service.listTools(server.id);
-    tools.resolve(makeRawTools(['search']));
+    tools.resolve({ tools: makeRawTools(['search']) });
 
     await expect(first).resolves.toEqual([{ description: 'desc search', name: 'search' }]);
     await expect(second).resolves.toEqual([{ description: 'desc search', name: 'search' }]);
@@ -262,17 +249,136 @@ describe('listTools', () => {
   });
 });
 
+describe('Runtime tool adapter', () => {
+  it('preserves paginated raw identities and JSON Schemas while filtering disabled tools', async () => {
+    const client = makeClient(makeRawTools([]));
+    client.listTools
+      .mockResolvedValueOnce({
+        nextCursor: 'page-2',
+        tools: [
+          {
+            description: 'Search issues',
+            inputSchema: {
+              properties: { query: { minLength: 1, type: 'string' } },
+              required: ['query'],
+              type: 'object',
+            },
+            name: 'search',
+            title: 'Issue Search',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        tools: [
+          {
+            inputSchema: { properties: {}, type: 'object' },
+            name: 'disabled-tool',
+          },
+        ],
+      });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer({ disabledTools: ['disabled-tool'] });
+    const { service } = makeService([server]);
+
+    const descriptors = await service.listExecutableToolDescriptors(server.id);
+    expect(descriptors).toEqual([
+      {
+        description: 'Search issues',
+        displayName: 'Issue Search',
+        inputSchema: {
+          properties: { query: { minLength: 1, type: 'string' } },
+          required: ['query'],
+          type: 'object',
+        },
+        rawToolName: 'search',
+        serverId: server.id,
+      },
+    ]);
+    expect(Object.getOwnPropertySymbols(descriptors[0]!.inputSchema as object)).toEqual([]);
+    expect(client.listTools).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when pagination repeats a raw tool identity', async () => {
+    const client = makeClient(makeRawTools([]));
+    client.listTools.mockResolvedValue({
+      tools: [
+        { inputSchema: { properties: {}, type: 'object' }, name: 'search' },
+        { inputSchema: { properties: {}, type: 'object' }, name: 'search' },
+      ],
+    });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    await expect(service.listExecutableToolDescriptors(server.id)).rejects.toMatchObject({
+      code: 'mcp_tool_unavailable',
+      message: 'The MCP tool catalog contains a duplicate tool identity.',
+    });
+  });
+
+  it('rechecks stored policy and invokes the exact raw tool with the supplied signal', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.callTool.mockResolvedValue({
+      content: [{ text: 'result', type: 'text' }],
+      structuredContent: { count: 1 },
+    });
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    const controller = new AbortController();
+
+    await expect(
+      tool!.execute({ query: 'cherry' }, { signal: controller.signal, toolCallId: 'call-1' }),
+    ).resolves.toEqual({
+      artifacts: [],
+      value: {
+        content: [{ text: 'result', type: 'text' }],
+        structuredContent: { count: 1 },
+      },
+    });
+    expect(client.callTool).toHaveBeenCalledWith({
+      args: { query: 'cherry' },
+      name: 'search',
+      options: { abortSignal: expect.any(AbortSignal) },
+    });
+  });
+
+  it.each([
+    { disabledTools: ['search'] },
+    { isEnabled: false },
+    { endpointUrl: 'ftp://private.example/mcp' },
+  ])('refuses execution after the server policy changes', async (serverPatch) => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    Object.assign(server, serverPatch);
+
+    await expect(
+      tool!.execute(
+        { query: 'cherry' },
+        { signal: new AbortController().signal, toolCallId: 'call-1' },
+      ),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+});
+
 describe('runtime lifecycle', () => {
   it('reports connection errors without rejecting summaries', async () => {
     const client = makeClient(makeRawTools([]));
-    client.tools.mockRejectedValue(new Error('401 unauthorized'));
+    client.listTools.mockRejectedValue(new Error('401 unauthorized'));
     mockCreateMCPClient.mockResolvedValue(client);
     const server = makeServer();
     const { service } = makeService([server]);
 
     await expect(service.listTools(server.id)).rejects.toThrow('401 unauthorized');
     await expect(service.getRuntimeSummaries([server])).resolves.toEqual({
-      [server.id]: { lastError: '401 unauthorized', state: 'error' },
+      [server.id]: { lastError: 'MCP connection failed.', state: 'error' },
     });
   });
 
@@ -294,7 +400,9 @@ describe('runtime lifecycle', () => {
 
   it('invalidates an in-flight listing and permits a replacement', async () => {
     const stalled = makeClient(makeRawTools(['old']));
-    stalled.tools.mockReturnValue(new Promise(() => undefined));
+    stalled.listTools.mockImplementation((args?: { options?: { signal?: AbortSignal } }) =>
+      abortable(new Promise(() => undefined), args?.options?.signal, 'Request was aborted'),
+    );
     const replacement = makeClient(makeRawTools(['new']));
     mockCreateMCPClient.mockResolvedValueOnce(stalled).mockResolvedValue(replacement);
     const server = makeServer();

@@ -7,16 +7,12 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type {
-  AgentErrorView,
-  AgentMessagePart,
-  AgentMessageView,
-  AgentSessionView,
-} from '@/shared/contracts/agent';
+import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
 import { interruptNonTerminalToolParts } from './mapping';
@@ -125,10 +121,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return true;
   }
 
-  async reserveSubmission(input: {
-    sessionId: string;
-    userParts: AgentMessagePart[];
-  }): Promise<ReserveSubmissionResult> {
+  async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     const transcript = this.messages.get(input.sessionId);
     if (!transcript) {
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
@@ -144,6 +137,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       status: 'success',
       parts: cloneJson(input.userParts),
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -155,6 +150,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       status: 'pending',
       parts: [],
       usage: null,
+      modelId: input.modelId,
+      inferenceSnapshot: {
+        status: 'supported',
+        snapshot: cloneJson(input.inferenceSnapshot),
+      },
       createdAt: timestamp,
       updatedAt: timestamp,
     };

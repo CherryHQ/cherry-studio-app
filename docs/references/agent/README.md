@@ -1,8 +1,8 @@
 # Agent Architecture
 
-Status: **Agent, tool binding, and Agent Session persistence/backend integration implemented**.
-Version 1 is local-only; the Host currently exposes only a fixed built-in tool, while per-Agent
-binding projection remains deferred.
+Status: **Agent, tool binding, MCP Runtime adaptation, and Agent Session persistence/backend
+integration implemented**. Version 1 is local-only; the Host currently exposes only a fixed
+built-in tool, while per-Agent binding projection remains deferred.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
@@ -76,9 +76,10 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 - Built-in tools and Streamable HTTP MCP use one application-owned binding model with per-tool
   approval policy and stable built-in/MCP `ToolRef` identities. Provider-safe aliases and display
-  names are not persistence authority. The database and typed Data API persist those bindings;
-  per-Agent Runtime projection remains separate work. The logical model and resolution rules are in
-  [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
+  names are not persistence authority. The database and typed Data API persist those bindings, and
+  the HTTP MCP adapter can project selected raw descriptors into executable Runtime tools;
+  per-Agent Host resolution and injection remain separate work. The logical model and resolution
+  rules are in [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 - AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
   application-owned tools. They never become a parallel Agent or Chat Runtime.
 - Calendar, Office generation/inspection/patching, image generation, and file operations are
@@ -123,10 +124,13 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 The Runtime contract, Fake Runtime, Pi Runtime, Protocol contract, and Mobile Agent Host are
 implemented. The Host binds `local` directly to Pi, consumes the message-centric
 `AgentSessionStore` port, owns the Turn projection, and merges immutable composer model/reasoning
-snapshots over the current Agent definition for each execution. These snapshots are not persisted
-by the Agent Protocol. The durable `SqliteAgentSessionStore` is the production store binding over the
+snapshots over the current Agent definition for each execution. Every accepted assistant
+placeholder persists its selected model and versioned, credential-free inference snapshot through
+the durable `SqliteAgentSessionStore`, the production store binding over the
 `agent`/`agent_session`/`agent_session_message` tables. Agent CRUD and static Session/transcript
-reads are exposed through the Data API, and the Host resolves definitions from the `agent` table.
+reads are exposed through the Data API, and the Host resolves definitions from the `agent` table;
+transcript reads preserve missing and unsupported snapshot states without consulting current Agent
+configuration.
 The table intentionally starts empty: retired Assistant data is not migrated or copied. See
 [Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
 follow-ups, per the authority direction of
@@ -137,9 +141,11 @@ Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Pi ma
 cumulative usage, cancellation, native tool loops, and approval decisions onto the Runtime
 contract. The Host resolves a fixed `write_file` tool for function-calling models; durable
 per-Agent bindings are exposed through the typed Data API but are not yet projected into that
-Runtime snapshot. The Host resolves bounded managed images for supported image-capable models;
-text attachments remain deferred. It also persists and replays versioned Runtime context
-checkpoints; Pi does not produce or consume them until its compaction integration lands.
+Runtime snapshot. The HTTP MCP adapter preserves raw JSON Schemas and creates bounded, cancellable
+Runtime callbacks, but the Host does not resolve bindings into that adapter yet. The Host resolves
+bounded managed images for supported image-capable models; text attachments remain deferred. It
+also persists and replays versioned Runtime context checkpoints; Pi does not produce or consume
+them until its compaction integration lands.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
