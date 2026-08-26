@@ -3,6 +3,12 @@
 Status: **target design; application tool bindings and the Pi adapter are not yet complete**.
 Version 1 is local-only.
 
+One capability is as-built ahead of that design: `write_file` (see
+[Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
+injects a fixed catalog into every turn, so the `ToolRef` identity, the durable bindings, the turn
+resource ledger, and the `{ value, artifacts }` result envelope described below do not exist in
+code yet. Sections that a shipped tool already diverges from carry an **As-built** note.
+
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
 side effect, credential, system permission, managed file, and provider-specific capability.
@@ -53,6 +59,10 @@ generated aliases are never authority. Alias generation includes the source name
 digest, rejects collisions within the snapshot, and never falls back to display-name matching. The
 Host snapshots a display name separately so historical UI remains understandable after
 configuration changes.
+
+**As-built.** Neither representation exists yet. `write_file` is identified by its wire name alone,
+and the Host builds the same one-tool catalog for every Agent, so there is nothing to bind and no
+alias to derive. The `agent` table therefore still has no tool-policy column.
 
 The logical binding model is:
 
@@ -116,6 +126,10 @@ receives a [`file_entry`](../data/file-model.md) id. Protocol operations and fil
 that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
 import sources, never authority.
 
+**As-built.** There is no `TurnResourceLedger` yet. `write_file` needs none: it only creates
+entries and never reads one, so it has no input to authorize. The ledger becomes necessary with the
+first tool that accepts a `fileEntryId`.
+
 For Version 1, the Host derives the initial ledger grants from:
 
 - managed files attached to the current user input;
@@ -154,6 +168,12 @@ Agent Protocol file part with `purpose: 'artifact'` so the transcript retains it
 display metadata. Its content is not automatically projected as a model attachment in later
 history. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
+
+**As-built.** `RuntimeTool.execute` still returns bare JSON, so there is no envelope and no
+artifact projection. `write_file` reports its new entry as a `fileEntryId` inside that JSON, which
+the transcript persists with the tool call; chat renders it as the same file card an attachment
+gets, resolved from the id at read time. Nothing is stored as a `purpose: 'artifact'` file part,
+and later turns see the id as ordinary result data.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
@@ -287,6 +307,15 @@ with its own approval policy.
   not an arbitrary path.
 - Edit tools use format-specific application services and copy-on-write output. There is no generic
   unrestricted byte writer in Version 1.
+
+**As-built.** `write_file` is the one writer that ships. It does not weaken the rule above: it
+accepts a display name rather than a path, writes bounded UTF-8 text (1 MB) as a *new* entry, and
+can neither address nor overwrite an existing one. The model receives
+`{ status, fileEntryId, filename, size }`; a name it could correct returns
+`{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
+opaque failure. It runs without approval because it has no destructive form, and the Host offers it
+only to models that support function calling — handing tools to a model that cannot call them fails
+the whole turn. Implementation: `src/backend/ai/agentHost/tools/`.
 - Input size, extracted-text size, generated-file size, timeout, and cancellation limits are
   enforced by the capability service before provider or filesystem work grows without bound.
 

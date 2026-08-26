@@ -3,6 +3,7 @@ import type { CherryMessagePart } from '@cherrystudio/universal/data/types/messa
 import type { MessageListItem } from '@/frontend/components/messages';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
+export const STORY_WRITTEN_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000102';
 
 export type MessageExample = {
   label: string;
@@ -87,6 +88,40 @@ const toolParts: CherryMessagePart[] = [
     toolCallId: 'mcp-complete',
     toolMetadata: { cherry: { tool: { serverName: 'Filesystem', type: 'mcp' } } },
     toolName: 'read_file',
+    type: 'dynamic-tool',
+  },
+];
+
+const writeFileParts: CherryMessagePart[] = [
+  {
+    input: { content: '# Release Notes\n', filename: 'release-notes.md' },
+    state: 'input-available',
+    toolCallId: 'write-file-running',
+    toolName: 'write_file',
+    type: 'dynamic-tool',
+  },
+  {
+    input: { content: '# Release Notes\n', filename: 'release-notes.md' },
+    output: {
+      fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID,
+      filename: 'release-notes.md',
+      size: 128,
+      status: 'created',
+    },
+    state: 'output-available',
+    toolCallId: 'write-file-complete',
+    toolName: 'write_file',
+    type: 'dynamic-tool',
+  },
+  {
+    input: { content: '...', filename: 'notes/report.md' },
+    output: {
+      message: 'Invalid filename: give a plain name with an extension, such as `report.md`.',
+      status: 'error',
+    },
+    state: 'output-available',
+    toolCallId: 'write-file-rejected',
+    toolName: 'write_file',
     type: 'dynamic-tool',
   },
 ];
@@ -225,6 +260,10 @@ export const messageExamples: readonly MessageExample[] = [
   {
     label: 'Generic and MCP tools',
     message: createMessage('assistant-tools', 'assistant', toolParts),
+  },
+  {
+    label: 'Written file',
+    message: createMessage('assistant-write-file', 'assistant', writeFileParts),
   },
   {
     label: 'Meta tools',

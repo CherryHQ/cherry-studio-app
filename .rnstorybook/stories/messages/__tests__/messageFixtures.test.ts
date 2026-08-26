@@ -1,6 +1,10 @@
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
-import { messageExamples, STORY_FILE_ENTRY_ID } from '../messageFixtures';
+import {
+  messageExamples,
+  STORY_FILE_ENTRY_ID,
+  STORY_WRITTEN_FILE_ENTRY_ID,
+} from '../messageFixtures';
 
 describe('messages Storybook fixtures', () => {
   it('covers every message adapter family in the playground', () => {
@@ -42,11 +46,23 @@ describe('messages Storybook fixtures', () => {
         'tool_invoke',
         'tool_search',
         'web_search',
+        'write_file',
       ]),
     );
     expect(
       parts.some(
         (part) => part.type === 'file' && readCherryMeta(part)?.fileEntryId === STORY_FILE_ENTRY_ID,
+      ),
+    ).toBe(true);
+    // A written file renders as a card, so its id must be one the story providers resolve.
+    expect(
+      parts.some(
+        (part) =>
+          part.type === 'dynamic-tool' &&
+          part.toolName === 'write_file' &&
+          part.state === 'output-available' &&
+          (part.output as { fileEntryId?: string } | undefined)?.fileEntryId ===
+            STORY_WRITTEN_FILE_ENTRY_ID,
       ),
     ).toBe(true);
   });

@@ -1,0 +1,133 @@
+/**
+ * `write_file`: the model saves text as a managed file.
+ *
+ * Bounded on purpose (docs/references/agent/agent-tools-and-resources.md): UTF-8
+ * text only, one new entry per call, no path and no overwrite. The model names
+ * the file; where the bytes live is Cherry's business, so the result carries an
+ * entry id rather than a URI.
+ */
+
+import * as z from 'zod';
+
+import type { RuntimeJsonValue, RuntimeTool } from '@/backend/ai/agent';
+import { type FileEntry, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+
+export const WRITE_FILE_TOOL_NAME = 'write_file';
+
+/** Far above any model's output budget: a larger body is a malfunction. */
+export const WRITE_FILE_MAX_CONTENT_BYTES = 1_048_576;
+
+const DEFAULT_EXTENSION = 'txt';
+const FALLBACK_MEDIA_TYPE = 'text/plain';
+
+/**
+ * Only extensions whose media type earns something (preview, library filter).
+ * Anything absent falls back to `text/plain`, which is also why source-code
+ * extensions are left out: `ts` maps to `video/mp2t` in the IANA registry.
+ */
+const MEDIA_TYPES_BY_EXTENSION: Record<string, string> = {
+  css: 'text/css',
+  csv: 'text/csv',
+  htm: 'text/html',
+  html: 'text/html',
+  json: 'application/json',
+  markdown: 'text/markdown',
+  md: 'text/markdown',
+  tsv: 'text/tab-separated-values',
+  xml: 'application/xml',
+  yaml: 'application/yaml',
+  yml: 'application/yaml',
+};
+
+export const writeFileInputSchema = z.strictObject({
+  content: z.string().describe('The full text to write. UTF-8, at most 1 MB.'),
+  filename: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .describe(
+      'Display name including its extension, e.g. `report.md`. Not a path: it must not contain `/` or `\\`.',
+    ),
+});
+
+/** The slice of the managed-file port this tool needs. */
+export type WriteFileFiles = {
+  createTextEntry(input: { data: string; mediaType: string; name: string }): Promise<FileEntry>;
+};
+
+export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
+  return {
+    name: WRITE_FILE_TOOL_NAME,
+    description:
+      "Save text as a file in the user's file library. Use it only when the user asks to save, export, or download something as a file; otherwise answer in the conversation.",
+    inputSchema: toolInputSchema(),
+    approval: 'auto',
+    async execute(input) {
+      const parsed = writeFileInputSchema.safeParse(input);
+      if (!parsed.success) {
+        return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
+      }
+
+      const filename = normalizeFilename(parsed.data.filename);
+      if (!filename) {
+        return invalid(
+          'Invalid filename: give a plain name with an extension, such as `report.md`, without path separators.',
+        );
+      }
+
+      const size = new TextEncoder().encode(parsed.data.content).length;
+      if (size > WRITE_FILE_MAX_CONTENT_BYTES) {
+        return invalid(
+          `Content is ${size} bytes, over the ${WRITE_FILE_MAX_CONTENT_BYTES}-byte limit. Write less, or split it across files.`,
+        );
+      }
+
+      const entry = await files.createTextEntry({
+        data: parsed.data.content,
+        mediaType: mediaTypeForFilename(filename),
+        name: filename,
+      });
+
+      return {
+        status: 'created',
+        fileEntryId: entry.id,
+        filename: entry.filename,
+        size: entry.size,
+      };
+    },
+  };
+}
+
+/**
+ * A rejection the model can act on. Thrown errors reach it as an opaque
+ * "Tool execution failed", so anything it could fix by retrying is a value.
+ */
+function invalid(message: string): RuntimeJsonValue {
+  return { status: 'error', message };
+}
+
+/**
+ * Applies the same rules the file library stores by, and adds an extension when
+ * the model omitted one. Null means no safe name is recoverable.
+ */
+function normalizeFilename(filename: string): string | null {
+  const trimmed = filename.replace(/[\s.]+$/, '');
+  if (!SafeNameSchema.safeParse(trimmed).success) {
+    return null;
+  }
+  const named = filenameExtension(trimmed) ? trimmed : `${trimmed}.${DEFAULT_EXTENSION}`;
+  return SafeNameSchema.safeParse(named).success ? named : null;
+}
+
+function mediaTypeForFilename(filename: string): string {
+  const extension = filenameExtension(filename);
+  return (extension && MEDIA_TYPES_BY_EXTENSION[extension]) || FALLBACK_MEDIA_TYPE;
+}
+
+/** `RuntimeTool.inputSchema` is portable JSON Schema; the dialect key is noise. */
+function toolInputSchema(): RuntimeJsonValue {
+  const schema = z.toJSONSchema(writeFileInputSchema) as Record<string, unknown>;
+  delete schema.$schema;
+  return schema as RuntimeJsonValue;
+}
