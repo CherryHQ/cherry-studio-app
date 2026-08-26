@@ -1,7 +1,7 @@
 # Agent Tools And Controlled Resources
 
-Status: **tool binding persistence and HTTP MCP Runtime adaptation implemented; Host projection
-remains incomplete**. Version 1 is local-only.
+Status: **tool binding persistence, HTTP MCP Runtime adaptation, and Host projection implemented**.
+Version 1 is local-only.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -264,7 +264,8 @@ with its own approval policy.
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
 - The Host freezes the discovered tools for the turn. A reconnect may refresh the next snapshot but
   cannot silently replace the active catalog.
-- Third-party MCP tools default to `ask` until the user chooses a narrower per-tool policy.
+- Third-party MCP tools execute only with per-call `ask` approval in this version. An explicit
+  `deny` remains denied, while any legacy `auto` row is downgraded to `ask` during projection.
 
 ### System Calendar
 
@@ -321,6 +322,10 @@ Every callback receives the turn `AbortSignal`, applies a capability-specific ti
 credentials and private payloads from errors, and returns portable values. Cancellation propagates
 through MCP, provider, device, and file operations where their APIs support it; non-abortable native
 work must discard late results after the turn is terminal.
+
+Pi caps each turn at eight tool-loop steps, sixteen requested tool calls, and ten minutes. The MCP
+adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
+limits are application constants rather than user settings in Version 1.
 
 ## Desktop Relationship
 

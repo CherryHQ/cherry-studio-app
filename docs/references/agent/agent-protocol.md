@@ -1,7 +1,7 @@
 # Cherry Agent Protocol
 
-Status: **as built**. Tool configuration and managed attachment resolution remain separate follow-up
-work. Version 1 is local-only.
+Status: **as built**. Tool configuration is projected into local MCP execution; managed attachment
+resolution remains separate follow-up work. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.

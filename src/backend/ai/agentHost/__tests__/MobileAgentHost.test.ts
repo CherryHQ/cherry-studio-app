@@ -7,6 +7,7 @@
 import {
   FakeRuntime,
   type RuntimeExecutionRequest,
+  type RuntimeTool,
   type RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
@@ -96,10 +97,16 @@ const inferenceModel = async (model: { providerId: string; modelId: string }) =>
   name: model.modelId === 'mock-model' ? 'Mock Model' : 'Override Model',
 });
 
+type HostToolOverrides = {
+  modelSupportsTools?: () => Promise<boolean>;
+  resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
+};
+
 function createHost(
   runtime: FakeRuntime,
   naming: NamingOverride = noOpNaming,
   resolveInferenceModel = inferenceModel,
+  toolOverrides: HostToolOverrides = {},
 ): MobileAgentHost {
   return new MobileAgentHost(
     store,
@@ -110,7 +117,11 @@ function createHost(
     {
       agents,
       inferenceModel: resolveInferenceModel,
+      modelSupportsTools: toolOverrides.modelSupportsTools ?? (async () => true),
       naming,
+      runtimeTools: {
+        resolve: toolOverrides.resolveRuntimeTools ?? (async () => []),
+      },
       usage,
     },
   );
@@ -410,6 +421,91 @@ describe('MobileAgentHost', () => {
       view: {
         code: 'EXECUTION_UNAVAILABLE',
         message: 'The selected model is unavailable.',
+      },
+    });
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
+  });
+
+  test('freezes configured tools into Runtime input and the persisted inference snapshot', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      requests.push(controller.request);
+      controller.emit({ type: 'completed' });
+    });
+    const tool: RuntimeTool = {
+      approval: 'ask',
+      description: 'Search a remote catalog.',
+      displayName: 'Search',
+      execute: async () => ({ artifacts: [], value: { found: true } }),
+      inputSchema: { type: 'object' },
+      providerName: 'mcp_search_abc1234',
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+    };
+    let configuredTools = [tool];
+    const host = createHost(runtime, noOpNaming, inferenceModel, {
+      resolveRuntimeTools: async () => configuredTools.slice(),
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Search.' }],
+      sessionId: session.id,
+    });
+    configuredTools = [];
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool snapshot turn');
+
+    expect(requests[0]?.tools).toEqual([tool]);
+    const transcript = await store.listMessages(session.id);
+    expect(transcript[1]?.inferenceSnapshot).toMatchObject({
+      status: 'supported',
+      snapshot: {
+        tools: [
+          {
+            approval: 'ask',
+            displayName: 'Search',
+            providerName: 'mcp_search_abc1234',
+            ref: tool.ref,
+          },
+        ],
+      },
+    });
+  });
+
+  test('rejects configured tools for an unsupported model before reserving messages', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, inferenceModel, {
+      modelSupportsTools: async () => false,
+      resolveRuntimeTools: async () => [
+        {
+          approval: 'ask',
+          description: 'Search.',
+          displayName: 'Search',
+          execute: async () => ({ artifacts: [], value: null }),
+          inputSchema: { type: 'object' },
+          providerName: 'mcp_search_abc1234',
+          ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+        },
+      ],
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        parts: [{ type: 'text', text: 'Do not reserve this.' }],
+        sessionId: session.id,
+      }),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'The selected model does not support native tool calling.',
       },
     });
     await expect(store.listMessages(session.id)).resolves.toEqual([]);

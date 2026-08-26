@@ -173,7 +173,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }));
   }
 
-  /** Raw, JSON-safe definitions used by the Host-facing Runtime projection in a later stack PR. */
+  /** Raw, JSON-safe definitions used by the Host-facing Runtime projection. */
   async listExecutableToolDescriptors(serverId: string): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
     if (!server.isEnabled || !hasRunnableUrl(server)) {

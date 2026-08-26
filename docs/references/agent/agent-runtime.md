@@ -1,8 +1,7 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, settled tool contracts, and HTTP MCP Runtime adaptation active behind the
-Mobile Agent Host**; application tool resolution and injection remain follow-up work. Version 1 is
-local-only.
+Status: **Pi Runtime and executable Streamable HTTP MCP tools are active behind the Mobile Agent
+Host**. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -50,11 +49,11 @@ services. Current provider coverage is intentionally narrow: API-key-authenticat
 endpoints. Unsupported endpoint or authentication types fail before partial execution; expanding
 that adapter is follow-up work.
 
-Pi receives the complete structured transcript and Agent inference options on each execution. It
-maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
-multi-call usage onto this contract. The Runtime tool loop and HTTP MCP capability adapter are
-implemented, but the Host currently supplies `tools: []` until persisted bindings are resolved into
-an immutable Runtime tool snapshot. Attachments remain disabled pending Host-side file resolution.
+Pi receives the complete structured transcript, frozen MCP tool catalog, and Agent inference options
+on each execution. It maps text, reasoning, tool parts, approvals, cancellation, normalized
+failures, and cumulative multi-call usage onto this contract. The Host resolves persisted bindings
+and currently executable MCP descriptors before reservation; attachments remain disabled pending
+Host-side file resolution.
 
 ## Descriptor and lifecycle
 
@@ -239,8 +238,8 @@ tool result; a Runtime never looks up and executes an arbitrary application tool
 
 Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
 not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
-the Pi Runtime rejects the turn with a normalized unsupported-tools failure before partial execution
-instead of silently degrading to prompt-encoded pseudo calls.
+the Host rejects admission before reserving messages; Pi repeats the check before execution as a
+defensive boundary instead of silently degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied`, persists
@@ -253,6 +252,12 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 `value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
+
+Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
+limit do not execute their callback and receive a classified error result; reaching either limit
+stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
+and timeout abort the model, approval waiters, and the callback signal before terminalizing live
+tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -431,6 +436,7 @@ Every Runtime implementation passes the same suite:
 13. Artifact output contains validated managed refs, never absolute paths or unbounded inline bytes.
 14. Cancellation and startup recovery leave no non-terminal tool part or dangling model-history call.
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
+16. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
 Pi or a provider connection.
