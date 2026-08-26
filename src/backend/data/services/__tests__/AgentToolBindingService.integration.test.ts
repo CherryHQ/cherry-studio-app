@@ -212,7 +212,10 @@ describe('AgentToolBindingService', () => {
         ],
       }),
     ).resolves.toMatchObject({
-      items: expect.arrayContaining([{ id: serverDefault.id }, { id: specific.id }]),
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: serverDefault.id }),
+        expect.objectContaining({ id: specific.id }),
+      ]),
     });
     await expect(
       bindingService.upsert(agent.id, {
