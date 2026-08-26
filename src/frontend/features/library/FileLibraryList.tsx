@@ -4,7 +4,7 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { memo, type RefObject, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,8 +53,6 @@ export function FileLibraryList({
     (windowWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap) /
     fileLibraryGrid.columns;
   const estimatedItemSize = tileSize + fileLibraryGrid.tileGap;
-
-  useScrollToTopOnChange(listRef, filter);
 
   const contentContainerStyle = useMemo(
     () => ({
@@ -130,26 +128,6 @@ export function FileLibraryList({
       testID="file-library-grid"
     />
   );
-}
-
-/**
- * A tab switch is a new list, so it starts at the top. Without this the offset
- * carries over: leaving a short tab for a long one lands mid-grid with the
- * filter row — which scrolls with the content — already off screen.
- */
-function useScrollToTopOnChange(
-  listRef: RefObject<LegendListRef | null>,
-  filter: FileLibraryFilter,
-) {
-  const previousFilterRef = useRef(filter);
-
-  useEffect(() => {
-    if (previousFilterRef.current === filter) {
-      return;
-    }
-    previousFilterRef.current = filter;
-    listRef.current?.scrollToOffset({ animated: false, offset: 0 });
-  }, [filter, listRef]);
 }
 
 function fileEntryKeyExtractor(item: FileLibraryEntry) {
