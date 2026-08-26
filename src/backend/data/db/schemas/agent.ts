@@ -14,8 +14,9 @@ import { userModelTable } from './userModel';
  * Agent table - stores user-configured Agent definitions
  * (docs/references/agent/agent-persistence.md).
  *
- * Tool policy and skill references are deliberately absent: Agent tools are an
- * undecided open question (agent/README.md) and V1 executes tool-less turns.
+ * Per-Agent tool policy is normalized in `agent_tool_binding`; skill references
+ * remain deferred. Agent CRUD never rewrites either relation. The fixed built-in
+ * Runtime catalog is Host-owned and is not stored on this row.
  * Sessions reference agents via FK (ON DELETE RESTRICT); agents soft-delete
  * first, so live Sessions never orphan.
  */

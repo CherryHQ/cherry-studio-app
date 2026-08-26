@@ -7,7 +7,12 @@ import {
   type CompactionPreparation,
   type CompactionSettings,
 } from '@earendil-works/pi-agent-core/compaction';
-import type { Model as PiModel, Models, Usage as PiUsage } from '@earendil-works/pi-ai';
+import type {
+  Api as PiApi,
+  Model as PiModel,
+  Models,
+  Usage as PiUsage,
+} from '@earendil-works/pi-ai';
 
 import type { RuntimeContextCheckpoint, RuntimeExecutionRequest, RuntimeTool } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
@@ -122,7 +127,7 @@ export function estimatePiContextFixedCosts(input: {
 export async function planPiContext(input: {
   checkpoint: RuntimeContextCheckpoint | null;
   conversation: PiConversation;
-  model: PiModel<'openai-responses'>;
+  model: PiModel<PiApi>;
   models: Pick<Models, 'completeSimple'>;
   options?: PiContextCompactionOptions;
   outputReserveTokens: number;

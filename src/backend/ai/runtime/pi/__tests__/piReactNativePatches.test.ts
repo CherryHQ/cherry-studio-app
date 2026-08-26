@@ -68,7 +68,7 @@ describe('Pi React Native patches', () => {
     expect(providerEnv).toContain('function getBunSandboxEnvValue(_name)');
   });
 
-  test('keeps the OpenAI Responses runtime out of the Pi model and auth graph', () => {
+  test('keeps supported Pi adapters out of the Pi model and auth graph', () => {
     const packageJson = JSON.parse(
       readFileSync(`${process.cwd()}/node_modules/@earendil-works/pi-ai/package.json`, 'utf8'),
     ) as { exports?: Record<string, unknown> };
@@ -79,6 +79,16 @@ describe('Pi React Native patches', () => {
     const responsesShared = readFileSync(
       `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/openai-responses-shared.js`,
       'utf8',
+    );
+    const additionalAdapters = [
+      'anthropic-messages',
+      'google-generative-ai',
+      'openai-completions',
+    ].map((api) =>
+      readFileSync(
+        `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/${api}.js`,
+        'utf8',
+      ),
     );
 
     expect(packageJson.exports).toMatchObject({
@@ -107,5 +117,9 @@ describe('Pi React Native patches', () => {
     expect(responsesShared).not.toContain('from "../models.js"');
     expect(responses).toContain('from "../utils/model-runtime.js"');
     expect(responsesShared).toContain('from "../utils/model-runtime.js"');
+    for (const adapter of additionalAdapters) {
+      expect(adapter).not.toContain('from "../models.js"');
+      expect(adapter).toContain('from "../utils/model-runtime.js"');
+    }
   });
 });

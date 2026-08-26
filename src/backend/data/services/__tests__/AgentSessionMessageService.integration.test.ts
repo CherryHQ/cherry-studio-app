@@ -35,6 +35,8 @@ describe('AgentSessionMessageService persistence', () => {
     const first = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
     expect(first.items.map((message) => message.id)).toEqual(['message-c', 'message-b']);
     expect(first.items[0]).toMatchObject({
+      inferenceSnapshot: null,
+      modelId: null,
       parts: [{ state: 'done', text: 'C', type: 'text' }],
       sessionId: 'session-1',
       status: 'success',
@@ -54,6 +56,20 @@ describe('AgentSessionMessageService persistence', () => {
     });
     await expect(agentSessionMessageService.listByCursor('missing')).rejects.toMatchObject({
       details: { id: 'missing', resource: 'AgentSession' },
+    });
+  });
+
+  test('preserves an unknown inference snapshot version as unsupported JSON', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'message-future', text: 'Future' });
+    const futureSnapshot = { version: 2, opaque: { retained: true } };
+    sqlite
+      .prepare('UPDATE agent_session_message SET message_snapshot = ? WHERE id = ?')
+      .run(JSON.stringify(futureSnapshot), 'message-future');
+
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    expect(page.items[0]?.inferenceSnapshot).toEqual({
+      status: 'unsupported',
+      raw: futureSnapshot,
     });
   });
 });

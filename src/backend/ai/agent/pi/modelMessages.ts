@@ -1,4 +1,5 @@
 import type {
+  Api as PiApi,
   AssistantMessage,
   ImageContent,
   Message as PiMessage,
@@ -44,7 +45,7 @@ export type PiHistoryTurn = {
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
   request: RuntimeExecutionRequest,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
 ): PiConversation {
   const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
@@ -85,11 +86,9 @@ export function toPiConversation(
   };
 }
 
-function collectUserContent(
-  parts: RuntimeExecutionRequest['input'] | RuntimeMessagePart[],
-): UserMessage['content'] {
-  const content: (TextContent | ImageContent)[] = parts.flatMap((part) => {
-    if (part.type === 'text' || part.type === 'reasoning') {
+function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['content'] {
+  const content = parts.flatMap<TextContent | ImageContent>((part) => {
+    if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
     }
     if (part.type === 'text-attachment') {
@@ -141,7 +140,7 @@ function collectProviderNames(request: RuntimeExecutionRequest): Map<string, str
   return result;
 }
 
-function collectText(parts: RuntimeMessagePart[]): string {
+function collectText(parts: readonly RuntimeMessagePart[]): string {
   return parts
     .flatMap((part) => (part.type === 'text' || part.type === 'reasoning' ? [part.text] : []))
     .join('\n');
@@ -151,7 +150,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
   usage: RuntimeExecutionRequest['history'][number]['messages'][number]['usage'],
 ): void {
   const startIndex = history.length;

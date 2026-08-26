@@ -331,6 +331,79 @@ describe('fileStorage', () => {
     ]);
   });
 
+  test('writes text verbatim under the caller-provided filename', async () => {
+    const entries = createEntryStore();
+
+    const entry = await createInternalEntry(entries, {
+      data: '# Report\n',
+      mediaType: 'text/markdown',
+      name: 'report.md',
+      source: 'text',
+    });
+
+    expect(entry).toEqual(
+      expect.objectContaining({
+        filename: 'report.md',
+        mediaType: 'text/markdown',
+        size: 9,
+      }),
+    );
+    // No encoding option: expo-file-system writes UTF-8 by default.
+    expect(testState.writes).toEqual([
+      {
+        content: '# Report\n',
+        options: undefined,
+        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.md',
+      },
+    ]);
+  });
+
+  test('rejects a text filename that escapes the managed directory', async () => {
+    await expect(
+      createInternalEntry(createEntryStore(), {
+        data: 'x',
+        mediaType: 'text/plain',
+        name: '../escape.txt',
+        source: 'text',
+      }),
+    ).rejects.toThrow();
+
+    expect(testState.writes).toEqual([]);
+  });
+
+  test('removes a partially written text file on failure', async () => {
+    const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt';
+    testState.writeFailures.add(uri);
+
+    await expect(
+      createInternalEntry(createEntryStore(), {
+        data: 'x',
+        mediaType: 'text/plain',
+        name: 'notes.txt',
+        source: 'text',
+      }),
+    ).rejects.toThrow('write failed');
+    expect(testState.files.has(uri)).toBe(false);
+  });
+
+  test('removes the text blob when FileEntry persistence fails', async () => {
+    const entries = createEntryStore();
+    entries.create.mockRejectedValueOnce(new Error('database failed'));
+
+    await expect(
+      createInternalEntry(entries, {
+        data: 'x',
+        mediaType: 'text/plain',
+        name: 'notes.txt',
+        source: 'text',
+      }),
+    ).rejects.toThrow('database failed');
+
+    expect(
+      testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
+    ).toBe(false);
+  });
+
   test('removes a partially written generated image on failure', async () => {
     const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
     testState.writeFailures.add(uri);

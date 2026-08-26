@@ -48,6 +48,7 @@ describe('bundled SQLite migrations', () => {
         'agent',
         'agent_session',
         'agent_session_message',
+        'agent_tool_binding',
         'ai_usage_record',
         'app_state',
         'file_entry',
@@ -95,8 +96,8 @@ describe('bundled SQLite migrations', () => {
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
 
-      // Agent persistence (docs/references/agent/agent-persistence.md): three
-      // tables, no turn table, no approval table, no workspace or runtime id.
+      // Agent persistence (docs/references/agent/agent-persistence.md): four
+      // tables, no turn or pending-approval table, no workspace or runtime id.
       expect(columnNames(database, 'agent')).toEqual([
         'id',
         'name',
@@ -136,6 +137,19 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'context_checkpoint',
       ]);
+      expect(columnNames(database, 'agent_tool_binding')).toEqual([
+        'id',
+        'agent_id',
+        'source',
+        'capability_id',
+        'mcp_server_id',
+        'raw_tool_name',
+        'enabled',
+        'approval',
+        'display_name_snapshot',
+        'created_at',
+        'updated_at',
+      ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);
       expect(indexNames(database, 'user_model')).toEqual(
@@ -148,6 +162,15 @@ describe('bundled SQLite migrations', () => {
       );
       expect(indexNames(database, 'file_entry')).toEqual(['fe_created_at_idx']);
       expect(indexNames(database, 'painting')).toContain('painting_order_key_idx');
+      expect(indexNames(database, 'agent_tool_binding')).toEqual(
+        expect.arrayContaining([
+          'agent_tool_binding_agent_id_idx',
+          'agent_tool_binding_builtin_uniq',
+          'agent_tool_binding_mcp_server_default_uniq',
+          'agent_tool_binding_mcp_server_id_idx',
+          'agent_tool_binding_mcp_tool_uniq',
+        ]),
+      );
 
       const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
       // Every entry is a Cherry-owned immutable blob, so the desktop origin /
@@ -192,6 +215,12 @@ describe('bundled SQLite migrations', () => {
           expect.objectContaining({ from: 'model_id', on_delete: 'SET NULL', table: 'user_model' }),
         ]),
       );
+      expect(getForeignKeys(database, 'agent_tool_binding')).toEqual([
+        expect.objectContaining({ from: 'agent_id', on_delete: 'CASCADE', table: 'agent' }),
+      ]);
+      const agentToolBindingTableSql = getSchemaSql(database, 'table', 'agent_tool_binding');
+      expect(agentToolBindingTableSql).toContain('agent_tool_binding_identity_check');
+      expect(agentToolBindingTableSql).toContain('agent_tool_binding_approval_check');
       // Invariant 1 (agent-protocol.md) is a database constraint: at most one
       // unsettled assistant message per session.
       expect(indexList(database, 'agent_session_message')).toEqual(
@@ -206,6 +235,15 @@ describe('bundled SQLite migrations', () => {
       database.exec(`
         INSERT INTO agent (id, name, settings, order_key, created_at, updated_at)
         VALUES ('agent-1', 'Agent', '{}', 'a0', 1, 1);
+        INSERT INTO agent_tool_binding (
+          id, agent_id, source, capability_id, enabled, approval, created_at, updated_at
+        ) VALUES ('binding-builtin', 'agent-1', 'builtin', 'calendar.read', 1, 'auto', 1, 1);
+        INSERT INTO agent_tool_binding (
+          id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at
+        ) VALUES ('binding-default', 'agent-1', 'mcp', 'server-1', 1, 'ask', 1, 1);
+        INSERT INTO agent_tool_binding (
+          id, agent_id, source, mcp_server_id, raw_tool_name, enabled, approval, created_at, updated_at
+        ) VALUES ('binding-tool', 'agent-1', 'mcp', 'server-1', 'write', 0, 'deny', 1, 1);
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
         VALUES ('session-1', 'agent-1', 1, 1, 1);
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
@@ -213,6 +251,27 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
         VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
       `);
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_tool_binding (
+            id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-default-duplicate', 'agent-1', 'mcp', 'server-1', 1, 'ask', 1, 1);
+        `),
+      ).toThrow(/UNIQUE/);
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_tool_binding (
+            id, agent_id, source, capability_id, mcp_server_id, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-mixed', 'agent-1', 'builtin', 'calendar.write', 'server-1', 1, 'ask', 1, 1);
+        `),
+      ).toThrow(/agent_tool_binding_identity_check/);
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_tool_binding (
+            id, agent_id, source, capability_id, enabled, approval, created_at, updated_at
+          ) VALUES ('binding-unsafe', 'agent-1', 'builtin', 'calendar.write', 1, 'always', 1, 1);
+        `),
+      ).toThrow(/agent_tool_binding_approval_check/);
       // A second unsettled assistant row in the same session is the reservation
       // race the partial unique index exists to reject.
       expect(() =>
@@ -245,6 +304,9 @@ describe('bundled SQLite migrations', () => {
         { count: 0 },
       );
       database.exec("DELETE FROM agent WHERE id = 'agent-1'");
+      expect(database.prepare('SELECT count(*) AS count FROM agent_tool_binding').get()).toEqual({
+        count: 0,
+      });
 
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)

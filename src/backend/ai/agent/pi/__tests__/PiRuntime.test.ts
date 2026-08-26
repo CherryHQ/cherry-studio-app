@@ -25,11 +25,13 @@ import {
 } from '../contextCompaction';
 import { PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX, toPiConversation } from '../modelMessages';
 import {
+  DEFAULT_PI_RUNTIME_LIMITS,
   PiRuntime,
   type PiModelResolution,
   type PiRuntimeAgent,
   type PiRuntimeAgentFactory,
   type PiRuntimeContextOptions,
+  type PiRuntimeLimits,
 } from '../PiRuntime';
 
 const ERROR_SECRET = 'test-key';
@@ -96,9 +98,7 @@ const holders = new WeakMap<AgentRuntime, RuntimeHolder>();
 
 function createResolution(): PiModelResolution {
   return {
-    apiKey: 'test-key',
     defaultThinkingLevel: 'medium',
-    maxRetries: 0,
     model: {
       api: 'openai-responses',
       baseUrl: 'https://provider.example/v1',
@@ -111,8 +111,11 @@ function createResolution(): PiModelResolution {
       provider: 'mock-provider',
       reasoning: true,
     },
+    redactionValues: [ERROR_SECRET],
+    streamFn: () => {
+      throw new Error('The fake Pi agent must not call the provider stream.');
+    },
     supportsTools: true,
-    timeoutMs: 60_000,
     usageContext: {
       credentialReceipt: {
         attribution: 'explicit',
@@ -130,7 +133,10 @@ function createResolution(): PiModelResolution {
   };
 }
 
-function createTestRuntime(contextOptions: PiRuntimeContextOptions = {}): PiRuntime {
+function createTestRuntime(
+  limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
+  contextOptions: PiRuntimeContextOptions = {},
+): PiRuntime {
   const holder: RuntimeHolder = { resolution: createResolution() };
   const factory: PiRuntimeAgentFactory = (options) => {
     holder.lastOptions = options;
@@ -149,6 +155,7 @@ function createTestRuntime(contextOptions: PiRuntimeContextOptions = {}): PiRunt
       resolveModel: () => holder.resolution,
     },
     factory,
+    limits,
     contextOptions,
   );
   holders.set(runtime, holder);
@@ -256,6 +263,10 @@ function askTool(onExecute: () => void): RuntimeTool {
       return { value: { deleted: true }, artifacts: [] };
     },
   };
+}
+
+function createCompactionRuntime(contextOptions: PiRuntimeContextOptions): PiRuntime {
+  return createTestRuntime(DEFAULT_PI_RUNTIME_LIMITS, contextOptions);
 }
 
 function compactionOptions(
@@ -437,6 +448,14 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
   return events;
 }
 
+async function waitFor(predicate: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 describe('PiRuntime mapping', () => {
   test('encodes structured text attachments as JSON-escaped untrusted user content', () => {
     const runtime = createTestRuntime();
@@ -585,7 +604,7 @@ describe('PiRuntime mapping', () => {
 
   test('keeps short conversations on the full-history path without summarizing or checkpointing', async () => {
     let summaryCalls = 0;
-    const runtime = createTestRuntime(
+    const runtime = createCompactionRuntime(
       compactionOptions(
         summaryCompletion('Unused summary.', () => {
           summaryCalls += 1;
@@ -618,7 +637,7 @@ describe('PiRuntime mapping', () => {
 
   test('rejects oversized fixed costs before summary or agent model calls', async () => {
     let summaryCalls = 0;
-    const runtime = createTestRuntime(
+    const runtime = createCompactionRuntime(
       compactionOptions(
         summaryCompletion('Must not run.', () => {
           summaryCalls += 1;
@@ -655,7 +674,7 @@ describe('PiRuntime mapping', () => {
   test('compacts long history, reports summary usage, and replays the checkpoint after restart', async () => {
     let summaryCalls = 0;
     const attachmentBody = 'RAW_ATTACHMENT_BODY_SHOULD_NOT_PERSIST';
-    const runtime = createTestRuntime(
+    const runtime = createCompactionRuntime(
       compactionOptions(
         summaryCompletion(
           `EARLIEST_FACT is preserved. ${attachmentBody} test-key data:image/png;base64,AAAA`,
@@ -710,7 +729,7 @@ describe('PiRuntime mapping', () => {
     await session.close();
 
     let restartSummaryCalls = 0;
-    const restartedRuntime = createTestRuntime(
+    const restartedRuntime = createCompactionRuntime(
       compactionOptions(
         summaryCompletion('Must not run.', () => {
           restartSummaryCalls += 1;
@@ -744,7 +763,7 @@ describe('PiRuntime mapping', () => {
 
   test('incrementally merges the previous summary into the next checkpoint', async () => {
     let summarizationPrompt = '';
-    const runtime = createTestRuntime(
+    const runtime = createCompactionRuntime(
       compactionOptions(
         summaryCompletion('EARLIEST_FACT remains after the incremental update.', (context) => {
           summarizationPrompt = JSON.stringify(context.messages);
@@ -797,7 +816,7 @@ describe('PiRuntime mapping', () => {
 
   test('keeps tool calls paired when Pi compacts a split turn', async () => {
     const sensitiveResult = 'SENSITIVE_TOOL_RESULT_PAYLOAD';
-    const runtime = createTestRuntime(
+    const runtime = createCompactionRuntime(
       compactionOptions(summaryCompletion(`Safe split-turn summary. ${sensitiveResult}`), {
         settings: { enabled: true, reserveTokens: 100, keepRecentTokens: 30 },
       }),
@@ -892,7 +911,7 @@ describe('PiRuntime mapping', () => {
       }
       return assistantMessage({ content: [], stopReason: 'aborted', usage: usage(0, 0) });
     };
-    const runtime = createTestRuntime(compactionOptions(completeSimple));
+    const runtime = createCompactionRuntime(compactionOptions(completeSimple));
     const holder = arrange(runtime, (context) => emitText(context, 'Must not run.'));
     const session = await runtime.open();
 
@@ -943,7 +962,7 @@ describe('PiRuntime mapping', () => {
       ),
     );
 
-    expect(arranged.lastOptions?.initialState?.model.input).toEqual(['text', 'image']);
+    expect(arranged.lastOptions?.initialState?.model?.input).toEqual(['text', 'image']);
     expect(arranged.lastOptions?.initialState?.messages).toEqual([
       {
         role: 'user',
@@ -1103,6 +1122,8 @@ describe('PiRuntime mapping', () => {
       systemPrompt: 'Be helpful.\n\nPrior system note.',
       thinkingLevel: 'high',
     });
+    expect(holder.lastOptions?.streamFn).toBe(holder.resolution.streamFn);
+    expect(holder.lastOptions?.getApiKey).toBeUndefined();
     await session.close();
   });
 
@@ -1193,6 +1214,111 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('keeps parallel approvals independent and never executes a denied call', async () => {
+    const runtime = createTestRuntime();
+    let executionCount = 0;
+    const tool = askTool(() => {
+      executionCount += 1;
+    });
+    arrange(runtime, async (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Parallel approval program requires one tool.');
+      const message = assistantMessage({
+        content: [
+          {
+            type: 'toolCall',
+            id: 'parallel-call-1',
+            name: piTool.name,
+            arguments: { fileEntryId: 'file-1' },
+          },
+          {
+            type: 'toolCall',
+            id: 'parallel-call-2',
+            name: piTool.name,
+            arguments: { fileEntryId: 'file-2' },
+          },
+        ],
+        stopReason: 'toolUse',
+      });
+      const [first, second] = await Promise.all([
+        piTool.execute('parallel-call-1', { fileEntryId: 'file-1' }, context.signal),
+        piTool.execute('parallel-call-2', { fileEntryId: 'file-2' }, context.signal),
+      ]);
+      await context.emit({
+        type: 'turn_end',
+        message,
+        toolResults: [
+          {
+            role: 'toolResult',
+            toolCallId: 'parallel-call-1',
+            toolName: piTool.name,
+            content: first.content,
+            details: first.details,
+            isError: false,
+            timestamp: Date.now(),
+          },
+          {
+            role: 'toolResult',
+            toolCallId: 'parallel-call-2',
+            toolName: piTool.name,
+            content: second.content,
+            details: second.details,
+            isError: false,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+      await emitText(context, 'Handled independently.');
+    });
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    const collecting = (async () => {
+      for await (const event of session.execute(
+        baseRequest('turn-parallel-approvals', { tools: [tool] }),
+      )) {
+        events.push(event);
+      }
+    })();
+    await waitFor(
+      () => events.filter((event) => event.type === 'approval.requested').length === 2,
+      'both approval requests',
+    );
+
+    await session.respondApproval({
+      approvalId: 'approval-parallel-call-2',
+      decision: 'approve',
+      turnId: 'turn-parallel-approvals',
+    });
+    await session.respondApproval({
+      approvalId: 'approval-parallel-call-1',
+      decision: 'deny',
+      turnId: 'turn-parallel-approvals',
+    });
+    await collecting;
+
+    expect(executionCount).toBe(1);
+    expect(
+      events.flatMap((event) => (event.type === 'approval.resolved' ? [event.approval] : [])),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ toolCallId: 'parallel-call-1', status: 'denied' }),
+        expect.objectContaining({ toolCallId: 'parallel-call-2', status: 'approved' }),
+      ]),
+    );
+    expect(
+      events.flatMap((event) =>
+        event.type === 'part.replace' && event.part.type === 'tool' ? [event.part] : [],
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ toolCallId: 'parallel-call-1', state: 'denied' }),
+        expect.objectContaining({ toolCallId: 'parallel-call-2', state: 'output-available' }),
+      ]),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
   test('normalizes callback failures into a classified result envelope', async () => {
     const runtime = createTestRuntime();
     const tool: RuntimeTool = {
@@ -1234,6 +1360,206 @@ describe('PiRuntime mapping', () => {
       },
     });
     expect(JSON.stringify(failedPart)).not.toContain(ERROR_SECRET);
+    await session.close();
+  });
+
+  test('preserves a sanitized classified callback error', async () => {
+    const runtime = createTestRuntime();
+    const tool: RuntimeTool = {
+      ref: TOOL_REF,
+      providerName: TOOL_PROVIDER_NAME,
+      displayName: TOOL_DISPLAY_NAME,
+      description: 'Time out safely.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        throw Object.assign(new Error('The MCP tool call timed out.'), {
+          code: 'mcp_tool_timeout',
+          retryable: true,
+        });
+      },
+    };
+    arrange(runtime, approvalProgram('timeout-call'));
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-tool-timeout', { tools: [tool] })),
+    );
+
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.state === 'error',
+      ),
+    ).toMatchObject({
+      part: {
+        error: {
+          code: 'mcp_tool_timeout',
+          message: 'The MCP tool call timed out.',
+          retryable: true,
+        },
+        output: {
+          value: {
+            status: 'error',
+            error: { code: 'mcp_tool_timeout', retryable: true },
+          },
+          artifacts: [],
+        },
+      },
+    });
+    await session.close();
+  });
+
+  test('stops new callback execution after the per-turn tool call limit', async () => {
+    const runtime = createTestRuntime({
+      maxToolCalls: 1,
+      maxToolSteps: 8,
+      turnTimeoutMs: 60_000,
+    });
+    let executionCount = 0;
+    const tool: RuntimeTool = {
+      ref: TOOL_REF,
+      providerName: TOOL_PROVIDER_NAME,
+      displayName: TOOL_DISPLAY_NAME,
+      description: 'Count executions.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        executionCount += 1;
+        return { value: { executionCount }, artifacts: [] };
+      },
+    };
+    arrange(runtime, async (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Tool limit program requires one tool.');
+      const message = assistantMessage({
+        content: [
+          { type: 'toolCall', id: 'call-1', name: piTool.name, arguments: {} },
+          { type: 'toolCall', id: 'call-2', name: piTool.name, arguments: {} },
+        ],
+        stopReason: 'toolUse',
+      });
+      const first = await piTool.execute('call-1', {}, context.signal);
+      const second = await piTool.execute('call-2', {}, context.signal);
+      await context.emit({
+        type: 'turn_end',
+        message,
+        toolResults: [
+          {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: piTool.name,
+            content: first.content,
+            details: first.details,
+            isError: false,
+            timestamp: Date.now(),
+          },
+          {
+            role: 'toolResult',
+            toolCallId: 'call-2',
+            toolName: piTool.name,
+            content: second.content,
+            details: second.details,
+            isError: true,
+            timestamp: Date.now(),
+          },
+        ],
+      });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-call-limit', { tools: [tool] })),
+    );
+
+    expect(executionCount).toBe(1);
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      error: {
+        code: 'tool_call_limit_exceeded',
+        message: 'The turn reached its tool call limit.',
+        retryable: false,
+      },
+    });
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'call-2',
+      ),
+    ).toMatchObject({
+      part: { state: 'error', error: { code: 'tool_call_limit_exceeded' } },
+    });
+    await session.close();
+  });
+
+  test('stops the model loop after the configured tool step limit', async () => {
+    const runtime = createTestRuntime({
+      maxToolCalls: 16,
+      maxToolSteps: 1,
+      turnTimeoutMs: 60_000,
+    });
+    let shouldStop = false;
+    arrange(runtime, async (context) => {
+      const message = assistantMessage({ content: [], stopReason: 'toolUse' });
+      const result: ToolResultMessage = {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: TOOL_PROVIDER_NAME,
+        content: [{ type: 'text', text: '{}' }],
+        details: { artifacts: [], value: {} },
+        isError: false,
+        timestamp: Date.now(),
+      };
+      await context.emit({ type: 'turn_end', message, toolResults: [result] });
+      shouldStop =
+        (await context.options.shouldStopAfterTurn?.({
+          context: { messages: [], systemPrompt: '', tools: [] },
+          message,
+          newMessages: [],
+          toolResults: [result],
+        })) ?? false;
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-step-limit')));
+
+    expect(shouldStop).toBe(true);
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      error: {
+        code: 'tool_step_limit_exceeded',
+        message: 'The turn reached its tool loop step limit.',
+        retryable: false,
+      },
+    });
+    await session.close();
+  });
+
+  test('aborts the model and reports a classified whole-turn timeout', async () => {
+    const runtime = createTestRuntime({
+      maxToolCalls: 16,
+      maxToolSteps: 8,
+      turnTimeoutMs: 5,
+    });
+    arrange(runtime, async (context) => {
+      await new Promise<void>((resolve) => {
+        context.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-timeout')));
+
+    expect(events).toEqual([
+      {
+        type: 'failed',
+        error: { code: 'turn_timeout', message: 'The Agent turn timed out.', retryable: true },
+      },
+    ]);
     await session.close();
   });
 });

@@ -13,6 +13,8 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
     usage: null,
+    modelId: null,
+    inferenceSnapshot: null,
     ...overrides,
   };
 }
@@ -85,6 +87,49 @@ describe('agentMessageProjection', () => {
             title: 'Read file',
             toolCallId: 'call-1',
             toolName: 'builtin_read_file_a1b2',
+            type: 'dynamic-tool',
+          },
+        ],
+      },
+    });
+  });
+
+  test('unwraps Runtime tool results for the shared tool renderers', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-tool-result', {
+        parts: [
+          {
+            displayName: 'Write file',
+            id: 'tool-1',
+            input: { filename: 'report.md' },
+            output: {
+              value: { status: 'created', fileEntryId: 'file-1' },
+              artifacts: [
+                {
+                  ref: { kind: 'managed-file', fileEntryId: 'file-1' },
+                  mediaType: 'text/markdown',
+                  name: 'report.md',
+                  kind: 'created',
+                },
+              ],
+            },
+            providerName: 'write_file',
+            state: 'output-available',
+            toolCallId: 'call-1',
+            toolRef: { source: 'builtin', capabilityId: 'write_file' },
+            type: 'tool',
+          },
+        ],
+        status: 'success',
+      }),
+    );
+
+    expect(item).toMatchObject({
+      data: {
+        parts: [
+          {
+            output: { status: 'created', fileEntryId: 'file-1' },
+            toolName: 'write_file',
             type: 'dynamic-tool',
           },
         ],

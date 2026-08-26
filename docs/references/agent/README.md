@@ -1,7 +1,7 @@
 # Agent Architecture
 
-Status: **Agent and Agent Session backend/frontend integration implemented**. Version 1 is
-local-only and tool-less.
+Status: **Agent, tool binding, executable MCP Runtime, and Agent Session persistence/backend
+integration implemented**. Version 1 is local-only.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
@@ -57,8 +57,9 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. The current implementation
-  always resolves an empty snapshot: no tool bindings are persisted yet.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host combines its fixed
+  built-in tools with persisted MCP bindings whose Streamable HTTP server and raw discovered tool
+  remain executable.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -74,8 +75,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 - Built-in tools and Streamable HTTP MCP use one application-owned binding model with per-tool
   approval policy and stable built-in/MCP `ToolRef` identities. Provider-safe aliases and display
-  names are not persistence authority. The current database does not yet persist those bindings;
-  the logical model and resolution rules are settled in
+  names are not persistence authority. The database and Data API persist those bindings, and the
+  Host combines their effective policy with live HTTP MCP descriptors before creating executable
+  Runtime tools. The logical model and resolution rules are in
   [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 - AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
   application-owned tools. They never become a parallel Agent or Chat Runtime.
@@ -121,30 +123,34 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 The Runtime contract, Fake Runtime, Pi Runtime, Protocol contract, and Mobile Agent Host are
 implemented. The Host binds `local` directly to Pi, consumes the message-centric
 `AgentSessionStore` port, owns the Turn projection, and merges immutable composer model/reasoning
-snapshots over the current Agent definition for each execution. These snapshots are not persisted
-by the Agent Protocol. The durable `SqliteAgentSessionStore` is the production store binding over the
+snapshots over the current Agent definition for each execution. Every accepted assistant
+placeholder persists its selected model and versioned, credential-free inference snapshot through
+the durable `SqliteAgentSessionStore`, the production store binding over the
 `agent`/`agent_session`/`agent_session_message` tables. Agent CRUD and static Session/transcript
-reads are exposed through the Data API, and the Host resolves definitions from the `agent` table.
+reads are exposed through the Data API, and the Host resolves definitions from the `agent` table;
+transcript reads preserve missing and unsupported snapshot states without consulting current Agent
+configuration.
 The table intentionally starts empty: retired Assistant data is not migrated or copied. See
 [Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
-The production Pi model adapter currently accepts API-key-authenticated OpenAI Responses endpoints.
-Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and approval decisions
-onto the Runtime contract. Agent tool configuration is still deferred, so the Host deliberately
-supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
-file resolver lands. The Host also persists and replays versioned Runtime context checkpoints;
-Pi produces and consumes them through its RN-safe compaction adapter.
+The production Pi model adapter currently accepts API-key-authenticated Anthropic Messages, Google
+Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Pi maps text, reasoning,
+cumulative usage, cancellation, native tool loops, and approval decisions onto the Runtime
+contract. Agent tool bindings are durable and exposed through the typed Data API. The HTTP MCP
+adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks, and the Host
+resolves their effective policy alongside its fixed application-owned catalog into a frozen
+per-turn snapshot before reserving messages. The Host resolves bounded managed images for supported
+image-capable models; text attachments remain deferred. It also persists and replays versioned
+Runtime context checkpoints; Pi produces and consumes them through its RN-safe compaction adapter.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Application-owned tool configuration/resolution — tool binding persistence, the per-turn
-`RuntimeTool` snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work,
-along with Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments
-and artifacts, plus the avatar workflow, are also separate follow-ups.
+Mobile Skill configuration/loading, text attachment conversion and the controlled resource ledger,
+plus the avatar workflow, remain separate follow-ups.
 
 ## Related
 

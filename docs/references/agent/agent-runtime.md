@@ -1,8 +1,7 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, settled tool contracts, bounded managed image/text input, and Pi context
-compaction active behind the Mobile Agent Host**; application tool configuration remains follow-up
-work. Version 1 is local-only.
+Status: **Pi Runtime, executable Streamable HTTP MCP tools, bounded managed image/text input, and
+Pi context compaction are active behind the Mobile Agent Host**. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -46,17 +45,18 @@ remain deferred. The injected Pi Runtime remains stable for the Host lifetime.
 
 The production Host binds `local` directly to Pi and injects provider/model resolution through an
 application adapter. The Runtime itself imports neither Expo transport nor application data
-services. Current provider coverage is intentionally narrow: API-key-authenticated OpenAI Responses
-endpoints. Unsupported endpoint or authentication types fail before partial execution; expanding
-that adapter is follow-up work.
+services. Current provider coverage includes API-key-authenticated Anthropic Messages, Google
+Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Unsupported endpoint,
+non-standard adapter family, or authentication types fail before partial execution.
 
-Pi receives the grouped structured transcript, an optional opaque context checkpoint, and Agent
-inference options on each execution. It
-maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
-multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
-supplies `tools: []` until the application-owned tool configuration model lands. The Host resolves
-bounded managed images for image-capable OpenAI Responses models and bounded UTF-8 managed text as
-untrusted user content.
+Pi receives the grouped structured transcript, an optional opaque context checkpoint, a frozen MCP
+tool catalog, and Agent inference options on each execution. It maps text, reasoning, tool parts,
+approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
+The Host resolves persisted bindings and currently executable MCP descriptors before reservation,
+alongside the fixed application-owned catalog. It also resolves bounded managed images for
+registry-declared image-capable models supported by the selected Pi endpoint adapter, plus bounded
+UTF-8 managed text as untrusted user content.
+
 The repository patches expose `pi-agent-core/compaction` and its exact RN-safe Pi AI utility
 subpaths. Short conversations retain the complete-history path. Long conversations reuse or
 incrementally update a Runtime checkpoint before the first provider turn.
@@ -189,10 +189,10 @@ filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP
 at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
 tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
 S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
-temporary Data URL after reservation.
-Cancellation aborts that read boundary and late content is discarded. Current image read failure
-settles the reserved turn; missing historical content is omitted while its persisted reference
-remains.
+temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
+discarded. Current image read failure settles the reserved turn; missing historical content is
+omitted while its persisted reference remains.
+
 For text, the Host accepts `text/*` and an explicit application/source-code allowlist cross-checked
 by filename extension. It reads at most 1 MiB per current file before reservation, accepts and strips
 a leading UTF-8 BOM, rejects invalid UTF-8, NUL, and binary controls, then emits at most 200,000
@@ -200,11 +200,12 @@ Unicode code points per file and 400,000 across all model-visible text attachmen
 temporary Runtime part keeps body, authoritative metadata, truncation, and the
 `untrusted-user-content` trust label structurally separate. Pi JSON-escapes that part only while
 adapting it to ordinary user message text, so attachment data cannot become system instructions or
-forge its boundary metadata. Pi's existing current-input/history estimator counts the resulting
-text alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment
-bodies are redacted if a compaction model reproduces them in a persisted checkpoint.
-Neither Data URLs, extracted text, nor device URIs enter protocol values, SQLite, snapshots, or logs.
-Tool-side access follows the stricter managed-id ledger in
+forge its boundary metadata. Pi's current-input/history estimator counts the resulting text
+alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
+are redacted if a compaction model reproduces them in a persisted checkpoint.
+
+Neither Data URLs, extracted text, nor device URIs enter protocol values, SQLite, snapshots, or
+logs. Tool-side access follows the stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History
@@ -319,8 +320,8 @@ tool result; a Runtime never looks up and executes an arbitrary application tool
 
 Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
 not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
-the Pi Runtime rejects the turn with a normalized unsupported-tools failure before partial execution
-instead of silently degrading to prompt-encoded pseudo calls.
+the Host rejects admission before reserving messages; Pi repeats the check before execution as a
+defensive boundary instead of silently degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied`, persists
@@ -333,6 +334,12 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 `value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
+
+Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
+limit do not execute their callback and receive a classified error result; reaching either limit
+stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
+and timeout abort the model, approval waiters, and the callback signal before terminalizing live
+tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -468,13 +475,16 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 ## Host execution flow
 
 1. The Host validates that the Session is idle.
-2. It persists the user message and assistant placeholder.
-3. It validates that the Session target is `local` and resolves the current Agent configuration.
-4. The Host uses its injected Pi Runtime.
-5. The Host resolves enabled Mobile Skills, creates the turn resource ledger, loads the latest
-   valid context checkpoint, and normalizes instructions, model, grouped structured history after
-   its anchor, the immutable tool snapshot, input, and options. Invalid candidates fall back to the
-   full history.
+2. It validates that the Session target is `local` and resolves the current Agent, public model
+    facts, input, and immutable tool catalog.
+3. It builds the versioned, credential-free inference snapshot from the same model, options, and
+    tools that will be sent to the Runtime.
+4. It atomically persists the user message and assistant placeholder with the selected model id and
+    inference snapshot.
+5. The Host uses its injected Pi Runtime, creates the turn resource ledger, loads the latest valid
+   context checkpoint, and normalizes instructions, model, grouped structured history after its
+   anchor, the immutable tool snapshot, input, and options. Invalid candidates fall back to the full
+   history.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.
@@ -523,11 +533,12 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
+17. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
+18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
-18. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
+19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
     candidate, and invalid replay candidates fall back to full history.
-19. Short history does not summarize; compacted history replays summary plus retained complete-Turn
+20. Short history does not summarize; compacted history replays summary plus retained complete-Turn
     context, preserves tool pairs across split turns, and accounts summary usage in the active Turn.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without

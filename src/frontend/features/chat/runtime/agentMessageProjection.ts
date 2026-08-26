@@ -1,5 +1,10 @@
 import type { MessageListItem } from '@/frontend/components/messages';
-import type { AgentErrorView, AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
+import {
+  type AgentErrorView,
+  type AgentMessagePart,
+  type AgentMessageView,
+  AgentToolResultSchema,
+} from '@/shared/contracts/agent';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
@@ -54,7 +59,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
     case 'output-available':
       return {
         ...base,
-        output: part.output,
+        output: unwrapToolOutput(part.output),
         state: 'output-available',
       } as CherryMessagePart;
     case 'denied':
@@ -74,6 +79,12 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
         state: 'output-error',
       } as CherryMessagePart;
   }
+}
+
+/** Shared tool renderers consume the capability value, not the Runtime envelope. */
+function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['output']) {
+  const parsed = AgentToolResultSchema.safeParse(output);
+  return parsed.success ? parsed.data.value : output;
 }
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {

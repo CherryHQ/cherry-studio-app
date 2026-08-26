@@ -16,7 +16,7 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-import type { AgentErrorView } from '@/shared/contracts/agent';
+import type { AgentErrorView, AgentInferenceSnapshotV1 } from '@/shared/contracts/agent';
 
 import type { AgentSessionStore } from '../AgentSessionStore';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
@@ -27,6 +27,22 @@ const INTERRUPTED: AgentErrorView = {
   message: 'restart',
   retryable: true,
 };
+
+const MODEL_ID = 'mock-provider::mock-model' as const;
+const INFERENCE_SNAPSHOT: AgentInferenceSnapshotV1 = {
+  version: 1,
+  model: {
+    uniqueModelId: MODEL_ID,
+    providerId: 'mock-provider',
+    modelId: 'mock-model',
+    apiModelId: 'mock-model-api',
+    name: 'Mock Model',
+  },
+  reasoningEffort: 'low',
+  parameters: { temperature: 0.2, maxOutputTokens: 512 },
+  tools: [],
+};
+const RESERVATION_FACTS = { modelId: MODEL_ID, inferenceSnapshot: INFERENCE_SNAPSHOT };
 
 type StoreHarness = {
   store: AgentSessionStore;
@@ -99,6 +115,19 @@ function makeSqliteHarness(): StoreHarness {
       const id = randomUUID();
       sqlite
         .prepare(
+          `INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+           VALUES ('mock-provider', 'Mock Provider', 'a0', 1, 1)`,
+        )
+        .run();
+      sqlite
+        .prepare(
+          `INSERT INTO user_model (
+            id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at
+          ) VALUES (?, 'mock-provider', 'mock-model', 'Mock Model', 'mock-model', 'a0', 1, 1)`,
+        )
+        .run(MODEL_ID);
+      sqlite
+        .prepare(
           'INSERT INTO agent (id, name, settings, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run(id, 'Agent', '{}', 'a0', Date.now(), Date.now());
@@ -164,6 +193,7 @@ describe.each([
   test('reserveSubmission writes the correlated user/assistant pair', async () => {
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
@@ -175,22 +205,30 @@ describe.each([
     expect(reserved.userMessage.parts).toEqual([
       { id: 'input-0', type: 'text', text: 'Hello.', state: 'done' },
     ]);
+    expect(reserved.userMessage.modelId).toBeNull();
+    expect(reserved.userMessage.inferenceSnapshot).toBeNull();
     expect(reserved.assistantMessage.role).toBe('assistant');
     expect(reserved.assistantMessage.status).toBe('pending');
     expect(reserved.assistantMessage.parts).toEqual([]);
+    expect(reserved.assistantMessage.modelId).toBe(MODEL_ID);
+    expect(reserved.assistantMessage.inferenceSnapshot).toEqual({
+      status: 'supported',
+      snapshot: INFERENCE_SNAPSHOT,
+    });
 
     expect(await store.listMessages(session.id)).toEqual([
       reserved.userMessage,
       reserved.assistantMessage,
     ]);
     await expect(
-      store.reserveSubmission({ sessionId: 'missing', userParts: [] }),
+      store.reserveSubmission({ ...RESERVATION_FACTS, sessionId: 'missing', userParts: [] }),
     ).rejects.toThrow();
   });
 
   test('finalizeAssistantMessage settles status, parts, usage, and turn error', async () => {
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hi', state: 'done' }],
     });
@@ -214,6 +252,8 @@ describe.each([
     expect(finalized.status).toBe('error');
     expect(finalized.parts).toHaveLength(2);
     expect(finalized.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(finalized.modelId).toBe(MODEL_ID);
+    expect(finalized.inferenceSnapshot).toEqual(reserved.assistantMessage.inferenceSnapshot);
 
     const transcript = await store.listMessages(session.id);
     expect(transcript[1]).toEqual(finalized);
@@ -234,6 +274,7 @@ describe.each([
     const session = await store.createSession({ agentId });
     for (const text of ['one', 'two']) {
       const reserved = await store.reserveSubmission({
+        ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text, state: 'done' }],
       });
@@ -296,6 +337,7 @@ describe.each([
   test('reconcileInterrupted settles unsettled assistant placeholders once', async () => {
     const session = await store.createSession({ agentId });
     await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
@@ -303,6 +345,11 @@ describe.each([
     expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(1);
     const transcript = await store.listMessages(session.id);
     expect(transcript.map((message) => message.status)).toEqual(['success', 'interrupted']);
+    expect(transcript[1]?.modelId).toBe(MODEL_ID);
+    expect(transcript[1]?.inferenceSnapshot).toEqual({
+      status: 'supported',
+      snapshot: INFERENCE_SNAPSHOT,
+    });
 
     expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(0);
   });
@@ -310,6 +357,7 @@ describe.each([
   test('deleteSession removes the transcript with the session', async () => {
     const session = await store.createSession({ agentId });
     await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
@@ -335,6 +383,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await store.createSession({ agentId });
     const first = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
     });
@@ -343,6 +392,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     // and post-settle assertions below pin that the unique index caused it.
     await expect(
       store.reserveSubmission({
+        ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
       }),
@@ -363,6 +413,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
     await expect(
       store.reserveSubmission({
+        ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
       }),
@@ -375,6 +426,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'quantum sailboat', state: 'done' }],
     });
@@ -411,6 +463,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
     });
@@ -433,6 +486,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
     });
@@ -454,12 +508,31 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
   });
 
+  test('keeps the inference snapshot after its selected model is deleted', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await store.createSession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Remember the model.', state: 'done' }],
+    });
+
+    raw.prepare("DELETE FROM user_provider WHERE provider_id = 'mock-provider'").run();
+
+    const assistant = (await store.listMessages(session.id))[1];
+    expect(assistant?.modelId).toBeNull();
+    expect(assistant?.inferenceSnapshot).toEqual(reserved.assistantMessage.inferenceSnapshot);
+  });
+
   test('reconciliation atomically terminalizes persisted non-terminal tool parts', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Use the tool.', state: 'done' }],
     });

@@ -6,7 +6,9 @@
 
 import {
   FakeRuntime,
+  type RuntimeDescriptor,
   type RuntimeExecutionRequest,
+  type RuntimeTool,
   type RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
@@ -17,6 +19,7 @@ import {
   type AgentEvent,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
@@ -24,6 +27,7 @@ import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import type { ManagedFileResolver } from '../managedFileResolver';
 import { MobileAgentHost } from '../MobileAgentHost';
+import type { AgentToolSource } from '../tools/builtInToolSource';
 
 const AGENT_ID = 'agent-under-test';
 const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
@@ -91,16 +95,45 @@ const usage = {
   record: jest.fn(),
 };
 
+const inferenceModel = async (model: { providerId: string; modelId: string }) => ({
+  uniqueModelId: createUniqueModelId(model.providerId, model.modelId),
+  providerId: model.providerId,
+  modelId: model.modelId,
+  apiModelId: `${model.modelId}-api`,
+  name: model.modelId === 'mock-model' ? 'Mock Model' : 'Override Model',
+});
+
 const noFiles: ManagedFileResolver = {
   resolveAvailable: jest.fn(async () => new Map()),
   readAsBytes: jest.fn(async () => undefined),
   readAsDataUrl: jest.fn(async () => undefined),
 };
 
+/** Keeps the suite off the production catalog, which reads the database. */
+const noOpTools: AgentToolSource = { getTools: async () => [] };
+
+const stubTool: RuntimeTool = {
+  ref: { source: 'builtin', capabilityId: 'stub_tool' },
+  providerName: 'stub_tool',
+  displayName: 'Stub tool',
+  description: 'Does nothing.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  approval: 'auto',
+  execute: async () => ({ value: { status: 'ok' }, artifacts: [] }),
+};
+
+type HostToolOverrides = {
+  modelSupportsTools?: () => Promise<boolean>;
+  resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
+};
+
 function createHost(
   runtime: FakeRuntime,
   naming: NamingOverride = noOpNaming,
   files: ManagedFileResolver = noFiles,
+  tools: AgentToolSource = noOpTools,
+  resolveInferenceModel = inferenceModel,
+  toolOverrides: HostToolOverrides = {},
 ): MobileAgentHost {
   return new MobileAgentHost(
     store,
@@ -111,14 +144,24 @@ function createHost(
     {
       agents,
       files,
+      inferenceModel: resolveInferenceModel,
+      modelSupportsTools: toolOverrides.modelSupportsTools ?? (async () => true),
       naming,
+      runtimeTools: {
+        resolve: toolOverrides.resolveRuntimeTools ?? (async () => []),
+      },
       usage,
+      tools,
     },
   );
 }
 
-function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
-  const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+function hostWithText(
+  texts: string[],
+  requests: RuntimeExecutionRequest[] = [],
+  options: { descriptor?: RuntimeDescriptor; tools?: AgentToolSource } = {},
+): MobileAgentHost {
+  const runtime = new FakeRuntime({ descriptor: options.descriptor ?? FAKE_DESCRIPTOR });
   for (const text of texts) {
     runtime.script((controller) => {
       requests.push(controller.request);
@@ -143,7 +186,7 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       controller.emit({ type: 'completed' });
     });
   }
-  return createHost(runtime);
+  return createHost(runtime, noOpNaming, noFiles, options.tools);
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -233,6 +276,25 @@ describe('MobileAgentHost', () => {
     const finalized = events.find((event) => event.type === 'message.finalized');
     if (finalized?.type !== 'message.finalized') throw new Error('missing finalized message');
     expect(finalized.message.id).toBe(submitted.assistantMessageId);
+    expect(finalized.message).toMatchObject({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        status: 'supported',
+        snapshot: {
+          version: 1,
+          model: {
+            uniqueModelId: 'mock-provider::mock-model',
+            providerId: 'mock-provider',
+            modelId: 'mock-model',
+            apiModelId: 'mock-model-api',
+            name: 'Mock Model',
+          },
+          reasoningEffort: 'low',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+    });
     expect(finalized.message.status).toBe('success');
     expect(finalized.message.parts).toEqual([
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
@@ -479,6 +541,87 @@ describe('MobileAgentHost', () => {
     ]);
   });
 
+  test('hands the turn the tools resolved for its model', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Save it.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).toHaveBeenCalledWith({ providerId: 'mock-provider', modelId: 'mock-model' });
+    expect(requests[0]?.tools).toEqual([stubTool]);
+    expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({
+      status: 'supported',
+      snapshot: {
+        tools: [
+          {
+            ref: stubTool.ref,
+            providerName: stubTool.providerName,
+            displayName: stubTool.displayName,
+            approval: stubTool.approval,
+          },
+        ],
+      },
+    });
+  });
+
+  test('runs the turn tool-less when the catalog cannot be resolved', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Hi'], requests, {
+      tools: {
+        getTools: async () => {
+          throw new Error('database unavailable');
+        },
+      },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+    expect(requests[0]?.tools).toEqual([]);
+  });
+
+  test('skips tool resolution for a runtime that cannot run tools', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Hi'], requests, {
+      descriptor: {
+        ...FAKE_DESCRIPTOR,
+        capabilities: { ...FAKE_DESCRIPTOR.capabilities, tools: false },
+      },
+      tools: { getTools },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).not.toHaveBeenCalled();
+    expect(requests[0]?.tools).toEqual([]);
+  });
+
   test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['One', 'Two', 'Three'], requests);
@@ -525,6 +668,147 @@ describe('MobileAgentHost', () => {
       model: { modelId: 'mock-model', providerId: 'mock-provider' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
     });
+
+    const assistantSnapshots = (await store.listMessages(session.id))
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.inferenceSnapshot);
+    expect(assistantSnapshots).toMatchObject([
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'override-provider::override-model' },
+          reasoningEffort: 'max',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'mock-provider::mock-model' },
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'mock-provider::mock-model' },
+          reasoningEffort: 'low',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+    ]);
+  });
+
+  test('rejects an unavailable model before reserving transcript rows', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async () => {
+      throw new Error('credential-secret from provider lookup');
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Do not reserve this.' }],
+      }),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'EXECUTION_UNAVAILABLE',
+        message: 'The selected model is unavailable.',
+      },
+    });
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
+  });
+
+  test('freezes configured tools into Runtime input and the persisted inference snapshot', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      requests.push(controller.request);
+      controller.emit({ type: 'completed' });
+    });
+    const tool: RuntimeTool = {
+      approval: 'ask',
+      description: 'Search a remote catalog.',
+      displayName: 'Search',
+      execute: async () => ({ artifacts: [], value: { found: true } }),
+      inputSchema: { type: 'object' },
+      providerName: 'mcp_search_abc1234',
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+    };
+    let configuredTools = [tool];
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
+      resolveRuntimeTools: async () => configuredTools.slice(),
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Search.' }],
+      sessionId: session.id,
+    });
+    configuredTools = [];
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool snapshot turn');
+
+    expect(requests[0]?.tools).toEqual([tool]);
+    const transcript = await store.listMessages(session.id);
+    expect(transcript[1]?.inferenceSnapshot).toMatchObject({
+      status: 'supported',
+      snapshot: {
+        tools: [
+          {
+            approval: 'ask',
+            displayName: 'Search',
+            providerName: 'mcp_search_abc1234',
+            ref: tool.ref,
+          },
+        ],
+      },
+    });
+  });
+
+  test('rejects configured tools for an unsupported model before reserving messages', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
+      modelSupportsTools: async () => false,
+      resolveRuntimeTools: async () => [
+        {
+          approval: 'ask',
+          description: 'Search.',
+          displayName: 'Search',
+          execute: async () => ({ artifacts: [], value: null }),
+          inputSchema: { type: 'object' },
+          providerName: 'mcp_search_abc1234',
+          ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+        },
+      ],
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        parts: [{ type: 'text', text: 'Do not reserve this.' }],
+        sessionId: session.id,
+      }),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'The selected model does not support native tool calling.',
+      },
+    });
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
   test('cancel settles the turn as cancelled and is idempotent', async () => {
@@ -663,7 +947,6 @@ describe('MobileAgentHost', () => {
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
     });
-
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
@@ -681,6 +964,18 @@ describe('MobileAgentHost', () => {
     // restore after a process death.
     const session = await store.createSession({ agentId: AGENT_ID });
     const reserved = await store.reserveSubmission({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        version: 1,
+        model: {
+          uniqueModelId: 'mock-provider::mock-model',
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          name: 'Mock Model',
+        },
+        parameters: {},
+        tools: [],
+      },
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
@@ -718,6 +1013,7 @@ describe('MobileAgentHost', () => {
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
     });
+
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete this Session.' }],
