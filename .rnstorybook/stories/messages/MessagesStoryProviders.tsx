@@ -21,7 +21,7 @@ import {
 } from '@/shared/data/preference';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { STORY_FILE_ENTRY_ID } from './messageFixtures';
+import { STORY_FILE_ENTRY_ID, STORY_WRITTEN_FILE_ENTRY_ID } from './messageFixtures';
 
 const storyFileEntries = new Map(
   [
@@ -33,9 +33,17 @@ const storyFileEntries = new Map(
       size: 1,
       updatedAt: 1,
     },
+    {
+      createdAt: 1,
+      filename: 'release-notes.md',
+      id: STORY_WRITTEN_FILE_ENTRY_ID,
+      mediaType: 'text/markdown',
+      size: 128,
+      updatedAt: 1,
+    },
   ].map((entry) => [entry.id, FileEntrySchema.parse(entry)]),
 );
-// Every entry resolves to the same asset: a card renders from the row, not the bytes.
+// Both entries resolve to the same asset: a card renders from the row, not the bytes.
 const storyFileUri = Image.resolveAssetSource(require('../../../assets/icon.png')).uri;
 const storyQueryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: Infinity } },
