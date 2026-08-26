@@ -31,6 +31,7 @@ import type {
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeEvent,
+  RuntimeTool,
   RuntimeUsageReport,
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
@@ -85,6 +86,11 @@ import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import {
+  createAgentInferenceSnapshot,
+  type AgentInferenceModelResolver,
+  resolveAgentInferenceModel,
+} from './inferenceSnapshot';
+import {
   interruptNonTerminalToolParts,
   toAgentApprovalView,
   toAgentErrorView,
@@ -111,6 +117,7 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
 
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
+  inferenceModel: AgentInferenceModelResolver;
   naming: Pick<
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
@@ -169,6 +176,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly runningTurns = new Set<Promise<void>>();
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
+  private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -193,6 +201,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         store,
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
+    this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
   }
 
   private get agents(): AgentDefinitionSource {
@@ -312,12 +321,24 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const configuredAgent = await this.requireAgent(session.agentId);
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
+      // Runtime tool projection lands in M4. S1 still freezes and persists the
+      // exact empty catalog used by this request instead of inheriting history.
+      const tools: RuntimeTool[] = [];
       if (
         !runtime.descriptor.capabilities.attachments &&
         parsed.parts.some((part) => part.type === 'file')
       ) {
         fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
       }
+
+      const inferenceModel = await this.inferenceModel(agent.model).catch(() =>
+        fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.'),
+      );
+      const inferenceSnapshot = createAgentInferenceSnapshot({
+        model: inferenceModel,
+        options: agent.options,
+        tools,
+      });
 
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
@@ -336,7 +357,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
 
       // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.store.reserveSubmission({ sessionId, userParts });
+      const reserved = await this.store.reserveSubmission({
+        sessionId,
+        userParts,
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
       const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
       // The Turn projection starts here: reservation time is the turn start.
@@ -384,6 +410,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         state,
         toRuntimeHistory(priorMessages),
         parsed.parts,
+        tools,
       );
       this.runningTurns.add(run);
       this.runningTurnsBySession.set(sessionId, run);
@@ -484,6 +511,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     history: ReturnType<typeof toRuntimeHistory>,
     inputParts: AgentInputPart[],
+    tools: RuntimeTool[],
   ): Promise<void> {
     try {
       const events = state.runtimeSession.execute({
@@ -492,8 +520,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         model: agent.model,
         history,
         input: toRuntimeInputParts(inputParts),
-        // Binding persistence is implemented; Runtime projection lands in a later stack layer.
-        tools: [],
+        tools,
         options: agent.options,
       });
       for await (const event of events) {

@@ -1,8 +1,13 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import type { AgentErrorView, AgentMessagePart, AgentUsageView } from '@/shared/contracts/agent';
-import type { MessageSnapshot } from '@/shared/data/types/message';
+import type {
+  AgentErrorView,
+  AgentInferenceSnapshotV1,
+  AgentMessagePart,
+  AgentUsageView,
+  JsonValue,
+} from '@/shared/contracts/agent';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentSessionTable } from './agentSession';
@@ -51,8 +56,9 @@ export const agentSessionMessageTable = sqliteTable(
     error: text({ mode: 'json' }).$type<AgentErrorView>(),
     // Model identifier: FK to user_model(id) — UniqueModelId "providerId::modelId"
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
-    // Snapshot of model/provider/params at call time
-    messageSnapshot: text({ mode: 'json' }).$type<MessageSnapshot>(),
+    // Versioned Agent inference snapshot. Keep raw JSON so unknown future
+    // versions can be projected as unsupported without losing the message.
+    messageSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
     // Searchable text extracted from data.parts (populated by trigger, used for FTS5)
     searchableText: text().notNull().default(''),
     // Stable integer surrogate for the FTS5 content_rowid: trigger-assigned,

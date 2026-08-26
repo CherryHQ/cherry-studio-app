@@ -17,6 +17,7 @@ import {
   type AgentEvent,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
@@ -87,7 +88,19 @@ const usage = {
   record: jest.fn(),
 };
 
-function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): MobileAgentHost {
+const inferenceModel = async (model: { providerId: string; modelId: string }) => ({
+  uniqueModelId: createUniqueModelId(model.providerId, model.modelId),
+  providerId: model.providerId,
+  modelId: model.modelId,
+  apiModelId: `${model.modelId}-api`,
+  name: model.modelId === 'mock-model' ? 'Mock Model' : 'Override Model',
+});
+
+function createHost(
+  runtime: FakeRuntime,
+  naming: NamingOverride = noOpNaming,
+  resolveInferenceModel = inferenceModel,
+): MobileAgentHost {
   return new MobileAgentHost(
     store,
     unusedAiService,
@@ -96,6 +109,7 @@ function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): 
     runtime,
     {
       agents,
+      inferenceModel: resolveInferenceModel,
       naming,
       usage,
     },
@@ -218,6 +232,25 @@ describe('MobileAgentHost', () => {
     const finalized = events.find((event) => event.type === 'message.finalized');
     if (finalized?.type !== 'message.finalized') throw new Error('missing finalized message');
     expect(finalized.message.id).toBe(submitted.assistantMessageId);
+    expect(finalized.message).toMatchObject({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        status: 'supported',
+        snapshot: {
+          version: 1,
+          model: {
+            uniqueModelId: 'mock-provider::mock-model',
+            providerId: 'mock-provider',
+            modelId: 'mock-model',
+            apiModelId: 'mock-model-api',
+            name: 'Mock Model',
+          },
+          reasoningEffort: 'low',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+    });
     expect(finalized.message.status).toBe('success');
     expect(finalized.message.parts).toEqual([
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
@@ -324,6 +357,62 @@ describe('MobileAgentHost', () => {
       model: { modelId: 'mock-model', providerId: 'mock-provider' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
     });
+
+    const assistantSnapshots = (await store.listMessages(session.id))
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.inferenceSnapshot);
+    expect(assistantSnapshots).toMatchObject([
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'override-provider::override-model' },
+          reasoningEffort: 'max',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'mock-provider::mock-model' },
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+      {
+        status: 'supported',
+        snapshot: {
+          model: { uniqueModelId: 'mock-provider::mock-model' },
+          reasoningEffort: 'low',
+          parameters: { maxOutputTokens: 512, temperature: 0.2 },
+          tools: [],
+        },
+      },
+    ]);
+  });
+
+  test('rejects an unavailable model before reserving transcript rows', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, async () => {
+      throw new Error('credential-secret from provider lookup');
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Do not reserve this.' }],
+      }),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'EXECUTION_UNAVAILABLE',
+        message: 'The selected model is unavailable.',
+      },
+    });
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
   test('cancel settles the turn as cancelled and is idempotent', async () => {
@@ -479,6 +568,18 @@ describe('MobileAgentHost', () => {
     // restore after a process death.
     const session = await store.createSession({ agentId: AGENT_ID });
     const reserved = await store.reserveSubmission({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        version: 1,
+        model: {
+          uniqueModelId: 'mock-provider::mock-model',
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          name: 'Mock Model',
+        },
+        parameters: {},
+        tools: [],
+      },
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });

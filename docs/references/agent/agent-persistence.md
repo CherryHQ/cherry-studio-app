@@ -204,8 +204,8 @@ Future additive columns (not created now): `forkedFromSessionId`, `forkedFromMes
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`; projected into `AgentTurnView.error`, not part of the message view |
-| `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model actually used |
-| `messageSnapshot` | text (json) | NULL | Model/provider/params at call time |
+| `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
+| `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete via session cascade |
@@ -228,6 +228,13 @@ migrations. FTS mirrors the chat `message` architecture (external-content FTS5 t
 `ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
 agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
 deliberately not searchable; tool payloads are structured data, not prose.
+
+`reserveSubmission` writes the selected `modelId` and `AgentInferenceSnapshotV1` on the assistant
+placeholder in the same transaction as the user/assistant pair. The existing nullable columns from
+the Agent Session schema are reused, so this contract requires no table rebuild. The column does
+not store the Chat `MessageSnapshot` shape. Reads validate known versions with the Agent-specific
+schema, return `null` for old rows, and retain unknown raw JSON behind an `unsupported` projection.
+Model deletion may null the foreign key but never rewrites the historical snapshot.
 
 ## Store port and adapter
 
