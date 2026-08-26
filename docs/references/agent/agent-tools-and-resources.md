@@ -1,7 +1,7 @@
 # Agent Tools And Controlled Resources
 
-Status: **tool binding persistence implemented; Runtime projection and the Pi adapter remain
-incomplete**. Version 1 is local-only.
+Status: **tool binding persistence and HTTP MCP Runtime adaptation implemented; Host projection
+remains incomplete**. Version 1 is local-only.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -259,6 +259,9 @@ with its own approval policy.
   transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
 - `McpRuntimeService` owns clients, discovery caches, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
+- Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
+  adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
+  a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
 - The Host freezes the discovered tools for the turn. A reconnect may refresh the next snapshot but
   cannot silently replace the active catalog.
 - Third-party MCP tools default to `ask` until the user chooses a narrower per-tool policy.

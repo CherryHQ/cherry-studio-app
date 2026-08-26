@@ -1,7 +1,8 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime and settled tool contracts active behind the Mobile Agent Host**; application
-tool configuration and injection remain follow-up work. Version 1 is local-only.
+Status: **Pi Runtime, settled tool contracts, and HTTP MCP Runtime adaptation active behind the
+Mobile Agent Host**; application tool resolution and injection remain follow-up work. Version 1 is
+local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -51,9 +52,9 @@ that adapter is follow-up work.
 
 Pi receives the complete structured transcript and Agent inference options on each execution. It
 maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
-multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
-supplies `tools: []` until persisted bindings are adapted into an immutable Runtime tool snapshot.
-Attachments remain disabled pending Host-side file resolution.
+multi-call usage onto this contract. The Runtime tool loop and HTTP MCP capability adapter are
+implemented, but the Host currently supplies `tools: []` until persisted bindings are resolved into
+an immutable Runtime tool snapshot. Attachments remain disabled pending Host-side file resolution.
 
 ## Descriptor and lifecycle
 
