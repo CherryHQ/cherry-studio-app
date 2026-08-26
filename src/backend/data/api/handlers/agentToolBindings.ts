@@ -15,14 +15,14 @@ export function createAgentToolBindingHandlers(
   return {
     '/agents/:agentId/tool-bindings': {
       GET: ({ params }) => service.list(params.agentId),
-      POST: ({ body, params }) => {
+      POST: async ({ body, params }) => {
         const parsed = WriteAgentToolBindingSchema.safeParse(body);
         if (!parsed.success) {
           throw toDataApiError(parsed.error, 'Agent tool binding upsert');
         }
         return service.upsert(params.agentId, parsed.data);
       },
-      PUT: ({ body, params }) => {
+      PUT: async ({ body, params }) => {
         const parsed = ReplaceAgentToolBindingsSchema.safeParse(body);
         if (!parsed.success) {
           throw toDataApiError(parsed.error, 'Agent tool binding replace');
