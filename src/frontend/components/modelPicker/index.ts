@@ -5,7 +5,6 @@ export { ModelPickerTagChip } from './components/ModelPickerTagChip';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';
 export { ModelTypeFilterBar } from './components/ModelTypeFilterBar';
 export { useModelPickerData } from './hooks/useModelPickerData';
-export { useModelSearch } from './hooks/useModelSearch';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export {
   filterModelsByModelPickerTags,
