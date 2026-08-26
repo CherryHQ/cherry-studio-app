@@ -297,7 +297,7 @@ storage boundary moves.
    separate slice.
 8. **Follow-ups (separate implementation slices).** Avatar workflow (generalizing
    `userAvatarStorage`), Skill binding persistence, managed attachment and artifact projection,
-   fork columns, Pi context compaction generation, and broader Pi provider coverage.
+   fork columns, and broader Pi provider coverage.
 
 ## Rejected alternatives
 

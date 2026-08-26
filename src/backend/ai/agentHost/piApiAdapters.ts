@@ -82,8 +82,8 @@ export async function bindPiStream(
       fetch: adapter.supportsCustomFetch ? binding.fetch : undefined,
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
-      maxTokens: binding.maxTokens,
-      temperature: binding.temperature,
+      maxTokens: options?.maxTokens ?? binding.maxTokens,
+      temperature: options?.temperature ?? binding.temperature,
       timeoutMs: binding.timeoutMs,
     });
 }

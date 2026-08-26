@@ -1,7 +1,30 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+function readLocalModuleGraph(entry: string): string {
+  const pending = [entry];
+  const visited = new Set<string>();
+  const sources: string[] = [];
+
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (!file || visited.has(file)) continue;
+    visited.add(file);
+    const source = readFileSync(file, 'utf8');
+    sources.push(source);
+    for (const match of source.matchAll(/from\s+["']([^"']+)["']/g)) {
+      const specifier = match[1];
+      if (!specifier?.startsWith('.')) continue;
+      const dependency = resolve(dirname(file), specifier);
+      if (existsSync(dependency)) pending.push(dependency);
+    }
+  }
+
+  return sources.join('\n');
+}
 
 describe('Pi React Native patches', () => {
-  test('exposes only the Agent runtime entry used by Metro', () => {
+  test('exposes the Agent and compaction entries used by Metro', () => {
     const packageJson = JSON.parse(
       readFileSync(
         `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/package.json`,
@@ -13,6 +36,10 @@ describe('Pi React Native patches', () => {
       import: './dist/agent.js',
       types: './dist/agent.d.ts',
     });
+    expect(packageJson.exports?.['./compaction']).toEqual({
+      import: './dist/harness/compaction/compaction.js',
+      types: './dist/harness/compaction/compaction.d.ts',
+    });
 
     const agentLoop = readFileSync(
       `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/dist/agent-loop.js`,
@@ -21,6 +48,14 @@ describe('Pi React Native patches', () => {
     expect(agentLoop).not.toContain('from "@earendil-works/pi-ai"');
     expect(agentLoop).toContain('from "@earendil-works/pi-ai/utils/event-stream"');
     expect(agentLoop).toContain('from "@earendil-works/pi-ai/utils/validation"');
+
+    const compactionPath = `${process.cwd()}/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js`;
+    const compactionGraph = readLocalModuleGraph(compactionPath);
+    expect(compactionGraph).not.toContain('from "node:');
+    expect(compactionGraph).not.toContain('from "@earendil-works/pi-ai"');
+    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/retry"');
+    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/text"');
+    expect(compactionGraph).toContain('from "@earendil-works/pi-ai/utils/uuid"');
   });
 
   test('does not leave the Bun node:fs fallback in the Pi AI bundle', () => {
@@ -60,6 +95,18 @@ describe('Pi React Native patches', () => {
       './utils/event-stream': {
         import: './dist/utils/event-stream.js',
         types: './dist/utils/event-stream.d.ts',
+      },
+      './utils/retry': {
+        import: './dist/utils/retry.js',
+        types: './dist/utils/retry.d.ts',
+      },
+      './utils/text': {
+        import: './dist/utils/text.js',
+        types: './dist/utils/text.d.ts',
+      },
+      './utils/uuid': {
+        import: './dist/utils/uuid.js',
+        types: './dist/utils/uuid.d.ts',
       },
       './utils/validation': {
         import: './dist/utils/validation.js',

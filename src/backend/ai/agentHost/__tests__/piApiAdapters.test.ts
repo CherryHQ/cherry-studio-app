@@ -98,7 +98,7 @@ describe('Pi API adapters', () => {
         fetch: testCase.expectedFetch,
         headers: { 'X-App': 'Cherry', 'X-Request': 'request' },
         maxRetries: 0,
-        maxTokens: 2048,
+        maxTokens: 32,
         reasoning: 'high',
         temperature: 0.2,
         timeoutMs: 60_000,

@@ -5,6 +5,7 @@ import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
   AssistantMessage,
   Message as PiMessage,
+  Models,
   ToolResultMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
@@ -18,12 +19,19 @@ import {
 } from '../../__tests__/_runtimeConformance';
 import type { AgentRuntime, RuntimeEvent, RuntimeExecutionRequest, RuntimeTool } from '../../types';
 import {
+  estimatePiContextFixedCosts,
+  PI_CONTEXT_SAFETY_MARGIN_TOKENS,
+  PI_IMAGE_CONTEXT_TOKEN_RESERVE,
+} from '../contextCompaction';
+import { toPiConversation } from '../modelMessages';
+import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PiRuntime,
   type PiModelResolution,
-  type PiRuntimeLimits,
   type PiRuntimeAgent,
   type PiRuntimeAgentFactory,
+  type PiRuntimeContextOptions,
+  type PiRuntimeLimits,
 } from '../PiRuntime';
 
 const ERROR_SECRET = 'test-key';
@@ -125,7 +133,10 @@ function createResolution(): PiModelResolution {
   };
 }
 
-function createTestRuntime(limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS): PiRuntime {
+function createTestRuntime(
+  limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
+  contextOptions: PiRuntimeContextOptions = {},
+): PiRuntime {
   const holder: RuntimeHolder = { resolution: createResolution() };
   const factory: PiRuntimeAgentFactory = (options) => {
     holder.lastOptions = options;
@@ -145,6 +156,7 @@ function createTestRuntime(limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS):
     },
     factory,
     limits,
+    contextOptions,
   );
   holders.set(runtime, holder);
   return runtime;
@@ -251,6 +263,64 @@ function askTool(onExecute: () => void): RuntimeTool {
       return { value: { deleted: true }, artifacts: [] };
     },
   };
+}
+
+function createCompactionRuntime(contextOptions: PiRuntimeContextOptions): PiRuntime {
+  return createTestRuntime(DEFAULT_PI_RUNTIME_LIMITS, contextOptions);
+}
+
+function compactionOptions(
+  completeSimple: Models['completeSimple'],
+  overrides: Partial<PiRuntimeContextOptions> = {},
+): PiRuntimeContextOptions {
+  return {
+    completeSimple,
+    estimateHistoryTokens: () => 127_000,
+    settings: { enabled: true, reserveTokens: 100, keepRecentTokens: 5 },
+    ...overrides,
+  };
+}
+
+function summaryCompletion(
+  summary: string,
+  onCall?: (context: Parameters<Models['completeSimple']>[1]) => void,
+): Models['completeSimple'] {
+  return async (_model, context) => {
+    onCall?.(context);
+    return assistantMessage({
+      content: [{ type: 'text', text: summary }],
+      usage: usage(10, 3),
+    });
+  };
+}
+
+function compactableHistory() {
+  return [
+    {
+      turnId: 'turn-old',
+      messages: [
+        {
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: 'EARLIEST_FACT '.repeat(8) }],
+        },
+        {
+          role: 'assistant' as const,
+          parts: [{ type: 'text' as const, text: 'Old answer. '.repeat(8) }],
+        },
+      ],
+    },
+    {
+      turnId: 'turn-recent',
+      messages: [
+        { role: 'user' as const, parts: [{ type: 'text' as const, text: 'Recent question.' }] },
+        {
+          role: 'assistant' as const,
+          parts: [{ type: 'text' as const, text: 'Recent.' }],
+          usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
+        },
+      ],
+    },
+  ];
 }
 
 function approvalProgram(toolCallId: string): TestAgentProgram {
@@ -363,6 +433,7 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../../RuntimeEventChannel.ts'),
     path.resolve(__dirname, '../../toolResults.ts'),
     path.resolve(__dirname, '../PiRuntime.ts'),
+    path.resolve(__dirname, '../contextCompaction.ts'),
     path.resolve(__dirname, '../modelMessages.ts'),
   ],
 };
@@ -386,6 +457,367 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('accounts for every fixed context cost with a conservative image reserve', () => {
+    const runtime = createTestRuntime();
+    const holder = holders.get(runtime);
+    if (!holder) throw new Error('missing Runtime holder');
+    holder.resolution = {
+      ...holder.resolution,
+      model: { ...holder.resolution.model, input: ['text', 'image'] },
+    };
+    const request = baseRequest('turn-costs', {
+      input: [
+        { type: 'text', text: 'Describe this.' },
+        {
+          type: 'file',
+          mediaType: 'image/png',
+          name: 'image.png',
+          uri: 'data:image/png;base64,AAAA',
+        },
+      ],
+      tools: [askTool(() => undefined)],
+    });
+    const costs = estimatePiContextFixedCosts({
+      conversation: toPiConversation(request, holder.resolution.model),
+      outputReserveTokens: 512,
+      tools: request.tools,
+    });
+
+    expect(costs).toMatchObject({
+      systemInstructionsTokens: expect.any(Number),
+      currentInputTokens: expect.any(Number),
+      toolSchemaTokens: expect.any(Number),
+      attachmentTokens: PI_IMAGE_CONTEXT_TOKEN_RESERVE - 1_200,
+      outputReserveTokens: 512,
+      safetyMarginTokens: PI_CONTEXT_SAFETY_MARGIN_TOKENS,
+    });
+    expect(costs.systemInstructionsTokens).toBeGreaterThan(0);
+    expect(costs.currentInputTokens).toBeGreaterThan(0);
+    expect(costs.toolSchemaTokens).toBeGreaterThan(0);
+    expect(costs.totalTokens).toBe(
+      costs.systemInstructionsTokens +
+        costs.currentInputTokens +
+        costs.toolSchemaTokens +
+        costs.attachmentTokens +
+        costs.outputReserveTokens +
+        costs.safetyMarginTokens,
+    );
+  });
+
+  test('keeps short conversations on the full-history path without summarizing or checkpointing', async () => {
+    let summaryCalls = 0;
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('Unused summary.', () => {
+          summaryCalls += 1;
+        }),
+        { estimateHistoryTokens: () => 100 },
+      ),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Short answer.'));
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-short', { history: compactableHistory() })),
+    );
+
+    expect(summaryCalls).toBe(0);
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(holder.lastOptions?.initialState?.messages).toHaveLength(4);
+    expect(holder.lastOptions?.initialState?.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(holder.lastOptions?.initialState?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      usage: { input: 120, output: 8, totalTokens: 128 },
+    });
+    await session.close();
+  });
+
+  test('rejects oversized fixed costs before summary or agent model calls', async () => {
+    let summaryCalls = 0;
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('Must not run.', () => {
+          summaryCalls += 1;
+        }),
+        { estimateHistoryTokens: () => 0 },
+      ),
+    );
+    const holder = holders.get(runtime);
+    if (!holder) throw new Error('missing Runtime holder');
+    holder.resolution = {
+      ...holder.resolution,
+      model: { ...holder.resolution.model, contextWindow: 1_000, maxTokens: 100 },
+    };
+    arrange(runtime, (context) => emitText(context, 'Must not run.'));
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-fixed-overflow')));
+
+    expect(summaryCalls).toBe(0);
+    expect(holder.lastOptions).toBeUndefined();
+    expect(events).toEqual([
+      {
+        type: 'failed',
+        error: {
+          code: 'context_window_exceeded',
+          message: 'The current input exceeds the model context window.',
+          retryable: false,
+        },
+      },
+    ]);
+    await session.close();
+  });
+
+  test('compacts long history, reports summary usage, and replays the checkpoint after restart', async () => {
+    let summaryCalls = 0;
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('EARLIEST_FACT is preserved. test-key data:image/png;base64,AAAA', () => {
+          summaryCalls += 1;
+        }),
+      ),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Compacted answer.'));
+    const session = await runtime.open();
+    const history = compactableHistory();
+    const originalHistory = JSON.parse(JSON.stringify(history));
+
+    const events = await collect(session.execute(baseRequest('turn-compact', { history })));
+    const checkpointEvent = events.find((event) => event.type === 'context.checkpoint');
+    if (checkpointEvent?.type !== 'context.checkpoint') {
+      throw new Error('expected a context checkpoint');
+    }
+    const checkpoint = checkpointEvent.checkpoint;
+
+    expect(summaryCalls).toBe(1);
+    expect(checkpoint).toMatchObject({
+      version: 1,
+      anchorTurnId: 'turn-old',
+      payload: {
+        kind: 'pi-context-compaction',
+        summary: 'EARLIEST_FACT is preserved. [REDACTED] [attachment content omitted]',
+      },
+    });
+    expect(history).toEqual(originalHistory);
+    expect(JSON.stringify(checkpoint)).not.toContain('Old answer.');
+    expect(JSON.stringify(checkpoint)).not.toContain('test-key');
+    expect(JSON.stringify(checkpoint)).not.toContain('base64');
+    expect(holder.lastOptions?.initialState?.messages.map((message) => message.role)).toEqual([
+      'compactionSummary',
+      'user',
+      'assistant',
+    ]);
+    expect(events.find((event) => event.type === 'usage')).toMatchObject({
+      usage: { inputTokens: 13, outputTokens: 5, totalTokens: 18 },
+    });
+    await session.close();
+
+    let restartSummaryCalls = 0;
+    const restartedRuntime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('Must not run.', () => {
+          restartSummaryCalls += 1;
+        }),
+        { estimateHistoryTokens: () => 100 },
+      ),
+    );
+    const restartedHolder = arrange(restartedRuntime, (context) => emitText(context, 'Restarted.'));
+    const restartedSession = await restartedRuntime.open();
+
+    const restartedEvents = await collect(
+      restartedSession.execute(
+        baseRequest('turn-restarted', {
+          contextCheckpoint: checkpoint,
+          history: compactableHistory().slice(1),
+        }),
+      ),
+    );
+
+    expect(restartSummaryCalls).toBe(0);
+    expect(restartedEvents.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(
+      restartedHolder.lastOptions?.initialState?.messages.map((message) => message.role),
+    ).toEqual(['compactionSummary', 'user', 'assistant']);
+    expect(restartedHolder.lastOptions?.initialState?.messages[0]).toMatchObject({
+      role: 'compactionSummary',
+      summary: 'EARLIEST_FACT is preserved. [REDACTED] [attachment content omitted]',
+    });
+    await restartedSession.close();
+  });
+
+  test('incrementally merges the previous summary into the next checkpoint', async () => {
+    let summarizationPrompt = '';
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('EARLIEST_FACT remains after the incremental update.', (context) => {
+          summarizationPrompt = JSON.stringify(context.messages);
+        }),
+      ),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Updated.'));
+    const session = await runtime.open();
+    const nextTurn = {
+      turnId: 'turn-new',
+      messages: [
+        { role: 'user' as const, parts: [{ type: 'text' as const, text: 'New question here.' }] },
+        { role: 'assistant' as const, parts: [{ type: 'text' as const, text: 'New reply.' }] },
+      ],
+    };
+
+    const events = await collect(
+      session.execute(
+        baseRequest('turn-incremental', {
+          contextCheckpoint: {
+            version: 1,
+            anchorTurnId: 'turn-old',
+            payload: {
+              kind: 'pi-context-compaction',
+              summary: 'EARLIEST_FACT from the first checkpoint.',
+              tokensBefore: 1_000,
+            },
+          },
+          history: [...compactableHistory().slice(1), nextTurn],
+        }),
+      ),
+    );
+    const checkpointEvent = events.find((event) => event.type === 'context.checkpoint');
+
+    expect(summarizationPrompt).toContain(
+      '<previous-summary>\\nEARLIEST_FACT from the first checkpoint.\\n</previous-summary>',
+    );
+    expect(checkpointEvent).toMatchObject({
+      checkpoint: {
+        anchorTurnId: 'turn-recent',
+        payload: { summary: 'EARLIEST_FACT remains after the incremental update.' },
+      },
+    });
+    expect(holder.lastOptions?.initialState?.messages[0]).toMatchObject({
+      role: 'compactionSummary',
+      summary: 'EARLIEST_FACT remains after the incremental update.',
+    });
+    await session.close();
+  });
+
+  test('keeps tool calls paired when Pi compacts a split turn', async () => {
+    const sensitiveResult = 'SENSITIVE_TOOL_RESULT_PAYLOAD';
+    const runtime = createCompactionRuntime(
+      compactionOptions(summaryCompletion(`Safe split-turn summary. ${sensitiveResult}`), {
+        settings: { enabled: true, reserveTokens: 100, keepRecentTokens: 30 },
+      }),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
+    const session = await runtime.open();
+    const toolProviderName = 'mcp_server_2_lookup_c3d4';
+
+    const events = await collect(
+      session.execute(
+        baseRequest('turn-split-compaction', {
+          history: [
+            {
+              turnId: 'turn-before-split',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Earlier request.' }] },
+                { role: 'assistant', parts: [{ type: 'text', text: 'Earlier reply.' }] },
+              ],
+            },
+            {
+              turnId: 'turn-split',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Large request '.repeat(40) }] },
+                {
+                  role: 'assistant',
+                  parts: [
+                    {
+                      type: 'tool-call',
+                      toolCallId: 'split-call',
+                      toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
+                      providerName: toolProviderName,
+                      input: { query: 'Cherry' },
+                    },
+                    {
+                      type: 'tool-result',
+                      toolCallId: 'split-call',
+                      output: { value: { secret: sensitiveResult }, artifacts: [] },
+                      isError: false,
+                    },
+                    { type: 'text', text: 'Final.' },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    const checkpointEvent = events.find((event) => event.type === 'context.checkpoint');
+    const messages = holder.lastOptions?.initialState?.messages ?? [];
+    const toolCallIndex = messages.findIndex(
+      (message) =>
+        message.role === 'assistant' &&
+        message.content.some((part) => part.type === 'toolCall' && part.id === 'split-call'),
+    );
+    const toolResultIndex = messages.findIndex(
+      (message) => message.role === 'toolResult' && message.toolCallId === 'split-call',
+    );
+
+    expect(toolCallIndex).toBeGreaterThan(0);
+    expect(toolResultIndex).toBe(toolCallIndex + 1);
+    expect(checkpointEvent).toMatchObject({
+      checkpoint: {
+        anchorTurnId: 'turn-before-split',
+        payload: {
+          kind: 'pi-context-compaction',
+          resume: { turnId: 'turn-split', messageOffset: 1 },
+        },
+      },
+    });
+    expect(checkpointEvent).toMatchObject({
+      checkpoint: { payload: { summary: 'Safe split-turn summary. [REDACTED]' } },
+    });
+    expect(JSON.stringify(checkpointEvent)).not.toContain(sensitiveResult);
+    await session.close();
+  });
+
+  test('cancels an in-flight summary without emitting a partial checkpoint', async () => {
+    let resolveStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    let summarySignal: AbortSignal | undefined;
+    const completeSimple: Models['completeSimple'] = async (_model, _context, options) => {
+      summarySignal = options?.signal;
+      resolveStarted?.();
+      if (!summarySignal) throw new Error('summary signal is required');
+      if (!summarySignal.aborted) {
+        await new Promise<void>((resolve) => {
+          summarySignal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+      return assistantMessage({ content: [], stopReason: 'aborted', usage: usage(0, 0) });
+    };
+    const runtime = createCompactionRuntime(compactionOptions(completeSimple));
+    const holder = arrange(runtime, (context) => emitText(context, 'Must not run.'));
+    const session = await runtime.open();
+
+    const eventsPromise = collect(
+      session.execute(baseRequest('turn-cancel-summary', { history: compactableHistory() })),
+    );
+    await started;
+    await session.cancel('turn-cancel-summary');
+    const events = await eventsPromise;
+
+    expect(summarySignal?.aborted).toBe(true);
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(events.at(-1)).toEqual({ type: 'cancelled' });
+    expect(holder.lastOptions).toBeUndefined();
+    await session.close();
+  });
+
   test('preflights and maps current and historical inline images without retaining data URLs', async () => {
     const runtime = createTestRuntime();
     const holder = holders.get(runtime);

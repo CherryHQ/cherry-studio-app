@@ -152,6 +152,33 @@ describe('Agent Host mappings', () => {
     ]);
   });
 
+  test('projects persisted assistant usage for Pi context estimation', () => {
+    const message: AgentMessageView = {
+      id: 'assistant-message',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      parts: [{ id: 'text-1', type: 'text', text: 'Answer.', state: 'done' }],
+      usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn-1',
+        messages: [
+          {
+            role: 'assistant',
+            parts: [{ type: 'text', text: 'Answer.' }],
+            usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
+          },
+        ],
+      },
+    ]);
+  });
+
   test('omits a dangling tool call instead of producing unpaired Runtime history', () => {
     const message: AgentMessageView = {
       id: 'assistant-message',

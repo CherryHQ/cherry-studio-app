@@ -121,6 +121,8 @@ export type RuntimeMessagePart =
 export type RuntimeMessage = {
   role: 'user' | 'assistant' | 'system';
   parts: RuntimeMessagePart[];
+  /** Persisted provider usage, when available, for Runtime-owned context estimation. */
+  usage?: RuntimeUsage;
 };
 
 /** One persisted application turn, kept intact for Runtime-owned context policy. */

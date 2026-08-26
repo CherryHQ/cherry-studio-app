@@ -1,8 +1,8 @@
 # Cherry Agent Runtime
 
 Status: **Pi Runtime, executable Streamable HTTP MCP tools, bounded managed image input, and the
-Runtime context checkpoint contract are active behind the Mobile Agent Host**. Pi compaction and
-text attachment resolution remain follow-up work. Version 1 is local-only.
+Runtime context checkpoint contract are active behind the Mobile Agent Host**. Pi context
+compaction is active; text attachment resolution remains follow-up work. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -57,8 +57,9 @@ The Host resolves persisted bindings and currently executable MCP descriptors be
 alongside the fixed application-owned catalog. It also resolves bounded managed images for
 registry-declared image-capable models
 supported by the selected Pi endpoint adapter; text attachments remain deferred.
-The current Pi adapter deliberately ignores the checkpoint and emits none, so model input remains
-the complete flattened history until Pi compaction lands.
+The repository patches expose `pi-agent-core/compaction` and its exact RN-safe Pi AI utility
+subpaths. Short conversations retain the complete-history path. Long conversations reuse or
+incrementally update a Runtime checkpoint before the first provider turn.
 
 ## Descriptor and lifecycle
 
@@ -198,6 +199,7 @@ type RuntimeHistoryTurn = {
 type RuntimeMessage = {
   role: 'user' | 'assistant' | 'system'
   parts: RuntimeMessagePart[]
+  usage?: RuntimeUsage
 }
 
 type RuntimeMessagePart =
@@ -241,6 +243,20 @@ session state. The Host does not inspect `payload`; it validates version 1, veri
 checkpoint, the request carries complete Turn groups after the anchor. With no checkpoint—or an
 invalid, incompatible, oversized, or orphaned candidate—the Host supplies the entire grouped
 history. Pi owns all later selection, formatting, and compaction policy.
+
+Pi estimates history with `pi-agent-core` provider usage when the last persisted assistant usage is
+available and otherwise uses its conservative message estimator. The adapter adds system
+instructions, current input, tool schemas, image reserves, requested output, and a fixed safety
+margin before calling Pi's `shouldCompact`. A current input whose fixed costs alone exceed the
+window fails before the first model call.
+
+On compaction, Pi owns the cut point, `previousSummary` merge, retained tail, and split-turn prefix
+summary. Checkpoint payloads store the redacted summary and an optional structural resume cursor;
+they do not duplicate attachment bodies or raw retained tool results. Anchors remain complete
+durable Turns. A split-turn cursor reconstructs the retained suffix from the Host-supplied complete
+Turn so tool calls and results remain paired after restart. Summary calls reuse the current model
+transport, credentials, timeout, and cancellation signal, and their usage is added to the active
+Turn.
 
 ### Tools
 
@@ -494,6 +510,8 @@ Every Runtime implementation passes the same suite:
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
     candidate, and invalid replay candidates fall back to full history.
+20. Short history does not summarize; compacted history replays summary plus retained complete-Turn
+    context, preserves tool pairs across split turns, and accounts summary usage in the active Turn.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
 Pi or a provider connection.

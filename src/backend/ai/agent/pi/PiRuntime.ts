@@ -8,6 +8,7 @@ import type {
   AssistantMessage,
   Message as PiMessage,
   Model as PiModel,
+  Models,
   ModelThinkingLevel,
   ToolResultMessage,
   Usage as PiUsage,
@@ -36,6 +37,7 @@ import type {
   RuntimeUsage,
   RuntimeUsageContext,
 } from '../types';
+import { planPiContext, type PiContextCompactionOptions } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
 
 export type PiModelResolution = {
@@ -54,6 +56,10 @@ export interface PiRuntimeDependencies {
     options: RuntimeExecutionRequest['options'],
   ): PiModelResolution | Promise<PiModelResolution>;
 }
+
+export type PiRuntimeContextOptions = PiContextCompactionOptions & {
+  completeSimple?: Models['completeSimple'];
+};
 
 export type PiRuntimeAgent = {
   abort(): void;
@@ -135,6 +141,7 @@ type ActiveTurn = {
   cancelRequested: boolean;
   currentMessageOrdinal?: number;
   failedToolCalls: Set<string>;
+  hasUsage: boolean;
   limitError?: RuntimeError;
   nextMessageOrdinal: number;
   nextPartIndex: number;
@@ -149,6 +156,8 @@ type ActiveTurn = {
   toolsByProviderName: Map<string, RuntimeTool>;
   turnId: string;
   usage: RuntimeUsage;
+  usageContext?: RuntimeUsageContext;
+  usageReported: boolean;
 };
 
 async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent> {
@@ -240,6 +249,48 @@ function sensitiveValues(resolution: PiModelResolution): string[] {
   return [...resolution.redactionValues];
 }
 
+function redactCompactionSummary(summary: string, secrets: readonly string[]): string {
+  let redacted = summary.replace(
+    /data:[^;,\s]+;base64,[a-z0-9+/=]+/gi,
+    '[attachment content omitted]',
+  );
+  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
+    if (secret) redacted = redacted.replaceAll(secret, REDACTED_SECRET);
+  }
+  return redacted;
+}
+
+function sensitiveToolResultValues(messages: readonly PiMessage[]): string[] {
+  const values: string[] = [];
+  for (const message of messages) {
+    if (message.role !== 'toolResult') continue;
+    for (const part of message.content) {
+      if (part.type === 'text' && part.text) values.push(part.text);
+    }
+    collectSensitiveValues(message.details, values);
+  }
+  return values;
+}
+
+function collectSensitiveValues(value: unknown, values: string[], sensitive = false): void {
+  if (typeof value === 'string') {
+    if (sensitive) values.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectSensitiveValues(item, values, sensitive);
+    return;
+  }
+  if (typeof value !== 'object' || value === null) return;
+  for (const [key, child] of Object.entries(value)) {
+    collectSensitiveValues(
+      child,
+      values,
+      sensitive || /secret|token|password|credential|api.?key|authorization|cookie/i.test(key),
+    );
+  }
+}
+
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return {
@@ -301,6 +352,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     private readonly dependencies: PiRuntimeDependencies,
     private readonly createAgent?: PiRuntimeAgentFactory,
     private readonly limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
+    private readonly contextOptions: PiRuntimeContextOptions = {},
   ) {}
 
   execute(request: RuntimeExecutionRequest): AsyncIterable<RuntimeEvent> {
@@ -321,6 +373,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       cancelRequested: false,
       channel,
       failedToolCalls: new Set(),
+      hasUsage: false,
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
       settledToolCalls: new Set(),
@@ -339,6 +392,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         outputTokens: 0,
         totalTokens: 0,
       },
+      usageReported: false,
     };
     this.activeTurn = turn;
     turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), this.limits.turnTimeoutMs);
@@ -391,6 +445,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
       secrets = sensitiveValues(resolution);
+      turn.usageContext = resolution.usageContext;
       if (turn.terminated || turn.cancelRequested) return;
       if (turn.timedOut) {
         this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
@@ -426,14 +481,64 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
 
       const conversation = toPiConversation(request, resolution.model);
+      const models: Pick<Models, 'completeSimple'> = {
+        completeSimple:
+          this.contextOptions.completeSimple ??
+          (async (model, context, options) => {
+            const stream = await resolution.streamFn(model, context, options);
+            return stream.result();
+          }),
+      };
+      const compactionSecrets = [...secrets, ...sensitiveToolResultValues(conversation.history)];
+      const thinkingLevel = resolveThinkingLevel(request, resolution);
+      const contextPlan = await planPiContext({
+        checkpoint: request.contextCheckpoint,
+        conversation,
+        model: resolution.model,
+        models,
+        options: this.contextOptions,
+        outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
+        redactSummary: (summary) => redactCompactionSummary(summary, compactionSecrets),
+        signal: turn.abortController.signal,
+        thinkingLevel,
+        tools: request.tools,
+      });
+      if (turn.terminated) return;
+      if (turn.timedOut) {
+        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
+        return;
+      }
+      if (!contextPlan.ok) {
+        this.emit(
+          turn,
+          turn.cancelRequested
+            ? { type: 'cancelled' }
+            : {
+                type: 'failed',
+                error: {
+                  code: contextPlan.code,
+                  message: contextPlan.message,
+                  retryable: contextPlan.retryable,
+                },
+              },
+        );
+        return;
+      }
+      if (contextPlan.usage) {
+        turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(contextPlan.usage));
+        turn.hasUsage = true;
+      }
+      if (contextPlan.checkpoint) {
+        this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
+      }
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
         initialState: {
-          messages: conversation.history,
+          messages: contextPlan.messages,
           model: resolution.model,
           systemPrompt: conversation.systemPrompt,
-          thinkingLevel: resolveThinkingLevel(request, resolution),
+          thinkingLevel,
           tools: this.toPiTools(request.tools, turn),
         },
         shouldStopAfterTurn: ({ toolResults }) => {
@@ -553,6 +658,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
           turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
+          turn.hasUsage = true;
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;
@@ -892,10 +998,20 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private emit(turn: ActiveTurn, event: RuntimeEvent): void {
     if (turn.terminated) return;
+    if (event.type === 'usage') turn.usageReported = true;
     const isTerminal = TERMINAL_TYPES.has(event.type);
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
       turn.abortController.abort();
+      if (turn.hasUsage && !turn.usageReported && turn.usageContext) {
+        turn.usageReported = true;
+        turn.channel.push({
+          type: 'usage',
+          completedAt: Date.now(),
+          context: turn.usageContext,
+          usage: turn.usage,
+        });
+      }
       this.interruptUnsettledToolParts(turn);
       turn.terminated = true;
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));
@@ -915,6 +1031,7 @@ export class PiRuntime implements AgentRuntime {
     private readonly dependencies: PiRuntimeDependencies,
     private readonly createAgent?: PiRuntimeAgentFactory,
     private readonly limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
+    private readonly contextOptions: PiRuntimeContextOptions = {},
   ) {}
 
   async preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight> {
@@ -922,6 +1039,11 @@ export class PiRuntime implements AgentRuntime {
   }
 
   async open(): Promise<AgentRuntimeSession> {
-    return new PiRuntimeSession(this.dependencies, this.createAgent, this.limits);
+    return new PiRuntimeSession(
+      this.dependencies,
+      this.createAgent,
+      this.limits,
+      this.contextOptions,
+    );
   }
 }

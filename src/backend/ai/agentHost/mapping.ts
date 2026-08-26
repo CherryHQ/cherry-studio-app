@@ -190,7 +190,11 @@ export function toRuntimeHistory(
       history.push(runtimeTurn);
     }
     if (parts.length > 0) {
-      const runtimeMessage: RuntimeMessage = { role: message.role, parts };
+      const runtimeMessage: RuntimeMessage = {
+        role: message.role,
+        parts,
+        ...(message.role === 'assistant' && message.usage ? { usage: message.usage } : {}),
+      };
       runtimeTurn.messages.push(runtimeMessage);
     }
   }

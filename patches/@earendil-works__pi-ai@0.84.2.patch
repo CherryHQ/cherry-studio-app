@@ -156,10 +156,22 @@ diff --git a/package.json b/package.json
 index fe1f336d89b4cdb500956b9431ed4306c3182d49..5a8e5b709c6b80cb888a9751a05219b63742a92c 100644
 --- a/package.json
 +++ b/package.json
-@@ -30,0 +31,8 @@
+@@ -30,0 +31,20 @@
 +		"./utils/event-stream": {
 +			"types": "./dist/utils/event-stream.d.ts",
 +			"import": "./dist/utils/event-stream.js"
++		},
++		"./utils/retry": {
++			"types": "./dist/utils/retry.d.ts",
++			"import": "./dist/utils/retry.js"
++		},
++		"./utils/text": {
++			"types": "./dist/utils/text.d.ts",
++			"import": "./dist/utils/text.js"
++		},
++		"./utils/uuid": {
++			"types": "./dist/utils/uuid.d.ts",
++			"import": "./dist/utils/uuid.js"
 +		},
 +		"./utils/validation": {
 +			"types": "./dist/utils/validation.d.ts",

@@ -104,9 +104,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Context compaction policy** belongs to Pi. The collaboration contract is now settled: Runtime
   history is grouped by durable `turnId`, the Runtime may emit a versioned opaque context
   checkpoint, and the Host validates, persists, and replays that artifact with complete turns after
-  its anchor. The Host never interprets the payload or truncates history itself. Pi compaction
-  generation remains a follow-up built on this contract; see [Agent Runtime](./agent-runtime.md)
-  and [Agent Persistence](./agent-persistence.md).
+  its anchor. The Host never interprets the payload or truncates history itself. Pi now owns
+  threshold estimation, cut points, incremental summaries, retained tails, and split-turn handling;
+  see [Agent Runtime](./agent-runtime.md) and [Agent Persistence](./agent-persistence.md).
 
 ## Documents
 
@@ -143,15 +143,14 @@ adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime call
 resolves their effective policy alongside its fixed application-owned catalog into a frozen
 per-turn snapshot before reserving messages. The Host resolves bounded managed images for supported
 image-capable models; text attachments remain deferred. It also persists and replays versioned
-Runtime context checkpoints; Pi does not produce or consume them until its compaction integration
-lands.
+Runtime context checkpoints; Pi produces and consumes them through its RN-safe compaction adapter.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
 Mobile Skill configuration/loading, text attachment conversion and the controlled resource ledger,
-the avatar workflow, and Pi context compaction remain separate follow-ups.
+plus the avatar workflow, remain separate follow-ups.
 
 ## Related
 
