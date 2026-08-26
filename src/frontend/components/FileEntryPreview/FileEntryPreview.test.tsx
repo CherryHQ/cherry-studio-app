@@ -106,6 +106,21 @@ describe('FileEntryPreview', () => {
     });
   });
 
+  it('renders the stable unavailable placeholder when the entry or blob is missing', () => {
+    mockUseResolvedFile.mockReturnValue({ data: null, isLoading: false });
+
+    act(() => {
+      create(<FileEntryPreview entryId={entry.id} />);
+    });
+
+    expect(mockFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: null,
+        labels: expect.objectContaining({ unavailable: 'filePreview.unavailable' }),
+      }),
+    );
+  });
+
   it('logs all preview errors and alerts only when opening fails', () => {
     act(() => {
       create(<FileEntryPreview entryId={entry.id} />);

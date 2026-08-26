@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import * as z from 'zod';
 
 import { application } from '@/backend/core/application/Application';
@@ -88,12 +88,29 @@ export class FileEntryService {
     return row ? rowToFileEntry(row) : null;
   }
 
+  /**
+   * Batch lookup for submission-time owners. Soft-deleted rows are unavailable
+   * even though ordinary historical reads may still need their references.
+   */
+  async findAvailableByIds(ids: readonly FileEntryId[]): Promise<FileEntry[]> {
+    const uniqueIds = [...new Set(ids.map((id) => FileEntryIdSchema.parse(id)))];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select()
+      .from(fileEntryTable)
+      .where(and(inArray(fileEntryTable.id, uniqueIds), isNull(fileEntryTable.deletedAt)));
+    return rows.map(rowToFileEntry);
+  }
+
   get(id: FileEntryId): Promise<FileEntry | null> {
     return this.findById(id);
   }
 
   async getById(id: FileEntryId): Promise<FileEntry> {
-    const entry = await this.findById(id);
+    const [entry] = await this.findAvailableByIds([id]);
     if (!entry) {
       throw DataApiErrorFactory.notFound('FileEntry', id);
     }

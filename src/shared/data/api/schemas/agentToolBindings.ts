@@ -31,12 +31,14 @@ export const WriteAgentToolBindingSchema = z.discriminatedUnion('source', [
   BuiltinAgentToolBindingInputSchema,
   McpAgentToolBindingInputSchema,
 ]);
-export type WriteAgentToolBinding = z.infer<typeof WriteAgentToolBindingSchema>;
+export type WriteAgentToolBindingInput = z.input<typeof WriteAgentToolBindingSchema>;
+export type WriteAgentToolBinding = z.output<typeof WriteAgentToolBindingSchema>;
 
 export const ReplaceAgentToolBindingsSchema = z.strictObject({
   bindings: z.array(WriteAgentToolBindingSchema),
 });
-export type ReplaceAgentToolBindingsDto = z.infer<typeof ReplaceAgentToolBindingsSchema>;
+export type ReplaceAgentToolBindingsInput = z.input<typeof ReplaceAgentToolBindingsSchema>;
+export type ReplaceAgentToolBindingsDto = z.output<typeof ReplaceAgentToolBindingsSchema>;
 
 export const ListAgentToolBindingsResponseSchema = z.strictObject({
   items: z.array(AgentToolBindingSchema),
@@ -52,12 +54,12 @@ export type AgentToolBindingSchemas = {
       response: { items: AgentToolBinding[] };
     };
     POST: {
-      body: WriteAgentToolBinding;
+      body: WriteAgentToolBindingInput;
       params: { agentId: string };
       response: AgentToolBinding;
     };
     PUT: {
-      body: ReplaceAgentToolBindingsDto;
+      body: ReplaceAgentToolBindingsInput;
       params: { agentId: string };
       response: { items: AgentToolBinding[] };
     };

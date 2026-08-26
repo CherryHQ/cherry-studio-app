@@ -6,7 +6,9 @@
 
 import {
   FakeRuntime,
+  type RuntimeDescriptor,
   type RuntimeExecutionRequest,
+  type RuntimeTool,
   type RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
@@ -22,9 +24,12 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import type { AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
+import type { ManagedFileResolver } from '../managedFileResolver';
 import { MobileAgentHost } from '../MobileAgentHost';
+import type { AgentToolSource } from '../tools/builtInToolSource';
 
 const AGENT_ID = 'agent-under-test';
+const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
 const TOOL_DISPLAY_NAME = 'Delete file';
@@ -96,9 +101,28 @@ const inferenceModel = async (model: { providerId: string; modelId: string }) =>
   name: model.modelId === 'mock-model' ? 'Mock Model' : 'Override Model',
 });
 
+const noFiles: ManagedFileResolver = {
+  resolveAvailable: jest.fn(async () => new Map()),
+};
+
+/** Keeps the suite off the production catalog, which reads the database. */
+const noOpTools: AgentToolSource = { getTools: async () => [] };
+
+const stubTool: RuntimeTool = {
+  ref: { source: 'builtin', capabilityId: 'stub_tool' },
+  providerName: 'stub_tool',
+  displayName: 'Stub tool',
+  description: 'Does nothing.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  approval: 'auto',
+  execute: async () => ({ value: { status: 'ok' }, artifacts: [] }),
+};
+
 function createHost(
   runtime: FakeRuntime,
   naming: NamingOverride = noOpNaming,
+  files: ManagedFileResolver = noFiles,
+  tools: AgentToolSource = noOpTools,
   resolveInferenceModel = inferenceModel,
 ): MobileAgentHost {
   return new MobileAgentHost(
@@ -109,15 +133,21 @@ function createHost(
     runtime,
     {
       agents,
+      files,
       inferenceModel: resolveInferenceModel,
       naming,
       usage,
+      tools,
     },
   );
 }
 
-function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
-  const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+function hostWithText(
+  texts: string[],
+  requests: RuntimeExecutionRequest[] = [],
+  options: { descriptor?: RuntimeDescriptor; tools?: AgentToolSource } = {},
+): MobileAgentHost {
+  const runtime = new FakeRuntime({ descriptor: options.descriptor ?? FAKE_DESCRIPTOR });
   for (const text of texts) {
     runtime.script((controller) => {
       requests.push(controller.request);
@@ -142,7 +172,7 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       controller.emit({ type: 'completed' });
     });
   }
-  return createHost(runtime);
+  return createHost(runtime, noOpNaming, noFiles, options.tools);
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -311,6 +341,87 @@ describe('MobileAgentHost', () => {
     expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 
+  test('hands the turn the tools resolved for its model', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Save it.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).toHaveBeenCalledWith({ providerId: 'mock-provider', modelId: 'mock-model' });
+    expect(requests[0]?.tools).toEqual([stubTool]);
+    expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({
+      status: 'supported',
+      snapshot: {
+        tools: [
+          {
+            ref: stubTool.ref,
+            providerName: stubTool.providerName,
+            displayName: stubTool.displayName,
+            approval: stubTool.approval,
+          },
+        ],
+      },
+    });
+  });
+
+  test('runs the turn tool-less when the catalog cannot be resolved', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Hi'], requests, {
+      tools: {
+        getTools: async () => {
+          throw new Error('database unavailable');
+        },
+      },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+    expect(requests[0]?.tools).toEqual([]);
+  });
+
+  test('skips tool resolution for a runtime that cannot run tools', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Hi'], requests, {
+      descriptor: {
+        ...FAKE_DESCRIPTOR,
+        capabilities: { ...FAKE_DESCRIPTOR.capabilities, tools: false },
+      },
+      tools: { getTools },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).not.toHaveBeenCalled();
+    expect(requests[0]?.tools).toEqual([]);
+  });
+
   test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['One', 'Two', 'Three'], requests);
@@ -393,7 +504,7 @@ describe('MobileAgentHost', () => {
 
   test('rejects an unavailable model before reserving transcript rows', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
-    const host = createHost(runtime, noOpNaming, async () => {
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async () => {
       throw new Error('credential-secret from provider lookup');
     });
     const session = await host.createSession({
@@ -854,6 +965,139 @@ describe('MobileAgentHost', () => {
     expect(toolPart).toMatchObject({ type: 'tool', state: 'output-available' });
   });
 
+  test('validates managed files before reservation and persists authoritative references', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      });
+    const resolveAvailable = jest.fn(async (fileEntryIds: readonly string[]) =>
+      fileEntryIds.length === 0
+        ? new Map()
+        : new Map([
+            [
+              FILE_ENTRY_ID,
+              {
+                fileEntryId: FILE_ENTRY_ID,
+                mediaType: 'image/png',
+                name: 'managed.png',
+                size: 128,
+              },
+            ],
+          ]),
+    );
+    const host = createHost(fake, noOpNaming, { resolveAvailable } as ManagedFileResolver);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [
+        { type: 'text', text: 'Remember this image.' },
+        { type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' },
+      ],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the attachment turn');
+
+    expect(resolveAvailable).toHaveBeenNthCalledWith(1, [FILE_ENTRY_ID]);
+    const transcript = await store.listMessages(session.id);
+    expect(transcript[0]?.parts).toEqual([
+      { id: 'input-0', type: 'text', text: 'Remember this image.', state: 'done' },
+      {
+        id: 'input-1',
+        type: 'file',
+        fileEntryId: FILE_ENTRY_ID,
+        mediaType: 'image/png',
+        name: 'managed.png',
+        purpose: 'input-attachment',
+      },
+    ]);
+    expect(requests[0]?.input).toEqual([{ type: 'text', text: 'Remember this image.' }]);
+
+    // A later missing blob does not invalidate the historical reference or
+    // fail a text-only turn. A1 still omits attachment content from Pi history.
+    events.length = 0;
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Continue.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the follow-up turn');
+    expect(resolveAvailable).toHaveBeenCalledTimes(1);
+    expect(requests[1]?.history).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          parts: expect.arrayContaining([expect.objectContaining({ type: 'file' })]),
+        }),
+      ]),
+    );
+    expect((await store.listMessages(session.id))[0]?.parts[1]).toMatchObject({
+      fileEntryId: FILE_ENTRY_ID,
+      purpose: 'input-attachment',
+    });
+  });
+
+  test('rejects unavailable and forged managed-file input before reservation', async () => {
+    const facts = new Map([
+      [
+        FILE_ENTRY_ID,
+        {
+          fileEntryId: FILE_ENTRY_ID,
+          mediaType: 'image/png',
+          name: 'managed.png',
+          size: 128,
+        },
+      ],
+    ]);
+    const availableHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
+      resolveAvailable: async () => facts,
+    } as ManagedFileResolver);
+    const availableSession = await availableHost.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      availableHost.submitMessage({
+        sessionId: availableSession.id,
+        parts: [
+          {
+            type: 'file',
+            fileEntryId: FILE_ENTRY_ID,
+            mediaType: 'image/jpeg',
+            name: 'forged.jpg',
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'ATTACHMENT_METADATA_MISMATCH' } });
+    expect(await store.listMessages(availableSession.id)).toEqual([]);
+
+    const unavailableHost = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+    );
+    const unavailableSession = await unavailableHost.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await expect(
+      unavailableHost.submitMessage({
+        sessionId: unavailableSession.id,
+        parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'ATTACHMENT_UNAVAILABLE' } });
+    expect(await store.listMessages(unavailableSession.id)).toEqual([]);
+  });
+
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);
 
@@ -871,13 +1115,13 @@ describe('MobileAgentHost', () => {
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
     });
-    // attachments: false — file input is rejected before any reservation.
+    // Raw or unknown ids are rejected before any reservation.
     await expect(
       host.submitMessage({
         sessionId: session.id,
-        parts: [{ type: 'file', fileEntryId: 'file-1', mediaType: 'image/png' }],
+        parts: [{ type: 'file', fileEntryId: 'file:///private/image.png', mediaType: 'image/png' }],
       }),
-    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    ).rejects.toMatchObject({ view: { code: 'ATTACHMENT_UNAVAILABLE' } });
     expect(await store.listMessages(session.id)).toEqual([]);
 
     // Rename and delete round out the session lifecycle.

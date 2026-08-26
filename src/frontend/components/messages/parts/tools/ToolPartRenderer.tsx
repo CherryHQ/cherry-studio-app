@@ -7,6 +7,7 @@ import {
   isWebSearchToolPart,
   WebSearchToolPart,
 } from './WebSearchToolPart';
+import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 
 type ToolPartRendererProps = {
   part: ToolMessagePart;
@@ -27,6 +28,10 @@ export function ToolPartRenderer({ part }: ToolPartRendererProps) {
 
   if (isMcpToolPart(part)) {
     return <McpToolPart part={part} />;
+  }
+
+  if (isWriteFileToolPart(part)) {
+    return <WriteFileToolPart part={part} />;
   }
 
   return <GenericToolPart part={part} />;

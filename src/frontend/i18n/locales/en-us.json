@@ -49,6 +49,7 @@
   "chat.builtinTool.calendar.listCalendars": "Get calendar list",
   "chat.builtinTool.calendar.listEvents": "Find calendar events",
   "chat.builtinTool.calendar.updateEvent": "Update calendar event",
+  "chat.builtinTool.file.write": "Write file",
   "chat.builtinTool.health.listWorkouts": "Find workout records",
   "chat.builtinTool.health.summary": "Get health summary",
   "chat.builtinTool.location.current": "Get current location",

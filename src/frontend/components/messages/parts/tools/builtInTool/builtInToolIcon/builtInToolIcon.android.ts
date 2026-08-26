@@ -1,6 +1,7 @@
 import type { LucideIconProps } from '@cherrystudio/app-icons';
 import BellRingIcon from '@cherrystudio/app-icons/icons/bell-ring';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
+import FileIcon from '@cherrystudio/app-icons/icons/file';
 import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import type { ComponentType } from 'react';
@@ -10,6 +11,7 @@ import type { BuiltInToolIcon } from './builtInToolIcon.types';
 
 const icons: Record<BuiltInToolIconName, ComponentType<LucideIconProps>> = {
   calendar: CalendarIcon,
+  file: FileIcon,
   health: HeartPulseIcon,
   location: MapPinIcon,
   reminders: BellRingIcon,

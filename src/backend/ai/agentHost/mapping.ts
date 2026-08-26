@@ -26,6 +26,8 @@ import {
   type AgentUsageView,
 } from '@/shared/contracts/agent';
 
+import type { TurnResourceLedger } from './managedFileResolver';
+
 /**
  * Runtime error codes are implementation-scoped strings; the protocol enum is
  * closed. Every runtime failure surfaces as EXECUTION_FAILED with the
@@ -97,12 +99,20 @@ export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
   };
 }
 
-export function toRuntimeInputParts(parts: AgentInputPart[]): RuntimeInputPart[] {
-  return parts.map((part) => {
+export function toRuntimeInputParts(
+  parts: AgentInputPart[],
+  resources?: Pick<TurnResourceLedger, 'fileEntryIds'>,
+): RuntimeInputPart[] {
+  return parts.flatMap((part): RuntimeInputPart[] => {
     if (part.type === 'file') {
-      throw new Error('Managed file input must be resolved before entering the Runtime.');
+      if (!resources?.fileEntryIds.has(part.fileEntryId)) {
+        throw new Error('Managed file input is outside the turn resource ledger.');
+      }
+      // A1 persists only the managed reference. A2/A3 own the bounded
+      // temporary conversion to Runtime image/text input.
+      return [];
     }
-    return { type: 'text', text: part.text };
+    return [{ type: 'text', text: part.text }];
   });
 }
 
