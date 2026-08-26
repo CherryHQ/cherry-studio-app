@@ -16,8 +16,10 @@ import {
   DeleteAgentToolBindingResultSchema,
   ListAgentToolBindingsResponseSchema,
   type ReplaceAgentToolBindingsDto,
+  type ReplaceAgentToolBindingsInput,
   ReplaceAgentToolBindingsSchema,
   type WriteAgentToolBinding,
+  type WriteAgentToolBindingInput,
   WriteAgentToolBindingSchema,
 } from '@/shared/data/api/schemas/agentToolBindings';
 import {
@@ -51,7 +53,7 @@ export class AgentToolBindingService {
     return ListAgentToolBindingsResponseSchema.parse({ items: rows.map(rowToBinding) });
   }
 
-  async upsert(agentId: string, input: WriteAgentToolBinding): Promise<AgentToolBinding> {
+  async upsert(agentId: string, input: WriteAgentToolBindingInput): Promise<AgentToolBinding> {
     const parsed = parseWriteBinding(input);
 
     const row = await this.dbService.withWriteTx(async (tx) => {
@@ -69,7 +71,7 @@ export class AgentToolBindingService {
 
   async replace(
     agentId: string,
-    input: ReplaceAgentToolBindingsDto,
+    input: ReplaceAgentToolBindingsInput,
   ): Promise<{ items: AgentToolBinding[] }> {
     const parsed = parseReplaceBindings(input);
     assertUniqueBindings(parsed.bindings);
@@ -138,7 +140,8 @@ export class AgentToolBindingService {
       .where(eq(mcpServerTable.id, parsed.serverId))
       .limit(1);
     const candidates = items.filter(
-      (binding) => binding.source === 'mcp' && binding.serverId === parsed.serverId,
+      (binding): binding is Extract<AgentToolBinding, { source: 'mcp' }> =>
+        binding.source === 'mcp' && binding.serverId === parsed.serverId,
     );
     const binding =
       candidates.find((candidate) => candidate.rawToolName === parsed.rawToolName) ??
@@ -268,7 +271,7 @@ export class AgentToolBindingService {
   }
 }
 
-function parseWriteBinding(input: WriteAgentToolBinding): WriteAgentToolBinding {
+function parseWriteBinding(input: WriteAgentToolBindingInput): WriteAgentToolBinding {
   const result = WriteAgentToolBindingSchema.safeParse(input);
   if (!result.success) {
     throw toDataApiError(result.error, 'Agent tool binding upsert');
@@ -276,7 +279,7 @@ function parseWriteBinding(input: WriteAgentToolBinding): WriteAgentToolBinding 
   return result.data;
 }
 
-function parseReplaceBindings(input: ReplaceAgentToolBindingsDto): ReplaceAgentToolBindingsDto {
+function parseReplaceBindings(input: ReplaceAgentToolBindingsInput): ReplaceAgentToolBindingsDto {
   const result = ReplaceAgentToolBindingsSchema.safeParse(input);
   if (!result.success) {
     throw toDataApiError(result.error, 'Agent tool binding replace');
@@ -310,13 +313,15 @@ function assertUniqueBindings(bindings: readonly WriteAgentToolBinding[]): void 
 }
 
 function bindingIdentity(binding: AgentToolBindingRow | WriteAgentToolBinding): string {
+  if ('mcpServerId' in binding) {
+    return binding.source === 'builtin'
+      ? JSON.stringify(['builtin', binding.capabilityId])
+      : JSON.stringify(['mcp', binding.mcpServerId, binding.rawToolName ?? null]);
+  }
+
   return binding.source === 'builtin'
     ? JSON.stringify(['builtin', binding.capabilityId])
-    : JSON.stringify([
-        'mcp',
-        'mcpServerId' in binding ? binding.mcpServerId : binding.serverId,
-        binding.rawToolName ?? null,
-      ]);
+    : JSON.stringify(['mcp', binding.serverId, binding.rawToolName ?? null]);
 }
 
 function rowToBinding(row: AgentToolBindingRow): AgentToolBinding {
