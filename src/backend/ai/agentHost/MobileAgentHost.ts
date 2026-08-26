@@ -39,6 +39,7 @@ import type {
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -48,6 +49,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import type {
@@ -95,7 +97,9 @@ import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAtta
 import {
   createAgentInferenceSnapshot,
   type AgentInferenceModelResolver,
+  type AgentModelToolSupportResolver,
   resolveAgentInferenceModel,
+  resolveAgentModelToolSupport,
 } from './inferenceSnapshot';
 import {
   createTurnResourceLedger,
@@ -114,6 +118,7 @@ import {
   type RuntimeFileContents,
 } from './mapping';
 import { createPiModelResolver } from './piModelResolver';
+import { createAgentRuntimeToolResolver, type AgentRuntimeToolResolver } from './runtimeTools';
 import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
@@ -138,6 +143,8 @@ type MobileAgentHostOverrides = {
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
   >;
+  modelSupportsTools: AgentModelToolSupportResolver;
+  runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: AgentToolSource;
 };
@@ -199,6 +206,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
   private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
+  private readonly modelSupportsTools: MobileAgentHostOverrides['modelSupportsTools'];
+  private readonly runtimeTools: MobileAgentHostOverrides['runtimeTools'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -225,6 +234,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
     this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
+    this.modelSupportsTools = overrides.modelSupportsTools ?? resolveAgentModelToolSupport;
+    this.runtimeTools =
+      overrides.runtimeTools ??
+      createAgentRuntimeToolResolver({
+        bindings: agentToolBindingService,
+        getMcpRuntime: () => application.get('McpRuntimeService'),
+      });
   }
 
   private get agents(): AgentDefinitionSource {
@@ -353,22 +369,47 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const configuredAgent = await this.requireAgent(session.agentId);
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
+      if (
+        !runtime.descriptor.capabilities.attachments &&
+        parsed.parts.some((part) => part.type === 'file')
+      ) {
+        fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
+      }
 
-      // Frozen for the turn, so mid-turn configuration changes cannot alter it.
-      // Tools are an enhancement: if the catalog cannot be resolved the turn
-      // still runs, tool-less.
-      let tools: readonly RuntimeTool[] = [];
+      // Freeze built-in and configured tools for the turn so mid-turn changes
+      // cannot alter the active catalog. Built-in discovery remains optional;
+      // configured binding resolution fails closed.
+      let builtInTools: readonly RuntimeTool[] = [];
+      let configuredTools: readonly RuntimeTool[] = [];
       if (runtime.descriptor.capabilities.tools) {
         try {
-          tools = await this.toolSource.getTools(agent.model);
+          builtInTools = await this.toolSource.getTools(agent.model);
         } catch (error) {
-          logger.warn('Failed to resolve Agent tools; running this turn tool-less', error as Error);
+          logger.warn(
+            'Failed to resolve built-in Agent tools; continuing without them',
+            error as Error,
+          );
         }
+        configuredTools = await this.runtimeTools
+          .resolve(agent.id)
+          .catch(() =>
+            fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.'),
+          );
       }
+      const tools = [...builtInTools, ...configuredTools];
 
       const inferenceModel = await this.inferenceModel(agent.model).catch(() =>
         fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.'),
       );
+      if (tools.length > 0) {
+        const supportsTools = await this.modelSupportsTools(agent.model).catch(() => false);
+        if (!supportsTools) {
+          fail(
+            'CAPABILITY_UNSUPPORTED',
+            'The selected model does not support native tool calling.',
+          );
+        }
+      }
       const inferenceSnapshot = createAgentInferenceSnapshot({
         model: inferenceModel,
         options: agent.options,

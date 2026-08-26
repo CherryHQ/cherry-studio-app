@@ -1,14 +1,12 @@
 # Agent Tools And Controlled Resources
 
-Status: **tool binding persistence, settled Runtime tool contracts, the Pi adapter, and HTTP MCP
-Runtime adaptation are active; persisted binding projection remains incomplete**. Version 1 is
-local-only.
+Status: **tool binding persistence, Runtime tool contracts, the Pi adapter, HTTP MCP Runtime
+adaptation, and Host projection are implemented**. Version 1 is local-only.
 
-One capability is as-built ahead of the full design: `write_file` (see
-[Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
-injects a fixed catalog into every turn, and the tool uses the settled `ToolRef` and
-`{ value, artifacts }` contracts. Durable bindings exist but are not yet consumed by the Host; the
-turn resource ledger does not exist yet. Sections that a shipped tool still diverges from carry an
+`write_file` (see [Managed File Read And Edit](#managed-file-read-and-edit)) ships as a minimal
+built-in slice using the settled `ToolRef` and `{ value, artifacts }` contracts. The Host combines
+its fixed application-owned catalog with persisted executable MCP bindings for each turn. The turn
+resource ledger does not exist yet. Sections that a shipped tool still diverges from carry an
 **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
@@ -286,7 +284,8 @@ with its own approval policy.
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
 - The Host freezes the discovered tools for the turn. A reconnect may refresh the next snapshot but
   cannot silently replace the active catalog.
-- Third-party MCP tools default to `ask` until the user chooses a narrower per-tool policy.
+- Third-party MCP tools execute only with per-call `ask` approval in this version. An explicit
+  `deny` remains denied, while any legacy `auto` row is downgraded to `ask` during projection.
 
 ### System Calendar
 
@@ -352,6 +351,10 @@ Every callback receives the turn `AbortSignal`, applies a capability-specific ti
 credentials and private payloads from errors, and returns portable values. Cancellation propagates
 through MCP, provider, device, and file operations where their APIs support it; non-abortable native
 work must discard late results after the turn is terminal.
+
+Pi caps each turn at eight tool-loop steps, sixteen requested tool calls, and ten minutes. The MCP
+adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
+limits are application constants rather than user settings in Version 1.
 
 ## Desktop Relationship
 

@@ -1,8 +1,7 @@
 # Agent Architecture
 
-Status: **Agent, tool binding, MCP Runtime adaptation, and Agent Session persistence/backend
-integration implemented**. Version 1 is local-only; the Host currently exposes only a fixed
-built-in tool, while per-Agent binding projection remains deferred.
+Status: **Agent, tool binding, executable MCP Runtime, and Agent Session persistence/backend
+integration implemented**. Version 1 is local-only.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
@@ -58,9 +57,9 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. The current Host supplies a
-  fixed `write_file` snapshot to function-calling models. Durable bindings are persisted but not
-  yet projected into that snapshot.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host combines its fixed
+  built-in tools with persisted MCP bindings whose Streamable HTTP server and raw discovered tool
+  remain executable.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -76,10 +75,10 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 - Built-in tools and Streamable HTTP MCP use one application-owned binding model with per-tool
   approval policy and stable built-in/MCP `ToolRef` identities. Provider-safe aliases and display
-  names are not persistence authority. The database and typed Data API persist those bindings, and
-  the HTTP MCP adapter can project selected raw descriptors into executable Runtime tools;
-  per-Agent Host resolution and injection remain separate work. The logical model and resolution
-  rules are in [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
+  names are not persistence authority. The database and Data API persist those bindings, and the
+  Host combines their effective policy with live HTTP MCP descriptors before creating executable
+  Runtime tools. The logical model and resolution rules are in
+  [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 - AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
   application-owned tools. They never become a parallel Agent or Chat Runtime.
 - Calendar, Office generation/inspection/patching, image generation, and file operations are
@@ -139,22 +138,20 @@ follow-ups, per the authority direction of
 The production Pi model adapter currently accepts API-key-authenticated Anthropic Messages, Google
 Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Pi maps text, reasoning,
 cumulative usage, cancellation, native tool loops, and approval decisions onto the Runtime
-contract. The Host resolves a fixed `write_file` tool for function-calling models; durable
-per-Agent bindings are exposed through the typed Data API but are not yet projected into that
-Runtime snapshot. The HTTP MCP adapter preserves raw JSON Schemas and creates bounded, cancellable
-Runtime callbacks, but the Host does not resolve bindings into that adapter yet. The Host resolves
-bounded managed images for supported image-capable models; text attachments remain deferred. It
-also persists and replays versioned Runtime context checkpoints; Pi does not produce or consume
-them until its compaction integration lands.
+contract. Agent tool bindings are durable and exposed through the typed Data API. The HTTP MCP
+adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks, and the Host
+resolves their effective policy alongside its fixed application-owned catalog into a frozen
+per-turn snapshot before reserving messages. The Host resolves bounded managed images for supported
+image-capable models; text attachments remain deferred. It also persists and replays versioned
+Runtime context checkpoints; Pi does not produce or consume them until its compaction integration
+lands.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Per-Agent binding projection into the Runtime remains follow-up work; the fixed per-turn
-`RuntimeTool` snapshot and Pi-to-Protocol mapping are implemented. Mobile Skill
-configuration/loading, text attachment conversion, the avatar workflow, and Pi context compaction
-are separate follow-ups.
+Mobile Skill configuration/loading, text attachment conversion and the controlled resource ledger,
+the avatar workflow, and Pi context compaction remain separate follow-ups.
 
 ## Related
 

@@ -1,9 +1,8 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, settled tool contracts, HTTP MCP Runtime adaptation, bounded managed image
-input, and the Runtime context checkpoint contract active behind the Mobile Agent Host**; persisted
-per-Agent binding projection, Pi compaction, and text attachment resolution remain follow-up work.
-Version 1 is local-only.
+Status: **Pi Runtime, executable Streamable HTTP MCP tools, bounded managed image input, and the
+Runtime context checkpoint contract are active behind the Mobile Agent Host**. Pi compaction and
+text attachment resolution remain follow-up work. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -51,12 +50,12 @@ services. Current provider coverage includes API-key-authenticated Anthropic Mes
 Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Unsupported endpoint,
 non-standard adapter family, or authentication types fail before partial execution.
 
-Pi receives the grouped structured transcript, an optional opaque context checkpoint, and Agent
-inference options on each execution. It maps text, reasoning, tool parts, approvals, cancellation,
-multi-call usage onto this contract. The Runtime tool loop and HTTP MCP capability adapter are
-implemented. The Host currently supplies one fixed application-owned `write_file` tool to
-function-calling models; persisted per-Agent bindings are not yet projected into the Runtime
-snapshot. The Host resolves bounded managed images for registry-declared image-capable models
+Pi receives the grouped structured transcript, an optional opaque context checkpoint, a frozen MCP
+tool catalog, and Agent inference options on each execution. It maps text, reasoning, tool parts,
+approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
+The Host resolves persisted bindings and currently executable MCP descriptors before reservation,
+alongside the fixed application-owned catalog. It also resolves bounded managed images for
+registry-declared image-capable models
 supported by the selected Pi endpoint adapter; text attachments remain deferred.
 The current Pi adapter deliberately ignores the checkpoint and emits none, so model input remains
 the complete flattened history until Pi compaction lands.
@@ -277,8 +276,8 @@ tool result; a Runtime never looks up and executes an arbitrary application tool
 
 Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
 not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
-the Pi Runtime rejects the turn with a normalized unsupported-tools failure before partial execution
-instead of silently degrading to prompt-encoded pseudo calls.
+the Host rejects admission before reserving messages; Pi repeats the check before execution as a
+defensive boundary instead of silently degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied`, persists
@@ -291,6 +290,12 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 `value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
+
+Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
+limit do not execute their callback and receive a classified error result; reaching either limit
+stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
+and timeout abort the model, approval waiters, and the callback signal before terminalizing live
+tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -484,9 +489,10 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
+17. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
+18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
-18. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
+19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded
     candidate, and invalid replay candidates fall back to full history.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without

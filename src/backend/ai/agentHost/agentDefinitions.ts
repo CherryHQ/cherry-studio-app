@@ -1,10 +1,9 @@
 /**
  * Minimal Agent configuration source.
  *
- * Per-Agent tool bindings are persisted separately, but their immutable Runtime
- * projection is follow-up work. Basic chat needs only id/name/model/instructions/
- * inference options, so the Host keeps this definition source narrow. The fixed
- * built-in catalog remains Host-owned and is not represented here.
+ * Tool bindings and the fixed built-in catalog are resolved separately from the
+ * definition. Agent lookup stays limited to id/name/model/instructions/inference
+ * options.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
