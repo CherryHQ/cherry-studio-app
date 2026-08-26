@@ -8,7 +8,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { DbService, Database } from '@/backend/data/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
 import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
@@ -27,6 +27,7 @@ import type {
   FinalizeAssistantMessageInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
+import { interruptNonTerminalToolParts } from './mapping';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 
@@ -194,28 +195,31 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   async reconcileInterrupted(error: AgentErrorView): Promise<number> {
     return this.dbService.withWriteTx(async (tx) => {
-      const reconciled = await this.markInterrupted(tx, 'assistant', error);
-      // User/system rows settle at insert; this sweeps any row a future writer
-      // leaves unsettled so reconciliation stays complete by construction.
-      await this.markInterrupted(tx, null, null);
-      return reconciled.length;
-    });
-  }
+      const rows = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]));
+      let assistantCount = 0;
 
-  private markInterrupted(
-    tx: Database,
-    role: 'assistant' | null,
-    error: AgentErrorView | null,
-  ): Promise<{ id: string }[]> {
-    return tx
-      .update(agentSessionMessageTable)
-      .set({ status: 'interrupted', ...(error ? { error } : {}) })
-      .where(
-        and(
-          inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
-          ...(role ? [eq(agentSessionMessageTable.role, role)] : []),
-        ),
-      )
-      .returning({ id: agentSessionMessageTable.id });
+      for (const row of rows) {
+        const message = toAgentMessageView(row);
+        await tx
+          .update(agentSessionMessageTable)
+          .set({
+            status: 'interrupted',
+            data: {
+              version: 1,
+              parts: interruptNonTerminalToolParts(message.parts, error.message),
+            },
+            ...(message.role === 'assistant' ? { error } : {}),
+          })
+          .where(eq(agentSessionMessageTable.id, message.id));
+        if (message.role === 'assistant') {
+          assistantCount += 1;
+        }
+      }
+
+      return assistantCount;
+    });
   }
 }

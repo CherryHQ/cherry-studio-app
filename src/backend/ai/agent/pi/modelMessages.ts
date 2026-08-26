@@ -31,7 +31,7 @@ export function toPiConversation(
 ): PiConversation {
   const history: PiMessage[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
-  const toolNamesByCallId = collectToolNames(request);
+  const providerNamesByCallId = collectProviderNames(request);
 
   for (const message of request.history) {
     if (message.role === 'system') {
@@ -43,7 +43,7 @@ export function toPiConversation(
       history.push({ role: 'user', content: collectText(message.parts), timestamp: Date.now() });
       continue;
     }
-    appendAssistantHistory(history, message.parts, toolNamesByCallId, model);
+    appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
   }
 
   const promptText = request.input
@@ -57,11 +57,11 @@ export function toPiConversation(
   };
 }
 
-function collectToolNames(request: RuntimeExecutionRequest): Map<string, string> {
+function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
   const result = new Map<string, string>();
   for (const message of request.history) {
     for (const part of message.parts) {
-      if (part.type === 'tool-call') result.set(part.toolCallId, part.toolName);
+      if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
     }
   }
   return result;
@@ -76,7 +76,7 @@ function collectText(parts: RuntimeMessagePart[]): string {
 function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
-  toolNamesByCallId: Map<string, string>,
+  providerNamesByCallId: Map<string, string>,
   model: PiModel<PiApi>,
 ): void {
   let content: AssistantMessage['content'] = [];
@@ -108,7 +108,7 @@ function appendAssistantHistory(
         content.push({
           type: 'toolCall',
           id: part.toolCallId,
-          name: part.toolName,
+          name: part.providerName,
           arguments: part.input as Record<string, unknown>,
         });
         break;
@@ -117,7 +117,7 @@ function appendAssistantHistory(
         const result: ToolResultMessage<RuntimeJsonValue> = {
           role: 'toolResult',
           toolCallId: part.toolCallId,
-          toolName: toolNamesByCallId.get(part.toolCallId) ?? 'unknown',
+          toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',
           content: [{ type: 'text', text: JSON.stringify(part.output) }],
           details: part.output,
           isError: part.isError,

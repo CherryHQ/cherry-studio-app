@@ -52,6 +52,19 @@ export const AgentExecutionTargetSchema = z.strictObject({
 });
 export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
 
+export const AgentToolRefSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    source: z.literal('builtin'),
+    capabilityId: z.string().min(1),
+  }),
+  z.strictObject({
+    source: z.literal('mcp'),
+    serverId: z.string().min(1),
+    rawToolName: z.string().min(1),
+  }),
+]);
+export type AgentToolRef = z.infer<typeof AgentToolRefSchema>;
+
 export const AgentSessionViewSchema = z.strictObject({
   id: z.string().min(1),
   agentId: z.string().min(1),
@@ -100,6 +113,82 @@ export const AgentTurnViewSchema = z.strictObject({
 });
 export type AgentTurnView = z.infer<typeof AgentTurnViewSchema>;
 
+export const AgentToolResultSchema = z.strictObject({
+  value: JsonValueSchema,
+  artifacts: z.array(
+    z.strictObject({
+      ref: z.strictObject({
+        kind: z.literal('managed-file'),
+        fileEntryId: z.string().min(1),
+      }),
+      mediaType: z.string(),
+      name: z.string(),
+      kind: z.enum(['created', 'derived']),
+    }),
+  ),
+});
+
+const TERMINAL_TOOL_STATES = new Set(['output-available', 'denied', 'error', 'interrupted']);
+
+const DeniedToolResultSchema = z.strictObject({
+  value: z.strictObject({ status: z.literal('denied'), reason: z.string() }),
+  artifacts: z.tuple([]),
+});
+const ErrorToolResultSchema = z.strictObject({
+  value: z.strictObject({
+    status: z.literal('error'),
+    error: z.strictObject({ code: z.string(), message: z.string(), retryable: z.boolean() }),
+  }),
+  artifacts: z.tuple([]),
+});
+const InterruptedToolResultSchema = z.strictObject({
+  value: z.strictObject({ status: z.literal('interrupted'), reason: z.string() }),
+  artifacts: z.tuple([]),
+});
+
+const AgentToolMessagePartSchema = z
+  .strictObject({
+    id: z.string().min(1),
+    type: z.literal('tool'),
+    toolCallId: z.string(),
+    toolRef: AgentToolRefSchema,
+    providerName: z.string(),
+    displayName: z.string(),
+    state: z.enum([
+      'input-available',
+      'awaiting-approval',
+      'running',
+      'output-available',
+      'denied',
+      'error',
+      'interrupted',
+    ]),
+    input: JsonValueSchema.optional(),
+    output: JsonValueSchema.optional(),
+    approvalId: z.string().optional(),
+    error: AgentErrorViewSchema.optional(),
+  })
+  .superRefine((part, context) => {
+    if (!TERMINAL_TOOL_STATES.has(part.state)) {
+      return;
+    }
+    const outputSchema =
+      part.state === 'denied'
+        ? DeniedToolResultSchema
+        : part.state === 'error'
+          ? ErrorToolResultSchema
+          : part.state === 'interrupted'
+            ? InterruptedToolResultSchema
+            : AgentToolResultSchema;
+    if (!outputSchema.safeParse(part.output).success) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Terminal tool output must be a RuntimeToolResult JSON projection.',
+        path: ['output'],
+      });
+    }
+  });
+
 export const AgentMessagePartSchema = z.union([
   z.strictObject({
     id: z.string().min(1),
@@ -110,28 +199,12 @@ export const AgentMessagePartSchema = z.union([
   z.strictObject({
     id: z.string().min(1),
     type: z.literal('file'),
+    fileEntryId: z.string().min(1),
     mediaType: z.string(),
     name: z.string().optional(),
-    uri: z.string(),
+    purpose: z.enum(['input-attachment', 'artifact']),
   }),
-  z.strictObject({
-    id: z.string().min(1),
-    type: z.literal('tool'),
-    toolCallId: z.string(),
-    toolName: z.string(),
-    state: z.enum([
-      'input-available',
-      'awaiting-approval',
-      'running',
-      'output-available',
-      'denied',
-      'error',
-    ]),
-    input: JsonValueSchema.optional(),
-    output: JsonValueSchema.optional(),
-    approvalId: z.string().optional(),
-    error: AgentErrorViewSchema.optional(),
-  }),
+  AgentToolMessagePartSchema,
   z.strictObject({
     id: z.string().min(1),
     type: z.literal('error'),
@@ -164,9 +237,9 @@ export const AgentInputPartSchema = z.union([
   z.strictObject({ type: z.literal('text'), text: z.string() }),
   z.strictObject({
     type: z.literal('file'),
+    fileEntryId: z.string().min(1),
     mediaType: z.string(),
     name: z.string().optional(),
-    uri: z.string(),
   }),
 ]);
 export type AgentInputPart = z.infer<typeof AgentInputPartSchema>;
@@ -176,7 +249,8 @@ export const AgentApprovalViewSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
   toolCallId: z.string(),
-  toolName: z.string(),
+  toolRef: AgentToolRefSchema,
+  displayName: z.string(),
   input: JsonValueSchema,
   status: z.enum(['pending', 'approved', 'denied']),
 });

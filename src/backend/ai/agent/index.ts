@@ -2,6 +2,7 @@ export type {
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeApproval,
+  RuntimeArtifact,
   RuntimeCapabilities,
   RuntimeDescriptor,
   RuntimeError,
@@ -15,6 +16,8 @@ export type {
   RuntimeOptions,
   RuntimeOutputPart,
   RuntimeTool,
+  RuntimeToolRef,
+  RuntimeToolResult,
   RuntimeUsage,
   RuntimeUsageContext,
   RuntimeUsageReport,
@@ -26,6 +29,12 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export { FakeRuntime } from './FakeRuntime';
+export {
+  createDeniedToolResult,
+  createErrorToolResult,
+  createInterruptedToolResult,
+  TOOL_EXECUTION_ERROR,
+} from './toolResults';
 
 export type {
   PiModelResolution,

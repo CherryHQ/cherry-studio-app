@@ -1,10 +1,7 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
-
-import { getBuiltInToolDisplay } from '@/frontend/components/messages';
 
 const TOOL_APPROVAL_SHEET_HEIGHT = 420;
 const ignoreClose = () => undefined;
@@ -14,8 +11,7 @@ export type PendingToolApproval = {
   input: unknown;
   messageId: string;
   toolCallId: string;
-  toolName: string;
-  toolType?: 'builtin' | 'mcp' | 'provider';
+  displayName: string;
 };
 
 type ToolApprovalRespondInput = {
@@ -97,7 +93,7 @@ function ToolApprovalSheetBody({
           {t('chat.tool.approval.description')}
         </Text>
         <Text className="font-semibold text-base text-foreground" selectable>
-          {formatApprovalTitle(approval, t)}
+          {approval.displayName}
         </Text>
         {pendingCount > 1 ? (
           <Text className="text-foreground-tertiary text-xs">
@@ -150,24 +146,6 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
       </ScrollView>
     </View>
   );
-}
-
-function formatApprovalTitle(
-  approval: PendingToolApproval,
-  t: ReturnType<typeof useTranslation>['t'],
-): string {
-  const display = getBuiltInToolDisplay(approval.toolName);
-  if (display || approval.toolType === 'builtin') {
-    if (display) {
-      return t(display.titleKey);
-    }
-
-    const words = approval.toolName.replaceAll('_', ' ');
-    return words ? `${words[0].toUpperCase()}${words.slice(1)}` : approval.toolName;
-  }
-
-  const parsed = parseFunctionCallToolName(approval.toolName);
-  return parsed ? `${parsed.serverPart}: ${parsed.toolPart}` : approval.toolName;
 }
 
 function formatApprovalInput(input: unknown): string {

@@ -1,13 +1,13 @@
 # Agent Tools And Controlled Resources
 
-Status: **target design; application tool bindings and the Pi adapter are not yet complete**.
-Version 1 is local-only.
+Status: **target design; settled Runtime tool contracts and the Pi adapter are active, while
+application tool bindings remain follow-up work**. Version 1 is local-only.
 
-One capability is as-built ahead of that design: `write_file` (see
+One capability is as-built ahead of the full design: `write_file` (see
 [Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
-injects a fixed catalog into every turn, so the `ToolRef` identity, the durable bindings, the turn
-resource ledger, and the `{ value, artifacts }` result envelope described below do not exist in
-code yet. Sections that a shipped tool already diverges from carry an **As-built** note.
+injects a fixed catalog into every turn, and the tool uses the settled `ToolRef` and
+`{ value, artifacts }` contracts. Durable bindings and the turn resource ledger do not exist yet.
+Sections that a shipped tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -60,9 +60,10 @@ digest, rejects collisions within the snapshot, and never falls back to display-
 Host snapshots a display name separately so historical UI remains understandable after
 configuration changes.
 
-**As-built.** Neither representation exists yet. `write_file` is identified by its wire name alone,
-and the Host builds the same one-tool catalog for every Agent, so there is nothing to bind and no
-alias to derive. The `agent` table therefore still has no tool-policy column.
+**As-built.** The turn-local representation exists: `write_file` has a stable built-in `ToolRef`
+and keeps `write_file` as its provider alias for compatibility. The durable binding representation
+does not exist yet, and the Host builds the same one-tool catalog for every Agent. The `agent` table
+therefore still has no tool-policy column.
 
 The logical binding model is:
 
@@ -169,11 +170,10 @@ display metadata. Its content is not automatically projected as a model attachme
 history. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
-**As-built.** `RuntimeTool.execute` still returns bare JSON, so there is no envelope and no
-artifact projection. `write_file` reports its new entry as a `fileEntryId` inside that JSON, which
-the transcript persists with the tool call; chat renders it as the same file card an attachment
-gets, resolved from the id at read time. Nothing is stored as a `purpose: 'artifact'` file part,
-and later turns see the id as ordinary result data.
+**As-built.** `write_file` returns its status and new `fileEntryId` under `value`, plus the created
+managed entry under `artifacts`. Pi projects that artifact as a `purpose: 'artifact'` file part, and
+the Host persists both the result envelope and file part. There is no resource ledger yet because
+the shipped catalog contains no tool that can read the resulting managed id.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts

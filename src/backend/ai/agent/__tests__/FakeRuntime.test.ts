@@ -19,6 +19,8 @@ import {
 } from './_runtimeConformance';
 
 const ERROR_SECRET = 'sk-live-super-secret-9f83b2';
+const TOOL_REF = { source: 'builtin', capabilityId: 'delete-managed-file' } as const;
+const TOOL_DISPLAY_NAME = 'Delete managed file';
 
 const USAGE_CONTEXT: RuntimeUsageContext = {
   credentialReceipt: { attribution: 'unknown' },
@@ -107,20 +109,22 @@ const harness: RuntimeConformanceHarness = {
   },
 
   arrangeApproval(runtime, turnId): ArrangedApprovalRequest {
-    const toolName = 'delete_file';
+    const providerName = 'builtin_delete_file_a1b2';
     const toolCallId = 'call-1';
     const approvalId = 'approval-1';
-    const toolInput: RuntimeJsonValue = { path: '/tmp/report.txt' };
+    const toolInput: RuntimeJsonValue = { fileEntryId: 'file-1' };
     let executed = false;
 
     const tool: RuntimeTool = {
-      name: toolName,
+      ref: TOOL_REF,
+      providerName,
+      displayName: TOOL_DISPLAY_NAME,
       description: 'Delete a file.',
       inputSchema: { type: 'object' },
       approval: 'ask',
       async execute() {
         executed = true;
-        return { deleted: true };
+        return { value: { deleted: true }, artifacts: [] };
       },
     };
 
@@ -132,7 +136,9 @@ const harness: RuntimeConformanceHarness = {
           id: 'tool-0',
           type: 'tool',
           toolCallId,
-          toolName,
+          toolRef: TOOL_REF,
+          providerName,
+          displayName: TOOL_DISPLAY_NAME,
           state: 'input-available',
           input: toolInput,
         },
@@ -143,7 +149,9 @@ const harness: RuntimeConformanceHarness = {
           id: 'tool-0',
           type: 'tool',
           toolCallId,
-          toolName,
+          toolRef: TOOL_REF,
+          providerName,
+          displayName: TOOL_DISPLAY_NAME,
           state: 'awaiting-approval',
           input: toolInput,
           approvalId,
@@ -155,7 +163,8 @@ const harness: RuntimeConformanceHarness = {
           id: approvalId,
           turnId: controller.turnId,
           toolCallId,
-          toolName,
+          toolRef: TOOL_REF,
+          displayName: TOOL_DISPLAY_NAME,
           input: toolInput,
           status: 'pending',
         },
@@ -169,7 +178,8 @@ const harness: RuntimeConformanceHarness = {
             id: approvalId,
             turnId: controller.turnId,
             toolCallId,
-            toolName,
+            toolRef: TOOL_REF,
+            displayName: TOOL_DISPLAY_NAME,
             input: toolInput,
             status: 'approved',
           },
@@ -180,7 +190,9 @@ const harness: RuntimeConformanceHarness = {
             id: 'tool-0',
             type: 'tool',
             toolCallId,
-            toolName,
+            toolRef: TOOL_REF,
+            providerName,
+            displayName: TOOL_DISPLAY_NAME,
             state: 'running',
             input: toolInput,
             approvalId,
@@ -196,7 +208,9 @@ const harness: RuntimeConformanceHarness = {
             id: 'tool-0',
             type: 'tool',
             toolCallId,
-            toolName,
+            toolRef: TOOL_REF,
+            providerName,
+            displayName: TOOL_DISPLAY_NAME,
             state: 'output-available',
             input: toolInput,
             output,
@@ -209,7 +223,8 @@ const harness: RuntimeConformanceHarness = {
             id: approvalId,
             turnId: controller.turnId,
             toolCallId,
-            toolName,
+            toolRef: TOOL_REF,
+            displayName: TOOL_DISPLAY_NAME,
             input: toolInput,
             status: 'denied',
           },
@@ -220,9 +235,15 @@ const harness: RuntimeConformanceHarness = {
             id: 'tool-0',
             type: 'tool',
             toolCallId,
-            toolName,
+            toolRef: TOOL_REF,
+            providerName,
+            displayName: TOOL_DISPLAY_NAME,
             state: 'denied',
             input: toolInput,
+            output: {
+              value: { status: 'denied', reason: 'The user denied this tool call.' },
+              artifacts: [],
+            },
           },
         });
       }
@@ -231,13 +252,23 @@ const harness: RuntimeConformanceHarness = {
 
     return {
       request: baseRequest(turnId, { tools: [tool] }),
-      toolName,
+      toolRef: TOOL_REF,
+      displayName: TOOL_DISPLAY_NAME,
       toolCallId,
       toolExecuted: () => executed,
     };
   },
 
   arrangeCancellable(runtime, turnId): ArrangedRequest {
+    const tool: RuntimeTool = {
+      ref: TOOL_REF,
+      providerName: 'builtin_delete_file_a1b2',
+      displayName: TOOL_DISPLAY_NAME,
+      description: 'Delete a managed file.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
     (runtime as FakeRuntime).script(async (controller) => {
       controller.emit({
         type: 'part.add',
@@ -245,6 +276,20 @@ const harness: RuntimeConformanceHarness = {
         part: { id: 'text-0', type: 'text', text: '', state: 'streaming' },
       });
       controller.emit({ type: 'text.delta', partId: 'text-0', text: 'Working' });
+      controller.emit({
+        type: 'part.add',
+        index: 1,
+        part: {
+          id: 'tool-0',
+          type: 'tool',
+          toolCallId: 'call-1',
+          toolRef: TOOL_REF,
+          providerName: tool.providerName,
+          displayName: tool.displayName,
+          state: 'running',
+          input: { fileEntryId: 'file-1' },
+        },
+      });
       await new Promise<void>((resolve) => {
         if (controller.signal.aborted) {
           resolve();
@@ -253,7 +298,7 @@ const harness: RuntimeConformanceHarness = {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    return { request: baseRequest(turnId) };
+    return { request: baseRequest(turnId, { tools: [tool] }) };
   },
 
   arrangeError(runtime, turnId): ArrangedErrorRequest {
@@ -268,6 +313,7 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../types.ts'),
     path.resolve(__dirname, '../RuntimeEventChannel.ts'),
     path.resolve(__dirname, '../FakeRuntime.ts'),
+    path.resolve(__dirname, '../toolResults.ts'),
   ],
 };
 

@@ -14,6 +14,12 @@ import type {
 } from '@earendil-works/pi-ai';
 
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
+import {
+  createDeniedToolResult,
+  createErrorToolResult,
+  createInterruptedToolResult,
+  TOOL_EXECUTION_ERROR,
+} from '../toolResults';
 import type {
   AgentRuntime,
   AgentRuntimeSession,
@@ -24,6 +30,7 @@ import type {
   RuntimeJsonValue,
   RuntimeOutputPart,
   RuntimeTool,
+  RuntimeToolResult,
   RuntimeUsage,
   RuntimeUsageContext,
 } from '../types';
@@ -66,16 +73,8 @@ const PI_DESCRIPTOR: RuntimeDescriptor = {
   },
 };
 
-const DENIED_TOOL_OUTPUT: RuntimeJsonValue = {
-  reason: 'The user denied this tool call.',
-  status: 'denied',
-};
-
-const TOOL_EXECUTION_ERROR: RuntimeError = {
-  code: 'tool_execution_error',
-  message: 'The tool failed to execute.',
-  retryable: false,
-};
+const DENIED_TOOL_RESULT = createDeniedToolResult('The user denied this tool call.');
+const INTERRUPTED_TOOL_REASON = 'The turn ended before this tool call completed.';
 
 const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
@@ -89,10 +88,12 @@ type ApprovalWaiter = {
 };
 
 type ToolPartBase = {
+  displayName: string;
   id: string;
   input: RuntimeJsonValue;
+  providerName: string;
   toolCallId: string;
-  toolName: string;
+  toolRef: RuntimeTool['ref'];
 };
 
 type ActiveTurn = {
@@ -101,12 +102,14 @@ type ActiveTurn = {
   channel: RuntimeEventChannel;
   cancelRequested: boolean;
   currentMessageOrdinal?: number;
+  failedToolCalls: Set<string>;
   nextMessageOrdinal: number;
   nextPartIndex: number;
   settledToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
   terminated: boolean;
   toolParts: Map<string, ToolPartBase>;
+  toolsByProviderName: Map<string, RuntimeTool>;
   turnId: string;
   usage: RuntimeUsage;
 };
@@ -243,11 +246,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
       approvalWaiters: new Map(),
       cancelRequested: false,
       channel,
+      failedToolCalls: new Set(),
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
       settledToolCalls: new Set(),
       terminated: false,
       toolParts: new Map(),
+      toolsByProviderName: new Map(request.tools.map((tool) => [tool.providerName, tool])),
       turnId: request.turnId,
       usage: {
         cacheReadTokens: 0,
@@ -306,7 +311,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
       secrets = sensitiveValues(resolution);
-      if (turn.terminated) return;
+      if (turn.terminated || turn.cancelRequested) return;
       if (request.tools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
           type: 'failed',
@@ -321,6 +326,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
       const conversation = toPiConversation(request, resolution.model);
       const agentOptions: AgentOptions = {
+        afterToolCall: async ({ toolCall }) =>
+          turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
         initialState: {
           messages: conversation.history,
           model: resolution.model,
@@ -334,6 +341,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
         ? this.createAgent(agentOptions)
         : await createDefaultAgent(agentOptions);
       turn.agent = agent;
+      if (turn.terminated || turn.cancelRequested) {
+        agent.abort();
+        return;
+      }
       unsubscribe = agent.subscribe((event) => this.handlePiEvent(turn, event));
 
       await agent.prompt(conversation.prompt);
@@ -476,12 +487,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
         break;
       }
       case 'toolcall_end':
-        this.ensureToolPart(turn, {
-          id: `tool-${event.toolCall.id}`,
-          input: toRuntimeJson(event.toolCall.arguments, {}),
-          toolCallId: event.toolCall.id,
-          toolName: event.toolCall.name,
-        });
+        this.ensureToolPartFromProviderCall(
+          turn,
+          event.toolCall.id,
+          event.toolCall.name,
+          toRuntimeJson(event.toolCall.arguments, {}),
+        );
         break;
       default:
         break;
@@ -490,8 +501,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private toPiTools(tools: RuntimeTool[], turn: ActiveTurn): PiAgentTool[] {
     return tools.map((runtimeTool) => ({
-      name: runtimeTool.name,
-      label: runtimeTool.name,
+      name: runtimeTool.providerName,
+      label: runtimeTool.displayName,
       description: runtimeTool.description,
       parameters: runtimeTool.inputSchema as never,
       execute: (toolCallId, params, signal) =>
@@ -507,20 +518,29 @@ class PiRuntimeSession implements AgentRuntimeSession {
     turn: ActiveTurn,
   ) {
     const part = this.ensureToolPart(turn, {
+      displayName: runtimeTool.displayName,
       id: `tool-${toolCallId}`,
       input,
+      providerName: runtimeTool.providerName,
       toolCallId,
-      toolName: runtimeTool.name,
+      toolRef: runtimeTool.ref,
     });
 
+    if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+      return this.interruptToolCall(turn, part);
+    }
+
     if (runtimeTool.approval === 'deny') {
-      this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_OUTPUT });
+      this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
       turn.settledToolCalls.add(toolCallId);
-      return this.piToolResult(DENIED_TOOL_OUTPUT);
+      return this.piToolResult(DENIED_TOOL_RESULT);
     }
 
     if (runtimeTool.approval === 'ask') {
       const approvalId = `approval-${toolCallId}`;
+      // Register before publishing the request: callers may cancel as soon as
+      // they observe that event, and cancellation must always find the waiter.
+      const decisionPromise = this.waitForApproval(turn, approvalId);
       this.replaceToolPart(turn, part, { state: 'awaiting-approval', approvalId });
       this.emit(turn, {
         type: 'approval.requested',
@@ -528,27 +548,32 @@ class PiRuntimeSession implements AgentRuntimeSession {
           id: approvalId,
           turnId: turn.turnId,
           toolCallId,
-          toolName: runtimeTool.name,
+          toolRef: runtimeTool.ref,
+          displayName: runtimeTool.displayName,
           input,
           status: 'pending',
         },
       });
-      const decision = await this.waitForApproval(turn, approvalId);
+      const decision = await decisionPromise;
       this.emit(turn, {
         type: 'approval.resolved',
         approval: {
           id: approvalId,
           turnId: turn.turnId,
           toolCallId,
-          toolName: runtimeTool.name,
+          toolRef: runtimeTool.ref,
+          displayName: runtimeTool.displayName,
           input,
           status: decision === 'approve' ? 'approved' : 'denied',
         },
       });
       if (decision === 'deny') {
-        this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_OUTPUT });
+        this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
         turn.settledToolCalls.add(toolCallId);
-        return this.piToolResult(DENIED_TOOL_OUTPUT);
+        return this.piToolResult(DENIED_TOOL_RESULT);
+      }
+      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+        return this.interruptToolCall(turn, part);
       }
     }
 
@@ -558,25 +583,80 @@ class PiRuntimeSession implements AgentRuntimeSession {
         signal: signal ?? new AbortController().signal,
         toolCallId,
       });
+      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+        return this.interruptToolCall(turn, part);
+      }
       this.replaceToolPart(turn, part, { state: 'output-available', output });
       turn.settledToolCalls.add(toolCallId);
+      this.emitArtifacts(turn, toolCallId, output);
       return this.piToolResult(output);
     } catch {
+      const isInterrupted = turn.cancelRequested || turn.terminated || signal?.aborted;
+      if (isInterrupted) {
+        return this.interruptToolCall(turn, part);
+      }
+      const output = createErrorToolResult(TOOL_EXECUTION_ERROR);
       this.replaceToolPart(turn, part, {
         state: 'error',
         error: TOOL_EXECUTION_ERROR,
-        output: null,
+        output,
       });
+      turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
-      throw new Error('Tool execution failed.');
+      return this.piToolResult(output);
     }
   }
 
-  private piToolResult(output: RuntimeJsonValue) {
+  private piToolResult(output: RuntimeToolResult) {
     return {
       content: [{ type: 'text' as const, text: JSON.stringify(output) }],
       details: output,
     };
+  }
+
+  private interruptToolCall(turn: ActiveTurn, part: ToolPartBase) {
+    const output = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+    this.replaceToolPart(turn, part, { state: 'interrupted', output });
+    turn.failedToolCalls.add(part.toolCallId);
+    turn.settledToolCalls.add(part.toolCallId);
+    return this.piToolResult(output);
+  }
+
+  private emitArtifacts(turn: ActiveTurn, toolCallId: string, output: RuntimeToolResult): void {
+    output.artifacts.forEach((artifact, index) => {
+      this.emit(turn, {
+        type: 'part.add',
+        index: turn.nextPartIndex++,
+        part: {
+          id: `artifact-${toolCallId}-${index}`,
+          type: 'file',
+          ref: artifact.ref,
+          mediaType: artifact.mediaType,
+          name: artifact.name,
+          purpose: 'artifact',
+        },
+      });
+    });
+  }
+
+  private ensureToolPartFromProviderCall(
+    turn: ActiveTurn,
+    toolCallId: string,
+    providerName: string,
+    input: RuntimeJsonValue,
+  ): ToolPartBase | undefined {
+    const runtimeTool = turn.toolsByProviderName.get(providerName);
+    if (!runtimeTool) {
+      return undefined;
+    }
+    return this.ensureToolPart(turn, {
+      displayName: runtimeTool.displayName,
+      id: `tool-${toolCallId}`,
+      input,
+      providerName,
+      toolCallId,
+      toolRef: runtimeTool.ref,
+    });
   }
 
   private ensureToolPart(turn: ActiveTurn, base: ToolPartBase): ToolPartBase {
@@ -606,13 +686,20 @@ class PiRuntimeSession implements AgentRuntimeSession {
   private settleUnmappedToolResults(turn: ActiveTurn, results: ToolResultMessage[]): void {
     for (const result of results) {
       if (turn.settledToolCalls.has(result.toolCallId)) continue;
-      const base = this.ensureToolPart(turn, {
-        id: `tool-${result.toolCallId}`,
-        input: null,
-        toolCallId: result.toolCallId,
-        toolName: result.toolName,
-      });
-      const output = toolResultOutput(result);
+      // Pi may surface the rejection used to unwind an approval waiter as a
+      // native error result. During cancellation the Runtime terminalizer owns
+      // the outcome, so keep the part live and normalize it as interrupted.
+      if (turn.cancelRequested) continue;
+      const base = this.ensureToolPartFromProviderCall(
+        turn,
+        result.toolCallId,
+        result.toolName,
+        null,
+      );
+      if (!base) continue;
+      const output = result.isError
+        ? createErrorToolResult(TOOL_EXECUTION_ERROR)
+        : { value: toolResultOutput(result), artifacts: [] };
       this.replaceToolPart(
         turn,
         base,
@@ -624,8 +711,24 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
   }
 
+  private interruptUnsettledToolParts(turn: ActiveTurn): void {
+    for (const part of turn.toolParts.values()) {
+      if (turn.settledToolCalls.has(part.toolCallId)) continue;
+      this.replaceToolPart(turn, part, {
+        state: 'interrupted',
+        output: createInterruptedToolResult(INTERRUPTED_TOOL_REASON),
+      });
+      turn.failedToolCalls.add(part.toolCallId);
+      turn.settledToolCalls.add(part.toolCallId);
+    }
+  }
+
   private waitForApproval(turn: ActiveTurn, approvalId: string): Promise<'approve' | 'deny'> {
     return new Promise((resolve, reject) => {
+      if (turn.cancelRequested || turn.terminated) {
+        reject(new Error('The turn is no longer active.'));
+        return;
+      }
       turn.approvalWaiters.set(approvalId, { resolve, reject });
     });
   }
@@ -639,6 +742,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     if (turn.terminated) return;
     const isTerminal = TERMINAL_TYPES.has(event.type);
     if (isTerminal) {
+      this.interruptUnsettledToolParts(turn);
       turn.terminated = true;
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));
     }

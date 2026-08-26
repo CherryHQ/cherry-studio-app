@@ -14,15 +14,16 @@
 
 import { readFileSync } from 'node:fs';
 
-import type { AgentRuntime, RuntimeEvent, RuntimeExecutionRequest } from '../types';
+import type { AgentRuntime, RuntimeEvent, RuntimeExecutionRequest, RuntimeToolRef } from '../types';
 
 export type ArrangedRequest = {
   request: RuntimeExecutionRequest;
 };
 
 export type ArrangedApprovalRequest = ArrangedRequest & {
-  /** The `ask`-mode tool name the run requests approval for. */
-  toolName: string;
+  /** Stable identity and display snapshot carried by the approval. */
+  toolRef: RuntimeToolRef;
+  displayName: string;
   /** The tool call id carried by the tool part and its approval. */
   toolCallId: string;
   /** Reports whether the tool implementation actually ran. */
@@ -248,6 +249,23 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
       const terminals = all.filter(isTerminal);
       expect(terminals).toHaveLength(1);
       expect(terminals[0]?.type).toBe('cancelled');
+      if (request.tools.length > 0) {
+        expect(
+          all.find(
+            (event) =>
+              event.type === 'part.replace' &&
+              event.part.type === 'tool' &&
+              event.part.state === 'interrupted',
+          ),
+        ).toMatchObject({
+          part: {
+            output: {
+              artifacts: [],
+              value: { status: 'interrupted' },
+            },
+          },
+        });
+      }
     } finally {
       await session.close();
     }
@@ -270,7 +288,8 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
         throw new Error('expected an approval.requested event');
       }
       expect(requested.approval.turnId).toBe(arranged.request.turnId);
-      expect(requested.approval.toolName).toBe(arranged.toolName);
+      expect(requested.approval.toolRef).toEqual(arranged.toolRef);
+      expect(requested.approval.displayName).toBe(arranged.displayName);
       expect(requested.approval.toolCallId).toBe(arranged.toolCallId);
 
       await session.respondApproval({
@@ -317,6 +336,21 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
       const all = [...untilApproval.events, ...rest];
       expect(all.filter(isTerminal)).toHaveLength(1);
       expect(arranged.toolExecuted()).toBe(false);
+      expect(
+        all.find(
+          (event) =>
+            event.type === 'part.replace' &&
+            event.part.type === 'tool' &&
+            event.part.state === 'denied',
+        ),
+      ).toMatchObject({
+        part: {
+          output: {
+            artifacts: [],
+            value: { status: 'denied' },
+          },
+        },
+      });
     } finally {
       await session.close();
     }

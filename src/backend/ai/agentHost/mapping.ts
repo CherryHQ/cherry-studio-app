@@ -4,22 +4,26 @@
  * through the other.
  */
 
-import type {
-  RuntimeApproval,
-  RuntimeError,
-  RuntimeInputPart,
-  RuntimeMessage,
-  RuntimeMessagePart,
-  RuntimeOutputPart,
-  RuntimeUsage,
+import {
+  createInterruptedToolResult,
+  type RuntimeApproval,
+  type RuntimeError,
+  type RuntimeInputPart,
+  type RuntimeMessage,
+  type RuntimeMessagePart,
+  type RuntimeOutputPart,
+  type RuntimeUsage,
 } from '@/backend/ai/agent';
-import type {
-  AgentApprovalView,
-  AgentErrorView,
-  AgentInputPart,
-  AgentMessagePart,
-  AgentMessageView,
-  AgentUsageView,
+import {
+  AgentApprovalViewSchema,
+  AgentMessagePartSchema,
+  AgentToolResultSchema,
+  type AgentApprovalView,
+  type AgentErrorView,
+  type AgentInputPart,
+  type AgentMessagePart,
+  type AgentMessageView,
+  type AgentUsageView,
 } from '@/shared/contracts/agent';
 
 /**
@@ -37,43 +41,52 @@ export function toAgentErrorView(error: RuntimeError): AgentErrorView {
 
 export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
   if (part.type === 'file') {
-    return {
+    return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'file',
+      fileEntryId: part.ref.fileEntryId,
       mediaType: part.mediaType,
-      ...(part.name !== undefined ? { name: part.name } : {}),
-      uri: part.uri,
-    };
+      name: part.name,
+      purpose: part.purpose,
+    });
   }
   if (part.type === 'tool') {
-    return {
+    return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'tool',
       toolCallId: part.toolCallId,
-      toolName: part.toolName,
+      toolRef: part.toolRef,
+      providerName: part.providerName,
+      displayName: part.displayName,
       state: part.state,
       ...(part.input !== undefined ? { input: part.input } : {}),
       ...(part.output !== undefined ? { output: part.output } : {}),
       ...(part.approvalId !== undefined ? { approvalId: part.approvalId } : {}),
       ...(part.error !== undefined ? { error: toAgentErrorView(part.error) } : {}),
-    };
+    });
   }
-  return { id: part.id, type: part.type, text: part.text, state: part.state };
+  return AgentMessagePartSchema.parse({
+    id: part.id,
+    type: part.type,
+    text: part.text,
+    state: part.state,
+  });
 }
 
 export function toAgentApprovalView(
   approval: RuntimeApproval,
   sessionId: string,
 ): AgentApprovalView {
-  return {
+  return AgentApprovalViewSchema.parse({
     id: approval.id,
     sessionId,
     turnId: approval.turnId,
     toolCallId: approval.toolCallId,
-    toolName: approval.toolName,
+    toolRef: approval.toolRef,
+    displayName: approval.displayName,
     input: approval.input,
     status: approval.status,
-  };
+  });
 }
 
 export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
@@ -85,16 +98,12 @@ export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
 }
 
 export function toRuntimeInputParts(parts: AgentInputPart[]): RuntimeInputPart[] {
-  return parts.map((part) =>
-    part.type === 'text'
-      ? { type: 'text', text: part.text }
-      : {
-          type: 'file',
-          mediaType: part.mediaType,
-          ...(part.name !== undefined ? { name: part.name } : {}),
-          uri: part.uri,
-        },
-  );
+  return parts.map((part) => {
+    if (part.type === 'file') {
+      throw new Error('Managed file input must be resolved before entering the Runtime.');
+    }
+    return { type: 'text', text: part.text };
+  });
 }
 
 /**
@@ -113,33 +122,37 @@ export function toRuntimeHistory(messages: AgentMessageView[]): RuntimeMessage[]
           parts.push({ type: part.type, text: part.text });
           break;
         case 'file':
-          parts.push({
-            type: 'file',
-            mediaType: part.mediaType,
-            ...(part.name !== undefined ? { name: part.name } : {}),
-            uri: part.uri,
-          });
+          // C1 has no Host-side managed-file resolver. Artifact parts never
+          // become implicit model attachments, and input attachments remain
+          // unavailable until the attachment slice resolves them explicitly.
           break;
-        case 'tool':
-          parts.push({
-            type: 'tool-call',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            input: part.input ?? null,
-          });
+        case 'tool': {
+          const validPart = AgentMessagePartSchema.safeParse(part);
+          const output = AgentToolResultSchema.safeParse(part.output);
           if (
-            part.state === 'output-available' ||
-            part.state === 'denied' ||
-            part.state === 'error'
+            validPart.success &&
+            (part.state === 'output-available' ||
+              part.state === 'denied' ||
+              part.state === 'error' ||
+              part.state === 'interrupted') &&
+            output.success
           ) {
+            parts.push({
+              type: 'tool-call',
+              toolCallId: part.toolCallId,
+              toolRef: part.toolRef,
+              providerName: part.providerName,
+              input: part.input ?? null,
+            });
             parts.push({
               type: 'tool-result',
               toolCallId: part.toolCallId,
-              output: part.output ?? null,
-              isError: part.state === 'error',
+              output: output.data,
+              isError: part.state === 'error' || part.state === 'interrupted',
             });
           }
           break;
+        }
         default:
           break;
       }
@@ -149,4 +162,26 @@ export function toRuntimeHistory(messages: AgentMessageView[]): RuntimeMessage[]
     }
   }
   return history;
+}
+
+export function interruptNonTerminalToolParts(
+  parts: AgentMessagePart[],
+  reason: string,
+): AgentMessagePart[] {
+  return parts.map((part) => {
+    if (
+      part.type !== 'tool' ||
+      (part.state !== 'input-available' &&
+        part.state !== 'awaiting-approval' &&
+        part.state !== 'running')
+    ) {
+      return part;
+    }
+    const { approvalId: _approvalId, error: _error, output: _output, ...base } = part;
+    return {
+      ...base,
+      state: 'interrupted',
+      output: createInterruptedToolResult(reason),
+    };
+  });
 }

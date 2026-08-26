@@ -14,6 +14,7 @@
  */
 
 import { RuntimeEventChannel } from './RuntimeEventChannel';
+import { createInterruptedToolResult } from './toolResults';
 import type {
   AgentRuntime,
   AgentRuntimeSession,
@@ -22,6 +23,7 @@ import type {
   RuntimeError,
   RuntimeEvent,
   RuntimeExecutionRequest,
+  RuntimeOutputPart,
 } from './types';
 
 /**
@@ -142,6 +144,7 @@ type ActiveTurn = {
   channel: RuntimeEventChannel;
   abortController: AbortController;
   approvalWaiters: Map<string, ApprovalWaiter>;
+  toolParts: Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>;
   terminated: boolean;
 };
 
@@ -177,6 +180,7 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       channel,
       abortController: new AbortController(),
       approvalWaiters: new Map(),
+      toolParts: new Map(),
       terminated: false,
     };
     this.activeTurn = turn;
@@ -251,6 +255,14 @@ class FakeRuntimeSession implements AgentRuntimeSession {
     if (turn.terminated) {
       return; // no output may follow a terminal event
     }
+    if (isTerminal(event)) {
+      this.interruptUnsettledToolParts(turn);
+    } else if (
+      (event.type === 'part.add' || event.type === 'part.replace') &&
+      event.part.type === 'tool'
+    ) {
+      turn.toolParts.set(event.part.toolCallId, event.part);
+    }
     turn.channel.push(event);
     if (isTerminal(event)) {
       turn.terminated = true;
@@ -259,6 +271,27 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       if (this.activeTurn === turn) {
         this.activeTurn = undefined;
       }
+    }
+  }
+
+  private interruptUnsettledToolParts(turn: ActiveTurn): void {
+    for (const part of turn.toolParts.values()) {
+      if (
+        part.state === 'output-available' ||
+        part.state === 'denied' ||
+        part.state === 'error' ||
+        part.state === 'interrupted'
+      ) {
+        continue;
+      }
+      const { approvalId: _approvalId, error: _error, output: _output, ...base } = part;
+      const interrupted: Extract<RuntimeOutputPart, { type: 'tool' }> = {
+        ...base,
+        state: 'interrupted',
+        output: createInterruptedToolResult('The turn ended before this tool call completed.'),
+      };
+      turn.toolParts.set(part.toolCallId, interrupted);
+      turn.channel.push({ type: 'part.replace', part: interrupted });
     }
   }
 
