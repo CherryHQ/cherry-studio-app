@@ -558,7 +558,10 @@ describe('MobileAgentHost', () => {
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
-    expect(getTools).toHaveBeenCalledWith({ providerId: 'mock-provider', modelId: 'mock-model' });
+    expect(getTools).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
+      model: { providerId: 'mock-provider', modelId: 'mock-model' },
+    });
     expect(requests[0]?.tools).toEqual([stubTool]);
     expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({
       status: 'supported',

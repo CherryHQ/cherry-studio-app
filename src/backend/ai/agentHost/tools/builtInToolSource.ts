@@ -2,37 +2,253 @@
  * The Host's built-in tool catalog, resolved once per turn.
  *
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
- * for the tools a turn may use, and the source projects only what the selected
- * model can actually call. There are no per-Agent bindings yet, so the catalog
- * is the same for every Agent.
+ * for the tools a turn may use, and the source projects only the capabilities
+ * that this model can call, this platform implements, this device has granted,
+ * this app has configured, and this Agent has authorized. Everything it returns
+ * is executable; a capability that fails any gate is absent rather than present
+ * and broken.
+ *
+ * Resolution is per turn on purpose. Permissions and the drawing-model setting
+ * change outside Cherry, so a catalog cached across turns would offer tools the
+ * user just revoked.
  */
 
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { Platform } from 'react-native';
 
 import type { RuntimeModel, RuntimeTool } from '@/backend/ai/agent';
+import { application } from '@/backend/core/application/Application';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
+import { devicePermissions } from '@/backend/services/permissions';
+import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import {
+  type BuiltInToolDescriptor,
+  BUILT_IN_TOOL_DESCRIPTORS,
+} from '@/shared/data/types/builtInTool';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import {
+  createCalendarTools,
+  createHealthTools,
+  createLocationTools,
+  createReminderTools,
+  type DeviceToolDependencies,
+} from './device';
+import {
+  type ConfiguredPaintingModel,
+  createGenerateImageTool,
+  type PaintingToolDependencies,
+  resolveConfiguredPaintingModel,
+} from './painting';
+import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
+
+const logger = loggerService.withContext('BuiltInToolSource');
+
+const DEVICE_PERMISSION_SCOPES = [
+  'calendar.read',
+  'calendar.write',
+  'health.read',
+  'location.read',
+  'reminders.read',
+  'reminders.write',
+] as const satisfies readonly DevicePermissionScope[];
+
+export type DeviceAccess = Readonly<Record<DevicePermissionScope, SystemPermissionState>>;
+
+/** Everything outside the tool definitions that decides what a turn may use. */
+export type BuiltInToolScope = {
+  bindingsByCapabilityId: ReadonlyMap<string, AgentToolBinding>;
+  deviceAccess: DeviceAccess;
+  paintingModel: ConfiguredPaintingModel | null;
+  platform: string;
+};
 
 export type AgentToolSource = {
   /** The tools this turn may use; empty when the model cannot call any. */
-  getTools(model: RuntimeModel): Promise<readonly RuntimeTool[]>;
+  getTools(input: { agentId: string; model: RuntimeModel }): Promise<readonly RuntimeTool[]>;
 };
 
-export function createBuiltInToolSource(): AgentToolSource {
-  // Stateless tools: one instance serves every turn.
-  const tools: readonly RuntimeTool[] = [createWriteFileTool(fileContent)];
+export type BuiltInToolSourceDependencies = DeviceToolDependencies &
+  WebSearchToolDependencies & {
+    listBindings(agentId: string): Promise<readonly AgentToolBinding[]>;
+    painting: PaintingToolDependencies;
+    platform: string;
+    supportsToolCalling(model: RuntimeModel): Promise<boolean>;
+  };
 
+export function createBuiltInToolSource(
+  overrides: Partial<BuiltInToolSourceDependencies> = {},
+): AgentToolSource {
   return {
-    async getTools(model) {
-      const configured = await modelService.getById(
-        createUniqueModelId(model.providerId, model.modelId),
-      );
-      // Handing tools to a model that cannot call them fails the whole turn, so
-      // an unknown or incapable model gets none.
-      return configured?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ? tools : [];
+    async getTools({ agentId, model }) {
+      const deps = resolveDependencies(overrides);
+      if (!(await deps.supportsToolCalling(model))) {
+        // Handing tools to a model that cannot call them fails the whole turn.
+        return [];
+      }
+
+      const scope = await resolveScope(deps, agentId);
+      const catalog = createCatalog(deps, scope);
+      return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
+        const approval = resolveApproval(descriptor, scope);
+        const tool = catalog.get(descriptor.capabilityId);
+        return approval && tool ? [{ ...tool, approval }] : [];
+      });
     },
   };
+}
+
+/**
+ * The Agent binding is the last gate, and the only one the user sets per Agent.
+ * `null` means the capability is not in this turn's catalog at all.
+ */
+export function resolveApproval(
+  descriptor: BuiltInToolDescriptor,
+  scope: BuiltInToolScope,
+): RuntimeTool['approval'] | null {
+  if (!isPlatformSupported(descriptor, scope.platform)) {
+    return null;
+  }
+  if (descriptor.requiresPaintingModel && !scope.paintingModel) {
+    return null;
+  }
+  if (
+    descriptor.permissionScopes.some((permission) => scope.deviceAccess[permission] !== 'granted')
+  ) {
+    return null;
+  }
+
+  const binding = scope.bindingsByCapabilityId.get(descriptor.capabilityId);
+  if (!binding) {
+    // An opt-in capability reaches a service the user configures separately, so
+    // silence is a "no" rather than the catalog default.
+    return descriptor.isOptIn ? null : descriptor.defaultApproval;
+  }
+  // A `deny` binding stays in the snapshot so Pi settles the call as denied
+  // rather than letting the model retry a tool it believes merely vanished.
+  return binding.enabled ? binding.approval : null;
+}
+
+function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string): boolean {
+  return (
+    descriptor.platforms === null ||
+    descriptor.platforms.some((candidate) => candidate === platform)
+  );
+}
+
+/**
+ * Instantiated once per turn: the device families are created as groups, and
+ * `generate_image` bakes the resolved drawing model into its input schema, so
+ * the catalog cannot be a module constant.
+ */
+function createCatalog(
+  deps: BuiltInToolSourceDependencies,
+  scope: BuiltInToolScope,
+): ReadonlyMap<string, RuntimeTool> {
+  const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
+  const tools = [
+    createWriteFileTool(fileContent),
+    ...createCalendarTools(deviceDeps),
+    ...createReminderTools(deviceDeps),
+    ...createHealthTools(deviceDeps),
+    ...createLocationTools(deviceDeps),
+    ...createWebTools({ webSearch: deps.webSearch }),
+    createGenerateImageTool(deps.painting, scope.paintingModel),
+  ];
+  return new Map(
+    tools.flatMap((tool) =>
+      tool.ref.source === 'builtin' ? [[tool.ref.capabilityId, tool] as const] : [],
+    ),
+  );
+}
+
+async function resolveScope(
+  deps: BuiltInToolSourceDependencies,
+  agentId: string,
+): Promise<BuiltInToolScope> {
+  // A failed binding read is not caught: falling back to catalog defaults would
+  // re-enable a capability the user disabled, so the whole built-in catalog
+  // fails closed and the Host runs the turn without it.
+  const [bindings, deviceAccess, paintingModel] = await Promise.all([
+    deps.listBindings(agentId),
+    resolveDeviceAccess(deps),
+    resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+      logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
+      return null;
+    }),
+  ]);
+
+  return {
+    bindingsByCapabilityId: new Map(
+      bindings.flatMap((binding) =>
+        binding.source === 'builtin' ? [[binding.capabilityId, binding] as const] : [],
+      ),
+    ),
+    deviceAccess,
+    paintingModel,
+    platform: deps.platform,
+  };
+}
+
+async function resolveDeviceAccess(deps: BuiltInToolSourceDependencies): Promise<DeviceAccess> {
+  const entries = await Promise.all(
+    DEVICE_PERMISSION_SCOPES.map(async (scope) => {
+      try {
+        return [scope, await deps.devicePermissions.getStatusForScope(scope)] as const;
+      } catch (error) {
+        logger.warn('Device access lookup failed; omitting the affected tools', {
+          error,
+          scope,
+        });
+        return [scope, 'unavailable' as const] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries) as DeviceAccess;
+}
+
+function resolveDependencies(
+  overrides: Partial<BuiltInToolSourceDependencies>,
+): BuiltInToolSourceDependencies {
+  return {
+    devicePermissions: overrides.devicePermissions ?? devicePermissions,
+    listBindings:
+      overrides.listBindings ??
+      (async (agentId) => (await agentToolBindingService.list(agentId)).items),
+    painting: overrides.painting ?? productionPaintingDependencies(),
+    platform: overrides.platform ?? Platform.OS,
+    supportsToolCalling: overrides.supportsToolCalling ?? supportsToolCalling,
+    // Resolved per turn rather than captured: the container replaces service
+    // instances across host generations.
+    webSearch: overrides.webSearch ?? application.get('WebSearchService'),
+  };
+}
+
+function productionPaintingDependencies(): PaintingToolDependencies {
+  const ai = application.get('AiService');
+  return {
+    ai: { generateImage: (request) => ai.generateImage(request) },
+    files: {
+      createInternalEntry: paintingFileStorage.createInternalEntry,
+      discard: paintingFileStorage.discard,
+      readDataUrl: paintingFileStorage.readDataUrl,
+      resolve: fileContent.resolve,
+    },
+    preference: application.get('PreferenceService'),
+    providerRegistry: providerRegistryService,
+  };
+}
+
+async function supportsToolCalling(model: RuntimeModel): Promise<boolean> {
+  const configured = await modelService.getById(
+    createUniqueModelId(model.providerId, model.modelId),
+  );
+  return configured?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false;
 }
