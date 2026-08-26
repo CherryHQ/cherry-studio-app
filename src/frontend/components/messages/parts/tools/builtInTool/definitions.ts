@@ -1,4 +1,4 @@
-export type BuiltInToolIconName = 'calendar' | 'health' | 'location' | 'reminders';
+export type BuiltInToolIconName = 'calendar' | 'file' | 'health' | 'location' | 'reminders';
 
 type BuiltInToolDefinition = {
   iconName: BuiltInToolIconName;
@@ -57,5 +57,9 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   reminder_update_item: {
     iconName: 'reminders',
     titleKey: 'chat.builtinTool.reminders.update',
+  },
+  write_file: {
+    iconName: 'file',
+    titleKey: 'chat.builtinTool.file.write',
   },
 };

@@ -133,18 +133,18 @@ follow-ups, per the authority direction of
 
 The production Pi model adapter currently accepts API-key-authenticated OpenAI Responses endpoints.
 Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and approval decisions
-onto the Runtime contract. Agent tool configuration is still deferred, so the Host deliberately
-supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
-file resolver lands.
+onto the Runtime contract. The Host resolves a fixed `write_file` tool for function-calling models;
+per-Agent tool configuration is still deferred. File attachments are rejected before provider
+execution until the Host-side file resolver lands.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Application-owned tool configuration/resolution — tool binding persistence, the per-turn
-`RuntimeTool` snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work,
-along with Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments
-and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+Application-owned tool binding persistence and per-Agent resolution remain follow-up work; the
+per-turn `RuntimeTool` snapshot and Pi-to-Protocol mapping are implemented. Mobile Skill
+configuration/loading, broader Pi provider coverage, managed input attachments and the controlled
+resource ledger, the avatar workflow, and context compaction are separate follow-ups.
 
 ## Related
 

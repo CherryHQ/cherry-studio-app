@@ -1,7 +1,13 @@
 # Agent Tools And Controlled Resources
 
-Status: **target design; application tool bindings and the Pi adapter are not yet complete**.
-Version 1 is local-only.
+Status: **target design; settled Runtime tool contracts and the Pi adapter are active, while
+application tool bindings remain follow-up work**. Version 1 is local-only.
+
+One capability is as-built ahead of the full design: `write_file` (see
+[Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
+injects a fixed catalog into every turn, and the tool uses the settled `ToolRef` and
+`{ value, artifacts }` contracts. Durable bindings and the turn resource ledger do not exist yet.
+Sections that a shipped tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -53,6 +59,11 @@ generated aliases are never authority. Alias generation includes the source name
 digest, rejects collisions within the snapshot, and never falls back to display-name matching. The
 Host snapshots a display name separately so historical UI remains understandable after
 configuration changes.
+
+**As-built.** The turn-local representation exists: `write_file` has a stable built-in `ToolRef`
+and keeps `write_file` as its provider alias for compatibility. The durable binding representation
+does not exist yet, and the Host builds the same one-tool catalog for every Agent. The `agent` table
+therefore still has no tool-policy column.
 
 The logical binding model is:
 
@@ -116,6 +127,10 @@ receives a [`file_entry`](../data/file-model.md) id. Protocol operations and fil
 that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
 import sources, never authority.
 
+**As-built.** There is no `TurnResourceLedger` yet. `write_file` needs none: it only creates
+entries and never reads one, so it has no input to authorize. The ledger becomes necessary with the
+first tool that accepts a `fileEntryId`.
+
 For Version 1, the Host derives the initial ledger grants from:
 
 - managed files attached to the current user input;
@@ -154,6 +169,11 @@ Agent Protocol file part with `purpose: 'artifact'` so the transcript retains it
 display metadata. Its content is not automatically projected as a model attachment in later
 history. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
+
+**As-built.** `write_file` returns its status and new `fileEntryId` under `value`, plus the created
+managed entry under `artifacts`. Pi projects that artifact as a `purpose: 'artifact'` file part, and
+the Host persists both the result envelope and file part. There is no resource ledger yet because
+the shipped catalog contains no tool that can read the resulting managed id.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
@@ -287,6 +307,15 @@ with its own approval policy.
   not an arbitrary path.
 - Edit tools use format-specific application services and copy-on-write output. There is no generic
   unrestricted byte writer in Version 1.
+
+**As-built.** `write_file` is the one writer that ships. It does not weaken the rule above: it
+accepts a display name rather than a path, writes bounded UTF-8 text (1 MB) as a *new* entry, and
+can neither address nor overwrite an existing one. The model receives
+`{ status, fileEntryId, filename, size }`; a name it could correct returns
+`{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
+opaque failure. It runs without approval because it has no destructive form, and the Host offers it
+only to models that support function calling — handing tools to a model that cannot call them fails
+the whole turn. Implementation: `src/backend/ai/agentHost/tools/`.
 - Input size, extracted-text size, generated-file size, timeout, and cancellation limits are
   enforced by the capability service before provider or filesystem work grows without bound.
 

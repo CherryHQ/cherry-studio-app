@@ -31,6 +31,7 @@ import type {
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeEvent,
+  RuntimeTool,
   RuntimeUsageReport,
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
@@ -101,6 +102,7 @@ import {
   toRuntimeInputParts,
 } from './mapping';
 import { createPiModelResolver } from './piModelResolver';
+import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -124,6 +126,7 @@ type MobileAgentHostOverrides = {
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
   >;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
+  tools: AgentToolSource;
 };
 
 /**
@@ -211,6 +214,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private lazyAgents: AgentDefinitionSource | undefined;
+
+  private get toolSource(): AgentToolSource {
+    return this.overrides.tools ?? (this.lazyTools ??= createBuiltInToolSource());
+  }
+
+  private lazyTools: AgentToolSource | undefined;
 
   /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
@@ -324,6 +333,18 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
 
+      // Frozen for the turn, so mid-turn configuration changes cannot alter it.
+      // Tools are an enhancement: if the catalog cannot be resolved the turn
+      // still runs, tool-less.
+      let tools: readonly RuntimeTool[] = [];
+      if (runtime.descriptor.capabilities.tools) {
+        try {
+          tools = await this.toolSource.getTools(agent.model);
+        } catch (error) {
+          logger.warn('Failed to resolve Agent tools; running this turn tool-less', error as Error);
+        }
+      }
+
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
       const { inputFiles, parts } = await this.resolveManagedInput(parsed.parts);
@@ -386,7 +407,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publishSessionRename(state.autoNamePromise);
       }
 
-      const run = this.runTurn(sessionId, agent, state, toRuntimeHistory(priorMessages), parts);
+      const run = this.runTurn(
+        sessionId,
+        agent,
+        state,
+        toRuntimeHistory(priorMessages),
+        parts,
+        tools,
+      );
       this.runningTurns.add(run);
       this.runningTurnsBySession.set(sessionId, run);
       void run.finally(() => {
@@ -486,6 +514,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     history: ReturnType<typeof toRuntimeHistory>,
     inputParts: AgentInputPart[],
+    tools: readonly RuntimeTool[],
   ): Promise<void> {
     try {
       const events = state.runtimeSession.execute({
@@ -494,8 +523,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         model: agent.model,
         history,
         input: toRuntimeInputParts(inputParts, state.resources),
-        // V1 executes tool-less turns; Agent tools await the deferred definition.
-        tools: [],
+        tools: [...tools],
         options: agent.options,
       });
       for await (const event of events) {
