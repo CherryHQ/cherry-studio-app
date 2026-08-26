@@ -25,10 +25,10 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Out of scope: branching columns, background turns, the physical tool/Skill configuration schema,
-and broader Pi provider coverage. The retired `assistant`/`topic`/`message` tables were removed
-separately after Agent surfaces became authoritative. The tool and Skill ownership and logical
-models are defined separately; the current three-table schema must still be described as tool-less.
+Out of scope: branching columns, background turns, tool configuration storage, Mobile Skill
+configuration/loading, and broader Pi provider coverage. The retired `assistant`/`topic`/`message`
+tables were removed separately after Agent surfaces became authoritative. The current three-table
+schema must still be described as tool-less.
 
 ## Current limitations
 
@@ -107,17 +107,15 @@ installs a per-Session barrier, waits any already-admitted submission to install
 then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
 are never deleted individually in V1.
 
-**Tool and Skill configuration is designed but not migrated.** The current foundation schema has no
-tool or Skill configuration and must not be described as tool-capable persistence. The logical
-models are settled in
-[Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings) and
-[Agent Skills](./agent-skills.md#definition): application-owned Agent bindings select built-in or
-MCP capabilities with per-tool approval, and a many-to-many binding selects validated Skill text.
-The physical tables/columns land as one additive implementation slice with Agent CRUD. Pi never owns
-or reads them directly; the Host resolves immutable tool and Skill snapshots for each turn. The
-implementation must first reconcile desktop `agent_global_skill` / `agent_skill` retention and the
-desktop Agent's MCP/disabled-tool fields, then add only the mobile-owned approval and description
-projection needed by this design.
+**Tool and Skill configuration has not migrated.** The current foundation schema has neither and
+must not be described as tool-capable persistence. Tool ownership and the logical binding direction
+are settled in
+[Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings).
+For Skills, only the ownership boundary is settled: the current Agent configuration selects the
+mobile-supported Skills available to its Sessions. The physical schema and loading behavior remain
+deferred. Desktop `agent_global_skill` / `agent_skill` metadata and relations must be retained for
+data parity without treating desktop Skill content as mobile-executable. Pi reads neither tool nor
+Skill persistence directly.
 
 **Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the

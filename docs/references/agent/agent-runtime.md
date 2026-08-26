@@ -37,10 +37,10 @@ directly into the Host. There is no Runtime registry, no implementation-selectio
 persisted Runtime binding. Agent configuration, Session configuration, model selection, and tool
 availability never select another local engine.
 
-The Agent's application-owned instructions, model, and tools are resolved afresh for every turn.
-Enabled description-only Skills are resolved at the same boundary into a frozen name/description
-index; their instruction bodies load on demand through the built-in reader tool, and a Skill is
-never itself a tool. The injected Pi Runtime remains stable for the Host lifetime.
+The Agent's application-owned instructions, model, tools, and enabled Mobile Skills are resolved
+afresh for every turn. The Host prepares instruction context from only the Skills selected by the
+current Agent configuration. A Skill is never itself a tool; its exact loading and history behavior
+remain deferred. The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Production Pi binding
 
@@ -269,9 +269,10 @@ later model attachments. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 Absolute paths and large base64 payloads are never tool results.
 
-Description-only Skills are resolved into the `instructions` string before execution. They never
-appear in `tools`, never receive callbacks, and cannot change the tool snapshot, approval policy, OS
-permission, or turn resource ledger. See [Agent Skills](./agent-skills.md).
+Mobile Skills are resolved by the Host from the current Agent configuration. They never become
+executable capabilities and cannot change the tool snapshot, approval policy, OS permission, or
+turn resource ledger. Their eventual loading and prompt projection are defined with implementation.
+See [Agent Skills](./agent-skills.md).
 
 ## Execution output
 
@@ -380,7 +381,7 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 2. It persists the user message and assistant placeholder.
 3. It validates that the Session target is `local` and resolves the current Agent configuration.
 4. The Host uses its injected Pi Runtime.
-5. The Host resolves the enabled Skill index, creates the turn resource ledger, and normalizes
+5. The Host resolves enabled Mobile Skills, creates the turn resource ledger, and normalizes
    instructions, model, structured history, the immutable tool snapshot, input, and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
@@ -422,7 +423,7 @@ Every Runtime implementation passes the same suite:
 12. Tool refs remain stable when display names or provider aliases change.
 13. Artifact output contains validated managed refs, never absolute paths or unbounded inline bytes.
 14. Cancellation and startup recovery leave no non-terminal tool part or dangling model-history call.
-15. Skills cannot appear as executable tools or expand a turn's tool snapshot or resource ledger.
+15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
 Pi or a provider connection.

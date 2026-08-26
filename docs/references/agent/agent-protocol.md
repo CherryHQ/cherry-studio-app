@@ -158,14 +158,14 @@ Part ids are stable within a message. The protocol owns these normalized parts; 
 provider SDK shape leaks through the boundary. Text parts may contain Markdown, but tool calls and
 results remain structured protocol parts and are not flattened into display Markdown.
 
-Every file part names an existing managed `file_entry`; protocol values never use absolute device
-paths or transient import URIs as authority. User input is imported before submission and persisted
-with `purpose: 'input-attachment'`. A tool that produces an Office document, image, or edited file
-keeps its structured tool result and also emits a part with `purpose: 'artifact'` so the assistant
-message durably owns the output. Artifact file parts and content remain UI- and tool-visible but are
-not automatically projected as model attachments in later history; the originating bounded artifact
-refs remain inside the paired structured tool result so same-turn and later controlled tool calls can
-address them. See
+Every file part records a managed `fileEntryId` that existed when the part was written, together
+with stable display metadata such as name and media type; protocol values never use absolute device
+paths or transient import URIs as authority. The managed entry may later be deleted, in which case
+the historical part remains visible but its content is unavailable. User input is imported before
+submission and persisted with `purpose: 'input-attachment'`. A tool that produces an Office
+document, image, or edited file keeps its structured tool result and also emits a part with
+`purpose: 'artifact'` so the assistant message durably owns the reference. Artifact content is not
+automatically projected as a model attachment in later history. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 
 `toolRef` is the stable application identity used by configuration, approval, persistence, and
@@ -336,8 +336,8 @@ Native errors and stack traces stay behind the Host boundary.
 10. The client supplies an execution target and Agent identity, never a Runtime identity.
 11. Tool identity is a stable `AgentToolRef`; provider aliases and display names are not authority.
 12. Every finalized tool call is terminal and reconstructs as a paired model tool call/result.
-13. Every file part references an existing managed entry; artifact parts are not implicit model
-    attachments.
+13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable
+    historical reference, and artifact parts are not implicit model attachments.
 
 ## Branching
 

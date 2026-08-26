@@ -102,10 +102,10 @@ turns interrupted.
 
 ## Agent Tool Capabilities
 
-When application tools land, the Agent Host additionally owns enabled Skill resolution, the
+When application tools land, the Agent Host additionally owns current Agent Skill resolution, the
 monotonic turn resource ledger, immutable per-turn tool snapshots, tool terminalization, and
-artifact projection. The ownership split below is settled design; Version 1 still resolves an empty
-tool snapshot.
+artifact projection. Skill loading details remain deferred; the ownership split below is settled
+design, and Version 1 still resolves an empty tool snapshot.
 
 Pi owns model context construction and the model → tool → result loop. It does not own system
 permissions, provider credentials, managed files, MCP clients, or side-effect policy. Each

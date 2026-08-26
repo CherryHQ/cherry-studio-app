@@ -119,7 +119,7 @@ import sources, never authority.
 For Version 1, the Host derives the initial ledger grants from:
 
 - managed files attached to the current user input;
-- managed file parts already visible in the Session transcript; and
+- managed file parts already visible in the Session transcript whose entries remain available; and
 - files created by earlier tools in the same active turn.
 
 The Host creates a `TurnResourceLedger` containing explicit readable and derivable `fileEntryId`
@@ -150,9 +150,10 @@ Tool results never contain absolute device paths or large base64 payloads. The P
 the typed outer envelope as the model's tool result, so an application artifact's bounded managed
 ref remains available for a follow-up tool call while an MCP payload with similar keys stays nested
 under `value`. Each artifact is also projected into a Runtime file part; the Host persists it as an
-Agent Protocol file part with `purpose: 'artifact'` so the transcript owns it. That file part and its
-content are not automatically projected as a model attachment in later history. A user may
-explicitly attach the same managed entry again, or the model may read it through a controlled tool.
+Agent Protocol file part with `purpose: 'artifact'` so the transcript retains its reference and
+display metadata. Its content is not automatically projected as a model attachment in later
+history. If the managed entry still exists, a user may explicitly attach it again or the model may
+read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
@@ -289,15 +290,13 @@ with its own approval policy.
 - Input size, extracted-text size, generated-file size, timeout, and cancellation limits are
   enforced by the capability service before provider or filesystem work grows without bound.
 
-### Skill Loading
+### Skill Boundary
 
-- `load_skill` is a built-in read-only capability present whenever the Agent has enabled Skills. It
-  returns the validated instruction text of one Skill id frozen in the current turn's Skill index,
-  pinned by that index's content hash, and nothing else.
-- It defaults to `auto`: it has no side effects, reads no managed files, and cannot reach MCP,
-  providers, or the device.
-- It cannot load disabled, deleted, or un-indexed Skills, and loaded Skill text cannot change the
-  tool snapshot, approvals, or the resource ledger. See [Agent Skills](./agent-skills.md).
+- The Host resolves only the Mobile Skills enabled in the current Agent configuration.
+- A Skill is instruction context, not a Runtime capability, and cannot add tools or change approval,
+  permission, MCP, or managed-resource policy.
+- Skill loading, prompt projection, and history behavior remain follow-up design. See
+  [Agent Skills](./agent-skills.md).
 
 ## Approval And Failure Policy
 
@@ -340,6 +339,6 @@ desktop event labels or persistence shapes.
 - Office edits are copy-on-write and fail closed when unsupported content cannot be preserved.
 - File reads and edits cannot escape the explicit turn resource ledger; only validated
   application-created outputs can extend it, and edits never mutate source bytes.
-- Description-only Skills cannot add tools, approvals, credentials, or resource-ledger grants.
+- Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.

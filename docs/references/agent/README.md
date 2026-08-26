@@ -62,9 +62,9 @@ app and move to a package when a real independent consumer exists.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
-- Before each turn, the Host also freezes an index of enabled description-only Skills (name and
-  description) into prompt context; full Skill instructions load on demand through a built-in
-  read-only tool. Skills are not tools and cannot expand the tool snapshot or resource ledger.
+- Before each turn, the Host resolves only the mobile-supported Skills enabled in the current Agent
+  configuration. Skills provide instruction context; they are not tools and cannot expand the tool
+  snapshot or resource ledger. Their loading and persistence details are deferred.
 
 Branching is also a future direction with its model already decided: Sessions never branch in
 place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
@@ -84,10 +84,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   than exposing renderer APIs or OOXML. File access is limited to managed `file_entry` ids visible
   to the turn, edits are copy-on-write, and generated artifact parts are not implicit model
   attachments.
-- Skills are controlled Markdown instruction resources stored and enabled by Cherry, following the
-  open Agent Skills progressive-disclosure model: an always-injected name/description index and
-  on-demand instruction loading through the built-in `load_skill` tool. They have no executable
-  files, callbacks, hooks, scripts, network access, or permission authority; see
+- Skills are mobile-owned, controlled instruction resources selected by Agent configuration. Mobile
+  does not assume that desktop directory-based Skills are executable or compatible, and Skills have
+  no callbacks, scripts, network access, or permission authority; see
   [Agent Skills](./agent-skills.md).
 
 ## Open Questions
@@ -95,21 +94,11 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Provider coverage** for the Pi model layer currently starts with API-key-authenticated OpenAI
   Responses endpoints. Expanding it is separate provider work and is not a reason to retain a
   second conversation runtime.
-- **Background turn continuation** is undesigned. The primary path is settled: OS-sanctioned
-  mechanisms — `BGContinuedProcessingTask` with its system progress UI on iOS 26+, and typed
-  foreground services with a persistent notification on Android (`shortService` to finish a
-  streaming reply; `dataSync`/`mediaProcessing` within their 6-hour budgets for longer tool work).
-  Purposeless keep-alive hacks (bare silent-audio loops, overlay-based revival, mutual process
-  wakeup, 1-pixel activities) are excluded. One fallback stays open and is deliberately
-  **risk-annotated** for older iOS versions: an OpenMinis-style audio leg — a real, opt-in
-  background TTS narration feature whose active audio session keeps the turn alive, padded with
-  silence between utterances. The audible narration itself is a legitimate `audio` background-mode
-  use, but the silent padding conflicts with the mode's documented "plays audible content" purpose
-  and App Review guideline 2.5.4, iOS interrupts sessions that stay silent too long, and update
-  review or reports can remove a shipped app. Adopting it is a product risk decision, not a
-  technical one, and is not decided. Both platforms can still terminate continued work, so today's
-  interrupted-turn reconciliation remains the contract floor; continuation additionally needs a
-  protocol design for re-attaching an observed Session to a still-running turn.
+- **Background turn continuation** is undecided on both iOS and Android. Candidate platform
+  mechanisms must be evaluated against the actual workload, OS support, user-visible behavior, and
+  store policy before one becomes architecture. Today both platforms may suspend or terminate local
+  work, so interrupted-turn reconciliation remains the contract floor. Any continuation design also
+  needs a protocol for re-attaching an observed Session to a still-running turn.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that structured record into the actual model prompt — selection, formatting, and
@@ -126,7 +115,7 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 | [Agent Runtime](./agent-runtime.md) | Independent local execution contract, Host boundary, lifecycle, and implementation conformance |
 | [Agent Persistence](./agent-persistence.md) | Durable SQLite schema behind `AgentSessionStore`, the Turn projection, delete semantics, and the rollout plan |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | Tool bindings, capability adapters, approvals, HTTP MCP, managed files, and artifacts |
-| [Agent Skills](./agent-skills.md) | Controlled description-only Skill storage, trust, resolution, and prompt precedence |
+| [Agent Skills](./agent-skills.md) | Mobile Skill ownership, compatibility boundary, trust, and deferred design |
 
 ## Current Implementation
 
@@ -151,10 +140,10 @@ The primary chat frontend consumes the Agent Data API and observes `Backend.agen
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Application-owned tool configuration/resolution — tool/Skill binding persistence, the per-turn
-`RuntimeTool` snapshot and enabled-Skill resolution, and mapping Pi tool events into the Agent
-Protocol — remains follow-up work, along with broader Pi provider coverage. Managed attachments and
-artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+Application-owned tool configuration/resolution — tool binding persistence, the per-turn
+`RuntimeTool` snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work,
+along with Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments
+and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
 
 ## Related
 
