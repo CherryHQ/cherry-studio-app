@@ -35,6 +35,10 @@ Screens differ by which slots they compose, not by flags:
 A provider whose auth type has no editable URL (AWS, GCP) yields no endpoint types, and both
 endpoint slots render nothing.
 
+The form is laid out the way the Agent editor is: a circular `AvatarPickerField` over bare fields
+that carry no visible label, because the placeholder already names the field and required-ness is
+expressed by Save staying disabled rather than by an asterisk.
+
 ## Connectivity Check
 
 The check section selects one provider-scoped model through `ModelPickerDrawer`, whose header search

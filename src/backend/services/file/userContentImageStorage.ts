@@ -5,8 +5,6 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const logger = loggerService.withContext('UserContentImageStorage');
-const AVATAR_DIRECTORY_NAME = 'user-avatar';
-const STORED_AVATAR_NAME_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.webp$/i;
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024;
 const MAX_STORED_BYTES = 2 * 1024 * 1024;
 // The mobile profile photo expands into a large hero, so thumbnail-sized output
@@ -14,29 +12,62 @@ const MAX_STORED_BYTES = 2 * 1024 * 1024;
 const AVATAR_DIMENSION = 1024;
 const WEBP_QUALITY = 0.82;
 
+/** Matches one UUID v4, for composing a directory's stored-name pattern. */
+export const STORED_NAME_UUID_FRAGMENT = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
+
+export type UserContentImageStorageConfig = {
+  /** Directory under the app's document directory that owns these images. */
+  directoryName: string;
+  /**
+   * Guards every name a caller hands back. Names are persisted references, so
+   * this is what keeps a tampered one from walking out of the directory.
+   */
+  storedNamePattern: RegExp;
+};
+
 export type UserContentImageStorage = {
-  create(sourceUri: string): Promise<string>;
+  /**
+   * Normalizes a picked image and stores it, returning the stored name.
+   *
+   * `namePrefix` is prepended to the generated UUID: a directory whose files
+   * are owned per record keeps that ownership legible in the file name, which
+   * is what lets an orphan be traced back to its owner. Omit it when the
+   * directory has a single owner.
+   */
+  create(sourceUri: string, namePrefix?: string): Promise<string>;
   remove(storedName: string): Promise<boolean>;
   resolve(storedName: string): Promise<string | undefined>;
 };
 
 /**
- * Plain-directory storage for the user's profile image. Deliberately outside
- * the `file_entry` model: the avatar is a settings value, not a document — it
- * must not surface in the file library, and its lifecycle is "replace or
- * reset", which a fixed directory expresses without any reference bookkeeping.
- * Picker and camera URIs are transient inputs; callers persist only the
- * returned stored name (`{uuid}.webp`).
+ * Plain-directory storage for user-supplied images that back a record rather
+ * than the file library. Deliberately outside the `file_entry` model: an avatar
+ * is a settings value, not a document — it must not surface in the file
+ * library, and its lifecycle is "replace or reset", which a fixed directory
+ * expresses without any reference bookkeeping. Picker and camera URIs are
+ * transient inputs; callers persist only the returned stored name.
  */
-export function createUserContentImageStorage(): UserContentImageStorage {
+export function createUserContentImageStorage(
+  config: UserContentImageStorageConfig,
+): UserContentImageStorage {
+  const directory = () => new Directory(Paths.document, config.directoryName);
+  const storedFile = (storedName: string): File | undefined =>
+    config.storedNamePattern.test(storedName) ? new File(directory(), storedName) : undefined;
+
   return {
-    create: async (sourceUri) => {
+    create: async (sourceUri, namePrefix) => {
       let normalizedUri: string | undefined;
 
       try {
         normalizedUri = await normalizeAvatarImage(sourceUri);
-        const storedName = `${randomUUID()}.webp`;
-        await new File(normalizedUri).copy(new File(ensureAvatarDirectory(), storedName));
+        const storedName = `${namePrefix ? `${namePrefix}.` : ''}${randomUUID()}.webp`;
+        const target = directory();
+
+        if (!target.exists) {
+          target.create({ intermediates: true });
+        }
+
+        await new File(normalizedUri).copy(new File(target, storedName));
         return storedName;
       } finally {
         if (normalizedUri) {
@@ -45,7 +76,7 @@ export function createUserContentImageStorage(): UserContentImageStorage {
       }
     },
     remove: async (storedName) => {
-      const file = storedAvatarFile(storedName);
+      const file = storedFile(storedName);
       if (!file?.exists) {
         return false;
       }
@@ -53,28 +84,10 @@ export function createUserContentImageStorage(): UserContentImageStorage {
       return true;
     },
     resolve: async (storedName) => {
-      const file = storedAvatarFile(storedName);
+      const file = storedFile(storedName);
       return file?.exists ? file.uri : undefined;
     },
   };
-}
-
-function avatarDirectory(): Directory {
-  return new Directory(Paths.document, AVATAR_DIRECTORY_NAME);
-}
-
-function ensureAvatarDirectory(): Directory {
-  const directory = avatarDirectory();
-  if (!directory.exists) {
-    directory.create({ intermediates: true });
-  }
-  return directory;
-}
-
-function storedAvatarFile(storedName: string): File | undefined {
-  return STORED_AVATAR_NAME_PATTERN.test(storedName)
-    ? new File(avatarDirectory(), storedName)
-    : undefined;
 }
 
 async function normalizeAvatarImage(sourceUri: string): Promise<string> {

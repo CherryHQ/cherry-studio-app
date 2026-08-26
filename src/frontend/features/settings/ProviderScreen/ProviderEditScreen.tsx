@@ -176,6 +176,7 @@ export default function ProviderEditScreen() {
                 presetProviderId={provider.presetProviderId}
                 providerId={provider.id}
                 providerName={state.name}
+                shape="circle"
                 size={providerFormAvatarSize}
               />
             ) : undefined}

@@ -26,9 +26,15 @@ import { timestampToISO } from './utils/rowMappers';
 
 type TxLike = any;
 
+/**
+ * `avatarUri` is left null here on purpose: resolving it needs the avatar
+ * directory, which lives under `backend/services` and is out of this layer's
+ * reach. The Data API fills it in before a record leaves the boundary.
+ */
 function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
   return {
     avatar: row.avatar,
+    avatarUri: null,
     createdAt: timestampToISO(row.createdAt),
     id: row.id,
     instructions: row.instructions,
@@ -204,6 +210,32 @@ export class AgentService {
         : current.modelName;
 
     return rowToAgent(row, modelName);
+  }
+
+  /**
+   * The column half of the avatar workflow — the file half lives in
+   * `agentAvatarStorage`, which calls this between storing the new image and
+   * dropping the old one. Kept off `update()` because the CRUD DTOs
+   * deliberately refuse `avatar`: a caller must not be able to point the column
+   * at an arbitrary string.
+   */
+  async setAvatar(id: string, avatar: string): Promise<Agent> {
+    const row = await this.dbService.withWriteTx(async (tx) => {
+      const [updated] = await tx
+        .update(agentTable)
+        .set({
+          avatar,
+          updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
+        })
+        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .returning();
+      if (!updated) {
+        throw DataApiErrorFactory.notFound('Agent', id);
+      }
+      return updated as AgentRow;
+    });
+
+    return rowToAgent(row, await this.getModelName(row.modelId));
   }
 
   /**

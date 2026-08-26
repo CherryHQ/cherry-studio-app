@@ -75,6 +75,10 @@ jest.mock('expo-image-manipulator', () => ({
 }));
 
 const STORED_NAME_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.webp$/i;
+const userAvatarConfig = {
+  directoryName: 'user-avatar',
+  storedNamePattern: STORED_NAME_PATTERN,
+};
 const sourceUri = 'file:///picker/avatar.jpg';
 const normalizedUri = 'file:///cache/avatar.webp';
 const { testState: fileSystemState } = jest.requireMock<{
@@ -111,7 +115,7 @@ describe('userContentImageStorage', () => {
     ImageManipulator.manipulate
       .mockReturnValueOnce(sourceContext)
       .mockReturnValueOnce(outputContext);
-    const storage = createUserContentImageStorage();
+    const storage = createUserContentImageStorage(userAvatarConfig);
 
     const storedName = await storage.create(sourceUri);
 
@@ -137,7 +141,7 @@ describe('userContentImageStorage', () => {
 
   it('rejects oversized picker files before decoding them', async () => {
     fileSystemState.files.set(sourceUri, 10 * 1024 * 1024 + 1);
-    const storage = createUserContentImageStorage();
+    const storage = createUserContentImageStorage(userAvatarConfig);
 
     await expect(storage.create(sourceUri)).rejects.toThrow('exceeds the 10 MB limit');
 
@@ -146,7 +150,7 @@ describe('userContentImageStorage', () => {
 
   it('refuses names outside the stored avatar pattern', async () => {
     fileSystemState.files.set('file:///documents/user-avatar/escape.webp', 1);
-    const storage = createUserContentImageStorage();
+    const storage = createUserContentImageStorage(userAvatarConfig);
 
     await expect(storage.resolve('../Data/Files/escape.webp')).resolves.toBeUndefined();
     await expect(storage.remove('escape.webp')).resolves.toBe(false);

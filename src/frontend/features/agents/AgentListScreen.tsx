@@ -11,6 +11,7 @@ import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAppSearch } from '@/frontend/components/appSearch';
+import { AgentAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
@@ -285,24 +286,12 @@ export default function AgentListScreen() {
   );
 }
 
-/**
- * Agent avatars are file references owned by the future avatar workflow; every
- * row today has `avatar: null`, which renders as the default badge.
- */
-function AgentAvatarBadge({ className }: { className: string }) {
-  return (
-    <View className={`items-center justify-center rounded-full bg-secondary ${className}`}>
-      <BotIcon className="size-5 text-foreground" />
-    </View>
-  );
-}
-
 function AgentSearchResult({ agent }: { agent: Agent }) {
   const { t } = useTranslation();
 
   return (
     <View className="min-h-12 flex-row items-center gap-3">
-      <AgentAvatarBadge className="size-10" />
+      <AgentAvatar name={agent.name} uri={agent.avatarUri} />
       <View className="min-w-0 flex-1 gap-0.5">
         <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
           {agent.name}
@@ -418,7 +407,9 @@ function AgentListRow({
             </View>
           </Animated.View>
         ) : null}
-        <AgentAvatarBadge className="ml-1 size-10" />
+        <View className="ml-1">
+          <AgentAvatar name={agent.name} uri={agent.avatarUri} />
+        </View>
         <View className="min-w-0 flex-1 pr-4">
           <View className="gap-0.5">
             <Text className="font-semibold text-foreground text-base" numberOfLines={1}>

@@ -14,7 +14,9 @@ This module owns Expo Router header adapters used by the app screens.
   stack uses back, the drawer stack uses the drawer action, and exceptional full-screen routes can
   explicitly use close.
 - `RouteHeader` automatically changes drawer-stack child screens to back. Business screens declare
-  only titles, right-side actions, and exceptional back interception.
+  only titles, right-side actions, and exceptional back interception. The drawer's own swipe is
+  turned off on those screens from `app/(drawer)/_layout.tsx`, so the leading action and the gesture
+  always agree on which screen owns the sidebar.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to
   the action semantics; multiple secondary actions belong in a menu, while save/done remain direct.
 - `components/HeaderChrome` is the single native placement boundary. Android mounts actions through
@@ -29,3 +31,5 @@ This module owns Expo Router header adapters used by the app screens.
 - Top-bar controls share one Cherry visual on both platforms: icon actions use a 40-point white
   circle with a black icon, while text actions use the matching white pill with black text. iOS
   toolbar adapters hide the system-provided shared background before mounting these controls.
+- `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
+  Agent's avatar, so the chat identifies its Agent the same way the Agent list does.

@@ -26,6 +26,12 @@ export const AgentIdSchema = z.uuidv4();
 export const AgentSchema = z.strictObject({
   /** Stable avatar file reference; null renders the default avatar. Managed by the avatar workflow, not the CRUD DTOs. */
   avatar: z.string().nullable(),
+  /**
+   * Read-time projection of `avatar` into a device-local image URI; null when
+   * unset or when the file is gone. Absolute paths are never persisted — iOS
+   * relocates the app container — so this is rebuilt on every read.
+   */
+  avatarUri: z.string().nullable(),
   createdAt: z.iso.datetime(),
   id: AgentIdSchema,
   /** System instructions supplied to every turn */

@@ -12,13 +12,23 @@ surfaces.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
-- The editor exposes only the Agent definition fields: name, default model, and
+- The editor exposes only the Agent definition fields: avatar, name, default model, and
   instructions. Inference parameters are not part of the Agent editor surface.
-- Agent avatars are managed file references owned by the future avatar workflow; until it exists
-  every agent renders the default badge and the editor offers no avatar control.
+- The avatar is a managed file, not a mutable Agent field, so it has its own endpoint
+  (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
+  returns an id. Picking one only updates the draft; Save commits it. An avatar can be set and
+  replaced but not cleared. Unset avatars render the name's first character over a generated colour,
+  falling back to a neutral badge while the name is still blank.
 
 ## Organization
 
 - `agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screens.
+- The editor lays its fields out bare rather than in a grouped card, so its route keeps the ordinary
+  page background — the field fill needs a lighter page behind it to read as a field at all.
+- The editor's route is the one screen in this stack with an opaque header, so the native stack owns
+  the top inset. Under the stack's floating header that inset comes from `useHeaderHeight()`, which
+  reports an estimate until the native header measures itself and so drops the content into place a
+  frame after the push finishes. The bottom inset stays hand-rolled either way, because the avatar
+  picker's full-screen modal wipes whatever the scroll view adjusted for itself.
 - Cross-screen UI comes from neutral modules under `src/frontend/components`.

@@ -105,6 +105,18 @@ WebP under `{documentDirectory}/agent-avatars/`, referenced as
 user-visible library content with independent lifecycle; an avatar is replace-in-place and dies
 with the Agent.
 
+Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
+`PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
+column-write failure compensating the new file. The CRUD DTOs still refuse `avatar` — the column has
+no other writer. The uuid rotates on every replace so the uri, which doubles as the image cache key,
+changes with it.
+
+Reads project the column into a device-local `Agent.avatarUri`, rebuilt per read because the
+absolute path does not survive container relocation. That projection happens at the Data API
+boundary, not in `AgentService`: resolving it is file-system work under `backend/services`, which
+`backend/data` must not depend on. `createAgentAvatars` owns both directions and is injected through
+`dataApiDependencies`, the same channel `mcpServerMutations` uses.
+
 **Delete semantics.** `agent` soft-deletes (`deletedAt`), so Sessions never orphan; hard cleanup of
 an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-deletes and cascades
 messages — matching the store port's `deleteSession` contract. Before deleting rows, the Host
@@ -295,9 +307,13 @@ storage boundary moves.
 7. **Tool binding persistence.** Add mobile-owned binding schemas, migration, Data API, deterministic
    default/override resolution, and dangling MCP preservation (done). Runtime projection remains a
    separate slice.
-8. **Follow-ups (separate implementation slices).** Avatar workflow (generalizing
-   `userAvatarStorage`), Skill binding persistence, managed attachment and artifact projection,
-   fork columns, and broader Pi provider coverage.
+8. **Avatar workflow.** Generalize `userContentImageStorage` over its directory and stored-name
+   rules, add `agentAvatarStorage` plus the `PUT /agents/:id/avatar` endpoint, and project
+   `avatarUri` at read time (done).
+9. **Follow-ups (separate implementation slices).** Avatar files orphaned by a soft-deleted Agent
+   are never reclaimed — a tombstoned Agent still renders in its historical Sessions, so the file
+   cannot be dropped at delete time. Also: Skill binding persistence, managed attachment and
+   artifact projection, fork columns, and broader Pi provider coverage.
 
 ## Rejected alternatives
 
