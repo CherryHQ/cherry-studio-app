@@ -86,8 +86,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 The Runtime contract, Fake Runtime, Pi Runtime, Protocol contract, and Mobile Agent Host are
 implemented. The Host binds `local` directly to Pi, consumes the message-centric
-`AgentSessionStore` port, owns the Turn projection, and forwards Agent inference settings into each
-execution. The durable `SqliteAgentSessionStore` is the production store binding over the
+`AgentSessionStore` port, owns the Turn projection, and merges immutable composer model/reasoning
+snapshots over the current Agent definition for each execution. These snapshots are not persisted
+by the Agent Protocol. The durable `SqliteAgentSessionStore` is the production store binding over the
 `agent`/`agent_session`/`agent_session_message` tables. Agent CRUD and static Session/transcript
 reads are exposed through the Data API, and the Host resolves definitions from the `agent` table.
 The table intentionally starts empty: retired Assistant data is not migrated or copied. See

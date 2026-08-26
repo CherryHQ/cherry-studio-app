@@ -275,6 +275,54 @@ describe('MobileAgentHost', () => {
     expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 
+  test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['One', 'Two', 'Three'], requests);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const completedTurnCount = () =>
+      events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
+        .length;
+
+    await host.submitMessage({
+      modelId: 'override-provider::override-model',
+      parts: [{ type: 'text', text: 'Override both.' }],
+      reasoningEffort: 'max',
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 1, 'the override turn');
+    expect(requests[0]).toMatchObject({
+      model: { modelId: 'override-model', providerId: 'override-provider' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'max', temperature: 0.2 },
+    });
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Use the model default.' }],
+      reasoningEffort: 'default',
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 2, 'the default-effort turn');
+    expect(requests[1]).toMatchObject({
+      model: { modelId: 'mock-model', providerId: 'mock-provider' },
+      options: { maxOutputTokens: 512, temperature: 0.2 },
+    });
+    expect(requests[1]?.options).not.toHaveProperty('reasoningEffort');
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Use the Agent configuration again.' }],
+      sessionId: session.id,
+    });
+    await waitFor(() => completedTurnCount() === 3, 'the inherited Agent turn');
+    expect(requests[2]).toMatchObject({
+      model: { modelId: 'mock-model', providerId: 'mock-provider' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
+    });
+  });
+
   test('cancel settles the turn as cancelled and is idempotent', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
       controller.emit({

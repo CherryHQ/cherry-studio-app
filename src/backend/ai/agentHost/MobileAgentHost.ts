@@ -70,9 +70,11 @@ import {
   type AgentProtocol,
   type AgentSessionObservation,
   type AgentSessionView,
+  type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { parseUniqueModelId } from '@/shared/data/types/model';
 
 import {
   createAgentTableDefinitionSource,
@@ -291,10 +293,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  async submitMessage(input: {
-    sessionId: string;
-    parts: AgentInputPart[];
-  }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }> {
+  async submitMessage(
+    input: AgentSubmitMessageInput,
+  ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }> {
     const parsed = AgentSubmitMessageInputSchema.parse(input);
     const { sessionId } = parsed;
     this.assertIdle(sessionId);
@@ -307,7 +308,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!session) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
-      const agent = await this.requireAgent(session.agentId);
+      const configuredAgent = await this.requireAgent(session.agentId);
+      const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
       if (
         !runtime.descriptor.capabilities.attachments &&
@@ -780,4 +782,30 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         logger.warn('Agent Session auto-naming failed', error as Error);
       });
   }
+}
+
+function applyTurnOverrides(
+  agent: AgentDefinition,
+  input: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'>,
+): AgentDefinition {
+  if (input.modelId === undefined && input.reasoningEffort === undefined) {
+    return agent;
+  }
+
+  const options = { ...agent.options };
+  if (input.reasoningEffort !== undefined) {
+    if (input.reasoningEffort === 'default' || input.reasoningEffort === 'auto') {
+      // Pi resolves an absent effort to the selected model's default. Removing
+      // the Agent setting here makes an explicit composer "default" win.
+      delete options.reasoningEffort;
+    } else {
+      options.reasoningEffort = input.reasoningEffort === 'none' ? 'off' : input.reasoningEffort;
+    }
+  }
+
+  return {
+    ...agent,
+    ...(input.modelId ? { model: parseUniqueModelId(input.modelId) } : {}),
+    options,
+  };
 }

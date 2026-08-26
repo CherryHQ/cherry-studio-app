@@ -61,7 +61,7 @@ export type RuntimeModel = {
 };
 
 export type RuntimeOptions = {
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoningEffort?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   maxOutputTokens?: number;
   temperature?: number;
 };

@@ -121,7 +121,7 @@ type RuntimeModel = {
 }
 
 type RuntimeOptions = {
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+  reasoningEffort?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   maxOutputTokens?: number
   temperature?: number
 }
@@ -133,6 +133,10 @@ type RuntimeInputPart =
 
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
+
+The Host resolves protocol-level turn snapshots before this boundary. `default` and the current Pi
+`auto` fallback become an absent `reasoningEffort`, while `none` becomes `off`; Runtime
+implementations therefore receive only an executable effort level.
 
 File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
 file storage first, and the Host converts stored `file://` references into a directly consumable

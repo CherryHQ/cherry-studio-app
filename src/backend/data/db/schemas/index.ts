@@ -15,6 +15,7 @@ export * from './agent';
 export * from './agentSession';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
+export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
 export * from './painting';

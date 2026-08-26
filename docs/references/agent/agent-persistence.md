@@ -110,6 +110,9 @@ owns or reads it directly.
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
 store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (like `assistant`);
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
+Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
+transaction. The composer can therefore use it as a strict row version when reconciling optimistic
+model selection with settings edits and inactive query caches.
 
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568

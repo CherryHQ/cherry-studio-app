@@ -13,6 +13,7 @@ import {
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
+import { monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
@@ -36,6 +37,7 @@ interface InsertManyWithOrderKeyOptions {
 }
 
 interface ApplyMovesOptions {
+  monotonicUpdatedAtColumn?: AnyColumn;
   pkColumn: AnyColumn;
   scope?: SQL;
 }
@@ -163,7 +165,14 @@ export async function applyMoves(
 
     await tx
       .update(table)
-      .set({ orderKey: newKey })
+      .set({
+        orderKey: newKey,
+        ...(options.monotonicUpdatedAtColumn
+          ? {
+              updatedAt: monotonicUpdateTimestamp(options.monotonicUpdatedAtColumn),
+            }
+          : {}),
+      })
       .where(scope ? and(eq(pkColumn, move.id), scope) : eq(pkColumn, move.id));
   }
 }
