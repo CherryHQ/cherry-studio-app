@@ -1,8 +1,10 @@
 import {
   AgentApprovalViewSchema,
+  AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
   AgentMessagePartSchema,
   AgentToolRefSchema,
+  readAgentInferenceSnapshot,
 } from '../agent';
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
@@ -12,6 +14,61 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips the versioned inference snapshot and preserves unsupported versions', () => {
+    const snapshot = {
+      version: 1,
+      model: {
+        uniqueModelId: 'provider-1::model-1',
+        providerId: 'provider-1',
+        modelId: 'model-1',
+        apiModelId: 'served-model-1',
+        name: 'Model One',
+      },
+      reasoningEffort: 'high',
+      parameters: { temperature: 0.2, maxOutputTokens: 2048 },
+      tools: [
+        {
+          ref: MCP_TOOL_REF,
+          providerName: 'mcp_server_1_search_a1b2',
+          displayName: 'Search',
+          approval: 'ask',
+        },
+      ],
+    } as const;
+
+    expect(AgentInferenceSnapshotV1Schema.parse(roundTrip(snapshot))).toEqual(snapshot);
+    expect(readAgentInferenceSnapshot(roundTrip(snapshot))).toEqual({
+      status: 'supported',
+      snapshot,
+    });
+
+    const future = { version: 2, opaque: { retained: true } };
+    expect(readAgentInferenceSnapshot(roundTrip(future))).toEqual({
+      status: 'unsupported',
+      raw: future,
+    });
+  });
+
+  test.each(['apiKey', 'authorization', 'endpoint', 'headers', 'callback', 'inputSchema'])(
+    'rejects inference snapshot field %s outside the privacy allowlist',
+    (field) => {
+      expect(
+        AgentInferenceSnapshotV1Schema.safeParse({
+          version: 1,
+          model: {
+            uniqueModelId: 'provider-1::model-1',
+            providerId: 'provider-1',
+            modelId: 'model-1',
+            name: 'Model One',
+          },
+          parameters: {},
+          tools: [],
+          [field]: 'sensitive',
+        }).success,
+      ).toBe(false);
+    },
+  );
+
   test.each([{ source: 'builtin', capabilityId: 'calendar.read' }, MCP_TOOL_REF])(
     'round-trips the stable $source tool identity',
     (toolRef) => {

@@ -1,7 +1,8 @@
 # Cherry Agent Protocol
 
-Status: **as built**, including managed image resolution. Tool configuration and text attachment
-resolution remain separate follow-up work. Version 1 is local-only.
+Status: **as built**, including managed image resolution and projection of configured tools into
+local MCP execution. Text attachment resolution remains separate follow-up work. Version 1 is
+local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
@@ -101,6 +102,8 @@ type AgentMessageView = {
   status: 'pending' | 'streaming' | 'success' | 'error' | 'cancelled' | 'interrupted'
   parts: AgentMessagePart[]
   usage: AgentUsageView | null
+  modelId: UniqueModelId | null
+  inferenceSnapshot: AgentInferenceSnapshotView | null
   createdAt: string
   updatedAt: string
 }
@@ -151,6 +154,29 @@ type AgentUsageView = {
   outputTokens?: number
   totalTokens?: number
 }
+
+type AgentInferenceSnapshotV1 = {
+  version: 1
+  model: {
+    uniqueModelId: UniqueModelId
+    providerId: string
+    modelId: string
+    apiModelId?: string
+    name: string
+  }
+  reasoningEffort?: string
+  parameters: { temperature?: number; maxOutputTokens?: number }
+  tools: Array<{
+    ref: AgentToolRef
+    providerName: string
+    displayName: string
+    approval: 'auto' | 'ask' | 'deny'
+  }>
+}
+
+type AgentInferenceSnapshotView =
+  | { status: 'supported'; snapshot: AgentInferenceSnapshotV1 }
+  | { status: 'unsupported'; raw: JsonValue }
 ```
 
 Part ids are stable within a message. The protocol owns these normalized parts; neither Pi nor a
@@ -185,6 +211,15 @@ finalized message contains a tool left in `input-available`, `awaiting-approval`
 the turn and commits the final value together with the terminal message state, so
 `message.finalized` and later transcript reads both carry it. While the message is streaming,
 `usage` is `null`; there is no dedicated usage event.
+
+Every accepted assistant placeholder carries the selected `modelId` and a versioned inference
+snapshot committed in the same reservation transaction. The snapshot is Agent-owned and does not
+reuse the Chat `MessageSnapshot`: it records only request model facts, explicit inference options,
+and the frozen tool identity/policy catalog. It never records credentials, endpoints, headers,
+tool schemas, callbacks, Data URLs, or device paths. A missing value is a pre-snapshot message and
+stays `null`; an unknown or invalid persisted version is projected as `unsupported` with its raw
+JSON preserved rather than making the message unreadable or reconstructing it from current Agent
+configuration.
 
 ### Input and approval
 

@@ -34,10 +34,12 @@ import type {
   RuntimeEvent,
   RuntimeInputPart,
   RuntimeModelPreflight,
+  RuntimeTool,
   RuntimeUsageReport,
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
+import { application } from '@/backend/core/application/Application';
 import {
   AppStatePolicy,
   BaseService,
@@ -47,6 +49,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import type {
@@ -92,6 +95,13 @@ import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { selectRuntimeContext, validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAttachments';
 import {
+  createAgentInferenceSnapshot,
+  type AgentInferenceModelResolver,
+  type AgentModelToolSupportResolver,
+  resolveAgentInferenceModel,
+  resolveAgentModelToolSupport,
+} from './inferenceSnapshot';
+import {
   createTurnResourceLedger,
   managedFileResolver,
   type ManagedFileResolver,
@@ -108,6 +118,8 @@ import {
   type RuntimeFileContents,
 } from './mapping';
 import { createPiModelResolver } from './piModelResolver';
+import { createAgentRuntimeToolResolver, type AgentRuntimeToolResolver } from './runtimeTools';
+import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -126,11 +138,15 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
   files: ManagedFileResolver;
+  inferenceModel: AgentInferenceModelResolver;
   naming: Pick<
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
   >;
+  modelSupportsTools: AgentModelToolSupportResolver;
+  runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
+  tools: AgentToolSource;
 };
 
 /**
@@ -189,6 +205,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly files: ManagedFileResolver;
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
+  private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
+  private readonly modelSupportsTools: MobileAgentHostOverrides['modelSupportsTools'];
+  private readonly runtimeTools: MobileAgentHostOverrides['runtimeTools'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -214,6 +233,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         store,
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
+    this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
+    this.modelSupportsTools = overrides.modelSupportsTools ?? resolveAgentModelToolSupport;
+    this.runtimeTools =
+      overrides.runtimeTools ??
+      createAgentRuntimeToolResolver({
+        bindings: agentToolBindingService,
+        getMcpRuntime: () => application.get('McpRuntimeService'),
+      });
   }
 
   private get agents(): AgentDefinitionSource {
@@ -221,6 +248,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private lazyAgents: AgentDefinitionSource | undefined;
+
+  private get toolSource(): AgentToolSource {
+    return this.overrides.tools ?? (this.lazyTools ??= createBuiltInToolSource());
+  }
+
+  private lazyTools: AgentToolSource | undefined;
 
   /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
@@ -336,6 +369,52 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const configuredAgent = await this.requireAgent(session.agentId);
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
+      if (
+        !runtime.descriptor.capabilities.attachments &&
+        parsed.parts.some((part) => part.type === 'file')
+      ) {
+        fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
+      }
+
+      // Freeze built-in and configured tools for the turn so mid-turn changes
+      // cannot alter the active catalog. Built-in discovery remains optional;
+      // configured binding resolution fails closed.
+      let builtInTools: readonly RuntimeTool[] = [];
+      let configuredTools: readonly RuntimeTool[] = [];
+      if (runtime.descriptor.capabilities.tools) {
+        try {
+          builtInTools = await this.toolSource.getTools(agent.model);
+        } catch (error) {
+          logger.warn(
+            'Failed to resolve built-in Agent tools; continuing without them',
+            error as Error,
+          );
+        }
+        configuredTools = await this.runtimeTools
+          .resolve(agent.id)
+          .catch(() =>
+            fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.'),
+          );
+      }
+      const tools = [...builtInTools, ...configuredTools];
+
+      const inferenceModel = await this.inferenceModel(agent.model).catch(() =>
+        fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.'),
+      );
+      if (tools.length > 0) {
+        const supportsTools = await this.modelSupportsTools(agent.model).catch(() => false);
+        if (!supportsTools) {
+          fail(
+            'CAPABILITY_UNSUPPORTED',
+            'The selected model does not support native tool calling.',
+          );
+        }
+      }
+      const inferenceSnapshot = createAgentInferenceSnapshot({
+        model: inferenceModel,
+        options: agent.options,
+        tools,
+      });
 
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
@@ -379,7 +458,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
 
       // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.store.reserveSubmission({ sessionId, userParts });
+      const reserved = await this.store.reserveSubmission({
+        sessionId,
+        userParts,
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
       const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
       // The Turn projection starts here: reservation time is the turn start.
@@ -435,6 +519,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         runtimeContext.history,
         parts,
         runtimeContext.checkpoint,
+        tools,
       );
       this.runningTurns.add(run);
       this.runningTurnsBySession.set(sessionId, run);
@@ -537,6 +622,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     history: AgentMessageView[],
     inputParts: AgentInputPart[],
     storedContextCheckpoint: RuntimeContextCheckpoint | null,
+    tools: readonly RuntimeTool[],
   ): Promise<void> {
     try {
       const runtimeFiles = await this.resolveRuntimeFiles(
@@ -551,8 +637,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         history: toRuntimeHistory(history, runtimeFiles),
         contextCheckpoint: storedContextCheckpoint,
         input: toRuntimeInputParts(inputParts, state.resources, runtimeFiles),
-        // V1 executes tool-less turns; Agent tools await the deferred definition.
-        tools: [],
+        tools: [...tools],
         options: agent.options,
       });
       for await (const event of events) {

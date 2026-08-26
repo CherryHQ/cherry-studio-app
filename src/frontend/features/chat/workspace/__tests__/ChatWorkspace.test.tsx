@@ -139,6 +139,8 @@ function createMessage(
     turnId: 'turn-1',
     updatedAt: '2026-08-09T00:00:00.000Z',
     usage: null,
+    modelId: null,
+    inferenceSnapshot: null,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
 
 import { interruptNonTerminalToolParts, toRuntimeHistory, toRuntimeInputParts } from '../mapping';
 
@@ -116,6 +116,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -197,6 +199,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -209,7 +213,7 @@ describe('Agent Host mappings', () => {
     ['error', true],
     ['interrupted', true],
   ] as const)('replays terminal state %s as a paired tool result', (state, isError) => {
-    const value =
+    const value: JsonValue =
       state === 'error'
         ? {
             status: 'error',
@@ -242,6 +246,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
