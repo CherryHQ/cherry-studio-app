@@ -87,7 +87,7 @@ describe('Agent Host mappings', () => {
     };
 
     expect(toRuntimeHistory(messages, new Map([[availableId, image]]))).toEqual([
-      { role: 'user', parts: [image] },
+      { turnId: 'turn-1', messages: [{ role: 'user', parts: [image] }] },
     ]);
     expect(messages[0]?.parts).toHaveLength(2);
   });
@@ -124,23 +124,28 @@ describe('Agent Host mappings', () => {
 
     expect(toRuntimeHistory([message])).toEqual([
       {
-        role: 'assistant',
-        parts: [
+        turnId: 'turn-1',
+        messages: [
           {
-            type: 'tool-call',
-            toolCallId: 'call-1',
-            toolRef: TOOL_REF,
-            providerName: 'mcp_server_1_delete_file_a1b2',
-            input: { fileEntryId: 'file-1' },
-          },
-          {
-            type: 'tool-result',
-            toolCallId: 'call-1',
-            output: {
-              value: { status: 'denied', reason: 'The user denied this tool call.' },
-              artifacts: [],
-            },
-            isError: false,
+            role: 'assistant',
+            parts: [
+              {
+                type: 'tool-call',
+                toolCallId: 'call-1',
+                toolRef: TOOL_REF,
+                providerName: 'mcp_server_1_delete_file_a1b2',
+                input: { fileEntryId: 'file-1' },
+              },
+              {
+                type: 'tool-result',
+                toolCallId: 'call-1',
+                output: {
+                  value: { status: 'denied', reason: 'The user denied this tool call.' },
+                  artifacts: [],
+                },
+                isError: false,
+              },
+            ],
           },
         ],
       },
@@ -173,7 +178,7 @@ describe('Agent Host mappings', () => {
       updatedAt: TIMESTAMP,
     };
 
-    expect(toRuntimeHistory([message])).toEqual([]);
+    expect(toRuntimeHistory([message])).toEqual([{ turnId: 'turn-1', messages: [] }]);
   });
 
   test.each([
@@ -220,7 +225,7 @@ describe('Agent Host mappings', () => {
       updatedAt: TIMESTAMP,
     };
 
-    expect(toRuntimeHistory([message])[0]?.parts).toEqual([
+    expect(toRuntimeHistory([message])[0]?.messages[0]?.parts).toEqual([
       {
         type: 'tool-call',
         toolCallId: 'call-1',

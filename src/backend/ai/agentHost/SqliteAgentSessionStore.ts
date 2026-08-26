@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -169,6 +169,37 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return rows.map(toAgentMessageView);
   }
 
+  async getLatestContextCheckpoint(sessionId: string) {
+    const [row] = await this.dbService
+      .getDb()
+      .select({
+        assistantMessageId: agentSessionMessageTable.id,
+        checkpointJson: sql<string>`${agentSessionMessageTable.contextCheckpoint}`,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          eq(agentSessionMessageTable.role, 'assistant'),
+          eq(agentSessionMessageTable.status, 'success'),
+          isNotNull(agentSessionMessageTable.contextCheckpoint),
+        ),
+      )
+      .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+      .limit(1);
+    if (!row) {
+      return null;
+    }
+
+    let checkpoint: unknown = row.checkpointJson;
+    try {
+      checkpoint = JSON.parse(row.checkpointJson) as unknown;
+    } catch {
+      // Return the raw value so the Host can classify it and fall back to full history.
+    }
+    return { assistantMessageId: row.assistantMessageId, checkpoint };
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     return this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
@@ -178,6 +209,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           data: { version: 1, parts: input.parts },
           usage: input.usage,
           error: input.error,
+          contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
         })
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
         .returning();

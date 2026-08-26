@@ -42,6 +42,7 @@ function baseRequest(
     instructions: 'You are a helpful assistant.',
     model: { providerId: 'fake-provider', modelId: 'fake-model' },
     history: [],
+    contextCheckpoint: null,
     input: [{ type: 'text', text: 'Hello.' }],
     tools: [],
     options: {},
@@ -330,6 +331,28 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
 }
 
 describe('FakeRuntime scripting', () => {
+  test('emits an opaque context checkpoint fixture before completion', async () => {
+    const runtime = new FakeRuntime();
+    runtime.scriptEvents([
+      {
+        type: 'context.checkpoint',
+        checkpoint: { version: 1, anchorTurnId: 'turn-0', payload: { summary: 'Earlier turns.' } },
+      },
+    ]);
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-1')));
+
+    expect(events).toEqual([
+      {
+        type: 'context.checkpoint',
+        checkpoint: { version: 1, anchorTurnId: 'turn-0', payload: { summary: 'Earlier turns.' } },
+      },
+      { type: 'completed' },
+    ]);
+    await session.close();
+  });
+
   test('replays a scripted event list in order and appends completed if omitted', async () => {
     const runtime = new FakeRuntime();
     runtime.scriptEvents([

@@ -30,6 +30,7 @@
 import type {
   AgentRuntime,
   AgentRuntimeSession,
+  RuntimeContextCheckpoint,
   RuntimeEvent,
   RuntimeInputPart,
   RuntimeModelPreflight,
@@ -91,6 +92,7 @@ import {
 import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
+import { selectRuntimeContext, validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAttachments';
 import {
   createAgentInferenceSnapshot,
@@ -161,7 +163,9 @@ type ActiveTurnState = {
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
   pendingApprovals: Map<string, AgentApprovalView>;
+  pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
+  sessionTurnIds: Set<string>;
   usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
 };
@@ -414,13 +418,31 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
+      const storedContextCandidate = await this.store.getLatestContextCheckpoint(sessionId);
+      const runtimeContext = selectRuntimeContext(
+        priorMessages,
+        storedContextCandidate?.checkpoint ?? null,
+      );
+      if (runtimeContext.issue) {
+        logger.warn('Agent context checkpoint rejected; replaying full history', {
+          code: runtimeContext.issue,
+          checkpointMessageId: storedContextCandidate?.assistantMessageId,
+          sessionId,
+        });
+      }
       const { availableFiles, inputFiles, parts } = await this.resolveManagedInput(
         parsed.parts,
         priorMessages,
       );
       const resources = createTurnResourceLedger(inputFiles, priorMessages, availableFiles);
       const modelPreflight = await this.preflightModel(runtime, agent);
-      this.assertImageRequestSupported(runtime, parts, priorMessages, resources, modelPreflight);
+      this.assertImageRequestSupported(
+        runtime,
+        parts,
+        runtimeContext.history,
+        resources,
+        modelPreflight,
+      );
 
       const userParts: AgentMessagePart[] = parts.map((part, index) =>
         part.type === 'text'
@@ -468,7 +490,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           sessionTitle: session.title,
         }),
         pendingApprovals: new Map(),
+        pendingContextCheckpoint: null,
         resources,
+        sessionTurnIds: new Set([
+          ...priorMessages.flatMap((message) => (message.turnId ? [message.turnId] : [])),
+          reserved.turnId,
+        ]),
         usage: null,
         runtimeSession,
       };
@@ -485,7 +512,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publishSessionRename(state.autoNamePromise);
       }
 
-      const run = this.runTurn(sessionId, agent, state, priorMessages, parts, tools);
+      const run = this.runTurn(
+        sessionId,
+        agent,
+        state,
+        runtimeContext.history,
+        parts,
+        runtimeContext.checkpoint,
+        tools,
+      );
       this.runningTurns.add(run);
       this.runningTurnsBySession.set(sessionId, run);
       void run.finally(() => {
@@ -586,6 +621,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     history: AgentMessageView[],
     inputParts: AgentInputPart[],
+    storedContextCheckpoint: RuntimeContextCheckpoint | null,
     tools: readonly RuntimeTool[],
   ): Promise<void> {
     try {
@@ -599,6 +635,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         instructions: agent.instructions,
         model: agent.model,
         history: toRuntimeHistory(history, runtimeFiles),
+        contextCheckpoint: storedContextCheckpoint,
         input: toRuntimeInputParts(inputParts, state.resources, runtimeFiles),
         tools: [...tools],
         options: agent.options,
@@ -711,6 +748,19 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         };
         return false;
       }
+      case 'context.checkpoint': {
+        const validation = validateRuntimeContextCheckpoint(event.checkpoint, state.sessionTurnIds);
+        if (validation.issue) {
+          state.pendingContextCheckpoint = null;
+          logger.warn('Agent context checkpoint rejected before persistence', {
+            code: validation.issue,
+            sessionId,
+          });
+        } else {
+          state.pendingContextCheckpoint = validation.checkpoint;
+        }
+        return false;
+      }
       case 'completed':
         await this.finalize(sessionId, state, 'completed', null);
         return true;
@@ -754,6 +804,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       parts,
       usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
       error,
+      contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
     });
     const turn: AgentTurnView = {
       ...state.turn,

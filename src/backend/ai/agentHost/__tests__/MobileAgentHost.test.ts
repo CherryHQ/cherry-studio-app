@@ -23,6 +23,7 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
+import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import type { ManagedFileResolver } from '../managedFileResolver';
 import { MobileAgentHost } from '../MobileAgentHost';
@@ -338,6 +339,7 @@ describe('MobileAgentHost', () => {
     expect(requests[0]).toMatchObject({
       instructions: 'Be brief.',
       history: [],
+      contextCheckpoint: null,
       input: [{ type: 'text', text: 'Hello.' }],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
@@ -349,7 +351,192 @@ describe('MobileAgentHost', () => {
     expect(second.snapshot.activeTurn).toBeNull();
     await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'More.' }] });
     await waitFor(() => terminalTurnEvent(secondEvents) !== undefined, 'the second turn');
-    expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(
+      requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
+    ).toEqual(['user', 'assistant']);
+  });
+
+  test('persists a completed checkpoint and replays it after Host recreation', async () => {
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: '',
+      payload: { summary: 'First turn summary.' },
+    };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .scriptEvents([{ type: 'completed' }])
+      .script((controller) => {
+        const anchorTurnId = controller.request.history[0]?.turnId;
+        if (!anchorTurnId) throw new Error('missing prior turn anchor');
+        checkpoint.anchorTurnId = anchorTurnId;
+        controller.emit({ type: 'context.checkpoint', checkpoint });
+        controller.emit({ type: 'completed' });
+      });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const completedCount = () =>
+      events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
+        .length;
+
+    const first = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First.' }],
+    });
+    await waitFor(() => completedCount() === 1, 'the first checkpoint turn');
+    const second = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second.' }],
+    });
+    await waitFor(() => completedCount() === 2, 'the checkpoint-producing turn');
+    expect(checkpoint.anchorTurnId).toBe(first.turnId);
+    expect(await store.getLatestContextCheckpoint(session.id)).toEqual({
+      assistantMessageId: second.assistantMessageId,
+      checkpoint,
+    });
+
+    const replayed: RuntimeExecutionRequest[] = [];
+    const restartedRuntime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(
+      (controller) => {
+        replayed.push(controller.request);
+        controller.emit({ type: 'completed' });
+      },
+    );
+    const restartedHost = createHost(restartedRuntime);
+    const restartedEvents: AgentEvent[] = [];
+    await restartedHost.observeSession(session.id, (event) => restartedEvents.push(event));
+    await restartedHost.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Third.' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(restartedEvents)?.turn.status === 'completed',
+      'the replayed turn',
+    );
+
+    expect(replayed[0]?.contextCheckpoint).toEqual(checkpoint);
+    expect(replayed[0]?.history.map((turn) => turn.turnId)).toEqual([second.turnId]);
+  });
+
+  test('does not persist checkpoints from failed or cancelled turns', async () => {
+    let anchorTurnId = '';
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        anchorTurnId = controller.turnId;
+        controller.emit({ type: 'completed' });
+      })
+      .script((controller) => {
+        controller.emit({
+          type: 'context.checkpoint',
+          checkpoint: { version: 1, anchorTurnId, payload: { unsafe: 'failed' } },
+        });
+        controller.emit({
+          type: 'failed',
+          error: { code: 'runtime_error', message: 'failed', retryable: false },
+        });
+      })
+      .script((controller) => {
+        controller.emit({
+          type: 'context.checkpoint',
+          checkpoint: { version: 1, anchorTurnId, payload: { unsafe: 'cancelled' } },
+        });
+        controller.emit({ type: 'cancelled' });
+      });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const terminalCount = () =>
+      events.filter(
+        (event) =>
+          event.type === 'turn.updated' &&
+          ['completed', 'failed', 'cancelled'].includes(event.turn.status),
+      ).length;
+
+    for (const [index, text] of ['anchor', 'fail', 'cancel'].entries()) {
+      await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text }] });
+      await waitFor(() => terminalCount() === index + 1, `${text} turn`);
+    }
+
+    expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
+  });
+
+  test('rejects an oversized checkpoint without truncating or failing the turn', async () => {
+    let anchorTurnId = '';
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        anchorTurnId = controller.turnId;
+        controller.emit({ type: 'completed' });
+      })
+      .script((controller) => {
+        controller.emit({
+          type: 'context.checkpoint',
+          checkpoint: {
+            version: 1,
+            anchorTurnId,
+            payload: 'x'.repeat(MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES),
+          },
+        });
+        controller.emit({ type: 'completed' });
+      });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const completedCount = () =>
+      events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
+        .length;
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'one' }] });
+    await waitFor(() => completedCount() === 1, 'the anchor turn');
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'two' }] });
+    await waitFor(() => completedCount() === 2, 'the oversized checkpoint turn');
+
+    expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
+    expect(events.at(-1)).toMatchObject({ type: 'turn.updated', turn: { status: 'completed' } });
+  });
+
+  test.each([
+    ['corrupt', 'not-json'],
+    ['unsupported version', { version: 2, anchorTurnId: 'turn-1', payload: {} }],
+    ['missing anchor', { version: 1, anchorTurnId: 'missing', payload: {} }],
+  ])('falls back to complete history for a %s persisted checkpoint', async (_name, checkpoint) => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['One', 'Two'], requests);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const completedCount = () =>
+      events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
+        .length;
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'First.' }] });
+    await waitFor(() => completedCount() === 1, 'the first turn');
+    jest.spyOn(store, 'getLatestContextCheckpoint').mockResolvedValueOnce({
+      assistantMessageId: 'checkpoint-row',
+      checkpoint,
+    });
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Second.' }] });
+    await waitFor(() => completedCount() === 2, 'the fallback turn');
+
+    expect(requests[1]?.contextCheckpoint).toBeNull();
+    expect(requests[1]?.history).toHaveLength(1);
+    expect(requests[1]?.history[0]?.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
   });
 
   test('hands the turn the tools resolved for its model', async () => {
@@ -1133,7 +1320,7 @@ describe('MobileAgentHost', () => {
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the follow-up turn');
     expect(resolveAvailable).toHaveBeenCalledTimes(2);
-    expect(requests[1]?.history).not.toEqual(
+    expect(requests[1]?.history.flatMap((turn) => turn.messages)).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           parts: expect.arrayContaining([expect.objectContaining({ type: 'file' })]),
@@ -1190,13 +1377,18 @@ describe('MobileAgentHost', () => {
     expect(requests[1]?.history).toEqual(
       expect.arrayContaining([
         {
-          role: 'user',
-          parts: [
+          turnId: expect.any(String),
+          messages: [
             {
-              type: 'file',
-              mediaType: 'image/png',
-              name: 'managed.png',
-              uri: 'data:image/png;base64,AAAA',
+              role: 'user',
+              parts: [
+                {
+                  type: 'file',
+                  mediaType: 'image/png',
+                  name: 'managed.png',
+                  uri: 'data:image/png;base64,AAAA',
+                },
+              ],
             },
           ],
         },

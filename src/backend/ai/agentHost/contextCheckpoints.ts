@@ -1,0 +1,86 @@
+import { RuntimeContextCheckpointSchema, type RuntimeContextCheckpoint } from '@/backend/ai/agent';
+
+/** Opaque checkpoint payloads are bounded before they cross into SQLite. */
+export const MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES = 256 * 1024;
+
+export type RuntimeContextCheckpointIssueCode =
+  | 'CONTEXT_CHECKPOINT_INVALID'
+  | 'CONTEXT_CHECKPOINT_VERSION_UNSUPPORTED'
+  | 'CONTEXT_CHECKPOINT_ANCHOR_INVALID'
+  | 'CONTEXT_CHECKPOINT_TOO_LARGE';
+
+export type RuntimeContextCheckpointValidation =
+  | { checkpoint: RuntimeContextCheckpoint; issue: null }
+  | { checkpoint: null; issue: RuntimeContextCheckpointIssueCode };
+
+export function validateRuntimeContextCheckpoint(
+  value: unknown,
+  sessionTurnIds: ReadonlySet<string>,
+): RuntimeContextCheckpointValidation {
+  if (typeof value === 'object' && value !== null && 'version' in value && value.version !== 1) {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_VERSION_UNSUPPORTED' };
+  }
+
+  let parsed: ReturnType<typeof RuntimeContextCheckpointSchema.safeParse>;
+  try {
+    parsed = RuntimeContextCheckpointSchema.safeParse(value);
+  } catch {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_INVALID' };
+  }
+  if (!parsed.success) {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_INVALID' };
+  }
+  if (!sessionTurnIds.has(parsed.data.anchorTurnId)) {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
+  }
+
+  let payloadBytes: number;
+  try {
+    payloadBytes = new TextEncoder().encode(JSON.stringify(parsed.data.payload)).byteLength;
+  } catch {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_INVALID' };
+  }
+  if (payloadBytes > MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES) {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_TOO_LARGE' };
+  }
+
+  return { checkpoint: parsed.data, issue: null };
+}
+
+export function selectRuntimeContext<THistoryItem extends { turnId: string | null }>(
+  history: THistoryItem[],
+  candidate: unknown,
+): {
+  checkpoint: RuntimeContextCheckpoint | null;
+  history: THistoryItem[];
+  issue: RuntimeContextCheckpointIssueCode | null;
+} {
+  if (candidate === null || candidate === undefined) {
+    return { checkpoint: null, history, issue: null };
+  }
+
+  const sessionTurnIds = new Set(
+    history.flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
+  );
+  const validation = validateRuntimeContextCheckpoint(candidate, sessionTurnIds);
+  if (!validation.checkpoint) {
+    return { checkpoint: null, history, issue: validation.issue };
+  }
+
+  const checkpoint = validation.checkpoint;
+  let anchorIndex = -1;
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index]?.turnId === checkpoint.anchorTurnId) {
+      anchorIndex = index;
+      break;
+    }
+  }
+  if (anchorIndex < 0) {
+    return { checkpoint: null, history, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
+  }
+  return {
+    checkpoint,
+    history: history.slice(anchorIndex + 1),
+    issue: null,
+  };
+}
