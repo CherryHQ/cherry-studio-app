@@ -38,8 +38,9 @@ persisted Runtime binding. Agent configuration, Session configuration, model sel
 availability never select another local engine.
 
 The Agent's application-owned instructions, model, and tools are resolved afresh for every turn.
-Enabled description-only Skills are resolved into instructions at the same boundary but are not
-tools. The injected Pi Runtime remains stable for the Host lifetime.
+Enabled description-only Skills are resolved at the same boundary into a frozen name/description
+index; their instruction bodies load on demand through the built-in reader tool, and a Skill is
+never itself a tool. The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Production Pi binding
 
@@ -379,8 +380,8 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 2. It persists the user message and assistant placeholder.
 3. It validates that the Session target is `local` and resolves the current Agent configuration.
 4. The Host uses its injected Pi Runtime.
-5. The Host resolves enabled Skills, creates the turn resource ledger, and normalizes instructions,
-   model, structured history, the immutable tool snapshot, input, and options.
+5. The Host resolves the enabled Skill index, creates the turn resource ledger, and normalizes
+   instructions, model, structured history, the immutable tool snapshot, input, and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.

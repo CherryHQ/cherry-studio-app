@@ -62,8 +62,9 @@ app and move to a package when a real independent consumer exists.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
-- Before each turn, the Host also resolves enabled description-only Skills into immutable prompt
-  context. Skills are not tools and cannot expand the tool snapshot or resource ledger.
+- Before each turn, the Host also freezes an index of enabled description-only Skills (name and
+  description) into prompt context; full Skill instructions load on demand through a built-in
+  read-only tool. Skills are not tools and cannot expand the tool snapshot or resource ledger.
 
 Branching is also a future direction with its model already decided: Sessions never branch in
 place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
@@ -83,8 +84,10 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   than exposing renderer APIs or OOXML. File access is limited to managed `file_entry` ids visible
   to the turn, edits are copy-on-write, and generated artifact parts are not implicit model
   attachments.
-- Skills are controlled Markdown instruction resources stored and enabled by Cherry. They have no
-  executable files, callbacks, hooks, scripts, network access, or permission authority; see
+- Skills are controlled Markdown instruction resources stored and enabled by Cherry, following the
+  open Agent Skills progressive-disclosure model: an always-injected name/description index and
+  on-demand instruction loading through the built-in `load_skill` tool. They have no executable
+  files, callbacks, hooks, scripts, network access, or permission authority; see
   [Agent Skills](./agent-skills.md).
 
 ## Open Questions

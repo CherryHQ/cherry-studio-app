@@ -287,6 +287,16 @@ with its own approval policy.
 - Input size, extracted-text size, generated-file size, timeout, and cancellation limits are
   enforced by the capability service before provider or filesystem work grows without bound.
 
+### Skill Loading
+
+- `load_skill` is a built-in read-only capability present whenever the Agent has enabled Skills. It
+  returns the validated instruction text of one Skill id frozen in the current turn's Skill index,
+  pinned by that index's content hash, and nothing else.
+- It defaults to `auto`: it has no side effects, reads no managed files, and cannot reach MCP,
+  providers, or the device.
+- It cannot load disabled, deleted, or un-indexed Skills, and loaded Skill text cannot change the
+  tool snapshot, approvals, or the resource ledger. See [Agent Skills](./agent-skills.md).
+
 ## Approval And Failure Policy
 
 Tool configuration, OS permission, turn resource ledger, and per-call approval are independent
