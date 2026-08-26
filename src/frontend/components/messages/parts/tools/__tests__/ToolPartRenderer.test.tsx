@@ -21,12 +21,17 @@ jest.mock('../WebSearchToolPart', () => ({
   isWebSearchToolPart: (part: ToolMessagePart) =>
     mockGetToolName(part) === 'provider-search' || mockGetToolName(part) === 'web-search',
 }));
+jest.mock('../WriteFileToolPart', () => ({
+  ...mockCreateToolPart('WriteFileToolPart'),
+  isWriteFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'write_file',
+}));
 
 describe('ToolPartRenderer', () => {
   it.each([
     ['web-search', 'WebSearchToolPart'],
     ['meta', 'MetaToolPartRenderer'],
     ['mcp', 'McpToolPart'],
+    ['write_file', 'WriteFileToolPart'],
     ['other', 'GenericToolPart'],
   ])('routes %s tools to %s', (toolName, expectedType) => {
     const part = makeToolPart(toolName);

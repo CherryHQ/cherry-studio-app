@@ -1,4 +1,4 @@
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
 
 import { interruptNonTerminalToolParts, toRuntimeHistory, toRuntimeInputParts } from '../mapping';
 
@@ -177,7 +177,7 @@ describe('Agent Host mappings', () => {
     ['error', true],
     ['interrupted', true],
   ] as const)('replays terminal state %s as a paired tool result', (state, isError) => {
-    const value =
+    const value: JsonValue =
       state === 'error'
         ? {
             status: 'error',

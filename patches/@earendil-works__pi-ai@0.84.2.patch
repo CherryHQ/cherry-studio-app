@@ -1,3 +1,33 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -1,5 +1,5 @@
+ import Anthropic from "@anthropic-ai/sdk";
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { splitDeferredTools } from "../utils/deferred-tools.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
+--- a/dist/api/google-generative-ai.js
++++ b/dist/api/google-generative-ai.js
+@@ -1,5 +1,5 @@
+ import { GoogleGenAI, } from "@google/genai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { providerHeadersToRecord } from "../utils/headers.js";
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -1,5 +1,5 @@
+ import OpenAI from "openai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { shortHash } from "../utils/hash.js";
 diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
 index c35771dcc9b2173d0b459d13c6d86e622de45e9a..8e03a85b7fd678240b31bc62f1f1825a89c2b788 100644
 --- a/dist/api/openai-responses-shared.js

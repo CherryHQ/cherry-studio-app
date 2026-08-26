@@ -1,4 +1,5 @@
 import type {
+  Api as PiApi,
   AssistantMessage,
   ImageContent,
   Message as PiMessage,
@@ -29,7 +30,7 @@ export type PiConversation = {
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
   request: RuntimeExecutionRequest,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
 ): PiConversation {
   const history: PiMessage[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
@@ -102,7 +103,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
 ): void {
   let content: AssistantMessage['content'] = [];
   const flushAssistant = () => {
