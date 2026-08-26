@@ -27,7 +27,6 @@ export const AgentSchema = z.strictObject({
   /** Stable avatar file reference; null renders the default avatar. Managed by the avatar workflow, not the CRUD DTOs. */
   avatar: z.string().nullable(),
   createdAt: z.iso.datetime(),
-  description: z.string(),
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),

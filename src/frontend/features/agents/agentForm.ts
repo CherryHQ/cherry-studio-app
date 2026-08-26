@@ -3,7 +3,6 @@ import type { Agent } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
-  description: string;
   instructions: string;
   modelId: UniqueModelId | null;
   name: string;
@@ -16,7 +15,6 @@ type BuildAgentDtoOptions = {
 
 export function createAgentFormState(agent?: Agent): AgentFormState {
   return {
-    description: agent?.description ?? '',
     instructions: agent?.instructions ?? '',
     modelId: agent?.modelId ?? null,
     name: agent?.name ?? '',
@@ -36,7 +34,6 @@ export function buildAgentDto(
   return {
     ok: true,
     value: {
-      description: form.description.trim(),
       instructions: form.instructions,
       ...(options.inheritDefaultModel ? {} : { modelId: form.modelId }),
       name,

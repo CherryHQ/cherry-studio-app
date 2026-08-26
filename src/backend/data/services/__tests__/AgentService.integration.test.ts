@@ -76,7 +76,6 @@ describe('AgentService persistence', () => {
 
     expect(agent).toMatchObject({
       avatar: null,
-      description: '',
       instructions: '',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
@@ -124,8 +123,8 @@ describe('AgentService persistence', () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000);
     const agent = await agentService.create({ name: 'Researcher' });
 
-    const firstUpdate = await agentService.update(agent.id, { description: 'First' });
-    const secondUpdate = await agentService.update(agent.id, { description: 'Second' });
+    const firstUpdate = await agentService.update(agent.id, { instructions: 'First' });
+    const secondUpdate = await agentService.update(agent.id, { instructions: 'Second' });
 
     expect(Date.parse(firstUpdate.updatedAt)).toBeGreaterThan(Date.parse(agent.updatedAt));
     expect(Date.parse(secondUpdate.updatedAt)).toBeGreaterThan(Date.parse(firstUpdate.updatedAt));
@@ -147,10 +146,7 @@ describe('AgentService persistence', () => {
   });
 
   it('filters by search and persists explicit ordering changes', async () => {
-    const researcher = await agentService.create({
-      description: 'Finds primary sources',
-      name: 'Researcher',
-    });
+    const researcher = await agentService.create({ name: 'Primary Researcher' });
     const writer = await agentService.create({ name: 'Writer' });
 
     await expect(agentService.list({ search: 'primary' })).resolves.toMatchObject({

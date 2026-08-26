@@ -33,7 +33,6 @@ describe('EntitySearchService', () => {
       .mockReturnValueOnce(
         queryResult([
           {
-            description: 'Agent result',
             id: 'agent-1',
             name: 'Needle Agent',
             updatedAt: 100,

@@ -24,8 +24,6 @@ export const agentTable = sqliteTable(
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    // Type-level empty: DB DEFAULT is the single source of truth
-    description: text().notNull().default(''),
     // System instructions supplied to every turn
     instructions: text().notNull().default(''),
     // Stable avatar file reference (agent-avatar-file:{agentId}.{uuid}.webp);

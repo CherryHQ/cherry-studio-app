@@ -202,8 +202,6 @@
   "agent.delete.title": "删除智能体？",
   "agent.edit.title": "编辑智能体",
   "agent.form.basicSection": "基础设置",
-  "agent.form.description": "介绍",
-  "agent.form.descriptionPlaceholder": "智能体介绍",
   "agent.form.instructions": "指令",
   "agent.form.instructionsPlaceholder": "智能体系统指令",
   "agent.form.loadFailed": "无法加载智能体。",

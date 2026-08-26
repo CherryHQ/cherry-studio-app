@@ -100,7 +100,6 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'agent')).toEqual([
         'id',
         'name',
-        'description',
         'instructions',
         'avatar',
         'model_id',

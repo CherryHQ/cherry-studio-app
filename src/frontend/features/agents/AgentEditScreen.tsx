@@ -174,15 +174,6 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
               value={form.name}
             />
           </FormField>
-          <FormField label={t('agent.form.description')}>
-            <Input
-              accessibilityLabel={t('agent.form.description')}
-              autoCorrect
-              onChangeText={(value) => updateForm('description', value)}
-              placeholder={t('agent.form.descriptionPlaceholder')}
-              value={form.description}
-            />
-          </FormField>
           <FormField label={t('agent.form.instructions')}>
             <Input
               accessibilityLabel={t('agent.form.instructions')}

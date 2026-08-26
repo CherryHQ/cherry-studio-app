@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import {
@@ -30,7 +30,6 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
   return {
     avatar: row.avatar,
     createdAt: timestampToISO(row.createdAt),
-    description: row.description,
     id: row.id,
     instructions: row.instructions,
     modelId: row.modelId as UniqueModelId | null,
@@ -94,13 +93,7 @@ export class AgentService {
 
     if (query.search) {
       const pattern = `%${query.search.replace(/[\\%_]/g, '\\$&')}%`;
-      const searchClause = or(
-        sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`,
-        sql`${agentTable.description} LIKE ${pattern} ESCAPE '\\'`,
-      );
-      if (searchClause) {
-        conditions.push(searchClause);
-      }
+      conditions.push(sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`);
     }
 
     const whereClause = and(...conditions);
