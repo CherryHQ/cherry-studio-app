@@ -307,3 +307,10 @@ export async function imageUriToDataUrl(
   const resolvedMediaType = resolveMediaType(mediaType, file.type, 'image/*');
   return `data:${resolvedMediaType};base64,${base64}`;
 }
+
+export async function readFileUriBytes(uri: string, signal?: AbortSignal): Promise<Uint8Array> {
+  signal?.throwIfAborted();
+  const bytes = await new File(uri).bytes();
+  signal?.throwIfAborted();
+  return bytes;
+}

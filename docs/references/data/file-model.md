@@ -72,10 +72,14 @@ never created.
 A persisted Agent file part stores `fileEntryId` plus Host-validated display metadata such as name
 and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The
 Host verifies the live entry and managed blob before reserving a current submission. If the entry or
-its bytes later disappear, the part remains in history and renders unavailable. Agent Protocol now
-reports image attachment support: the Host accepts only the shared AI image whitelist, validates the
-selected model and Pi endpoint before reservation, and converts managed bytes to a bounded temporary
-Data URL for the active request. Text and other file attachments remain unsupported.
+its bytes later disappear, the part remains in history and renders unavailable. For images, the Host
+accepts only the shared AI image whitelist, validates the selected model and Pi endpoint before
+reservation, and converts managed bytes to a bounded temporary Data URL for the active request. For
+text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
+UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
+content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
+unsupported binary media types fail closed before reservation. Extracted text remains request-local
+and is never persisted.
 
 Attachments are sent to providers as inlined base64 data URLs. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,

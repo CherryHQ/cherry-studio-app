@@ -29,7 +29,7 @@ import {
 
 import type { TurnResourceLedger } from './managedFileResolver';
 
-export type RuntimeFileContents = ReadonlyMap<string, Extract<RuntimeInputPart, { type: 'file' }>>;
+export type RuntimeAttachmentContents = ReadonlyMap<string, RuntimeInputPart>;
 
 /**
  * Runtime error codes are implementation-scoped strings; the protocol enum is
@@ -105,18 +105,18 @@ export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
 export function toRuntimeInputParts(
   parts: AgentInputPart[],
   resources?: Pick<TurnResourceLedger, 'fileEntryIds'>,
-  files?: RuntimeFileContents,
+  attachments?: RuntimeAttachmentContents,
 ): RuntimeInputPart[] {
   return parts.flatMap((part): RuntimeInputPart[] => {
     if (part.type === 'file') {
       if (!resources?.fileEntryIds.has(part.fileEntryId)) {
         throw new Error('Managed file input is outside the turn resource ledger.');
       }
-      const file = files?.get(part.fileEntryId);
-      if (!file) {
+      const attachment = attachments?.get(part.fileEntryId);
+      if (!attachment) {
         throw new Error('Managed file input has no resolved Runtime content.');
       }
-      return [file];
+      return [attachment];
     }
     return [{ type: 'text', text: part.text }];
   });
@@ -129,7 +129,7 @@ export function toRuntimeInputParts(
  */
 export function toRuntimeHistory(
   messages: AgentMessageView[],
-  files: RuntimeFileContents = new Map(),
+  attachments: RuntimeAttachmentContents = new Map(),
 ): RuntimeHistoryTurn[] {
   const history: RuntimeHistoryTurn[] = [];
   for (const message of messages) {
@@ -142,9 +142,9 @@ export function toRuntimeHistory(
           break;
         case 'file':
           if (message.role === 'user' && part.purpose === 'input-attachment') {
-            const file = files.get(part.fileEntryId);
-            if (file) {
-              parts.push(file);
+            const attachment = attachments.get(part.fileEntryId);
+            if (attachment) {
+              parts.push(attachment);
             }
           }
           // Missing historical input content is omitted. Assistant artifacts

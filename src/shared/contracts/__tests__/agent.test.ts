@@ -1,5 +1,6 @@
 import {
   AgentApprovalViewSchema,
+  AgentErrorViewSchema,
   AgentInputPartSchema,
   AgentMessagePartSchema,
   AgentToolRefSchema,
@@ -41,6 +42,16 @@ describe('Agent tool and managed-file contracts', () => {
         uri: 'file:///private/image.png',
       }).success,
     ).toBe(false);
+  });
+
+  test('round-trips the classified text attachment admission error', () => {
+    const error = {
+      code: 'ATTACHMENT_INVALID',
+      message: 'Attachment "notes.txt" is not valid UTF-8 text.',
+      retryable: false,
+    } as const;
+
+    expect(AgentErrorViewSchema.parse(roundTrip(error))).toEqual(error);
   });
 
   test('round-trips stable tool identity and the RuntimeToolResult projection', () => {

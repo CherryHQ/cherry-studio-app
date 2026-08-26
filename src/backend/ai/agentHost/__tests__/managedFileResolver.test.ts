@@ -15,7 +15,13 @@ describe('managedFileResolver', () => {
       candidate.id === AVAILABLE_ID ? 'file:///private/managed/available.png' : undefined,
     );
     const readDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
-    const resolver = createManagedFileResolver({ findAvailableByIds }, getUri, readDataUrl);
+    const readBytes = jest.fn(async () => Uint8Array.from([116, 101, 120, 116]));
+    const resolver = createManagedFileResolver(
+      { findAvailableByIds },
+      getUri,
+      readDataUrl,
+      readBytes,
+    );
 
     const facts = await resolver.resolveAvailable([AVAILABLE_ID, AVAILABLE_ID, MISSING_BLOB_ID]);
 
@@ -44,6 +50,10 @@ describe('managedFileResolver', () => {
       'image/png',
       signal,
     );
+    await expect(resolver.readAsBytes(facts.get(AVAILABLE_ID)!, signal)).resolves.toEqual(
+      Uint8Array.from([116, 101, 120, 116]),
+    );
+    expect(readBytes).toHaveBeenCalledWith('file:///private/managed/available.png', signal);
   });
 
   test('drops a late image read after cancellation', async () => {
@@ -57,6 +67,7 @@ describe('managedFileResolver', () => {
       { findAvailableByIds: async () => [available] },
       () => 'file:///private/managed/available.png',
       async () => read,
+      async () => Uint8Array.from([]),
     );
 
     const pending = resolver.readAsDataUrl(availableFact(), controller.signal);

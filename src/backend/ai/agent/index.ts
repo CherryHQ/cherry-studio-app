@@ -19,6 +19,7 @@ export type {
   RuntimeModelPreflight,
   RuntimeOptions,
   RuntimeOutputPart,
+  RuntimeTextAttachmentPart,
   RuntimeTool,
   RuntimeToolRef,
   RuntimeToolResult,
