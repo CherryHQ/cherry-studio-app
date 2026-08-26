@@ -1,7 +1,7 @@
 # Agent Persistence
 
-Status: **schema, durable store, Agent CRUD, Session reads, and frontend integration active in
-production**. Version 1 is local-only.
+Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, and frontend
+integration active in production**. Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -12,8 +12,8 @@ record for mobile-originated Agent Sessions only.
 
 ## Scope
 
-- Three new tables: `agent`, `agent_session`, `agent_session_message`, plus an FTS index for
-  message search.
+- Four Agent-owned tables: `agent`, `agent_tool_binding`, `agent_session`,
+  `agent_session_message`, plus an FTS index for message search.
 - A message-centric reshape of the `AgentSessionStore` port: the protocol's Turn becomes a Host
   projection over the assistant message plus Host-held live state. The Agent Protocol itself does
   not change.
@@ -25,10 +25,10 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Out of scope: branching columns, background turns, tool configuration storage, Mobile Skill
+Out of scope: branching columns, background turns, Runtime tool projection/execution, Mobile Skill
 configuration/loading, and broader Pi provider coverage. The retired `assistant`/`topic`/`message`
-tables were removed separately after Agent surfaces became authoritative. The current three-table
-schema must still be described as tool-less.
+tables were removed separately after Agent surfaces became authoritative. Persisted bindings do not
+make the current Host tool-capable: it still supplies an empty Runtime tool snapshot.
 
 ## Current limitations
 
@@ -107,15 +107,22 @@ installs a per-Session barrier, waits any already-admitted submission to install
 then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
 are never deleted individually in V1.
 
-**Tool and Skill configuration has not migrated.** The current foundation schema has neither and
-must not be described as tool-capable persistence. Tool ownership and the logical binding direction
-are settled in
+**Tool bindings are mobile-owned configuration.** `agent_tool_binding` stores a stable built-in
+capability or MCP `(serverId, rawToolName?)` identity, its enabled state, approval policy, and an
+optional display snapshot. A missing `rawToolName` is the server default; a specific row overrides
+it. MCP server ids deliberately have no foreign key, so deleting a server atomically disables but
+does not erase its bindings. Three partial unique indexes enforce the stable identities and the
+service preserves row ids during upsert/replace. Third-party MCP writes default to `ask` and the
+Data API rejects `auto`; display names never resolve or retarget a dangling binding. The Host and Pi
+still do not read this table in the current slice. The data resolver deterministically selects a
+specific MCP tool row before its server default and reports missing Server/discovery facts as
+effective unavailability without deleting or retargeting the row. Runtime projection remains as
+described in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings).
-For Skills, only the ownership boundary is settled: the current Agent configuration selects the
-mobile-supported Skills available to its Sessions. The physical schema and loading behavior remain
-deferred. Desktop `agent_global_skill` / `agent_skill` metadata and relations must be retained for
-data parity without treating desktop Skill content as mobile-executable. Pi reads neither tool nor
-Skill persistence directly.
+
+Skill configuration remains deferred. Only the ownership boundary is settled: the current Agent
+configuration will select the mobile-supported Skills available to its Sessions. Pi reads neither
+tool nor Skill persistence directly.
 
 **Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
@@ -147,6 +154,25 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
 Indexes: `orderKeyIndex('agent')`, `agent_created_at_idx`.
+
+### `agent_tool_binding`
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | text | PK, UUID v4 | Preserved across stable-identity upserts |
+| `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE CASCADE | Hard Agent cleanup removes bindings; soft delete does not |
+| `source` | text | NOT NULL, CHECK `builtin`/`mcp` identity shape | |
+| `capabilityId` | text | NULL | Required only for `builtin` |
+| `mcpServerId` | text | NULL, no FK | Required only for `mcp`; survives server deletion |
+| `rawToolName` | text | NULL | NULL is the MCP server default |
+| `enabled` | integer (bool) | NOT NULL DEFAULT `true` | Server deletion sets related rows false in the same transaction |
+| `approval` | text | NOT NULL DEFAULT `ask`, CHECK `auto`/`ask`/`deny` | MCP Data API writes admit only `ask`/`deny` |
+| `displayNameSnapshot` | text | NULL | Repair-only UI context; never authority |
+| `createdAt` / `updatedAt` | integer | helper defaults | Stable row timestamps |
+
+Partial unique indexes enforce `(agentId, capabilityId)` for built-ins, `(agentId, mcpServerId)`
+for MCP server defaults, and `(agentId, mcpServerId, rawToolName)` for specific MCP tools. Plain
+indexes cover Agent listing/cascade and MCP server delete-time disabling.
 
 ### `agent_session`
 
@@ -248,9 +274,12 @@ storage boundary moves.
    lookup, and route Session rename/delete through the Host lifecycle boundary (done).
 6. **Frontend and retirement.** Agent UI consumes `Backend.agent`; the incompatible legacy Chat
    tables/runtime are removed without data conversion (done).
-7. **Follow-ups (separate implementation slices).** Avatar workflow (generalizing
-   `userAvatarStorage`), tool/Skill binding persistence, managed attachment and artifact
-   projection, fork columns, context compaction, and broader Pi provider coverage.
+7. **Tool binding persistence.** Add mobile-owned binding schemas, migration, Data API, deterministic
+   default/override resolution, and dangling MCP preservation (done). Runtime projection remains a
+   separate slice.
+8. **Follow-ups (separate implementation slices).** Avatar workflow (generalizing
+   `userAvatarStorage`), Skill binding persistence, managed attachment and artifact projection,
+   fork columns, context compaction, and broader Pi provider coverage.
 
 ## Rejected alternatives
 

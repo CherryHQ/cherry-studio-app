@@ -52,8 +52,8 @@ that adapter is follow-up work.
 Pi receives the complete structured transcript and Agent inference options on each execution. It
 maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
 multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
-supplies `tools: []` until the application-owned tool configuration model lands. Attachments remain
-disabled pending Host-side file resolution.
+supplies `tools: []` until persisted bindings are adapted into an immutable Runtime tool snapshot.
+Attachments remain disabled pending Host-side file resolution.
 
 ## Descriptor and lifecycle
 

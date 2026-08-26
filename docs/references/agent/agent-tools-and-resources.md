@@ -1,7 +1,7 @@
 # Agent Tools And Controlled Resources
 
-Status: **target design; application tool bindings and the Pi adapter are not yet complete**.
-Version 1 is local-only.
+Status: **tool binding persistence implemented; Runtime projection and the Pi adapter remain
+incomplete**. Version 1 is local-only.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -82,9 +82,19 @@ per `(agentId, serverId)`, and one specific binding per `(agentId, serverId, raw
 server or tool leaves a disabled/dangling binding for explicit user repair; it never retargets by
 display name.
 
-The physical SQLite shape lands with Agent CRUD integration. That is an implementation gap, not an
-open ownership question: bindings belong to Cherry persistence, the Host resolves them, and Pi must
-never read them directly.
+The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. MCP server
+ids intentionally have no foreign key: deleting a server disables its rows without erasing their
+stable identity, display snapshot, or approval. Upsert and replace preserve the row id for a stable
+identity, reject duplicates atomically, and cannot create authorization for a missing server unless
+that exact dangling identity already exists. Bindings belong to Cherry persistence, the Host
+resolves them, and Pi must never read them directly.
+
+The data resolver chooses a specific tool row before its server default, then combines that policy
+with the current stored Server state and caller-supplied discovery fact. It reports `unbound`,
+`binding-disabled`, `server-unavailable`, or `tool-unavailable` instead of silently falling back.
+A temporarily undiscovered tool keeps its stored `enabled` value; only its effective result is
+unavailable. This resolver returns configuration facts only and does not create or inject a Runtime
+tool.
 
 ## Snapshot Resolution
 

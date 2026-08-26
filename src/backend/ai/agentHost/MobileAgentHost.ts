@@ -492,7 +492,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         model: agent.model,
         history,
         input: toRuntimeInputParts(inputParts),
-        // V1 executes tool-less turns; Agent tools await the deferred definition.
+        // Binding persistence is implemented; Runtime projection lands in a later stack layer.
         tools: [],
         options: agent.options,
       });

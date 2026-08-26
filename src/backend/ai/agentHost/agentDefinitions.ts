@@ -1,11 +1,9 @@
 /**
  * Minimal Agent configuration source.
  *
- * The Agent tool configuration model is not settled yet
- * (docs/references/agent/README.md open questions). Basic chat needs only
- * id/name/model/instructions/inference options, so the Host consumes this
- * narrow source. Tools are deliberately absent because V1 executes tool-less
- * turns.
+ * Tool bindings are persisted separately, but their immutable Runtime projection
+ * is a follow-up. Basic chat needs only id/name/model/instructions/inference
+ * options, so the Host keeps this definition source narrow for now.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';

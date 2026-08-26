@@ -1,7 +1,7 @@
 # Agent Architecture
 
-Status: **Agent and Agent Session backend/frontend integration implemented**. Version 1 is
-local-only and tool-less.
+Status: **Agent, tool binding, and Agent Session persistence/backend integration implemented**.
+Version 1 is local-only and still tool-less at the Host boundary.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
@@ -57,8 +57,8 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. The current implementation
-  always resolves an empty snapshot: no tool bindings are persisted yet.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. Tool bindings are now
+  persisted, but the current Host does not project them and still supplies an empty snapshot.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -74,8 +74,8 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 - Built-in tools and Streamable HTTP MCP use one application-owned binding model with per-tool
   approval policy and stable built-in/MCP `ToolRef` identities. Provider-safe aliases and display
-  names are not persistence authority. The current database does not yet persist those bindings;
-  the logical model and resolution rules are settled in
+  names are not persistence authority. The database and Data API persist those bindings; Runtime
+  projection and execution remain separate work. The logical model and resolution rules are in
   [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 - AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
   application-owned tools. They never become a parallel Agent or Chat Runtime.
@@ -133,18 +133,18 @@ follow-ups, per the authority direction of
 
 The production Pi model adapter currently accepts API-key-authenticated OpenAI Responses endpoints.
 Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and approval decisions
-onto the Runtime contract. Agent tool configuration is still deferred, so the Host deliberately
-supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
-file resolver lands.
+onto the Runtime contract. Agent tool bindings are durable and exposed through the typed Data API,
+but Runtime adaptation is still deferred, so the Host deliberately supplies `tools: []`; file
+attachments are rejected before provider execution until the Host-side file resolver lands.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Application-owned tool configuration/resolution — tool binding persistence, the per-turn
-`RuntimeTool` snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work,
-along with Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments
-and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+Application-owned tool Runtime integration — catalog adaptation, the per-turn `RuntimeTool`
+snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work, along with
+Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments and
+artifacts, the avatar workflow, and context compaction are also separate follow-ups.
 
 ## Related
 
