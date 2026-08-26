@@ -31,8 +31,9 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMessagePart {
   const base = {
     input: part.input,
+    title: part.displayName,
     toolCallId: part.toolCallId,
-    toolName: part.toolName,
+    toolName: part.providerName,
     type: 'dynamic-tool',
   } as const;
 
@@ -60,9 +61,14 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
         state: 'output-denied',
       } as CherryMessagePart;
     case 'error':
+    case 'interrupted':
       return {
         ...base,
-        errorText: part.error?.message ?? 'Tool execution failed.',
+        errorText:
+          part.error?.message ??
+          (part.state === 'interrupted'
+            ? 'Tool execution was interrupted.'
+            : 'Tool execution failed.'),
         state: 'output-error',
       } as CherryMessagePart;
   }
@@ -76,9 +82,11 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'file':
       return {
         type: 'file',
-        filename: part.name ?? part.uri.split('/').at(-1) ?? 'File',
+        filename: part.name ?? 'File',
         mediaType: part.mediaType,
-        url: part.uri,
+        // Managed refs are resolved by the attachment feature before they can
+        // be opened. C1 deliberately exposes no raw path fallback.
+        url: '',
       } as CherryMessagePart;
     case 'tool':
       return toToolPart(part);

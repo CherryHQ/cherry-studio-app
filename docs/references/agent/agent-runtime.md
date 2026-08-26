@@ -1,8 +1,7 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime active behind the Mobile Agent Host**; the tool contract shapes
-(`RuntimeToolRef`, `RuntimeToolResult`, the `interrupted` tool state) are settled design landing
-with tool configuration. Version 1 is local-only.
+Status: **Pi Runtime and settled tool contracts active behind the Mobile Agent Host**; application
+tool configuration and injection remain follow-up work. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation

@@ -70,7 +70,7 @@ export function ChatWorkspace({
         input: approval.input,
         messageId: live.activeTurn?.assistantMessageId ?? '',
         toolCallId: approval.toolCallId,
-        toolName: approval.toolName,
+        displayName: approval.displayName,
       })),
     [live.activeTurn?.assistantMessageId, live.pendingApprovals],
   );

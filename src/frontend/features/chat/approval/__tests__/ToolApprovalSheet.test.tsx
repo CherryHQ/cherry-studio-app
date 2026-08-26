@@ -32,13 +32,6 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('@/frontend/components/messages', () => ({
-  getBuiltInToolDisplay: (toolName: string) =>
-    toolName === 'location_get_current'
-      ? { titleKey: 'chat.builtinTool.location.current' }
-      : undefined,
-}));
-
 const allowLabel = 'chat.tool.approval.allow';
 const denyLabel = 'chat.tool.approval.deny';
 
@@ -48,7 +41,7 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
     input: { query: 'cherry' },
     messageId: 'assistant-1',
     toolCallId: 'call-1',
-    toolName: 'mcp__serverOne__searchDocs',
+    displayName: 'Server One: Search docs',
     ...overrides,
   };
 }
@@ -197,7 +190,7 @@ describe('ToolApprovalSheet', () => {
     // The list empties the instant the last decision lands, but the sheet is
     // still animating out — dropping the request here flashes an empty card on
     // the way off screen.
-    expect(renderedTexts()).toContain('serverOne: searchDocs');
+    expect(renderedTexts()).toContain('Server One: Search docs');
   });
 
   test('says how many approvals are still queued behind this one', () => {
@@ -217,25 +210,24 @@ describe('ToolApprovalSheet', () => {
       makeApproval({
         approvalId: 'approval-2',
         toolCallId: 'call-2',
-        toolName: 'mcp__serverTwo__createFile',
+        displayName: 'Server Two: Create file',
       }),
     ]);
 
-    expect(renderedTexts()).toContain('serverTwo: createFile');
+    expect(renderedTexts()).toContain('Server Two: Create file');
     expect(renderer.root.findByType(BottomSheet).props.open).toBe(true);
   });
 
-  test('formats built-in tool names without exposing the internal prefix', () => {
+  test('renders the snapshotted display name without exposing the provider alias', () => {
     render({
       approvals: [
         makeApproval({
-          toolName: 'location_get_current',
-          toolType: 'builtin',
+          displayName: 'Get current location',
         }),
       ],
     });
 
-    expect(renderedTexts()).toContain('chat.builtinTool.location.current');
+    expect(renderedTexts()).toContain('Get current location');
     expect(renderedTexts()).not.toContain('location_get_current');
   });
 });

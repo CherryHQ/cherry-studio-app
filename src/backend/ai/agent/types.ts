@@ -66,6 +66,22 @@ export type RuntimeOptions = {
   temperature?: number;
 };
 
+export type RuntimeToolRef =
+  | { source: 'builtin'; capabilityId: string }
+  | { source: 'mcp'; serverId: string; rawToolName: string };
+
+export type RuntimeArtifact = {
+  ref: { kind: 'managed-file'; fileEntryId: string };
+  mediaType: string;
+  name: string;
+  kind: 'created' | 'derived';
+};
+
+export type RuntimeToolResult = {
+  value: RuntimeJsonValue;
+  artifacts: RuntimeArtifact[];
+};
+
 export type RuntimeInputPart =
   | { type: 'text'; text: string }
   | { type: 'file'; mediaType: string; name?: string; uri: string };
@@ -76,13 +92,14 @@ export type RuntimeMessagePart =
   | {
       type: 'tool-call';
       toolCallId: string;
-      toolName: string;
+      toolRef: RuntimeToolRef;
+      providerName: string;
       input: RuntimeJsonValue;
     }
   | {
       type: 'tool-result';
       toolCallId: string;
-      output: RuntimeJsonValue;
+      output: RuntimeToolResult;
       isError: boolean;
     };
 
@@ -92,14 +109,16 @@ export type RuntimeMessage = {
 };
 
 export type RuntimeTool = {
-  name: string;
+  ref: RuntimeToolRef;
+  providerName: string;
+  displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
   approval: 'auto' | 'ask' | 'deny';
   execute(
     input: RuntimeJsonValue,
     context: { signal: AbortSignal; toolCallId: string },
-  ): Promise<RuntimeJsonValue>;
+  ): Promise<RuntimeToolResult>;
 };
 
 export type RuntimeExecutionRequest = {
@@ -122,24 +141,28 @@ export type RuntimeOutputPart =
   | {
       id: string;
       type: 'file';
+      ref: { kind: 'managed-file'; fileEntryId: string };
       mediaType: string;
-      name?: string;
-      uri: string;
+      name: string;
+      purpose: 'artifact';
     }
   | {
       id: string;
       type: 'tool';
       toolCallId: string;
-      toolName: string;
+      toolRef: RuntimeToolRef;
+      providerName: string;
+      displayName: string;
       state:
         | 'input-available'
         | 'awaiting-approval'
         | 'running'
         | 'output-available'
         | 'denied'
-        | 'error';
+        | 'error'
+        | 'interrupted';
       input?: RuntimeJsonValue;
-      output?: RuntimeJsonValue;
+      output?: RuntimeToolResult;
       approvalId?: string;
       error?: RuntimeError;
     };
@@ -148,7 +171,8 @@ export type RuntimeApproval = {
   id: string;
   turnId: string;
   toolCallId: string;
-  toolName: string;
+  toolRef: RuntimeToolRef;
+  displayName: string;
   input: RuntimeJsonValue;
   status: 'pending' | 'approved' | 'denied';
 };

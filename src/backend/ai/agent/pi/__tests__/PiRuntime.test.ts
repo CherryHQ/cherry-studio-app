@@ -25,6 +25,9 @@ import {
 } from '../PiRuntime';
 
 const ERROR_SECRET = 'test-key';
+const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
+const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
+const TOOL_DISPLAY_NAME = 'Delete file';
 
 type TestAgentContext = {
   emit(event: PiAgentEvent): Promise<void>;
@@ -216,17 +219,19 @@ function baseRequest(
 
 function askTool(onExecute: () => void): RuntimeTool {
   return {
+    ref: TOOL_REF,
+    providerName: TOOL_PROVIDER_NAME,
+    displayName: TOOL_DISPLAY_NAME,
     approval: 'ask',
     description: 'Delete a file.',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string' } },
-      required: ['path'],
+      properties: { fileEntryId: { type: 'string' } },
+      required: ['fileEntryId'],
     },
-    name: 'delete_file',
     async execute() {
       onExecute();
-      return { deleted: true };
+      return { value: { deleted: true }, artifacts: [] };
     },
   };
 }
@@ -237,7 +242,7 @@ function approvalProgram(toolCallId: string): TestAgentProgram {
     if (!tool) throw new Error('Approval program requires one tool.');
     const partial = assistantMessage({
       content: [
-        { type: 'toolCall', id: toolCallId, name: tool.name, arguments: { path: '/tmp/a' } },
+        { type: 'toolCall', id: toolCallId, name: tool.name, arguments: { fileEntryId: 'file-1' } },
       ],
       stopReason: 'toolUse',
     });
@@ -256,7 +261,23 @@ function approvalProgram(toolCallId: string): TestAgentProgram {
       },
     });
     await context.emit({ type: 'message_end', message: partial });
-    const result = await tool.execute(toolCallId, { path: '/tmp/a' }, context.signal);
+    let result: Awaited<ReturnType<typeof tool.execute>>;
+    try {
+      result = await tool.execute(toolCallId, { fileEntryId: 'file-1' }, context.signal);
+    } catch {
+      const failedToolResult: ToolResultMessage = {
+        role: 'toolResult',
+        toolCallId,
+        toolName: tool.name,
+        content: [{ type: 'text', text: 'Native cancellation failure.' }],
+        details: { message: 'Native cancellation failure.' },
+        isError: true,
+        timestamp: Date.now(),
+      };
+      await context.emit({ type: 'turn_end', message: partial, toolResults: [failedToolResult] });
+      return;
+    }
+    if (context.signal.aborted) return;
     const toolResult: ToolResultMessage = {
       role: 'toolResult',
       toolCallId,
@@ -298,24 +319,15 @@ const harness: RuntimeConformanceHarness = {
       request: baseRequest(turnId, { tools: [tool] }),
       toolCallId,
       toolExecuted: () => executed,
-      toolName: tool.name,
+      toolRef: tool.ref,
+      displayName: tool.displayName,
     };
   },
 
   arrangeCancellable(runtime, turnId): ArrangedRequest {
-    arrange(runtime, async (context) => {
-      const partial = assistantMessage({ content: [{ type: 'text', text: 'Working' }] });
-      await context.emit({ type: 'message_start', message: partial });
-      await context.emit({
-        type: 'message_update',
-        message: partial,
-        assistantMessageEvent: { type: 'text_start', contentIndex: 0, partial },
-      });
-      await new Promise<void>((resolve) => {
-        context.signal.addEventListener('abort', () => resolve(), { once: true });
-      });
-    });
-    return { request: baseRequest(turnId) };
+    const tool = askTool(() => undefined);
+    arrange(runtime, approvalProgram('call-cancel'));
+    return { request: baseRequest(turnId, { tools: [tool] }) };
   },
 
   arrangeError(runtime, turnId): ArrangedErrorRequest {
@@ -332,6 +344,7 @@ const harness: RuntimeConformanceHarness = {
   sourceFiles: [
     path.resolve(__dirname, '../../types.ts'),
     path.resolve(__dirname, '../../RuntimeEventChannel.ts'),
+    path.resolve(__dirname, '../../toolResults.ts'),
     path.resolve(__dirname, '../PiRuntime.ts'),
     path.resolve(__dirname, '../modelMessages.ts'),
   ],
@@ -419,13 +432,14 @@ describe('PiRuntime mapping', () => {
             {
               type: 'tool-call',
               toolCallId: 'historic-call',
-              toolName: 'lookup',
+              toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
+              providerName: 'mcp_server_2_lookup_c3d4',
               input: { query: 'Cherry Studio' },
             },
             {
               type: 'tool-result',
               toolCallId: 'historic-call',
-              output: { found: true },
+              output: { value: { found: true }, artifacts: [] },
               isError: false,
             },
           ],
@@ -468,7 +482,7 @@ describe('PiRuntime mapping', () => {
             {
               type: 'toolCall',
               id: 'historic-call',
-              name: 'lookup',
+              name: 'mcp_server_2_lookup_c3d4',
               arguments: { query: 'Cherry Studio' },
             },
           ],
@@ -476,8 +490,8 @@ describe('PiRuntime mapping', () => {
         {
           role: 'toolResult',
           toolCallId: 'historic-call',
-          toolName: 'lookup',
-          details: { found: true },
+          toolName: 'mcp_server_2_lookup_c3d4',
+          details: { value: { found: true }, artifacts: [] },
         },
       ],
       systemPrompt: 'Be helpful.\n\nPrior system note.',
@@ -511,6 +525,109 @@ describe('PiRuntime mapping', () => {
       },
     ]);
     expect(holder.lastOptions).toBeUndefined();
+    await session.close();
+  });
+
+  test('maps stable tool identity, result envelopes, and managed artifacts', async () => {
+    const runtime = createTestRuntime();
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'create-report' },
+      providerName: 'builtin_create_report_a1b2',
+      displayName: 'Create report',
+      description: 'Create a managed report.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({
+        value: { created: true },
+        artifacts: [
+          {
+            ref: { kind: 'managed-file', fileEntryId: 'file-1' },
+            mediaType: 'text/markdown',
+            name: 'report.md',
+            kind: 'created',
+          },
+        ],
+      }),
+    };
+    const holder = arrange(runtime, approvalProgram('artifact-call'));
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-artifact', { tools: [tool] })));
+
+    expect(holder.lastOptions?.initialState?.tools?.[0]).toMatchObject({
+      name: tool.providerName,
+      label: tool.displayName,
+    });
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.state === 'output-available',
+      ),
+    ).toMatchObject({
+      part: {
+        toolRef: tool.ref,
+        providerName: tool.providerName,
+        displayName: tool.displayName,
+        output: {
+          value: { created: true },
+          artifacts: [{ ref: { kind: 'managed-file', fileEntryId: 'file-1' } }],
+        },
+      },
+    });
+    expect(
+      events.find((event) => event.type === 'part.add' && event.part.type === 'file'),
+    ).toMatchObject({
+      part: {
+        ref: { kind: 'managed-file', fileEntryId: 'file-1' },
+        purpose: 'artifact',
+      },
+    });
+    await session.close();
+  });
+
+  test('normalizes callback failures into a classified result envelope', async () => {
+    const runtime = createTestRuntime();
+    const tool: RuntimeTool = {
+      ref: TOOL_REF,
+      providerName: TOOL_PROVIDER_NAME,
+      displayName: TOOL_DISPLAY_NAME,
+      description: 'Fail safely.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => {
+        throw new Error(`native failure containing ${ERROR_SECRET}`);
+      },
+    };
+    arrange(runtime, approvalProgram('failed-call'));
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-tool-error', { tools: [tool] })),
+    );
+    const failedPart = events.find(
+      (event) =>
+        event.type === 'part.replace' && event.part.type === 'tool' && event.part.state === 'error',
+    );
+
+    expect(failedPart).toMatchObject({
+      part: {
+        error: {
+          code: 'tool_execution_error',
+          message: 'The tool failed to execute.',
+          retryable: false,
+        },
+        output: {
+          value: {
+            status: 'error',
+            error: { code: 'tool_execution_error', retryable: false },
+          },
+          artifacts: [],
+        },
+      },
+    });
+    expect(JSON.stringify(failedPart)).not.toContain(ERROR_SECRET);
     await session.close();
   });
 });

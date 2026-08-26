@@ -19,6 +19,7 @@ import type {
   FinalizeAssistantMessageInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
+import { interruptNonTerminalToolParts } from './mapping';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -192,7 +193,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
           continue;
         }
-        stored.view = { ...stored.view, status: 'interrupted', updatedAt: nowIso() };
+        stored.view = {
+          ...stored.view,
+          status: 'interrupted',
+          parts: interruptNonTerminalToolParts(stored.view.parts, error.message),
+          updatedAt: nowIso(),
+        };
         if (stored.view.role === 'assistant') {
           stored.error = cloneJson(error);
           count += 1;

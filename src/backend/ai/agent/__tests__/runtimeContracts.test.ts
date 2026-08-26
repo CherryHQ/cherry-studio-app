@@ -1,0 +1,37 @@
+import type { RuntimeArtifact, RuntimeTool, RuntimeToolRef, RuntimeToolResult } from '../types';
+
+describe('Agent Runtime settled contracts', () => {
+  test('round-trips stable refs, results, and managed artifacts as JSON', async () => {
+    const ref: RuntimeToolRef = {
+      source: 'mcp',
+      serverId: 'server-1',
+      rawToolName: 'search',
+    };
+    const artifact: RuntimeArtifact = {
+      ref: { kind: 'managed-file', fileEntryId: 'file-1' },
+      mediaType: 'text/markdown',
+      name: 'result.md',
+      kind: 'created',
+    };
+    const expected: RuntimeToolResult = {
+      value: { matches: 2 },
+      artifacts: [artifact],
+    };
+    const tool: RuntimeTool = {
+      ref,
+      providerName: 'mcp_server_1_search_a1b2',
+      displayName: 'Search',
+      description: 'Search documents.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => expected,
+    };
+
+    const result = await tool.execute(
+      { query: 'Cherry Studio' },
+      { signal: new AbortController().signal, toolCallId: 'call-1' },
+    );
+
+    expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });
+  });
+});

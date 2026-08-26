@@ -85,6 +85,7 @@ import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import {
+  interruptNonTerminalToolParts,
   toAgentApprovalView,
   toAgentErrorView,
   toAgentMessagePart,
@@ -327,9 +328,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           : {
               id: `input-${index}`,
               type: 'file',
+              fileEntryId: part.fileEntryId,
               mediaType: part.mediaType,
               ...(part.name !== undefined ? { name: part.name } : {}),
-              uri: part.uri,
+              purpose: 'input-attachment',
             },
       );
 
@@ -618,10 +620,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
   ): Promise<void> {
-    const parts: AgentMessagePart[] = state.assistantMessage.parts.map((part) =>
-      (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
-        ? { ...part, state: 'done' }
-        : part,
+    const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
+      state.assistantMessage.parts.map((part) =>
+        (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
+          ? { ...part, state: 'done' }
+          : part,
+      ),
+      'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
       parts.push({ id: `error-${state.turn.id}`, type: 'error', error });

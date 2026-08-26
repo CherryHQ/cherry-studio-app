@@ -20,6 +20,22 @@ const translations: Record<string, string> = {
 };
 const t = (key: string) => translations[key] ?? key;
 
+function toolPart(rawToolName: string): Extract<AgentMessagePart, { type: 'tool' }> {
+  return {
+    id: 'tool-1',
+    input: {},
+    state: 'running',
+    toolCallId: 'call-1',
+    toolRef:
+      rawToolName === 'private_mcp_tool'
+        ? { source: 'mcp', serverId: 'server-1', rawToolName }
+        : { source: 'builtin', capabilityId: rawToolName },
+    providerName: `provider_${rawToolName}`,
+    displayName: rawToolName,
+    type: 'tool',
+  };
+}
+
 describe('deriveBackgroundReplyContent', () => {
   test('moves from preparing through thinking to responding', () => {
     expect(deriveBackgroundReplyContent(undefined, t)).toEqual({
@@ -49,19 +65,7 @@ describe('deriveBackgroundReplyContent', () => {
     ['calendar_list_events', 'Find calendar events'],
     ['private_mcp_tool', 'Using a tool'],
   ])('maps active tool %s to a safe label', (toolName, detail) => {
-    const content = deriveBackgroundReplyContent(
-      message([
-        {
-          id: 'tool-1',
-          input: {},
-          state: 'running',
-          toolCallId: 'call-1',
-          toolName,
-          type: 'tool',
-        },
-      ]),
-      t,
-    );
+    const content = deriveBackgroundReplyContent(message([toolPart(toolName)]), t);
 
     expect(content).toEqual({ detail, phase: 'using-tool' });
   });
@@ -71,13 +75,10 @@ describe('deriveBackgroundReplyContent', () => {
       message([
         { type: 'text', text: 'Partial **answer**' },
         {
+          ...toolPart('private_mcp_tool'),
           approvalId: 'approval-1',
-          id: 'tool-1',
           input: { secret: 'not rendered' },
           state: 'awaiting-approval',
-          toolCallId: 'call-1',
-          toolName: 'private_tool',
-          type: 'tool',
         },
       ]),
       t,
@@ -91,14 +92,7 @@ describe('deriveBackgroundReplyContent', () => {
   });
 
   test('derives tool and approval phases from Agent message parts', () => {
-    const tool = {
-      id: 'tool-1',
-      input: {},
-      state: 'running',
-      toolCallId: 'call-1',
-      toolName: 'web_search',
-      type: 'tool',
-    } as const satisfies AgentMessagePart;
+    const tool = toolPart('web_search');
     expect(deriveBackgroundReplyContent({ parts: [tool] }, t)).toEqual({
       detail: 'Searching the web',
       phase: 'using-tool',

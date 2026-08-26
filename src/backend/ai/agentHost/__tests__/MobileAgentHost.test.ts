@@ -24,6 +24,9 @@ import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
 
 const AGENT_ID = 'agent-under-test';
+const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
+const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
+const TOOL_DISPLAY_NAME = 'Delete file';
 
 const USAGE_CONTEXT: RuntimeUsageContext = {
   credentialReceipt: { attribution: 'unknown' },
@@ -638,9 +641,11 @@ describe('MobileAgentHost', () => {
           id: 'tool-0',
           type: 'tool',
           toolCallId: 'call-1',
-          toolName: 'delete_file',
+          toolRef: TOOL_REF,
+          providerName: TOOL_PROVIDER_NAME,
+          displayName: TOOL_DISPLAY_NAME,
           state: 'awaiting-approval',
-          input: { path: '/tmp/x' },
+          input: { fileEntryId: 'file-1' },
           approvalId,
         },
       });
@@ -650,8 +655,9 @@ describe('MobileAgentHost', () => {
           id: approvalId,
           turnId: controller.turnId,
           toolCallId: 'call-1',
-          toolName: 'delete_file',
-          input: { path: '/tmp/x' },
+          toolRef: TOOL_REF,
+          displayName: TOOL_DISPLAY_NAME,
+          input: { fileEntryId: 'file-1' },
           status: 'pending',
         },
       });
@@ -662,8 +668,9 @@ describe('MobileAgentHost', () => {
           id: approvalId,
           turnId: controller.turnId,
           toolCallId: 'call-1',
-          toolName: 'delete_file',
-          input: { path: '/tmp/x' },
+          toolRef: TOOL_REF,
+          displayName: TOOL_DISPLAY_NAME,
+          input: { fileEntryId: 'file-1' },
           status: decision === 'approve' ? 'approved' : 'denied',
         },
       });
@@ -673,10 +680,18 @@ describe('MobileAgentHost', () => {
           id: 'tool-0',
           type: 'tool',
           toolCallId: 'call-1',
-          toolName: 'delete_file',
+          toolRef: TOOL_REF,
+          providerName: TOOL_PROVIDER_NAME,
+          displayName: TOOL_DISPLAY_NAME,
           state: decision === 'approve' ? 'output-available' : 'denied',
-          input: { path: '/tmp/x' },
-          output: decision === 'approve' ? { deleted: true } : undefined,
+          input: { fileEntryId: 'file-1' },
+          output:
+            decision === 'approve'
+              ? { value: { deleted: true }, artifacts: [] }
+              : {
+                  value: { status: 'denied', reason: 'The user denied this tool call.' },
+                  artifacts: [],
+                },
         },
       });
       controller.emit({ type: 'completed' });
@@ -759,7 +774,7 @@ describe('MobileAgentHost', () => {
     await expect(
       host.submitMessage({
         sessionId: session.id,
-        parts: [{ type: 'file', mediaType: 'image/png', uri: 'file:///x.png' }],
+        parts: [{ type: 'file', fileEntryId: 'file-1', mediaType: 'image/png' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
     expect(await store.listMessages(session.id)).toEqual([]);

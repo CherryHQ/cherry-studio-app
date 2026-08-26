@@ -389,6 +389,55 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       .get(session.id) as { last_activity_at: number };
     expect(sessionRow.last_activity_at).toBeGreaterThan(0);
   });
+
+  test('reconciliation atomically terminalizes persisted non-terminal tool parts', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await store.createSession({ agentId });
+    const reserved = await store.reserveSubmission({
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Use the tool.', state: 'done' }],
+    });
+    raw.prepare('UPDATE agent_session_message SET data = ?, status = ? WHERE id = ?').run(
+      JSON.stringify({
+        version: 1,
+        parts: [
+          {
+            id: 'tool-1',
+            type: 'tool',
+            toolCallId: 'call-1',
+            toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+            providerName: 'mcp_server_1_search_a1b2',
+            displayName: 'Search',
+            state: 'awaiting-approval',
+            input: { query: 'Cherry Studio' },
+            approvalId: 'approval-1',
+          },
+        ],
+      }),
+      'streaming',
+      reserved.assistantMessage.id,
+    );
+
+    expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(1);
+
+    const assistant = (await store.listMessages(session.id))[1];
+    expect(assistant).toMatchObject({
+      status: 'interrupted',
+      parts: [
+        {
+          id: 'tool-1',
+          state: 'interrupted',
+          output: {
+            value: { status: 'interrupted', reason: INTERRUPTED.message },
+            artifacts: [],
+          },
+        },
+      ],
+    });
+    expect(assistant?.parts[0]).not.toHaveProperty('approvalId');
+  });
 });
 
 type MigrationJournal = { entries: { tag: string }[] };
