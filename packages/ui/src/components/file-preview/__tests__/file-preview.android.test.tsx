@@ -42,7 +42,7 @@ describe('FilePreview.android', () => {
   });
 
   it('opens files with the localized chooser label', async () => {
-    const renderer = render(<FilePreview file={file('document')} labels={labels} />);
+    const renderer = render(<FilePreview file={file('image')} labels={labels} />);
 
     await act(async () => renderer.root.findByType('FilePreviewFrame').props.onPress());
 
@@ -65,6 +65,7 @@ function file(kind: FilePreviewFile['kind']): FilePreviewFile {
     extensionLabel: 'PDF',
     id: 'file-1',
     kind,
+    previewUri: 'file:///cache/brief.webp',
     revision: 42,
     uri: 'file:///documents/brief.pdf',
   };

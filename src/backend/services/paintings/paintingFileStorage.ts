@@ -1,6 +1,6 @@
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import {
-  createInternalEntry,
   discardInternalEntries,
   getInternalFileUri,
   imageUriToDataUrl,
@@ -15,7 +15,7 @@ import type { PaintingFileStorage } from './tasks/paintingGenerateJobHandler';
  * because everything it closes over is one too.
  */
 export const paintingFileStorage: PaintingFileStorage = {
-  createInternalEntry: (input) => createInternalEntry(fileEntryService, input),
+  createInternalEntry: (input) => createInternalEntryWithPreview(fileEntryService, input),
   discard: (entries) => discardInternalEntries(fileEntryService, entries),
   getUri: getInternalFileUri,
   readDataUrl: imageUriToDataUrl,

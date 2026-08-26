@@ -9,11 +9,14 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
-import type { FileEntry } from '@/shared/data/types/file';
+import { FileEntrySkeleton, LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
 
 import { FileLibrarySkeleton } from './components/FileLibrarySkeleton';
-import { type FileLibraryFilter, useFileEntries } from './hooks/useFileEntries';
+import {
+  type FileLibraryEntry,
+  type FileLibraryFilter,
+  useFileEntries,
+} from './hooks/useFileEntries';
 import { fileLibraryGrid } from './utils/constants';
 
 type FileLibraryListProps = {
@@ -149,17 +152,17 @@ function useScrollToTopOnChange(
   }, [filter, listRef]);
 }
 
-function fileEntryKeyExtractor(item: FileEntry) {
-  return item.id;
+function fileEntryKeyExtractor(item: FileLibraryEntry) {
+  return item.entry.id;
 }
 
-function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileEntry>) {
-  return <FileTile entry={item} size={extraData as number} />;
+function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibraryEntry>) {
+  return <FileTile item={item} size={extraData as number} />;
 }
 
-// Memoised on the entry identity: paging in a tile must not re-render — and so
-// re-resolve the URI of — every tile already on screen.
-const FileTile = memo(function FileTile({ entry, size }: { entry: FileEntry; size: number }) {
+// URI pages retain prior item identities when a new page appends, so mounted
+// tiles stay on the memoized path while the next page resolves.
+const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
   return (
     <View
       style={{
@@ -167,7 +170,16 @@ const FileTile = memo(function FileTile({ entry, size }: { entry: FileEntry; siz
         paddingHorizontal: fileLibraryGrid.tileGap / 2,
       }}
     >
-      <LoadedFileEntryPreview entry={entry} size={size} />
+      {item.entry.mediaType.startsWith('image/') && !item.previewUri ? (
+        <FileEntrySkeleton size={size} />
+      ) : (
+        <LoadedFileEntryPreview
+          entry={item.entry}
+          previewUri={item.previewUri}
+          size={size}
+          uri={item.uri}
+        />
+      )}
     </View>
   );
 });

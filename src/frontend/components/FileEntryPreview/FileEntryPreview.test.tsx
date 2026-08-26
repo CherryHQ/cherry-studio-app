@@ -8,7 +8,6 @@ const mockAlertShow = jest.fn();
 const mockFilePreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockLoggerWarn = jest.fn();
 const mockSkeleton = jest.fn((_props: Record<string, unknown>) => null);
-const mockUseFileUri = jest.fn();
 const mockUseResolvedFile = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -23,7 +22,6 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 jest.mock('./hooks/useResolvedFile', () => ({
-  useFileUri: (entryId: string) => mockUseFileUri(entryId),
   useResolvedFile: (entryId: string) => mockUseResolvedFile(entryId),
 }));
 
@@ -43,7 +41,6 @@ describe('FileEntryPreview', () => {
       data: { entry, uri: 'file:///documents/image.png' },
       isLoading: false,
     });
-    mockUseFileUri.mockReturnValue({ data: 'file:///documents/image.png', isLoading: false });
   });
 
   it('adapts a managed file into the CherryUI descriptor', () => {
@@ -59,6 +56,7 @@ describe('FileEntryPreview', () => {
           extensionLabel: 'PNG',
           id: entry.id,
           kind: 'image',
+          previewUri: undefined,
           revision: 42,
           uri: 'file:///documents/image.png',
         },
@@ -71,31 +69,28 @@ describe('FileEntryPreview', () => {
     );
   });
 
-  it('resolves only the URI when the caller already holds the entry', () => {
+  it('uses the URI supplied with an already-loaded entry', () => {
     act(() => {
-      create(<LoadedFileEntryPreview entry={entry} size={160} />);
+      create(
+        <LoadedFileEntryPreview
+          entry={entry}
+          previewUri="file:///cache/image.webp"
+          size={160}
+          uri="file:///documents/image.png"
+        />,
+      );
     });
 
     expect(mockUseResolvedFile).not.toHaveBeenCalled();
-    expect(mockUseFileUri).toHaveBeenCalledWith(entry.id);
     expect(mockFilePreview).toHaveBeenCalledWith(
       expect.objectContaining({
-        file: expect.objectContaining({ id: entry.id, uri: 'file:///documents/image.png' }),
+        file: expect.objectContaining({
+          id: entry.id,
+          previewUri: 'file:///cache/image.webp',
+          uri: 'file:///documents/image.png',
+        }),
       }),
     );
-  });
-
-  it('uses the shared file-entry skeleton while its URI resolves', () => {
-    mockUseFileUri.mockReturnValue({ data: undefined, isLoading: true });
-
-    act(() => {
-      create(<LoadedFileEntryPreview entry={entry} size={160} />);
-    });
-
-    expect(mockFilePreview).not.toHaveBeenCalled();
-    expect(mockSkeleton).toHaveBeenCalledWith({
-      style: { borderRadius: 16, height: 160, width: 160 },
-    });
   });
 
   it('uses the shared file-entry skeleton while the entry resolves', () => {

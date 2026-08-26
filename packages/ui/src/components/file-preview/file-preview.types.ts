@@ -6,6 +6,7 @@ export type FilePreviewFile = {
   extensionLabel: string;
   id: string;
   kind: FilePreviewKind;
+  previewUri?: string;
   revision: number | string;
   uri: string;
 };

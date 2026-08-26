@@ -14,12 +14,17 @@ export function fileEntryExtensionLabel(entry: Pick<FileEntry, 'filename'>): str
  * The whole mapping from a managed entry to CherryUI's neutral descriptor, so
  * every caller classifies images and labels extensions the same way.
  */
-export function toFilePreviewFile(entry: FileEntry, uri: string): FilePreviewFile {
+export function toFilePreviewFile(
+  entry: FileEntry,
+  uri: string,
+  previewUri?: string,
+): FilePreviewFile {
   return {
     displayName: fileEntryDisplayName(entry),
     extensionLabel: fileEntryExtensionLabel(entry),
     id: entry.id,
     kind: entry.mediaType.startsWith('image/') ? 'image' : 'document',
+    previewUri,
     revision: entry.updatedAt,
     uri,
   };

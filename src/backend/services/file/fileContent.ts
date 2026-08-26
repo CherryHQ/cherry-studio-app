@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import {
+  type FileEntry,
   type FileEntryId,
   FileEntryIdSchema,
   MediaTypeSchema,
@@ -9,7 +10,11 @@ import {
 } from '@/shared/data/types/file';
 
 import {
-  createInternalEntry as createStoredInternalEntry,
+  createInternalEntryWithPreview,
+  generateFilePreviewUri,
+  resolveCachedFilePreviewUris,
+} from './filePreviewStorage';
+import {
   deleteInternalEntry,
   discardInternalEntries,
   getFileUri,
@@ -32,7 +37,7 @@ const createInternalEntryInputSchema = z.strictObject({
 export const fileContent = {
   createInternalEntry: async (input: { mediaType?: string; name?: string; uri: string }) => {
     const validated = createInternalEntryInputSchema.parse(input);
-    const entry = await createStoredInternalEntry(fileEntryService, {
+    const entry = await createInternalEntryWithPreview(fileEntryService, {
       mediaType: validated.mediaType,
       name: validated.name,
       source: 'uri',
@@ -46,6 +51,8 @@ export const fileContent = {
     return resolved;
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
+  generatePreviewUri: generateFilePreviewUri,
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
+  resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),
   resolve: (id: FileEntryId) => resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id)),
 };

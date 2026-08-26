@@ -6,7 +6,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 import { FileEntrySkeleton } from './FileEntrySkeleton';
-import { useFileUri, useResolvedFile } from './hooks/useResolvedFile';
+import { useResolvedFile } from './hooks/useResolvedFile';
 import { toFilePreviewFile } from './utils/fileEntryPresentation';
 
 const logger = loggerService.withContext('FileEntryPreview');
@@ -23,28 +23,34 @@ export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size
 }
 
 /**
- * Same preview for a caller that already holds the entry — a list page, say —
- * so rendering a page of files costs one URI resolution each and no re-read of
- * rows the list just returned.
+ * Same preview for a caller that already holds the entry and its resolved URI.
  */
-export function LoadedFileEntryPreview({ entry, size }: { entry: FileEntry; size?: number }) {
-  const uriQuery = useFileUri(entry.id);
-
-  if (uriQuery.isLoading) {
-    return <FileEntrySkeleton size={size} />;
-  }
-
-  return <EntryPreview entry={entry} entryId={entry.id} size={size} uri={uriQuery.data} />;
+export function LoadedFileEntryPreview({
+  entry,
+  previewUri,
+  size,
+  uri,
+}: {
+  entry: FileEntry;
+  previewUri: string | undefined;
+  size?: number;
+  uri: string | undefined;
+}) {
+  return (
+    <EntryPreview entry={entry} entryId={entry.id} previewUri={previewUri} size={size} uri={uri} />
+  );
 }
 
 function EntryPreview({
   entry,
   entryId,
+  previewUri,
   size,
   uri,
 }: {
   entry: FileEntry | undefined;
   entryId: FileEntryId;
+  previewUri?: string;
   size?: number;
   uri: string | undefined;
 }) {
@@ -62,7 +68,7 @@ function EntryPreview({
 
   return (
     <FilePreview
-      file={entry && uri ? toFilePreviewFile(entry, uri) : null}
+      file={entry && uri ? toFilePreviewFile(entry, uri, previewUri) : null}
       labels={{
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),

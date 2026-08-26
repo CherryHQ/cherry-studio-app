@@ -46,9 +46,7 @@ describe('FilePreview.ios', () => {
     const error = new Error('open failed');
     const onError = jest.fn();
     mockPreviewFile.mockRejectedValue(error);
-    const renderer = render(
-      <FilePreview file={file('document')} labels={labels} onError={onError} />,
-    );
+    const renderer = render(<FilePreview file={file('image')} labels={labels} onError={onError} />);
 
     await act(async () => renderer.root.findByType('FilePreviewFrame').props.onPress());
 
@@ -66,6 +64,7 @@ function file(kind: FilePreviewFile['kind']): FilePreviewFile {
     extensionLabel: 'PDF',
     id: 'file-1',
     kind,
+    previewUri: 'file:///cache/brief.webp',
     revision: 42,
     uri: 'file:///documents/brief.pdf',
   };

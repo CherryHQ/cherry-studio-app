@@ -5,7 +5,8 @@ It resolves the entry and local URI, classifies images, injects translations, lo
 and presents an Alert when the system viewer cannot open a file.
 
 `LoadedFileEntryPreview` is the same adapter for a caller that already holds the `FileEntry` — a
-list page, say — and so resolves only the URI instead of re-reading the row.
+list page, say — and accepts original and preview URIs resolved in the same batch as its peers.
+Image cards render the bounded WebP preview while opening continues to use the original file.
 
 `FileEntrySkeleton` is the shared same-sized placeholder for both adapters and file-entry grids.
 

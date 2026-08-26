@@ -8,7 +8,7 @@ export function ImagePreview({ file }: { file: FilePreviewFile }) {
       className="absolute inset-0 bg-secondary"
       contentFit="cover"
       recyclingKey={`${file.id}:${file.revision}`}
-      source={file.uri}
+      source={file.previewUri ?? file.uri}
     />
   );
 }

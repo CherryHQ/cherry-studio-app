@@ -41,7 +41,8 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
-import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { createMessagePartsWithPreviews } from '@/backend/services/file/filePreviewStorage';
+import { discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type {
   ChatFollowUpInput,
   ChatSendNewTopicTextInput,
@@ -141,7 +142,7 @@ function createHostDependencies(
   return {
     backgroundReply,
     files: {
-      createParts: (parts) => createMessageParts(fileEntryService, parts),
+      createParts: (parts) => createMessagePartsWithPreviews(fileEntryService, parts),
       discard: (entries) => discardInternalEntries(fileEntryService, entries),
     },
     services: {

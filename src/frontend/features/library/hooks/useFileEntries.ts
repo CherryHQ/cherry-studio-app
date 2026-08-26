@@ -1,7 +1,8 @@
+import { queryOptions, useQueries } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { useInfiniteQuery } from '@/frontend/data';
+import { queryKeys, useBackendModule, useInfiniteQuery } from '@/frontend/data';
 import type { FileEntry } from '@/shared/data/types/file';
 
 import { fileLibraryMinVisibleTiles } from '../utils/constants';
@@ -9,6 +10,20 @@ import { fileLibraryMinVisibleTiles } from '../utils/constants';
 const pageSize = 30;
 
 export type FileLibraryFilter = 'all' | 'document' | 'image';
+export type FileLibraryEntry = {
+  entry: FileEntry;
+  previewUri: string | undefined;
+  uri: string | undefined;
+};
+
+type FileLibraryUriPageResult = {
+  data: FileLibraryEntry[] | undefined;
+  isPending: boolean;
+};
+
+type FileLibraryPreviewResult = {
+  data: FileLibraryEntry | undefined;
+};
 
 /**
  * One cursor walk over every file, partitioned by the kind tabs client-side.
@@ -20,12 +35,66 @@ export type FileLibraryFilter = 'all' | 'document' | 'image';
  * cannot share a thing.
  */
 export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled: boolean }) {
+  const file = useBackendModule('file');
   const query = useInfiniteQuery('/files/entries', { enabled, limit: pageSize });
   const loadNext = query.loadNext;
-  const loaded = useMemo(() => query.pages.flatMap((page) => page.items), [query.pages]);
+  const uriPageQueries = useMemo(
+    () =>
+      query.pages.map((page) =>
+        queryOptions({
+          queryFn: async (): Promise<FileLibraryEntry[]> => {
+            const uris = await file.resolveUris(page.items);
+            return page.items.map((entry, index) => ({
+              entry,
+              previewUri: uris[index]?.previewUri,
+              uri: uris[index]?.uri,
+            }));
+          },
+          queryKey: queryKeys.files.previewUriPage(page.items),
+          retry: false,
+          staleTime: Infinity,
+        }),
+      ),
+    [file, query.pages],
+  );
+  const combineUriPages = useCallback((results: readonly FileLibraryUriPageResult[]) => {
+    return {
+      entries: results.flatMap((result) => result.data ?? []),
+      isPending: results.some((result) => result.isPending),
+    };
+  }, []);
+  const uriPages = useQueries({ combine: combineUriPages, queries: uriPageQueries });
+  const previewQueries = useMemo(
+    () =>
+      uriPages.entries.map((item) => {
+        const needsPreview =
+          Boolean(item.uri) && item.entry.mediaType.startsWith('image/') && !item.previewUri;
+        return queryOptions({
+          enabled: needsPreview,
+          initialData: needsPreview ? undefined : item,
+          queryFn: async (): Promise<FileLibraryEntry> => ({
+            ...item,
+            previewUri: await file.generatePreviewUri(item.entry),
+          }),
+          queryKey: queryKeys.files.previewUri(item.entry),
+          retry: false,
+          staleTime: Infinity,
+        });
+      }),
+    [file, uriPages.entries],
+  );
+  const combinePreviews = useCallback(
+    (results: readonly FileLibraryPreviewResult[]) =>
+      results.map((result, index) => result.data ?? uriPages.entries[index]),
+    [uriPages.entries],
+  );
+  const resolvedEntries = useQueries({ combine: combinePreviews, queries: previewQueries });
   const entries = useMemo(
-    () => (filter === 'all' ? loaded : loaded.filter((entry) => entryKind(entry) === filter)),
-    [filter, loaded],
+    () =>
+      filter === 'all'
+        ? resolvedEntries
+        : resolvedEntries.filter((item) => entryKind(item.entry) === filter),
+    [filter, resolvedEntries],
   );
 
   useRefreshOnRefocus(query.refresh, enabled);
@@ -44,7 +113,7 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
 
   return {
     entries,
-    isLoading: loaded.length === 0 && (!enabled || query.isLoading),
+    isLoading: uriPages.entries.length === 0 && (!enabled || query.isLoading || uriPages.isPending),
     isLoadingMore: query.isLoadingMore,
     loadMore,
   };
