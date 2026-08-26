@@ -4,8 +4,8 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
+  Api as PiApi,
   AssistantMessage,
-  FetchFunction,
   Message as PiMessage,
   Model as PiModel,
   ModelThinkingLevel,
@@ -30,14 +30,11 @@ import type {
 import { toPiConversation } from './modelMessages';
 
 export type PiModelResolution = {
-  apiKey: string;
   defaultThinkingLevel: ModelThinkingLevel;
-  fetch?: FetchFunction;
-  headers?: Record<string, string>;
-  maxRetries: number;
-  model: PiModel<'openai-responses'>;
+  model: PiModel<PiApi>;
+  redactionValues: readonly string[];
+  streamFn: AgentOptions['streamFn'];
   supportsTools: boolean;
-  timeoutMs: number;
   usageContext: RuntimeUsageContext;
 };
 
@@ -165,11 +162,7 @@ function normalizeExecutionError(error: unknown, secrets: readonly string[] = []
 }
 
 function sensitiveValues(resolution: PiModelResolution): string[] {
-  const values = [resolution.apiKey];
-  for (const [name, value] of Object.entries(resolution.headers ?? {})) {
-    if (/authorization|api[-_]key|token|secret/i.test(name)) values.push(value);
-  }
-  return values;
+  return [...resolution.redactionValues];
 }
 
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
@@ -327,22 +320,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
 
       const conversation = toPiConversation(request, resolution.model);
-      const streamFn: AgentOptions['streamFn'] = async (model, context, options) => {
-        const { streamSimple } = await import('@earendil-works/pi-ai/api/openai-responses');
-        return streamSimple(model as PiModel<'openai-responses'>, context, {
-          ...options,
-          apiKey: resolution.apiKey,
-          fetch: resolution.fetch,
-          headers: resolution.headers,
-          maxRetries: resolution.maxRetries,
-          maxTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
-          signal: options?.signal,
-          temperature: request.options.temperature,
-          timeoutMs: resolution.timeoutMs,
-        });
-      };
       const agentOptions: AgentOptions = {
-        getApiKey: () => resolution.apiKey,
         initialState: {
           messages: conversation.history,
           model: resolution.model,
@@ -350,7 +328,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           thinkingLevel: resolveThinkingLevel(request, resolution),
           tools: this.toPiTools(request.tools, turn),
         },
-        streamFn,
+        streamFn: resolution.streamFn,
       };
       const agent = this.createAgent
         ? this.createAgent(agentOptions)
