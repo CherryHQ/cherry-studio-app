@@ -310,6 +310,7 @@ describe.each([
   test('stores a checkpoint on the assistant terminal write and reads the newest candidate', async () => {
     const session = await store.createSession({ agentId });
     const first = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
     });

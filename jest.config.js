@@ -34,6 +34,13 @@ module.exports = {
   // them out of the Haste map so package names remain unique during tests.
   modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    // These patched Pi subpaths intentionally expose ESM through import-only
+    // conditions. Jest resolves the app tests as CommonJS, so point it at the
+    // same published files directly and let babel-jest transform them below.
+    '^@earendil-works/pi-agent-core/compaction$':
+      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-ai/utils/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/utils/$1.js',
     '^@cherrystudio/ui/background-activity/ios$':
       '<rootDir>/packages/ui/src/background-activity/background-activity.ios.tsx',
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
@@ -57,7 +64,7 @@ module.exports = {
     // arrives transitively through Expo Router's public exports.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|uuid|voyage-ai-provider|@opeoginni)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|uuid|voyage-ai-provider|@opeoginni|@earendil-works)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };
