@@ -6,7 +6,9 @@
 
 import {
   FakeRuntime,
+  type RuntimeDescriptor,
   type RuntimeExecutionRequest,
+  type RuntimeTool,
   type RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
@@ -22,6 +24,7 @@ import type { AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
+import type { AgentToolSource } from '../tools/builtInToolSource';
 
 const AGENT_ID = 'agent-under-test';
 
@@ -84,7 +87,22 @@ const usage = {
   record: jest.fn(),
 };
 
-function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): MobileAgentHost {
+/** Keeps the suite off the production catalog, which reads the database. */
+const noOpTools: AgentToolSource = { getTools: async () => [] };
+
+const stubTool: RuntimeTool = {
+  name: 'stub_tool',
+  description: 'Does nothing.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  approval: 'auto',
+  execute: async () => ({ status: 'ok' }),
+};
+
+function createHost(
+  runtime: FakeRuntime,
+  naming: NamingOverride = noOpNaming,
+  tools: AgentToolSource = noOpTools,
+): MobileAgentHost {
   return new MobileAgentHost(
     store,
     unusedAiService,
@@ -95,12 +113,17 @@ function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): 
       agents,
       naming,
       usage,
+      tools,
     },
   );
 }
 
-function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
-  const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+function hostWithText(
+  texts: string[],
+  requests: RuntimeExecutionRequest[] = [],
+  options: { descriptor?: RuntimeDescriptor; tools?: AgentToolSource } = {},
+): MobileAgentHost {
+  const runtime = new FakeRuntime({ descriptor: options.descriptor ?? FAKE_DESCRIPTOR });
   for (const text of texts) {
     runtime.script((controller) => {
       requests.push(controller.request);
@@ -125,7 +148,7 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       controller.emit({ type: 'completed' });
     });
   }
-  return createHost(runtime);
+  return createHost(runtime, noOpNaming, options.tools);
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -273,6 +296,74 @@ describe('MobileAgentHost', () => {
     await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'More.' }] });
     await waitFor(() => terminalTurnEvent(secondEvents) !== undefined, 'the second turn');
     expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
+  });
+
+  test('hands the turn the tools resolved for its model', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Save it.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).toHaveBeenCalledWith({ providerId: 'mock-provider', modelId: 'mock-model' });
+    expect(requests[0]?.tools).toEqual([stubTool]);
+  });
+
+  test('runs the turn tool-less when the catalog cannot be resolved', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Hi'], requests, {
+      tools: {
+        getTools: async () => {
+          throw new Error('database unavailable');
+        },
+      },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+    expect(requests[0]?.tools).toEqual([]);
+  });
+
+  test('skips tool resolution for a runtime that cannot run tools', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const getTools = jest.fn(async () => [stubTool]);
+    const host = hostWithText(['Hi'], requests, {
+      descriptor: {
+        ...FAKE_DESCRIPTOR,
+        capabilities: { ...FAKE_DESCRIPTOR.capabilities, tools: false },
+      },
+      tools: { getTools },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(getTools).not.toHaveBeenCalled();
+    expect(requests[0]?.tools).toEqual([]);
   });
 
   test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
