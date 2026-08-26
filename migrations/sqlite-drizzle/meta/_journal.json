@@ -50,6 +50,13 @@
       "when": 1787716659144,
       "tag": "0006_natural_blur",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787726636521,
+      "tag": "0007_agent-tool-bindings",
+      "breakpoints": true
     }
   ]
 }

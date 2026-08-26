@@ -1,13 +1,14 @@
 # Agent Tools And Controlled Resources
 
-Status: **target design; settled Runtime tool contracts and the Pi adapter are active, while
-application tool bindings remain follow-up work**. Version 1 is local-only.
+Status: **tool binding persistence, settled Runtime tool contracts, and the Pi adapter are active;
+persisted binding projection remains incomplete**. Version 1 is local-only.
 
 One capability is as-built ahead of the full design: `write_file` (see
 [Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
 injects a fixed catalog into every turn, and the tool uses the settled `ToolRef` and
-`{ value, artifacts }` contracts. Durable bindings and the turn resource ledger do not exist yet.
-Sections that a shipped tool still diverges from carry an **As-built** note.
+`{ value, artifacts }` contracts. Durable bindings exist but are not yet consumed by the Host; the
+turn resource ledger does not exist yet. Sections that a shipped tool still diverges from carry an
+**As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -61,9 +62,9 @@ Host snapshots a display name separately so historical UI remains understandable
 configuration changes.
 
 **As-built.** The turn-local representation exists: `write_file` has a stable built-in `ToolRef`
-and keeps `write_file` as its provider alias for compatibility. The durable binding representation
-does not exist yet, and the Host builds the same one-tool catalog for every Agent. The `agent` table
-therefore still has no tool-policy column.
+and keeps `write_file` as its provider alias for compatibility. Durable bindings live in the
+normalized `agent_tool_binding` table, but the Host does not project them yet and builds the same
+one-tool catalog for every eligible Agent. The `agent` table therefore has no tool-policy column.
 
 The logical binding model is:
 
@@ -93,9 +94,19 @@ per `(agentId, serverId)`, and one specific binding per `(agentId, serverId, raw
 server or tool leaves a disabled/dangling binding for explicit user repair; it never retargets by
 display name.
 
-The physical SQLite shape lands with Agent CRUD integration. That is an implementation gap, not an
-open ownership question: bindings belong to Cherry persistence, the Host resolves them, and Pi must
-never read them directly.
+The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. MCP server
+ids intentionally have no foreign key: deleting a server disables its rows without erasing their
+stable identity, display snapshot, or approval. Upsert and replace preserve the row id for a stable
+identity, reject duplicates atomically, and cannot create authorization for a missing server unless
+that exact dangling identity already exists. Bindings belong to Cherry persistence, the Host
+resolves them, and Pi must never read them directly.
+
+The data resolver chooses a specific tool row before its server default, then combines that policy
+with the current stored Server state and caller-supplied discovery fact. It reports `unbound`,
+`binding-disabled`, `server-unavailable`, or `tool-unavailable` instead of silently falling back.
+A temporarily undiscovered tool keeps its stored `enabled` value; only its effective result is
+unavailable. This resolver returns configuration facts only and does not create or inject a Runtime
+tool.
 
 ## Snapshot Resolution
 
