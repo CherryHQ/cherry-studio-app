@@ -10,7 +10,11 @@ import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
-import { mcpServerTable } from '@/backend/data/db/schemas';
+import {
+  agentToolBindingTable,
+  mcpServerTable,
+  monotonicUpdateTimestamp,
+} from '@/backend/data/db/schemas';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
@@ -156,13 +160,23 @@ export class McpServerService {
   }
 
   async delete(id: string): Promise<void> {
-    const [deleted] = await this.db
-      .delete(mcpServerTable)
-      .where(eq(mcpServerTable.id, id))
-      .returning({ id: mcpServerTable.id });
-    if (!deleted) {
-      throw DataApiErrorFactory.notFound('McpServer', id);
-    }
+    await this.dbService.withWriteTx(async (tx) => {
+      await tx
+        .update(agentToolBindingTable)
+        .set({
+          enabled: false,
+          updatedAt: monotonicUpdateTimestamp(agentToolBindingTable.updatedAt),
+        })
+        .where(eq(agentToolBindingTable.mcpServerId, id));
+
+      const [deleted] = await tx
+        .delete(mcpServerTable)
+        .where(eq(mcpServerTable.id, id))
+        .returning({ id: mcpServerTable.id });
+      if (!deleted) {
+        throw DataApiErrorFactory.notFound('McpServer', id);
+      }
+    });
 
     logger.info('Deleted MCP server', { id });
   }

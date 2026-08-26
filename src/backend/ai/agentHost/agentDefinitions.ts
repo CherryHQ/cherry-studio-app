@@ -1,12 +1,10 @@
 /**
  * Minimal Agent configuration source.
  *
- * The Agent tool configuration model is not settled yet
- * (docs/references/agent/README.md open questions). Basic chat needs only
- * id/name/model/instructions/inference options, so the Host consumes this
- * narrow source. Tools are deliberately absent: the built-in catalog is
- * Host-owned and identical for every Agent, so there is nothing to configure
- * here until per-Agent bindings exist.
+ * Per-Agent tool bindings are persisted separately, but their immutable Runtime
+ * projection is follow-up work. Basic chat needs only id/name/model/instructions/
+ * inference options, so the Host keeps this definition source narrow. The fixed
+ * built-in catalog remains Host-owned and is not represented here.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';

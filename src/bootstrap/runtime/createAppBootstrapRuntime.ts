@@ -75,6 +75,7 @@ export function createAppBootstrapRuntime(
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agents: services.agentData,
+      agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,
       agentSessionMutations: services.agent,
       agentSessions: services.agentSession,

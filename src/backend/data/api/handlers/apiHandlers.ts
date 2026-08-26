@@ -3,6 +3,7 @@ import type { ApiImplementation } from '@/shared/data/api/types';
 import type { AgentService } from '../../services/AgentService';
 import type { AgentSessionMessageService } from '../../services/AgentSessionMessageService';
 import type { AgentSessionService } from '../../services/AgentSessionService';
+import type { AgentToolBindingService } from '../../services/AgentToolBindingService';
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
@@ -14,6 +15,7 @@ import type { ProviderService } from '../../services/ProviderService';
 import { createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
+import { createAgentToolBindingHandlers } from './agentToolBindings';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createFileHandlers } from './files';
 import { createJobHandlers } from './jobs';
@@ -25,6 +27,7 @@ import { createSearchHandlers } from './search';
 
 export type DataApiDependencies = {
   agents: AgentService;
+  agentToolBindings: AgentToolBindingService;
   agentSessionMessages: AgentSessionMessageService;
   agentSessionMutations: AgentSessionMutations;
   agentSessions: AgentSessionService;
@@ -43,6 +46,7 @@ export type DataApiDependencies = {
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
     ...createAgentHandlers(dependencies.agents),
+    ...createAgentToolBindingHandlers(dependencies.agentToolBindings),
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
     ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
