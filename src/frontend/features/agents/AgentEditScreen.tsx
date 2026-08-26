@@ -1,19 +1,16 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
-  BottomSheet,
   ContentState,
   Description,
   Input,
   Label,
-  Section,
-  Switch,
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -28,13 +25,7 @@ import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { Agent } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-import {
-  AGENT_REASONING_EFFORTS,
-  type AgentFormState,
-  type AgentReasoningEffort,
-  buildAgentDto,
-  createAgentFormState,
-} from './agentForm';
+import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 
 export default function AgentEditScreen() {
   const { t } = useTranslation();
@@ -81,7 +72,6 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
   const { createAgent, isCreating, isUpdating, updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
-  const [isReasoningEffortSheetOpen, setIsReasoningEffortSheetOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
   const [hasPickedModel, setHasPickedModel] = useState(false);
@@ -119,28 +109,6 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
     setHasPickedModel(true);
     setForm((current) => ({ ...current, modelId: item.modelId }));
     setIsModelPickerOpen(false);
-  }, []);
-  const reasoningEffortOptions = useMemo(
-    () =>
-      AGENT_REASONING_EFFORTS.map((value) => ({
-        label: t(`agent.form.reasoningEffort.${value}`),
-        value,
-      })),
-    [t],
-  );
-  const selectedReasoningEffort = reasoningEffortOptions.find(
-    (option) => option.value === form.reasoningEffort,
-  );
-  const openReasoningEffortSheet = useCallback(() => {
-    Keyboard.dismiss();
-    setIsReasoningEffortSheetOpen(true);
-  }, []);
-  const closeReasoningEffortSheet = useCallback(() => {
-    setIsReasoningEffortSheetOpen(false);
-  }, []);
-  const handleReasoningEffortSelect = useCallback((value: AgentReasoningEffort) => {
-    setForm((current) => ({ ...current, reasoningEffort: value }));
-    setIsReasoningEffortSheetOpen(false);
   }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAgentDto(form, {
@@ -226,7 +194,7 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
             />
           </FormField>
         </FormSection>
-        <FormSection title={t('agent.form.generationSection')}>
+        <FormSection title={t('agent.form.modelSection')}>
           <Pressable
             accessibilityLabel={t('agent.form.modelSelect')}
             accessibilityRole="button"
@@ -246,57 +214,6 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
               <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
             </View>
           </Pressable>
-          <SwitchRow
-            label={t('agent.form.enableTemperature')}
-            value={form.enableTemperature}
-            onValueChange={(value) => updateForm('enableTemperature', value)}
-          />
-          {form.enableTemperature ? (
-            <NumberField
-              accessibilityLabel={t('agent.form.temperature')}
-              value={form.temperature}
-              onChangeText={(value) => updateForm('temperature', value)}
-            />
-          ) : null}
-          <SwitchRow
-            label={t('agent.form.enableMaxOutputTokens')}
-            value={form.enableMaxOutputTokens}
-            onValueChange={(value) => updateForm('enableMaxOutputTokens', value)}
-          />
-          {form.enableMaxOutputTokens ? (
-            <NumberField
-              accessibilityLabel={t('agent.form.maxOutputTokens')}
-              inputMode="numeric"
-              value={form.maxOutputTokens}
-              onChangeText={(value) => updateForm('maxOutputTokens', value)}
-            />
-          ) : null}
-          <SwitchRow
-            label={t('agent.form.enableReasoningEffort')}
-            value={form.enableReasoningEffort}
-            onValueChange={(value) => updateForm('enableReasoningEffort', value)}
-          />
-          {form.enableReasoningEffort ? (
-            <Pressable
-              accessibilityLabel={t('agent.form.reasoningEffort.label')}
-              accessibilityRole="button"
-              className="min-h-10 flex-row items-center justify-between gap-4 active:opacity-70"
-              onPress={openReasoningEffortSheet}
-            >
-              <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
-                {t('agent.form.reasoningEffort.label')}
-              </Text>
-              <View className="min-w-0 max-w-48 flex-row items-center justify-end gap-1">
-                <Text
-                  className="min-w-0 shrink text-right text-base text-foreground"
-                  numberOfLines={1}
-                >
-                  {selectedReasoningEffort?.label}
-                </Text>
-                <ChevronDownIcon className="size-5 shrink-0 text-foreground" />
-              </View>
-            </Pressable>
-          ) : null}
         </FormSection>
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
@@ -308,26 +225,6 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
           title={t('agent.form.modelSelect')}
         />
       ) : null}
-      <BottomSheet
-        onClose={closeReasoningEffortSheet}
-        open={isReasoningEffortSheetOpen}
-        size="compact"
-        testID="agent-reasoning-effort-selection"
-        title={t('agent.form.reasoningEffort.label')}
-      >
-        <ScrollView contentContainerClassName="px-6 pt-2" showsVerticalScrollIndicator={false}>
-          <Section>
-            {reasoningEffortOptions.map((option) => (
-              <Section.RadioItem
-                key={option.value}
-                label={option.label}
-                onPress={() => handleReasoningEffortSelect(option.value)}
-                selected={option.value === form.reasoningEffort}
-              />
-            ))}
-          </Section>
-        </ScrollView>
-      </BottomSheet>
     </>
   );
 }
@@ -355,50 +252,6 @@ function FormField({
       <Label>{label}</Label>
       {children}
       {description ? <Description selectable>{description}</Description> : null}
-    </TextField>
-  );
-}
-
-function SwitchRow({
-  label,
-  onValueChange,
-  value,
-}: {
-  label: string;
-  onValueChange: (value: boolean) => void;
-  value: boolean;
-}) {
-  return (
-    <View className="min-h-10 flex-row items-center justify-between gap-4">
-      <Text className="min-w-0 flex-1 font-medium text-base text-foreground" numberOfLines={2}>
-        {label}
-      </Text>
-      <Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} />
-    </View>
-  );
-}
-
-function NumberField({
-  accessibilityLabel,
-  inputMode = 'decimal',
-  onChangeText,
-  value,
-}: {
-  accessibilityLabel: string;
-  inputMode?: 'decimal' | 'numeric';
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <TextField>
-      <Input
-        accessibilityLabel={accessibilityLabel}
-        inputMode={inputMode}
-        keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
-        onChangeText={onChangeText}
-        placeholder="0"
-        value={value}
-      />
     </TextField>
   );
 }
