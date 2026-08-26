@@ -63,7 +63,7 @@ const agents: AgentDefinitionSource = {
 const FAKE_DESCRIPTOR = {
   id: 'fake',
   name: 'Scripted Runtime',
-  capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
+  capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 } as const;
 
 const unusedAiService = {} as AiService;
@@ -103,6 +103,7 @@ const inferenceModel = async (model: { providerId: string; modelId: string }) =>
 
 const noFiles: ManagedFileResolver = {
   resolveAvailable: jest.fn(async () => new Map()),
+  readAsDataUrl: jest.fn(async () => undefined),
 };
 
 /** Keeps the suite off the production catalog, which reads the database. */
@@ -235,7 +236,7 @@ describe('MobileAgentHost', () => {
       reasoning: true,
       tools: true,
       approvals: true,
-      attachments: false,
+      attachments: true,
     });
     expect(observation.snapshot.activeTurn).toBeNull();
 
@@ -976,22 +977,18 @@ describe('MobileAgentHost', () => {
         requests.push(controller.request);
         controller.emit({ type: 'completed' });
       });
-    const resolveAvailable = jest.fn(async (fileEntryIds: readonly string[]) =>
-      fileEntryIds.length === 0
-        ? new Map()
-        : new Map([
-            [
-              FILE_ENTRY_ID,
-              {
-                fileEntryId: FILE_ENTRY_ID,
-                mediaType: 'image/png',
-                name: 'managed.png',
-                size: 128,
-              },
-            ],
-          ]),
-    );
-    const host = createHost(fake, noOpNaming, { resolveAvailable } as ManagedFileResolver);
+    const imageFact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'managed.png',
+      size: 128,
+    };
+    const resolveAvailable = jest
+      .fn<Promise<ReadonlyMap<string, typeof imageFact>>, [readonly string[]]>()
+      .mockResolvedValueOnce(new Map([[FILE_ENTRY_ID, imageFact]]))
+      .mockResolvedValueOnce(new Map());
+    const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
+    const host = createHost(fake, noOpNaming, { readAsDataUrl, resolveAvailable });
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -1021,17 +1018,26 @@ describe('MobileAgentHost', () => {
         purpose: 'input-attachment',
       },
     ]);
-    expect(requests[0]?.input).toEqual([{ type: 'text', text: 'Remember this image.' }]);
+    expect(requests[0]?.input).toEqual([
+      { type: 'text', text: 'Remember this image.' },
+      {
+        type: 'file',
+        mediaType: 'image/png',
+        name: 'managed.png',
+        uri: 'data:image/png;base64,AAAA',
+      },
+    ]);
+    expect(JSON.stringify(transcript)).not.toContain('data:image');
 
     // A later missing blob does not invalidate the historical reference or
-    // fail a text-only turn. A1 still omits attachment content from Pi history.
+    // fail a text-only turn. Its content is omitted from Pi history.
     events.length = 0;
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Continue.' }],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the follow-up turn');
-    expect(resolveAvailable).toHaveBeenCalledTimes(1);
+    expect(resolveAvailable).toHaveBeenCalledTimes(2);
     expect(requests[1]?.history).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1043,6 +1049,166 @@ describe('MobileAgentHost', () => {
       fileEntryId: FILE_ENTRY_ID,
       purpose: 'input-attachment',
     });
+  });
+
+  test('replays available managed images across turns for an image-capable model', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      });
+    const fact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'managed.png',
+      size: 128,
+    };
+    const files: ManagedFileResolver = {
+      readAsDataUrl: async () => 'data:image/png;base64,AAAA',
+      resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
+    };
+    const host = createHost(fake, noOpNaming, files);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first image turn');
+    events.length = 0;
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'What was in that image?' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the historical image turn');
+
+    expect(requests[1]?.history).toEqual(
+      expect.arrayContaining([
+        {
+          role: 'user',
+          parts: [
+            {
+              type: 'file',
+              mediaType: 'image/png',
+              name: 'managed.png',
+              uri: 'data:image/png;base64,AAAA',
+            },
+          ],
+        },
+      ]),
+    );
+  });
+
+  test('rejects unsupported models and endpoints before reserving image messages', async () => {
+    const fact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'managed.png',
+      size: 128,
+    };
+    const textOnlyRuntime = new FakeRuntime({
+      descriptor: FAKE_DESCRIPTOR,
+      modelPreflight: {
+        contextWindow: 128_000,
+        inputModalities: ['text'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: true,
+      },
+    });
+    const files: ManagedFileResolver = {
+      readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
+      resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
+    };
+    const host = createHost(textOnlyRuntime, noOpNaming, files);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(await store.listMessages(session.id)).toEqual([]);
+    expect(files.readAsDataUrl).not.toHaveBeenCalled();
+
+    const unsupportedEndpointRuntime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    jest
+      .spyOn(unsupportedEndpointRuntime, 'preflightModel')
+      .mockRejectedValue(new Error('unsupported endpoint containing private configuration'));
+    const endpointHost = createHost(unsupportedEndpointRuntime, noOpNaming, files);
+    const endpointSession = await endpointHost.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await expect(
+      endpointHost.submitMessage({
+        sessionId: endpointSession.id,
+        parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+      }),
+    ).rejects.toMatchObject({
+      message: 'The selected model or provider endpoint cannot execute this turn.',
+      view: { code: 'CAPABILITY_UNSUPPORTED' },
+    });
+    expect(await store.listMessages(endpointSession.id)).toEqual([]);
+  });
+
+  test('aborts managed image reads and discards late data when the turn is cancelled', async () => {
+    let readSignal: AbortSignal | undefined;
+    let resolveRead!: (value: string) => void;
+    const read = new Promise<string>((resolve) => {
+      resolveRead = resolve;
+    });
+    const fact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'managed.png',
+      size: 128,
+    };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(() => {
+      throw new Error('Runtime must not start after an image read is cancelled.');
+    });
+    const host = createHost(runtime, noOpNaming, {
+      readAsDataUrl: async (_file, signal) => {
+        readSignal = signal;
+        return read;
+      },
+      resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    const submitted = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+    });
+    await waitFor(() => readSignal !== undefined, 'the managed image read');
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    expect(readSignal?.aborted).toBe(true);
+    resolveRead('data:image/png;base64,LATE');
+    await waitFor(
+      () => terminalTurnEvent(events)?.turn.status === 'cancelled',
+      'the cancelled image turn',
+    );
+
+    expect(JSON.stringify(await store.listMessages(session.id))).not.toContain('LATE');
   });
 
   test('rejects unavailable and forged managed-file input before reservation', async () => {
@@ -1058,8 +1224,9 @@ describe('MobileAgentHost', () => {
       ],
     ]);
     const availableHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
+      readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => facts,
-    } as ManagedFileResolver);
+    });
     const availableSession = await availableHost.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },

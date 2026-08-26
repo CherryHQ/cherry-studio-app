@@ -14,7 +14,8 @@ describe('managedFileResolver', () => {
     const getUri = jest.fn((candidate: { filename: string; id: string }) =>
       candidate.id === AVAILABLE_ID ? 'file:///private/managed/available.png' : undefined,
     );
-    const resolver = createManagedFileResolver({ findAvailableByIds }, getUri);
+    const readDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
+    const resolver = createManagedFileResolver({ findAvailableByIds }, getUri, readDataUrl);
 
     const facts = await resolver.resolveAvailable([AVAILABLE_ID, AVAILABLE_ID, MISSING_BLOB_ID]);
 
@@ -33,6 +34,36 @@ describe('managedFileResolver', () => {
       ]),
     );
     expect(JSON.stringify([...facts.values()])).not.toContain('file:///');
+
+    const signal = new AbortController().signal;
+    await expect(resolver.readAsDataUrl(facts.get(AVAILABLE_ID)!, signal)).resolves.toBe(
+      'data:image/png;base64,AAAA',
+    );
+    expect(readDataUrl).toHaveBeenCalledWith(
+      'file:///private/managed/available.png',
+      'image/png',
+      signal,
+    );
+  });
+
+  test('drops a late image read after cancellation', async () => {
+    const available = entry(AVAILABLE_ID, 'available.png');
+    const controller = new AbortController();
+    let resolveRead!: (value: string) => void;
+    const read = new Promise<string>((resolve) => {
+      resolveRead = resolve;
+    });
+    const resolver = createManagedFileResolver(
+      { findAvailableByIds: async () => [available] },
+      () => 'file:///private/managed/available.png',
+      async () => read,
+    );
+
+    const pending = resolver.readAsDataUrl(availableFact(), controller.signal);
+    controller.abort(new Error('cancelled'));
+
+    await expect(pending).rejects.toThrow('cancelled');
+    resolveRead('data:image/png;base64,LATE');
   });
 
   test('keeps historical managed ids in the ledger without requiring them to resolve', () => {
@@ -86,4 +117,13 @@ function entry(id: string, filename: string) {
     size: 128,
     updatedAt: 1,
   });
+}
+
+function availableFact() {
+  return {
+    fileEntryId: AVAILABLE_ID,
+    mediaType: 'image/png',
+    name: 'available.png',
+    size: 128,
+  };
 }

@@ -11,6 +11,8 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type {
   PiModelResolution,
   PiRuntimeDependencies,
+  RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import { modelService } from '@/backend/data/services/ModelService';
@@ -35,23 +37,12 @@ const NON_STANDARD_ADAPTER_FAMILIES = new Set([
 
 export function createPiModelResolver(): PiRuntimeDependencies {
   return {
+    async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
+      return (await resolveConfiguredPiModel(runtimeModel)).preflight;
+    },
     async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
-      const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
-      const [provider, model] = await Promise.all([
-        providerService.getByProviderId(runtimeModel.providerId),
-        modelService.getById(uniqueModelId),
-      ]);
-      if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
-
-      const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
-      const adapter = resolveSupportedAdapter(provider, resolvedEndpoint.endpointType);
-      const configuredBaseUrl = resolvedEndpoint.baseUrl.trim();
-      if (!configuredBaseUrl) {
-        throw new Error('Pi Runtime requires a base URL from the selected provider.');
-      }
-      if (configuredBaseUrl.endsWith('#')) {
-        throw new Error('Pi Runtime does not support a separate custom endpoint path.');
-      }
+      const { adapter, configuredBaseUrl, model, preflight, provider, resolvedEndpoint } =
+        await resolveConfiguredPiModel(runtimeModel);
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
       if (!selectedApiKey.value.trim()) {
@@ -63,12 +54,12 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(configuredBaseUrl),
-        contextWindow: model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW,
+        contextWindow: preflight.contextWindow,
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
         headers,
         id: modelId,
-        input: ['text'],
-        maxTokens: model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS,
+        input: preflight.inputModalities,
+        maxTokens: preflight.maxOutputTokens,
         name: model.name,
         provider: provider.id,
         reasoning: model.reasoning !== undefined,
@@ -110,10 +101,58 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         model: piModel,
         redactionValues: collectRedactionValues(selectedApiKey.value, headers),
         streamFn,
-        supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
+        supportsTools: preflight.supportsTools,
         usageContext,
       };
     },
+  };
+}
+
+async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
+  const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
+  const [provider, model] = await Promise.all([
+    providerService.getByProviderId(runtimeModel.providerId),
+    modelService.getById(uniqueModelId),
+  ]);
+  if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
+
+  const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
+  const adapter = resolveSupportedAdapter(provider, resolvedEndpoint.endpointType);
+  const configuredBaseUrl = resolvedEndpoint.baseUrl.trim();
+  if (!configuredBaseUrl) {
+    throw new Error('Pi Runtime requires a base URL from the selected provider.');
+  }
+  if (configuredBaseUrl.endsWith('#')) {
+    throw new Error('Pi Runtime does not support a separate custom endpoint path.');
+  }
+
+  return {
+    adapter,
+    configuredBaseUrl,
+    model,
+    preflight: toPiModelPreflight(model),
+    provider,
+    resolvedEndpoint,
+  };
+}
+
+export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
+  const contextWindow = model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW;
+  const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS;
+  const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
+  const maxInputTokens = Math.max(
+    0,
+    Math.min(model.maxInputTokens ?? contextInputLimit, contextInputLimit),
+  );
+
+  return {
+    contextWindow,
+    inputModalities: model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION)
+      ? ['text', 'image']
+      : ['text'],
+    maxInputTokens,
+    maxOutputTokens,
+    supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
   };
 }
 
