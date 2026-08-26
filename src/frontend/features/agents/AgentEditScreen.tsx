@@ -20,23 +20,49 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { usePreference } from '@/frontend/data/hooks';
-import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import {
+  useAgentApiById,
+  useAgentMutations,
+  useAgentToolBindingMutations,
+  useAgentToolBindingsApi,
+} from '@/frontend/hooks/agent';
+import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent } from '@/shared/data/types/agent';
+import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
+import { createAgentToolBindingDraft } from './agentToolSettings';
+import { AgentToolsSection } from './AgentToolsSection';
 
 export default function AgentEditScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ agentId?: string | string[] }>();
   const agentId = getSingleParamValue(params.agentId);
   const { agent, isLoading, refetch } = useAgentApiById(agentId);
+  const {
+    bindings,
+    error: bindingsError,
+    isLoading: areBindingsLoading,
+    refetch: refetchBindings,
+  } = useAgentToolBindingsApi(agentId);
+  const {
+    error: serversError,
+    isLoading: areServersLoading,
+    refetch: refetchServers,
+    servers,
+  } = useMcpServersApi();
+  const isLoadingEditData =
+    Boolean(agentId) && (isLoading || areBindingsLoading || areServersLoading);
+  const hasEditDataError = Boolean(agentId) && (bindingsError || serversError);
 
   // The form seeds its fields from the record when it mounts, so it must not mount
   // before the record is there — an empty form that reseeds a commit later would throw
   // away whatever the user had already typed into it.
-  if (agentId && isLoading) {
+  if (isLoadingEditData) {
     return (
       <>
         <RouteHeader title={t('agent.edit.title')} />
@@ -45,7 +71,7 @@ export default function AgentEditScreen() {
     );
   }
 
-  if (agentId && !agent) {
+  if (agentId && (!agent || hasEditDataError)) {
     return (
       <>
         <RouteHeader title={t('agent.edit.title')} />
@@ -53,7 +79,9 @@ export default function AgentEditScreen() {
           className="p-4"
           primaryAction={{
             children: t('agent.actions.retry'),
-            onPress: () => void refetch(),
+            onPress: () => {
+              void Promise.all([refetch(), refetchBindings(), refetchServers()]);
+            },
           }}
           title={t('agent.form.loadFailed')}
         />
@@ -61,19 +89,40 @@ export default function AgentEditScreen() {
     );
   }
 
-  return <AgentEditForm agent={agent} agentId={agentId} />;
+  return (
+    <AgentEditForm
+      agent={agent}
+      agentId={agentId}
+      originalToolBindings={bindings}
+      servers={servers}
+    />
+  );
 }
 
-function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?: string }) {
+function AgentEditForm({
+  agent,
+  agentId,
+  originalToolBindings,
+  servers,
+}: {
+  agent: Agent | undefined;
+  agentId?: string;
+  originalToolBindings: readonly AgentToolBinding[];
+  servers: readonly McpServer[];
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const isEditing = Boolean(agentId);
   const { createAgent, isCreating, isUpdating, updateAgent } = useAgentMutations();
+  const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
+  const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
+    createAgentToolBindingDraft(originalToolBindings),
+  );
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
@@ -81,7 +130,7 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
   // user has since removed) from being seeded, which the create endpoint would
   // reject as an unregistered model.
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
-  const isSaving = isCreating || isUpdating;
+  const isSaving = isCreating || isReplacing || isUpdating;
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -123,6 +172,7 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
     try {
       if (agentId) {
         await updateAgent(agentId, dto.value);
+        await replaceAgentToolBindings(agentId, toolBindings);
       } else {
         await createAgent(dto.value);
       }
@@ -131,7 +181,18 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
     } catch {
       alert.show({ title: t('agent.toast.saveFailed') });
     }
-  }, [agentId, alert, createAgent, form, hasPickedModel, router, t, updateAgent]);
+  }, [
+    agentId,
+    alert,
+    createAgent,
+    form,
+    hasPickedModel,
+    replaceAgentToolBindings,
+    router,
+    t,
+    toolBindings,
+    updateAgent,
+  ]);
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -206,6 +267,16 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
             </View>
           </Pressable>
         </FormSection>
+        {isEditing ? (
+          <FormSection title={t('agent.tools.section')}>
+            <AgentToolsSection
+              bindings={toolBindings}
+              onChange={setToolBindings}
+              originalBindings={originalToolBindings}
+              servers={servers}
+            />
+          </FormSection>
+        ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer

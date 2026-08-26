@@ -1,4 +1,5 @@
 export { useAgentApiById, useAgentMutations, useAgentsApi } from './useAgents';
+export { useAgentToolBindingMutations, useAgentToolBindingsApi } from './useAgentToolBindings';
 export {
   type AgentSessionsOptions,
   type AgentSessionsViewModel,
