@@ -92,6 +92,36 @@ describe('agentMessageProjection', () => {
     });
   });
 
+  test('projects a managed file reference into the shared unavailable-aware renderer', () => {
+    const fileEntryId = '00000000-0000-7000-8000-000000000001';
+    const item = toAgentMessageListItem(
+      message('user-file', {
+        parts: [
+          {
+            fileEntryId,
+            id: 'input-0',
+            mediaType: 'image/png',
+            name: 'managed.png',
+            purpose: 'input-attachment',
+            type: 'file',
+          },
+        ],
+        role: 'user',
+        status: 'success',
+      }),
+    );
+
+    expect(item?.data.parts).toEqual([
+      expect.objectContaining({
+        filename: 'managed.png',
+        mediaType: 'image/png',
+        providerMetadata: { cherry: { fileEntryId } },
+        type: 'file',
+        url: `cherry://file/${fileEntryId}`,
+      }),
+    ]);
+  });
+
   test('replaces persisted rows by id and appends only new live rows', () => {
     const persistedUser = message('user-1', { role: 'user', status: 'success' });
     const persistedAssistant = message('assistant-1', { status: 'pending' });

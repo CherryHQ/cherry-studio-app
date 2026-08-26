@@ -15,8 +15,8 @@ here. Terms follow [Domain Language](../domain-language.md).
    (copy-on-write); nothing in the app rewrites a managed blob in place.
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
-4. **Import happens when the file enters the app.** Painting imports at generation time; Agent
-   attachment import remains deferred until the Host file resolver exists.
+4. **Import happens when the file enters the app.** Painting imports at generation time; the Agent
+   Composer imports when an attachment enters its managed draft.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
 6. **Only the user deletes files.** Two paths exist: cancelling an attachment before send, and (once
@@ -46,8 +46,9 @@ here. Terms follow [Domain Language](../domain-language.md).
   separately.
 - `updatedAt` equals `createdAt` on insert and has no writer today. A future metadata update
   (library rename) is its first one; immutable content means it never tracks a content write.
-- `deletedAt` is reserved for the future library trash. It is `NULL` for every row today, no code
-  branches on it, and no cleanup logic may consult it.
+- `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
+  attachment admission and direct preview reads already treat a marked row as unavailable, while
+  cleanup still must not infer ownership from it.
 
 ## Ownership
 
@@ -56,8 +57,7 @@ An owner stores the entry ids it points at, inside its own row:
 | Owner | Where the ids live |
 | --- | --- |
 | Painting | `painting.files` — `{ input: string[], output: string[] }` |
-
-Agent Session attachments are not active in Version 1, so no current transcript row owns file ids.
+| Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
 There is no association table and no foreign key from an owner to `file_entry`. That is the point:
 a foreign key would have to choose between `CASCADE` (deleting a file silently rewrites the
@@ -67,13 +67,14 @@ placeholder. Writers validate ids against `file_entry` at write time (`assertFil
 for paintings), which catches the mistake that actually happens: pointing at an entry that was
 never created.
 
-## Future Agent Attachment Persistence
+## Agent Attachment Persistence
 
-A future persisted Agent file part stores `fileEntryId` plus stable display metadata such as name
+A persisted Agent file part stores `fileEntryId` plus Host-validated display metadata such as name
 and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The
-Host-side resolver must resolve that id for provider input. If the entry or its bytes are gone, the
-part remains in history and renders unavailable. Until that contract lands, Agent Protocol reports
-`attachments: false` and rejects attachments before execution.
+Host verifies the live entry and managed blob before reserving a current submission. If the entry or
+its bytes later disappear, the part remains in history and renders unavailable. Agent Protocol still
+reports `attachments: false` until the image-input slice converts managed content for Pi; the current
+ChatInput keeps the user-facing attachment submit gate closed.
 
 Attachments are sent to providers as inlined base64 data URLs. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
@@ -90,9 +91,9 @@ bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is 
 calls it when the user cancels an attachment; the future library calls it when the user empties the
 trash.
 
-**Missing bytes** — the row survives and the UI renders the "unavailable" placeholder; the AI request
-drops that attachment rather than failing the turn. History stays intact; nothing silently removes a
-reference.
+**Missing bytes** — a current submission fails before admission; an already-persisted reference
+survives, the UI renders the "unavailable" placeholder, and later model history omits its content
+without failing the turn. Nothing silently removes a historical reference.
 
 ## Out of scope, deliberately
 

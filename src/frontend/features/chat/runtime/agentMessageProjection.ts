@@ -1,6 +1,8 @@
 import type { MessageListItem } from '@/frontend/components/messages';
 import type { AgentErrorView, AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
+import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
+import { withCherryMeta } from '@/shared/data/types/uiParts';
 
 function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
   switch (status) {
@@ -80,14 +82,15 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'reasoning':
       return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
     case 'file':
-      return {
-        type: 'file',
-        filename: part.name ?? 'File',
-        mediaType: part.mediaType,
-        // Managed refs are resolved by the attachment feature before they can
-        // be opened. C1 deliberately exposes no raw path fallback.
-        url: '',
-      } as CherryMessagePart;
+      return withCherryMeta(
+        {
+          type: 'file',
+          filename: part.name ?? 'File',
+          mediaType: part.mediaType,
+          url: fileEntryUrl(part.fileEntryId as FileEntryId),
+        } as Extract<CherryMessagePart, { type: 'file' }>,
+        { fileEntryId: part.fileEntryId },
+      );
     case 'tool':
       return toToolPart(part);
     case 'error':

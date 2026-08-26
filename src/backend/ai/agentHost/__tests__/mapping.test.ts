@@ -1,11 +1,28 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
-import { interruptNonTerminalToolParts, toRuntimeHistory } from '../mapping';
+import { interruptNonTerminalToolParts, toRuntimeHistory, toRuntimeInputParts } from '../mapping';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('Agent Host mappings', () => {
+  test('keeps managed references behind the ledger until Runtime resolution lands', () => {
+    const fileEntryId = '00000000-0000-7000-8000-000000000001';
+
+    expect(
+      toRuntimeInputParts(
+        [
+          { type: 'text', text: 'Describe this.' },
+          { type: 'file', fileEntryId, mediaType: 'image/png', name: 'image.png' },
+        ],
+        { fileEntryIds: new Set([fileEntryId]) },
+      ),
+    ).toEqual([{ type: 'text', text: 'Describe this.' }]);
+    expect(() =>
+      toRuntimeInputParts([{ type: 'file', fileEntryId, mediaType: 'image/png' }]),
+    ).toThrow('outside the turn resource ledger');
+  });
+
   test('replays a denied tool call as a non-error tool result', () => {
     const message: AgentMessageView = {
       id: 'assistant-message',

@@ -74,6 +74,7 @@ import {
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 
 import {
@@ -84,6 +85,12 @@ import {
 import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
+import {
+  createTurnResourceLedger,
+  managedFileResolver,
+  type ManagedFileResolver,
+  type TurnResourceLedger,
+} from './managedFileResolver';
 import {
   interruptNonTerminalToolParts,
   toAgentApprovalView,
@@ -111,6 +118,7 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
 
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
+  files: ManagedFileResolver;
   naming: Pick<
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
@@ -131,6 +139,7 @@ type ActiveTurnState = {
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
   pendingApprovals: Map<string, AgentApprovalView>;
+  resources: TurnResourceLedger;
   usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
 };
@@ -167,6 +176,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     { runtimeId: string; session: AgentRuntimeSession }
   >();
   private readonly runningTurns = new Set<Promise<void>>();
+  private readonly files: ManagedFileResolver;
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
 
@@ -183,6 +193,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();
+    this.files = overrides.files ?? managedFileResolver;
     this.naming =
       overrides.naming ??
       new AgentSessionNaming({
@@ -312,17 +323,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const configuredAgent = await this.requireAgent(session.agentId);
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
-      if (
-        !runtime.descriptor.capabilities.attachments &&
-        parsed.parts.some((part) => part.type === 'file')
-      ) {
-        fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
-      }
 
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
+      const { inputFiles, parts } = await this.resolveManagedInput(parsed.parts);
+      const resources = createTurnResourceLedger(inputFiles, priorMessages);
 
-      const userParts: AgentMessagePart[] = parsed.parts.map((part, index) =>
+      const userParts: AgentMessagePart[] = parts.map((part, index) =>
         part.type === 'text'
           ? { id: `input-${index}`, type: 'text', text: part.text, state: 'done' }
           : {
@@ -354,7 +361,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         turn,
         assistantMessage: reserved.assistantMessage,
         autoNamePromise: null,
-        autoNameUserParts: priorMessages.length === 0 ? parsed.parts : null,
+        autoNameUserParts: priorMessages.length === 0 ? parts : null,
         backgroundReply: this.startBackgroundReply({
           agentId: agent.id,
           agentName: agent.name,
@@ -362,6 +369,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           sessionTitle: session.title,
         }),
         pendingApprovals: new Map(),
+        resources,
         usage: null,
         runtimeSession,
       };
@@ -378,13 +386,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publishSessionRename(state.autoNamePromise);
       }
 
-      const run = this.runTurn(
-        sessionId,
-        agent,
-        state,
-        toRuntimeHistory(priorMessages),
-        parsed.parts,
-      );
+      const run = this.runTurn(sessionId, agent, state, toRuntimeHistory(priorMessages), parts);
       this.runningTurns.add(run);
       this.runningTurnsBySession.set(sessionId, run);
       void run.finally(() => {
@@ -491,7 +493,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         instructions: agent.instructions,
         model: agent.model,
         history,
-        input: toRuntimeInputParts(inputParts),
+        input: toRuntimeInputParts(inputParts, state.resources),
         // V1 executes tool-less turns; Agent tools await the deferred definition.
         tools: [],
         options: agent.options,
@@ -681,6 +683,52 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   // ── Helpers ──
+
+  private async resolveManagedInput(parts: AgentInputPart[]) {
+    const fileEntryIds = parts.flatMap((part) => {
+      if (part.type !== 'file') {
+        return [];
+      }
+      const parsed = FileEntryIdSchema.safeParse(part.fileEntryId);
+      if (!parsed.success) {
+        fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
+      }
+      return [parsed.data];
+    });
+
+    let inputFiles: Awaited<ReturnType<ManagedFileResolver['resolveAvailable']>> = new Map();
+    if (fileEntryIds.length > 0) {
+      try {
+        inputFiles = await this.files.resolveAvailable(fileEntryIds);
+      } catch {
+        fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.');
+      }
+    }
+
+    const canonicalParts = parts.map((part): AgentInputPart => {
+      if (part.type !== 'file') {
+        return part;
+      }
+      const fact = inputFiles.get(part.fileEntryId);
+      if (!fact) {
+        fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
+      }
+      if (
+        part.mediaType !== fact.mediaType ||
+        (part.name !== undefined && part.name !== fact.name)
+      ) {
+        fail('ATTACHMENT_METADATA_MISMATCH', 'Attached file metadata could not be verified.');
+      }
+      return {
+        type: 'file',
+        fileEntryId: fact.fileEntryId,
+        mediaType: fact.mediaType,
+        name: fact.name,
+      };
+    });
+
+    return { inputFiles, parts: canonicalParts };
+  }
 
   private assertIdle(sessionId: string): void {
     if (this.deletingSessions.has(sessionId)) {
