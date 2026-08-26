@@ -7,15 +7,16 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerState } from '../context/ComposerProvider';
 import {
-  type ComposerAttachmentDraft,
+  type ComposerAttachmentReady,
   hasComposerSendableContent,
   hasImportingComposerAttachments,
+  isComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('ComposerSurface');
 
 export type ComposerSendPayload = {
-  attachments: readonly ComposerAttachmentDraft[];
+  attachments: readonly ComposerAttachmentReady[];
   text: string;
 };
 
@@ -62,12 +63,18 @@ export function ComposerSurface({
       return;
     }
 
+    const attachmentSnapshot = attachments.filter(isComposerAttachmentReady);
+    if (attachmentSnapshot.length !== attachments.length) {
+      logger.warn('Ignored message send with attachments that are not ready');
+      toast.show({ label: t('chat.input.sendFailed'), variant: 'danger' });
+      return;
+    }
+
     const attemptId = ++nextSendAttemptIdRef.current;
     activeSendAttemptIdRef.current = attemptId;
     logger.debug('Message send started', { attemptId });
 
     const draftSnapshot = draft;
-    const attachmentSnapshot = [...attachments];
 
     setDraft('');
     clearAttachments();

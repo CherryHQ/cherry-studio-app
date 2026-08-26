@@ -20,8 +20,9 @@ import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHe
  *
  * - `updatedAt` equals `createdAt` until a future metadata update (file-library
  *   rename) writes it; nothing writes it today.
- * - `deletedAt` is reserved for the future file-library trash; nothing reads or
- *   writes it today, and cleanup logic must not consult it.
+ * - `deletedAt` is reserved for the future file-library trash. Attachment
+ *   admission and direct preview reads already treat a marked row as
+ *   unavailable; no production path writes it yet.
  */
 export const fileEntryTable = sqliteTable(
   'file_entry',

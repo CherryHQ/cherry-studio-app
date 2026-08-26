@@ -53,7 +53,8 @@ Pi receives the complete structured transcript and Agent inference options on ea
 maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
 multi-call usage onto this contract. The Host currently supplies one fixed application-owned
 `write_file` tool to function-calling models; persisted per-Agent bindings are not yet projected
-into the Runtime snapshot. Attachments remain disabled pending Host-side file resolution.
+into the Runtime snapshot. Attachments remain disabled pending bounded conversion of Host-validated
+managed files into Runtime input.
 
 ## Descriptor and lifecycle
 
@@ -161,11 +162,13 @@ The Host resolves protocol-level turn snapshots before this boundary. `default` 
 implementations therefore receive only an executable effort level.
 
 File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
-file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates and
-converts that entry into a directly consumable `uri` (such as a data URL). A Runtime never reads the
-device filesystem; until the Host-side resolution step lands (owned separately), local Runtimes
-declare `attachments: false` and reject file parts before partial execution. Tool-side access
-follows the stricter managed-id ledger in
+file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates the
+live entry and managed blob before message reservation. The Host has a process-local ledger of the
+managed ids referenced by the current input and visible history. A Runtime never reads the device
+filesystem. The current persistence slice stores authoritative references but omits their content
+from Runtime input and history; local Runtimes therefore still declare `attachments: false`. The
+image/text slices separately own bounded conversion into directly consumable Runtime input. Tool-side
+access follows the stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History

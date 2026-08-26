@@ -81,7 +81,7 @@ describe('useManagedComposerAttachments', () => {
       await second.promise;
     });
     await act(async () => {
-      first.reject(new Error('copy failed'));
+      first.reject(new Error('copy failed at file:///source/first.pdf'));
       await flushPromises();
     });
 
@@ -95,6 +95,7 @@ describe('useManagedComposerAttachments', () => {
     expect(mockAlertShow).toHaveBeenCalledWith({
       title: 'chat.attachments.importFailed:1',
     });
+    expect(JSON.stringify(mockLoggerWarn.mock.calls)).not.toContain('file:///');
   });
 
   it('deletes an import that finishes after its placeholder was removed', async () => {
@@ -164,6 +165,40 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
+  it('relinquishes temporary ownership after a successful send clears the draft', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000019', 'sent.pdf'),
+    );
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('sent.pdf')]));
+    await act(flushPromises);
+    const sent = snapshot?.attachments[0];
+    if (!sent || sent.status !== 'ready') throw new Error('missing ready attachment');
+
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.addAttachments([sent]));
+    await act(async () => snapshot?.removeAttachment(sent.id));
+
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('restores temporary ownership when a failed send restores the draft', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000020', 'retry.pdf'),
+    );
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('retry.pdf')]));
+    await act(flushPromises);
+    const restored = snapshot?.attachments[0];
+    if (!restored || restored.status !== 'ready') throw new Error('missing ready attachment');
+
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => snapshot?.setAttachments([restored]));
+    await act(async () => snapshot?.removeAttachment(restored.id));
+
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000020');
+  });
+
   it('imports transient initial attachments but mounts managed ones as ready', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000005', 'source.pdf'),
@@ -177,6 +212,29 @@ describe('useManagedComposerAttachments', () => {
     expect(snapshot?.attachments.map(({ name, status }) => ({ name, status }))).toEqual([
       { name: 'source.pdf', status: 'ready' },
       { name: 'ready.pdf', status: 'ready' },
+    ]);
+  });
+
+  it('uses managed entry metadata after importing a transient source', async () => {
+    mockCreateInternalEntry.mockResolvedValue({
+      ...resolvedFile('00000000-0000-7000-8000-000000000018', 'managed-name.md'),
+      entry: {
+        ...resolvedFile('00000000-0000-7000-8000-000000000018', 'managed-name.md').entry,
+        mediaType: 'text/markdown',
+      },
+    });
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([source('picker-name.pdf')]));
+    await act(flushPromises);
+
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000018',
+        mediaType: 'text/markdown',
+        name: 'managed-name.md',
+        status: 'ready',
+      }),
     ]);
   });
 

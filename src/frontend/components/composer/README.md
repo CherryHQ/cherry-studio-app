@@ -88,7 +88,9 @@ walk to verify it.
   `hooks/useManagedComposerAttachments.ts`: own one composer session and import
   transient picker results into managed file entries before exposing them to
   Chat or Painting. Existing managed entries passed into a session are borrowed;
-  removing them detaches them without deleting their source file.
+  removing them detaches them without deleting their source file. A successful
+  send transfers a newly imported entry out of temporary Composer ownership;
+  failed-send restoration restores that ownership with the draft.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, split so dispatch-only components skip keystroke re-renders.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
@@ -104,8 +106,9 @@ walk to verify it.
   keeps focus and covers the live keyboard.
 - Transient attachments render their own progress tile while they are imported
   into managed storage. Any importing attachment disables send; text editing,
-  removal, and tools remain available. Import timing logs contain only kind,
-  size, result, and duration.
+  removal, and tools remain available. The send boundary rechecks readiness and
+  exposes only managed `fileEntryId` attachments to callers. Import timing logs
+  contain only kind, size, result, and duration.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.
