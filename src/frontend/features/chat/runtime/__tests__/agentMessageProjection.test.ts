@@ -92,6 +92,49 @@ describe('agentMessageProjection', () => {
     });
   });
 
+  test('unwraps Runtime tool results for the shared tool renderers', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-tool-result', {
+        parts: [
+          {
+            displayName: 'Write file',
+            id: 'tool-1',
+            input: { filename: 'report.md' },
+            output: {
+              value: { status: 'created', fileEntryId: 'file-1' },
+              artifacts: [
+                {
+                  ref: { kind: 'managed-file', fileEntryId: 'file-1' },
+                  mediaType: 'text/markdown',
+                  name: 'report.md',
+                  kind: 'created',
+                },
+              ],
+            },
+            providerName: 'write_file',
+            state: 'output-available',
+            toolCallId: 'call-1',
+            toolRef: { source: 'builtin', capabilityId: 'write_file' },
+            type: 'tool',
+          },
+        ],
+        status: 'success',
+      }),
+    );
+
+    expect(item).toMatchObject({
+      data: {
+        parts: [
+          {
+            output: { status: 'created', fileEntryId: 'file-1' },
+            toolName: 'write_file',
+            type: 'dynamic-tool',
+          },
+        ],
+      },
+    });
+  });
+
   test('replaces persisted rows by id and appends only new live rows', () => {
     const persistedUser = message('user-1', { role: 'user', status: 'success' });
     const persistedAssistant = message('assistant-1', { status: 'pending' });
