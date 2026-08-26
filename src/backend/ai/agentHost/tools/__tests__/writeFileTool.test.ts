@@ -1,4 +1,4 @@
-import type { RuntimeJsonValue } from '@/backend/ai/agent';
+import type { RuntimeJsonValue, RuntimeToolResult } from '@/backend/ai/agent';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import {
@@ -20,10 +20,33 @@ describe('writeFileTool', () => {
       name: 'report.md',
     });
     expect(output).toEqual({
-      status: 'created',
-      fileEntryId: '00000000-0000-7000-8000-000000000001',
-      filename: 'report.md',
-      size: 9,
+      value: {
+        status: 'created',
+        fileEntryId: '00000000-0000-7000-8000-000000000001',
+        filename: 'report.md',
+        size: 9,
+      },
+      artifacts: [
+        {
+          ref: {
+            kind: 'managed-file',
+            fileEntryId: '00000000-0000-7000-8000-000000000001',
+          },
+          mediaType: 'text/markdown',
+          name: 'report.md',
+          kind: 'created',
+        },
+      ],
+    });
+  });
+
+  test('exposes stable Runtime identity for the existing provider function', () => {
+    const tool = createWriteFileTool(createFilesPort());
+
+    expect(tool).toMatchObject({
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
     });
   });
 
@@ -73,7 +96,10 @@ describe('writeFileTool', () => {
 
     const output = await execute(createWriteFileTool(files), { content: 'x', filename });
 
-    expect(output).toEqual({ status: 'error', message: expect.stringContaining('filename') });
+    expect(output).toEqual({
+      value: { status: 'error', message: expect.stringContaining('filename') },
+      artifacts: [],
+    });
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -86,7 +112,10 @@ describe('writeFileTool', () => {
       path: '/etc/passwd',
     });
 
-    expect(output).toEqual({ status: 'error', message: expect.stringContaining('Invalid input') });
+    expect(output).toEqual({
+      value: { status: 'error', message: expect.stringContaining('Invalid input') },
+      artifacts: [],
+    });
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -97,7 +126,10 @@ describe('writeFileTool', () => {
 
     const output = await execute(createWriteFileTool(files), { content, filename: 'big.txt' });
 
-    expect(output).toEqual({ status: 'error', message: expect.stringContaining('limit') });
+    expect(output).toEqual({
+      value: { status: 'error', message: expect.stringContaining('limit') },
+      artifacts: [],
+    });
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -143,7 +175,7 @@ function createFilesPort() {
 function execute(
   tool: ReturnType<typeof createWriteFileTool>,
   input: RuntimeJsonValue,
-): Promise<RuntimeJsonValue> {
+): Promise<RuntimeToolResult> {
   return tool.execute(input, {
     signal: new AbortController().signal,
     toolCallId: 'call-1',

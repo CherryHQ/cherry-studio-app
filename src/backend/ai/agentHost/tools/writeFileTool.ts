@@ -9,7 +9,7 @@
 
 import * as z from 'zod';
 
-import type { RuntimeJsonValue, RuntimeTool } from '@/backend/ai/agent';
+import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '@/backend/ai/agent';
 import { type FileEntry, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
 export const WRITE_FILE_TOOL_NAME = 'write_file';
@@ -58,7 +58,9 @@ export type WriteFileFiles = {
 
 export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
   return {
-    name: WRITE_FILE_TOOL_NAME,
+    ref: { source: 'builtin', capabilityId: WRITE_FILE_TOOL_NAME },
+    providerName: WRITE_FILE_TOOL_NAME,
+    displayName: 'Write file',
     description:
       "Save text as a file in the user's file library. Use it only when the user asks to save, export, or download something as a file; otherwise answer in the conversation.",
     inputSchema: toolInputSchema(),
@@ -90,10 +92,20 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
       });
 
       return {
-        status: 'created',
-        fileEntryId: entry.id,
-        filename: entry.filename,
-        size: entry.size,
+        value: {
+          status: 'created',
+          fileEntryId: entry.id,
+          filename: entry.filename,
+          size: entry.size,
+        },
+        artifacts: [
+          {
+            ref: { kind: 'managed-file', fileEntryId: entry.id },
+            mediaType: entry.mediaType,
+            name: entry.filename,
+            kind: 'created',
+          },
+        ],
       };
     },
   };
@@ -103,8 +115,8 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
  * A rejection the model can act on. Thrown errors reach it as an opaque
  * "Tool execution failed", so anything it could fix by retrying is a value.
  */
-function invalid(message: string): RuntimeJsonValue {
-  return { status: 'error', message };
+function invalid(message: string): RuntimeToolResult {
+  return { value: { status: 'error', message }, artifacts: [] };
 }
 
 /**

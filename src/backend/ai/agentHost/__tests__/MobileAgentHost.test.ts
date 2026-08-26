@@ -94,11 +94,13 @@ const usage = {
 const noOpTools: AgentToolSource = { getTools: async () => [] };
 
 const stubTool: RuntimeTool = {
-  name: 'stub_tool',
+  ref: { source: 'builtin', capabilityId: 'stub_tool' },
+  providerName: 'stub_tool',
+  displayName: 'Stub tool',
   description: 'Does nothing.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   approval: 'auto',
-  execute: async () => ({ status: 'ok' }),
+  execute: async () => ({ value: { status: 'ok' }, artifacts: [] }),
 };
 
 function createHost(
