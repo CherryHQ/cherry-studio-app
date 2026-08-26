@@ -122,8 +122,8 @@ function validateRequest(
   }
   if (!capabilities.attachments) {
     const inputHasFile = request.input.some((part) => part.type === 'file');
-    const historyHasFile = request.history.some((message) =>
-      message.parts.some((part) => part.type === 'file'),
+    const historyHasFile = request.history.some((turn) =>
+      turn.messages.some((message) => message.parts.some((part) => part.type === 'file')),
     );
     if (inputHasFile || historyHasFile) {
       return {

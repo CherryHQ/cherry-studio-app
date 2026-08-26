@@ -135,6 +135,7 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'context_checkpoint',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',

@@ -54,6 +54,9 @@ export const agentSessionMessageTable = sqliteTable(
     // Turn-level error persisted beside the message for the Host's Turn
     // projection; it is not part of the protocol message view.
     error: text({ mode: 'json' }).$type<AgentErrorView>(),
+    // Runtime-owned opaque context artifact. The Host validates its version,
+    // anchor, and byte size before saving or replaying it.
+    contextCheckpoint: text({ mode: 'json' }).$type<unknown>(),
     // Model identifier: FK to user_model(id) — UniqueModelId "providerId::modelId"
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future

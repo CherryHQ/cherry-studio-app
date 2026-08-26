@@ -57,6 +57,13 @@
       "when": 1787726636521,
       "tag": "0007_agent-tool-bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787740980175,
+      "tag": "0008_context-checkpoint",
+      "breakpoints": true
     }
   ]
 }

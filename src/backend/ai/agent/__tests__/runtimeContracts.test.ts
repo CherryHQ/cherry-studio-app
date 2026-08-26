@@ -1,4 +1,11 @@
-import type { RuntimeArtifact, RuntimeTool, RuntimeToolRef, RuntimeToolResult } from '../types';
+import { RuntimeContextCheckpointSchema } from '../runtimeSchemas';
+import type {
+  RuntimeArtifact,
+  RuntimeContextCheckpoint,
+  RuntimeTool,
+  RuntimeToolRef,
+  RuntimeToolResult,
+} from '../types';
 
 describe('Agent Runtime settled contracts', () => {
   test('round-trips stable refs, results, and managed artifacts as JSON', async () => {
@@ -33,5 +40,17 @@ describe('Agent Runtime settled contracts', () => {
     );
 
     expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });
+  });
+
+  test('round-trips context checkpoints through the Runtime schema', () => {
+    const checkpoint: RuntimeContextCheckpoint = {
+      version: 1,
+      anchorTurnId: 'turn-1',
+      payload: { summary: 'Earlier conversation.', retained: ['fact-1'] },
+    };
+
+    expect(RuntimeContextCheckpointSchema.parse(JSON.parse(JSON.stringify(checkpoint)))).toEqual(
+      checkpoint,
+    );
   });
 });

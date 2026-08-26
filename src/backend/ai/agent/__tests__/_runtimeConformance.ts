@@ -1,7 +1,7 @@
 /**
  * Reusable Agent Runtime conformance suite.
  *
- * `describeRuntimeConformance` covers all eleven items from the "Conformance"
+ * `describeRuntimeConformance` covers the executable items from the "Conformance"
  * section of `docs/references/agent/agent-runtime.md`. Any {@link AgentRuntime}
  * implementation plugs in by supplying a {@link RuntimeConformanceHarness}: the
  * suite drives the runtime only through the public contract, while the harness
@@ -182,6 +182,30 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
       expect(terminalIndices).toHaveLength(1);
       // The single terminal is the last event; nothing follows it.
       expect(terminalIndices[0]).toBe(events.length - 1);
+    } finally {
+      await session.close();
+    }
+  });
+
+  test('accepts grouped history and an opaque context checkpoint', async () => {
+    const runtime = await harness.createRuntime();
+    const { request } = await harness.arrangeSuccess(runtime, 'turn-context-checkpoint');
+    request.history = [
+      {
+        turnId: 'turn-after-anchor',
+        messages: [{ role: 'user', parts: [{ type: 'text', text: 'Retained input.' }] }],
+      },
+    ];
+    request.contextCheckpoint = {
+      version: 1,
+      anchorTurnId: 'turn-anchor',
+      payload: { summary: 'Earlier input.' },
+    };
+    const session = await runtime.open();
+    try {
+      const events = await collect(session.execute(request));
+
+      expect(events.at(-1)?.type).toBe('completed');
     } finally {
       await session.close();
     }

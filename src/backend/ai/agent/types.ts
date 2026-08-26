@@ -123,6 +123,19 @@ export type RuntimeMessage = {
   parts: RuntimeMessagePart[];
 };
 
+/** One persisted application turn, kept intact for Runtime-owned context policy. */
+export type RuntimeHistoryTurn = {
+  turnId: string | null;
+  messages: RuntimeMessage[];
+};
+
+/** Versioned, opaque Runtime context artifact persisted and replayed by the Host. */
+export type RuntimeContextCheckpoint = {
+  version: 1;
+  anchorTurnId: string;
+  payload: RuntimeJsonValue;
+};
+
 export type RuntimeTool = {
   ref: RuntimeToolRef;
   providerName: string;
@@ -140,7 +153,8 @@ export type RuntimeExecutionRequest = {
   turnId: string;
   instructions: string;
   model: RuntimeModel;
-  history: RuntimeMessage[];
+  history: RuntimeHistoryTurn[];
+  contextCheckpoint: RuntimeContextCheckpoint | null;
   input: RuntimeInputPart[];
   tools: RuntimeTool[];
   options: RuntimeOptions;
@@ -223,6 +237,7 @@ export type RuntimeEvent =
   | { type: 'part.replace'; part: RuntimeOutputPart }
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
+  | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
   | ({ type: 'usage' } & RuntimeUsageReport)
   | { type: 'completed' }
   | { type: 'failed'; error: RuntimeError }
