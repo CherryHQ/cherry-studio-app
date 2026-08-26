@@ -25,7 +25,10 @@ surfaces.
 - `agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screens.
 - The editor lays its fields out bare rather than in a grouped card, so its route keeps the ordinary
-  page background — the field fill needs a lighter page behind it to read as a field at all. It also
-  owns its top content inset instead of leaving it to the scroll view, because the avatar picker's
-  full-screen modal wipes the automatic one on dismissal.
+  page background — the field fill needs a lighter page behind it to read as a field at all.
+- The editor's route is the one screen in this stack with an opaque header, so the native stack owns
+  the top inset. Under the stack's floating header that inset comes from `useHeaderHeight()`, which
+  reports an estimate until the native header measures itself and so drops the content into place a
+  frame after the push finishes. The bottom inset stays hand-rolled either way, because the avatar
+  picker's full-screen modal wipes whatever the scroll view adjusted for itself.
 - Cross-screen UI comes from neutral modules under `src/frontend/components`.

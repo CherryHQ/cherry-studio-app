@@ -2,14 +2,13 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { ContentState, Input, useAlert } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/avatar';
+import { AgentAvatar, AvatarPickerField } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   ModelPickerDrawer,
@@ -25,7 +24,7 @@ import {
   useAgentToolBindingsApi,
 } from '@/frontend/hooks/agent';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
-import { isLiquidGlassAvailable, keyboardBottomOffset } from '@/frontend/utils/constants';
+import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -128,7 +127,6 @@ function AgentEditForm({
   );
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
-  const headerHeight = useHeaderHeight();
   const safeAreaInsets = useSafeAreaInsets();
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   // Resolving through the picker catalog keeps a stale preference (a model the
@@ -229,20 +227,16 @@ function AgentEditForm({
     toolBindings,
     updateAgent,
   ]);
-  // This stack floats its header over the scene, so the content has to clear it
-  // itself. `contentInsetAdjustmentBehavior="automatic"` does that until the
-  // image picker presents its full-screen modal — dismissing it wipes the inset
-  // and the form comes back sitting under the header. Owning the padding here
-  // keeps it stable across that trip, so the scroll view adjusts nothing.
+  // The header is opaque here, so the only inset left to clear is the home
+  // indicator — and that one is owned rather than left to
+  // `contentInsetAdjustmentBehavior`, because presenting the image picker's
+  // full-screen modal wipes whatever the scroll view adjusted for itself.
   const scrollContentStyle = useMemo(
     () => [
       styles.scrollContent,
-      {
-        paddingBottom: agentFormContentPadding + safeAreaInsets.bottom,
-        paddingTop: (isLiquidGlassAvailable ? headerHeight : 0) + agentFormContentPadding,
-      },
+      { paddingBottom: agentFormContentPadding + safeAreaInsets.bottom },
     ],
-    [headerHeight, safeAreaInsets.bottom],
+    [safeAreaInsets.bottom],
   );
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -275,26 +269,19 @@ function AgentEditForm({
         showsVerticalScrollIndicator={false}
         style={styles.scroll}
       >
-        {/* Avatar and caption share one trigger, so tapping either opens the
-            same picker — hence no `size` on the picker: it hugs the block. */}
-        <View className="items-center">
-          <AvatarImagePicker
+        <AvatarPickerField
+          caption={t('agent.form.setAvatar')}
+          onBeforeOpen={Keyboard.dismiss}
+          onError={reportAvatarPickError}
+          onSelect={handleAvatarSelect}
+        >
+          <AgentAvatar
             accessibilityLabel={t('agent.form.setAvatar')}
-            onBeforeOpen={Keyboard.dismiss}
-            onError={reportAvatarPickError}
-            onSelect={handleAvatarSelect}
-          >
-            <View className="items-center gap-3">
-              <AgentAvatar
-                accessibilityLabel={t('agent.form.setAvatar')}
-                name={form.name}
-                size={agentFormAvatarSize}
-                uri={form.avatarUri}
-              />
-              <Text className="font-medium text-base text-brand">{t('agent.form.setAvatar')}</Text>
-            </View>
-          </AvatarImagePicker>
-        </View>
+            name={form.name}
+            size={agentFormAvatarSize}
+            uri={form.avatarUri}
+          />
+        </AvatarPickerField>
         {/* No card and no rows: each field stands on its own, so the only chrome
             is the one the `Input` already draws. The model row borrows that same
             outline so the three read as one set. */}
@@ -385,5 +372,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 32,
     paddingHorizontal: 16,
+    paddingTop: agentFormContentPadding,
   },
 });
