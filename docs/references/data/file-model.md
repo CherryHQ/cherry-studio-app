@@ -69,10 +69,11 @@ never created.
 
 ## Future Agent Attachment Persistence
 
-A future persisted Agent file part stores `url: "cherry://file/{id}"` plus `fileEntryId` in its
-Cherry metadata — never an absolute sandbox path, which iOS invalidates on container relocation.
-The Host-side resolver must resolve that id for provider input. Until that contract lands, Agent
-Protocol reports `attachments: false` and rejects attachments before execution.
+A future persisted Agent file part stores `fileEntryId` plus stable display metadata such as name
+and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The
+Host-side resolver must resolve that id for provider input. If the entry or its bytes are gone, the
+part remains in history and renders unavailable. Until that contract lands, Agent Protocol reports
+`attachments: false` and rejects attachments before execution.
 
 Attachments are sent to providers as inlined base64 data URLs. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
@@ -112,11 +113,25 @@ the user owns the consequences of their own deletion. The same iteration owns a 
 action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
 row).
 
-**Agent file writes.** A write tool reads the current entry, creates a new one, and returns the new
-id; it must not rewrite a managed blob. Agent-owned files are stored the way every other owner
-stores them — ids on the owning row — not in an association table. A file id sitting in a
-tool-result JSON payload is not ownership: it has to reach a row that outlives the turn, or the
-file has no owner at all.
+**Agent file writes and generated artifacts.** A write tool reads an entry in the turn's controlled
+resource ledger, creates a new one, and returns the new id; it must not rewrite a managed blob.
+Office inputs are imported before inspection or editing, and every edit patches a copy into a new
+entry while preserving the source. Office and image tools follow the same rule for newly generated
+output. The file library is also the Version 1 artifact library; no parallel artifact blob store or
+external authoritative path exists. Raw picker, provider, and device URIs are transient import
+sources; Agent protocol and tools receive only managed ids.
+
+The Runtime projects each result into an assistant-message file part containing its `fileEntryId`
+and `purpose: 'artifact'`, because a file id sitting only in tool-result JSON is not transcript
+ownership. That reference remains available to UI and, while the managed entry exists, controlled
+tools, but is not automatically sent to the model as a file attachment in later history. The
+originating paired tool result retains bounded reference metadata without inlining its content.
+Explicit user attachment produces an `input-attachment` part for the same entry; controlled
+inspection and read tools can also consume it by id. See
+[Agent Tools And Controlled Resources](../agent/agent-tools-and-resources.md#tool-results-and-artifacts).
+
+Saving or sharing a managed artifact to the system copies its bytes to a user-selected destination.
+The managed entry remains canonical, and Cherry never persists the exported path as file authority.
 
 **Provider upload cache.** A separate table keyed by content hash, added when the AI SDK's Files
 Upload API stabilizes.

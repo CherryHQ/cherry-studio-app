@@ -76,6 +76,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
 - [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
+- [Agent Architecture](./agent/README.md): Pi-only conversation Runtime, Agent Protocol, tools,
+  controlled resources, Skills, and persistence.
 - [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): Agent Protocol observation,
   transcript windows, live projection, and rendering.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
@@ -98,6 +100,11 @@ compatibility adapter or generic frontend selector for persistence services.
   `Backend.agent` and combines it with Data API transcript reads.
 - Pi is the only local Agent Runtime. `AiService` serves explicit-model, non-conversation
   generation and provider utilities; no parallel Topic/Chat runtime remains.
+- In the settled Agent tool direction, application-owned `RuntimeTool` adapters expose Streamable
+  HTTP MCP, device APIs, Office/image generation, and controlled managed-file operations to Pi. AI
+  SDK may implement a model capability behind a tool, but never owns the conversation or tool loop.
+- Controlled Skills are persisted description-only prompt resources. They are not executable tools
+  and cannot expand permission or the turn resource ledger.
 - Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
 - App shutdown closes Agent Runtime sessions and awaits tracked Agent turns before disposing lower
   infrastructure.

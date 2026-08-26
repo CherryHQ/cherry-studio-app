@@ -17,6 +17,22 @@ Pi is the only local Agent Runtime. It receives a normalized Agent transcript an
 selected Agent model through the Host-owned provider adapter. Provider coverage beyond the current
 OpenAI Responses-compatible Pi adapter is separate follow-up work.
 
+When application tools land, the capability path is:
+
+```text
+Mobile Agent Host → Pi Runtime → application-owned RuntimeTool
+                                      ↓
+                              capability service
+                                      ↓
+                         AiService / ai-core / AI SDK
+```
+
+Image generation is the first intended use of this path. Office generation and managed-file edits
+use the same tool boundary but do not need AI SDK unless their application capability chooses it.
+Pi owns tool selection and iteration; the capability service owns provider configuration,
+credentials, request execution, usage, cancellation, output import, and cleanup. See
+[Agent Tools And Controlled Resources](../agent/agent-tools-and-resources.md).
+
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
 - `generateText()` for short internal generations such as Session naming;
@@ -55,7 +71,8 @@ builders are centralized in `src/backend/ai/provider/config.ts`.
 `src/backend/ai/runtime/aiSdk/Agent.ts` is now a generate-only wrapper around the AI SDK. Request
 assembly in `buildAgentParams.ts` supports explicit reasoning, sampling/provider overrides, headers,
 timeouts, retries, and caller-supplied tools. It owns no conversation persistence or stream
-lifecycle.
+lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
+resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
 
 ## Special Providers
 
@@ -85,3 +102,5 @@ configuration and API-version settings influence the generated provider settings
 - Desktop Provider/Model semantics change.
 - Pi provider coverage expands.
 - Agent tools or attachments gain an application-owned runtime contract.
+- A new model-capability tool needs provider configuration, usage, or artifact semantics not covered
+  by the application capability boundary.
