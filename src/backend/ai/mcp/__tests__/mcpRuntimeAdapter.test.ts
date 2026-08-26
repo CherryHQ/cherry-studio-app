@@ -9,12 +9,12 @@ import {
   type McpToolInvocationCapability,
 } from '../mcpRuntimeAdapter';
 
-const VALID_INPUT_SCHEMA = {
+const VALID_INPUT_SCHEMA: RuntimeJsonValue = {
   additionalProperties: false,
   properties: { query: { type: 'string' } },
   required: ['query'],
   type: 'object',
-} as const;
+};
 
 function descriptor(overrides: Partial<McpExecutableToolDescriptor> = {}) {
   return {

@@ -78,6 +78,31 @@ describe('FileEntryService integration', () => {
     await expect(service.getById(id(9))).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('batch-resolves only live file entries for submission-time validation', async () => {
+    const available = await service.create({
+      filename: 'available.png',
+      id: id(1),
+      mediaType: 'image/png',
+      size: 12,
+    });
+    await service.create({
+      filename: 'deleted.png',
+      id: id(2),
+      mediaType: 'image/png',
+      size: 24,
+    });
+    testDatabase.sqlite
+      .prepare('UPDATE file_entry SET deleted_at = ? WHERE id = ?')
+      .run(now + HOUR, id(2));
+
+    await expect(service.findAvailableByIds([id(2), id(1), id(1), id(9)])).resolves.toEqual([
+      available,
+    ]);
+    await expect(service.findById(id(2))).resolves.toMatchObject({ id: id(2) });
+    await expect(service.getById(id(2))).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(service.findAvailableByIds([])).resolves.toEqual([]);
+  });
+
   it('deletes an entry idempotently', async () => {
     await service.create({ filename: 'note.txt', id: id(3), mediaType: 'text/plain', size: 1 });
 

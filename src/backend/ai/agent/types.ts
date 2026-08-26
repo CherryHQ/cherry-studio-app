@@ -41,6 +41,7 @@ export type RuntimeDescriptor = {
 
 export interface AgentRuntime {
   readonly descriptor: RuntimeDescriptor;
+  preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
   open(): Promise<AgentRuntimeSession>;
 }
 
@@ -58,6 +59,20 @@ export interface AgentRuntimeSession {
 export type RuntimeModel = {
   providerId: string;
   modelId: string;
+};
+
+export type RuntimeInputModality = 'text' | 'image';
+
+/**
+ * JSON-safe model facts the Host may inspect before reserving a turn. Runtime
+ * implementations keep provider SDK model objects behind their own boundary.
+ */
+export type RuntimeModelPreflight = {
+  contextWindow: number;
+  inputModalities: RuntimeInputModality[];
+  maxInputTokens: number;
+  maxOutputTokens: number;
+  supportsTools: boolean;
 };
 
 export type RuntimeOptions = {

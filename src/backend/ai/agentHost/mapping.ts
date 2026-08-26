@@ -26,6 +26,10 @@ import {
   type AgentUsageView,
 } from '@/shared/contracts/agent';
 
+import type { TurnResourceLedger } from './managedFileResolver';
+
+export type RuntimeFileContents = ReadonlyMap<string, Extract<RuntimeInputPart, { type: 'file' }>>;
+
 /**
  * Runtime error codes are implementation-scoped strings; the protocol enum is
  * closed. Every runtime failure surfaces as EXECUTION_FAILED with the
@@ -97,12 +101,23 @@ export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
   };
 }
 
-export function toRuntimeInputParts(parts: AgentInputPart[]): RuntimeInputPart[] {
-  return parts.map((part) => {
+export function toRuntimeInputParts(
+  parts: AgentInputPart[],
+  resources?: Pick<TurnResourceLedger, 'fileEntryIds'>,
+  files?: RuntimeFileContents,
+): RuntimeInputPart[] {
+  return parts.flatMap((part): RuntimeInputPart[] => {
     if (part.type === 'file') {
-      throw new Error('Managed file input must be resolved before entering the Runtime.');
+      if (!resources?.fileEntryIds.has(part.fileEntryId)) {
+        throw new Error('Managed file input is outside the turn resource ledger.');
+      }
+      const file = files?.get(part.fileEntryId);
+      if (!file) {
+        throw new Error('Managed file input has no resolved Runtime content.');
+      }
+      return [file];
     }
-    return { type: 'text', text: part.text };
+    return [{ type: 'text', text: part.text }];
   });
 }
 
@@ -111,7 +126,10 @@ export function toRuntimeInputParts(parts: AgentInputPart[]): RuntimeInputPart[]
  * expand into `tool-call` + `tool-result` pairs; protocol `error` parts stay
  * behind the boundary (they describe the turn, not model-visible content).
  */
-export function toRuntimeHistory(messages: AgentMessageView[]): RuntimeMessage[] {
+export function toRuntimeHistory(
+  messages: AgentMessageView[],
+  files: RuntimeFileContents = new Map(),
+): RuntimeMessage[] {
   const history: RuntimeMessage[] = [];
   for (const message of messages) {
     const parts: RuntimeMessagePart[] = [];
@@ -122,9 +140,14 @@ export function toRuntimeHistory(messages: AgentMessageView[]): RuntimeMessage[]
           parts.push({ type: part.type, text: part.text });
           break;
         case 'file':
-          // C1 has no Host-side managed-file resolver. Artifact parts never
-          // become implicit model attachments, and input attachments remain
-          // unavailable until the attachment slice resolves them explicitly.
+          if (message.role === 'user' && part.purpose === 'input-attachment') {
+            const file = files.get(part.fileEntryId);
+            if (file) {
+              parts.push(file);
+            }
+          }
+          // Missing historical input content is omitted. Assistant artifacts
+          // never become implicit model attachments.
           break;
         case 'tool': {
           const validPart = AgentMessagePartSchema.safeParse(part);

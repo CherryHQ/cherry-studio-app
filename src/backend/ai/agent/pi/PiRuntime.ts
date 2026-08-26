@@ -4,8 +4,8 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
+  Api as PiApi,
   AssistantMessage,
-  FetchFunction,
   Message as PiMessage,
   Model as PiModel,
   ModelThinkingLevel,
@@ -28,6 +28,8 @@ import type {
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeJsonValue,
+  RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolResult,
@@ -37,18 +39,16 @@ import type {
 import { toPiConversation } from './modelMessages';
 
 export type PiModelResolution = {
-  apiKey: string;
   defaultThinkingLevel: ModelThinkingLevel;
-  fetch?: FetchFunction;
-  headers?: Record<string, string>;
-  maxRetries: number;
-  model: PiModel<'openai-responses'>;
+  model: PiModel<PiApi>;
+  redactionValues: readonly string[];
+  streamFn: AgentOptions['streamFn'];
   supportsTools: boolean;
-  timeoutMs: number;
   usageContext: RuntimeUsageContext;
 };
 
 export interface PiRuntimeDependencies {
+  preflightModel(model: RuntimeModel): RuntimeModelPreflight | Promise<RuntimeModelPreflight>;
   resolveModel(
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
@@ -70,7 +70,7 @@ const PI_DESCRIPTOR: RuntimeDescriptor = {
   name: 'Pi Runtime',
   capabilities: {
     approvals: true,
-    attachments: false,
+    attachments: true,
     reasoning: true,
     tools: true,
   },
@@ -157,18 +157,26 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 }
 
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
-  const hasFileInput = request.input.some((part) => part.type === 'file');
-  const hasFileHistory = request.history.some((message) =>
-    message.parts.some((part) => part.type === 'file'),
-  );
-  if (hasFileInput || hasFileHistory) {
+  const files = [
+    ...request.input.filter((part) => part.type === 'file'),
+    ...request.history.flatMap((message) => message.parts.filter((part) => part.type === 'file')),
+  ];
+  if (files.some((part) => !isInlineImagePart(part))) {
     return {
       code: 'unsupported_input',
-      message: 'This runtime does not support file attachments.',
+      message: 'Pi Runtime accepts only validated inline image attachments.',
       retryable: false,
     };
   }
   return null;
+}
+
+function isInlineImagePart(part: { mediaType: string; type: 'file'; uri: string }): boolean {
+  return (
+    part.mediaType.startsWith('image/') &&
+    part.uri.startsWith(`data:${part.mediaType};base64,`) &&
+    part.uri.length > `data:${part.mediaType};base64,`.length
+  );
 }
 
 function normalizeExecutionError(error: unknown, secrets: readonly string[] = []): RuntimeError {
@@ -227,11 +235,7 @@ function normalizeToolExecutionError(error: unknown): RuntimeError {
 }
 
 function sensitiveValues(resolution: PiModelResolution): string[] {
-  const values = [resolution.apiKey];
-  for (const [name, value] of Object.entries(resolution.headers ?? {})) {
-    if (/authorization|api[-_]key|token|secret/i.test(name)) values.push(value);
-  }
-  return values;
+  return [...resolution.redactionValues];
 }
 
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
@@ -385,7 +389,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
       secrets = sensitiveValues(resolution);
-      if (turn.terminated) return;
+      if (turn.terminated || turn.cancelRequested) return;
       if (turn.timedOut) {
         this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
         return;
@@ -401,26 +405,26 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
+      if (
+        (request.input.some((part) => part.type === 'file') ||
+          request.history.some((message) => message.parts.some((part) => part.type === 'file'))) &&
+        !resolution.model.input.includes('image')
+      ) {
+        this.emit(turn, {
+          type: 'failed',
+          error: {
+            code: 'unsupported_input',
+            message: 'The selected model does not support image input.',
+            retryable: false,
+          },
+        });
+        return;
+      }
 
       const conversation = toPiConversation(request, resolution.model);
-      const streamFn: AgentOptions['streamFn'] = async (model, context, options) => {
-        const { streamSimple } = await import('@earendil-works/pi-ai/api/openai-responses');
-        return streamSimple(model as PiModel<'openai-responses'>, context, {
-          ...options,
-          apiKey: resolution.apiKey,
-          fetch: resolution.fetch,
-          headers: resolution.headers,
-          maxRetries: resolution.maxRetries,
-          maxTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
-          signal: options?.signal,
-          temperature: request.options.temperature,
-          timeoutMs: resolution.timeoutMs,
-        });
-      };
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
-        getApiKey: () => resolution.apiKey,
         initialState: {
           messages: conversation.history,
           model: resolution.model,
@@ -437,13 +441,17 @@ class PiRuntimeSession implements AgentRuntimeSession {
           }
           return turn.limitError !== undefined || turn.timedOut || turn.cancelRequested;
         },
-        streamFn,
+        streamFn: resolution.streamFn,
         toolExecution: 'parallel',
       };
       const agent = this.createAgent
         ? this.createAgent(agentOptions)
         : await createDefaultAgent(agentOptions);
       turn.agent = agent;
+      if (turn.terminated || turn.cancelRequested) {
+        agent.abort();
+        return;
+      }
       unsubscribe = agent.subscribe((event) => this.handlePiEvent(turn, event));
 
       await agent.prompt(conversation.prompt);
@@ -635,6 +643,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolRef: runtimeTool.ref,
     });
 
+    if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+      return this.interruptToolCall(turn, part);
+    }
+
     turn.toolCallCount += 1;
     if (turn.toolCallCount > this.limits.maxToolCalls) {
       const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
@@ -657,6 +669,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     if (runtimeTool.approval === 'ask') {
       const approvalId = `approval-${toolCallId}`;
+      // Register before publishing the request: callers may cancel as soon as
+      // they observe that event, and cancellation must always find the waiter.
+      const decisionPromise = this.waitForApproval(turn, approvalId);
       this.replaceToolPart(turn, part, { state: 'awaiting-approval', approvalId });
       this.emit(turn, {
         type: 'approval.requested',
@@ -670,7 +685,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           status: 'pending',
         },
       });
-      const decision = await this.waitForApproval(turn, approvalId);
+      const decision = await decisionPromise;
       this.emit(turn, {
         type: 'approval.resolved',
         approval: {
@@ -688,6 +703,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.settledToolCalls.add(toolCallId);
         return this.piToolResult(DENIED_TOOL_RESULT);
       }
+      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+        return this.interruptToolCall(turn, part);
+      }
     }
 
     this.replaceToolPart(turn, part, { state: 'running' });
@@ -699,12 +717,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
         signal: callbackSignal,
         toolCallId,
       });
-      if (turn.cancelRequested || turn.timedOut || callbackSignal.aborted) {
-        const interrupted = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
-        this.replaceToolPart(turn, part, { state: 'interrupted', output: interrupted });
-        turn.failedToolCalls.add(toolCallId);
-        turn.settledToolCalls.add(toolCallId);
-        return this.piToolResult(interrupted);
+      if (turn.cancelRequested || turn.terminated || turn.timedOut || callbackSignal.aborted) {
+        return this.interruptToolCall(turn, part);
       }
       this.replaceToolPart(turn, part, { state: 'output-available', output });
       turn.settledToolCalls.add(toolCallId);
@@ -713,20 +727,20 @@ class PiRuntimeSession implements AgentRuntimeSession {
     } catch (error) {
       const isInterrupted =
         turn.cancelRequested ||
+        turn.terminated ||
         turn.timedOut ||
         turn.abortController.signal.aborted ||
         signal?.aborted;
+      if (isInterrupted) {
+        return this.interruptToolCall(turn, part);
+      }
       const executionError = normalizeToolExecutionError(error);
-      const output = isInterrupted
-        ? createInterruptedToolResult(INTERRUPTED_TOOL_REASON)
-        : createErrorToolResult(executionError);
-      this.replaceToolPart(
-        turn,
-        part,
-        isInterrupted
-          ? { state: 'interrupted', output }
-          : { state: 'error', error: executionError, output },
-      );
+      const output = createErrorToolResult(executionError);
+      this.replaceToolPart(turn, part, {
+        state: 'error',
+        error: executionError,
+        output,
+      });
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       return this.piToolResult(output);
@@ -738,6 +752,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       content: [{ type: 'text' as const, text: JSON.stringify(output) }],
       details: output,
     };
+  }
+
+  private interruptToolCall(turn: ActiveTurn, part: ToolPartBase) {
+    const output = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+    this.replaceToolPart(turn, part, { state: 'interrupted', output });
+    turn.failedToolCalls.add(part.toolCallId);
+    turn.settledToolCalls.add(part.toolCallId);
+    return this.piToolResult(output);
   }
 
   private emitArtifacts(turn: ActiveTurn, toolCallId: string, output: RuntimeToolResult): void {
@@ -843,6 +865,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private waitForApproval(turn: ActiveTurn, approvalId: string): Promise<'approve' | 'deny'> {
     return new Promise((resolve, reject) => {
+      if (turn.cancelRequested || turn.terminated) {
+        reject(new Error('The turn is no longer active.'));
+        return;
+      }
       turn.approvalWaiters.set(approvalId, { resolve, reject });
     });
   }
@@ -886,6 +912,10 @@ export class PiRuntime implements AgentRuntime {
     private readonly createAgent?: PiRuntimeAgentFactory,
     private readonly limits: PiRuntimeLimits = DEFAULT_PI_RUNTIME_LIMITS,
   ) {}
+
+  async preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight> {
+    return this.dependencies.preflightModel(model);
+  }
 
   async open(): Promise<AgentRuntimeSession> {
     return new PiRuntimeSession(this.dependencies, this.createAgent, this.limits);

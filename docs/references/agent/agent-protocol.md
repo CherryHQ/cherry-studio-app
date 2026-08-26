@@ -1,7 +1,8 @@
 # Cherry Agent Protocol
 
-Status: **as built**. Tool configuration is projected into local MCP execution; managed attachment
-resolution remains separate follow-up work. Version 1 is local-only.
+Status: **as built**, including managed image resolution and projection of configured tools into
+local MCP execution. Text attachment resolution remains separate follow-up work. Version 1 is
+local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
@@ -186,11 +187,19 @@ Every file part records a managed `fileEntryId` that existed when the part was w
 with stable display metadata such as name and media type; protocol values never use absolute device
 paths or transient import URIs as authority. The managed entry may later be deleted, in which case
 the historical part remains visible but its content is unavailable. User input is imported before
-submission and persisted with `purpose: 'input-attachment'`. A tool that produces an Office
+submission. Before reservation, the Host verifies the live entry and managed blob, rejects client
+metadata that differs from the entry, and persists the authoritative name and media type with
+`purpose: 'input-attachment'`. A tool that produces an Office
 document, image, or edited file keeps its structured tool result and also emits a part with
 `purpose: 'artifact'` so the assistant message durably owns the reference. Artifact content is not
 automatically projected as a model attachment in later history. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
+
+Current JPEG, PNG, GIF, and WebP inputs are admitted only when the authoritative entry and blob,
+selected model capability, Pi endpoint adapter, and centralized request limits all pass before
+reservation. Available historical user images are projected again for an image-capable model;
+missing historical content is omitted without deleting or rewriting the message. The temporary
+Data URL exists only inside the Host-to-Runtime request.
 
 `toolRef` is the stable application identity used by configuration, approval, persistence, and
 audit. `providerName` is the deterministic function alias used in model history; `displayName` is a
@@ -351,6 +360,8 @@ type AgentErrorView = {
     | 'SESSION_NOT_FOUND'
     | 'SESSION_BUSY'
     | 'CAPABILITY_UNSUPPORTED'
+    | 'ATTACHMENT_UNAVAILABLE'
+    | 'ATTACHMENT_METADATA_MISMATCH'
     | 'APPROVAL_NOT_FOUND'
     | 'EXECUTION_UNAVAILABLE'
     | 'EXECUTION_FAILED'

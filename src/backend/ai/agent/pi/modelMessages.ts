@@ -1,8 +1,12 @@
 import type {
+  Api as PiApi,
   AssistantMessage,
+  ImageContent,
   Message as PiMessage,
   Model as PiModel,
+  TextContent,
   ToolResultMessage,
+  UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
@@ -26,7 +30,7 @@ export type PiConversation = {
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
 export function toPiConversation(
   request: RuntimeExecutionRequest,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
 ): PiConversation {
   const history: PiMessage[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
@@ -39,21 +43,42 @@ export function toPiConversation(
       continue;
     }
     if (message.role === 'user') {
-      history.push({ role: 'user', content: collectText(message.parts), timestamp: Date.now() });
+      history.push({
+        role: 'user',
+        content: collectUserContent(message.parts),
+        timestamp: Date.now(),
+      });
       continue;
     }
     appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
   }
 
-  const promptText = request.input
-    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-    .join('\n');
-
   return {
     history,
-    prompt: { role: 'user', content: promptText, timestamp: Date.now() },
+    prompt: { role: 'user', content: collectUserContent(request.input), timestamp: Date.now() },
     systemPrompt: systemParts.join('\n\n'),
   };
+}
+
+function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['content'] {
+  const content = parts.flatMap<TextContent | ImageContent>((part) => {
+    if (part.type === 'text') {
+      return [{ type: 'text' as const, text: part.text }];
+    }
+    if (part.type === 'file') {
+      return [toPiImage(part)];
+    }
+    return [];
+  });
+  return content.some((part) => part.type === 'image') ? content : collectText(parts);
+}
+
+function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageContent {
+  const prefix = `data:${part.mediaType};base64,`;
+  if (!part.uri.startsWith(prefix) || part.uri.length === prefix.length) {
+    throw new Error('Runtime image content must be a matching base64 data URL.');
+  }
+  return { type: 'image', data: part.uri.slice(prefix.length), mimeType: part.mediaType };
 }
 
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
@@ -66,7 +91,7 @@ function collectProviderNames(request: RuntimeExecutionRequest): Map<string, str
   return result;
 }
 
-function collectText(parts: RuntimeMessagePart[]): string {
+function collectText(parts: readonly RuntimeMessagePart[]): string {
   return parts
     .flatMap((part) => (part.type === 'text' || part.type === 'reasoning' ? [part.text] : []))
     .join('\n');
@@ -76,7 +101,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
-  model: PiModel<'openai-responses'>,
+  model: PiModel<PiApi>,
 ): void {
   let content: AssistantMessage['content'] = [];
   const flushAssistant = () => {
@@ -126,7 +151,7 @@ function appendAssistantHistory(
         break;
       }
       default:
-        // File parts are rejected before model resolution.
+        // Assistant artifact files are not implicit model attachments.
         break;
     }
   }

@@ -27,6 +27,7 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../runtime';
@@ -35,6 +36,7 @@ import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnV
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { toAgentInputParts } from './utils/agentInputParts';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -42,8 +44,6 @@ type ChatInputProps = {
   dismissKeyboardOnSend?: boolean;
   sessionId?: string;
 };
-
-class AgentAttachmentsUnsupportedError extends Error {}
 
 const logger = loggerService.withContext('ChatInput');
 const restingInputHeight = 32;
@@ -57,7 +57,7 @@ const focusTransitionMotion = {
 
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
-  const { cancel, isBusy, sendText } = useAgentChatControls({ agentId, sessionId });
+  const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData();
@@ -175,12 +175,9 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   );
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
-      if (attachments.length > 0) {
-        throw new AgentAttachmentsUnsupportedError();
-      }
-
-      return sendText({
-        text,
+      const parts = toAgentInputParts({ attachments, text });
+      return sendMessage({
+        parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
           ? {
@@ -200,14 +197,25 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       reasoningEffort,
       reasoningEfforts,
       selectedModelId,
-      sendText,
+      sendMessage,
     ],
   );
   const getSendErrorLabel = useCallback(
-    (error: unknown) =>
-      error instanceof AgentAttachmentsUnsupportedError
-        ? t('chat.input.attachmentsUnsupported')
-        : undefined,
+    (error: unknown) => {
+      if (!(error instanceof AgentProtocolError)) {
+        return undefined;
+      }
+      if (error.view.code === 'CAPABILITY_UNSUPPORTED') {
+        return t('chat.input.attachmentsRejected');
+      }
+      if (
+        error.view.code === 'ATTACHMENT_UNAVAILABLE' ||
+        error.view.code === 'ATTACHMENT_METADATA_MISMATCH'
+      ) {
+        return t('chat.input.attachmentUnavailable');
+      }
+      return undefined;
+    },
     [t],
   );
 
@@ -227,8 +235,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             onStop={() => void cancel()}
             streaming={isBusy}
           >
-            {/* Pasted attachments remain visible and removable, but sending fails closed until
-                the Host-side file resolver enables the protocol capability. */}
             <ComposerAttachments />
             <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
               <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>

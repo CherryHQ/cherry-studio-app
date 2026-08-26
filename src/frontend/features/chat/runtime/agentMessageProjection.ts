@@ -1,6 +1,13 @@
 import type { MessageListItem } from '@/frontend/components/messages';
-import type { AgentErrorView, AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
+import {
+  type AgentErrorView,
+  type AgentMessagePart,
+  type AgentMessageView,
+  AgentToolResultSchema,
+} from '@/shared/contracts/agent';
+import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
+import { withCherryMeta } from '@/shared/data/types/uiParts';
 
 function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
   switch (status) {
@@ -52,7 +59,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
     case 'output-available':
       return {
         ...base,
-        output: part.output,
+        output: unwrapToolOutput(part.output),
         state: 'output-available',
       } as CherryMessagePart;
     case 'denied':
@@ -74,20 +81,27 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
   }
 }
 
+/** Shared tool renderers consume the capability value, not the Runtime envelope. */
+function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['output']) {
+  const parsed = AgentToolResultSchema.safeParse(output);
+  return parsed.success ? parsed.data.value : output;
+}
+
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
     case 'text':
     case 'reasoning':
       return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
     case 'file':
-      return {
-        type: 'file',
-        filename: part.name ?? 'File',
-        mediaType: part.mediaType,
-        // Managed refs are resolved by the attachment feature before they can
-        // be opened. C1 deliberately exposes no raw path fallback.
-        url: '',
-      } as CherryMessagePart;
+      return withCherryMeta(
+        {
+          type: 'file',
+          filename: part.name ?? 'File',
+          mediaType: part.mediaType,
+          url: fileEntryUrl(part.fileEntryId as FileEntryId),
+        } as Extract<CherryMessagePart, { type: 'file' }>,
+        { fileEntryId: part.fileEntryId },
+      );
     case 'tool':
       return toToolPart(part);
     case 'error':

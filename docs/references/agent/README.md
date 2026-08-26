@@ -57,8 +57,9 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. Persisted MCP bindings are
-  projected only when their Streamable HTTP server and raw discovered tool remain executable.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host combines its fixed
+  built-in tools with persisted MCP bindings whose Streamable HTTP server and raw discovered tool
+  remain executable.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -140,15 +141,15 @@ Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and 
 onto the Runtime contract. Agent tool bindings are durable and exposed through the typed Data API.
 The HTTP MCP adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks,
 and the Host resolves their effective policy into a frozen per-turn catalog before reserving
-messages. File attachments are rejected before provider execution until the Host-side file resolver
-lands.
+messages. The Host also resolves bounded managed images for supported models and Pi endpoint
+adapters; text attachments remain deferred.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
 tables, management screens, and Chat Runtime have been removed.
 
-Mobile Skill configuration/loading and broader Pi provider coverage remain follow-up work. Managed
-attachments and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+Mobile Skill configuration/loading, text attachment resolution and the controlled resource ledger,
+the avatar workflow, and context compaction remain separate follow-ups.
 
 ## Related
 
