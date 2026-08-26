@@ -175,12 +175,13 @@ live entry and managed blob before message reservation. The Host has a process-l
 managed ids referenced by the current input and visible history. A Runtime never reads the device
 filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist plus
 at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
-tokens per image plus 1,024 tokens for text. S2 replaces that last conservative check with complete
-turn budgeting. The Host then reads a temporary Data URL after reservation. Cancellation aborts
-that read boundary and late content is discarded. Current input read failure settles the turn;
-missing historical content is omitted while its persisted reference remains. Neither Data URLs nor
-device URIs enter protocol values, SQLite, snapshots, or logs. Text attachment conversion remains
-deferred. Tool-side access follows the stricter managed-id ledger in
+tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
+S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
+temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
+discarded. Current input read failure settles the turn; missing historical content is omitted while
+its persisted reference remains. Neither Data URLs nor device URIs enter protocol values, SQLite,
+snapshots, or logs. Text attachment conversion remains deferred. Tool-side access follows the
+stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History

@@ -9,9 +9,9 @@ export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_IMAGE_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024;
 
 /**
- * A provider-independent reserve until S2 owns complete request token accounting.
- * Image tokenization is endpoint-specific, so A2 uses a conservative fixed charge
- * and leaves enough input capacity for instructions and text.
+ * A provider-independent Host admission ceiling retained alongside S2b's image-aware Pi
+ * compression-trigger estimate. Image tokenization is endpoint-specific, so A2 uses a conservative
+ * fixed charge and leaves enough input capacity for instructions and text.
  */
 export const IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const MIN_TEXT_CONTEXT_TOKEN_RESERVE = 1_024;
