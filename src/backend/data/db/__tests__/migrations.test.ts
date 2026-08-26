@@ -134,6 +134,7 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'context_checkpoint',
       ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);

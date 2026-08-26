@@ -36,6 +36,7 @@ function cloneJson<T>(value: T): T {
 type StoredMessage = {
   view: AgentMessageView;
   error: AgentErrorView | null;
+  contextCheckpoint: unknown | null;
 };
 
 /**
@@ -157,12 +158,29 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    transcript.push({ view: userMessage, error: null }, { view: assistantMessage, error: null });
+    transcript.push(
+      { view: userMessage, error: null, contextCheckpoint: null },
+      { view: assistantMessage, error: null, contextCheckpoint: null },
+    );
     return cloneJson({ turnId, userMessage, assistantMessage });
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
     return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
+  }
+
+  async getLatestContextCheckpoint(sessionId: string) {
+    const transcript = this.messages.get(sessionId) ?? [];
+    for (let index = transcript.length - 1; index >= 0; index -= 1) {
+      const stored = transcript[index];
+      if (stored?.view.role === 'assistant' && stored.contextCheckpoint !== null) {
+        return cloneJson({
+          assistantMessageId: stored.view.id,
+          checkpoint: stored.contextCheckpoint,
+        });
+      }
+    }
+    return null;
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
@@ -181,6 +199,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         updatedAt: nowIso(),
       };
       stored.error = input.error === null ? null : cloneJson(input.error);
+      stored.contextCheckpoint =
+        input.status === 'success' && input.contextCheckpoint !== null
+          ? cloneJson(input.contextCheckpoint)
+          : null;
       return cloneJson(stored.view);
     }
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);

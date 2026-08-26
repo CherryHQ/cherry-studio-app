@@ -128,7 +128,9 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
   const files = [
     ...request.input.filter((part) => part.type === 'file'),
-    ...request.history.flatMap((message) => message.parts.filter((part) => part.type === 'file')),
+    ...request.history.flatMap((turn) =>
+      turn.messages.flatMap((message) => message.parts.filter((part) => part.type === 'file')),
+    ),
   ];
   if (files.some((part) => !isInlineImagePart(part))) {
     return {
@@ -343,7 +345,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
       if (
         (request.input.some((part) => part.type === 'file') ||
-          request.history.some((message) => message.parts.some((part) => part.type === 'file'))) &&
+          request.history.some((turn) =>
+            turn.messages.some((message) => message.parts.some((part) => part.type === 'file')),
+          )) &&
         !resolution.model.input.includes('image')
       ) {
         this.emit(turn, {

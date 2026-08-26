@@ -1,3 +1,4 @@
+import type { RuntimeContextCheckpoint } from '@/backend/ai/agent';
 import type {
   AgentErrorView,
   AgentMessagePart,
@@ -5,6 +6,11 @@ import type {
   AgentSessionView,
   AgentUsageView,
 } from '@/shared/contracts/agent';
+
+export type StoredRuntimeContextCheckpoint = {
+  assistantMessageId: string;
+  checkpoint: unknown;
+};
 
 export type ReserveSubmissionResult = {
   /** Fresh correlation id shared by the reserved user/assistant pair. */
@@ -23,6 +29,8 @@ export type FinalizeAssistantMessageInput = {
    * (agent-persistence.md). It is not part of the message view.
    */
   error: AgentErrorView | null;
+  /** Saved only on a successfully completed assistant row. */
+  contextCheckpoint: RuntimeContextCheckpoint | null;
 };
 
 /**
@@ -57,6 +65,9 @@ export interface AgentSessionStore {
   }): Promise<ReserveSubmissionResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
+
+  /** Returns the newest assistant row carrying an opaque checkpoint candidate. */
+  getLatestContextCheckpoint(sessionId: string): Promise<StoredRuntimeContextCheckpoint | null>;
 
   /**
    * Atomically settles the assistant message's terminal state before terminal

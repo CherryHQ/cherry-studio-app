@@ -222,6 +222,7 @@ function baseRequest(
     instructions: 'Be helpful.',
     model: { providerId: 'mock-provider', modelId: 'mock-model' },
     history: [],
+    contextCheckpoint: null,
     input: [{ type: 'text', text: 'Hello.' }],
     options: {},
     tools: [],
@@ -400,7 +401,7 @@ describe('PiRuntime mapping', () => {
     await collect(
       session.execute(
         baseRequest('turn-images', {
-          history: [{ role: 'user', parts: [image] }],
+          history: [{ turnId: 'turn-before-images', messages: [{ role: 'user', parts: [image] }] }],
           input: [{ type: 'text', text: 'Compare these.' }, image],
         }),
       ),
@@ -486,25 +487,30 @@ describe('PiRuntime mapping', () => {
     const session = await runtime.open();
     const request = baseRequest('turn-context', {
       history: [
-        { role: 'system', parts: [{ type: 'text', text: 'Prior system note.' }] },
-        { role: 'user', parts: [{ type: 'text', text: 'Earlier question.' }] },
-        { role: 'assistant', parts: [{ type: 'reasoning', text: 'Earlier thought.' }] },
-        { role: 'assistant', parts: [{ type: 'text', text: 'Earlier answer.' }] },
         {
-          role: 'assistant',
-          parts: [
+          turnId: 'turn-history',
+          messages: [
+            { role: 'system', parts: [{ type: 'text', text: 'Prior system note.' }] },
+            { role: 'user', parts: [{ type: 'text', text: 'Earlier question.' }] },
+            { role: 'assistant', parts: [{ type: 'reasoning', text: 'Earlier thought.' }] },
+            { role: 'assistant', parts: [{ type: 'text', text: 'Earlier answer.' }] },
             {
-              type: 'tool-call',
-              toolCallId: 'historic-call',
-              toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
-              providerName: 'mcp_server_2_lookup_c3d4',
-              input: { query: 'Cherry Studio' },
-            },
-            {
-              type: 'tool-result',
-              toolCallId: 'historic-call',
-              output: { value: { found: true }, artifacts: [] },
-              isError: false,
+              role: 'assistant',
+              parts: [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'historic-call',
+                  toolRef: { source: 'mcp', serverId: 'server-2', rawToolName: 'lookup' },
+                  providerName: 'mcp_server_2_lookup_c3d4',
+                  input: { query: 'Cherry Studio' },
+                },
+                {
+                  type: 'tool-result',
+                  toolCallId: 'historic-call',
+                  output: { value: { found: true }, artifacts: [] },
+                  isError: false,
+                },
+              ],
             },
           ],
         },

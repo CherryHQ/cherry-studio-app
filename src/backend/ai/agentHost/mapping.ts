@@ -8,6 +8,7 @@ import {
   createInterruptedToolResult,
   type RuntimeApproval,
   type RuntimeError,
+  type RuntimeHistoryTurn,
   type RuntimeInputPart,
   type RuntimeMessage,
   type RuntimeMessagePart,
@@ -129,8 +130,8 @@ export function toRuntimeInputParts(
 export function toRuntimeHistory(
   messages: AgentMessageView[],
   files: RuntimeFileContents = new Map(),
-): RuntimeMessage[] {
-  const history: RuntimeMessage[] = [];
+): RuntimeHistoryTurn[] {
+  const history: RuntimeHistoryTurn[] = [];
   for (const message of messages) {
     const parts: RuntimeMessagePart[] = [];
     for (const part of message.parts) {
@@ -180,8 +181,17 @@ export function toRuntimeHistory(
           break;
       }
     }
+    const currentTurn = history.at(-1);
+    const runtimeTurn =
+      message.turnId !== null && currentTurn?.turnId === message.turnId
+        ? currentTurn
+        : { turnId: message.turnId, messages: [] };
+    if (runtimeTurn !== currentTurn) {
+      history.push(runtimeTurn);
+    }
     if (parts.length > 0) {
-      history.push({ role: message.role, parts });
+      const runtimeMessage: RuntimeMessage = { role: message.role, parts };
+      runtimeTurn.messages.push(runtimeMessage);
     }
   }
   return history;

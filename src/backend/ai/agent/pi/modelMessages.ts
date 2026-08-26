@@ -35,21 +35,23 @@ export function toPiConversation(
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
   const providerNamesByCallId = collectProviderNames(request);
 
-  for (const message of request.history) {
-    if (message.role === 'system') {
-      const text = collectText(message.parts);
-      if (text.length > 0) systemParts.push(text);
-      continue;
+  for (const turn of request.history) {
+    for (const message of turn.messages) {
+      if (message.role === 'system') {
+        const text = collectText(message.parts);
+        if (text.length > 0) systemParts.push(text);
+        continue;
+      }
+      if (message.role === 'user') {
+        history.push({
+          role: 'user',
+          content: collectUserContent(message.parts),
+          timestamp: Date.now(),
+        });
+        continue;
+      }
+      appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
     }
-    if (message.role === 'user') {
-      history.push({
-        role: 'user',
-        content: collectUserContent(message.parts),
-        timestamp: Date.now(),
-      });
-      continue;
-    }
-    appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
   }
 
   return {
@@ -84,9 +86,11 @@ function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageCo
 
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
   const result = new Map<string, string>();
-  for (const message of request.history) {
-    for (const part of message.parts) {
-      if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
+  for (const turn of request.history) {
+    for (const message of turn.messages) {
+      for (const part of message.parts) {
+        if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
+      }
     }
   }
   return result;
