@@ -37,17 +37,20 @@ describe('WriteFileToolPart', () => {
     expect(isWriteFileToolPart(toolPart({ output: {}, toolName: 'read_file' }))).toBe(false);
   });
 
-  it('shows a written file as a preview card', () => {
+  it('leaves a successful write to its artifact file part', () => {
+    // The Host already persists the created entry as a `purpose: 'artifact'`
+    // file part, which draws the card; drawing one here too showed it twice.
     const renderer = render(
       toolPart({
         output: { status: 'created', fileEntryId: ENTRY_ID, filename: 'report.md', size: 9 },
       }),
     );
 
-    expect(renderer.root.findByType('FileEntryPreview').props.entryId).toBe(ENTRY_ID);
+    expect(renderer.root.findAllByType('FileEntryPreview')).toHaveLength(0);
+    expect(renderer.root.findByType('GenericToolPart')).toBeDefined();
   });
 
-  it('surfaces a rejected write instead of the file card', () => {
+  it('surfaces a rejected write, which has no artifact to speak for it', () => {
     const renderer = render(
       toolPart({ output: { status: 'error', message: 'Invalid filename: ...' } }),
     );
@@ -59,8 +62,7 @@ describe('WriteFileToolPart', () => {
   it.each([
     ['a non-object output', 'written'],
     ['an unknown status', { status: 'queued' }],
-    ['a malformed entry id', { status: 'created', fileEntryId: 'not-a-uuid' }],
-    ['a missing entry id', { status: 'created', filename: 'report.md' }],
+    ['an error without a message', { status: 'error' }],
   ])('falls back to the generic rendering for %s', (_case, output) => {
     const renderer = render(toolPart({ output }));
 
