@@ -23,17 +23,19 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { STORY_FILE_ENTRY_ID } from './messageFixtures';
 
-const storyFileEntry = FileEntrySchema.parse({
-  cleanupPolicy: 'manual',
-  contentHash: null,
-  createdAt: 1,
-  ext: 'png',
-  id: STORY_FILE_ENTRY_ID,
-  name: 'cherry-studio',
-  origin: 'internal',
-  size: 1,
-  updatedAt: 1,
-});
+const storyFileEntries = new Map(
+  [
+    {
+      createdAt: 1,
+      filename: 'cherry-studio.png',
+      id: STORY_FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      size: 1,
+      updatedAt: 1,
+    },
+  ].map((entry) => [entry.id, FileEntrySchema.parse(entry)]),
+);
+// Every entry resolves to the same asset: a card renders from the row, not the bytes.
 const storyFileUri = Image.resolveAssetSource(require('../../../assets/icon.png')).uri;
 const storyQueryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: Infinity } },
@@ -50,8 +52,9 @@ void storyI18n.use(initReactI18next).init({
 
 const storyDataApi = {
   get: async (path: string) => {
-    if (path === `/files/entries/${STORY_FILE_ENTRY_ID}`) {
-      return storyFileEntry;
+    const entry = storyFileEntries.get(path.replace('/files/entries/', ''));
+    if (entry) {
+      return entry;
     }
     throw new Error(`Story Data API received an unsupported GET: ${path}`);
   },
@@ -62,8 +65,8 @@ const storyBackend = {
     createInternalEntry: async () => {
       throw new Error('Story file creation is not supported');
     },
-    deleteIfUnreferenced: async () => false,
-    getUri: async (id: string) => (id === STORY_FILE_ENTRY_ID ? storyFileUri : undefined),
+    delete: async () => false,
+    getUri: async (id: string) => (storyFileEntries.has(id) ? storyFileUri : undefined),
   },
 } as unknown as Backend;
 
