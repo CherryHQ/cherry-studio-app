@@ -30,6 +30,10 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.navigate('agents');
         navigation.closeDrawer();
       },
+      openLibrary: () => {
+        navigation.navigate('library');
+        navigation.closeDrawer();
+      },
       openPaintings: () => {
         navigation.navigate('drawings');
         navigation.closeDrawer();

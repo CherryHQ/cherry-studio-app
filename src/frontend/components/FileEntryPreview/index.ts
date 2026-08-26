@@ -1,1 +1,2 @@
-export { FileEntryPreview } from './FileEntryPreview';
+export { FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
+export { FileEntrySkeleton } from './FileEntrySkeleton';

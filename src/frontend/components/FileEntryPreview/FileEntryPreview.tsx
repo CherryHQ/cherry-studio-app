@@ -1,34 +1,61 @@
-import {
-  FilePreview,
-  type FilePreviewFile,
-  type FilePreviewOperation,
-  useAlert,
-} from '@cherrystudio/ui/components';
+import { FilePreview, type FilePreviewOperation, useAlert } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { FileEntryId } from '@/shared/data/types/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
+import { FileEntrySkeleton } from './FileEntrySkeleton';
 import { useResolvedFile } from './hooks/useResolvedFile';
-import { fileEntryDisplayName, fileEntryExtensionLabel } from './utils/fileEntryPresentation';
+import { toFilePreviewFile } from './utils/fileEntryPresentation';
 
 const logger = loggerService.withContext('FileEntryPreview');
 
+/** Reads the entry by id, then its URI. */
 export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size?: number }) {
+  const { data, isLoading } = useResolvedFile(entryId);
+
+  if (isLoading) {
+    return <FileEntrySkeleton size={size} />;
+  }
+
+  return <EntryPreview entry={data?.entry} entryId={entryId} size={size} uri={data?.uri} />;
+}
+
+/**
+ * Same preview for a caller that already holds the entry and its resolved URI.
+ */
+export function LoadedFileEntryPreview({
+  entry,
+  previewUri,
+  size,
+  uri,
+}: {
+  entry: FileEntry;
+  previewUri: string | undefined;
+  size?: number;
+  uri: string | undefined;
+}) {
+  return (
+    <EntryPreview entry={entry} entryId={entry.id} previewUri={previewUri} size={size} uri={uri} />
+  );
+}
+
+function EntryPreview({
+  entry,
+  entryId,
+  previewUri,
+  size,
+  uri,
+}: {
+  entry: FileEntry | undefined;
+  entryId: FileEntryId;
+  previewUri?: string;
+  size?: number;
+  uri: string | undefined;
+}) {
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const { data, isLoading } = useResolvedFile(entryId);
-  const file: FilePreviewFile | null = data
-    ? {
-        displayName: fileEntryDisplayName(data.entry),
-        extensionLabel: fileEntryExtensionLabel(data.entry),
-        id: data.entry.id,
-        kind: data.entry.mediaType.startsWith('image/') ? 'image' : 'document',
-        revision: data.entry.updatedAt,
-        uri: data.uri,
-      }
-    : null;
   const handleError = useCallback(
     (error: Error, operation: FilePreviewOperation) => {
       logger.warn('File preview operation failed', error, { entryId, operation });
@@ -41,10 +68,8 @@ export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size
 
   return (
     <FilePreview
-      file={file}
-      isLoading={isLoading}
+      file={entry && uri ? toFilePreviewFile(entry, uri, previewUri) : null}
       labels={{
-        loading: t('filePreview.loading'),
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),
       }}

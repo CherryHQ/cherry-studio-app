@@ -85,4 +85,53 @@ describe('FileEntryService integration', () => {
     await expect(service.findById(id(3))).resolves.toBeNull();
     await expect(service.delete(id(3))).resolves.toBeUndefined();
   });
+
+  describe('listByCursor', () => {
+    // Distinct timestamps, so the major sort is what orders the page and the
+    // `(createdAt, id)` tie-break is exercised separately below.
+    const seed = async () => {
+      const entries = [
+        { filename: 'alpha.png', mediaType: 'image/png' },
+        { filename: 'beta.pdf', mediaType: 'application/pdf' },
+        { filename: 'gamma photo.jpeg', mediaType: 'image/jpeg' },
+        { filename: 'delta.txt', mediaType: 'text/plain' },
+      ];
+      for (const [index, entry] of entries.entries()) {
+        jest.spyOn(Date, 'now').mockReturnValue(now + index * HOUR);
+        await service.create({ ...entry, id: id(index + 1), size: index + 1 });
+      }
+    };
+    const filenamesOf = (page: { items: { filename: string }[] }) =>
+      page.items.map((item) => item.filename);
+
+    it('returns entries newest first and pages through the cursor', async () => {
+      await seed();
+
+      const first = await service.listByCursor({ limit: 2 });
+      expect(filenamesOf(first)).toEqual(['delta.txt', 'gamma photo.jpeg']);
+      expect(first.nextCursor).toBeDefined();
+
+      const second = await service.listByCursor({ cursor: first.nextCursor, limit: 2 });
+      expect(filenamesOf(second)).toEqual(['beta.pdf', 'alpha.png']);
+      expect(second.nextCursor).toBeUndefined();
+    });
+
+    it('breaks a createdAt tie by id so a page boundary neither skips nor repeats', async () => {
+      await service.create({ filename: 'a.png', id: id(1), mediaType: 'image/png', size: 1 });
+      await service.create({ filename: 'b.png', id: id(2), mediaType: 'image/png', size: 1 });
+
+      const first = await service.listByCursor({ limit: 1 });
+      const second = await service.listByCursor({ cursor: first.nextCursor, limit: 1 });
+      expect(filenamesOf(first)).toEqual(['b.png']);
+      expect(filenamesOf(second)).toEqual(['a.png']);
+    });
+
+    it('falls back to the first page when the cursor is unparseable', async () => {
+      await seed();
+
+      await expect(
+        service.listByCursor({ cursor: 'not-a-cursor', limit: 1 }).then(filenamesOf),
+      ).resolves.toEqual(['delta.txt']);
+    });
+  });
 });

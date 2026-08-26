@@ -5,6 +5,8 @@ import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { FileEntryListQuery } from '@/shared/data/api/schemas/files';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import {
   FileEntryIdSchema,
@@ -12,6 +14,8 @@ import {
   MediaTypeSchema,
   SafeNameSchema,
 } from '@/shared/data/types/file';
+
+import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 const CreateFileEntrySchema = z.strictObject({
   filename: SafeNameSchema,
@@ -21,6 +25,9 @@ const CreateFileEntrySchema = z.strictObject({
 });
 
 export type CreateFileEntry = z.input<typeof CreateFileEntrySchema>;
+
+const defaultLimit = 30;
+const maxLimit = 100;
 
 export class FileEntryService {
   /**
@@ -38,6 +45,38 @@ export class FileEntryService {
 
   withWriteTx<TValue>(callback: (tx: Database) => Promise<TValue>): Promise<TValue> {
     return this.dbService.withWriteTx(callback);
+  }
+
+  /**
+   * Newest first, paged by `(createdAt, id)` — the one stream the file library
+   * browses, which its kind tabs then partition client-side. Ordered uuids
+   * break `createdAt` ties in insertion order, so the tie-break direction
+   * matches the major sort.
+   *
+   * `deletedAt` is deliberately not consulted: nothing writes it today (it is
+   * reserved for the future trash), so filtering on it here would encode a
+   * lifecycle the rest of the file model does not have yet.
+   */
+  async listByCursor(query: FileEntryListQuery = {}): Promise<CursorPaginationResponse<FileEntry>> {
+    const limit = Math.min(Math.max(query.limit ?? defaultLimit, 1), maxLimit);
+    const cursor = decodeListCursor(query.cursor, asNumericKey, 'file-entries');
+    const keyset = keysetOrdering(fileEntryTable.createdAt, fileEntryTable.id, {
+      major: 'desc',
+      tie: 'desc',
+    });
+    const rows = await this.db
+      .select()
+      .from(fileEntryTable)
+      .where(cursor ? keyset.where(cursor) : undefined)
+      .orderBy(...keyset.orderBy)
+      .limit(limit + 1);
+
+    const pageRows = rows.slice(0, limit);
+    const last = pageRows.at(-1);
+    return {
+      items: pageRows.map(rowToFileEntry),
+      ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.createdAt, last.id) } : {}),
+    };
   }
 
   async findById(id: FileEntryId): Promise<FileEntry | null> {

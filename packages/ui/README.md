@@ -22,9 +22,10 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 API.
 
 `FilePreview` renders and opens a business-neutral file descriptor. The caller supplies display
-metadata, whether the file is an image or document, localized state labels, and an error callback;
-the component owns platform rendering, loading and unavailable states, system opening, and iOS
-Quick Look thumbnail caching:
+metadata, whether the file is an image or document, localized unavailable/opening labels, and an
+error callback; the component owns platform rendering, unavailable states, system opening, and
+iOS Quick Look thumbnail caching. Loading placeholders belong to the caller because it owns the
+loading lifecycle:
 
 ```tsx
 <FilePreview
@@ -36,7 +37,7 @@ Quick Look thumbnail caching:
     revision: 4,
     uri: 'file:///documents/brief.pdf',
   }}
-  labels={{ loading: 'Loading', openWith: 'Open with', unavailable: 'Unavailable' }}
+  labels={{ openWith: 'Open with', unavailable: 'Unavailable' }}
   onError={(error, operation) => reportPreviewError(error, operation)}
 />;
 ```

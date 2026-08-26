@@ -53,6 +53,7 @@ export default function DrawerLayout() {
             the drawer's initial route, keeping cold start on the chat surface. */}
         <Drawer.Screen name="(chat)" />
         <Drawer.Screen name="home" />
+        <Drawer.Screen name="library" />
         <Drawer.Screen name="agents" />
         <Drawer.Screen name="drawings" />
       </Drawer>

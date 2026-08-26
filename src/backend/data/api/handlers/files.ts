@@ -9,6 +9,9 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 export function createFileHandlers(entries: FileEntryService): HandlersFor<FileSchemas> {
   return {
+    '/files/entries': {
+      GET: ({ query }) => entries.listByCursor(query),
+    },
     '/files/entries/:id': {
       GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),
     },

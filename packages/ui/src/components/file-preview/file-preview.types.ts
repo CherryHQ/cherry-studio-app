@@ -6,19 +6,18 @@ export type FilePreviewFile = {
   extensionLabel: string;
   id: string;
   kind: FilePreviewKind;
+  previewUri?: string;
   revision: number | string;
   uri: string;
 };
 
 export type FilePreviewLabels = {
-  loading: string;
   openWith: string;
   unavailable: string;
 };
 
 export type FilePreviewProps = {
   file?: FilePreviewFile | null;
-  isLoading?: boolean;
   labels: FilePreviewLabels;
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   size?: number;

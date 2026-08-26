@@ -76,7 +76,7 @@ describe('ContextMenuLink.ios', () => {
   it('can render a native context menu without a route preview', () => {
     act(() => {
       renderer = create(
-        <ContextMenuLink href="/agents/agent-1" items={[]} preview={false}>
+        <ContextMenuLink href="/agents/agent-1/edit" items={[]} preview={false}>
           <Pressable>
             <Text>Agent</Text>
           </Pressable>
