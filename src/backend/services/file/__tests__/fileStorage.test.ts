@@ -12,6 +12,7 @@ import {
   getFileUri,
   getInternalFileUri,
   imageUriToDataUrl,
+  readFileUriBytes,
   resolveFileEntry,
 } from '../fileStorage';
 
@@ -80,6 +81,10 @@ jest.mock('expo-file-system', () => {
 
     async base64() {
       return 'encoded';
+    }
+
+    async bytes() {
+      return Uint8Array.from([116, 101, 120, 116]);
     }
 
     async copy(destination: MockFile) {
@@ -480,6 +485,12 @@ describe('fileStorage', () => {
   test('resolves a local image as a data URL, falling back to the file type', async () => {
     await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'unknown')).resolves.toBe(
       'data:image/jpeg;base64,encoded',
+    );
+  });
+
+  test('reads local file bytes without projecting a path into the result', async () => {
+    await expect(readFileUriBytes('file:///documents/Data/Files/file.txt')).resolves.toEqual(
+      Uint8Array.from([116, 101, 120, 116]),
     );
   });
 

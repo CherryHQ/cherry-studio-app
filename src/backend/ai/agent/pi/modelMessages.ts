@@ -15,7 +15,11 @@ import type {
   RuntimeJsonValue,
   RuntimeMessage,
   RuntimeMessagePart,
+  RuntimeTextAttachmentPart,
 } from '../types';
+
+export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
+  'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
 
 const EMPTY_PI_USAGE: PiUsage = {
   cacheRead: 0,
@@ -87,12 +91,33 @@ function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['
     if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
     }
+    if (part.type === 'text-attachment') {
+      return [toPiTextAttachment(part)];
+    }
     if (part.type === 'file') {
       return [toPiImage(part)];
     }
     return [];
   });
-  return content.some((part) => part.type === 'image') ? content : collectText(parts);
+  return content.some((part) => part.type === 'image')
+    ? content
+    : content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
+}
+
+function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
+  const envelope = {
+    version: 1,
+    kind: 'managed-text-attachment',
+    trust: part.trust,
+    name: part.name,
+    mediaType: part.mediaType,
+    truncation: part.truncated ? '[truncated]' : '[complete]',
+    content: part.text,
+  } as const;
+  return {
+    type: 'text',
+    text: `${PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX}${JSON.stringify(envelope)}`,
+  };
 }
 
 function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageContent {

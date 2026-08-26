@@ -121,11 +121,15 @@ function validateRequest(
     };
   }
   if (!capabilities.attachments) {
-    const inputHasFile = request.input.some((part) => part.type === 'file');
-    const historyHasFile = request.history.some((turn) =>
-      turn.messages.some((message) => message.parts.some((part) => part.type === 'file')),
+    const inputHasAttachment = request.input.some(
+      (part) => part.type === 'file' || part.type === 'text-attachment',
     );
-    if (inputHasFile || historyHasFile) {
+    const historyHasAttachment = request.history.some((turn) =>
+      turn.messages.some((message) =>
+        message.parts.some((part) => part.type === 'file' || part.type === 'text-attachment'),
+      ),
+    );
+    if (inputHasAttachment || historyHasAttachment) {
       return {
         code: 'unsupported_input',
         message: 'This runtime does not support file attachments.',

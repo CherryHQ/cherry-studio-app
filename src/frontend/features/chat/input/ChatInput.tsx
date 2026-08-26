@@ -205,6 +205,9 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       if (!(error instanceof AgentProtocolError)) {
         return undefined;
       }
+      if (error.view.code === 'ATTACHMENT_INVALID') {
+        return error.view.message;
+      }
       if (error.view.code === 'CAPABILITY_UNSUPPORTED') {
         return t('chat.input.attachmentsRejected');
       }

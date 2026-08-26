@@ -34,6 +34,7 @@ import type {
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolResult,
+  RuntimeTextAttachmentPart,
   RuntimeUsage,
   RuntimeUsageContext,
 } from '../types';
@@ -166,16 +167,32 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 }
 
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
-  const files = [
-    ...request.input.filter((part) => part.type === 'file'),
-    ...request.history.flatMap((turn) =>
-      turn.messages.flatMap((message) => message.parts.filter((part) => part.type === 'file')),
-    ),
+  const inputAndHistoryParts = [
+    ...request.input,
+    ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
   ];
+  const files = inputAndHistoryParts.filter((part) => part.type === 'file');
   if (files.some((part) => !isInlineImagePart(part))) {
     return {
       code: 'unsupported_input',
       message: 'Pi Runtime accepts only validated inline image attachments.',
+      retryable: false,
+    };
+  }
+  const textAttachments = inputAndHistoryParts.filter((part) => part.type === 'text-attachment');
+  const hasNonUserHistoricalTextAttachment = request.history.some((turn) =>
+    turn.messages.some(
+      (message) =>
+        message.role !== 'user' && message.parts.some((part) => part.type === 'text-attachment'),
+    ),
+  );
+  if (
+    hasNonUserHistoricalTextAttachment ||
+    textAttachments.some((part) => !isValidatedTextAttachment(part))
+  ) {
+    return {
+      code: 'unsupported_input',
+      message: 'Pi Runtime accepts only validated untrusted text attachments in user input.',
       retryable: false,
     };
   }
@@ -187,6 +204,19 @@ function isInlineImagePart(part: { mediaType: string; type: 'file'; uri: string 
     part.mediaType.startsWith('image/') &&
     part.uri.startsWith(`data:${part.mediaType};base64,`) &&
     part.uri.length > `data:${part.mediaType};base64,`.length
+  );
+}
+
+function isValidatedTextAttachment(part: RuntimeTextAttachmentPart): boolean {
+  return (
+    typeof part.mediaType === 'string' &&
+    part.mediaType.includes('/') &&
+    typeof part.name === 'string' &&
+    part.name.length > 0 &&
+    !/[/\\\0]/u.test(part.name) &&
+    typeof part.text === 'string' &&
+    typeof part.truncated === 'boolean' &&
+    part.trust === 'untrusted-user-content'
   );
 }
 
@@ -249,13 +279,15 @@ function sensitiveValues(resolution: PiModelResolution): string[] {
   return [...resolution.redactionValues];
 }
 
-function redactCompactionSummary(summary: string, secrets: readonly string[]): string {
+function redactCompactionSummary(summary: string, sensitiveValues: readonly string[]): string {
   let redacted = summary.replace(
     /data:[^;,\s]+;base64,[a-z0-9+/=]+/gi,
     '[attachment content omitted]',
   );
-  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
-    if (secret) redacted = redacted.replaceAll(secret, REDACTED_SECRET);
+  for (const value of [...new Set(sensitiveValues)].sort(
+    (left, right) => right.length - left.length,
+  )) {
+    if (value) redacted = redacted.replaceAll(value, REDACTED_SECRET);
   }
   return redacted;
 }
@@ -270,6 +302,13 @@ function sensitiveToolResultValues(messages: readonly PiMessage[]): string[] {
     collectSensitiveValues(message.details, values);
   }
   return values;
+}
+
+function textAttachmentBodies(request: RuntimeExecutionRequest): string[] {
+  return [
+    ...request.input,
+    ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
+  ].flatMap((part) => (part.type === 'text-attachment' && part.text.length > 0 ? [part.text] : []));
 }
 
 function collectSensitiveValues(value: unknown, values: string[], sensitive = false): void {
@@ -489,7 +528,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
             return stream.result();
           }),
       };
-      const compactionSecrets = [...secrets, ...sensitiveToolResultValues(conversation.history)];
+      const compactionRedactions = [
+        ...secrets,
+        ...sensitiveToolResultValues(conversation.history),
+        ...textAttachmentBodies(request),
+      ];
       const thinkingLevel = resolveThinkingLevel(request, resolution);
       const contextPlan = await planPiContext({
         checkpoint: request.contextCheckpoint,
@@ -498,7 +541,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         models,
         options: this.contextOptions,
         outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
-        redactSummary: (summary) => redactCompactionSummary(summary, compactionSecrets),
+        redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
         signal: turn.abortController.signal,
         thinkingLevel,
         tools: request.tools,

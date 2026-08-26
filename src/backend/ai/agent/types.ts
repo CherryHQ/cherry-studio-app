@@ -97,12 +97,23 @@ export type RuntimeToolResult = {
   artifacts: RuntimeArtifact[];
 };
 
+export type RuntimeTextAttachmentPart = {
+  type: 'text-attachment';
+  mediaType: string;
+  name: string;
+  text: string;
+  truncated: boolean;
+  trust: 'untrusted-user-content';
+};
+
 export type RuntimeInputPart =
   | { type: 'text'; text: string }
+  | RuntimeTextAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string };
 
 export type RuntimeMessagePart =
   | { type: 'text' | 'reasoning'; text: string }
+  | RuntimeTextAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
   | {
       type: 'tool-call';

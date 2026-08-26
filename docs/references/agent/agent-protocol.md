@@ -1,8 +1,7 @@
 # Cherry Agent Protocol
 
-Status: **as built**, including managed image resolution and projection of configured tools into
-local MCP execution. Text attachment resolution remains separate follow-up work. Version 1 is
-local-only.
+Status: **as built**, including managed image and bounded text resolution plus projection of
+configured tools into local MCP execution. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
@@ -201,6 +200,15 @@ reservation. Available historical user images are projected again for an image-c
 missing historical content is omitted without deleting or rewriting the message. The temporary
 Data URL exists only inside the Host-to-Runtime request.
 
+Text inputs accept authoritative `text/*` media types and an explicit application/source-code
+media-type and extension allowlist. The Host reads managed bytes before reservation, accepts and
+strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL/binary controls, unsupported types, and
+oversized current files, then projects a temporary structured Runtime part. Pi JSON-escapes that
+part as untrusted user text with the authoritative name, media type, and `[complete]` or
+`[truncated]` state; its body cannot alter the system/tool instruction layer or expand the Turn
+resource ledger. Historical text read failures are omitted without rewriting the persisted file
+part. Extracted text never enters protocol values or persistence.
+
 `toolRef` is the stable application identity used by configuration, approval, persistence, and
 audit. `providerName` is the deterministic function alias used in model history; `displayName` is a
 snapshot for historical UI. For every persisted tool call, `output-available`, `denied`, `error`, and
@@ -360,6 +368,7 @@ type AgentErrorView = {
     | 'SESSION_NOT_FOUND'
     | 'SESSION_BUSY'
     | 'CAPABILITY_UNSUPPORTED'
+    | 'ATTACHMENT_INVALID'
     | 'ATTACHMENT_UNAVAILABLE'
     | 'ATTACHMENT_METADATA_MISMATCH'
     | 'APPROVAL_NOT_FOUND'

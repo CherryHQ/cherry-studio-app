@@ -1,8 +1,7 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, executable Streamable HTTP MCP tools, bounded managed image input, and the
-Runtime context checkpoint contract are active behind the Mobile Agent Host**. Pi context
-compaction is active; text attachment resolution remains follow-up work. Version 1 is local-only.
+Status: **Pi Runtime, executable Streamable HTTP MCP tools, bounded managed image/text input, and
+Pi context compaction are active behind the Mobile Agent Host**. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -55,8 +54,9 @@ tool catalog, and Agent inference options on each execution. It maps text, reaso
 approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
 The Host resolves persisted bindings and currently executable MCP descriptors before reservation,
 alongside the fixed application-owned catalog. It also resolves bounded managed images for
-registry-declared image-capable models
-supported by the selected Pi endpoint adapter; text attachments remain deferred.
+registry-declared image-capable models supported by the selected Pi endpoint adapter, plus bounded
+UTF-8 managed text as untrusted user content.
+
 The repository patches expose `pi-agent-core/compaction` and its exact RN-safe Pi AI utility
 subpaths. Short conversations retain the complete-history path. Long conversations reuse or
 incrementally update a Runtime checkpoint before the first provider turn.
@@ -163,6 +163,14 @@ type RuntimeOptions = {
 
 type RuntimeInputPart =
   | { type: 'text'; text: string }
+  | {
+      type: 'text-attachment'
+      mediaType: string
+      name: string
+      text: string
+      truncated: boolean
+      trust: 'untrusted-user-content'
+    }
   | { type: 'file'; mediaType: string; name?: string; uri: string }
 ```
 
@@ -182,10 +190,22 @@ at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context rese
 tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
 S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
 temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
-discarded. Current input read failure settles the turn; missing historical content is omitted while
-its persisted reference remains. Neither Data URLs nor device URIs enter protocol values, SQLite,
-snapshots, or logs. Text attachment conversion remains deferred. Tool-side access follows the
-stricter managed-id ledger in
+discarded. Current image read failure settles the reserved turn; missing historical content is
+omitted while its persisted reference remains.
+
+For text, the Host accepts `text/*` and an explicit application/source-code allowlist cross-checked
+by filename extension. It reads at most 1 MiB per current file before reservation, accepts and strips
+a leading UTF-8 BOM, rejects invalid UTF-8, NUL, and binary controls, then emits at most 200,000
+Unicode code points per file and 400,000 across all model-visible text attachment occurrences. The
+temporary Runtime part keeps body, authoritative metadata, truncation, and the
+`untrusted-user-content` trust label structurally separate. Pi JSON-escapes that part only while
+adapting it to ordinary user message text, so attachment data cannot become system instructions or
+forge its boundary metadata. Pi's current-input/history estimator counts the resulting text
+alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
+are redacted if a compaction model reproduces them in a persisted checkpoint.
+
+Neither Data URLs, extracted text, nor device URIs enter protocol values, SQLite, snapshots, or
+logs. Tool-side access follows the stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History
@@ -204,6 +224,14 @@ type RuntimeMessage = {
 
 type RuntimeMessagePart =
   | { type: 'text' | 'reasoning'; text: string }
+  | {
+      type: 'text-attachment'
+      mediaType: string
+      name: string
+      text: string
+      truncated: boolean
+      trust: 'untrusted-user-content'
+    }
   | { type: 'file'; mediaType: string; name?: string; uri: string }
   | {
       type: 'tool-call'

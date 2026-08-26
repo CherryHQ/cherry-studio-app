@@ -331,6 +331,40 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
 }
 
 describe('FakeRuntime scripting', () => {
+  test('rejects structured text attachments when attachment capability is disabled', async () => {
+    const runtime = new FakeRuntime({ descriptor: CONFORMANCE_CAPABILITIES });
+    const session = await runtime.open();
+
+    await expect(
+      collect(
+        session.execute(
+          baseRequest('turn-text-attachment', {
+            input: [
+              {
+                type: 'text-attachment',
+                mediaType: 'text/plain',
+                name: 'notes.txt',
+                text: 'notes',
+                truncated: false,
+                trust: 'untrusted-user-content',
+              },
+            ],
+          }),
+        ),
+      ),
+    ).resolves.toEqual([
+      {
+        type: 'failed',
+        error: {
+          code: 'unsupported_input',
+          message: 'This runtime does not support file attachments.',
+          retryable: false,
+        },
+      },
+    ]);
+    await session.close();
+  });
+
   test('emits an opaque context checkpoint fixture before completion', async () => {
     const runtime = new FakeRuntime();
     runtime.scriptEvents([

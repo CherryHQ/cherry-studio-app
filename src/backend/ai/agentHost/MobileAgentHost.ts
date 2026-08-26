@@ -104,6 +104,7 @@ import {
 import {
   createTurnResourceLedger,
   managedFileResolver,
+  type ManagedFileFact,
   type ManagedFileResolver,
   type TurnResourceLedger,
 } from './managedFileResolver';
@@ -115,10 +116,15 @@ import {
   toAgentUsageView,
   toRuntimeHistory,
   toRuntimeInputParts,
-  type RuntimeFileContents,
+  type RuntimeAttachmentContents,
 } from './mapping';
 import { createPiModelResolver } from './piModelResolver';
 import { createAgentRuntimeToolResolver, type AgentRuntimeToolResolver } from './runtimeTools';
+import {
+  isSupportedTextAttachment,
+  resolveManagedTextAttachments,
+  TextAttachmentError,
+} from './textAttachments';
 import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
@@ -436,12 +442,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
       const resources = createTurnResourceLedger(inputFiles, priorMessages, availableFiles);
       const modelPreflight = await this.preflightModel(runtime, agent);
-      this.assertImageRequestSupported(
+      this.assertAttachmentRequestSupported(
         runtime,
         parts,
         runtimeContext.history,
         resources,
         modelPreflight,
+      );
+      const runtimeTextAttachments = await this.resolveRuntimeTextAttachments(
+        parts,
+        runtimeContext.history,
+        resources,
       );
 
       const userParts: AgentMessagePart[] = parts.map((part, index) =>
@@ -519,6 +530,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         runtimeContext.history,
         parts,
         runtimeContext.checkpoint,
+        runtimeTextAttachments,
         tools,
       );
       this.runningTurns.add(run);
@@ -622,21 +634,26 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     history: AgentMessageView[],
     inputParts: AgentInputPart[],
     storedContextCheckpoint: RuntimeContextCheckpoint | null,
+    runtimeTextAttachments: RuntimeAttachmentContents,
     tools: readonly RuntimeTool[],
   ): Promise<void> {
     try {
-      const runtimeFiles = await this.resolveRuntimeFiles(
+      const runtimeAttachments = new Map(runtimeTextAttachments);
+      const runtimeImages = await this.resolveRuntimeImages(
         state.resources,
         state.abortController.signal,
       );
+      for (const [fileEntryId, image] of runtimeImages) {
+        runtimeAttachments.set(fileEntryId, image);
+      }
       state.abortController.signal.throwIfAborted();
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
         instructions: agent.instructions,
         model: agent.model,
-        history: toRuntimeHistory(history, runtimeFiles),
+        history: toRuntimeHistory(history, runtimeAttachments),
         contextCheckpoint: storedContextCheckpoint,
-        input: toRuntimeInputParts(inputParts, state.resources, runtimeFiles),
+        input: toRuntimeInputParts(inputParts, state.resources, runtimeAttachments),
         tools: [...tools],
         options: agent.options,
       });
@@ -923,25 +940,30 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  private assertImageRequestSupported(
+  private assertAttachmentRequestSupported(
     runtime: AgentRuntime,
     input: AgentInputPart[],
     history: AgentMessageView[],
     resources: TurnResourceLedger,
     model: RuntimeModelPreflight,
   ): void {
+    let hasAttachments = false;
     const images = input.flatMap((part) => {
       if (part.type !== 'file') {
         return [];
       }
       const fact = resources.inputFiles.get(part.fileEntryId);
-      if (!fact || !isAiSupportedImageMediaType(fact.mediaType)) {
-        fail(
-          'CAPABILITY_UNSUPPORTED',
-          'Only managed JPEG, PNG, GIF, and WebP images are supported.',
-        );
+      if (!fact) {
+        fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
       }
-      return [fact];
+      hasAttachments = true;
+      if (isAiSupportedImageMediaType(fact.mediaType)) {
+        return [fact];
+      }
+      if (isSupportedTextAttachment(fact)) {
+        return [];
+      }
+      fail('ATTACHMENT_INVALID', unsupportedAttachmentMessage(fact));
     });
 
     for (const message of history) {
@@ -951,15 +973,24 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }
         const fact = resources.availableFiles.get(part.fileEntryId);
         if (fact && isAiSupportedImageMediaType(fact.mediaType)) {
+          hasAttachments = true;
           images.push(fact);
+        } else if (fact && isSupportedTextAttachment(fact)) {
+          hasAttachments = true;
         }
       }
     }
 
+    if (!hasAttachments) {
+      return;
+    }
+    if (!runtime.descriptor.capabilities.attachments) {
+      fail('CAPABILITY_UNSUPPORTED', 'The selected runtime does not support file attachments.');
+    }
     if (images.length === 0) {
       return;
     }
-    if (!runtime.descriptor.capabilities.attachments || !model.inputModalities.includes('image')) {
+    if (!model.inputModalities.includes('image')) {
       fail('CAPABILITY_UNSUPPORTED', 'The selected model does not support image input.');
     }
 
@@ -969,10 +1000,48 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  private async resolveRuntimeFiles(
+  private async resolveRuntimeTextAttachments(
+    input: AgentInputPart[],
+    history: AgentMessageView[],
+    resources: TurnResourceLedger,
+  ): Promise<RuntimeAttachmentContents> {
+    const currentFileEntryIds = input.flatMap((part) =>
+      part.type === 'file' ? [part.fileEntryId] : [],
+    );
+    const historicalFileEntryIds: string[] = [];
+    for (let messageIndex = history.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const parts = history[messageIndex]?.parts ?? [];
+      for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
+        const part = parts[partIndex];
+        if (part?.type === 'file' && part.purpose === 'input-attachment') {
+          historicalFileEntryIds.push(part.fileEntryId);
+        }
+      }
+    }
+
+    try {
+      return await resolveManagedTextAttachments({
+        availableFiles: resources.availableFiles,
+        currentFileEntryIds,
+        historicalFileEntryIds,
+        readBytes: (file, signal) => this.files.readAsBytes(file, signal),
+        signal: new AbortController().signal,
+      });
+    } catch (error) {
+      if (error instanceof TextAttachmentError) {
+        fail(
+          error.failure === 'unavailable' ? 'ATTACHMENT_UNAVAILABLE' : 'ATTACHMENT_INVALID',
+          error.message,
+        );
+      }
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.');
+    }
+  }
+
+  private async resolveRuntimeImages(
     resources: TurnResourceLedger,
     signal: AbortSignal,
-  ): Promise<RuntimeFileContents> {
+  ): Promise<RuntimeAttachmentContents> {
     const files = new Map<string, Extract<RuntimeInputPart, { type: 'file' }>>();
     for (const fact of resources.availableFiles.values()) {
       if (!isAiSupportedImageMediaType(fact.mediaType)) {
@@ -1149,4 +1218,8 @@ function imageAttachmentLimitMessage(limit: ImageAttachmentLimit): string {
     case 'context':
       return 'The attached images exceed the selected model context budget.';
   }
+}
+
+function unsupportedAttachmentMessage(file: ManagedFileFact): string {
+  return `Attachment ${JSON.stringify(file.name)} has unsupported media type ${JSON.stringify(file.mediaType)}.`;
 }
