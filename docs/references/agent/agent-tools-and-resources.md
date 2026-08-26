@@ -1,7 +1,8 @@
 # Agent Tools And Controlled Resources
 
-Status: **tool binding persistence, settled Runtime tool contracts, and the Pi adapter are active;
-persisted binding projection remains incomplete**. Version 1 is local-only.
+Status: **tool binding persistence, settled Runtime tool contracts, the Pi adapter, and HTTP MCP
+Runtime adaptation are active; persisted binding projection remains incomplete**. Version 1 is
+local-only.
 
 One capability is as-built ahead of the full design: `write_file` (see
 [Managed File Read And Edit](#managed-file-read-and-edit)). It ships as a minimal slice — the Host
@@ -280,6 +281,9 @@ with its own approval policy.
   transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
 - `McpRuntimeService` owns clients, discovery caches, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
+- Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
+  adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
+  a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
 - The Host freezes the discovered tools for the turn. A reconnect may refresh the next snapshot but
   cannot silently replace the active catalog.
 - Third-party MCP tools default to `ask` until the user chooses a narrower per-tool policy.
