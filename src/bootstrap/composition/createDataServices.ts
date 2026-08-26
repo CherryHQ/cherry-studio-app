@@ -3,6 +3,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentService } from '@/backend/data/services/AgentService';
 import { agentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import { agentSessionService } from '@/backend/data/services/AgentSessionService';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
@@ -34,6 +35,7 @@ export function createDataServices({
     // `agent` names the MobileAgentHost in the merged services object; the
     // CRUD data service gets the suffixed key.
     agentData: agentService,
+    agentToolBinding: agentToolBindingService,
     agentSession: agentSessionService,
     agentSessionMessage: agentSessionMessageService,
     aiUsageRecord: aiUsageRecordService,

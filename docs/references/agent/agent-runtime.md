@@ -1,8 +1,8 @@
 # Cherry Agent Runtime
 
 Status: **Pi Runtime, settled tool contracts, bounded managed image input, and the Runtime context
-checkpoint contract active behind the Mobile Agent Host**; application tool configuration, Pi
-compaction, and text attachment resolution remain follow-up work. Version 1 is local-only.
+checkpoint contract active behind the Mobile Agent Host**; persisted per-Agent binding projection,
+Pi compaction, and text attachment resolution remain follow-up work. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -46,18 +46,19 @@ remain deferred. The injected Pi Runtime remains stable for the Host lifetime.
 
 The production Host binds `local` directly to Pi and injects provider/model resolution through an
 application adapter. The Runtime itself imports neither Expo transport nor application data
-services. Current provider coverage is intentionally narrow: API-key-authenticated OpenAI Responses
-endpoints. Unsupported endpoint or authentication types fail before partial execution; expanding
-that adapter is follow-up work.
+services. Current provider coverage includes API-key-authenticated Anthropic Messages, Google
+Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Unsupported endpoint,
+non-standard adapter family, or authentication types fail before partial execution.
 
 Pi receives the grouped structured transcript, an optional opaque context checkpoint, and Agent
-inference options on each execution. It
-maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
-multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
-supplies `tools: []` until the application-owned tool configuration model lands. The Host resolves
-bounded managed images for image-capable OpenAI Responses models; text attachments remain deferred.
-The current Pi adapter deliberately ignores the checkpoint and emits none, so model input remains
-the complete flattened history until Pi compaction lands.
+inference options on each execution. It maps text, reasoning, tool parts, approvals, cancellation,
+normalized failures, and cumulative multi-call usage onto this contract. The Host currently
+supplies one fixed application-owned
+`write_file` tool to function-calling models; persisted per-Agent bindings are not yet projected
+into the Runtime snapshot. The Host resolves bounded managed images for registry-declared
+image-capable models supported by the selected Pi endpoint adapter; text attachments remain
+deferred. The current Pi adapter deliberately ignores the checkpoint and emits none, so model input
+remains the complete flattened history until Pi compaction lands.
 
 ## Descriptor and lifecycle
 
@@ -179,11 +180,11 @@ filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP
 at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
 tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
 S2b separately includes image costs in Pi compression-trigger estimates. The Host then reads a
-temporary Data URL after reservation.
-Cancellation aborts that read boundary and late content is discarded. Current input read failure
-settles the turn; missing historical content is omitted while its persisted reference remains.
-Neither Data URLs nor device URIs enter protocol values, SQLite, snapshots, or logs. Text attachment
-conversion remains deferred. Tool-side access follows the stricter managed-id ledger in
+temporary Data URL after reservation. Cancellation aborts that read boundary and late content is
+discarded. Current input read failure settles the turn; missing historical content is omitted while
+its persisted reference remains. Neither Data URLs nor device URIs enter protocol values, SQLite,
+snapshots, or logs. Text attachment conversion remains deferred. Tool-side access follows the
+stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History

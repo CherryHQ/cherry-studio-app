@@ -4,8 +4,8 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
+  Api as PiApi,
   AssistantMessage,
-  FetchFunction,
   Message as PiMessage,
   Model as PiModel,
   ModelThinkingLevel,
@@ -39,14 +39,11 @@ import type {
 import { toPiConversation } from './modelMessages';
 
 export type PiModelResolution = {
-  apiKey: string;
   defaultThinkingLevel: ModelThinkingLevel;
-  fetch?: FetchFunction;
-  headers?: Record<string, string>;
-  maxRetries: number;
-  model: PiModel<'openai-responses'>;
+  model: PiModel<PiApi>;
+  redactionValues: readonly string[];
+  streamFn: AgentOptions['streamFn'];
   supportsTools: boolean;
-  timeoutMs: number;
   usageContext: RuntimeUsageContext;
 };
 
@@ -181,11 +178,7 @@ function normalizeExecutionError(error: unknown, secrets: readonly string[] = []
 }
 
 function sensitiveValues(resolution: PiModelResolution): string[] {
-  const values = [resolution.apiKey];
-  for (const [name, value] of Object.entries(resolution.headers ?? {})) {
-    if (/authorization|api[-_]key|token|secret/i.test(name)) values.push(value);
-  }
-  return values;
+  return [...resolution.redactionValues];
 }
 
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
@@ -331,7 +324,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
       secrets = sensitiveValues(resolution);
-      if (turn.terminated) return;
+      if (turn.terminated || turn.cancelRequested) return;
       if (request.tools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
           type: 'failed',
@@ -362,24 +355,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
 
       const conversation = toPiConversation(request, resolution.model);
-      const streamFn: AgentOptions['streamFn'] = async (model, context, options) => {
-        const { streamSimple } = await import('@earendil-works/pi-ai/api/openai-responses');
-        return streamSimple(model as PiModel<'openai-responses'>, context, {
-          ...options,
-          apiKey: resolution.apiKey,
-          fetch: resolution.fetch,
-          headers: resolution.headers,
-          maxRetries: resolution.maxRetries,
-          maxTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
-          signal: options?.signal,
-          temperature: request.options.temperature,
-          timeoutMs: resolution.timeoutMs,
-        });
-      };
       const agentOptions: AgentOptions = {
         afterToolCall: async ({ toolCall }) =>
           turn.failedToolCalls.has(toolCall.id) ? { isError: true } : undefined,
-        getApiKey: () => resolution.apiKey,
         initialState: {
           messages: conversation.history,
           model: resolution.model,
@@ -387,12 +365,16 @@ class PiRuntimeSession implements AgentRuntimeSession {
           thinkingLevel: resolveThinkingLevel(request, resolution),
           tools: this.toPiTools(request.tools, turn),
         },
-        streamFn,
+        streamFn: resolution.streamFn,
       };
       const agent = this.createAgent
         ? this.createAgent(agentOptions)
         : await createDefaultAgent(agentOptions);
       turn.agent = agent;
+      if (turn.terminated || turn.cancelRequested) {
+        agent.abort();
+        return;
+      }
       unsubscribe = agent.subscribe((event) => this.handlePiEvent(turn, event));
 
       await agent.prompt(conversation.prompt);
@@ -574,6 +556,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolRef: runtimeTool.ref,
     });
 
+    if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+      return this.interruptToolCall(turn, part);
+    }
+
     if (runtimeTool.approval === 'deny') {
       this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
       turn.settledToolCalls.add(toolCallId);
@@ -582,6 +568,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     if (runtimeTool.approval === 'ask') {
       const approvalId = `approval-${toolCallId}`;
+      // Register before publishing the request: callers may cancel as soon as
+      // they observe that event, and cancellation must always find the waiter.
+      const decisionPromise = this.waitForApproval(turn, approvalId);
       this.replaceToolPart(turn, part, { state: 'awaiting-approval', approvalId });
       this.emit(turn, {
         type: 'approval.requested',
@@ -595,7 +584,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           status: 'pending',
         },
       });
-      const decision = await this.waitForApproval(turn, approvalId);
+      const decision = await decisionPromise;
       this.emit(turn, {
         type: 'approval.resolved',
         approval: {
@@ -613,6 +602,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.settledToolCalls.add(toolCallId);
         return this.piToolResult(DENIED_TOOL_RESULT);
       }
+      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+        return this.interruptToolCall(turn, part);
+      }
     }
 
     this.replaceToolPart(turn, part, { state: 'running' });
@@ -621,29 +613,24 @@ class PiRuntimeSession implements AgentRuntimeSession {
         signal: signal ?? new AbortController().signal,
         toolCallId,
       });
-      if (turn.cancelRequested || signal?.aborted) {
-        const interrupted = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
-        this.replaceToolPart(turn, part, { state: 'interrupted', output: interrupted });
-        turn.failedToolCalls.add(toolCallId);
-        turn.settledToolCalls.add(toolCallId);
-        return this.piToolResult(interrupted);
+      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+        return this.interruptToolCall(turn, part);
       }
       this.replaceToolPart(turn, part, { state: 'output-available', output });
       turn.settledToolCalls.add(toolCallId);
       this.emitArtifacts(turn, toolCallId, output);
       return this.piToolResult(output);
     } catch {
-      const isInterrupted = turn.cancelRequested || signal?.aborted;
-      const output = isInterrupted
-        ? createInterruptedToolResult(INTERRUPTED_TOOL_REASON)
-        : createErrorToolResult(TOOL_EXECUTION_ERROR);
-      this.replaceToolPart(
-        turn,
-        part,
-        isInterrupted
-          ? { state: 'interrupted', output }
-          : { state: 'error', error: TOOL_EXECUTION_ERROR, output },
-      );
+      const isInterrupted = turn.cancelRequested || turn.terminated || signal?.aborted;
+      if (isInterrupted) {
+        return this.interruptToolCall(turn, part);
+      }
+      const output = createErrorToolResult(TOOL_EXECUTION_ERROR);
+      this.replaceToolPart(turn, part, {
+        state: 'error',
+        error: TOOL_EXECUTION_ERROR,
+        output,
+      });
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       return this.piToolResult(output);
@@ -655,6 +642,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       content: [{ type: 'text' as const, text: JSON.stringify(output) }],
       details: output,
     };
+  }
+
+  private interruptToolCall(turn: ActiveTurn, part: ToolPartBase) {
+    const output = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+    this.replaceToolPart(turn, part, { state: 'interrupted', output });
+    turn.failedToolCalls.add(part.toolCallId);
+    turn.settledToolCalls.add(part.toolCallId);
+    return this.piToolResult(output);
   }
 
   private emitArtifacts(turn: ActiveTurn, toolCallId: string, output: RuntimeToolResult): void {
@@ -760,6 +755,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private waitForApproval(turn: ActiveTurn, approvalId: string): Promise<'approve' | 'deny'> {
     return new Promise((resolve, reject) => {
+      if (turn.cancelRequested || turn.terminated) {
+        reject(new Error('The turn is no longer active.'));
+        return;
+      }
       turn.approvalWaiters.set(approvalId, { resolve, reject });
     });
   }

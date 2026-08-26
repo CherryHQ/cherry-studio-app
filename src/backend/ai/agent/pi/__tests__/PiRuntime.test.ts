@@ -88,9 +88,7 @@ const holders = new WeakMap<AgentRuntime, RuntimeHolder>();
 
 function createResolution(): PiModelResolution {
   return {
-    apiKey: 'test-key',
     defaultThinkingLevel: 'medium',
-    maxRetries: 0,
     model: {
       api: 'openai-responses',
       baseUrl: 'https://provider.example/v1',
@@ -103,8 +101,11 @@ function createResolution(): PiModelResolution {
       provider: 'mock-provider',
       reasoning: true,
     },
+    redactionValues: [ERROR_SECRET],
+    streamFn: () => {
+      throw new Error('The fake Pi agent must not call the provider stream.');
+    },
     supportsTools: true,
-    timeoutMs: 60_000,
     usageContext: {
       credentialReceipt: {
         attribution: 'explicit',
@@ -567,6 +568,8 @@ describe('PiRuntime mapping', () => {
       systemPrompt: 'Be helpful.\n\nPrior system note.',
       thinkingLevel: 'high',
     });
+    expect(holder.lastOptions?.streamFn).toBe(holder.resolution.streamFn);
+    expect(holder.lastOptions?.getApiKey).toBeUndefined();
     await session.close();
   });
 
