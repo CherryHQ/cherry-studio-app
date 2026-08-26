@@ -188,7 +188,17 @@ describe('BottomSheet', () => {
     });
     const largeHeight = (mockBottomSheetProps.detents as number[])[1];
 
+    act(() => {
+      renderer?.update(
+        <BottomSheet onClose={onClose} open size="full" title="Options">
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+    const fullHeight = (mockBottomSheetProps.detents as number[])[1];
+
     expect(largeHeight).toBeGreaterThan(compactHeight);
+    expect(fullHeight).toBeGreaterThan(largeHeight);
   });
 
   test('uses a caller-provided fixed height on a full-width bottom-anchored card', () => {

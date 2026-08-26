@@ -23,6 +23,7 @@ const TOP_INSET = 12;
 const TOP_CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
   compact: 0.4,
+  full: 1,
   large: 0.8,
   medium: 0.6,
 } as const;

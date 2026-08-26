@@ -1,11 +1,9 @@
-import { BottomSheet } from '@cherrystudio/ui/components';
-import { useCallback, useMemo, useState } from 'react';
+import { BottomSheet, SearchField } from '@cherrystudio/ui/components';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { AppSearchButton } from '@/frontend/components/appSearch';
+import { View } from 'react-native';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
-import { useModelSearch } from '../hooks/useModelSearch';
 import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerList } from './ModelPickerList';
@@ -33,51 +31,27 @@ export function ModelPickerDrawer({
   title,
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
-  const openModelSearch = useModelSearch();
-  const [isSearching, setIsSearching] = useState(false);
-  const resolvedTitle = title ?? t('modelPicker.title');
-  const isSheetOpen = open && !isSearching;
-  const handleOpenSearch = useCallback(() => {
-    if (isSearching) {
-      return;
-    }
-
-    // Remove the sheet's portal and Android back handler before pushing the
-    // root search route. Cancellation restores the same picker state.
-    setIsSearching(true);
-    requestAnimationFrame(() => {
-      void openModelSearch({
-        providerId,
-        selectedModelId,
-        selectedTags,
-      }).then((outcome) => {
-        setIsSearching(false);
-        if (outcome.type === 'selected') {
-          onSelect(outcome.item);
-        }
-      });
-    });
-  }, [isSearching, onSelect, openModelSearch, providerId, selectedModelId, selectedTags]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const deferredSearchText = useDeferredValue(searchText);
+  const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
 
   return (
     <BottomSheet
-      headerAction={
-        <AppSearchButton
-          accessibilityLabel={t('navigation.search')}
-          disabled={isSearching}
-          onPress={handleOpenSearch}
-        />
-      }
       onClose={onClose}
-      open={isSheetOpen}
-      size="large"
+      open={open}
+      size={isSearchExpanded ? 'full' : 'large'}
       testID="model-picker"
-      title={resolvedTitle}
+      title={title ?? t('modelPicker.title')}
     >
       <ModelPickerDrawerContent
+        deferredSearchText={deferredSearchText}
         onSelect={onSelect}
-        open={isSheetOpen}
+        onSearchFocusChange={setIsSearchFocused}
+        onSearchTextChange={setSearchText}
+        open={open}
         providerId={providerId}
+        searchText={searchText}
         selectedModelId={selectedModelId}
         selectedTags={selectedTags}
       />
@@ -86,31 +60,58 @@ export function ModelPickerDrawer({
 }
 
 function ModelPickerDrawerContent({
+  deferredSearchText,
   onSelect,
+  onSearchFocusChange,
+  onSearchTextChange,
   open,
   providerId,
+  searchText,
   selectedTags,
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
   'onSelect' | 'open' | 'providerId' | 'selectedModelId' | 'selectedTags'
->) {
+> & {
+  deferredSearchText: string;
+  onSearchFocusChange: (isFocused: boolean) => void;
+  onSearchTextChange: (value: string) => void;
+  searchText: string;
+}) {
   const { t } = useTranslation();
   const { groups, isLoading } = useModelPickerData({
     providerId,
+    searchText: deferredSearchText,
     selectedTags,
   });
   const listItems = useMemo(() => buildModelPickerListItems(groups), [groups]);
 
   return (
-    <ModelPickerList
-      emptyText={t('modelPicker.empty')}
-      isLoading={isLoading}
-      isOpen={open}
-      listItems={listItems}
-      loadingText={t('settings.provider.models.loading')}
-      onSelect={onSelect}
-      selectedModelId={selectedModelId}
-    />
+    <View className="min-h-0 flex-1">
+      <View className="px-5 pb-2">
+        <SearchField
+          accessibilityLabel={t('modelPicker.searchPlaceholder')}
+          clearAccessibilityLabel={t('common.clear')}
+          onBlur={() => onSearchFocusChange(false)}
+          onChangeText={onSearchTextChange}
+          onClear={() => onSearchTextChange('')}
+          onFocus={() => onSearchFocusChange(true)}
+          placeholder={t('modelPicker.searchPlaceholder')}
+          testID="model-picker-search"
+          value={searchText}
+        />
+      </View>
+      <View className="min-h-0 flex-1">
+        <ModelPickerList
+          emptyText={t('settings.provider.models.search.empty')}
+          isLoading={isLoading}
+          isOpen={open}
+          listItems={listItems}
+          loadingText={t('settings.provider.models.loading')}
+          onSelect={onSelect}
+          selectedModelId={selectedModelId}
+        />
+      </View>
+    </View>
   );
 }
