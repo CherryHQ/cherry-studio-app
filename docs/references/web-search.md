@@ -11,10 +11,12 @@ Cherry Mobile retains two independent configurations:
 - **Web Search Provider** is a preference-backed external search/fetch service implemented by
   `WebSearchService`.
 
-The Version 1 Pi Agent path is tool-less, so neither the external provider service nor a legacy AI
-SDK `web_search` tool is attached to Agent turns. The settings workflow still configures and checks
-external providers. Future Agent search support must enter through an Agent-owned tool contract and
-Pi adapter, not by restoring the retired Chat tool resolver.
+`WebSearchService` reaches Agent turns through the application-owned `web_search` and `web_fetch`
+Runtime tools, never through an AI SDK tool set. Both are **opt-in**: they stay out of the turn
+catalog until the Agent has an enabled built-in binding for them, which is the gate the retired
+per-Assistant web-search switch used to provide. The settings workflow still configures and checks
+external providers, and a lookup that fails because no provider is configured returns a terminal
+result telling the model to stop retrying rather than a transient error.
 
 ## External Runtime
 
