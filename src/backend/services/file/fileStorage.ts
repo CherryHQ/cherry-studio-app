@@ -292,12 +292,18 @@ export function getInternalFileUri(entry: Pick<FileEntry, 'filename' | 'id'>): s
   return file.exists ? file.uri : undefined;
 }
 
-export async function imageUriToDataUrl(uri: string, mediaType: string): Promise<string> {
+export async function imageUriToDataUrl(
+  uri: string,
+  mediaType: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
   if (uri.startsWith('data:')) {
     return uri;
   }
   const file = new File(uri);
   const base64 = await file.base64();
+  signal?.throwIfAborted();
   const resolvedMediaType = resolveMediaType(mediaType, file.type, 'image/*');
   return `data:${resolvedMediaType};base64,${base64}`;
 }

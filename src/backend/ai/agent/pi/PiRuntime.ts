@@ -28,6 +28,8 @@ import type {
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeJsonValue,
+  RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolResult,
@@ -49,6 +51,7 @@ export type PiModelResolution = {
 };
 
 export interface PiRuntimeDependencies {
+  preflightModel(model: RuntimeModel): RuntimeModelPreflight | Promise<RuntimeModelPreflight>;
   resolveModel(
     model: RuntimeExecutionRequest['model'],
     options: RuntimeExecutionRequest['options'],
@@ -70,7 +73,7 @@ const PI_DESCRIPTOR: RuntimeDescriptor = {
   name: 'Pi Runtime',
   capabilities: {
     approvals: true,
-    attachments: false,
+    attachments: true,
     reasoning: true,
     tools: true,
   },
@@ -123,18 +126,26 @@ async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent
 }
 
 function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null {
-  const hasFileInput = request.input.some((part) => part.type === 'file');
-  const hasFileHistory = request.history.some((message) =>
-    message.parts.some((part) => part.type === 'file'),
-  );
-  if (hasFileInput || hasFileHistory) {
+  const files = [
+    ...request.input.filter((part) => part.type === 'file'),
+    ...request.history.flatMap((message) => message.parts.filter((part) => part.type === 'file')),
+  ];
+  if (files.some((part) => !isInlineImagePart(part))) {
     return {
       code: 'unsupported_input',
-      message: 'This runtime does not support file attachments.',
+      message: 'Pi Runtime accepts only validated inline image attachments.',
       retryable: false,
     };
   }
   return null;
+}
+
+function isInlineImagePart(part: { mediaType: string; type: 'file'; uri: string }): boolean {
+  return (
+    part.mediaType.startsWith('image/') &&
+    part.uri.startsWith(`data:${part.mediaType};base64,`) &&
+    part.uri.length > `data:${part.mediaType};base64,`.length
+  );
 }
 
 function normalizeExecutionError(error: unknown, secrets: readonly string[] = []): RuntimeError {
@@ -325,6 +336,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
           error: {
             code: 'unsupported_tools',
             message: 'The selected model does not support native tool calling.',
+            retryable: false,
+          },
+        });
+        return;
+      }
+      if (
+        (request.input.some((part) => part.type === 'file') ||
+          request.history.some((message) => message.parts.some((part) => part.type === 'file'))) &&
+        !resolution.model.input.includes('image')
+      ) {
+        this.emit(turn, {
+          type: 'failed',
+          error: {
+            code: 'unsupported_input',
+            message: 'The selected model does not support image input.',
             retryable: false,
           },
         });
@@ -762,6 +788,10 @@ export class PiRuntime implements AgentRuntime {
     private readonly dependencies: PiRuntimeDependencies,
     private readonly createAgent?: PiRuntimeAgentFactory,
   ) {}
+
+  async preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight> {
+    return this.dependencies.preflightModel(model);
+  }
 
   async open(): Promise<AgentRuntimeSession> {
     return new PiRuntimeSession(this.dependencies, this.createAgent);

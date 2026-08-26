@@ -4,6 +4,7 @@ import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
 import {
+  AI_IMAGE_INPUT_MAX_COUNT,
   imageMediaTypeFromExtension,
   isAiSupportedImageMediaType,
   isImageFileExtension,
@@ -88,7 +89,7 @@ export function removeComposerAttachment(
 
 // What the system photo picker is capped at. Chat and the drawing list share it
 // so a batch that is valid in one is valid in the other.
-export const COMPOSER_PHOTO_SELECTION_LIMIT = 9;
+export const COMPOSER_PHOTO_SELECTION_LIMIT = AI_IMAGE_INPUT_MAX_COUNT;
 
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentSource {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();

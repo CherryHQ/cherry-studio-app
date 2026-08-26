@@ -1,7 +1,7 @@
 # Cherry Agent Protocol
 
-Status: **as built**. Tool configuration and managed attachment resolution remain separate follow-up
-work. Version 1 is local-only.
+Status: **as built**, including managed image resolution. Tool configuration and text attachment
+resolution remain separate follow-up work. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
@@ -168,6 +168,12 @@ document, image, or edited file keeps its structured tool result and also emits 
 `purpose: 'artifact'` so the assistant message durably owns the reference. Artifact content is not
 automatically projected as a model attachment in later history. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
+
+Current JPEG, PNG, GIF, and WebP inputs are admitted only when the authoritative entry and blob,
+selected model capability, Pi endpoint adapter, and centralized request limits all pass before
+reservation. Available historical user images are projected again for an image-capable model;
+missing historical content is omitted without deleting or rewriting the message. The temporary
+Data URL exists only inside the Host-to-Runtime request.
 
 `toolRef` is the stable application identity used by configuration, approval, persistence, and
 audit. `providerName` is the deterministic function alias used in model history; `displayName` is a

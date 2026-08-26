@@ -159,6 +159,13 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
     expect(typeof capabilities.tools).toBe('boolean');
     expect(typeof capabilities.approvals).toBe('boolean');
     expect(typeof capabilities.attachments).toBe('boolean');
+
+    const preflight = await first.preflightModel({ providerId: 'provider', modelId: 'model' });
+    expect(preflight.contextWindow).toBeGreaterThan(0);
+    expect(preflight.maxInputTokens).toBeGreaterThanOrEqual(0);
+    expect(preflight.maxOutputTokens).toBeGreaterThan(0);
+    expect(preflight.inputModalities).toContain('text');
+    expect(typeof preflight.supportsTools).toBe('boolean');
   });
 
   // 2 & 3. Exactly one terminal event, and nothing follows it.

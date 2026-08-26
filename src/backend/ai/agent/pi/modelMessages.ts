@@ -1,8 +1,11 @@
 import type {
   AssistantMessage,
+  ImageContent,
   Message as PiMessage,
   Model as PiModel,
+  TextContent,
   ToolResultMessage,
+  UserMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
@@ -39,21 +42,44 @@ export function toPiConversation(
       continue;
     }
     if (message.role === 'user') {
-      history.push({ role: 'user', content: collectText(message.parts), timestamp: Date.now() });
+      history.push({
+        role: 'user',
+        content: collectUserContent(message.parts),
+        timestamp: Date.now(),
+      });
       continue;
     }
     appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
   }
 
-  const promptText = request.input
-    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-    .join('\n');
-
   return {
     history,
-    prompt: { role: 'user', content: promptText, timestamp: Date.now() },
+    prompt: { role: 'user', content: collectUserContent(request.input), timestamp: Date.now() },
     systemPrompt: systemParts.join('\n\n'),
   };
+}
+
+function collectUserContent(
+  parts: RuntimeExecutionRequest['input'] | RuntimeMessagePart[],
+): UserMessage['content'] {
+  const content: (TextContent | ImageContent)[] = parts.flatMap((part) => {
+    if (part.type === 'text') {
+      return [{ type: 'text' as const, text: part.text }];
+    }
+    if (part.type === 'file') {
+      return [toPiImage(part)];
+    }
+    return [];
+  });
+  return content.some((part) => part.type === 'image') ? content : collectText(parts);
+}
+
+function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageContent {
+  const prefix = `data:${part.mediaType};base64,`;
+  if (!part.uri.startsWith(prefix) || part.uri.length === prefix.length) {
+    throw new Error('Runtime image content must be a matching base64 data URL.');
+  }
+  return { type: 'image', data: part.uri.slice(prefix.length), mimeType: part.mediaType };
 }
 
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
@@ -126,7 +152,7 @@ function appendAssistantHistory(
         break;
       }
       default:
-        // File parts are rejected before model resolution.
+        // Assistant artifact files are not implicit model attachments.
         break;
     }
   }

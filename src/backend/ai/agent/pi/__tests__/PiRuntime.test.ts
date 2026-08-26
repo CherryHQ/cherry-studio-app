@@ -129,7 +129,19 @@ function createTestRuntime(): PiRuntime {
     if (!holder.program) throw new Error('Test Pi Agent program was not configured.');
     return new TestPiAgent(options, holder.program);
   };
-  const runtime = new PiRuntime({ resolveModel: () => holder.resolution }, factory);
+  const runtime = new PiRuntime(
+    {
+      preflightModel: () => ({
+        contextWindow: holder.resolution.model.contextWindow,
+        inputModalities: [...holder.resolution.model.input],
+        maxInputTokens: holder.resolution.model.contextWindow - holder.resolution.model.maxTokens,
+        maxOutputTokens: holder.resolution.model.maxTokens,
+        supportsTools: holder.resolution.supportsTools,
+      }),
+      resolveModel: () => holder.resolution,
+    },
+    factory,
+  );
   holders.set(runtime, holder);
   return runtime;
 }
@@ -361,6 +373,58 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
 }
 
 describe('PiRuntime mapping', () => {
+  test('preflights and maps current and historical inline images without retaining data URLs', async () => {
+    const runtime = createTestRuntime();
+    const holder = holders.get(runtime);
+    if (!holder) throw new Error('missing Runtime holder');
+    holder.resolution = {
+      ...holder.resolution,
+      model: { ...holder.resolution.model, input: ['text', 'image'] },
+    };
+    let prompt: PiMessage | undefined;
+    const arranged = arrange(runtime, async (context) => {
+      prompt = context.prompt;
+      await emitText(context, 'I see both images.');
+    });
+    const session = await runtime.open();
+    const image = {
+      type: 'file' as const,
+      mediaType: 'image/png',
+      name: 'image.png',
+      uri: 'data:image/png;base64,AAAA',
+    };
+
+    expect(await runtime.preflightModel(baseRequest('preflight').model)).toMatchObject({
+      inputModalities: ['text', 'image'],
+    });
+    await collect(
+      session.execute(
+        baseRequest('turn-images', {
+          history: [{ role: 'user', parts: [image] }],
+          input: [{ type: 'text', text: 'Compare these.' }, image],
+        }),
+      ),
+    );
+
+    expect(arranged.lastOptions?.initialState?.model.input).toEqual(['text', 'image']);
+    expect(arranged.lastOptions?.initialState?.messages).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }],
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(prompt).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Compare these.' },
+        { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+      ],
+      timestamp: expect.any(Number),
+    });
+    await session.close();
+  });
+
   test('surfaces provider errors after redacting resolved credentials', async () => {
     const runtime = createTestRuntime();
     arrange(runtime, async (context) => {

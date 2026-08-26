@@ -7,6 +7,8 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type {
   PiModelResolution,
   PiRuntimeDependencies,
+  RuntimeModel,
+  RuntimeModelPreflight,
   RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import { resolveProviderAiSdkConfig } from '@/backend/ai/provider/config';
@@ -30,15 +32,11 @@ type PiProviderSettings = {
 
 export function createPiModelResolver(): PiRuntimeDependencies {
   return {
+    async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
+      return (await resolveConfiguredPiModel(runtimeModel)).preflight;
+    },
     async resolveModel(runtimeModel): Promise<PiModelResolution> {
-      const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
-      const [provider, model] = await Promise.all([
-        providerService.getByProviderId(runtimeModel.providerId),
-        modelService.getById(uniqueModelId),
-      ]);
-      if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
-
-      assertPiModelSupported(provider, model);
+      const { model, preflight, provider } = await resolveConfiguredPiModel(runtimeModel);
       const { config, credentialReceipt } = await resolveProviderAiSdkConfig(provider, model, {
         fetch: expoFetch as FetchFunction,
         getAuthConfig: (providerId) => providerService.getAuthConfig(providerId),
@@ -82,21 +80,57 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         model: {
           api: 'openai-responses',
           baseUrl: settings.baseURL,
-          contextWindow: model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW,
+          contextWindow: preflight.contextWindow,
           cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
           headers: mergeHeaders(settings),
           id: modelId,
-          input: ['text'],
-          maxTokens: model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS,
+          input: preflight.inputModalities,
+          maxTokens: preflight.maxOutputTokens,
           name: model.name,
           provider: provider.id,
           reasoning: model.reasoning !== undefined,
         },
-        supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
+        supportsTools: preflight.supportsTools,
         timeoutMs: DEFAULT_PI_TIMEOUT_MS,
         usageContext,
       };
     },
+  };
+}
+
+async function resolveConfiguredPiModel(runtimeModel: RuntimeModel): Promise<{
+  model: Model;
+  preflight: RuntimeModelPreflight;
+  provider: Provider;
+}> {
+  const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
+  const [provider, model] = await Promise.all([
+    providerService.getByProviderId(runtimeModel.providerId),
+    modelService.getById(uniqueModelId),
+  ]);
+  if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
+
+  assertPiModelSupported(provider, model);
+  return { model, preflight: toPiModelPreflight(model), provider };
+}
+
+export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
+  const contextWindow = model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW;
+  const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS;
+  const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
+  const maxInputTokens = Math.max(
+    0,
+    Math.min(model.maxInputTokens ?? contextInputLimit, contextInputLimit),
+  );
+
+  return {
+    contextWindow,
+    inputModalities: model.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION)
+      ? ['text', 'image']
+      : ['text'],
+    maxInputTokens,
+    maxOutputTokens,
+    supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
   };
 }
 
