@@ -57,9 +57,11 @@ app and move to a package when a real independent consumer exists.
   interrupted.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
-  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host combines its fixed
-  built-in tools with persisted MCP bindings whose Streamable HTTP server and raw discovered tool
-  remain executable.
+  normal conversation; a non-empty snapshot enables Pi's tool loop. The Host resolves its built-in
+  catalog — device calendar and reminders, health, location, web search and fetch, image
+  generation, and `write_file` — against platform, OS permission, app configuration, and the
+  Agent's built-in bindings, then combines it with persisted MCP bindings whose Streamable HTTP
+  server and raw discovered tool remain executable.
 - The Host also initializes a controlled resource ledger from managed files already visible to the
   turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
   JSON and paths cannot expand it.
@@ -81,9 +83,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 - AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
   application-owned tools. They never become a parallel Agent or Chat Runtime.
-- Calendar, Office generation/inspection/patching, image generation, and file operations are
-  capability adapters. Office tools use versioned Cherry-owned specs and edit operations rather
-  than exposing renderer APIs or OOXML. File access is limited to managed `file_entry` ids visible
+- Calendar, reminders, health, location, web lookup, image generation, Office
+  generation/inspection/patching, and file operations are capability adapters. Office tools use
+  versioned Cherry-owned specs and edit operations rather than exposing renderer APIs or OOXML. File access is limited to managed `file_entry` ids visible
   to the turn, edits are copy-on-write, and generated artifact parts are not implicit model
   attachments.
 - Skills are mobile-owned, controlled instruction resources selected by Agent configuration. Mobile
@@ -135,13 +137,20 @@ The table intentionally starts empty: retired Assistant data is not migrated or 
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
+The built-in catalog is restored on the Runtime tool contract: thirteen device capabilities
+(calendar, reminders, health, location) behind their OS permission scopes, `web_search` and
+`web_fetch` behind an explicit per-Agent opt-in, `generate_image` behind a configured drawing
+model, and `write_file`. `src/shared/data/types/builtInTool.ts` holds the descriptors the Host and
+the Agent editor share.
+
 The production Pi model adapter currently accepts API-key-authenticated Anthropic Messages, Google
 Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Pi maps text, reasoning,
 cumulative usage, cancellation, native tool loops, and approval decisions onto the Runtime
-contract. Agent tool bindings are durable and exposed through the typed Data API. The HTTP MCP
-adapter preserves raw JSON Schemas and creates bounded, cancellable Runtime callbacks, and the Host
-resolves their effective policy alongside its fixed application-owned catalog into a frozen
-per-turn snapshot before reserving messages. The Host resolves bounded managed images for supported
+contract. Agent tool bindings are durable, exposed through the typed Data API, and configurable
+per Agent for both built-in capabilities and MCP servers. The HTTP MCP adapter preserves raw JSON
+Schemas and creates bounded, cancellable Runtime callbacks, and the Host resolves their effective
+policy alongside its application-owned catalog into a frozen per-turn snapshot before reserving
+messages. The Host resolves bounded managed images for supported
 image-capable models; text attachments remain deferred. It also persists and replays versioned
 Runtime context checkpoints; Pi produces and consumes them through its RN-safe compaction adapter.
 

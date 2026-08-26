@@ -1,13 +1,15 @@
 # Agent Tools And Controlled Resources
 
 Status: **tool binding persistence, Runtime tool contracts, the Pi adapter, HTTP MCP Runtime
-adaptation, and Host projection are implemented**. Version 1 is local-only.
+adaptation, built-in capability adapters, and Host projection are implemented**. Version 1 is
+local-only.
 
-`write_file` (see [Managed File Read And Edit](#managed-file-read-and-edit)) ships as a minimal
-built-in slice using the settled `ToolRef` and `{ value, artifacts }` contracts. The Host combines
-its fixed application-owned catalog with persisted executable MCP bindings for each turn. The turn
-resource ledger does not exist yet. Sections that a shipped tool still diverges from carry an
-**As-built** note.
+The built-in catalog ships device calendar and reminders, health, location, web search and fetch,
+image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
+contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
+permission, app configuration, and the Agent's persisted built-in bindings, then combines it with
+persisted executable MCP bindings. Office generation and the turn resource ledger do not exist yet.
+Sections that a shipped tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -60,10 +62,18 @@ digest, rejects collisions within the snapshot, and never falls back to display-
 Host snapshots a display name separately so historical UI remains understandable after
 configuration changes.
 
-**As-built.** The turn-local representation exists: `write_file` has a stable built-in `ToolRef`
-and keeps `write_file` as its provider alias for compatibility. Durable bindings live in the
-normalized `agent_tool_binding` table, but the Host does not project them yet and builds the same
-one-tool catalog for every eligible Agent. The `agent` table therefore has no tool-policy column.
+**As-built.** The turn-local representation exists: every built-in capability has a stable
+`ToolRef` whose `capabilityId` doubles as its provider alias, which is unambiguous because the
+catalog is Cherry-owned and collision-free. Durable bindings live in the normalized
+`agent_tool_binding` table and the Host projects both their `enabled` and `approval` values. The
+`agent` table therefore has no tool-policy column.
+
+A built-in capability with no binding row falls back to its catalog default rather than to a single
+global answer: reads default to `auto` and mutations to `ask`, while an **opt-in** capability
+defaults to off. `web_search` and `web_fetch` are opt-in because they reach a third-party service
+the user configures separately, which is the gate the retired per-Assistant web-search switch
+provided. `src/shared/data/types/builtInTool.ts` is the one catalog both the Host and the Agent
+editor read, so the switches and the turn cannot disagree about which capabilities exist.
 
 The logical binding model is:
 
@@ -138,8 +148,10 @@ that managed id; raw `file://`, `content://`, sandbox, provider, and user-entere
 import sources, never authority.
 
 **As-built.** There is no `TurnResourceLedger` yet. `write_file` needs none: it only creates
-entries and never reads one, so it has no input to authorize. The ledger becomes necessary with the
-first tool that accepts a `fileEntryId`.
+entries and never reads one, so it has no input to authorize. `generate_image` does accept
+`image_ids`, and until the ledger exists it authorizes them only by resolving each id to an
+available managed image entry — it cannot yet tell a transcript-visible image from any other library
+entry. Closing that gap is the first job of the ledger.
 
 For Version 1, the Host derives the initial ledger grants from:
 
@@ -181,9 +193,10 @@ history. If the managed entry still exists, a user may explicitly attach it agai
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 **As-built.** `write_file` returns its status and new `fileEntryId` under `value`, plus the created
-managed entry under `artifacts`. Pi projects that artifact as a `purpose: 'artifact'` file part, and
-the Host persists both the result envelope and file part. There is no resource ledger yet because
-the shipped catalog contains no tool that can read the resulting managed id.
+managed entry under `artifacts`; `generate_image` returns `{ id, name }` refs under `value` and each
+imported image under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts,
+and the Host persists both the result envelope and the file parts. Device and web capabilities
+return portable JSON with no artifacts.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
@@ -296,6 +309,10 @@ with its own approval policy.
   the Runtime approval decision immediately before access.
 - A missing platform API or denied permission returns a normalized unavailable/permission result;
   it never falls back to another calendar account or remote service.
+- Reminder capabilities are iOS-only and are absent from the Android catalog rather than present and
+  always failing.
+- A device failure settles as a `{ status: 'error', message, retryable }` value rather than a throw,
+  because a thrown error reaches the model only as an opaque failure it cannot act on.
 
 ### Image Generation
 
@@ -305,7 +322,9 @@ with its own approval policy.
   provider credentials, usage accounting, download, persistence, or cleanup.
 - Successful output is imported into managed file storage before the tool reports an artifact.
 - Cost-bearing or externally submitted generation defaults to `ask`; the Agent binding may choose a
-  different policy explicitly.
+  different policy explicitly. `generate_image` is absent from the catalog entirely until a drawing
+  model is configured, and its input schema is built from that model's capability block so the model
+  is never offered a parameter its provider rejects.
 
 ### Office Generation
 

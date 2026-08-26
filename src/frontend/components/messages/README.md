@@ -29,6 +29,10 @@ message items, `extraData`, or a feature-owned context/store read inside the row
 Part renderers, animation providers, and platform controls remain private implementation details.
 Callers import only from `@/frontend/components/messages`.
 
+A tool that returns managed artifacts already has them in the message: the Host persists each one
+as a `purpose: 'artifact'` file part that draws its own card. A per-tool renderer therefore renders
+the *call*, never the artifact, or the same file appears twice.
+
 ## Ownership
 
 The module accepts only visible `user` and `assistant` messages. A feature that stores additional

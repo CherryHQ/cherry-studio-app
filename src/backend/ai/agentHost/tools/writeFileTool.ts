@@ -9,8 +9,10 @@
 
 import * as z from 'zod';
 
-import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '@/backend/ai/agent';
+import type { RuntimeTool, RuntimeToolResult } from '@/backend/ai/agent';
 import { type FileEntry, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+
+import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export const WRITE_FILE_TOOL_NAME = 'write_file';
 
@@ -63,7 +65,9 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
     displayName: 'Write file',
     description:
       "Save text as a file in the user's file library. Use it only when the user asks to save, export, or download something as a file; otherwise answer in the conversation.",
-    inputSchema: toolInputSchema(),
+    inputSchema: toRuntimeInputSchema(writeFileInputSchema),
+    // The catalog overrides this from the resolved binding policy; the value
+    // here is only the floor this tool declares for itself.
     approval: 'auto',
     async execute(input) {
       const parsed = writeFileInputSchema.safeParse(input);
@@ -135,11 +139,4 @@ function normalizeFilename(filename: string): string | null {
 function mediaTypeForFilename(filename: string): string {
   const extension = filenameExtension(filename);
   return (extension && MEDIA_TYPES_BY_EXTENSION[extension]) || FALLBACK_MEDIA_TYPE;
-}
-
-/** `RuntimeTool.inputSchema` is portable JSON Schema; the dialect key is noise. */
-function toolInputSchema(): RuntimeJsonValue {
-  const schema = z.toJSONSchema(writeFileInputSchema) as Record<string, unknown>;
-  delete schema.$schema;
-  return schema as RuntimeJsonValue;
 }

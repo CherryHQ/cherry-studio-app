@@ -389,7 +389,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       let configuredTools: readonly RuntimeTool[] = [];
       if (runtime.descriptor.capabilities.tools) {
         try {
-          builtInTools = await this.toolSource.getTools(agent.model);
+          builtInTools = await this.toolSource.getTools({ agentId: agent.id, model: agent.model });
         } catch (error) {
           logger.warn(
             'Failed to resolve built-in Agent tools; continuing without them',
