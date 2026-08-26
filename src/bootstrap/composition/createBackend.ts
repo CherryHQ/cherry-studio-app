@@ -5,6 +5,11 @@ import {
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
+import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
+import {
+  type AgentAvatars,
+  createAgentAvatars,
+} from '@/backend/services/agents/createAgentAvatars';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -14,6 +19,7 @@ import { createProfileModule } from '@/backend/services/profile/createProfileMod
 import {
   replaceUserAvatar,
   resolveUserAvatarUri,
+  USER_AVATAR_IMAGE_CONFIG,
 } from '@/backend/services/profile/userAvatarStorage';
 import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
@@ -28,6 +34,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
+    agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
   };
 };
@@ -91,7 +98,11 @@ export function createBackend(
       request: (scope) => services.devicePermissions.requestForScope(scope),
     },
   });
-  const userContentImages = createUserContentImageStorage();
+  const agentAvatars = createAgentAvatars({
+    agents: services.agentData,
+    images: agentAvatarImages,
+  });
+  const userContentImages = createUserContentImageStorage(USER_AVATAR_IMAGE_CONFIG);
   const profile = createProfileModule({
     avatars: {
       replace: (sourceUri, previousAvatar, persist) =>
@@ -123,6 +134,7 @@ export function createBackend(
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
+      agentAvatars,
       mcpServerMutations,
     },
   };

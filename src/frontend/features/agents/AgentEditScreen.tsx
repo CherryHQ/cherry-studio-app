@@ -1,21 +1,19 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import {
-  ContentState,
-  Description,
-  Input,
-  Label,
-  TextField,
-  useAlert,
-} from '@cherrystudio/ui/components';
+import { ContentState, Input, useAlert } from '@cherrystudio/ui/components';
+import { loggerService } from '@logger';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   ModelPickerDrawer,
+  ModelPickerIcon,
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
@@ -27,7 +25,7 @@ import {
   useAgentToolBindingsApi,
 } from '@/frontend/hooks/agent';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
-import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import { isLiquidGlassAvailable, keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -37,6 +35,10 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentToolsSection } from './AgentToolsSection';
+
+const agentFormAvatarSize = 104;
+const agentFormContentPadding = 20;
+const logger = loggerService.withContext('AgentEditScreen');
 
 export default function AgentEditScreen() {
   const { t } = useTranslation();
@@ -114,7 +116,8 @@ function AgentEditForm({
   const router = useRouter();
   const { alert } = useAlert();
   const isEditing = Boolean(agentId);
-  const { createAgent, isCreating, isUpdating, updateAgent } = useAgentMutations();
+  const { createAgent, isCreating, isSettingAvatar, isUpdating, setAgentAvatar, updateAgent } =
+    useAgentMutations();
   const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
@@ -125,12 +128,14 @@ function AgentEditForm({
   );
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
+  const headerHeight = useHeaderHeight();
+  const safeAreaInsets = useSafeAreaInsets();
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   // Resolving through the picker catalog keeps a stale preference (a model the
   // user has since removed) from being seeded, which the create endpoint would
   // reject as an unregistered model.
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
-  const isSaving = isCreating || isReplacing || isUpdating;
+  const isSaving = isCreating || isReplacing || isSettingAvatar || isUpdating;
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -159,6 +164,18 @@ function AgentEditForm({
     setForm((current) => ({ ...current, modelId: item.modelId }));
     setIsModelPickerOpen(false);
   }, []);
+  // Draft only. The file write needs an agent row to point at, which on create
+  // does not exist until Save returns an id.
+  const handleAvatarSelect = useCallback((sourceUri: string) => {
+    setForm((current) => ({ ...current, avatarUri: sourceUri }));
+  }, []);
+  const reportAvatarPickError = useCallback(
+    (error: unknown) => {
+      logger.error('Failed to pick an agent avatar', error as Error);
+      alert.show({ title: t('agent.toast.avatarSaveFailed') });
+    },
+    [alert, t],
+  );
   const handleSave = useCallback(async () => {
     const dto = buildAgentDto(form, {
       inheritDefaultModel: !agentId && !hasPickedModel,
@@ -169,19 +186,37 @@ function AgentEditForm({
       return;
     }
 
+    let savedAgentId = agentId;
+
     try {
       if (agentId) {
         await updateAgent(agentId, dto.value);
         await replaceAgentToolBindings(agentId, toolBindings);
       } else {
-        await createAgent(dto.value);
+        savedAgentId = (await createAgent(dto.value)).id;
       }
-
-      router.back();
     } catch {
       alert.show({ title: t('agent.toast.saveFailed') });
+      return;
     }
+
+    // The avatar is a managed file keyed by agent id, so it can only be written
+    // once the record exists — and only when the draft moved off its seed.
+    // A failure here is reported but does not keep the form open: the agent is
+    // already saved, and a second Save from a create form would create a second
+    // agent.
+    if (savedAgentId && form.avatarUri && form.avatarUri !== (agent?.avatarUri ?? null)) {
+      try {
+        await setAgentAvatar(savedAgentId, form.avatarUri);
+      } catch (error) {
+        logger.error('Failed to save agent avatar', error as Error, { agentId: savedAgentId });
+        alert.show({ title: t('agent.toast.avatarSaveFailed') });
+      }
+    }
+
+    router.back();
   }, [
+    agent?.avatarUri,
     agentId,
     alert,
     createAgent,
@@ -189,10 +224,26 @@ function AgentEditForm({
     hasPickedModel,
     replaceAgentToolBindings,
     router,
+    setAgentAvatar,
     t,
     toolBindings,
     updateAgent,
   ]);
+  // This stack floats its header over the scene, so the content has to clear it
+  // itself. `contentInsetAdjustmentBehavior="automatic"` does that until the
+  // image picker presents its full-screen modal — dismissing it wipes the inset
+  // and the form comes back sitting under the header. Owning the padding here
+  // keeps it stable across that trip, so the scroll view adjusts nothing.
+  const scrollContentStyle = useMemo(
+    () => [
+      styles.scrollContent,
+      {
+        paddingBottom: agentFormContentPadding + safeAreaInsets.bottom,
+        paddingTop: (isLiquidGlassAvailable ? headerHeight : 0) + agentFormContentPadding,
+      },
+    ],
+    [headerHeight, safeAreaInsets.bottom],
+  );
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -216,47 +267,72 @@ function AgentEditForm({
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}
-        contentContainerStyle={styles.scrollContent}
-        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={scrollContentStyle}
+        contentInsetAdjustmentBehavior="never"
         disableScrollOnKeyboardHide
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         style={styles.scroll}
       >
-        <FormSection title={t('agent.form.basicSection')}>
-          <FormField label={t('agent.form.name')}>
-            <Input
-              accessibilityLabel={t('agent.form.name')}
-              autoCorrect={false}
-              onChangeText={(value) => updateForm('name', value)}
-              placeholder={t('agent.form.namePlaceholder')}
-              returnKeyType="next"
-              value={form.name}
-            />
-          </FormField>
-          <FormField label={t('agent.form.instructions')}>
-            <Input
-              accessibilityLabel={t('agent.form.instructions')}
-              autoCorrect
-              multiline
-              onChangeText={(value) => updateForm('instructions', value)}
-              placeholder={t('agent.form.instructionsPlaceholder')}
-              value={form.instructions}
-            />
-          </FormField>
-        </FormSection>
-        <FormSection title={t('agent.form.modelSection')}>
+        {/* Avatar and caption share one trigger, so tapping either opens the
+            same picker — hence no `size` on the picker: it hugs the block. */}
+        <View className="items-center">
+          <AvatarImagePicker
+            accessibilityLabel={t('agent.form.setAvatar')}
+            onBeforeOpen={Keyboard.dismiss}
+            onError={reportAvatarPickError}
+            onSelect={handleAvatarSelect}
+          >
+            <View className="items-center gap-3">
+              <AgentAvatar
+                accessibilityLabel={t('agent.form.setAvatar')}
+                name={form.name}
+                size={agentFormAvatarSize}
+                uri={form.avatarUri}
+              />
+              <Text className="font-medium text-base text-brand">{t('agent.form.setAvatar')}</Text>
+            </View>
+          </AvatarImagePicker>
+        </View>
+        {/* No card and no rows: each field stands on its own, so the only chrome
+            is the one the `Input` already draws. The model row borrows that same
+            outline so the three read as one set. */}
+        <View className="gap-3">
+          <Input
+            accessibilityLabel={t('agent.form.name')}
+            autoCorrect={false}
+            onChangeText={(value) => updateForm('name', value)}
+            placeholder={t('agent.form.namePlaceholder')}
+            returnKeyType="next"
+            value={form.name}
+          />
+          <Input
+            accessibilityLabel={t('agent.form.instructions')}
+            autoCorrect
+            multiline
+            onChangeText={(value) => updateForm('instructions', value)}
+            placeholder={t('agent.form.instructionsPlaceholder')}
+            value={form.instructions}
+          />
           <Pressable
             accessibilityLabel={t('agent.form.modelSelect')}
             accessibilityRole="button"
-            className="min-h-10 flex-row items-center justify-between gap-4 active:opacity-70"
+            className="min-h-10 flex-row items-center gap-2 rounded-lg border border-border bg-field px-3 py-2 active:opacity-60"
             onPress={openModelSelect}
           >
-            <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
+            <Text className="shrink-0 text-base text-foreground">
               {t('agent.form.modelSelect')}
             </Text>
-            <View className="min-w-0 max-w-[62%] flex-row items-center justify-end gap-1">
+            <View className="min-w-0 flex-1 flex-row items-center justify-end gap-1">
+              {selectedModel ? (
+                <ModelPickerIcon
+                  model={selectedModel.model}
+                  provider={selectedModel.provider}
+                  providerIconSize={18}
+                  size={20}
+                />
+              ) : null}
               <Text
                 className="min-w-0 shrink text-right text-base text-foreground"
                 numberOfLines={1}
@@ -266,16 +342,23 @@ function AgentEditForm({
               <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
             </View>
           </Pressable>
-        </FormSection>
+        </View>
+        {/* The one block that still needs naming: unlike the fields above, whose
+            placeholders say what they are, this is a list of switches that says
+            nothing about what it governs. It keeps the heading and drops the
+            card the rest of the form no longer draws. */}
         {isEditing ? (
-          <FormSection title={t('agent.tools.section')}>
+          <View className="gap-2">
+            <Text className="px-1 font-medium text-foreground text-sm">
+              {t('agent.tools.section')}
+            </Text>
             <AgentToolsSection
               bindings={toolBindings}
               onChange={setToolBindings}
               originalBindings={originalToolBindings}
               servers={servers}
             />
-          </FormSection>
+          </View>
         ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
@@ -291,33 +374,6 @@ function AgentEditForm({
   );
 }
 
-function FormSection({ children, title }: { children: React.ReactNode; title: string }) {
-  return (
-    <View className="gap-2">
-      <Text className="px-1 font-medium text-foreground text-sm">{title}</Text>
-      <View className="gap-4 rounded-2xl bg-grouped-surface p-4">{children}</View>
-    </View>
-  );
-}
-
-function FormField({
-  children,
-  description,
-  label,
-}: {
-  children: React.ReactNode;
-  description?: string;
-  label: string;
-}) {
-  return (
-    <TextField>
-      <Label>{label}</Label>
-      {children}
-      {description ? <Description selectable>{description}</Description> : null}
-    </TextField>
-  );
-}
-
 function getSingleParamValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value.at(0) : value;
 }
@@ -327,9 +383,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    gap: 24,
-    paddingBottom: 32,
+    gap: 32,
     paddingHorizontal: 16,
-    paddingTop: 20,
   },
 });

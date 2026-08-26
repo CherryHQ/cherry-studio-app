@@ -12,7 +12,7 @@ import type { JobService } from '../../services/JobService';
 import type { McpServerService } from '../../services/McpServerService';
 import type { PaintingService } from '../../services/PaintingService';
 import type { ProviderService } from '../../services/ProviderService';
-import { createAgentHandlers } from './agents';
+import { type AgentAvatars, createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
 import { createAgentToolBindingHandlers } from './agentToolBindings';
@@ -26,6 +26,7 @@ import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
 
 export type DataApiDependencies = {
+  agentAvatars: AgentAvatars;
   agents: AgentService;
   agentToolBindings: AgentToolBindingService;
   agentSessionMessages: AgentSessionMessageService;
@@ -45,7 +46,7 @@ export type DataApiDependencies = {
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
-    ...createAgentHandlers(dependencies.agents),
+    ...createAgentHandlers(dependencies.agents, dependencies.agentAvatars),
     ...createAgentToolBindingHandlers(dependencies.agentToolBindings),
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
     ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),

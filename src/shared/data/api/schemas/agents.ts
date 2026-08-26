@@ -31,6 +31,17 @@ export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .strict();
 export type UpdateAgentDto = z.infer<typeof UpdateAgentSchema>;
 
+/**
+ * The avatar's own write channel, kept off the CRUD DTOs because setting one is
+ * a workflow (normalize → store → update column → drop the previous file)
+ * rather than a field assignment.
+ */
+export const SetAgentAvatarSchema = z.strictObject({
+  /** Transient picker or camera URI; the workflow normalizes and copies it. */
+  sourceUri: z.string().min(1),
+});
+export type SetAgentAvatarDto = z.infer<typeof SetAgentAvatarSchema>;
+
 export const AGENTS_DEFAULT_PAGE = 1;
 export const AGENTS_DEFAULT_LIMIT = 100;
 export const AGENTS_MAX_LIMIT = 500;
@@ -73,6 +84,13 @@ export type AgentSchemas = {
     };
     PATCH: {
       body: UpdateAgentDto;
+      params: { id: string };
+      response: Agent;
+    };
+  };
+  '/agents/:id/avatar': {
+    PUT: {
+      body: SetAgentAvatarDto;
       params: { id: string };
       response: Agent;
     };

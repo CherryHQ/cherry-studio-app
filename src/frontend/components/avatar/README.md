@@ -9,6 +9,8 @@ Cherry product data and presentation rules before composing that primitive.
 - `BrandAvatar`, `BrandAvatarIcon`, and `BrandAvatarPhoto` apply provider/model brand fallback and
   icon inset rules.
 - `ModelAvatar` resolves a model icon from its model and provider records.
+- `AgentAvatar` renders an Agent's image, else the generated initial tile, else a neutral bot badge
+  for an unnamed draft — round, because an Agent reads as a persona rather than a brand.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
 - `ProfileAvatarImage` resolves the persisted user avatar for display-only surfaces.

@@ -10,7 +10,13 @@ type AvatarImagePickerProps = {
   onBeforeOpen?: () => void;
   onError: (error: unknown) => void;
   onSelect: (sourceUri: string) => Promise<void> | void;
-  size: number;
+  /**
+   * Pins the trigger to a square of this size, so an avatar that has not
+   * loaded yet still presents a full-size tap target. Omit it when the trigger
+   * is a composed block — an avatar with a caption under it — and should size
+   * itself to its content.
+   */
+  size?: number;
 };
 
 type PickerSource = 'camera' | 'photos';
@@ -97,7 +103,7 @@ export function AvatarImagePicker({
           onBeforeOpen?.();
           return false;
         }}
-        style={{ height: size, width: size }}
+        style={size === undefined ? undefined : { height: size, width: size }}
       >
         {children}
       </View>

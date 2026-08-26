@@ -74,6 +74,7 @@ export function createAppBootstrapRuntime(
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
       agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,

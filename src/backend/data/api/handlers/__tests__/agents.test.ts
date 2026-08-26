@@ -1,6 +1,6 @@
 import type { AgentService } from '@/backend/data/services/AgentService';
 
-import { createAgentHandlers } from '../agents';
+import { type AgentAvatars, createAgentHandlers } from '../agents';
 
 const AGENT_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -16,10 +16,18 @@ function createService() {
   };
 }
 
+function createAvatars() {
+  return {
+    setAvatar: jest.fn(async () => ({})),
+    withUri: jest.fn(async (agent: unknown) => agent),
+    withUris: jest.fn(async (agents: unknown) => agents),
+  } as unknown as AgentAvatars;
+}
+
 describe('agent handlers', () => {
   test('parses list pagination and sorting before delegation', async () => {
     const service = createService();
-    const handlers = createAgentHandlers(service as unknown as AgentService);
+    const handlers = createAgentHandlers(service as unknown as AgentService, createAvatars());
 
     await handlers['/agents'].GET({
       query: { page: '2' as never, search: 'research', sortBy: 'updatedAt', sortOrder: 'desc' },
@@ -36,7 +44,7 @@ describe('agent handlers', () => {
 
   test('preserves partial updates and the explicit model clear operation', async () => {
     const service = createService();
-    const handlers = createAgentHandlers(service as unknown as AgentService);
+    const handlers = createAgentHandlers(service as unknown as AgentService, createAvatars());
 
     await handlers['/agents/:id'].PATCH({
       body: { modelId: null },
@@ -56,7 +64,7 @@ describe('agent handlers', () => {
 
   test('rejects malformed reorder requests before delegation', async () => {
     const service = createService();
-    const handlers = createAgentHandlers(service as unknown as AgentService);
+    const handlers = createAgentHandlers(service as unknown as AgentService, createAvatars());
 
     await expect(
       handlers['/agents/:id/order'].PATCH({

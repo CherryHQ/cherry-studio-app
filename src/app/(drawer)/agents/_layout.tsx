@@ -5,12 +5,12 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 export default function AgentsStackLayout() {
-  const [foregroundColor, groupedBackground] = useThemeColor(['foreground', 'grouped-background']);
-  // Edit and new are grouped-card screens while the agent list at `index`
-  // keeps the ordinary page background, so this is per-screen rather than a
-  // stack-wide `screenOptions.contentStyle`.
-  const groupedScreen = { contentStyle: { backgroundColor: groupedBackground } };
+  const foregroundColor = useThemeColor('foreground');
 
+  // Every screen here keeps the ordinary page background. The editor used to be
+  // a grouped-card screen, which needs the gray page for its white cards to sit
+  // on; it now draws bare fields, and those need the page to stay lighter than
+  // the field fill or the outlines are all that separate them.
   return (
     <Stack
       screenOptions={{
@@ -20,8 +20,6 @@ export default function AgentsStackLayout() {
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="[agentId]/edit" options={groupedScreen} />
-      <Stack.Screen name="new" options={groupedScreen} />
     </Stack>
   );
 }
