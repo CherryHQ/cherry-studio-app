@@ -29,3 +29,5 @@ This module owns Expo Router header adapters used by the app screens.
 - Top-bar controls share one Cherry visual on both platforms: icon actions use a 40-point white
   circle with a black icon, while text actions use the matching white pill with black text. iOS
   toolbar adapters hide the system-provided shared background before mounting these controls.
+- `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
+  Agent's avatar, so the chat identifies its Agent the same way the Agent list does.

@@ -12,7 +12,9 @@ let mockAgentId: string | undefined;
 let mockSessionAgentId: string | undefined;
 let mockSessionId: string | undefined;
 
-jest.mock('@cherrystudio/app-icons/icons/bot', () => () => null);
+// This suite covers which Agent the button resolves and where it routes, not
+// how the avatar draws — and the real one pulls in untransformed CherryUI.
+jest.mock('@/frontend/components/avatar', () => ({ AgentAvatar: () => null }));
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({
