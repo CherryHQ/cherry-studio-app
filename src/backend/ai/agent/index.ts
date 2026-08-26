@@ -46,6 +46,7 @@ export type {
   PiModelResolution,
   PiRuntimeAgent,
   PiRuntimeAgentFactory,
+  PiRuntimeContextOptions,
   PiRuntimeDependencies,
 } from './pi/PiRuntime';
 export { PiRuntime } from './pi/PiRuntime';

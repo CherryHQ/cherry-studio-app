@@ -102,9 +102,9 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Context compaction policy** belongs to Pi. The collaboration contract is now settled: Runtime
   history is grouped by durable `turnId`, the Runtime may emit a versioned opaque context
   checkpoint, and the Host validates, persists, and replays that artifact with complete turns after
-  its anchor. The Host never interprets the payload or truncates history itself. Pi compaction
-  generation remains a follow-up built on this contract; see [Agent Runtime](./agent-runtime.md)
-  and [Agent Persistence](./agent-persistence.md).
+  its anchor. The Host never interprets the payload or truncates history itself. Pi now owns
+  threshold estimation, cut points, incremental summaries, retained tails, and split-turn handling;
+  see [Agent Runtime](./agent-runtime.md) and [Agent Persistence](./agent-persistence.md).
 
 ## Documents
 
@@ -135,7 +135,7 @@ Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and 
 onto the Runtime contract. Agent tool configuration is still deferred, so the Host deliberately
 supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
 file resolver lands. The Host also persists and replays versioned Runtime context checkpoints;
-Pi does not produce or consume them until its compaction integration lands.
+Pi produces and consumes them through its RN-safe compaction adapter.
 
 The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
 own its route identity, transcript, streaming, and cancellation. The retired Assistant/Topic/Message
@@ -144,7 +144,7 @@ tables, management screens, and Chat Runtime have been removed.
 Application-owned tool configuration/resolution — tool binding persistence, the per-turn
 `RuntimeTool` snapshot, and mapping Pi tool events into the Agent Protocol — remains follow-up work,
 along with Mobile Skill configuration/loading and broader Pi provider coverage. Managed attachments
-and artifacts, the avatar workflow, and context compaction are also separate follow-ups.
+and artifacts, plus the avatar workflow, are also separate follow-ups.
 
 ## Related
 

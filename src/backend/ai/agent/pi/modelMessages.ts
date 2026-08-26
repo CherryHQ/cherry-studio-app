@@ -9,7 +9,12 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
-import type { RuntimeExecutionRequest, RuntimeJsonValue, RuntimeMessagePart } from '../types';
+import type {
+  RuntimeExecutionRequest,
+  RuntimeJsonValue,
+  RuntimeMessage,
+  RuntimeMessagePart,
+} from '../types';
 
 const EMPTY_PI_USAGE: PiUsage = {
   cacheRead: 0,
@@ -22,8 +27,14 @@ const EMPTY_PI_USAGE: PiUsage = {
 
 export type PiConversation = {
   history: PiMessage[];
+  historyTurns: PiHistoryTurn[];
   prompt: Extract<PiMessage, { role: 'user' }>;
   systemPrompt: string;
+};
+
+export type PiHistoryTurn = {
+  turnId: string | null;
+  messages: PiMessage[];
 };
 
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
@@ -31,11 +42,12 @@ export function toPiConversation(
   request: RuntimeExecutionRequest,
   model: PiModel<'openai-responses'>,
 ): PiConversation {
-  const history: PiMessage[] = [];
+  const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
   const providerNamesByCallId = collectProviderNames(request);
 
   for (const turn of request.history) {
+    const historyTurn: PiHistoryTurn = { turnId: turn.turnId, messages: [] };
     for (const message of turn.messages) {
       if (message.role === 'system') {
         const text = collectText(message.parts);
@@ -43,19 +55,27 @@ export function toPiConversation(
         continue;
       }
       if (message.role === 'user') {
-        history.push({
+        historyTurn.messages.push({
           role: 'user',
           content: collectUserContent(message.parts),
           timestamp: Date.now(),
         });
         continue;
       }
-      appendAssistantHistory(history, message.parts, providerNamesByCallId, model);
+      appendAssistantHistory(
+        historyTurn.messages,
+        message.parts,
+        providerNamesByCallId,
+        model,
+        message.usage,
+      );
     }
+    historyTurns.push(historyTurn);
   }
 
   return {
-    history,
+    history: historyTurns.flatMap((turn) => turn.messages),
+    historyTurns,
     prompt: { role: 'user', content: collectUserContent(request.input), timestamp: Date.now() },
     systemPrompt: systemParts.join('\n\n'),
   };
@@ -107,7 +127,9 @@ function appendAssistantHistory(
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
   model: PiModel<'openai-responses'>,
+  usage: RuntimeExecutionRequest['history'][number]['messages'][number]['usage'],
 ): void {
+  const startIndex = history.length;
   let content: AssistantMessage['content'] = [];
   const flushAssistant = () => {
     if (content.length === 0) return;
@@ -162,4 +184,27 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
+
+  if (usage) {
+    const lastAssistant = history
+      .slice(startIndex)
+      .findLast((message): message is AssistantMessage => message.role === 'assistant');
+    if (lastAssistant) lastAssistant.usage = toPiUsage(usage);
+  }
+}
+
+function toPiUsage(usage: NonNullable<RuntimeMessage['usage']>): PiUsage {
+  const input = usage.noCacheTokens ?? usage.inputTokens ?? 0;
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  return {
+    input,
+    output,
+    cacheRead,
+    cacheWrite,
+    ...(usage.reasoningTokens !== undefined ? { reasoning: usage.reasoningTokens } : {}),
+    totalTokens: usage.totalTokens ?? input + cacheRead + cacheWrite + output,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  };
 }
