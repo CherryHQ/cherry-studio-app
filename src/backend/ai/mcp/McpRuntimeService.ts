@@ -35,6 +35,14 @@ type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'sta
   endpointUrl: string;
 };
 
+type McpToolCallingClient = MCPClient & {
+  callTool(input: {
+    args: Record<string, unknown>;
+    name: string;
+    options: { abortSignal: AbortSignal };
+  }): Promise<unknown>;
+};
+
 type ServerRuntimeState = {
   /** Cancels every in-flight request of the current generation; replaced on
    * reset so later work runs under a fresh signal. */
@@ -121,6 +129,10 @@ function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Pro
 
 function hasRunnableUrl(server: McpServer): boolean {
   return /^https?:\/\//i.test(server.endpointUrl);
+}
+
+function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClient {
+  return typeof (client as { callTool?: unknown }).callTool === 'function';
 }
 
 /**
@@ -453,6 +465,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
     try {
       const client = await this.getClient(server, state, invocationSignal);
       if (!this.isCurrentState(state, generation)) {
+        throw unavailableToolError();
+      }
+      if (!isMcpToolCallingClient(client)) {
         throw unavailableToolError();
       }
 
