@@ -24,7 +24,10 @@ type ProviderFormProps = {
 function ProviderFormRoot({ children, value }: ProviderFormProps) {
   return (
     <ProviderFormContext value={value}>
-      <View className="gap-6 px-6 py-8">{children}</View>
+      {/* Bare fields, one gap apart, the way the Agent editor stacks them. The
+          avatar block adds its own space below itself so it can sit further
+          from the first field than the fields do from each other. */}
+      <View className="gap-3 px-4 py-5">{children}</View>
     </ProviderFormContext>
   );
 }
