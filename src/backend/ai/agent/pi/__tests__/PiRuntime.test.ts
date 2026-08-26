@@ -622,13 +622,13 @@ describe('PiRuntime mapping', () => {
     expect(summaryCalls).toBe(0);
     expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
     expect(holder.lastOptions?.initialState?.messages).toHaveLength(4);
-    expect(holder.lastOptions?.initialState?.messages.map((message) => message.role)).toEqual([
+    expect(holder.lastOptions?.initialState?.messages?.map((message) => message.role)).toEqual([
       'user',
       'assistant',
       'user',
       'assistant',
     ]);
-    expect(holder.lastOptions?.initialState?.messages.at(-1)).toMatchObject({
+    expect(holder.lastOptions?.initialState?.messages?.at(-1)).toMatchObject({
       role: 'assistant',
       usage: { input: 120, output: 8, totalTokens: 128 },
     });
@@ -718,7 +718,7 @@ describe('PiRuntime mapping', () => {
     expect(JSON.stringify(checkpoint)).not.toContain(attachmentBody);
     expect(JSON.stringify(checkpoint)).not.toContain('test-key');
     expect(JSON.stringify(checkpoint)).not.toContain('base64');
-    expect(holder.lastOptions?.initialState?.messages.map((message) => message.role)).toEqual([
+    expect(holder.lastOptions?.initialState?.messages?.map((message) => message.role)).toEqual([
       'compactionSummary',
       'user',
       'assistant',
@@ -752,9 +752,9 @@ describe('PiRuntime mapping', () => {
     expect(restartSummaryCalls).toBe(0);
     expect(restartedEvents.some((event) => event.type === 'context.checkpoint')).toBe(false);
     expect(
-      restartedHolder.lastOptions?.initialState?.messages.map((message) => message.role),
+      restartedHolder.lastOptions?.initialState?.messages?.map((message) => message.role),
     ).toEqual(['compactionSummary', 'user', 'assistant']);
-    expect(restartedHolder.lastOptions?.initialState?.messages[0]).toMatchObject({
+    expect(restartedHolder.lastOptions?.initialState?.messages?.[0]).toMatchObject({
       role: 'compactionSummary',
       summary: 'EARLIEST_FACT is preserved. [REDACTED] [REDACTED] [attachment content omitted]',
     });
@@ -807,7 +807,7 @@ describe('PiRuntime mapping', () => {
         payload: { summary: 'EARLIEST_FACT remains after the incremental update.' },
       },
     });
-    expect(holder.lastOptions?.initialState?.messages[0]).toMatchObject({
+    expect(holder.lastOptions?.initialState?.messages?.[0]).toMatchObject({
       role: 'compactionSummary',
       summary: 'EARLIEST_FACT remains after the incremental update.',
     });
@@ -816,8 +816,21 @@ describe('PiRuntime mapping', () => {
 
   test('keeps tool calls paired when Pi compacts a split turn', async () => {
     const sensitiveResult = 'SENSITIVE_TOOL_RESULT_PAYLOAD';
+    const summaryResponses = [
+      `Safe history summary. ${sensitiveResult}`,
+      `Safe split-turn summary. ${sensitiveResult}`,
+    ];
+    let summaryCall = 0;
+    const completeSimple: Models['completeSimple'] = async () => {
+      const summary = summaryResponses[summaryCall++];
+      if (!summary) throw new Error('unexpected extra summary request');
+      return assistantMessage({
+        content: [{ type: 'text', text: summary }],
+        usage: usage(10, 3),
+      });
+    };
     const runtime = createCompactionRuntime(
-      compactionOptions(summaryCompletion(`Safe split-turn summary. ${sensitiveResult}`), {
+      compactionOptions(completeSimple, {
         settings: { enabled: true, reserveTokens: 100, keepRecentTokens: 30 },
       }),
     );
@@ -888,8 +901,14 @@ describe('PiRuntime mapping', () => {
       },
     });
     expect(checkpointEvent).toMatchObject({
-      checkpoint: { payload: { summary: 'Safe split-turn summary. [REDACTED]' } },
+      checkpoint: {
+        payload: {
+          summary:
+            'Safe history summary. [REDACTED]\n\n---\n\n**Turn Context (split turn):**\n\nSafe split-turn summary. [REDACTED]',
+        },
+      },
     });
+    expect(summaryCall).toBe(2);
     expect(JSON.stringify(checkpointEvent)).not.toContain(sensitiveResult);
     await session.close();
   });
