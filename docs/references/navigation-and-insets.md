@@ -87,6 +87,10 @@ scrim, card geometry, safe areas, swipe/scrim dismissal, Android back, and acces
 Feature-level picker components pass their content into this shell, while screen callers only pass
 open/close and selection state.
 
+The card keeps a four-point inset from both screen edges and the bottom edge. Its bottom corners use
+the larger of the 28-point card radius or the display radius minus that inset, keeping rounded-screen
+geometry concentric without exposing device geometry to feature code.
+
 Component sheets use the shared `compact`, `medium`, `large`, and `full` height specs (40%, 60%,
 80%, and 100% of available height). Features choose or dynamically switch the semantic size; they
 do not calculate screen height or pass native detents.
