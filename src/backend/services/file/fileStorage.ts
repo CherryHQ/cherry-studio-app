@@ -37,6 +37,14 @@ export type CreateInternalEntryInput =
       mediaType: string;
       name?: string;
       source: 'base64';
+    }
+  | {
+      /** UTF-8 text written verbatim. */
+      data: string;
+      mediaType: string;
+      /** Display name; the caller owns extension inference, so it is required. */
+      name: string;
+      source: 'text';
     };
 
 type WrittenInternalFile = {
@@ -112,13 +120,17 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
     filename = projectFilename(input.name ?? source.name, source.name);
     mediaType = resolveMediaType(input.mediaType, source.type);
     write = (destination) => source.copy(destination);
-  } else {
+  } else if (input.source === 'base64') {
     mediaType = resolveMediaType(input.mediaType);
     const ext = SafeExtSchema.parse(generatedImageExtension(mediaType));
     const name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
     filename = filenameExtension(name) ? name : `${name}.${ext}`;
     const payload = input.data.includes(',') ? (input.data.split(',', 2)[1] ?? '') : input.data;
     write = (destination) => destination.write(payload, { encoding: 'base64' });
+  } else {
+    mediaType = resolveMediaType(input.mediaType);
+    filename = SafeNameSchema.parse(input.name);
+    write = (destination) => destination.write(input.data);
   }
 
   const destination = new File(ensureFileDirectory(), `${id}${extSuffix(filename)}`);
