@@ -61,9 +61,9 @@ describe('managedFileResolver', () => {
 
     const pending = resolver.readAsDataUrl(availableFact(), controller.signal);
     controller.abort(new Error('cancelled'));
-    resolveRead('data:image/png;base64,AAAA');
 
     await expect(pending).rejects.toThrow('cancelled');
+    resolveRead('data:image/png;base64,LATE');
   });
 
   test('keeps historical managed ids in the ledger without requiring them to resolve', () => {

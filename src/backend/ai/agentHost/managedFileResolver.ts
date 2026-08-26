@@ -64,7 +64,7 @@ export function createManagedFileResolver(
         return undefined;
       }
       try {
-        const dataUrl = await readDataUrl(uri, file.mediaType, signal);
+        const dataUrl = await rejectOnAbort(readDataUrl(uri, file.mediaType, signal), signal);
         throwIfAborted(signal);
         return dataUrl;
       } catch {
@@ -103,6 +103,17 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw signal.reason ?? new Error('Managed image read was aborted.');
   }
+}
+
+function rejectOnAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  throwIfAborted(signal);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new Error('Managed image read was aborted.'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    void operation.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', onAbort);
+    });
+  });
 }
 
 export const managedFileResolver = createManagedFileResolver(
