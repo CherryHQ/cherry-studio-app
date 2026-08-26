@@ -107,9 +107,14 @@ export function AgentToolsSection({
         {t('agent.tools.description')}
       </Text>
       <AgentBuiltInTools bindings={bindings} onChange={onChange} />
-      <Text className="font-medium text-foreground text-sm" selectable>
-        {t('agent.tools.mcpSection')}
-      </Text>
+      <View className="gap-1">
+        <Text className="font-medium text-foreground text-sm" selectable>
+          {t('agent.tools.mcpSection')}
+        </Text>
+        <Text className="text-muted-foreground text-xs" selectable>
+          {t('agent.tools.mcpDescription')}
+        </Text>
+      </View>
       {serverOptions.length === 0 ? (
         <Text className="py-2 text-muted-foreground text-sm" selectable>
           {t('agent.tools.empty')}

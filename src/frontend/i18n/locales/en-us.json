@@ -228,7 +228,7 @@
   "agent.selection.start": "Select agents",
   "agent.toast.deleteFailed": "Agent was not deleted. Try again.",
   "agent.toast.saveFailed": "Agent was not saved. Try again.",
-  "agent.tools.description": "Choose which mobile-compatible MCP servers may offer tools to this agent.",
+  "agent.tools.description": "Choose which tools this agent may use.",
   "agent.tools.empty": "No mobile-compatible MCP servers are available.",
   "agent.tools.existingToolRules": "Existing tool rules",
   "agent.tools.nextTurn": "Changes apply from the next turn. Globally disabled tools always stay unavailable.",
@@ -742,5 +742,6 @@
   "agent.tools.builtInStatus.needs-painting-model": "Set a drawing model in Settings > Model",
   "agent.tools.builtInStatus.needs-permission": "Grant access in Settings > Permissions",
   "agent.tools.builtInStatus.unsupported": "Not available on this device",
-  "agent.tools.builtInAccessibilityLabel": "{{tool}}, {{status}}"
+  "agent.tools.builtInAccessibilityLabel": "{{tool}}, {{status}}",
+  "agent.tools.mcpDescription": "Mobile-compatible MCP servers that may offer tools to this agent."
 }
