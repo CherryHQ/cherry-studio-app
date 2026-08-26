@@ -1,5 +1,5 @@
 import { loggerService } from '@logger';
-import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionTable, agentTable } from '@/backend/data/db/schemas';
@@ -97,15 +97,10 @@ export class EntitySearchService {
   private async searchAgents(q: string, limit: number, updatedAtFrom?: number) {
     const pattern = likePattern(q);
     const conditions: SQL[] = [isNull(agentTable.deletedAt)];
-    const search = or(
-      sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${agentTable.description} LIKE ${pattern} ESCAPE '\\'`,
-    );
-    if (search) conditions.push(search);
+    conditions.push(sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`);
     if (updatedAtFrom !== undefined) conditions.push(gte(agentTable.updatedAt, updatedAtFrom));
     const rows = await this.db
       .select({
-        description: agentTable.description,
         id: agentTable.id,
         name: agentTable.name,
         updatedAt: agentTable.updatedAt,
@@ -117,7 +112,6 @@ export class EntitySearchService {
     return rows.map(
       (row): Extract<EntitySearchItem, { type: 'agent' }> => ({
         id: row.id,
-        subtitle: row.description || undefined,
         target: { agentId: row.id },
         title: row.name,
         type: 'agent',

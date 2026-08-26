@@ -203,8 +203,6 @@
   "agent.delete.title": "Delete agent?",
   "agent.edit.title": "Edit agent",
   "agent.form.basicSection": "Basic Settings",
-  "agent.form.description": "Introduction",
-  "agent.form.descriptionPlaceholder": "Agent introduction",
   "agent.form.instructions": "Instructions",
   "agent.form.instructionsPlaceholder": "Agent system instructions",
   "agent.form.loadFailed": "Agent could not be loaded.",

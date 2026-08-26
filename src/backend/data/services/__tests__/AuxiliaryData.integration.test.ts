@@ -93,9 +93,9 @@ describe('auxiliary Data API integration', () => {
     const assistantMessageId = mockRandomUUID();
     sqlite
       .prepare(
-        'INSERT INTO agent (id, name, description, settings, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent (id, name, settings, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
-      .run(agentId, 'Needle Agent', 'Searchable agent', '{}', 'a0', now, now);
+      .run(agentId, 'Needle Agent', '{}', 'a0', now, now);
     sqlite
       .prepare(
         'INSERT INTO agent_session (id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',

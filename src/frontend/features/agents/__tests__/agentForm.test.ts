@@ -7,7 +7,6 @@ const baseForm = createAgentFormState();
 describe('createAgentFormState', () => {
   it('hydrates only the editable agent definition fields', () => {
     const state = createAgentFormState({
-      description: 'desc',
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
@@ -15,7 +14,6 @@ describe('createAgentFormState', () => {
     } as unknown as Agent);
 
     expect(state).toEqual({
-      description: 'desc',
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
@@ -47,7 +45,6 @@ describe('buildAgentDto', () => {
   it('builds only the editable agent definition fields', () => {
     const dto = buildAgentDto({
       ...baseForm,
-      description: '  desc  ',
       instructions: 'system prompt',
       modelId: 'openai::gpt-5',
       name: '  Researcher  ',
@@ -58,7 +55,6 @@ describe('buildAgentDto', () => {
     }
 
     expect(dto.value).toEqual({
-      description: 'desc',
       instructions: 'system prompt',
       modelId: 'openai::gpt-5',
       name: 'Researcher',

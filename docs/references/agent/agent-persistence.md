@@ -139,7 +139,6 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
-| `description` | text | NOT NULL DEFAULT `''` | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Stable file reference; NULL renders the default avatar |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |

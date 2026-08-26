@@ -43,6 +43,13 @@
       "when": 1787679863379,
       "tag": "0005_remove_legacy_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787716659144,
+      "tag": "0006_natural_blur",
+      "breakpoints": true
     }
   ]
 }
