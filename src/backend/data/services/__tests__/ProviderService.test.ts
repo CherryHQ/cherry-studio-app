@@ -91,7 +91,6 @@ describe('ProviderService', () => {
     jest.mocked(providerRegistryService.getProviderDisplayMetadata).mockReturnValueOnce({
       apiFeatures: {
         arrayContent: true,
-        developerRole: false,
         reportsActualCost: true,
         serviceTier: false,
         streamOptions: true,
@@ -108,6 +107,28 @@ describe('ProviderService', () => {
     await expect(service.getByProviderId(row.providerId)).resolves.toMatchObject({
       apiFeatures: { reportsActualCost: true },
     });
+  });
+
+  test('drops removed API features from legacy provider rows', async () => {
+    const row = createProviderRow(
+      {},
+      {
+        apiFeatures: {
+          developerRole: true,
+          reportsActualCost: true,
+        } as unknown as UserProviderRow['apiFeatures'],
+      },
+    );
+    const service = await createReadService({
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [row] }) }),
+      }),
+    });
+
+    const provider = await service.getByProviderId(row.providerId);
+
+    expect(provider.apiFeatures.reportsActualCost).toBe(true);
+    expect('developerRole' in provider.apiFeatures).toBe(false);
   });
 
   test('only exposes deletion for custom providers and user-created preset clones', () => {

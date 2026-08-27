@@ -29,7 +29,6 @@ function createProvider(): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
-      developerRole: true,
       reportsActualCost: false,
       serviceTier: true,
       streamOptions: true,

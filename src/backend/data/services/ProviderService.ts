@@ -112,7 +112,7 @@ function mergeCatalogEndpointConfigs(
   return Object.keys(merged).length > 0 ? merged : null;
 }
 
-function mergeCatalogApiFeatures(
+function mergeApiFeatures(
   existing: InsertUserProviderRow['apiFeatures'],
   catalog: InsertUserProviderRow['apiFeatures'],
 ): InsertUserProviderRow['apiFeatures'] {
@@ -120,10 +120,19 @@ function mergeCatalogApiFeatures(
     return null;
   }
 
+  const merged = {
+    ...catalog,
+    ...existing,
+  };
   return {
-    ...(catalog ?? {}),
-    ...(existing ?? {}),
-  } as InsertUserProviderRow['apiFeatures'];
+    ...(merged.arrayContent !== undefined && { arrayContent: merged.arrayContent }),
+    ...(merged.reportsActualCost !== undefined && {
+      reportsActualCost: merged.reportsActualCost,
+    }),
+    ...(merged.serviceTier !== undefined && { serviceTier: merged.serviceTier }),
+    ...(merged.streamOptions !== undefined && { streamOptions: merged.streamOptions }),
+    ...(merged.verbosity !== undefined && { verbosity: merged.verbosity }),
+  };
 }
 
 function withInferredAdapterFamilies(
@@ -225,8 +234,7 @@ function rowToProvider(row: UserProviderRow): Provider {
   return {
     apiFeatures: {
       ...DEFAULT_FEATURES,
-      ...metadata.apiFeatures,
-      ...row.apiFeatures,
+      ...mergeApiFeatures(row.apiFeatures, metadata.apiFeatures),
     },
     apiKeys,
     authMethods: metadata.authMethods,
@@ -600,7 +608,7 @@ export class ProviderService {
         await tx
           .update(userProviderTable)
           .set({
-            apiFeatures: mergeCatalogApiFeatures(row.apiFeatures, input.apiFeatures ?? null),
+            apiFeatures: mergeApiFeatures(row.apiFeatures, input.apiFeatures ?? null),
             defaultChatEndpoint: row.defaultChatEndpoint ?? input.defaultChatEndpoint ?? null,
             endpointConfigs: mergeCatalogEndpointConfigs(
               row.endpointConfigs as EndpointConfigs | null,
