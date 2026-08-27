@@ -339,6 +339,7 @@
   "settings.mcp.fields.name": "Name",
   "settings.mcp.list.loadFailed": "Failed to load MCP servers.",
   "settings.mcp.list.loading": "Loading MCP servers...",
+  "settings.mcp.list.noResults": "No matching MCP servers",
   "settings.mcp.list.status.connected": "Enabled",
   "settings.mcp.list.status.connecting": "Connecting",
   "settings.mcp.list.status.disabled": "Disabled",

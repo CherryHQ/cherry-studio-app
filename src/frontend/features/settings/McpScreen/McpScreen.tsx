@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type { HeaderToolbarAction } from '@/frontend/components/headers';
+import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -19,6 +20,16 @@ export function McpScreen() {
   const { error, isLoading, refetch, servers } = useMcpServersApi();
   const { summaries } = useMcpServerRuntimeSummaries(servers);
   const [pressedServerId, setPressedServerId] = useState<string>();
+  // The endpoint is searchable alongside the name: a server is often easier to
+  // recall by the host it points at than by whatever it was named on creation.
+  const {
+    query,
+    results: listedServers,
+    setQuery,
+  } = useInlineSearch({
+    fields: (server: McpServer) => [server.name, server.endpointUrl],
+    items: servers,
+  });
 
   const handleServerPressedChange = useCallback((id: string, isPressed: boolean) => {
     setPressedServerId((currentId) => (isPressed ? id : currentId === id ? undefined : currentId));
@@ -45,6 +56,7 @@ export function McpScreen() {
     <SettingsScrollPage
       contentClassName="flex-grow gap-6"
       headerProps={{ rightActions, title: t('settings.pages.mcp.title') }}
+      search={<InlineSearch onChangeText={setQuery} value={query} />}
     >
       {isLoading ? (
         <ContentState.Loading className="px-1 py-8" title={t('settings.mcp.list.loading')} />
@@ -69,10 +81,12 @@ export function McpScreen() {
           }}
           title={t('settings.mcp.empty')}
         />
+      ) : listedServers.length === 0 ? (
+        <ContentState.Empty className="px-6 py-8" title={t('settings.mcp.list.noResults')} />
       ) : (
         <View className="overflow-hidden rounded-2xl bg-grouped-surface">
-          {servers.map((server, index) => {
-            const previousServerId = servers[index - 1]?.id;
+          {listedServers.map((server, index) => {
+            const previousServerId = listedServers[index - 1]?.id;
             const summary = summaries[server.id];
             const status = getServerStatus(server, summary);
 
