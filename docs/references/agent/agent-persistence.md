@@ -26,8 +26,9 @@ record for mobile-originated Agent Sessions only.
 
 Out of scope: branching columns, background turns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
-System capabilities are resolved independently and require no Agent persistence; the composer
-carries web-search and image-generation selection only on the current submission.
+System capabilities are resolved independently and require no Agent persistence. The frontend cache
+owns the Session-scoped web-search composer selection; image generation remains selected only by
+the current submission.
 
 ## Current limitations
 
@@ -130,8 +131,8 @@ unavailability without deleting or retargeting the row. Runtime projection is de
 
 The physical table and typed Data API retain the `builtin` variant to read existing databases
 without a destructive migration. Those rows are legacy compatibility data: the Host ignores them,
-and the Agent editor omits them when replacing bindings. Shared system capabilities and temporary
-composer selections are never persisted here.
+and the Agent editor omits them when replacing bindings. Shared system capabilities and composer
+selections are never persisted here.
 
 Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 

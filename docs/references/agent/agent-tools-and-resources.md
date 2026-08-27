@@ -5,10 +5,11 @@
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
 image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and composer-selected temporary capabilities, then combines it with
-the Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and
-`write_file` are available to every Agent when their system gates pass. Web search and image
-generation enter only the turn whose composer selected them; they are never Agent configuration.
+permission, app configuration, and composer-selected turn capabilities, then combines it with the
+Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and `write_file`
+are available to every Agent when their system gates pass. The frontend keeps web-search selection
+per Session and snapshots it into each turn; image generation enters only the turn whose draft
+selected it. Neither is Agent configuration.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
 diverges from carry an **As-built** note.
 
@@ -70,10 +71,10 @@ own platform, permission, application-configuration, approval, and optional temp
 gates. The Agent editor neither reads nor overrides it.
 
 `web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
-requires `image-generation` and a configured drawing model. The composer sends these selections on
-`submitMessage`; a successful send clears them, and they are never persisted on the Agent. System
-device and file capabilities have no Agent-specific switch. The inference snapshot records the
-tools that entered the immutable turn.
+requires `image-generation` and a configured drawing model. The composer snapshots its frontend
+Session cache for web search and its draft-local image selection on `submitMessage`. Neither is
+persisted on the Agent or Agent Session tables. System device and file capabilities have no
+Agent-specific switch. The inference snapshot records the tools that entered the immutable turn.
 
 The logical binding model is:
 

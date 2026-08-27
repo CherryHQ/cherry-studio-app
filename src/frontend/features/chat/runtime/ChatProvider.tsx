@@ -15,6 +15,7 @@ import { AppState } from 'react-native';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
+import { persistSessionWebSearchSelection } from '../sessionWebSearchSelection';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
 type AgentChatSendInput = {
@@ -97,6 +98,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
         const session = await client.createSession(agentId);
         targetSessionId = session.id;
+        persistSessionWebSearchSelection(
+          targetSessionId,
+          temporaryCapabilities?.includes('web-search') ?? false,
+        );
         await client.observe(targetSessionId);
         navigation.openSession(targetSessionId, agentId);
         await queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });

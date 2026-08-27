@@ -17,7 +17,7 @@ type ChatInputMenuItemsProps = {
  * composer takes them as a slot rather than knowing they exist.
  *
  * Image generation stays visible as a mention in the draft; web search is a
- * turn-only switch. Neither choice is persisted to Agent configuration.
+ * frontend Session setting. Neither choice is persisted to Agent configuration.
  */
 export function ChatInputMenuItems({
   isWebSearchEnabled,

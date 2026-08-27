@@ -60,9 +60,10 @@ protocol values.
 application (instructions, model, and MCP extensions). That configuration is live: before each
 turn, the Host resolves its current state and builds the Runtime execution request from it, so an
 application-level edit applies from the next turn. Shared system capabilities are not Agent
-configuration. The client may activate web search or image generation only for the submission that
-needs it. Configuration never selects a different local engine: `local` always means Pi. The client
-does not duplicate configuration or select an implementation.
+configuration. The frontend selects web search per Session and snapshots that selection into each
+submission, while image generation is selected by the submission that needs it. Configuration
+never selects a different local engine: `local` always means Pi. The client does not duplicate
+configuration or select an implementation.
 
 ### Turn
 
@@ -313,9 +314,10 @@ default instead of the Agent's configured effort.
 
 `temporaryCapabilities` is also turn-local and is never written to Agent configuration. The Host
 uses `web-search` to admit `web_search` and `web_fetch`, and `image-generation` to admit
-`generate_image` when its other system gates pass. Omitting the array admits neither temporary
-capability. The assistant's inference snapshot records the concrete tools that were frozen for the
-turn, so history does not depend on reconstructing composer state.
+`generate_image` when its other system gates pass. The frontend may retain web-search selection per
+Session and includes `web-search` on every submission while enabled. Omitting the array admits
+neither temporary capability. The assistant's inference snapshot records the concrete tools frozen
+for the turn, so history does not depend on reconstructing composer state.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
