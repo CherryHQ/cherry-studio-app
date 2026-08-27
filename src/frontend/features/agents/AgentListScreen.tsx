@@ -1,7 +1,7 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { ContentState, type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -10,9 +10,9 @@ import { type AccessibilityActionEvent, ScrollView, Text, View } from 'react-nat
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import { useAppSearch } from '@/frontend/components/appSearch';
 import { AgentAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
   areAllSelected,
@@ -26,7 +26,6 @@ import type { Agent } from '@/shared/data/types/agent';
 export default function AgentListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { open: openAppSearch } = useAppSearch();
   const { agents, error, isLoading, refetch } = useAgentsApi();
   const { deleteAgent, deleteAgents } = useAgentMutations();
   const { alert } = useAlert();
@@ -45,14 +44,27 @@ export default function AgentListScreen() {
         : agents.filter((agent) => !pendingDeletionIds.has(agent.id)),
     [agents, pendingDeletionIds],
   );
+  const {
+    isFiltering,
+    query,
+    results: listedAgents,
+    setQuery,
+  } = useInlineSearch({
+    fields: (agent: Agent) => [agent.name, agent.modelName],
+    items: visibleAgents,
+  });
 
   const enterEditing = useCallback(() => {
     if (isBatchDeleting) {
       return;
     }
 
+    // Selection acts on the whole list, and the search field is hidden while
+    // editing, so an active query would silently narrow what "select all"
+    // covers with nothing on screen to explain why.
+    setQuery('');
     setIsEditing(true);
-  }, [isBatchDeleting]);
+  }, [isBatchDeleting, setQuery]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
@@ -82,37 +94,6 @@ export default function AgentListScreen() {
     },
     [router],
   );
-  const openAgentChat = useCallback(
-    (agentId: string) => {
-      router.push({ pathname: '/', params: { agentId } });
-    },
-    [router],
-  );
-  const openAgentSearch = useCallback(() => {
-    void openAppSearch<Agent>({
-      emptyText: t('agent.list.noResults'),
-      getAccessibilityLabel: (agent) => agent.name,
-      keyExtractor: (agent) => agent.id,
-      placeholder: t('navigation.search'),
-      renderItem: (agent) => <AgentSearchResult agent={agent} />,
-      search: ({ query }) => {
-        const normalizedQuery = query.trim().toLocaleLowerCase();
-        const items = normalizedQuery
-          ? visibleAgents.filter((agent) =>
-              [agent.name, agent.modelName].some((value) =>
-                value?.toLocaleLowerCase().includes(normalizedQuery),
-              ),
-            )
-          : visibleAgents;
-
-        return { groups: [{ items, key: 'agents' }] };
-      },
-    }).then((outcome) => {
-      if (outcome.type === 'selected') {
-        openAgentChat(outcome.item.id);
-      }
-    });
-  }, [openAgentChat, openAppSearch, t, visibleAgents]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -121,27 +102,23 @@ export default function AgentListScreen() {
         onPress: openCreateAgent,
       },
       {
-        id: 'view-sessions',
-        label: t('agent.actions.viewSessions'),
-        onPress: openSessionList,
-      },
-      {
         disabled: visibleAgents.length === 0 || isBatchDeleting,
         id: 'select-agents',
         label: t('agent.selection.start'),
         onPress: enterEditing,
       },
     ],
-    [enterEditing, isBatchDeleting, openCreateAgent, openSessionList, t, visibleAgents.length],
+    [enterEditing, isBatchDeleting, openCreateAgent, t, visibleAgents.length],
   );
+  // Leading the overflow menu, so the two read as "history, then everything
+  // else" rather than burying the session list inside the menu.
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('navigation.search'),
-        disabled: visibleAgents.length === 0 || isBatchDeleting,
-        icon: SearchIcon,
-        key: 'search-agents',
-        onPress: openAgentSearch,
+        accessibilityLabel: t('agent.actions.viewSessions'),
+        icon: ClockIcon,
+        key: 'view-sessions',
+        onPress: openSessionList,
         type: 'icon',
       },
       {
@@ -152,7 +129,7 @@ export default function AgentListScreen() {
         type: 'menu',
       },
     ],
-    [isBatchDeleting, menuItems, openAgentSearch, t, visibleAgents.length],
+    [menuItems, openSessionList, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -222,6 +199,10 @@ export default function AgentListScreen() {
         rightActions={isEditing ? doneActions : rightActions}
         title={t('agent.list.title')}
       />
+      {/* Unmounting is what clears the field: iOS holds the text natively and
+          only reports it back, so leaving it mounted would keep a stale query
+          filtering rows that selection mode has no way to show. */}
+      {isEditing ? null : <InlineSearch onChangeText={setQuery} value={query} />}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -229,9 +210,9 @@ export default function AgentListScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {visibleAgents.length > 0 ? (
+        {listedAgents.length > 0 ? (
           <View>
-            {visibleAgents.map((agent) => (
+            {listedAgents.map((agent) => (
               <AgentListRow
                 key={agent.id}
                 agent={agent}
@@ -243,6 +224,8 @@ export default function AgentListScreen() {
               />
             ))}
           </View>
+        ) : isFiltering ? (
+          <ContentState.Empty className="px-8 py-16" title={t('agent.list.noResults')} />
         ) : isLoading ? (
           <ContentState.Loading className="px-8 py-16" title={t('agent.list.loading')} />
         ) : error ? (
@@ -283,24 +266,6 @@ export default function AgentListScreen() {
         />
       ) : null}
     </>
-  );
-}
-
-function AgentSearchResult({ agent }: { agent: Agent }) {
-  const { t } = useTranslation();
-
-  return (
-    <View className="min-h-12 flex-row items-center gap-3">
-      <AgentAvatar name={agent.name} uri={agent.avatarUri} />
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
-          {agent.name}
-        </Text>
-        <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-          {agent.modelName ?? t('agent.model.none')}
-        </Text>
-      </View>
-    </View>
   );
 }
 
