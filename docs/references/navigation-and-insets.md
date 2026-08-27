@@ -11,9 +11,11 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
+- The target priority and cancellation rules between system gestures, scrolling, app-defined pan,
+  long press, tap, and text selection are in
+  [Interaction And Gesture Arbitration](./interaction-and-gesture-arbitration.md) (`Status: design`).
 - Route-level sheets are reserved for page-like flows; no current route uses one. Every model
-  selection entry uses `ModelPickerDrawer`, whose search action uses the root native-stack
-  `/search` route.
+  selection entry uses `ModelPickerDrawer`, including its in-place search.
 
 ## Android Back Gesture
 
@@ -178,7 +180,9 @@ Current horizontal gestures, such as Session-row swipe actions, start inside con
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
-- Opening model selection from chat input keeps the picker sheet stable; its search action hands off
-  to app search without competing back handlers or an inset jump.
+- Opening model selection from chat input keeps the picker stable; focusing or clearing in-place
+  search changes the sheet size without a competing route, back handler, or inset jump.
 - Product horizontal gestures do not steal system edge back.
+- A scroll that begins on an interactive row does not also navigate, open a contextual menu, or
+  start native text selection.
 - Only screens with explicit product reasons use local back interception.
