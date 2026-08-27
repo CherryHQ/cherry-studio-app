@@ -2,7 +2,11 @@ import { MODALITY } from '@cherrystudio/provider-registry';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { UIMessage } from 'ai';
 
-import { resolveMediaCapabilities, stripUnsupportedMedia } from '../messageCapabilities';
+import {
+  resolveMediaCapabilities,
+  stripUnsupportedMedia,
+  unsupportedMediaNote,
+} from '../messageCapabilities';
 
 const model = (inputModalities: string[]): Model =>
   ({ capabilities: [], inputModalities }) as unknown as Model;
@@ -31,6 +35,13 @@ describe('resolveMediaCapabilities', () => {
 
 describe('stripUnsupportedMedia', () => {
   const noVision = { image: false, video: true, audio: true };
+
+  it('exposes the same omission note to non-UIMessage adapters', () => {
+    expect(unsupportedMediaNote('image/png', noVision)).toBe(
+      '[image attachment omitted: this model does not accept image input]',
+    );
+    expect(unsupportedMediaNote('image/png', { ...noVision, image: true })).toBeUndefined();
+  });
 
   it('replaces an image file part with a note when the model has no vision', () => {
     const [out] = stripUnsupportedMedia([fileMsg('image/png')], noVision);

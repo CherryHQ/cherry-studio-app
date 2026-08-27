@@ -1,3 +1,4 @@
+import { unsupportedMediaNote } from '@cherrystudio/ai-runtime/messages';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -50,6 +51,11 @@ export function toPiConversation(
   const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
   const providerNamesByCallId = collectProviderNames(request);
+  const mediaCapabilities = {
+    image: model.input.includes('image'),
+    video: false,
+    audio: false,
+  };
 
   for (const turn of request.history) {
     const historyTurn: PiHistoryTurn = { turnId: turn.turnId, messages: [] };
@@ -62,7 +68,7 @@ export function toPiConversation(
       if (message.role === 'user') {
         historyTurn.messages.push({
           role: 'user',
-          content: collectUserContent(message.parts),
+          content: collectUserContent(message.parts, mediaCapabilities),
           timestamp: Date.now(),
         });
         continue;
@@ -81,12 +87,19 @@ export function toPiConversation(
   return {
     history: historyTurns.flatMap((turn) => turn.messages),
     historyTurns,
-    prompt: { role: 'user', content: collectUserContent(request.input), timestamp: Date.now() },
+    prompt: {
+      role: 'user',
+      content: collectUserContent(request.input, mediaCapabilities),
+      timestamp: Date.now(),
+    },
     systemPrompt: systemParts.join('\n\n'),
   };
 }
 
-function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['content'] {
+function collectUserContent(
+  parts: readonly RuntimeMessagePart[],
+  mediaCapabilities: { image: boolean; video: boolean; audio: boolean },
+): UserMessage['content'] {
   const content = parts.flatMap<TextContent | ImageContent>((part) => {
     if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
@@ -95,6 +108,8 @@ function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['
       return [toPiTextAttachment(part)];
     }
     if (part.type === 'file') {
+      const note = unsupportedMediaNote(part.mediaType, mediaCapabilities);
+      if (note) return [{ type: 'text' as const, text: note }];
       return [toPiImage(part)];
     }
     return [];

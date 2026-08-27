@@ -950,6 +950,43 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('replaces current and historical images when the model accepts only text', async () => {
+    const runtime = createTestRuntime();
+    let prompt: PiMessage | undefined;
+    const arranged = arrange(runtime, async (context) => {
+      prompt = context.prompt;
+      await emitText(context, 'Continued without images.');
+    });
+    const session = await runtime.open();
+    const image = {
+      type: 'file' as const,
+      mediaType: 'image/png',
+      name: 'image.png',
+      uri: 'data:image/png;base64,AAAA',
+    };
+    const omitted = '[image attachment omitted: this model does not accept image input]';
+
+    const events = await collect(
+      session.execute(
+        baseRequest('turn-text-only-images', {
+          history: [{ turnId: 'turn-with-image', messages: [{ role: 'user', parts: [image] }] }],
+          input: [{ type: 'text', text: 'Continue.' }, image],
+        }),
+      ),
+    );
+
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(arranged.lastOptions?.initialState?.messages).toEqual([
+      { role: 'user', content: omitted, timestamp: expect.any(Number) },
+    ]);
+    expect(prompt).toEqual({
+      role: 'user',
+      content: `Continue.\n${omitted}`,
+      timestamp: expect.any(Number),
+    });
+    await session.close();
+  });
+
   test('preflights and maps current and historical inline images without retaining data URLs', async () => {
     const runtime = createTestRuntime();
     const holder = holders.get(runtime);
