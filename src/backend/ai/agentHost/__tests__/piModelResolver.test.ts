@@ -108,6 +108,11 @@ describe('Pi model resolver', () => {
       provider: 'test-provider',
       reasoning: true,
     });
+    expect(resolution.model.compat).toEqual(
+      testCase.api === 'openai-completions' || testCase.api === 'openai-responses'
+        ? { supportsDeveloperRole: false }
+        : undefined,
+    );
     expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');

@@ -50,7 +50,6 @@ export default openaiCompatible({
   },
   apiFeatures: {
     arrayContent: false,
-    developerRole: false,
   },
   overrides: [
     {

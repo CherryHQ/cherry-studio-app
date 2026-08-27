@@ -223,7 +223,6 @@ function provider(input: { id: string; presetProviderId?: string }): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
-      developerRole: true,
       serviceTier: true,
       streamOptions: true,
       verbosity: false,

@@ -338,6 +338,7 @@
   "settings.mcp.fields.name": "名称",
   "settings.mcp.list.loadFailed": "加载 MCP 服务器失败。",
   "settings.mcp.list.loading": "正在加载 MCP 服务器……",
+  "settings.mcp.list.noResults": "没有匹配的 MCP 服务器",
   "settings.mcp.list.status.connected": "已开启",
   "settings.mcp.list.status.connecting": "连接中",
   "settings.mcp.list.status.disabled": "已停用",

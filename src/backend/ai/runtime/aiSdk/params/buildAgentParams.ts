@@ -20,6 +20,7 @@ import {
   ENDPOINT_TYPE,
   endpointImpliedCapability,
   MODEL_CAPABILITY,
+  type EndpointType,
 } from '@cherrystudio/provider-registry';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
@@ -149,11 +150,15 @@ export async function buildAgentParams({
     request.callOverrides,
     model,
   );
-  const effectiveProviderOptions = applyFastModeToProviderOptions(
-    provider,
-    model,
-    overridden.providerOptions,
-    request.fastMode === true,
+  const effectiveProviderOptions = enforceSystemInstructionRole(
+    applyFastModeToProviderOptions(
+      provider,
+      model,
+      overridden.providerOptions,
+      request.fastMode === true,
+    ),
+    endpointType,
+    providerOptionsKey,
   );
 
   return {
@@ -180,6 +185,28 @@ export async function buildAgentParams({
       ...(tools && {
         stopWhen: [createToolCallLimitStopCondition(20), stopOnTerminalToolFailure],
       }),
+    },
+  };
+}
+
+/** Native OpenAI adapters otherwise promote reasoning-model instructions to `developer`. */
+function enforceSystemInstructionRole(
+  providerOptions: ProviderOptions,
+  endpointType: EndpointType | undefined,
+  providerOptionsKey: string,
+): ProviderOptions {
+  const isOpenAIInstructionEndpoint =
+    endpointType === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS ||
+    endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES;
+  if (!isOpenAIInstructionEndpoint || providerOptionsKey !== 'openai') {
+    return providerOptions;
+  }
+
+  return {
+    ...providerOptions,
+    openai: {
+      ...providerOptions.openai,
+      systemMessageMode: 'system',
     },
   };
 }

@@ -297,7 +297,6 @@ function createProvider(id: string): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
-      developerRole: false,
       reportsActualCost: false,
       serviceTier: false,
       streamOptions: true,

@@ -67,7 +67,6 @@ function createProvider(overrides: Partial<Provider> = {}): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
-      developerRole: true,
       serviceTier: true,
       streamOptions: true,
       verbosity: false,

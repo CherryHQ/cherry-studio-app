@@ -27,8 +27,6 @@ export const ApiFeaturesSchema = z.object({
 
   // --- Provider-specific parameter flags ---
 
-  /** Whether the provider supports the 'developer' role (OpenAI-specific) */
-  developerRole: z.boolean().default(false),
   /** Whether the provider supports service tier selection (OpenAI/Groq-specific) */
   serviceTier: z.boolean().default(false),
   /** Whether the provider supports verbosity settings (OpenAI-specific) */

@@ -91,6 +91,12 @@ timeouts, retries, and caller-supplied tools. It owns no conversation persistenc
 lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
 resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
 
+Mobile sends application instructions with the `system` role on OpenAI Chat Completions and OpenAI
+Responses endpoints. The Pi bridge disables its URL/model-based developer-role inference, and the
+native OpenAI AI SDK bridge sets `providerOptions.openai.systemMessageMode` to `system` after request
+overrides are merged. Generic OpenAI-compatible adapters already preserve system messages. This is
+a runtime-wide compatibility policy rather than a provider or model capability.
+
 ## Special Providers
 
 CherryAI:
