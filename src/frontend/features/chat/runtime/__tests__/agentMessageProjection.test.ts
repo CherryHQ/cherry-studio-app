@@ -29,6 +29,14 @@ describe('agentMessageProjection', () => {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (403): access denied',
               retryable: false,
+              failure: {
+                version: 1,
+                reasonCode: 'permission',
+                message: 'OpenAI API error (403): access denied',
+                retryable: false,
+                source: { layer: 'provider', code: 'access_denied' },
+                context: { statusCode: 403, providerId: 'openai', modelId: 'gpt-test' },
+              },
             },
             id: 'error-1',
             type: 'error',
@@ -45,12 +53,46 @@ describe('agentMessageProjection', () => {
             data: {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (403): access denied',
+              reasonCode: 'permission',
+              retryable: false,
+              source: { layer: 'provider', code: 'access_denied' },
+              context: { statusCode: 403, providerId: 'openai', modelId: 'gpt-test' },
             },
             type: 'data-error',
           },
         ],
       },
       status: 'error',
+    });
+  });
+
+  test('classifies historical flattened errors from their retained message', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-legacy-error', {
+        parts: [
+          {
+            error: {
+              code: 'EXECUTION_FAILED',
+              message: 'OpenAI API error (429): too many requests',
+              retryable: true,
+            },
+            id: 'error-legacy',
+            type: 'error',
+          },
+        ],
+        status: 'error',
+      }),
+    );
+
+    expect(item).toMatchObject({
+      data: {
+        parts: [
+          {
+            data: { reasonCode: 'rate_limit', retryable: true },
+            type: 'data-error',
+          },
+        ],
+      },
     });
   });
 

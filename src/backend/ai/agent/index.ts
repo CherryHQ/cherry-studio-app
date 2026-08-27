@@ -7,6 +7,7 @@ export type {
   RuntimeContextCheckpoint,
   RuntimeDescriptor,
   RuntimeError,
+  RuntimeErrorContext,
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeHistoryTurn,

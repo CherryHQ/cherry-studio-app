@@ -6,8 +6,8 @@
  * validated at this boundary (invariant 9: every protocol value survives a
  * JSON round trip and re-validates against its schema). Subscription callbacks
  * and unsubscribe handles are process-local transport mechanics, not protocol
- * data. Runtime ids and Pi/AI SDK implementation details never appear in
- * protocol values.
+ * data. Runtime objects and provider SDK payloads never appear in protocol
+ * values; failure snapshots retain only allowlisted source identity strings.
  *
  * Types are inferred from the zod schemas so the validated shape and the
  * static shape cannot drift.
@@ -132,24 +132,83 @@ export const AgentSessionViewSchema = z.strictObject({
 });
 export type AgentSessionView = z.infer<typeof AgentSessionViewSchema>;
 
-export const AgentErrorViewSchema = z.strictObject({
-  code: z.enum([
-    'AGENT_NOT_FOUND',
-    'SESSION_NOT_FOUND',
-    'SESSION_BUSY',
-    'CAPABILITY_UNSUPPORTED',
-    'ATTACHMENT_INVALID',
-    'ATTACHMENT_UNAVAILABLE',
-    'ATTACHMENT_METADATA_MISMATCH',
-    'APPROVAL_NOT_FOUND',
-    'EXECUTION_UNAVAILABLE',
-    'EXECUTION_FAILED',
-    'CANCELLED',
-    'INTERRUPTED',
-  ]),
-  message: z.string(),
+export const AgentFailureReasonSchema = z.enum([
+  'auth',
+  'permission',
+  'region',
+  'model_not_found',
+  'quota',
+  'rate_limit',
+  'context_length',
+  'payload_too_large',
+  'network',
+  'proxy_tls',
+  'stream_interrupted',
+  'content_filter',
+  'provider_unavailable',
+  'timeout',
+  'invalid_input',
+  'tool_limit',
+  'tool_failed',
+  'mcp',
+  'parse',
+  'internal',
+  'unknown',
+]);
+export type AgentFailureReason = z.infer<typeof AgentFailureReasonSchema>;
+
+export const AgentFailureSnapshotSchema = z.strictObject({
+  version: z.literal(1),
+  reasonCode: AgentFailureReasonSchema,
+  message: z.string().max(4_000),
   retryable: z.boolean(),
+  source: z.strictObject({
+    layer: z.enum(['provider', 'runtime', 'host', 'tool']),
+    name: z.string().max(256).optional(),
+    code: z.string().max(128).optional(),
+  }),
+  context: z
+    .strictObject({
+      statusCode: z.number().int().min(100).max(599).optional(),
+      providerId: z.string().max(256).optional(),
+      modelId: z.string().max(256).optional(),
+      finishReason: z.string().max(256).optional(),
+      responseBody: z.string().max(4_000).optional(),
+    })
+    .optional(),
 });
+export type AgentFailureSnapshot = z.infer<typeof AgentFailureSnapshotSchema>;
+
+export const AgentErrorViewSchema = z
+  .strictObject({
+    code: z.enum([
+      'AGENT_NOT_FOUND',
+      'SESSION_NOT_FOUND',
+      'SESSION_BUSY',
+      'CAPABILITY_UNSUPPORTED',
+      'ATTACHMENT_INVALID',
+      'ATTACHMENT_UNAVAILABLE',
+      'ATTACHMENT_METADATA_MISMATCH',
+      'APPROVAL_NOT_FOUND',
+      'EXECUTION_UNAVAILABLE',
+      'EXECUTION_FAILED',
+      'CANCELLED',
+      'INTERRUPTED',
+    ]),
+    message: z.string(),
+    retryable: z.boolean(),
+    /** Present on newly persisted execution failures; optional for historical rows. */
+    failure: AgentFailureSnapshotSchema.optional(),
+  })
+  .superRefine((error, context) => {
+    if (error.failure !== undefined && error.code !== 'EXECUTION_FAILED') {
+      context.addIssue({
+        code: 'custom',
+        message: 'Only EXECUTION_FAILED may carry an execution failure snapshot.',
+        path: ['failure'],
+      });
+    }
+  });
 export type AgentErrorView = z.infer<typeof AgentErrorViewSchema>;
 
 /** One submitted user input creates one turn and one assistant response. */

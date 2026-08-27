@@ -450,6 +450,15 @@ type RuntimeError = {
   code: string
   message: string
   retryable: boolean
+  origin?: 'provider' | 'runtime' | 'host' | 'tool'
+  name?: string
+  context?: {
+    statusCode?: number
+    providerId?: string
+    modelId?: string
+    finishReason?: string
+    responseBody?: string
+  }
 }
 ```
 
@@ -458,7 +467,9 @@ terminal event, the Runtime settles every live tool part: denial includes the ca
 output envelope, tool failure includes a normalized error result envelope, and cancellation replaces
 unfinished tool parts with `interrupted` and a normalized result envelope. No event may follow the
 terminal event. Runtime-native errors are normalized and must not expose credentials or stack
-traces.
+traces. `code` and `name` retain the source identity when it is available; `context` is an
+allowlisted, bounded snapshot. Messages and response bodies are credential-redacted before they
+cross the Runtime boundary. Request bodies, URLs, headers, and stacks are never included.
 
 A `context.checkpoint` event is non-terminal. The Host retains only the latest valid candidate from
 the active execution and commits it atomically with a successful assistant terminal result. Failed,

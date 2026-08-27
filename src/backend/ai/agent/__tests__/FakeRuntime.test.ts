@@ -332,6 +332,35 @@ async function collect(stream: AsyncIterable<RuntimeEvent>): Promise<RuntimeEven
 }
 
 describe('FakeRuntime scripting', () => {
+  test('preserves allowlisted fields from an explicitly normalized Runtime error', async () => {
+    const runtime = new FakeRuntime().script(() => {
+      throw {
+        code: 'rate_limit_error',
+        message: 'Too many requests.',
+        retryable: true,
+        origin: 'provider',
+        name: 'AI_APICallError',
+        context: { statusCode: 429, providerId: 'openai', modelId: 'gpt-test' },
+      };
+    });
+    const session = await runtime.open();
+
+    await expect(collect(session.execute(baseRequest('turn-rich-error')))).resolves.toEqual([
+      {
+        type: 'failed',
+        error: {
+          code: 'rate_limit_error',
+          message: 'Too many requests.',
+          retryable: true,
+          origin: 'provider',
+          name: 'AI_APICallError',
+          context: { statusCode: 429, providerId: 'openai', modelId: 'gpt-test' },
+        },
+      },
+    ]);
+    await session.close();
+  });
+
   test('rejects structured text attachments when attachment capability is disabled', async () => {
     const runtime = new FakeRuntime({ descriptor: CONFORMANCE_CAPABILITIES });
     const session = await runtime.open();

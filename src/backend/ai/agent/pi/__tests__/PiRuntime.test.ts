@@ -1008,6 +1008,22 @@ describe('PiRuntime mapping', () => {
       const failed = assistantMessage({
         errorMessage: `OpenAI API error (403): access denied for ${ERROR_SECRET}`,
         stopReason: 'error',
+        diagnostics: [
+          {
+            type: 'provider_response_failure',
+            timestamp: 1,
+            error: {
+              name: 'AI_APICallError',
+              message: 'access denied',
+              code: 'access_denied',
+              stack: `provider stack containing ${ERROR_SECRET}`,
+            },
+            details: {
+              status: 403,
+              body: `{"api_key":"unregistered-secret","error":"${ERROR_SECRET}"}`,
+            },
+          },
+        ],
       });
       await context.emit({ type: 'turn_end', message: failed, toolResults: [] });
     });
@@ -1018,18 +1034,36 @@ describe('PiRuntime mapping', () => {
     expect(events.at(-1)).toEqual({
       type: 'failed',
       error: {
-        code: 'runtime_error',
+        code: 'access_denied',
         message: 'OpenAI API error (403): access denied for [REDACTED]',
         retryable: false,
+        origin: 'provider',
+        name: 'AI_APICallError',
+        context: {
+          statusCode: 403,
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          responseBody: '{"api_key":"[REDACTED]","error":"[REDACTED]"}',
+        },
       },
     });
+    expect(JSON.stringify(events)).not.toContain(ERROR_SECRET);
+    expect(JSON.stringify(events)).not.toContain('unregistered-secret');
+    expect(JSON.stringify(events)).not.toContain('provider stack');
     await session.close();
   });
 
-  test('surfaces thrown runtime errors without stack traces', async () => {
+  test('preserves allowlisted provider error facts without stack traces or credentials', async () => {
     const runtime = createTestRuntime();
     arrange(runtime, () => {
-      throw new Error('Provider configuration is unsupported.');
+      throw Object.assign(new Error(`Provider call failed for ${ERROR_SECRET}.`), {
+        name: 'AI_APICallError',
+        code: 'provider_unavailable',
+        statusCode: 503,
+        responseBody: `{"api_key":"unregistered-secret","detail":"credential=${ERROR_SECRET}"}`,
+        finishReason: 'error',
+        isRetryable: true,
+      });
     });
     const session = await runtime.open();
 
@@ -1038,11 +1072,22 @@ describe('PiRuntime mapping', () => {
     expect(events.at(-1)).toEqual({
       type: 'failed',
       error: {
-        code: 'runtime_error',
-        message: 'Provider configuration is unsupported.',
-        retryable: false,
+        code: 'provider_unavailable',
+        message: 'Provider call failed for [REDACTED].',
+        retryable: true,
+        origin: 'provider',
+        name: 'AI_APICallError',
+        context: {
+          statusCode: 503,
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          finishReason: 'error',
+          responseBody: '{"api_key":"[REDACTED]","detail":"credential=[REDACTED]"}',
+        },
       },
     });
+    expect(JSON.stringify(events)).not.toContain(ERROR_SECRET);
+    expect(JSON.stringify(events)).not.toContain('unregistered-secret');
     await session.close();
   });
 
@@ -1595,6 +1640,7 @@ describe('PiRuntime mapping', () => {
         code: 'tool_call_limit_exceeded',
         message: 'The turn reached its tool call limit.',
         retryable: false,
+        origin: 'runtime',
       },
     });
     expect(
@@ -1648,6 +1694,7 @@ describe('PiRuntime mapping', () => {
         code: 'tool_step_limit_exceeded',
         message: 'The turn reached its tool loop step limit.',
         retryable: false,
+        origin: 'runtime',
       },
     });
     await session.close();
@@ -1671,7 +1718,12 @@ describe('PiRuntime mapping', () => {
     expect(events).toEqual([
       {
         type: 'failed',
-        error: { code: 'turn_timeout', message: 'The Agent turn timed out.', retryable: true },
+        error: {
+          code: 'turn_timeout',
+          message: 'The Agent turn timed out.',
+          retryable: true,
+          origin: 'runtime',
+        },
       },
     ]);
     expect(agentSignal?.aborted).toBe(true);

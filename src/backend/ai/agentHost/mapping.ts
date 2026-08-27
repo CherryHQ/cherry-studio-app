@@ -16,6 +16,7 @@ import {
   type RuntimeUsage,
 } from '@/backend/ai/agent';
 import {
+  AgentFailureSnapshotSchema,
   AgentApprovalViewSchema,
   AgentMessagePartSchema,
   AgentToolResultSchema,
@@ -26,21 +27,78 @@ import {
   type AgentMessageView,
   type AgentUsageView,
 } from '@/shared/contracts/agent';
+import { classifyAgentFailureReason } from '@/shared/utils/agentFailure';
 
 import type { TurnResourceLedger } from './managedFileResolver';
 
 export type RuntimeAttachmentContents = ReadonlyMap<string, RuntimeInputPart>;
 
+const MAX_ERROR_CODE_CHARS = 128;
+const MAX_ERROR_MESSAGE_CHARS = 4_000;
+const MAX_ERROR_CONTEXT_CHARS = 4_000;
+
+function bounded(value: string, maxChars: number): string {
+  const trimmed = value.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars - 1)}…` : trimmed;
+}
+
+function boundedOptional(value: string | undefined, maxChars: number): string | undefined {
+  if (value === undefined) return undefined;
+  return bounded(value, maxChars) || undefined;
+}
+
 /**
- * Runtime error codes are implementation-scoped strings; the protocol enum is
- * closed. Every runtime failure surfaces as EXECUTION_FAILED with the
- * normalized (already secret-free) runtime message.
+ * Keep the closed protocol error code as the transport envelope while
+ * preserving the Runtime/Provider identity in a versioned, JSON-safe snapshot.
  */
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
+  const code = bounded(error.code, MAX_ERROR_CODE_CHARS) || 'runtime_error';
+  const message = bounded(error.message, MAX_ERROR_MESSAGE_CHARS) || 'The Agent turn failed.';
+  const rawStatusCode = error.context?.statusCode;
+  const statusCode =
+    typeof rawStatusCode === 'number' &&
+    Number.isSafeInteger(rawStatusCode) &&
+    rawStatusCode >= 100 &&
+    rawStatusCode <= 599
+      ? rawStatusCode
+      : undefined;
+  const providerId = boundedOptional(error.context?.providerId, 256);
+  const modelId = boundedOptional(error.context?.modelId, 256);
+  const finishReason = boundedOptional(error.context?.finishReason, 256);
+  const responseBody = boundedOptional(error.context?.responseBody, MAX_ERROR_CONTEXT_CHARS);
+  const context = {
+    ...(statusCode !== undefined ? { statusCode } : {}),
+    ...(providerId !== undefined ? { providerId } : {}),
+    ...(modelId !== undefined ? { modelId } : {}),
+    ...(finishReason !== undefined ? { finishReason } : {}),
+    ...(responseBody !== undefined ? { responseBody } : {}),
+  };
+  const name = boundedOptional(error.name, 256);
+  const failure = AgentFailureSnapshotSchema.parse({
+    version: 1,
+    reasonCode: classifyAgentFailureReason({
+      code,
+      message,
+      ...(name !== undefined ? { name } : {}),
+      ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(finishReason !== undefined ? { finishReason } : {}),
+      ...(responseBody !== undefined ? { responseBody } : {}),
+    }),
+    message,
+    retryable: error.retryable,
+    source: {
+      layer: error.origin ?? 'runtime',
+      code,
+      ...(name !== undefined ? { name } : {}),
+    },
+    ...(Object.keys(context).length > 0 ? { context } : {}),
+  });
+
   return {
     code: 'EXECUTION_FAILED',
-    message: error.message,
+    message,
     retryable: error.retryable,
+    failure,
   };
 }
 

@@ -695,22 +695,35 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }
       }
       // Defensive: a conforming runtime always emits a terminal event.
-      await this.finalize(sessionId, state, 'failed', {
-        code: 'EXECUTION_FAILED',
-        message: 'The runtime ended without a terminal event.',
-        retryable: false,
-      });
+      await this.finalize(
+        sessionId,
+        state,
+        'failed',
+        toAgentErrorView({
+          code: 'missing_terminal_event',
+          message: 'The runtime ended without a terminal event.',
+          retryable: false,
+          origin: 'host',
+        }),
+      );
     } catch (error) {
       if (state.abortController.signal.aborted) {
         await this.finalize(sessionId, state, 'cancelled', null).catch(() => undefined);
         return;
       }
       logger.error('Agent turn failed outside the runtime event stream', error as Error);
-      await this.finalize(sessionId, state, 'failed', {
-        code: 'EXECUTION_FAILED',
-        message: 'The turn failed unexpectedly.',
-        retryable: false,
-      }).catch(() => undefined);
+      await this.finalize(
+        sessionId,
+        state,
+        'failed',
+        toAgentErrorView({
+          code: 'host_error',
+          message: 'The turn failed unexpectedly.',
+          retryable: false,
+          origin: 'host',
+          ...(error instanceof Error ? { name: error.name } : {}),
+        }),
+      ).catch(() => undefined);
     }
   }
 
@@ -869,6 +882,23 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
     if (this.activeTurns.get(sessionId) === state) {
       this.activeTurns.delete(sessionId);
+    }
+    if (outcome === 'failed' && error) {
+      logger.error('Agent turn reached a failed terminal state', {
+        assistantMessageId: finalized.id,
+        durationMs: Math.max(0, Date.parse(finalized.updatedAt) - Date.parse(state.turn.startedAt)),
+        hasUsage: state.usage !== null,
+        modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
+        providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,
+        reasonCode: error.failure?.reasonCode ?? 'unknown',
+        retryable: error.retryable,
+        sessionId,
+        sourceCode: error.failure?.source.code,
+        sourceLayer: error.failure?.source.layer,
+        statusCode: error.failure?.context?.statusCode,
+        totalTokens: state.usage?.usage.totalTokens,
+        turnId: state.turn.id,
+      });
     }
     if (state.usage) {
       this.usage.record({
