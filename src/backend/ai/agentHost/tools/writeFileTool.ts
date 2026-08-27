@@ -69,7 +69,7 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.
     approval: 'auto',
-    async execute(input) {
+    async execute({ input, signal }) {
       const parsed = writeFileInputSchema.safeParse(input);
       if (!parsed.success) {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
@@ -89,6 +89,8 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
         );
       }
 
+      // A cancelled turn must not add entries to the library.
+      signal.throwIfAborted();
       const entry = await files.createTextEntry({
         data: parsed.data.content,
         mediaType: mediaTypeForFilename(filename),

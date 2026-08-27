@@ -46,14 +46,12 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_SEARCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webSearchInputSchema),
       approval: 'auto',
-      execute: async (input, context) => {
+      execute: async ({ input, signal }) => {
         const parsed = webSearchInputSchema.safeParse(input);
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
-        return webLookupToolResult(
-          await searchWeb(deps.webSearch, parsed.data.query, context.signal),
-        );
+        return webLookupToolResult(await searchWeb(deps.webSearch, parsed.data.query, signal));
       },
     },
     {
@@ -63,14 +61,12 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_FETCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webFetchInputSchema),
       approval: 'auto',
-      execute: async (input, context) => {
+      execute: async ({ input, signal }) => {
         const parsed = webFetchInputSchema.safeParse(input);
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
-        return webLookupToolResult(
-          await fetchWeb(deps.webSearch, parsed.data.urls, context.signal),
-        );
+        return webLookupToolResult(await fetchWeb(deps.webSearch, parsed.data.urls, signal));
       },
     },
   ];

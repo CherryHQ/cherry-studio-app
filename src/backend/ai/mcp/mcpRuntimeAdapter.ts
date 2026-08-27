@@ -5,6 +5,7 @@ import type {
   RuntimeError,
   RuntimeJsonValue,
   RuntimeTool,
+  RuntimeToolCall,
   RuntimeToolRef,
 } from '@/backend/ai/agent';
 
@@ -23,6 +24,14 @@ export type McpExecutableToolDescriptor = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /**
+   * The endpoint this catalog was discovered against. Execution is pinned to
+   * it: editing the server row must fail the frozen tool as unavailable, never
+   * silently retarget the approved call to a new remote authority.
+   */
+  endpointUrl: string;
+  /** Monotonic identity of the live catalog that produced this descriptor. */
+  generation: number;
 };
 
 export type McpRuntimeToolSelection = {
@@ -35,6 +44,8 @@ export type McpToolInvocationCapability = {
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
+    discoveredEndpointUrl: string,
+    discoveredGeneration: number,
   ): Promise<unknown>;
 };
 
@@ -112,7 +123,13 @@ export function createMcpRuntimeTools(
   const invoke = capability.invoke.bind(capability);
 
   return selections.map(({ approval, descriptor }) => {
-    if (!descriptor.serverId || !descriptor.rawToolName) {
+    if (
+      !descriptor.serverId ||
+      !descriptor.rawToolName ||
+      !descriptor.endpointUrl ||
+      !Number.isSafeInteger(descriptor.generation) ||
+      descriptor.generation < 0
+    ) {
       throw new McpRuntimeToolError(
         'mcp_tool_unavailable',
         'The MCP tool catalog contains an invalid tool identity.',
@@ -145,13 +162,15 @@ export function createMcpRuntimeTools(
     providerNames.add(providerName);
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
+    const endpointUrl = descriptor.endpointUrl;
+    const generation = descriptor.generation;
 
     return {
       approval,
       description: descriptor.description,
       displayName: descriptor.displayName,
-      execute: (input, context) =>
-        executeMcpRuntimeTool({ context, input, inputValidator, invoke, ref }),
+      execute: (call) =>
+        executeMcpRuntimeTool({ call, endpointUrl, generation, inputValidator, invoke, ref }),
       inputSchema,
       providerName,
       ref,
@@ -160,16 +179,18 @@ export function createMcpRuntimeTools(
 }
 
 async function executeMcpRuntimeTool(input: {
-  context: { signal: AbortSignal; toolCallId: string };
-  input: RuntimeJsonValue;
+  call: RuntimeToolCall;
+  endpointUrl: string;
+  generation: number;
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];
   ref: Extract<RuntimeToolRef, { source: 'mcp' }>;
 }) {
-  if (input.context.signal.aborted) {
+  const { call } = input;
+  if (call.signal.aborted) {
     throw cancelledError();
   }
-  if (!input.inputValidator.safeParse(input.input).success) {
+  if (!input.inputValidator.safeParse(call.input).success) {
     throw new McpRuntimeToolError(
       'mcp_tool_input_invalid',
       'The MCP tool input did not match its JSON Schema.',
@@ -177,16 +198,16 @@ async function executeMcpRuntimeTool(input: {
     );
   }
 
-  const bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, input.context.signal);
+  const bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
   try {
     const remoteResult = await settleOrAbort(
-      input.invoke(input.ref, input.input, bound.signal),
+      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation),
       bound.signal,
     );
     if (bound.didTimeout()) {
       throw timeoutError();
     }
-    if (input.context.signal.aborted) {
+    if (call.signal.aborted) {
       throw cancelledError();
     }
 
@@ -195,7 +216,7 @@ async function executeMcpRuntimeTool(input: {
     if (bound.didTimeout()) {
       throw timeoutError();
     }
-    if (input.context.signal.aborted) {
+    if (call.signal.aborted) {
       throw cancelledError();
     }
     if (error instanceof McpRuntimeToolError) {

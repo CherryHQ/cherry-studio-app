@@ -142,6 +142,22 @@ describe('writeFileTool', () => {
     ).rejects.toThrow('disk full');
   });
 
+  test('does not start a write after the turn is cancelled', async () => {
+    const files = createFilesPort();
+    const tool = createWriteFileTool(files);
+    const controller = new AbortController();
+    controller.abort(new Error('turn cancelled'));
+
+    await expect(
+      tool.execute({
+        input: { content: 'late', filename: 'late.txt' },
+        signal: controller.signal,
+        toolCallId: 'call-1',
+      }),
+    ).rejects.toThrow('turn cancelled');
+    expect(files.createTextEntry).not.toHaveBeenCalled();
+  });
+
   test('exposes a portable JSON Schema that forbids extra keys', () => {
     const { inputSchema } = createWriteFileTool(createFilesPort());
 
@@ -176,8 +192,5 @@ function execute(
   tool: ReturnType<typeof createWriteFileTool>,
   input: RuntimeJsonValue,
 ): Promise<RuntimeToolResult> {
-  return tool.execute(input, {
-    signal: new AbortController().signal,
-    toolCallId: 'call-1',
-  });
+  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
 }

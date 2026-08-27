@@ -2,6 +2,7 @@ import { serviceList, services } from '@/backend/core/application/serviceRegistr
 import {
   getAppStatePolicy,
   getDependencies,
+  getPhase,
   getServiceName,
   isInjectable,
 } from '@/backend/core/lifecycle/decorators';
@@ -86,6 +87,28 @@ describe('service registry', () => {
     expect(layerOf('CacheService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('CacheService')).toBeLessThan(layerOf('DbService'));
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
+  });
+
+  test('stops MobileAgentHost before retiring tool Runtime state', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.PostReady),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+    const hostDependencies = getDependencies(services.MobileAgentHost);
+
+    expect(hostDependencies).toEqual(
+      expect.arrayContaining(['McpRuntimeService', 'WebSearchService']),
+    );
+
+    // MCP and the Host share PostReady, so their dependency layers carry the
+    // ordering. WebSearch is a Gate service: the phase boundary initializes it
+    // before every PostReady service, and global teardown reverses that order.
+    expect(layerOf('McpRuntimeService')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('McpRuntimeService')).toBeLessThan(layerOf('MobileAgentHost'));
+    expect(getPhase(services.WebSearchService)).toBe(Phase.Gate);
+    expect(getPhase(services.MobileAgentHost)).toBe(Phase.PostReady);
   });
 
   test('declares the background policy of long-running and native-surface owners', () => {

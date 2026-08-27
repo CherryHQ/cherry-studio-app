@@ -1,15 +1,26 @@
 import type { RuntimeModel, RuntimeTool } from '@/backend/ai/agent';
+import { fileContent } from '@/backend/services/file/fileContent';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import type { TurnToolResources } from '../../managedFileResolver';
 import { type BuiltInToolSourceDependencies, createBuiltInToolSource } from '../builtInToolSource';
 import type { ConfiguredPaintingModel } from '../painting';
 
 const AGENT_ID = '00000000-0000-7000-8000-0000000000a1';
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
+const TURN_RESOURCES: TurnToolResources = {
+  fileEntryIds: new Set<string>(),
+  grantFile: () => undefined,
+};
 
 describe('createBuiltInToolSource', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
@@ -118,9 +129,9 @@ describe('createBuiltInToolSource', () => {
 
     // The Host turns this into a tool-less turn rather than one authorized by
     // catalog defaults the user may have overridden.
-    await expect(source.getTools({ agentId: AGENT_ID, model: MODEL })).rejects.toThrow(
-      'database unavailable',
-    );
+    await expect(
+      source.getTools({ agentId: AGENT_ID, model: MODEL, resources: TURN_RESOURCES }),
+    ).rejects.toThrow('database unavailable');
   });
 
   test('describes every tool with a stable built-in ref and JSON Schema input', async () => {
@@ -140,6 +151,36 @@ describe('createBuiltInToolSource', () => {
       expect(tool.inputSchema).not.toHaveProperty('$schema');
     }
   });
+
+  test('grants a created artifact before returning the built-in tool result', async () => {
+    const entry = FileEntrySchema.parse({
+      createdAt: 1,
+      filename: 'report.txt',
+      id: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'text/plain',
+      size: 6,
+      updatedAt: 1,
+    });
+    jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
+    const grantFile = jest.fn();
+    const resources: TurnToolResources = { fileEntryIds: new Set(), grantFile };
+    const source = createBuiltInToolSource(dependencies({}));
+    const tools = await source.getTools({ agentId: AGENT_ID, model: MODEL, resources });
+    const writeFile = tools.find((tool) => tool.providerName === 'write_file');
+    if (!writeFile) throw new Error('write_file was not available.');
+
+    const result = await writeFile.execute({
+      input: { content: 'report', filename: 'report.txt' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+    });
+
+    expect(grantFile).toHaveBeenCalledWith(entry.id);
+    expect(result.artifacts[0]?.ref).toEqual({
+      kind: 'managed-file',
+      fileEntryId: entry.id,
+    });
+  });
 });
 
 type Scenario = {
@@ -158,7 +199,7 @@ async function resolve(
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
-  return source.getTools({ agentId: AGENT_ID, model: MODEL });
+  return source.getTools({ agentId: AGENT_ID, model: MODEL, resources: TURN_RESOURCES });
 }
 
 function dependencies(scenario: Scenario): Partial<BuiltInToolSourceDependencies> {

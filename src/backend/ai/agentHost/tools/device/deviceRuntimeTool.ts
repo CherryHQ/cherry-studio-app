@@ -59,7 +59,7 @@ export function createDeviceRuntimeTool<TSchema extends z.ZodType>(
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor a tool declares for itself.
     approval: 'ask',
-    async execute(rawInput, context) {
+    async execute({ input: rawInput, signal }) {
       const parsed = input.inputSchema.safeParse(rawInput);
       if (!parsed.success) {
         // The model wrote this call, so it is the one that can fix it.
@@ -74,13 +74,13 @@ export function createDeviceRuntimeTool<TSchema extends z.ZodType>(
       }
 
       try {
-        throwIfAborted(context.signal);
+        throwIfAborted(signal);
         await assertPermissions(input.deps, input.permissionScopes, input.capabilityId);
-        const value = await input.run(parsed.data, context.signal);
-        throwIfAborted(context.signal);
+        const value = await input.run(parsed.data, signal);
+        throwIfAborted(signal);
         return { value: (value ?? null) as RuntimeJsonValue, artifacts: [] };
       } catch (error) {
-        if (context.signal.aborted || isAbortError(error)) {
+        if (signal.aborted || isAbortError(error)) {
           throw error;
         }
         const message = error instanceof Error ? error.message : String(error);

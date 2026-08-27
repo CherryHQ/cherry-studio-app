@@ -12,7 +12,9 @@ import {
   type RuntimeUsageContext,
 } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
+import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -69,7 +71,9 @@ const FAKE_DESCRIPTOR = {
 } as const;
 
 const unusedAiService = {} as AiService;
+const unusedMcpRuntime = {} as McpRuntimeService;
 const unusedPreferenceService = {} as PreferenceService;
+const unusedWebSearchService = {} as WebSearchService;
 type NamingOverride = Pick<
   AgentSessionNaming,
   'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
@@ -140,6 +144,8 @@ function createHost(
     unusedAiService,
     unusedPreferenceService,
     backgroundReply,
+    unusedMcpRuntime,
+    unusedWebSearchService,
     runtime,
     {
       agents,
@@ -543,7 +549,9 @@ describe('MobileAgentHost', () => {
 
   test('hands the turn the tools resolved for its model', async () => {
     const requests: RuntimeExecutionRequest[] = [];
-    const getTools = jest.fn(async () => [stubTool]);
+    const getTools = jest.fn(async (_input: Parameters<AgentToolSource['getTools']>[0]) => [
+      stubTool,
+    ]);
     const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
     const session = await host.createSession({
       agentId: AGENT_ID,
@@ -561,7 +569,9 @@ describe('MobileAgentHost', () => {
     expect(getTools).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
+      resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
     });
+    expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
     expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({
       status: 'supported',
@@ -576,6 +586,46 @@ describe('MobileAgentHost', () => {
         ],
       },
     });
+  });
+
+  test('grants validated Runtime artifacts to the frozen turn resource scope', async () => {
+    let resources: Parameters<AgentToolSource['getTools']>[0]['resources'] | undefined;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: {
+          id: 'artifact-1',
+          type: 'file',
+          ref: { kind: 'managed-file', fileEntryId: SECOND_FILE_ENTRY_ID },
+          mediaType: 'image/png',
+          name: 'generated.png',
+          purpose: 'artifact',
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime, noOpNaming, noFiles, {
+      getTools: async (input) => {
+        resources = input.resources;
+        return [];
+      },
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Create an image.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the artifact turn');
+
+    expect(resources).toBeDefined();
+    expect([...(resources?.fileEntryIds ?? [])]).toEqual([SECOND_FILE_ENTRY_ID]);
   });
 
   test('runs the turn tool-less when the catalog cannot be resolved', async () => {
@@ -873,6 +923,43 @@ describe('MobileAgentHost', () => {
     // The session is idle again.
     const observation = await host.observeSession(session.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();
+  });
+
+  test('stops active turns before draining Host-owned lifecycle work', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      if (!controller.signal.aborted) {
+        await new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    });
+    const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
+    const naming: NamingOverride = {
+      ...noOpNaming,
+      drain: jest.fn(async () => {
+        expect(finalize).toHaveBeenCalledTimes(1);
+      }),
+    };
+    const host = createHost(runtime, naming);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Keep working.' }],
+    });
+    await started.promise;
+
+    await host._doStop();
+
+    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
+    expect(naming.drain).toHaveBeenCalledTimes(1);
+    expect(usage.drain).toHaveBeenCalledTimes(1);
+    await host._doDestroy();
+    expect(host.isDestroyed).toBe(true);
   });
 
   test('updates an active background reply when its Session is renamed', async () => {

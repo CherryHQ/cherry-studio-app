@@ -30,6 +30,8 @@ function descriptor(serverId: string, rawToolName: string): McpExecutableToolDes
   return {
     description: `${rawToolName} description`,
     displayName: rawToolName,
+    endpointUrl: `https://${serverId}.example/mcp`,
+    generation: 1,
     inputSchema: { type: 'object' },
     rawToolName,
     serverId,

@@ -34,10 +34,11 @@ describe('Agent Runtime settled contracts', () => {
       execute: async () => expected,
     };
 
-    const result = await tool.execute(
-      { query: 'Cherry Studio' },
-      { signal: new AbortController().signal, toolCallId: 'call-1' },
-    );
+    const result = await tool.execute({
+      input: { query: 'Cherry Studio' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+    });
 
     expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });
   });
