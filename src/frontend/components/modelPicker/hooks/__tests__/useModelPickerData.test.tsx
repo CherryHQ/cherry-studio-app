@@ -26,7 +26,7 @@ describe('useModelPickerData', () => {
   });
 
   test('returns the same reference across re-renders', () => {
-    const results = renderHookTwice(() => useModelPickerData());
+    const results = renderHookTwice(() => useModelPickerData({ modelType: 'text' }));
 
     expect(results[1]).toBe(results[0]);
   });
@@ -34,13 +34,15 @@ describe('useModelPickerData', () => {
   test('stays stable when the caller omits selectedTags', () => {
     // A `= []` default would allocate a new array per call and invalidate the
     // `groups` memo — the most expensive computation in the hook.
-    const results = renderHookTwice(() => useModelPickerData({ searchText: '' }));
+    const results = renderHookTwice(() =>
+      useModelPickerData({ modelType: 'text', searchText: '' }),
+    );
 
     expect(results[1]?.groups).toBe(results[0]?.groups);
   });
 
   test('exposes only reference-stable fields', () => {
-    const [result] = renderHookTwice(() => useModelPickerData());
+    const [result] = renderHookTwice(() => useModelPickerData({ modelType: 'text' }));
 
     // `queries` (react-query hands back a newly tracked proxy each render) can
     // never be stable, so the hook must not surface it.
@@ -48,9 +50,13 @@ describe('useModelPickerData', () => {
   });
 
   test('limits the model query to one provider when requested', () => {
-    renderHookTwice(() => useModelPickerData({ providerId: 'provider-1' }));
+    renderHookTwice(() => useModelPickerData({ modelType: 'text', providerId: 'provider-1' }));
 
-    expect(mockModelQueries).toContainEqual({ enabled: true, providerId: 'provider-1' });
+    expect(mockModelQueries).toContainEqual({
+      enabled: true,
+      isSystemSupported: true,
+      providerId: 'provider-1',
+    });
   });
 });
 

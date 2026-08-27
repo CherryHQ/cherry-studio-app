@@ -6,11 +6,13 @@ import { View } from 'react-native';
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
+import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerList } from './ModelPickerList';
 
 const DEFAULT_SELECTED_TAGS: readonly ModelPickerTag[] = [];
 
 type ModelPickerDrawerProps = {
+  modelType: ModelTypeFilter;
   onClose: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
   open: boolean;
@@ -22,6 +24,7 @@ type ModelPickerDrawerProps = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
+  modelType,
   onClose,
   onSelect,
   open,
@@ -46,6 +49,7 @@ export function ModelPickerDrawer({
     >
       <ModelPickerDrawerContent
         deferredSearchText={deferredSearchText}
+        modelType={modelType}
         onSelect={onSelect}
         onSearchFocusChange={setIsSearchFocused}
         onSearchTextChange={setSearchText}
@@ -61,6 +65,7 @@ export function ModelPickerDrawer({
 
 function ModelPickerDrawerContent({
   deferredSearchText,
+  modelType,
   onSelect,
   onSearchFocusChange,
   onSearchTextChange,
@@ -71,7 +76,7 @@ function ModelPickerDrawerContent({
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
-  'onSelect' | 'open' | 'providerId' | 'selectedModelId' | 'selectedTags'
+  'modelType' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId' | 'selectedTags'
 > & {
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
@@ -80,6 +85,7 @@ function ModelPickerDrawerContent({
 }) {
   const { t } = useTranslation();
   const { groups, isLoading } = useModelPickerData({
+    modelType,
     providerId,
     searchText: deferredSearchText,
     selectedTags,

@@ -49,6 +49,7 @@ type ModelsAi = {
 
 export type ModelsModuleDependencies = {
   ai: ModelsAi;
+  isSystemSupportedModel(provider: Provider, model: Model): boolean;
   materializeRemoteModels(provider: Provider, models: readonly RemoteModel[]): Model[];
   models: ModelWorkflowData;
   providers: ProviderWorkflowData;
@@ -163,8 +164,18 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
         }),
       ]),
     );
-    const normalizedRemoteModels = dependencies.materializeRemoteModels(provider, remoteModels);
-    const preview = buildPullPreview(providerId, localModels, normalizedRemoteModels);
+    const supportedLocalModels = localModels.filter((model) =>
+      dependencies.isSystemSupportedModel(provider, model),
+    );
+    const supportedRemoteModels = dependencies
+      .materializeRemoteModels(provider, remoteModels)
+      .filter((model) => dependencies.isSystemSupportedModel(provider, model));
+    const preview = buildPullPreview(
+      providerId,
+      supportedLocalModels,
+      supportedRemoteModels,
+      localModels,
+    );
 
     if (preview.added.length > 0 || preview.missing.length > 0) {
       return { preview, status: 'changes' };
@@ -172,7 +183,7 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
 
     const providerEnabled = await enableProviderWhenModelsAvailable(
       provider,
-      localModels.length,
+      supportedLocalModels.length,
       'pull-up-to-date',
     );
     return { providerEnabled, status: 'up-to-date' };
@@ -207,8 +218,9 @@ function buildPullPreview(
   providerId: string,
   localModels: readonly Model[],
   remoteModels: readonly Model[],
+  existingModels: readonly Model[] = localModels,
 ) {
-  const localIds = new Set(localModels.map((model) => model.id));
+  const localIds = new Set(existingModels.map((model) => model.id));
   const remoteIds = new Set(remoteModels.map((model) => model.id));
 
   return {

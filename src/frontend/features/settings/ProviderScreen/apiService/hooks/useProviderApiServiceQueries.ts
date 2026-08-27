@@ -27,7 +27,7 @@ export function useProviderApiServiceQueries(providerId: string) {
     retry: false,
   });
   const saveMutation = useMutation('PATCH', '/providers/:id', {
-    refresh: ['/providers', `/providers/${providerId}`, `/providers/${providerId}/auth`],
+    refresh: ['/models', '/providers', `/providers/${providerId}`, `/providers/${providerId}/auth`],
   });
   const replaceMutation = useMutation('PUT', '/providers/:id/api-keys', {
     onMutate: async (variables) => {

@@ -1,10 +1,11 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { Button, Section } from '@cherrystudio/ui/components';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import {
+  filterModelsByType,
   ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
@@ -32,9 +33,10 @@ export function ProviderModelCheckSection({
   const { t } = useTranslation();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [selectedModelId, setSelectedModelId] = useState<string>();
+  const textModels = useMemo(() => filterModelsByType(models, 'text'), [models]);
   const { isChecking, modelStatus, selectedModel, startCheck } = useProviderModelCheck({
     apiKeys,
-    models,
+    models: textModels,
     providerId,
     selectedModelId,
   });
@@ -60,7 +62,7 @@ export function ProviderModelCheckSection({
               accessibilityLabel={
                 selectedModel?.name ?? t('settings.provider.models.checkNoModels')
               }
-              disabled={isChecking || isLoading || models.length === 0}
+              disabled={isChecking || isLoading || textModels.length === 0}
               onPress={openModelPicker}
             >
               <View className="flex-row items-center gap-2">
@@ -90,6 +92,7 @@ export function ProviderModelCheckSection({
       {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
+          modelType="text"
           open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}

@@ -9,8 +9,10 @@ import {
   type ModelPickerModelItem,
   type ModelPickerTag,
 } from '../utils/modelPickerData';
+import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 
 type UseModelPickerDataOptions = {
+  modelType: ModelTypeFilter;
   providerId?: string;
   searchText?: string;
   selectedTags?: readonly ModelPickerTag[];
@@ -23,11 +25,16 @@ type UseModelPickerDataOptions = {
 const EMPTY_TAGS: readonly ModelPickerTag[] = Object.freeze([]);
 
 export function useModelPickerData({
+  modelType,
   providerId,
   searchText = '',
   selectedTags = EMPTY_TAGS,
-}: UseModelPickerDataOptions = {}) {
-  const { isLoading: isModelsLoading, models } = useModels({ enabled: true, providerId });
+}: UseModelPickerDataOptions) {
+  const { isLoading: isModelsLoading, models } = useModels({
+    enabled: true,
+    isSystemSupported: true,
+    providerId,
+  });
   const { isLoading: isProvidersLoading, providers: enabledProviders } = useProviders({
     enabled: true,
   });
@@ -39,20 +46,20 @@ export function useModelPickerData({
     [enabledProviders, providerId],
   );
   const groups = useMemo(
-    () => buildModelPickerGroups({ models, providers, searchText, selectedTags }),
-    [models, providers, searchText, selectedTags],
+    () => buildModelPickerGroups({ modelType, models, providers, searchText, selectedTags }),
+    [modelType, models, providers, searchText, selectedTags],
   );
   const availableTags = useMemo(
-    () => getAvailableModelPickerFilterTags({ models, providers }),
-    [models, providers],
+    () => getAvailableModelPickerFilterTags({ modelType, models, providers }),
+    [modelType, models, providers],
   );
   const modelItems = useMemo<ModelPickerModelItem[]>(
     () => groups.flatMap((group) => group.items),
     [groups],
   );
   const getModelItem = useCallback(
-    (modelId: string | null) => getModelPickerModelItem(modelId, { models, providers }),
-    [models, providers],
+    (modelId: string | null) => getModelPickerModelItem(modelId, { modelType, models, providers }),
+    [modelType, models, providers],
   );
 
   // Memoized so consumers can key their own memos/effects on the returned object.
