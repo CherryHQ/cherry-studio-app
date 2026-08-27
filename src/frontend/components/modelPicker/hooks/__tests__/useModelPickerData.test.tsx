@@ -31,9 +31,7 @@ describe('useModelPickerData', () => {
     expect(results[1]).toBe(results[0]);
   });
 
-  test('stays stable when the caller omits selectedTags', () => {
-    // A `= []` default would allocate a new array per call and invalidate the
-    // `groups` memo — the most expensive computation in the hook.
+  test('keeps the grouped result stable across an unchanged search', () => {
     const results = renderHookTwice(() =>
       useModelPickerData({ modelType: 'text', searchText: '' }),
     );

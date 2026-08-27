@@ -100,4 +100,25 @@ describe('ProviderModelList empty state', () => {
     expect(onPull).toHaveBeenCalledTimes(1);
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
+
+  it('shows a search empty state without provider actions for a filtered list', () => {
+    act(() => {
+      renderer = create(
+        <ProviderModelList
+          addAction={{ onPress: jest.fn() }}
+          isDefaultModel={() => false}
+          isFiltered
+          isLoading={false}
+          models={[]}
+          provider={undefined}
+          pullAction={{ onPress: jest.fn() }}
+        />,
+      );
+    });
+
+    expect(renderer?.root.findByType('Text').props.children).toBe(
+      'settings.provider.models.search.empty',
+    );
+    expect(renderer?.root.findAllByType('Button')).toHaveLength(0);
+  });
 });

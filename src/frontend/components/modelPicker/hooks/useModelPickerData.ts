@@ -4,10 +4,8 @@ import { useModels, useProviders } from '@/frontend/hooks/chat';
 
 import {
   buildModelPickerGroups,
-  getAvailableModelPickerFilterTags,
   getModelPickerModelItem,
   type ModelPickerModelItem,
-  type ModelPickerTag,
 } from '../utils/modelPickerData';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 
@@ -15,20 +13,12 @@ type UseModelPickerDataOptions = {
   modelType: ModelTypeFilter;
   providerId?: string;
   searchText?: string;
-  selectedTags?: readonly ModelPickerTag[];
 };
-
-// Module-level so the default is one shared reference. An inline `= []` default
-// allocates a new array on every call, which invalidated the `groups` memo below
-// (the most expensive computation here) on every render for callers that don't
-// filter by tag.
-const EMPTY_TAGS: readonly ModelPickerTag[] = Object.freeze([]);
 
 export function useModelPickerData({
   modelType,
   providerId,
   searchText = '',
-  selectedTags = EMPTY_TAGS,
 }: UseModelPickerDataOptions) {
   const { isLoading: isModelsLoading, models } = useModels({
     enabled: true,
@@ -46,12 +36,8 @@ export function useModelPickerData({
     [enabledProviders, providerId],
   );
   const groups = useMemo(
-    () => buildModelPickerGroups({ modelType, models, providers, searchText, selectedTags }),
-    [modelType, models, providers, searchText, selectedTags],
-  );
-  const availableTags = useMemo(
-    () => getAvailableModelPickerFilterTags({ modelType, models, providers }),
-    [modelType, models, providers],
+    () => buildModelPickerGroups({ modelType, models, providers, searchText }),
+    [modelType, models, providers, searchText],
   );
   const modelItems = useMemo<ModelPickerModelItem[]>(
     () => groups.flatMap((group) => group.items),
@@ -70,7 +56,6 @@ export function useModelPickerData({
   // defeated this memo.
   return useMemo(
     () => ({
-      availableTags,
       groups,
       isLoading: isModelsLoading || isProvidersLoading,
       modelItems,
@@ -78,15 +63,6 @@ export function useModelPickerData({
       providers,
       getModelItem,
     }),
-    [
-      availableTags,
-      getModelItem,
-      groups,
-      isModelsLoading,
-      isProvidersLoading,
-      modelItems,
-      models,
-      providers,
-    ],
+    [getModelItem, groups, isModelsLoading, isProvidersLoading, modelItems, models, providers],
   );
 }
