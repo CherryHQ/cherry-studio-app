@@ -1,7 +1,8 @@
 import {
   AgentApprovalViewSchema,
-  AgentInferenceSnapshotV1Schema,
   AgentErrorViewSchema,
+  AgentFailureSnapshotSchema,
+  AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
   AgentMessagePartSchema,
   AgentToolRefSchema,
@@ -109,6 +110,32 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentErrorViewSchema.parse(roundTrip(error))).toEqual(error);
+  });
+
+  test('round-trips a versioned execution failure without flattening its source identity', () => {
+    const failure = {
+      version: 1,
+      reasonCode: 'permission',
+      source: { layer: 'provider', name: 'AI_APICallError', code: 'access_denied' },
+      context: {
+        statusCode: 403,
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        responseBody: '{"error":"access_denied"}',
+      },
+    } as const;
+    const error = {
+      code: 'EXECUTION_FAILED',
+      message: 'OpenAI API error (403): access denied',
+      retryable: false,
+      failure,
+    } as const;
+
+    expect(AgentFailureSnapshotSchema.parse(roundTrip(failure))).toEqual(failure);
+    expect(AgentErrorViewSchema.parse(roundTrip(error))).toEqual(error);
+    expect(AgentErrorViewSchema.safeParse({ ...error, code: 'AGENT_NOT_FOUND' }).success).toBe(
+      false,
+    );
   });
 
   test('round-trips stable tool identity and the RuntimeToolResult projection', () => {

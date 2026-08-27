@@ -246,10 +246,21 @@ export type RuntimeUsageReport = {
   completedAt: number;
 };
 
+export type RuntimeErrorContext = {
+  statusCode?: number;
+  providerId?: string;
+  modelId?: string;
+  finishReason?: string;
+  responseBody?: string;
+};
+
 export type RuntimeError = {
   code: string;
   message: string;
   retryable: boolean;
+  origin?: 'provider' | 'runtime' | 'host' | 'tool';
+  name?: string;
+  context?: RuntimeErrorContext;
 };
 
 export type RuntimeEvent =

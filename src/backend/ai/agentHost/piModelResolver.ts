@@ -24,6 +24,18 @@ const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
 const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
 const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
 
+class PiModelResolutionError extends Error {
+  readonly retryable = false;
+
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PiModelResolutionError';
+  }
+}
+
 export function createPiModelResolver(): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
@@ -35,7 +47,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
       if (!selectedApiKey.value.trim()) {
-        throw new Error('Pi Runtime requires an API key from the selected provider.');
+        throw new PiModelResolutionError(
+          'invalid_api_key',
+          'Pi Runtime requires an API key from the selected provider.',
+        );
       }
 
       const modelId = connection.wireModelId;

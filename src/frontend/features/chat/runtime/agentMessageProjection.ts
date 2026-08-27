@@ -8,6 +8,7 @@ import {
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
+import { classifyAgentFailureReason } from '@/shared/utils/agentFailure';
 
 function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
   switch (status) {
@@ -25,12 +26,21 @@ function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
 }
 
 function toErrorPart(error: AgentErrorView): CherryMessagePart {
+  const failure =
+    error.failure ??
+    ({
+      version: 1,
+      reasonCode: classifyAgentFailureReason({ code: error.code, message: error.message }),
+      source: { layer: 'host', code: error.code },
+    } as const);
+
   return {
     type: 'data-error',
     data: {
       code: error.code,
       message: error.message,
-      name: error.code,
+      retryable: error.retryable,
+      ...failure,
     },
   } as CherryMessagePart;
 }

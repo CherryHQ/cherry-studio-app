@@ -220,7 +220,7 @@ Future additive columns (not created now): `forkedFromSessionId`, `forkedFromMes
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
-| `error` | text (json) | NULL | Turn-level `AgentErrorView`; projected into `AgentTurnView.error`, not part of the message view |
+| `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
@@ -263,7 +263,8 @@ projection:
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
   status, parts, usage, turn-level error, and an optional validated context checkpoint — in one
   write (invariant 5). Failed, cancelled, and interrupted terminal rows force the checkpoint to
-  `NULL`. `deleteSession` is one cascading delete.
+  `NULL`. The error part and turn-level error column receive the same `AgentErrorView`; historical
+  rows without a failure snapshot remain valid. `deleteSession` is one cascading delete.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

@@ -378,10 +378,55 @@ type AgentErrorView = {
     | 'INTERRUPTED'
   message: string
   retryable: boolean
+  failure?: AgentFailureSnapshot
+}
+
+type AgentFailureSnapshot = {
+  version: 1
+  reasonCode:
+    | 'auth'
+    | 'permission'
+    | 'region'
+    | 'model_not_found'
+    | 'quota'
+    | 'rate_limit'
+    | 'context_length'
+    | 'payload_too_large'
+    | 'network'
+    | 'proxy_tls'
+    | 'stream_interrupted'
+    | 'content_filter'
+    | 'provider_unavailable'
+    | 'timeout'
+    | 'invalid_input'
+    | 'tool_limit'
+    | 'tool_failed'
+    | 'mcp'
+    | 'parse'
+    | 'internal'
+    | 'unknown'
+  source: {
+    layer: 'provider' | 'runtime' | 'host' | 'tool'
+    name?: string
+    code?: string
+  }
+  context?: {
+    statusCode?: number
+    providerId?: string
+    modelId?: string
+    finishReason?: string
+    responseBody?: string
+  }
 }
 ```
 
-Native errors and stack traces stay behind the Host boundary.
+`EXECUTION_FAILED` remains the closed protocol envelope. New execution failures carry the
+versioned `failure` snapshot so source identity is not overwritten by that envelope; the UI derives
+localized copy from `reasonCode` and keeps the sanitized source message from the outer
+`AgentErrorView` as detail. The outer `message` and `retryable` fields are the single authoritative
+facts; the nested snapshot does not duplicate them. `failure` is optional so historical persisted
+rows remain readable. Native errors, request bodies, credentials, and stack traces stay behind the
+Host boundary.
 
 ## Invariants
 

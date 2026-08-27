@@ -117,6 +117,12 @@ describe('Pi React Native patches', () => {
     expect(responsesShared).not.toContain('from "../models.js"');
     expect(responses).toContain('from "../utils/model-runtime.js"');
     expect(responsesShared).toContain('from "../utils/model-runtime.js"');
+    for (const adapter of [responses, ...additionalAdapters]) {
+      expect(adapter).toContain('createAssistantMessageDiagnostic("provider_response_failure"');
+      expect(adapter).toContain('status: normalizedError.status');
+      expect(adapter).toContain('body: normalizedError.body');
+      expect(adapter).toContain('retryable: normalizedError.retryable');
+    }
     for (const adapter of additionalAdapters) {
       expect(adapter).not.toContain('from "../models.js"');
       expect(adapter).toContain('from "../utils/model-runtime.js"');

@@ -88,6 +88,34 @@ function normalizeError(error: unknown): RuntimeError {
       code: runtimeError.code,
       message: runtimeError.message,
       retryable: runtimeError.retryable,
+      ...(runtimeError.origin === 'provider' ||
+      runtimeError.origin === 'runtime' ||
+      runtimeError.origin === 'host' ||
+      runtimeError.origin === 'tool'
+        ? { origin: runtimeError.origin }
+        : {}),
+      ...(typeof runtimeError.name === 'string' ? { name: runtimeError.name } : {}),
+      ...(runtimeError.context && typeof runtimeError.context === 'object'
+        ? {
+            context: {
+              ...(typeof runtimeError.context.statusCode === 'number'
+                ? { statusCode: runtimeError.context.statusCode }
+                : {}),
+              ...(typeof runtimeError.context.providerId === 'string'
+                ? { providerId: runtimeError.context.providerId }
+                : {}),
+              ...(typeof runtimeError.context.modelId === 'string'
+                ? { modelId: runtimeError.context.modelId }
+                : {}),
+              ...(typeof runtimeError.context.finishReason === 'string'
+                ? { finishReason: runtimeError.context.finishReason }
+                : {}),
+              ...(typeof runtimeError.context.responseBody === 'string'
+                ? { responseBody: runtimeError.context.responseBody }
+                : {}),
+            },
+          }
+        : {}),
     };
   }
   return {

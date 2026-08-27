@@ -103,21 +103,25 @@ const TOOL_CALL_LIMIT_ERROR: RuntimeError = {
   code: 'tool_call_limit_exceeded',
   message: 'The turn reached its tool call limit.',
   retryable: false,
+  origin: 'runtime',
 };
 const TOOL_STEP_LIMIT_ERROR: RuntimeError = {
   code: 'tool_step_limit_exceeded',
   message: 'The turn reached its tool loop step limit.',
   retryable: false,
+  origin: 'runtime',
 };
 const TURN_TIMEOUT_ERROR: RuntimeError = {
   code: 'turn_timeout',
   message: 'The Agent turn timed out.',
   retryable: true,
+  origin: 'runtime',
 };
 const DUPLICATE_TOOL_CALL_ERROR: RuntimeError = {
   code: 'duplicate_tool_call_id',
   message: 'The provider reused a tool call id while its approval was pending.',
   retryable: false,
+  origin: 'provider',
 };
 
 /**
@@ -133,6 +137,19 @@ const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
 const REDACTED_SECRET = '[REDACTED]';
 
 const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
+const TERMINAL_ERROR_DIAGNOSTIC_TYPES = new Set([
+  'pi_messages_response_failure',
+  'provider_response_failure',
+]);
+const RETRYABLE_PROVIDER_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETDOWN',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+]);
 
 type ApprovalWaiter = {
   reject(reason: Error): void;
@@ -234,33 +251,157 @@ function isValidatedTextAttachment(part: RuntimeTextAttachmentPart): boolean {
   );
 }
 
-function normalizeExecutionError(error: unknown, secrets: readonly string[] = []): RuntimeError {
+function errorRecord(error: unknown): Record<string, unknown> | undefined {
+  return typeof error === 'object' && error !== null
+    ? (error as Record<string, unknown>)
+    : undefined;
+}
+
+function sanitizeErrorText(value: string, secrets: readonly string[], maxChars: number): string {
+  const stackStart = value.search(/\n\s+at\s+/);
+  let text = (stackStart >= 0 ? value.slice(0, stackStart) : value).trim();
+
+  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
+    if (secret) text = text.replaceAll(secret, REDACTED_SECRET);
+  }
+  text = text
+    .replace(/(bearer\s+)[a-z0-9._~+/=-]+/gi, `$1${REDACTED_SECRET}`)
+    .replace(
+      /(["']?(?:api[_-]?key|authorization|cookie|password|secret|access[_-]?token|refresh[_-]?token)["']?\s*[:=]\s*["']?)[^"',\s}]+/gi,
+      `$1${REDACTED_SECRET}`,
+    );
+
+  return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
+}
+
+function readErrorStatus(record: Record<string, unknown> | undefined): number | undefined {
+  const value = record?.statusCode ?? record?.status;
+  const status =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN;
+  return Number.isSafeInteger(status) && status >= 100 && status <= 599 ? status : undefined;
+}
+
+function diagnosticResponseBody(details: Record<string, unknown> | undefined): string | undefined {
+  if (typeof details?.responseBody === 'string') return details.responseBody;
+  if (typeof details?.body === 'string') return details.body;
+  if (details?.error === undefined) return undefined;
+  try {
+    return JSON.stringify(details.error);
+  } catch {
+    return undefined;
+  }
+}
+
+function terminalExecutionError(message: AssistantMessage): unknown {
+  const diagnostics = message.diagnostics ?? [];
+  for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+    const diagnostic = diagnostics[index];
+    if (!diagnostic?.error || !TERMINAL_ERROR_DIAGNOSTIC_TYPES.has(diagnostic.type)) continue;
+    const details = diagnostic.details;
+    const statusCode = details?.statusCode ?? details?.status;
+    const responseBody = diagnosticResponseBody(details);
+    return {
+      message: message.errorMessage ?? diagnostic.error.message,
+      ...(diagnostic.error.code !== undefined ? { code: String(diagnostic.error.code) } : {}),
+      ...(diagnostic.error.name ? { name: diagnostic.error.name } : {}),
+      ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(typeof details?.retryable === 'boolean' ? { retryable: details.retryable } : {}),
+      ...(message.rawStopReason ? { finishReason: message.rawStopReason } : {}),
+      ...(responseBody ? { responseBody } : {}),
+    };
+  }
+  return message.errorMessage;
+}
+
+function isRetryableProviderFailure(
+  code: string,
+  message: string,
+  statusCode: number | undefined,
+): boolean {
+  const embeddedStatus = message.match(
+    /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/iu,
+  )?.[1];
+  const leadingStatus = message.match(/^\s*([1-5]\d{2})(?=\s|:|$)/u)?.[1];
+  const resolvedStatusCode = statusCode ?? Number(embeddedStatus ?? leadingStatus ?? Number.NaN);
+  if (
+    resolvedStatusCode === 408 ||
+    resolvedStatusCode === 409 ||
+    resolvedStatusCode === 425 ||
+    resolvedStatusCode === 429 ||
+    resolvedStatusCode >= 500
+  ) {
+    return true;
+  }
+  if (RETRYABLE_PROVIDER_ERROR_CODES.has(code.toUpperCase())) return true;
+
+  return /(?:connection (?:failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
+    message,
+  );
+}
+
+function normalizeExecutionError(
+  error: unknown,
+  secrets: readonly string[] = [],
+  model?: RuntimeModel,
+): RuntimeError {
+  const record = errorRecord(error);
   const rawMessage =
     typeof error === 'string'
       ? error
       : error instanceof Error
         ? error.message
-        : typeof error === 'object' &&
-            error !== null &&
-            'message' in error &&
-            typeof error.message === 'string'
-          ? error.message
+        : typeof record?.message === 'string'
+          ? record.message
           : '';
-  const stackStart = rawMessage.search(/\n\s+at\s+/);
-  let message = (stackStart >= 0 ? rawMessage.slice(0, stackStart) : rawMessage).trim();
-
-  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
-    if (secret) message = message.replaceAll(secret, REDACTED_SECRET);
-  }
-
-  if (message.length > MAX_EXECUTION_ERROR_MESSAGE_CHARS) {
-    message = `${message.slice(0, MAX_EXECUTION_ERROR_MESSAGE_CHARS)}…`;
-  }
+  const message = sanitizeErrorText(rawMessage, secrets, MAX_EXECUTION_ERROR_MESSAGE_CHARS);
+  const code =
+    typeof record?.code === 'string'
+      ? sanitizeErrorText(record.code, secrets, 128) || 'runtime_error'
+      : 'runtime_error';
+  const nameValue =
+    error instanceof Error
+      ? error.name
+      : typeof record?.name === 'string'
+        ? record.name
+        : undefined;
+  const name = nameValue ? sanitizeErrorText(nameValue, secrets, 256) : undefined;
+  const statusCode = readErrorStatus(record);
+  const finishReason =
+    typeof record?.finishReason === 'string'
+      ? sanitizeErrorText(record.finishReason, secrets, 256)
+      : undefined;
+  const responseBody =
+    typeof record?.responseBody === 'string'
+      ? sanitizeErrorText(record.responseBody, secrets, MAX_EXECUTION_ERROR_MESSAGE_CHARS)
+      : undefined;
+  const explicitRetryable =
+    typeof record?.isRetryable === 'boolean'
+      ? record.isRetryable
+      : typeof record?.retryable === 'boolean'
+        ? record.retryable
+        : undefined;
+  const retryable = explicitRetryable ?? isRetryableProviderFailure(code, message, statusCode);
 
   return {
-    code: 'runtime_error',
+    code,
     message: message || DEFAULT_EXECUTION_ERROR_MESSAGE,
-    retryable: false,
+    retryable,
+    origin: 'provider',
+    ...(name ? { name } : {}),
+    ...(model || statusCode !== undefined || finishReason || responseBody
+      ? {
+          context: {
+            ...(statusCode !== undefined ? { statusCode } : {}),
+            ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
+            ...(finishReason ? { finishReason } : {}),
+            ...(responseBody ? { responseBody } : {}),
+          },
+        }
+      : {}),
   };
 }
 
@@ -286,6 +427,10 @@ function normalizeToolExecutionError(error: unknown): RuntimeError {
     code: error.code.slice(0, 128) || TOOL_EXECUTION_ERROR.code,
     message: message || TOOL_EXECUTION_ERROR.message,
     retryable: error.retryable,
+    origin: 'tool',
+    ...('name' in error && typeof error.name === 'string'
+      ? { name: error.name.trim().slice(0, 256) }
+      : {}),
   };
 }
 
@@ -684,7 +829,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
         case 'error':
           this.emit(turn, {
             type: 'failed',
-            error: normalizeExecutionError(terminal.errorMessage, secrets),
+            error: normalizeExecutionError(terminalExecutionError(terminal), secrets, {
+              providerId: resolution.usageContext.providerId,
+              modelId: resolution.usageContext.modelId,
+            }),
           });
           break;
         case 'toolUse':
@@ -708,7 +856,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
             ? { type: 'failed', error: TURN_TIMEOUT_ERROR }
             : turn.cancelRequested
               ? { type: 'cancelled' }
-              : { type: 'failed', error: normalizeExecutionError(error, secrets) },
+              : {
+                  type: 'failed',
+                  error: normalizeExecutionError(error, secrets, {
+                    providerId: turn.usageContext?.providerId ?? request.model.providerId,
+                    modelId: turn.usageContext?.modelId ?? request.model.modelId,
+                  }),
+                },
         );
       }
     } finally {
