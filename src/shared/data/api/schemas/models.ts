@@ -18,10 +18,11 @@ import {
 export const ListModelsQuerySchema = z.object({
   capability: z.enum(objectValues(MODEL_CAPABILITY)).optional(),
   enabled: z.boolean().optional(),
+  isSystemSupported: z.boolean().optional(),
   providerId: z.string().optional(),
 });
 export type ListModelsQuery = z.infer<typeof ListModelsQuerySchema>;
-export type ModelListQuery = ListModelsQuery;
+export type ModelListQuery = Omit<ListModelsQuery, 'isSystemSupported'>;
 
 export const CreateModelSchema = z.strictObject({
   capabilities: z.array(z.enum(objectValues(MODEL_CAPABILITY))).optional(),

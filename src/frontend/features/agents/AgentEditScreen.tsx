@@ -118,7 +118,7 @@ function AgentEditForm({
   const { createAgent, isCreating, isSettingAvatar, isUpdating, setAgentAvatar, updateAgent } =
     useAgentMutations();
   const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
-  const modelPickerData = useModelPickerData();
+  const modelPickerData = useModelPickerData({ modelType: 'text' });
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
@@ -350,6 +350,7 @@ function AgentEditForm({
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
+          modelType="text"
           open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}

@@ -60,7 +60,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
-  const modelPickerData = useModelPickerData();
+  const modelPickerData = useModelPickerData({ modelType: 'text' });
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
       updateAgent(targetAgentId, { modelId }),
@@ -292,6 +292,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       </ChatInputEffortOverlay>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
+          modelType="text"
           open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}

@@ -20,7 +20,7 @@ import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createFileHandlers } from './files';
 import { createJobHandlers } from './jobs';
 import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
-import { createModelHandlers } from './models';
+import { createModelHandlers, type SystemModelSupportFilter } from './models';
 import { createPaintingHandlers } from './paintings';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
@@ -40,6 +40,7 @@ export type DataApiDependencies = {
   mcpServerMutations: McpServerMutations;
   mcpServers: McpServerService;
   models: import('../../services/ModelService').ModelService;
+  systemModelSupport: SystemModelSupportFilter;
   paintings: PaintingService;
   providers: ProviderService;
 };
@@ -54,7 +55,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
-    ...createModelHandlers(dependencies.models),
+    ...createModelHandlers(dependencies.models, dependencies.systemModelSupport),
     ...createPaintingHandlers(dependencies.paintings),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),

@@ -1,7 +1,12 @@
 import {
+  filterModelsSupportedBySystem,
+  isModelSupportedBySystem,
+} from '@/backend/ai/provider/systemModelSupport';
+import {
   createMcpServerMutations,
   type McpServerMutations,
 } from '@/backend/data/api/handlers/mcpServers';
+import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
@@ -36,6 +41,7 @@ export type BackendComposition = {
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
+    systemModelSupport: SystemModelSupportFilter;
   };
 };
 
@@ -44,8 +50,13 @@ export function createBackend(
   infrastructure: { dbService: DbService },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const systemModelSupport: SystemModelSupportFilter = {
+    filter: async (candidateModels) =>
+      filterModelsSupportedBySystem(candidateModels, await services.provider.list()),
+  };
   const models = createModelsModule({
     ai: services.ai,
+    isSystemSupportedModel: isModelSupportedBySystem,
     materializeRemoteModels,
     models: {
       get: (id) => services.model.getById(id),
@@ -136,6 +147,7 @@ export function createBackend(
     dataApiDependencies: {
       agentAvatars,
       mcpServerMutations,
+      systemModelSupport,
     },
   };
 }

@@ -12,7 +12,11 @@ import {
   UpdateModelSchema,
 } from '@/shared/data/api/schemas/models';
 import type { HandlersFor } from '@/shared/data/api/types';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, type Model, parseUniqueModelId } from '@/shared/data/types/model';
+
+export type SystemModelSupportFilter = {
+  filter(models: readonly Model[]): Promise<Model[]>;
+};
 
 function parseUniqueId(uniqueModelId: string) {
   if (!isUniqueModelId(uniqueModelId)) {
@@ -23,14 +27,32 @@ function parseUniqueId(uniqueModelId: string) {
   return parseUniqueModelId(uniqueModelId);
 }
 
-export function createModelHandlers(service: ModelService): HandlersFor<ModelSchemas> {
+export function createModelHandlers(
+  service: ModelService,
+  systemModelSupport: SystemModelSupportFilter,
+): HandlersFor<ModelSchemas> {
   return {
     '/models': {
       DELETE: async ({ query }) => {
         const parsed = DeleteModelsQuerySchema.parse(query);
         await service.bulkDelete(parsed.ids.map(parseUniqueId));
       },
-      GET: async ({ query }) => service.list(ListModelsQuerySchema.parse(query ?? {})),
+      GET: async ({ query }) => {
+        const { isSystemSupported, ...listQuery } = ListModelsQuerySchema.parse(query ?? {});
+        const models = await service.list(listQuery);
+
+        if (isSystemSupported === undefined) {
+          return models;
+        }
+
+        const supportedModels = await systemModelSupport.filter(models);
+        if (isSystemSupported) {
+          return supportedModels;
+        }
+
+        const supportedIds = new Set(supportedModels.map((model) => model.id));
+        return models.filter((model) => !supportedIds.has(model.id));
+      },
       PATCH: async ({ body }) =>
         service.bulkUpdate(
           BulkUpdateModelsSchema.parse(body).map(({ patch, uniqueModelId }) => ({

@@ -1,5 +1,4 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Section } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,12 +16,11 @@ import {
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
 
-const IMAGE_GENERATION_MODEL_TAGS = [MODEL_CAPABILITY.IMAGE_GENERATION] as const;
-
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
   const { onSelectionChange, selections } = useModelSettingSelections();
-  const modelPickerData = useModelPickerData();
+  const imageModelPickerData = useModelPickerData({ modelType: 'image' });
+  const textModelPickerData = useModelPickerData({ modelType: 'text' });
   const [activeKind, setActiveKind] = useState<ModelSettingKind>();
   const closeModelPicker = useCallback(() => setActiveKind(undefined), []);
   const handleModelSelect = useCallback(
@@ -44,12 +42,16 @@ export default function ModelSettingsScreen() {
         onPress: () => setActiveKind(kind),
         trailing: (
           <SelectedModelName
-            item={modelPickerData.getModelItem(selections[kind])}
+            item={
+              kind === 'painting'
+                ? imageModelPickerData.getModelItem(selections[kind])
+                : textModelPickerData.getModelItem(selections[kind])
+            }
             placeholder={t('settings.select.placeholder')}
           />
         ),
       })),
-    [modelPickerData, selections, t],
+    [imageModelPickerData, selections, t, textModelPickerData],
   );
   const selectedModelId = activeKind ? selections[activeKind] : null;
 
@@ -72,11 +74,11 @@ export default function ModelSettingsScreen() {
       </ScrollView>
       {activeKind ? (
         <ModelPickerDrawer
+          modelType={activeKind === 'painting' ? 'image' : 'text'}
           open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
-          selectedTags={activeKind === 'painting' ? IMAGE_GENERATION_MODEL_TAGS : undefined}
           title={t(MODEL_SETTING_KIND_TITLE_KEYS[activeKind])}
         />
       ) : null}

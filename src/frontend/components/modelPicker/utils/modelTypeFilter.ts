@@ -1,11 +1,14 @@
-import {
-  ENDPOINT_TYPE,
-  endpointImpliedCapability,
-  MODALITY,
-  MODEL_CAPABILITY,
-} from '@cherrystudio/provider-registry';
-
 import type { Model } from '@/shared/data/types/model';
+import {
+  hasTextToSpeechEndpoint,
+  isAudioGenerationModel,
+  isEmbeddingModel,
+  isImageGenerationModel,
+  isRerankModel,
+  isSpeechToTextModel,
+  isTextGenerationModel,
+  isVideoGenerationModel,
+} from '@/shared/utils/modelPurpose';
 
 /**
  * The pull screen filters by what a model is *for*, not by the overlapping
@@ -42,16 +45,16 @@ export const MODEL_TYPE_LABEL_KEYS = {
 export function matchesModelTypeFilter(model: Model, filter: ModelTypeFilter): boolean {
   switch (filter) {
     case 'text':
-      return !isNonChatModel(model);
+      return isTextGenerationModel(model);
     case 'image':
-      return isGenerateImageModel(model);
+      return isImageGenerationModel(model);
     case 'embedding':
       return isEmbeddingModel(model);
     case 'audio':
       // "Generate audio", excluding text-to-speech, which has its own tab.
-      return isGenerateAudioModel(model) && !hasTextToSpeechEndpoint(model);
+      return isAudioGenerationModel(model) && !hasTextToSpeechEndpoint(model);
     case 'video':
-      return isGenerateVideoModel(model);
+      return isVideoGenerationModel(model);
     case 'rerank':
       return isRerankModel(model);
     case 'speech':
@@ -88,57 +91,4 @@ export function filterModelsByType(models: readonly Model[], filter: ModelTypeFi
   return filter === 'all'
     ? [...models]
     : models.filter((model) => matchesModelTypeFilter(model, filter));
-}
-
-// Text-to-speech is the only audio-output sub-kind that can be singled out from
-// generic audio generation today — the `AUDIO_GENERATION` capability backs both,
-// so the dedicated endpoint is the distinguishing signal.
-function hasTextToSpeechEndpoint(model: Model): boolean {
-  return model.endpointTypes?.includes(ENDPOINT_TYPE.OPENAI_TEXT_TO_SPEECH) ?? false;
-}
-
-function isEmbeddingModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING);
-}
-
-function isRerankModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.RERANK);
-}
-
-function isGenerateImageModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
-}
-
-function isGenerateAudioModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.AUDIO_GENERATION);
-}
-
-function isGenerateVideoModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.VIDEO_GENERATION);
-}
-
-// Prefer the explicit transcript capability. A catalog that only exposes
-// modalities still identifies a dedicated speech-to-text model by audio in and
-// text out with no text input; that last guard is what keeps a multimodal chat
-// model (Gemini, GPT-4o, …) out of this bucket.
-function isSpeechToTextModel(model: Model): boolean {
-  return (
-    model.capabilities.includes(MODEL_CAPABILITY.AUDIO_TRANSCRIPT) ||
-    (model.capabilities.includes(MODEL_CAPABILITY.AUDIO_RECOGNITION) &&
-      model.inputModalities?.includes(MODALITY.AUDIO) === true &&
-      !model.inputModalities.includes(MODALITY.TEXT) &&
-      model.outputModalities?.includes(MODALITY.TEXT) === true)
-  );
-}
-
-function isNonChatModel(model: Model): boolean {
-  return (
-    endpointImpliedCapability(model.endpointTypes?.[0]) != null ||
-    isEmbeddingModel(model) ||
-    isRerankModel(model) ||
-    isGenerateImageModel(model) ||
-    isGenerateVideoModel(model) ||
-    isGenerateAudioModel(model) ||
-    isSpeechToTextModel(model)
-  );
 }

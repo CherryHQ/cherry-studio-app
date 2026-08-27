@@ -90,6 +90,7 @@ export function createAppBootstrapRuntime(
       models: services.model,
       paintings: services.painting,
       providers: services.provider,
+      systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
   );
 

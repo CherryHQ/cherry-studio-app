@@ -31,6 +31,7 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
       checkModel: jest.fn(async () => ({ latency: 12 })),
       listModels: jest.fn(async () => []),
     },
+    isSystemSupportedModel: jest.fn(() => true),
     materializeRemoteModels: (_provider, models) => models as Model[],
     models: {
       get: jest.fn(async (id: UniqueModelId) => model(id.split('::')[1] ?? id)),
@@ -75,6 +76,22 @@ describe('createModelsModule', () => {
     await expect(backend.pull('openai')).resolves.toEqual({
       preview: { added: [remote], missing: [] },
       status: 'changes',
+    });
+  });
+
+  it('keeps unsupported local and remote models out of the pull preview', async () => {
+    const supported = model('supported');
+    const unsupportedLocal = model('unsupported-local', { presetModelId: 'unsupported-local' });
+    const unsupportedRemote = model('unsupported-remote');
+    const { backend, dependencies } = createSubject({
+      isSystemSupportedModel: jest.fn((_provider, candidate) => candidate.id === supported.id),
+    });
+    jest.mocked(dependencies.models.list).mockResolvedValue([supported, unsupportedLocal]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([supported, unsupportedRemote]);
+
+    await expect(backend.pull('openai')).resolves.toEqual({
+      providerEnabled: true,
+      status: 'up-to-date',
     });
   });
 
