@@ -5,7 +5,11 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 import { agentTable } from './agent';
 
 /**
- * Durable Agent authorization for an application-owned capability or MCP tool source.
+ * Durable Agent authorization for an MCP tool source.
+ *
+ * The built-in identity shape and indexes remain only so existing databases can be
+ * read without a destructive migration. Built-in system capabilities are resolved
+ * independently by the Host and these legacy rows have no Runtime authority.
  *
  * MCP server ids deliberately are not foreign keys: deleting a server must leave the stable
  * identity, approval policy, and display snapshot available for explicit repair.

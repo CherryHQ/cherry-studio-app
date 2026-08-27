@@ -23,6 +23,7 @@ type AgentChatSendInput = {
   parts: AgentInputPart[];
   reasoningEffort?: AgentSubmitMessageInput['reasoningEffort'];
   sessionId?: string;
+  temporaryCapabilities?: AgentSubmitMessageInput['temporaryCapabilities'];
 };
 
 type AgentChatContextValue = {
@@ -80,7 +81,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
   useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
-    async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
+    async ({
+      agentId,
+      modelId,
+      parts,
+      reasoningEffort,
+      sessionId,
+      temporaryCapabilities,
+    }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
       if (!targetSessionId) {
         if (!agentId) {
@@ -97,6 +105,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
       await client.submitMessage(targetSessionId, parts, {
         ...(modelId !== undefined ? { modelId } : {}),
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+        ...(temporaryCapabilities !== undefined ? { temporaryCapabilities } : {}),
       });
     },
     [client, navigation, queryClient],

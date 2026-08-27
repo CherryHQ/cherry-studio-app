@@ -12,11 +12,12 @@ Cherry Mobile retains two independent configurations:
   `WebSearchService`.
 
 `WebSearchService` reaches Agent turns through the application-owned `web_search` and `web_fetch`
-Runtime tools, never through an AI SDK tool set. Both are **opt-in**: they stay out of the turn
-catalog until the Agent has an enabled built-in binding for them, which is the gate the retired
-per-Assistant web-search switch used to provide. The settings workflow still configures and checks
-external providers, and a lookup that fails because no provider is configured returns a terminal
-result telling the model to stop retrying rather than a transient error.
+Runtime tools, never through an AI SDK tool set. Both are temporary composer capabilities: they stay
+out of the turn catalog unless that `submitMessage` carries `temporaryCapabilities: ['web-search']`.
+The selection applies to one turn and is never persisted on the Agent. The settings workflow still
+configures and checks external providers globally, and a lookup that fails because no provider is
+configured returns a terminal result telling the model to stop retrying rather than a transient
+error.
 
 ## External Runtime
 
@@ -54,6 +55,5 @@ settings. This does not merge `WebSearchService` into the AI provider subsystem.
 
 ## Reopen When
 
-- Agent tools gain an application-owned contract and Pi adapter.
 - Mobile implements one of the currently unsupported external providers.
 - A request needs defined arbitration between external and provider-native search.

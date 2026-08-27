@@ -202,7 +202,10 @@ export class AgentSessionChatClient {
   async submitMessage(
     sessionId: string,
     parts: AgentInputPart[],
-    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
+    overrides: Pick<
+      AgentSubmitMessageInput,
+      'modelId' | 'reasoningEffort' | 'temporaryCapabilities'
+    > = {},
   ) {
     await this.observe(sessionId);
     return this.protocol.submitMessage({ parts, sessionId, ...overrides });

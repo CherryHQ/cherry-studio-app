@@ -29,7 +29,7 @@ import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import type { ManagedFileResolver } from '../managedFileResolver';
 import { MobileAgentHost } from '../MobileAgentHost';
-import type { AgentToolSource } from '../tools/builtInToolSource';
+import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 
 const AGENT_ID = 'agent-under-test';
 const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
@@ -114,7 +114,7 @@ const noFiles: ManagedFileResolver = {
 };
 
 /** Keeps the suite off the production catalog, which reads the database. */
-const noOpTools: AgentToolSource = { getTools: async () => [] };
+const noOpTools: SystemCapabilitySource = { getTools: async () => [] };
 
 const stubTool: RuntimeTool = {
   ref: { source: 'builtin', capabilityId: 'stub_tool' },
@@ -135,7 +135,7 @@ function createHost(
   runtime: FakeRuntime,
   naming: NamingOverride = noOpNaming,
   files: ManagedFileResolver = noFiles,
-  tools: AgentToolSource = noOpTools,
+  tools: SystemCapabilitySource = noOpTools,
   resolveInferenceModel = inferenceModel,
   toolOverrides: HostToolOverrides = {},
 ): MobileAgentHost {
@@ -165,7 +165,7 @@ function createHost(
 function hostWithText(
   texts: string[],
   requests: RuntimeExecutionRequest[] = [],
-  options: { descriptor?: RuntimeDescriptor; tools?: AgentToolSource } = {},
+  options: { descriptor?: RuntimeDescriptor; tools?: SystemCapabilitySource } = {},
 ): MobileAgentHost {
   const runtime = new FakeRuntime({ descriptor: options.descriptor ?? FAKE_DESCRIPTOR });
   for (const text of texts) {
@@ -547,9 +547,9 @@ describe('MobileAgentHost', () => {
     ]);
   });
 
-  test('hands the turn the tools resolved for its model', async () => {
+  test('hands the turn the system capabilities resolved for its input and model', async () => {
     const requests: RuntimeExecutionRequest[] = [];
-    const getTools = jest.fn(async (_input: Parameters<AgentToolSource['getTools']>[0]) => [
+    const getTools = jest.fn(async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [
       stubTool,
     ]);
     const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
@@ -563,13 +563,14 @@ describe('MobileAgentHost', () => {
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Save it.' }],
+      temporaryCapabilities: ['web-search'],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).toHaveBeenCalledWith({
-      agentId: AGENT_ID,
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
+      temporaryCapabilities: new Set(['web-search']),
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
@@ -589,7 +590,7 @@ describe('MobileAgentHost', () => {
   });
 
   test('grants validated Runtime artifacts to the frozen turn resource scope', async () => {
-    let resources: Parameters<AgentToolSource['getTools']>[0]['resources'] | undefined;
+    let resources: Parameters<SystemCapabilitySource['getTools']>[0]['resources'] | undefined;
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
       controller.emit({
         type: 'part.add',

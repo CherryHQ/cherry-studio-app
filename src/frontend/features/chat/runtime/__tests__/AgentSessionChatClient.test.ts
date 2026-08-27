@@ -66,7 +66,7 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
-  test('forwards composer model and reasoning snapshots with the submitted message', async () => {
+  test('forwards composer turn overrides with the submitted message', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -76,6 +76,7 @@ describe('AgentSessionChatClient', () => {
     await client.submitMessage('session-1', [{ text: 'Hello', type: 'text' }], {
       modelId: 'provider::model-b',
       reasoningEffort: 'high',
+      temporaryCapabilities: ['web-search'],
     });
 
     expect(protocol.submitMessage).toHaveBeenCalledWith({
@@ -83,6 +84,7 @@ describe('AgentSessionChatClient', () => {
       parts: [{ text: 'Hello', type: 'text' }],
       reasoningEffort: 'high',
       sessionId: 'session-1',
+      temporaryCapabilities: ['web-search'],
     });
   });
 

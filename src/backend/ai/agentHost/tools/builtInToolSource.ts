@@ -4,7 +4,7 @@
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
  * for the tools a turn may use, and the source projects only the capabilities
  * that this model can call, this platform implements, this device has granted,
- * this app has configured, and this Agent has authorized. Everything it returns
+ * this app has configured, and the composer has activated for this turn. Everything it returns
  * is executable; a capability that fails any gate is absent rather than present
  * and broken.
  *
@@ -18,15 +18,17 @@ import { Platform } from 'react-native';
 
 import type { RuntimeModel, RuntimeTool } from '@/backend/ai/agent';
 import { application } from '@/backend/core/application/Application';
-import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
-import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type {
+  AgentTemporaryCapability,
+  DevicePermissionScope,
+  SystemPermissionState,
+} from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
@@ -66,43 +68,42 @@ export type DeviceAccess = Readonly<Record<DevicePermissionScope, SystemPermissi
 
 /** Everything outside the tool definitions that decides what a turn may use. */
 export type BuiltInToolScope = {
-  bindingsByCapabilityId: ReadonlyMap<string, AgentToolBinding>;
   deviceAccess: DeviceAccess;
   paintingModel: ConfiguredPaintingModel | null;
   platform: string;
+  temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>;
 };
 
 export type { TurnFileScope, TurnToolResources } from '../managedFileResolver';
 
-export type AgentToolSource = {
+export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
-    agentId: string;
     model: RuntimeModel;
     resources: TurnToolResources;
+    temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>;
   }): Promise<readonly RuntimeTool[]>;
 };
 
-export type BuiltInToolSourceDependencies = DeviceToolDependencies &
+export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
-    listBindings(agentId: string): Promise<readonly AgentToolBinding[]>;
     painting: PaintingToolDependencies;
     platform: string;
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
   };
 
-export function createBuiltInToolSource(
-  overrides: Partial<BuiltInToolSourceDependencies> = {},
-): AgentToolSource {
+export function createSystemCapabilitySource(
+  overrides: Partial<SystemCapabilitySourceDependencies> = {},
+): SystemCapabilitySource {
   return {
-    async getTools({ agentId, model, resources }) {
+    async getTools({ model, resources, temporaryCapabilities }) {
       const deps = resolveDependencies(overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
         return [];
       }
 
-      const scope = await resolveScope(deps, agentId);
+      const scope = await resolveScope(deps, temporaryCapabilities);
       const catalog = createCatalog(deps, scope, resources);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const approval = resolveApproval(descriptor, scope);
@@ -114,8 +115,8 @@ export function createBuiltInToolSource(
 }
 
 /**
- * The Agent binding is the last gate, and the only one the user sets per Agent.
- * `null` means the capability is not in this turn's catalog at all.
+ * Application policy is shared by every Agent. Temporary capabilities are the
+ * only composer-owned gate; `null` means the tool is absent for this turn.
  */
 export function resolveApproval(
   descriptor: BuiltInToolDescriptor,
@@ -133,15 +134,13 @@ export function resolveApproval(
     return null;
   }
 
-  const binding = scope.bindingsByCapabilityId.get(descriptor.capabilityId);
-  if (!binding) {
-    // An opt-in capability reaches a service the user configures separately, so
-    // silence is a "no" rather than the catalog default.
-    return descriptor.isOptIn ? null : descriptor.defaultApproval;
+  if (
+    descriptor.temporaryCapability &&
+    !scope.temporaryCapabilities.has(descriptor.temporaryCapability)
+  ) {
+    return null;
   }
-  // A `deny` binding stays in the snapshot so Pi settles the call as denied
-  // rather than letting the model retry a tool it believes merely vanished.
-  return binding.enabled ? binding.approval : null;
+  return descriptor.defaultApproval;
 }
 
 function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string): boolean {
@@ -157,7 +156,7 @@ function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string
  * the catalog cannot be a module constant.
  */
 function createCatalog(
-  deps: BuiltInToolSourceDependencies,
+  deps: SystemCapabilitySourceDependencies,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
 ): ReadonlyMap<string, RuntimeTool> {
@@ -197,34 +196,30 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
 }
 
 async function resolveScope(
-  deps: BuiltInToolSourceDependencies,
-  agentId: string,
+  deps: SystemCapabilitySourceDependencies,
+  temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>,
 ): Promise<BuiltInToolScope> {
-  // A failed binding read is not caught: falling back to catalog defaults would
-  // re-enable a capability the user disabled, so the whole built-in catalog
-  // fails closed and the Host runs the turn without it.
-  const [bindings, deviceAccess, paintingModel] = await Promise.all([
-    deps.listBindings(agentId),
+  const [deviceAccess, paintingModel] = await Promise.all([
     resolveDeviceAccess(deps),
-    resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
-      logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
-      return null;
-    }),
+    temporaryCapabilities.has('image-generation')
+      ? resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+          logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
+          return null;
+        })
+      : null,
   ]);
 
   return {
-    bindingsByCapabilityId: new Map(
-      bindings.flatMap((binding) =>
-        binding.source === 'builtin' ? [[binding.capabilityId, binding] as const] : [],
-      ),
-    ),
     deviceAccess,
     paintingModel,
     platform: deps.platform,
+    temporaryCapabilities,
   };
 }
 
-async function resolveDeviceAccess(deps: BuiltInToolSourceDependencies): Promise<DeviceAccess> {
+async function resolveDeviceAccess(
+  deps: SystemCapabilitySourceDependencies,
+): Promise<DeviceAccess> {
   const entries = await Promise.all(
     DEVICE_PERMISSION_SCOPES.map(async (scope) => {
       try {
@@ -242,13 +237,10 @@ async function resolveDeviceAccess(deps: BuiltInToolSourceDependencies): Promise
 }
 
 function resolveDependencies(
-  overrides: Partial<BuiltInToolSourceDependencies>,
-): BuiltInToolSourceDependencies {
+  overrides: Partial<SystemCapabilitySourceDependencies>,
+): SystemCapabilitySourceDependencies {
   return {
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
-    listBindings:
-      overrides.listBindings ??
-      (async (agentId) => (await agentToolBindingService.list(agentId)).items),
     painting: overrides.painting ?? productionPaintingDependencies(),
     platform: overrides.platform ?? Platform.OS,
     supportsToolCalling: overrides.supportsToolCalling ?? supportsToolCalling,

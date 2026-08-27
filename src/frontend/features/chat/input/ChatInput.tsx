@@ -15,6 +15,7 @@ import Animated, {
 import {
   ComposerAttachments,
   ComposerField,
+  ComposerMenu,
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
@@ -27,16 +28,19 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/utils/toolMentions';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
+import { ChatInputMenuItems } from './components/ChatInputMenuItems';
 import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
+import { getChatInputTemporaryCapabilities } from './utils/chatInputCapabilities';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -93,6 +97,13 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     );
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
+  const composerIdentity = sessionId ?? agentId ?? null;
+  const [webSearchSelection, setWebSearchSelection] = useState({
+    enabled: false,
+    identity: composerIdentity,
+  });
+  const isWebSearchEnabled =
+    webSearchSelection.identity === composerIdentity ? webSearchSelection.enabled : false;
   const isInputActiveRef = useRef(false);
   const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
@@ -132,6 +143,22 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
+  const setWebSearchEnabled = useCallback(
+    (enabled: boolean) => setWebSearchSelection({ enabled, identity: composerIdentity }),
+    [composerIdentity],
+  );
+  const handleMentionPress = useCallback(
+    (mentionId: ToolMentionId) => {
+      const mention = toolMentions.find((candidate) => candidate.id === mentionId);
+      if (!mention) {
+        return;
+      }
+
+      inputRef.current?.insertLink(t(mention.titleKey), toolMentionUrl(mention.id));
+      inputRef.current?.insertText(' ');
+    },
+    [inputRef, t],
+  );
   const handleFieldLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
@@ -176,6 +203,10 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       const parts = toAgentInputParts({ attachments, text });
+      const temporaryCapabilities = getChatInputTemporaryCapabilities({
+        isWebSearchEnabled,
+        text,
+      });
       return sendMessage({
         parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
@@ -189,6 +220,11 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               ),
             }
           : {}),
+        ...(temporaryCapabilities.length > 0 ? { temporaryCapabilities } : {}),
+      }).then(() => {
+        setWebSearchSelection((current) =>
+          current.identity === composerIdentity ? { ...current, enabled: false } : current,
+        );
       });
     },
     [
@@ -198,6 +234,8 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       reasoningEfforts,
       selectedModelId,
       sendMessage,
+      composerIdentity,
+      isWebSearchEnabled,
     ],
   );
   const getSendErrorLabel = useCallback(
@@ -252,11 +290,18 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               >
                 <Animated.View
                   accessibilityElementsHidden={!isInputActive}
-                  className="min-w-0 shrink"
+                  className="min-w-0 shrink flex-row items-center gap-2"
                   importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
                   pointerEvents={isInputActive ? 'auto' : 'none'}
                   style={modelControlStyle}
                 >
+                  <ComposerMenu>
+                    <ChatInputMenuItems
+                      isWebSearchEnabled={isWebSearchEnabled}
+                      onMentionPress={handleMentionPress}
+                      onWebSearchChange={setWebSearchEnabled}
+                    />
+                  </ComposerMenu>
                   <ComposerModelPill
                     icon={
                       selectedModelItem ? (

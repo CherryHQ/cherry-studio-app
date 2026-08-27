@@ -1,16 +1,15 @@
 /**
  * The built-in tool catalog.
  *
- * One list, read by both sides: the Mobile Agent Host resolves it into the
- * per-turn `RuntimeTool[]` snapshot, and the Agent editor renders it as the
- * per-Agent tool switches. Keeping the descriptors here is what stops the two
- * from drifting into different opinions about which capabilities exist.
+ * One list read by the Mobile Agent Host to resolve system capabilities into a
+ * per-turn `RuntimeTool[]` snapshot.
  *
  * A descriptor states only what is true everywhere. Whether a tool can actually
- * run this turn depends on OS permission, the configured drawing model, and the
- * Agent binding, and that resolution belongs to the Host.
+ * run this turn depends on OS permission, application configuration, and any
+ * temporary composer activation declared below.
  */
 
+import type { AgentTemporaryCapability } from '@/shared/contracts/agent';
 import type { DevicePermissionScope } from '@/shared/contracts/permissions';
 
 import type { AgentToolApproval } from './agentToolBinding';
@@ -37,37 +36,21 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
 
 export type BuiltInToolCapabilityId = (typeof BUILT_IN_TOOL_CAPABILITY_IDS)[number];
 
-/** Groups the editor renders together; not a runtime concept. */
-export type BuiltInToolGroup =
-  | 'calendar'
-  | 'files'
-  | 'health'
-  | 'location'
-  | 'media'
-  | 'reminders'
-  | 'web';
-
 export type BuiltInToolDescriptor = {
   capabilityId: BuiltInToolCapabilityId;
-  /** Approval used when the Agent has no explicit binding for this capability. */
+  /** Application-owned approval policy shared by every Agent. */
   defaultApproval: AgentToolApproval;
-  group: BuiltInToolGroup;
-  /**
-   * Off until a binding turns it on. Reserved for capabilities that reach a
-   * separately configured third-party service, which the retired per-Assistant
-   * web-search switch used to gate.
-   */
-  isOptIn: boolean;
   /** OS permission scopes that must be granted before the tool is offered. */
   permissionScopes: readonly DevicePermissionScope[];
   /** `null` means every platform. */
   platforms: readonly ('android' | 'ios')[] | null;
   /** Needs a drawing model configured in Settings > Model. */
   requiresPaintingModel: boolean;
+  /** Omit for system capabilities injected into every Agent turn. */
+  temporaryCapability?: AgentTemporaryCapability;
 };
 
 const DEFAULTS = {
-  isOptIn: false,
   permissionScopes: [],
   platforms: null,
   requiresPaintingModel: false,
@@ -75,13 +58,10 @@ const DEFAULTS = {
 
 function describe(
   capabilityId: BuiltInToolCapabilityId,
-  group: BuiltInToolGroup,
   defaultApproval: AgentToolApproval,
-  overrides: Partial<
-    Omit<BuiltInToolDescriptor, 'capabilityId' | 'defaultApproval' | 'group'>
-  > = {},
+  overrides: Partial<Omit<BuiltInToolDescriptor, 'capabilityId' | 'defaultApproval'>> = {},
 ): BuiltInToolDescriptor {
-  return { ...DEFAULTS, capabilityId, defaultApproval, group, ...overrides };
+  return { ...DEFAULTS, capabilityId, defaultApproval, ...overrides };
 }
 
 /**
@@ -90,44 +70,47 @@ function describe(
  * spends provider quota.
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
-  describe('calendar_list_collections', 'calendar', 'auto', {
+  describe('calendar_list_collections', 'auto', {
     permissionScopes: ['calendar.read'],
   }),
-  describe('calendar_list_events', 'calendar', 'auto', { permissionScopes: ['calendar.read'] }),
-  describe('calendar_create_event', 'calendar', 'ask', { permissionScopes: ['calendar.write'] }),
-  describe('calendar_update_event', 'calendar', 'ask', {
+  describe('calendar_list_events', 'auto', { permissionScopes: ['calendar.read'] }),
+  describe('calendar_create_event', 'ask', { permissionScopes: ['calendar.write'] }),
+  describe('calendar_update_event', 'ask', {
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
-  describe('calendar_delete_event', 'calendar', 'ask', {
+  describe('calendar_delete_event', 'ask', {
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
-  describe('reminder_list_collections', 'reminders', 'auto', {
+  describe('reminder_list_collections', 'auto', {
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
   }),
-  describe('reminder_list_items', 'reminders', 'auto', {
+  describe('reminder_list_items', 'auto', {
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
   }),
-  describe('reminder_create_item', 'reminders', 'ask', {
+  describe('reminder_create_item', 'ask', {
     permissionScopes: ['reminders.write'],
     platforms: ['ios'],
   }),
-  describe('reminder_update_item', 'reminders', 'ask', {
+  describe('reminder_update_item', 'ask', {
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
-  describe('reminder_delete_item', 'reminders', 'ask', {
+  describe('reminder_delete_item', 'ask', {
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
-  describe('health_get_summary', 'health', 'auto', { permissionScopes: ['health.read'] }),
-  describe('health_list_workouts', 'health', 'auto', { permissionScopes: ['health.read'] }),
-  describe('location_get_current', 'location', 'auto', { permissionScopes: ['location.read'] }),
-  describe('web_search', 'web', 'auto', { isOptIn: true }),
-  describe('web_fetch', 'web', 'auto', { isOptIn: true }),
-  describe('generate_image', 'media', 'ask', { requiresPaintingModel: true }),
-  describe('write_file', 'files', 'auto'),
+  describe('health_get_summary', 'auto', { permissionScopes: ['health.read'] }),
+  describe('health_list_workouts', 'auto', { permissionScopes: ['health.read'] }),
+  describe('location_get_current', 'auto', { permissionScopes: ['location.read'] }),
+  describe('web_search', 'auto', { temporaryCapability: 'web-search' }),
+  describe('web_fetch', 'auto', { temporaryCapability: 'web-search' }),
+  describe('generate_image', 'ask', {
+    requiresPaintingModel: true,
+    temporaryCapability: 'image-generation',
+  }),
+  describe('write_file', 'auto'),
 ];
 
 const DESCRIPTORS_BY_ID = new Map<string, BuiltInToolDescriptor>(
