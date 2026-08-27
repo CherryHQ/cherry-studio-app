@@ -153,12 +153,12 @@ function appendAssistantHistory(
   model: PiModel<PiApi>,
   usage: RuntimeExecutionRequest['history'][number]['messages'][number]['usage'],
 ): void {
-  const startIndex = history.length;
   let content: AssistantMessage['content'] = [];
+  let lastAssistant: AssistantMessage | undefined;
   const flushAssistant = () => {
     if (content.length === 0) return;
     const stopReason = content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop';
-    history.push({
+    lastAssistant = {
       api: model.api,
       content,
       model: model.id,
@@ -167,7 +167,8 @@ function appendAssistantHistory(
       stopReason,
       timestamp: Date.now(),
       usage: EMPTY_PI_USAGE,
-    });
+    };
+    history.push(lastAssistant);
     content = [];
   };
 
@@ -209,12 +210,7 @@ function appendAssistantHistory(
 
   flushAssistant();
 
-  if (usage) {
-    const lastAssistant = history
-      .slice(startIndex)
-      .findLast((message): message is AssistantMessage => message.role === 'assistant');
-    if (lastAssistant) lastAssistant.usage = toPiUsage(usage);
-  }
+  if (usage && lastAssistant) lastAssistant.usage = toPiUsage(usage);
 }
 
 function toPiUsage(usage: NonNullable<RuntimeMessage['usage']>): PiUsage {

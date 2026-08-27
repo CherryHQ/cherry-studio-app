@@ -99,10 +99,9 @@ export function estimatePiContextFixedCosts(input: {
     (total, tool) => total + estimateTextTokens(serializeTool(tool)),
     0,
   );
-  const imageCount = [...input.conversation.history, input.conversation.prompt].reduce(
-    (total, message) => total + countImages(message),
-    0,
-  );
+  const imageCount =
+    input.conversation.history.reduce((total, message) => total + countImages(message), 0) +
+    countImages(input.conversation.prompt);
   const attachmentTokens =
     imageCount * Math.max(0, PI_IMAGE_CONTEXT_TOKEN_RESERVE - PI_ESTIMATED_IMAGE_TOKENS);
   const outputReserveTokens = Math.max(0, input.outputReserveTokens);
@@ -321,7 +320,8 @@ function createCheckpoint(
     const value = metadata.get(message as object);
     return value ? [value] : [];
   });
-  let anchorTurnId = summarizedMetadata.at(-1)?.turnId ?? previous?.anchorTurnId ?? null;
+  const lastSummarized = summarizedMetadata.at(-1);
+  let anchorTurnId = lastSummarized?.turnId ?? previous?.anchorTurnId ?? null;
   let resume: PiCheckpointPayload['resume'];
 
   if (preparation.isSplitTurn) {
@@ -339,7 +339,7 @@ function createCheckpoint(
     anchorTurnId = previousTurn?.turnId ?? previous?.anchorTurnId ?? null;
     if (!anchorTurnId) return null;
     resume = { turnId: splitTurn.turnId, messageOffset: splitTurn.messageOffset };
-  } else if (summarizedMetadata.at(-1)?.turnId === null) {
+  } else if (lastSummarized?.turnId === null) {
     return null;
   }
 
