@@ -1,15 +1,18 @@
 # Agent Tools And Controlled Resources
 
-Status: **tool binding persistence, Runtime tool contracts, the Pi adapter, HTTP MCP Runtime
-adaptation, built-in capability adapters, and Host projection are implemented**. Version 1 is
+Status: **MCP binding persistence, Runtime tool contracts, the Pi adapter, HTTP MCP Runtime
+adaptation, system capability adapters, and Host projection are implemented**. Version 1 is
 local-only.
 
-The built-in catalog ships device calendar and reminders, health, location, web search and fetch,
+The system catalog ships device calendar and reminders, health, location, web search and fetch,
 image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and the Agent's persisted built-in bindings, then combines it with
-persisted executable MCP bindings. Office generation does not exist yet. Sections that a shipped
-tool still diverges from carry an **As-built** note.
+permission, app configuration, and composer-selected temporary capabilities, then combines it with
+the Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and file
+capabilities are available to every Agent when their system gates pass. Web search and image
+generation enter only the turn whose composer selected them; they are never Agent configuration.
+Office generation does not exist yet. Sections that a shipped tool still diverges from carry an
+**As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -19,7 +22,8 @@ side effect, credential, system permission, managed file, and provider-specific 
 
 ```text
 Mobile Agent Host
-    ├─ resolves Agent tool bindings
+    ├─ resolves the shared system capability catalog
+    ├─ resolves Agent-specific MCP bindings
     ├─ creates a Host-owned turn resource ledger
     └─ builds an immutable RuntimeTool[] snapshot
             ↓
@@ -42,8 +46,7 @@ implementations behind those adapters; they never become a second conversation R
 
 The application owns two different representations:
 
-- A durable **tool binding** says which application capability or MCP source an Agent may use and
-  its approval policy.
+- A durable **tool binding** says which MCP source an Agent may use and its approval policy.
 - A turn-local **Runtime tool** contains the provider-safe name, description, JSON Schema, approval
   mode, and execution callback Pi can use for one immutable turn.
 
@@ -55,60 +58,52 @@ type ToolRef =
   | { source: 'mcp'; serverId: string; rawToolName: string }
 ```
 
-`ToolRef` is the persistence, approval, and audit identity. The provider-safe function name is a
-turn-local execution alias derived deterministically from the stable ref; server display names and
-generated aliases are never authority. Alias generation includes the source namespace and a stable
-digest, rejects collisions within the snapshot, and never falls back to display-name matching. The
-Host snapshots a display name separately so historical UI remains understandable after
-configuration changes.
+`ToolRef` is the approval and audit identity, and the persistence identity for MCP. The
+provider-safe function name is a turn-local execution alias derived deterministically from the
+stable ref; server display names and generated aliases are never authority. Alias generation
+includes the source namespace and a stable digest, rejects collisions within the snapshot, and
+never falls back to display-name matching. The Host snapshots a display name separately so
+historical UI remains understandable after configuration changes.
 
-**As-built.** The turn-local representation exists: every built-in capability has a stable
-`ToolRef` whose `capabilityId` doubles as its provider alias, which is unambiguous because the
-catalog is Cherry-owned and collision-free. Durable bindings live in the normalized
-`agent_tool_binding` table and the Host projects both their `enabled` and `approval` values. The
-`agent` table therefore has no tool-policy column.
+**As-built.** Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its
+provider alias, which is unambiguous because the catalog is Cherry-owned and collision-free.
+`src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
+own platform, permission, application-configuration, approval, and optional temporary-capability
+gates. The Agent editor neither reads nor overrides this catalog.
 
-A built-in capability with no binding row falls back to its catalog default rather than to a single
-global answer: reads default to `auto` and mutations to `ask`, while an **opt-in** capability
-defaults to off. `web_search` and `web_fetch` are opt-in because they reach a third-party service
-the user configures separately, which is the gate the retired per-Assistant web-search switch
-provided. `src/shared/data/types/builtInTool.ts` is the one catalog both the Host and the Agent
-editor read, so the switches and the turn cannot disagree about which capabilities exist.
+`web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
+requires `image-generation` and a configured drawing model. The composer sends these selections on
+`submitMessage`; a successful send clears the selection and no value is written to the Agent.
+System device and file capabilities have no Agent-specific switch. The inference snapshot records
+the tools that actually entered the immutable turn.
 
 The logical binding model is:
 
 ```ts
-type AgentToolBinding =
-  | {
-      agentId: string
-      source: 'builtin'
-      capabilityId: string
-      enabled: boolean
-      approval: 'auto' | 'ask' | 'deny'
-    }
-  | {
-      agentId: string
-      source: 'mcp'
-      serverId: string
-      rawToolName?: string
-      enabled: boolean
-      approval: 'auto' | 'ask' | 'deny'
-    }
+type AgentToolBinding = {
+  agentId: string
+  source: 'mcp'
+  serverId: string
+  rawToolName?: string
+  enabled: boolean
+  approval: 'auto' | 'ask' | 'deny'
+}
 ```
 
 For MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
-default. There is at most one built-in binding per `(agentId, capabilityId)`, one MCP server default
-per `(agentId, serverId)`, and one specific binding per `(agentId, serverId, rawToolName)`. A deleted
-server or tool leaves a disabled/dangling binding for explicit user repair; it never retargets by
-display name.
+default. There is at most one MCP server default per `(agentId, serverId)` and one specific binding
+per `(agentId, serverId, rawToolName)`. A deleted server or tool leaves a disabled/dangling binding
+for explicit user repair; it never retargets by display name.
 
-The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. MCP server
-ids intentionally have no foreign key: deleting a server disables its rows without erasing their
-stable identity, display snapshot, or approval. Upsert and replace preserve the row id for a stable
-identity, reject duplicates atomically, and cannot create authorization for a missing server unless
-that exact dangling identity already exists. Bindings belong to Cherry persistence, the Host
-resolves them, and Pi must never read them directly.
+The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. They still
+accept historical `builtin` rows for migration-free compatibility, but the Host ignores those rows
+and the Agent editor drops them on its next binding replacement. MCP server ids intentionally have
+no foreign key: deleting a server disables its rows without erasing their stable identity, display
+snapshot, or approval. Upsert and replace preserve the row id for a stable identity, reject
+duplicates atomically, and cannot create authorization for a missing server unless that exact
+dangling identity already exists. Bindings belong to Cherry persistence, the Host resolves them,
+and Pi must never read them directly.
 
 The data resolver chooses a specific tool row before its server default, then combines that policy
 with the current stored Server state and caller-supplied discovery fact. It reports `unbound`,
@@ -122,9 +117,9 @@ tool.
 Before admitting a turn, the Host resolves tools in this order:
 
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
-2. Read the current Agent's enabled built-in and MCP bindings.
-3. Project only capabilities implemented on the current mobile platform.
-4. Resolve configured MCP servers and their currently enabled tool descriptors.
+2. Read temporary system capability selections from this submission.
+3. Project only system capabilities implemented and available on the current mobile platform.
+4. Read the current Agent's enabled MCP bindings and resolve their executable descriptors.
 5. Apply system permission state, model tool-calling support, and application policy.
 6. Freeze stable refs, provider-safe aliases, callbacks, and approval modes into `RuntimeTool[]` for
    the turn.
@@ -324,10 +319,10 @@ with its own approval policy.
 - Pi supplies the validated generation request but does not construct provider SDK options or own
   provider credentials, usage accounting, download, persistence, or cleanup.
 - Successful output is imported into managed file storage before the tool reports an artifact.
-- Cost-bearing or externally submitted generation defaults to `ask`; the Agent binding may choose a
-  different policy explicitly. `generate_image` is absent from the catalog entirely until a drawing
-  model is configured, and its input schema is built from that model's capability block so the model
-  is never offered a parameter its provider rejects.
+- Cost-bearing or externally submitted generation uses the application-owned `ask` policy; Agents
+  cannot override it. `generate_image` is absent from the catalog unless the composer selected image
+  generation for the turn and a drawing model is configured. Its input schema is built from that
+  model's capability block so the model is never offered a parameter its provider rejects.
 
 ### Office Generation
 

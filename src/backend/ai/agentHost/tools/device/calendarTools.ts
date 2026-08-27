@@ -1,9 +1,8 @@
 /**
  * System calendar capabilities.
  *
- * Reads and mutations are separate capabilities so an Agent binding can allow
- * "look at my week" without also allowing "delete that meeting"
- * (agent-tools-and-resources.md, System Calendar).
+ * Reads and mutations stay separate so application policy can approve safe
+ * lookups automatically while asking before calendar changes.
  */
 
 import * as z from 'zod';

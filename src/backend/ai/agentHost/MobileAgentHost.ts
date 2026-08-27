@@ -129,7 +129,10 @@ import {
   resolveManagedTextAttachments,
   TextAttachmentError,
 } from './textAttachments';
-import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
+import {
+  createSystemCapabilitySource,
+  type SystemCapabilitySource,
+} from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -158,7 +161,7 @@ type MobileAgentHostOverrides = {
   modelSupportsTools: AgentModelToolSupportResolver;
   runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
-  tools: AgentToolSource;
+  tools: SystemCapabilitySource;
 };
 
 /**
@@ -289,14 +292,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   private lazyAgents: AgentDefinitionSource | undefined;
 
-  private get toolSource(): AgentToolSource {
+  private get systemCapabilities(): SystemCapabilitySource {
     return (
       this.overrides.tools ??
-      (this.lazyTools ??= createBuiltInToolSource({ webSearch: this.webSearchService }))
+      (this.lazySystemCapabilities ??= createSystemCapabilitySource({
+        webSearch: this.webSearchService,
+      }))
     );
   }
 
-  private lazyTools: AgentToolSource | undefined;
+  private lazySystemCapabilities: SystemCapabilitySource | undefined;
 
   /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
@@ -485,26 +490,26 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         availableFiles,
       );
 
-      // Freeze built-in and configured tools for the turn so mid-turn changes
+      // Freeze system capabilities and configured MCP tools for the turn so mid-turn changes
       // cannot alter the active catalog. The catalog closes over this turn's
-      // resource ledger, never a global file surface. Built-in discovery
-      // remains optional; configured binding resolution fails closed.
-      let builtInTools: readonly RuntimeTool[] = [];
+      // resource ledger, never a global file surface. System capability
+      // resolution remains optional; configured MCP binding resolution fails closed.
+      let systemTools: readonly RuntimeTool[] = [];
       let configuredTools: readonly RuntimeTool[] = [];
       if (runtime.descriptor.capabilities.tools) {
         try {
-          builtInTools = await raceAbort(
-            this.toolSource.getTools({
-              agentId: agent.id,
+          systemTools = await raceAbort(
+            this.systemCapabilities.getTools({
               model: agent.model,
               resources,
+              temporaryCapabilities: new Set(parsed.temporaryCapabilities ?? []),
             }),
             signal,
           );
         } catch (error) {
           signal.throwIfAborted();
           logger.warn(
-            'Failed to resolve built-in Agent tools; continuing without them',
+            'Failed to resolve system capabilities; continuing without them',
             error as Error,
           );
         }
@@ -515,7 +520,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
         }
       }
-      const tools = [...builtInTools, ...configuredTools];
+      const tools = [...systemTools, ...configuredTools];
       let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
       try {
         inferenceModel = await raceAbort(this.inferenceModel(agent.model), signal);

@@ -12,8 +12,12 @@ surfaces.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
-- The editor exposes only the Agent definition fields: avatar, name, default model, and
-  instructions. Inference parameters are not part of the Agent editor surface.
+- The editor exposes the Agent definition fields (avatar, name, default model, and instructions)
+  plus Agent-specific MCP extensions. Inference parameters and system capabilities are not part of
+  the Agent editor surface.
+- Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
+  when their system gates pass. Web search and image generation are temporary composer selections
+  for one submission; they are never saved on the Agent.
 - The avatar is a managed file, not a mutable Agent field, so it has its own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
   returns an id. Picking one only updates the draft; Save commits it. An avatar can be set and

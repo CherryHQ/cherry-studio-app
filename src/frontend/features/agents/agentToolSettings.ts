@@ -1,10 +1,5 @@
-import type { PermissionStatuses } from '@/shared/contracts';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
-import {
-  BUILT_IN_TOOL_DESCRIPTORS,
-  type BuiltInToolDescriptor,
-} from '@/shared/data/types/builtInTool';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpToolBindingDraft = Extract<WriteAgentToolBinding, { source: 'mcp' }>;
@@ -45,27 +40,20 @@ export type McpToolCatalog = {
 export function createAgentToolBindingDraft(
   bindings: readonly AgentToolBinding[],
 ): WriteAgentToolBinding[] {
-  return bindings.map((binding) => {
-    const base = {
-      approval: binding.approval,
-      displayNameSnapshot: binding.displayNameSnapshot,
-      enabled: binding.enabled,
-    };
-
-    if (binding.source === 'builtin') {
-      return { ...base, capabilityId: binding.capabilityId, source: 'builtin' };
-    }
-
-    return {
-      ...base,
-      // Runtime already downgrades legacy MCP auto rows to ask. The write API
-      // intentionally cannot persist auto for third-party tools.
-      approval: binding.approval === 'deny' ? 'deny' : 'ask',
-      ...(binding.rawToolName ? { rawToolName: binding.rawToolName } : {}),
-      serverId: binding.serverId,
-      source: 'mcp',
-    };
-  });
+  return bindings.flatMap((binding) =>
+    binding.source === 'mcp'
+      ? [
+          {
+            approval: binding.approval === 'deny' ? 'deny' : 'ask',
+            displayNameSnapshot: binding.displayNameSnapshot,
+            enabled: binding.enabled,
+            ...(binding.rawToolName ? { rawToolName: binding.rawToolName } : {}),
+            serverId: binding.serverId,
+            source: 'mcp' as const,
+          },
+        ]
+      : [],
+  );
 }
 
 export function buildAgentMcpServerOptions(input: {
@@ -225,101 +213,4 @@ function mcpBindingIdentity(serverId: string, rawToolName?: string): string {
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
-}
-
-// ── Built-in capabilities ────────────────────────────────────────
-
-export type BuiltInToolDraft = Extract<WriteAgentToolBinding, { source: 'builtin' }>;
-
-export type AgentBuiltInToolStatus =
-  | 'available'
-  | 'binding-disabled'
-  | 'needs-painting-model'
-  | 'needs-permission'
-  | 'unsupported';
-
-export type AgentBuiltInToolOption = {
-  binding?: BuiltInToolDraft;
-  descriptor: BuiltInToolDescriptor;
-  /** Whether the switch can be turned on at all on this device right now. */
-  isSupported: boolean;
-  status: AgentBuiltInToolStatus;
-};
-
-/**
- * Mirrors the Host's own resolution order so the editor and the turn agree on
- * what an Agent can use: platform, then OS permission, then configuration, then
- * the Agent's own binding.
- */
-export function buildAgentBuiltInToolOptions(input: {
-  bindings: readonly WriteAgentToolBinding[];
-  hasPaintingModel: boolean;
-  permissionStatuses: PermissionStatuses;
-  platform: string;
-}): AgentBuiltInToolOption[] {
-  const byCapabilityId = new Map(
-    input.bindings.flatMap((binding) =>
-      binding.source === 'builtin' ? [[binding.capabilityId, binding] as const] : [],
-    ),
-  );
-
-  return BUILT_IN_TOOL_DESCRIPTORS.map((descriptor) => {
-    const binding = byCapabilityId.get(descriptor.capabilityId);
-    const blocker = findBuiltInToolBlocker(descriptor, input);
-    const isEnabled = binding ? binding.enabled : !descriptor.isOptIn;
-
-    return {
-      ...(binding ? { binding } : {}),
-      descriptor,
-      isSupported: blocker === null,
-      status: blocker ?? (isEnabled ? 'available' : 'binding-disabled'),
-    };
-  });
-}
-
-export function isBuiltInToolEnabled(option: AgentBuiltInToolOption): boolean {
-  return option.isSupported && option.status === 'available';
-}
-
-/**
- * Enabling writes an explicit binding rather than deleting the row, so a later
- * catalog default change cannot silently flip a choice the user already made.
- */
-export function setAgentBuiltInToolEnabled(
-  bindings: readonly WriteAgentToolBinding[],
-  option: AgentBuiltInToolOption,
-  enabled: boolean,
-): WriteAgentToolBinding[] {
-  const rest = bindings.filter(
-    (binding) =>
-      binding.source !== 'builtin' || binding.capabilityId !== option.descriptor.capabilityId,
-  );
-  return [
-    ...rest,
-    {
-      approval: option.binding?.approval ?? option.descriptor.defaultApproval,
-      capabilityId: option.descriptor.capabilityId,
-      enabled,
-      source: 'builtin',
-    },
-  ];
-}
-
-function findBuiltInToolBlocker(
-  descriptor: BuiltInToolDescriptor,
-  input: { hasPaintingModel: boolean; permissionStatuses: PermissionStatuses; platform: string },
-): Exclude<AgentBuiltInToolStatus, 'available' | 'binding-disabled'> | null {
-  if (
-    descriptor.platforms !== null &&
-    !descriptor.platforms.some((platform) => platform === input.platform)
-  ) {
-    return 'unsupported';
-  }
-  if (descriptor.permissionScopes.some((scope) => input.permissionStatuses[scope] !== 'granted')) {
-    return 'needs-permission';
-  }
-  if (descriptor.requiresPaintingModel && !input.hasPaintingModel) {
-    return 'needs-painting-model';
-  }
-  return null;
 }

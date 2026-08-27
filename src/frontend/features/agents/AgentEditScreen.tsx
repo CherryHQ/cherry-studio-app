@@ -330,10 +330,8 @@ function AgentEditForm({
             </View>
           </Pressable>
         </View>
-        {/* The one block that still needs naming: unlike the fields above, whose
-            placeholders say what they are, this is a list of switches that says
-            nothing about what it governs. It keeps the heading and drops the
-            card the rest of the form no longer draws. */}
+        {/* MCP is the only Agent-specific capability surface. Cherry's built-in
+            system capabilities are resolved uniformly for every Agent turn. */}
         {isEditing ? (
           <View className="gap-2">
             <Text className="px-1 font-medium text-foreground text-sm">

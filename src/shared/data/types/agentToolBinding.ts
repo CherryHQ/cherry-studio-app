@@ -16,6 +16,8 @@ const AGENT_TOOL_BINDING_BASE = {
 } as const;
 
 export const AgentToolBindingSchema = z.discriminatedUnion('source', [
+  // Kept so existing databases remain readable. Built-in system capabilities are
+  // no longer Agent configuration and the Host ignores this legacy variant.
   z.strictObject({
     ...AGENT_TOOL_BINDING_BASE,
     capabilityId: z.string().min(1),

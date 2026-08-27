@@ -1,22 +1,27 @@
 import type { RuntimeModel, RuntimeTool } from '@/backend/ai/agent';
 import { fileContent } from '@/backend/services/file/fileContent';
-import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
-import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type {
+  AgentTemporaryCapability,
+  DevicePermissionScope,
+  SystemPermissionState,
+} from '@/shared/contracts';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { TurnToolResources } from '../../managedFileResolver';
-import { type BuiltInToolSourceDependencies, createBuiltInToolSource } from '../builtInToolSource';
+import {
+  createSystemCapabilitySource,
+  type SystemCapabilitySourceDependencies,
+} from '../builtInToolSource';
 import type { ConfiguredPaintingModel } from '../painting';
 
-const AGENT_ID = '00000000-0000-7000-8000-0000000000a1';
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
 const TURN_RESOURCES: TurnToolResources = {
   fileEntryIds: new Set<string>(),
   grantFile: () => undefined,
 };
 
-describe('createBuiltInToolSource', () => {
+describe('createSystemCapabilitySource', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -59,48 +64,33 @@ describe('createBuiltInToolSource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
-  test('leaves web tools out until a binding opts in', async () => {
+  test('offers web tools only when the composer enables them for this turn', async () => {
     const unbound = await resolve({});
     expect(capabilityIds(unbound)).not.toContain('web_search');
 
-    const bound = await resolve({
-      bindings: [binding({ capabilityId: 'web_search', approval: 'auto' })],
+    const enabled = await resolve({
+      temporaryCapabilities: ['web-search'],
     });
-    expect(capabilityIds(bound)).toContain('web_search');
-    expect(approvalOf(bound, 'web_search')).toBe('auto');
+    expect(capabilityIds(enabled)).toEqual(expect.arrayContaining(['web_search', 'web_fetch']));
+    expect(approvalOf(enabled, 'web_search')).toBe('auto');
   });
 
-  test('offers generate_image only with a configured drawing model', async () => {
-    const withoutModel = await resolve({ paintingModel: null });
+  test('offers generate_image only with temporary activation and a drawing model', async () => {
+    const withoutActivation = await resolve({ paintingModel: paintingModel() });
+    expect(capabilityIds(withoutActivation)).not.toContain('generate_image');
+
+    const withoutModel = await resolve({
+      paintingModel: null,
+      temporaryCapabilities: ['image-generation'],
+    });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
 
-    const withModel = await resolve({ paintingModel: paintingModel() });
+    const withModel = await resolve({
+      paintingModel: paintingModel(),
+      temporaryCapabilities: ['image-generation'],
+    });
     expect(capabilityIds(withModel)).toContain('generate_image');
     expect(approvalOf(withModel, 'generate_image')).toBe('ask');
-  });
-
-  test('drops a capability an Agent binding disabled', async () => {
-    const tools = await resolve({
-      bindings: [binding({ capabilityId: 'write_file', enabled: false })],
-    });
-
-    expect(capabilityIds(tools)).toEqual([]);
-  });
-
-  test('keeps a denied capability in the snapshot so the call settles as denied', async () => {
-    const tools = await resolve({
-      bindings: [binding({ capabilityId: 'write_file', approval: 'deny' })],
-    });
-
-    expect(approvalOf(tools, 'write_file')).toBe('deny');
-  });
-
-  test('lets a binding tighten a default-auto capability', async () => {
-    const tools = await resolve({
-      bindings: [binding({ capabilityId: 'write_file', approval: 'ask' })],
-    });
-
-    expect(approvalOf(tools, 'write_file')).toBe('ask');
   });
 
   test('omits iOS-only capabilities on Android', async () => {
@@ -118,27 +108,11 @@ describe('createBuiltInToolSource', () => {
     expect(tools).toEqual([]);
   });
 
-  test('fails closed when the Agent bindings cannot be read', async () => {
-    const source = createBuiltInToolSource(
-      dependencies({
-        listBindings: async () => {
-          throw new Error('database unavailable');
-        },
-      }),
-    );
-
-    // The Host turns this into a tool-less turn rather than one authorized by
-    // catalog defaults the user may have overridden.
-    await expect(
-      source.getTools({ agentId: AGENT_ID, model: MODEL, resources: TURN_RESOURCES }),
-    ).rejects.toThrow('database unavailable');
-  });
-
   test('describes every tool with a stable built-in ref and JSON Schema input', async () => {
     const tools = await resolve({
       deviceAccess: { 'location.read': 'granted' },
       paintingModel: paintingModel(),
-      bindings: [binding({ capabilityId: 'web_search' })],
+      temporaryCapabilities: ['web-search', 'image-generation'],
     });
 
     for (const tool of tools) {
@@ -164,8 +138,12 @@ describe('createBuiltInToolSource', () => {
     jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
     const resources: TurnToolResources = { fileEntryIds: new Set(), grantFile };
-    const source = createBuiltInToolSource(dependencies({}));
-    const tools = await source.getTools({ agentId: AGENT_ID, model: MODEL, resources });
+    const source = createSystemCapabilitySource(dependencies({}));
+    const tools = await source.getTools({
+      model: MODEL,
+      resources,
+      temporaryCapabilities: new Set(),
+    });
     const writeFile = tools.find((tool) => tool.providerName === 'write_file');
     if (!writeFile) throw new Error('write_file was not available.');
 
@@ -184,30 +162,32 @@ describe('createBuiltInToolSource', () => {
 });
 
 type Scenario = {
-  bindings?: AgentToolBinding[];
   deviceAccess?: Partial<Record<DevicePermissionScope, SystemPermissionState>>;
-  listBindings?: BuiltInToolSourceDependencies['listBindings'];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
+  temporaryCapabilities?: AgentTemporaryCapability[];
 };
 
 async function resolve(
   scenario: Scenario,
   options: { platform?: string } = {},
 ): Promise<readonly RuntimeTool[]> {
-  const source = createBuiltInToolSource({
+  const source = createSystemCapabilitySource({
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
-  return source.getTools({ agentId: AGENT_ID, model: MODEL, resources: TURN_RESOURCES });
+  return source.getTools({
+    model: MODEL,
+    resources: TURN_RESOURCES,
+    temporaryCapabilities: new Set(scenario.temporaryCapabilities ?? []),
+  });
 }
 
-function dependencies(scenario: Scenario): Partial<BuiltInToolSourceDependencies> {
+function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDependencies> {
   return {
     devicePermissions: {
       getStatusForScope: async (scope) => scenario.deviceAccess?.[scope] ?? 'denied',
     },
-    listBindings: scenario.listBindings ?? (async () => scenario.bindings ?? []),
     painting: {
       ai: { generateImage: jest.fn() },
       files: {
@@ -224,7 +204,7 @@ function dependencies(scenario: Scenario): Partial<BuiltInToolSourceDependencies
       providerRegistry: {
         getImageGenerationSupport: () => scenario.paintingModel?.support ?? null,
       },
-    } as unknown as BuiltInToolSourceDependencies['painting'],
+    } as unknown as SystemCapabilitySourceDependencies['painting'],
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };
@@ -234,22 +214,6 @@ function paintingModel(): ConfiguredPaintingModel {
   return {
     support: { modes: { generate: { supports: {} } } } as ConfiguredPaintingModel['support'],
     uniqueModelId: createUniqueModelId('openai', 'gpt-image-1'),
-  };
-}
-
-function binding(
-  input: Partial<Extract<AgentToolBinding, { source: 'builtin' }>> & { capabilityId: string },
-): AgentToolBinding {
-  return {
-    agentId: AGENT_ID,
-    approval: 'auto',
-    createdAt: '2026-08-26T00:00:00.000Z',
-    displayNameSnapshot: null,
-    enabled: true,
-    id: '00000000-0000-4000-8000-0000000000b1',
-    source: 'builtin',
-    updatedAt: '2026-08-26T00:00:00.000Z',
-    ...input,
   };
 }
 

@@ -5,6 +5,7 @@ import {
   AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
   AgentMessagePartSchema,
+  AgentSubmitMessageInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
 } from '../agent';
@@ -16,6 +17,22 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent tool and managed-file contracts', () => {
+  test('accepts only the supported turn-only capability requests', () => {
+    const input = {
+      parts: [{ text: 'Draw it.', type: 'text' }],
+      sessionId: 'session-1',
+      temporaryCapabilities: ['web-search', 'image-generation'],
+    } as const;
+
+    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({
+        ...input,
+        temporaryCapabilities: ['calendar'],
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips the versioned inference snapshot and preserves unsupported versions', () => {
     const snapshot = {
       version: 1,
