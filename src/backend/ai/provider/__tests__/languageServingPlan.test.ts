@@ -12,7 +12,7 @@ import {
 describe('resolveLanguageServingPlan', () => {
   it('classifies shared auth and Pi protocol facts without selecting credentials', () => {
     const provider = createProvider();
-    const plan = resolveLanguageServingPlan(provider, createModel());
+    const plan = resolveLanguageServingPlan(provider, createModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
 
     expect(plan).toMatchObject({
       auth: { declaredMethods: ['api-key'], type: 'api-key' },
@@ -115,9 +115,7 @@ function createProvider(overrides: Partial<Provider> = {}): Provider {
   };
 }
 
-function createModel(
-  endpointType: EndpointType | undefined = ENDPOINT_TYPE.OPENAI_RESPONSES,
-): Model {
+function createModel(endpointType: EndpointType | undefined): Model {
   return {
     capabilities: [],
     endpointTypes: endpointType ? [endpointType] : undefined,

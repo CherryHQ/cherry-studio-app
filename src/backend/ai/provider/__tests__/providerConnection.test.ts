@@ -25,13 +25,13 @@ describe('resolveProviderConnection', () => {
     });
   });
 
-  it('does not expose stored Provider API key entries', () => {
+  it('does not expose runtime API key metadata', () => {
     const provider = createProvider();
-    provider.apiKeys = [{ id: 'key-1', isEnabled: true, key: 'provider-secret' }];
+    provider.apiKeys = [{ id: 'key-1', isEnabled: true, label: 'primary' }];
 
     const serialized = JSON.stringify(resolveProviderConnection(provider, createModel()));
 
-    expect(serialized).not.toContain('provider-secret');
+    expect(serialized).not.toContain('key-1');
     expect(serialized).not.toContain('apiKeys');
   });
 });
