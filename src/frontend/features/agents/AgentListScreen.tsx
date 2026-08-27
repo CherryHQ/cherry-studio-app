@@ -239,19 +239,17 @@ export default function AgentListScreen() {
           />
         ) : (
           <ContentState.Empty
-            className="px-8 py-16"
             description={t('agent.list.emptyDescription')}
             icon={
-              <View className="size-14 items-center justify-center rounded-full bg-secondary">
+              <ContentState.Icon>
                 <BotIcon className="size-7 text-foreground" />
-              </View>
+              </ContentState.Icon>
             }
+            layout="page"
             primaryAction={{
               accessibilityLabel: t('agent.actions.create'),
               children: t('agent.actions.create'),
-              className: 'rounded-full',
               onPress: openCreateAgent,
-              size: 'default',
             }}
             title={t('agent.list.emptyTitle')}
           />
