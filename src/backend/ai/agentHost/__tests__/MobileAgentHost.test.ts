@@ -127,7 +127,6 @@ const stubTool: RuntimeTool = {
 };
 
 type HostToolOverrides = {
-  modelSupportsTools?: () => Promise<boolean>;
   resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
 };
 
@@ -151,7 +150,6 @@ function createHost(
       agents,
       files,
       inferenceModel: resolveInferenceModel,
-      modelSupportsTools: toolOverrides.modelSupportsTools ?? (async () => true),
       naming,
       runtimeTools: {
         resolve: toolOverrides.resolveRuntimeTools ?? (async () => []),
@@ -831,9 +829,17 @@ describe('MobileAgentHost', () => {
   });
 
   test('rejects configured tools for an unsupported model before reserving messages', async () => {
-    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const runtime = new FakeRuntime({
+      descriptor: FAKE_DESCRIPTOR,
+      modelPreflight: {
+        contextWindow: 128_000,
+        inputModalities: ['text', 'image'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: false,
+      },
+    });
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
-      modelSupportsTools: async () => false,
       resolveRuntimeTools: async () => [
         {
           approval: 'ask',

@@ -8,6 +8,7 @@ import type {
   RuntimeToolCall,
   RuntimeToolRef,
 } from '@/backend/ai/agent';
+import { raceAbort } from '@/backend/ai/agent/raceAbort';
 
 export const MCP_TOOL_CALL_TIMEOUT_MS = 60 * 1000;
 export const MCP_TOOL_RESULT_MAX_BYTES = 256 * 1024;
@@ -17,6 +18,7 @@ const MCP_RESULT_PREVIEW_MAX_BYTES = 8 * 1024;
 const MCP_RESULT_PREVIEW_MAX_DEPTH = 5;
 const MCP_RESULT_PREVIEW_MAX_ENTRIES = 12;
 const MCP_RESULT_PREVIEW_MAX_STRING_BYTES = 512;
+const UTF8_ENCODER = new TextEncoder();
 
 export type McpExecutableToolDescriptor = {
   serverId: string;
@@ -200,7 +202,7 @@ async function executeMcpRuntimeTool(input: {
 
   const bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
   try {
-    const remoteResult = await settleOrAbort(
+    const remoteResult = await raceAbort(
       input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation),
       bound.signal,
     );
@@ -316,7 +318,7 @@ function truncateUtf8(value: string, maxBytes: number): string {
 }
 
 function utf8Size(value: string): number {
-  return new TextEncoder().encode(value).byteLength;
+  return UTF8_ENCODER.encode(value).byteLength;
 }
 
 function isRuntimeJsonValue(value: unknown): value is RuntimeJsonValue {
@@ -383,26 +385,4 @@ export function createBoundedSignal(
         ? timeoutController.signal
         : AbortSignal.any([timeoutController.signal, ...upstream]),
   };
-}
-
-function settleOrAbort<TValue>(promise: Promise<TValue>, signal: AbortSignal): Promise<TValue> {
-  return new Promise<TValue>((resolve, reject) => {
-    const abort = () => reject(new Error('MCP invocation aborted'));
-    if (signal.aborted) {
-      abort();
-    } else {
-      signal.addEventListener('abort', abort, { once: true });
-    }
-
-    promise.then(
-      (value) => {
-        signal.removeEventListener('abort', abort);
-        resolve(value);
-      },
-      (error: unknown) => {
-        signal.removeEventListener('abort', abort);
-        reject(error);
-      },
-    );
-  });
 }

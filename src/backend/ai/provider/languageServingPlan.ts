@@ -9,7 +9,7 @@ import {
   type ProviderLanguageTransportPolicy,
 } from '@/backend/ai/provider/providerTransport';
 import type { Model } from '@/shared/data/types/model';
-import type { AuthType, Provider, ProviderAuthMethod } from '@/shared/data/types/provider';
+import type { Provider } from '@/shared/data/types/provider';
 
 const PI_LANGUAGE_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
@@ -53,10 +53,6 @@ export type PiLanguageBinding =
     };
 
 export interface LanguageServingPlan {
-  auth: {
-    declaredMethods: readonly ProviderAuthMethod[] | undefined;
-    type: AuthType;
-  };
   bindings: {
     pi: PiLanguageBinding;
   };
@@ -83,10 +79,6 @@ export function resolveLanguageServingPlan(
   const connection = options.resolvedConnection ?? resolveProviderConnection(provider, model);
 
   return {
-    auth: {
-      declaredMethods: provider.authMethods ? [...provider.authMethods] : undefined,
-      type: provider.authType,
-    },
     bindings: {
       pi: resolvePiLanguageBinding(provider, connection),
     },

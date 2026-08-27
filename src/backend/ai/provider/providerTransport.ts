@@ -8,11 +8,6 @@ export interface ProviderLanguageTransportPolicy {
   wrapFetch(baseFetch: ProviderFetch): ProviderFetch;
 }
 
-interface ProviderLanguageTransportPolicyRegistration {
-  matches(provider: Provider): boolean;
-  policy: ProviderLanguageTransportPolicy;
-}
-
 const CHERRY_AI_LANGUAGE_TRANSPORT_POLICY: ProviderLanguageTransportPolicy = {
   wrapFetch: (baseFetch) => async (input, init) => {
     const signature = generateSignature({
@@ -28,22 +23,17 @@ const CHERRY_AI_LANGUAGE_TRANSPORT_POLICY: ProviderLanguageTransportPolicy = {
   },
 };
 
-const PROVIDER_LANGUAGE_TRANSPORT_POLICIES: readonly ProviderLanguageTransportPolicyRegistration[] =
-  [
-    {
-      matches: (provider) =>
-        isManagedCherryAiProviderId(provider.id) ||
-        isManagedCherryAiProviderId(provider.presetProviderId ?? ''),
-      policy: CHERRY_AI_LANGUAGE_TRANSPORT_POLICY,
-    },
-  ];
-
 /** Resolve shared Provider-specific language HTTP behavior without selecting user credentials. */
 export function resolveProviderLanguageTransportPolicy(
   provider: Provider,
 ): ProviderLanguageTransportPolicy | undefined {
-  return PROVIDER_LANGUAGE_TRANSPORT_POLICIES.find((registration) => registration.matches(provider))
-    ?.policy;
+  if (
+    isManagedCherryAiProviderId(provider.id) ||
+    isManagedCherryAiProviderId(provider.presetProviderId ?? '')
+  ) {
+    return CHERRY_AI_LANGUAGE_TRANSPORT_POLICY;
+  }
+  return undefined;
 }
 
 function getJsonBody(body: BodyInit | null | undefined): Record<string, unknown> | undefined {

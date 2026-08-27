@@ -10,12 +10,11 @@ import {
 } from '../languageServingPlan';
 
 describe('resolveLanguageServingPlan', () => {
-  it('classifies shared auth and Pi protocol facts without selecting credentials', () => {
+  it('classifies Pi protocol facts without selecting credentials', () => {
     const provider = createProvider();
     const plan = resolveLanguageServingPlan(provider, createModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
 
     expect(plan).toMatchObject({
-      auth: { declaredMethods: ['api-key'], type: 'api-key' },
       bindings: {
         pi: { endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES, status: 'supported' },
       },

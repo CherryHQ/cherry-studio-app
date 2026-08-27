@@ -1,8 +1,5 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import type { RuntimeModel, RuntimeOptions, RuntimeTool } from '@/backend/ai/agent';
 import { modelService } from '@/backend/data/services/ModelService';
-import { providerService } from '@/backend/data/services/ProviderService';
 import {
   AgentInferenceSnapshotV1Schema,
   type AgentInferenceSnapshotV1,
@@ -13,15 +10,11 @@ export type AgentInferenceModelSnapshot = AgentInferenceSnapshotV1['model'];
 export type AgentInferenceModelResolver = (
   model: RuntimeModel,
 ) => Promise<AgentInferenceModelSnapshot>;
-export type AgentModelToolSupportResolver = (model: RuntimeModel) => Promise<boolean>;
 
 /** Resolves public model facts only; provider credentials never cross this boundary. */
 export const resolveAgentInferenceModel: AgentInferenceModelResolver = async (runtimeModel) => {
   const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
-  const [model] = await Promise.all([
-    modelService.getById(uniqueModelId),
-    providerService.getByProviderId(runtimeModel.providerId),
-  ]);
+  const model = await modelService.getById(uniqueModelId);
   if (!model) {
     throw new Error('The selected model is unavailable.');
   }
@@ -33,14 +26,6 @@ export const resolveAgentInferenceModel: AgentInferenceModelResolver = async (ru
     ...(model.apiModelId !== undefined ? { apiModelId: model.apiModelId } : {}),
     name: model.name,
   };
-};
-
-/** Admission-time public capability check; no credentials are resolved here. */
-export const resolveAgentModelToolSupport: AgentModelToolSupportResolver = async (runtimeModel) => {
-  const model = await modelService.getById(
-    createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId),
-  );
-  return model?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false;
 };
 
 /**

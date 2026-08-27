@@ -25,10 +25,14 @@ export function findImageAttachmentLimit(
   if (files.length > MAX_IMAGE_ATTACHMENT_COUNT) {
     return 'count';
   }
-  if (files.some((file) => file.size > MAX_IMAGE_ATTACHMENT_BYTES)) {
-    return 'file-bytes';
+  let totalBytes = 0;
+  for (const file of files) {
+    if (file.size > MAX_IMAGE_ATTACHMENT_BYTES) {
+      return 'file-bytes';
+    }
+    totalBytes += file.size;
   }
-  if (files.reduce((total, file) => total + file.size, 0) > MAX_IMAGE_ATTACHMENT_TOTAL_BYTES) {
+  if (totalBytes > MAX_IMAGE_ATTACHMENT_TOTAL_BYTES) {
     return 'total-bytes';
   }
   if (

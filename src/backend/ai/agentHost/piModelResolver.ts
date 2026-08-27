@@ -42,8 +42,9 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
     async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
-      const { adapter, configuredBaseUrl, connection, model, preflight, provider, servingPlan } =
+      const { adapter, model, preflight, provider, servingPlan } =
         await resolveConfiguredPiModel(runtimeModel);
+      const { connection } = servingPlan;
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
       if (!selectedApiKey.value.trim()) {
@@ -59,7 +60,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       const providerFetch = servingPlan.transportPolicy?.wrapFetch(baseFetch) ?? baseFetch;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
-        baseUrl: adapter.formatBaseUrl(configuredBaseUrl),
+        baseUrl: adapter.formatBaseUrl(connection.baseUrl.trim()),
         ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
           ? { compat: { supportsDeveloperRole: false } }
           : {}),
@@ -126,15 +127,11 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
 
   const servingPlan = resolveLanguageServingPlan(provider, model);
-  const connection = servingPlan.connection;
   const piBinding = requirePiLanguageBinding(servingPlan);
   const adapter = resolvePiApiAdapter(piBinding.endpointType);
-  const configuredBaseUrl = connection.baseUrl.trim();
 
   return {
     adapter,
-    configuredBaseUrl,
-    connection,
     model,
     preflight: toPiModelPreflight(model),
     provider,

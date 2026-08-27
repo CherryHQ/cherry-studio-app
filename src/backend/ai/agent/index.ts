@@ -46,11 +46,5 @@ export {
   TOOL_EXECUTION_ERROR,
 } from './toolResults';
 
-export type {
-  PiModelResolution,
-  PiRuntimeAgent,
-  PiRuntimeAgentFactory,
-  PiRuntimeContextOptions,
-  PiRuntimeDependencies,
-} from './pi/PiRuntime';
+export type { PiModelResolution, PiRuntimeDependencies } from './pi/PiRuntime';
 export { PiRuntime } from './pi/PiRuntime';

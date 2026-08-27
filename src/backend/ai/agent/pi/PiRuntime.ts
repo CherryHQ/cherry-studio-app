@@ -136,7 +136,6 @@ const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
 const REDACTED_SECRET = '[REDACTED]';
 
-const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
 const TERMINAL_ERROR_DIAGNOSTIC_TYPES = new Set([
   'pi_messages_response_failure',
   'provider_response_failure',
@@ -434,10 +433,6 @@ function normalizeToolExecutionError(error: unknown): RuntimeError {
   };
 }
 
-function sensitiveValues(resolution: PiModelResolution): string[] {
-  return [...resolution.redactionValues];
-}
-
 function redactCompactionSummary(summary: string, sensitiveValues: readonly string[]): string {
   let redacted = summary.replace(
     /data:[^;,\s]+;base64,[a-z0-9+/=]+/gi,
@@ -600,11 +595,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   async cancel(turnId: string): Promise<void> {
     const turn = this.activeTurn;
-    if (!turn || turn.turnId !== turnId || turn.terminated) return;
+    if (!turn || turn.turnId !== turnId) return;
     turn.cancelRequested = true;
-    turn.abortController.abort();
-    turn.agent?.abort();
-    this.rejectApprovals(turn, new Error('The turn was cancelled.'));
+    this.abortExecution(turn, new Error('The turn was cancelled.'));
     await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
     this.emit(turn, { type: 'cancelled' });
   }
@@ -615,7 +608,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     decision: 'approve' | 'deny';
   }): Promise<void> {
     const turn = this.activeTurn;
-    if (!turn || turn.turnId !== input.turnId || turn.terminated) return;
+    if (!turn || turn.turnId !== input.turnId) return;
     const waiter = turn.approvalWaiters.get(input.approvalId);
     if (!waiter) return;
     turn.approvalWaiters.delete(input.approvalId);
@@ -626,15 +619,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
     if (this.closed) return;
     this.closed = true;
     const turn = this.activeTurn;
-    if (turn && !turn.terminated) {
+    if (turn) {
       turn.cancelRequested = true;
-      turn.abortController.abort();
-      turn.agent?.abort();
-      this.rejectApprovals(turn, new Error('The session was closed.'));
+      this.abortExecution(turn, new Error('The session was closed.'));
       await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
       this.emit(turn, { type: 'cancelled' });
     }
-    this.activeTurn = undefined;
   }
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
@@ -645,7 +635,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         this.dependencies.resolveModel(request.model, request.options),
         turn.abortController.signal,
       );
-      secrets = sensitiveValues(resolution);
+      secrets = resolution.redactionValues;
       turn.usageContext = resolution.usageContext;
       if (turn.terminated || turn.cancelRequested) return;
       if (turn.timedOut) {
@@ -1233,18 +1223,23 @@ class PiRuntimeSession implements AgentRuntimeSession {
     turn.approvalWaiters.clear();
   }
 
+  private abortExecution(turn: ActiveTurn, approvalError: Error): void {
+    turn.abortController.abort();
+    turn.agent?.abort();
+    this.rejectApprovals(turn, approvalError);
+  }
+
   private timeoutTurn(turn: ActiveTurn): void {
     if (turn.terminated || turn.timedOut) return;
     turn.timedOut = true;
-    turn.abortController.abort();
-    turn.agent?.abort();
-    this.rejectApprovals(turn, new Error('The Agent turn timed out.'));
+    this.abortExecution(turn, new Error('The Agent turn timed out.'));
   }
 
   private emit(turn: ActiveTurn, event: RuntimeEvent): void {
     if (turn.terminated) return;
     if (event.type === 'usage') turn.usageReported = true;
-    const isTerminal = TERMINAL_TYPES.has(event.type);
+    const isTerminal =
+      event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
       turn.abortController.abort();
