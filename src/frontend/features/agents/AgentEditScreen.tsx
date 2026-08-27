@@ -1,10 +1,10 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { ContentState, Input, useAlert } from '@cherrystudio/ui/components';
+import { BottomSheet, ContentState, Input, Section, useAlert } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -120,6 +120,7 @@ function AgentEditForm({
   const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
   const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
@@ -167,6 +168,32 @@ function AgentEditForm({
   const handleAvatarSelect = useCallback((sourceUri: string) => {
     setForm((current) => ({ ...current, avatarUri: sourceUri }));
   }, []);
+  const openToolApprovalModePicker = useCallback(() => {
+    Keyboard.dismiss();
+    setIsToolApprovalModePickerOpen(true);
+  }, []);
+  const closeToolApprovalModePicker = useCallback(() => setIsToolApprovalModePickerOpen(false), []);
+  const handleToolApprovalModeSelect = useCallback(
+    (mode: AgentFormState['toolApprovalMode']) => {
+      closeToolApprovalModePicker();
+      if (mode === form.toolApprovalMode) {
+        return;
+      }
+
+      if (mode === 'auto') {
+        alert.confirm({
+          confirmLabel: t('agent.toolApproval.autoConfirmLabel'),
+          description: t('agent.toolApproval.autoConfirmDescription'),
+          onConfirm: () => updateForm('toolApprovalMode', 'auto'),
+          title: t('agent.toolApproval.autoConfirmTitle'),
+        });
+        return;
+      }
+
+      updateForm('toolApprovalMode', mode);
+    },
+    [alert, closeToolApprovalModePicker, form.toolApprovalMode, t, updateForm],
+  );
   const reportAvatarPickError = useCallback(
     (error: unknown) => {
       logger.error('Failed to pick an agent avatar', error as Error);
@@ -329,9 +356,34 @@ function AgentEditForm({
               <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
             </View>
           </Pressable>
+          <View className="gap-1">
+            <Pressable
+              accessibilityHint={t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
+              accessibilityLabel={t('agent.toolApproval.title')}
+              accessibilityRole="button"
+              className="min-h-10 flex-row items-center gap-2 rounded-lg border border-border bg-field px-3 py-2 active:opacity-60"
+              onPress={openToolApprovalModePicker}
+            >
+              <Text className="shrink-0 text-base text-foreground">
+                {t('agent.toolApproval.title')}
+              </Text>
+              <View className="min-w-0 flex-1 flex-row items-center justify-end gap-1">
+                <Text
+                  className="min-w-0 shrink text-right text-base text-foreground"
+                  numberOfLines={1}
+                >
+                  {t(`agent.toolApproval.mode.${form.toolApprovalMode}.label`)}
+                </Text>
+                <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
+              </View>
+            </Pressable>
+            <Text className="px-1 text-muted-foreground text-sm" selectable>
+              {t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
+            </Text>
+          </View>
         </View>
-        {/* MCP is the only Agent-specific capability surface. Cherry's built-in
-            system capabilities are resolved uniformly for every Agent turn. */}
+        {/* MCP remains the only Agent-specific tool source. The approval setting
+            above changes interaction policy, not which tools are available. */}
         {isEditing ? (
           <View className="gap-2">
             <Text className="px-1 font-medium text-foreground text-sm">
@@ -356,6 +408,29 @@ function AgentEditForm({
           title={t('agent.form.modelSelect')}
         />
       ) : null}
+      <BottomSheet
+        onClose={closeToolApprovalModePicker}
+        open={isToolApprovalModePickerOpen}
+        size="compact"
+        title={t('agent.toolApproval.title')}
+      >
+        <ScrollView contentContainerClassName="px-6 pt-2" showsVerticalScrollIndicator={false}>
+          <Section footer={t('agent.toolApproval.footer')}>
+            <Section.RadioItem
+              description={t('agent.toolApproval.mode.default.description')}
+              label={t('agent.toolApproval.mode.default.label')}
+              onPress={() => handleToolApprovalModeSelect('default')}
+              selected={form.toolApprovalMode === 'default'}
+            />
+            <Section.RadioItem
+              description={t('agent.toolApproval.mode.auto.description')}
+              label={t('agent.toolApproval.mode.auto.label')}
+              onPress={() => handleToolApprovalModeSelect('auto')}
+              selected={form.toolApprovalMode === 'auto'}
+            />
+          </Section>
+        </ScrollView>
+      </BottomSheet>
     </>
   );
 }

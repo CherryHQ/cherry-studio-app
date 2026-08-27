@@ -80,7 +80,20 @@ describe('AgentService persistence', () => {
       modelId: 'openai::gpt-4',
       name: 'Researcher',
       settings: {},
+      toolApprovalMode: 'default',
     });
+  });
+
+  it('persists an explicit tool approval mode and lets the user change it', async () => {
+    const agent = await agentService.create({
+      name: 'Researcher',
+      toolApprovalMode: 'auto',
+    });
+
+    expect(agent.toolApprovalMode).toBe('auto');
+    await expect(
+      agentService.update(agent.id, { toolApprovalMode: 'default' }),
+    ).resolves.toMatchObject({ toolApprovalMode: 'default' });
   });
 
   it('falls back to no model when the preferred default is not registered', async () => {

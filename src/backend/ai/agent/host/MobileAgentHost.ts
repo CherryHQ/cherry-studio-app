@@ -521,7 +521,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
         }
       }
-      const tools = [...systemTools, ...configuredTools];
+      const tools = applyAgentToolApprovalMode(
+        [...systemTools, ...configuredTools],
+        agent.toolApprovalMode,
+      );
       let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
       try {
         inferenceModel = await raceAbort(this.inferenceModel(agent.model), signal);
@@ -1440,6 +1443,24 @@ function applyTurnOverrides(
     ...(input.modelId ? { model: parseUniqueModelId(input.modelId) } : {}),
     options,
   };
+}
+
+/**
+ * Applies only the Agent's interactive approval preference. Tool availability,
+ * hard denies, system permission, and callback-level resource checks are left
+ * untouched and continue to fail closed.
+ */
+function applyAgentToolApprovalMode(
+  tools: readonly RuntimeTool[],
+  mode: AgentDefinition['toolApprovalMode'],
+): RuntimeTool[] {
+  if (mode === 'default') {
+    return [...tools];
+  }
+
+  return tools.map((tool) =>
+    tool.approval === 'ask' ? { ...tool, approval: 'auto' as const } : tool,
+  );
 }
 
 function imageAttachmentLimitMessage(limit: ImageAttachmentLimit): string {

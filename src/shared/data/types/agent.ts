@@ -21,6 +21,12 @@ export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
 /** Creation default: every parameter unset means "use the model's defaults". */
 export const DEFAULT_AGENT_SETTINGS: AgentSettings = {};
 
+/** Controls only interactive tool approval; it never grants tool availability or resource access. */
+export const AgentToolApprovalModeSchema = z.enum(['default', 'auto']);
+export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
+
+export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'default';
+
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
@@ -42,6 +48,7 @@ export const AgentSchema = z.strictObject({
   name: z.string().min(1),
   orderKey: z.string(),
   settings: AgentSettingsSchema,
+  toolApprovalMode: AgentToolApprovalModeSchema,
   updatedAt: z.iso.datetime(),
 });
 export type Agent = z.infer<typeof AgentSchema>;

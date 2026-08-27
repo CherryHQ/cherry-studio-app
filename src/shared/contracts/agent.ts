@@ -43,9 +43,9 @@ export const AgentViewSchema = z.strictObject({
 export type AgentView = z.infer<typeof AgentViewSchema>;
 
 /**
- * Application intent, not implementation choice. Version 1 accepts only
- * `local`; LAN and cloud may add variants after their authority and transport
- * contracts are designed.
+ * Mobile Agent execution boundary, not an engine selector. `local` always
+ * means this mobile app. Cloud and LAN desktop control are separate product
+ * domains and do not add variants to this contract.
  */
 export const AgentExecutionTargetSchema = z.strictObject({
   kind: z.literal('local'),

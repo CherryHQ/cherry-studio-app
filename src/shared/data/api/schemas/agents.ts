@@ -15,6 +15,7 @@ const AGENT_MUTABLE_FIELDS = {
   modelId: true,
   name: true,
   settings: true,
+  toolApprovalMode: true,
 } as const;
 
 export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)

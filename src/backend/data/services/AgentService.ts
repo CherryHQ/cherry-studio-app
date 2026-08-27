@@ -17,7 +17,11 @@ import {
 } from '@/shared/data/api/schemas/agents';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { type Agent, DEFAULT_AGENT_SETTINGS } from '@/shared/data/types/agent';
+import {
+  type Agent,
+  DEFAULT_AGENT_SETTINGS,
+  DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+} from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { modelService } from './ModelService';
@@ -43,6 +47,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     name: row.name,
     orderKey: row.orderKey,
     settings: row.settings,
+    toolApprovalMode: row.toolApprovalMode,
     updatedAt: timestampToISO(row.updatedAt),
   };
 }
@@ -154,6 +159,7 @@ export class AgentService {
           ...dto,
           modelId,
           settings: dto.settings ?? DEFAULT_AGENT_SETTINGS,
+          toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
         },
         { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },
       )) as AgentRow;
