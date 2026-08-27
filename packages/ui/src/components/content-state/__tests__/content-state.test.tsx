@@ -92,6 +92,51 @@ describe('ContentState', () => {
     expect(onImport).toHaveBeenCalledTimes(1);
   });
 
+  test('page layout carries its own room and a pill-shaped action', () => {
+    const tree = render(
+      <ContentState.Empty
+        icon={<ContentState.Icon testID="empty-icon" />}
+        layout="page"
+        primaryAction={{ children: 'Create', onPress: jest.fn() }}
+        testID="state"
+        title="No assistants"
+      />,
+    );
+    const root = tree.root
+      .findAllByProps({ testID: 'state' })
+      .find((node) => typeof node.type === 'string');
+    const button = tree.root.find(
+      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
+    );
+    const disc = tree.root
+      .findAllByProps({ testID: 'empty-icon' })
+      .find((node) => typeof node.type === 'string');
+
+    expect(root?.props.className).toContain('px-8 py-16');
+    expect(button.props.className).toContain('rounded-full');
+    expect(disc?.props.className).toContain('rounded-full');
+    expect(disc?.props.className).toContain('bg-secondary');
+  });
+
+  test('inline layout stays flush so it can annotate a list in place', () => {
+    const tree = render(
+      <ContentState.Empty
+        primaryAction={{ children: 'Create', onPress: jest.fn() }}
+        testID="state"
+        title="No assistants"
+      />,
+    );
+    const root = tree.root
+      .findAllByProps({ testID: 'state' })
+      .find((node) => typeof node.type === 'string');
+    const button = tree.root.find(
+      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
+    );
+
+    expect(root?.props.className).not.toContain('py-16');
+    expect(button.props.className).not.toContain('rounded-full');
+  });
+
   test('uses the error hierarchy without inventing retry behavior', () => {
     const tree = render(<ContentState.Error description="Request timed out" title="Load failed" />);
     const text = tree.root.findAllByType(Text);

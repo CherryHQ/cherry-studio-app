@@ -1,7 +1,9 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import MessageCircleMoreIcon from '@cherrystudio/app-icons/icons/message-circle-more';
 import { ContentState } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { useRouter } from 'expo-router';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Text, View } from 'react-native';
@@ -87,6 +89,7 @@ function formatSessionActivityAt(
 
 const SessionListView = memo(function SessionListView() {
   const { t } = useTranslation();
+  const router = useRouter();
   const bottomInset = useListBottomInset();
   const { isSessionListLoading, sessionQueryError, sessions } = useSessionListSessions();
   const { loadMoreSessions } = useSessionListActions();
@@ -138,6 +141,13 @@ const SessionListView = memo(function SessionListView() {
     [agentNamesById, isEditing, requestDelete, requestRename, selectedIds, toggleId],
   );
 
+  // A session cannot be created from here: it is an agent that opens one, so
+  // the empty state hands off to the agent list the same way the sidebar's new
+  // chat action does.
+  const startNewChat = useCallback(() => {
+    router.push('/agents');
+  }, [router]);
+
   // Loading stays inside ListEmptyComponent so the list mounts on the first
   // frame: a loading-gate sibling tree would mount the scroll view only after
   // the push settles, and `automatic` would resolve a zero top inset under the
@@ -148,12 +158,26 @@ const SessionListView = memo(function SessionListView() {
         initialLoadError ? (
           <ContentState.Error className="px-6 py-8" title={t('session.list.loadFailed')} />
         ) : (
-          <ContentState.Empty className="px-6 py-8" description={t('session.list.empty')} />
+          <ContentState.Empty
+            description={t('session.list.emptyDescription')}
+            icon={
+              <ContentState.Icon>
+                <MessageCircleMoreIcon className="size-7 text-foreground" />
+              </ContentState.Icon>
+            }
+            layout="page"
+            primaryAction={{
+              accessibilityLabel: t('navigation.newChat'),
+              children: t('navigation.newChat'),
+              onPress: startNewChat,
+            }}
+            title={t('session.list.empty')}
+          />
         )
       ) : (
         <ContentState.Loading className="px-6 py-8" />
       ),
-    [initialLoadError, isInitialDataSettled, t],
+    [initialLoadError, isInitialDataSettled, startNewChat, t],
   );
 
   return (
