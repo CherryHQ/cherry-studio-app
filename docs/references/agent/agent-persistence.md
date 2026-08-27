@@ -3,8 +3,9 @@
 > Status: as-built. Version 1 is local-only.
 
 This document defines the durable SQLite schema and production adapter behind the Host-owned
-[`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port. It implements the
-storage side of the [Agent Protocol](./agent-protocol.md) and follows the authority model direction of
+[`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It
+implements the storage side of the [Agent Protocol](./agent-protocol.md) and follows the authority
+model direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568): mobile SQLite is the complete
 record for mobile-originated Agent Sessions only.
 

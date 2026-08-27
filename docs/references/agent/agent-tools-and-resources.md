@@ -244,7 +244,7 @@ model receives `{ status, fileEntryId, filename, size }`; a name it can correct 
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
 opaque failure. It runs without approval because it has no destructive form, and the Host offers it
 only to models that support function calling. Handing tools to a model that cannot call them fails
-the whole turn. Implementation: `src/backend/ai/agentHost/tools/`.
+the whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### Skill Boundary
 
