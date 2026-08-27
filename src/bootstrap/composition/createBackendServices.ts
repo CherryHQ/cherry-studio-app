@@ -1,4 +1,4 @@
-import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
+import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';

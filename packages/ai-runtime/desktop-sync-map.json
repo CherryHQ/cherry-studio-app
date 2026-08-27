@@ -10,7 +10,7 @@
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "00930d0269300cc323e2403b8e8b22cb8f15182084abf6eb6b5d9122251f9d6f"
+        "targetSha256": "e6fb300f7931e2f0ee2a03ee7b36fc381faa20c2fce7e21b497b0e978eebcfd5"
       },
       {
         "classification": "semantic-port",
@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "d55e0cea1b86e3c0f12ad21b12b0f94c63a05a92e2e9515aeef0ee5185035300"
+        "targetSha256": "8f024b2f23686988eb0588539b7c6e072dd3c089dbab88a4bbd455966f7bff6a"
       },
       {
         "classification": "blocked",
@@ -656,12 +656,12 @@
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/hooks/__tests__/billingHook.test.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/__tests__/aiUsagePlugin.test.ts"],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/hooks/__tests__/billingHook.test.ts",
         "sourceSha256": "dedfd9a6dd1bb547186986b92fbab15a4b1564942e35f8e12cb8f460a0b0787e",
-        "target": "src/backend/ai/hooks/__tests__/billingHook.test.ts",
-        "targetSha256": "629ae8b65cbaeade6aaa0807c15d2954f6607f02b5d10099e389450fe8af0439"
+        "target": "src/backend/ai/generation/__tests__/aiUsagePlugin.test.ts",
+        "targetSha256": "80b7fd5535bcae04f1cccb1b67f0ebd60a9c67ecc07f1c72762da727709cc615"
       },
       {
         "classification": "blocked",
@@ -672,11 +672,11 @@
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/hooks/billingHook.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiUsagePlugin.ts"],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/hooks/billingHook.ts",
         "sourceSha256": "d3f95e2ac4b0d984d98bf261c818886a2b94398c5a2233754f2197d164a86e40",
-        "target": "src/backend/ai/hooks/billingHook.ts",
+        "target": "src/backend/ai/generation/aiUsagePlugin.ts",
         "targetSha256": "93a8963198e56a5dcaae83cf1129b0ceeeea94bbb25aef0400aa485cef926247"
       },
       {
@@ -807,7 +807,7 @@
         "source": "src/main/ai/mcp/McpRuntimeService.ts",
         "sourceSha256": "aae2fd272c971b475b47de51d51a68cdc7515daa8a5c80ab2d1ab935f66d46d9",
         "target": "src/backend/ai/mcp/McpRuntimeService.ts",
-        "targetSha256": "69a13e81b2e7c1b6f8d79a266aa9e58afbd2b8d23434d1a08dc6b4a1adbb40af"
+        "targetSha256": "6985d30d7fd27a9b02e46ae5a11a07d7914b8a208e50f817b462e73f1a63d75f"
       },
       {
         "classification": "blocked",
@@ -837,7 +837,7 @@
         "source": "src/main/ai/mcp/__tests__/McpRuntimeService.test.ts",
         "sourceSha256": "d98b9c43be3c19482f00566f1ece7853917c513509d987837e6e0d2282f3be1d",
         "target": "src/backend/ai/mcp/__tests__/McpRuntimeService.test.ts",
-        "targetSha256": "b9511f18567edbf366a5d5992593f7b308ee29cf840ad39fda21d237a03074d9"
+        "targetSha256": "244e744941c168237393121d0c538a212fb458a40ed5e57eaf9f7088a21ce01a"
       },
       {
         "classification": "blocked",
@@ -1664,7 +1664,7 @@
         "source": "src/main/ai/provider/__tests__/config.test.ts",
         "sourceSha256": "db84d5b4a9c61c9693bb4e6b2478051a577a6f2fb899baebc93a392f271078be",
         "target": "src/backend/ai/provider/__tests__/config.test.ts",
-        "targetSha256": "cc2c43679c34d9e8d3ca44f44ef206150964aee954d776f54a68a6898a2ee26b"
+        "targetSha256": "bb2f9cea9ba6db70bb136562cfbbcd961a6090c740e59c7d9b4ff272929a84f2"
       },
       {
         "classification": "semantic-port",
@@ -1778,7 +1778,7 @@
         "source": "src/main/ai/provider/config.ts",
         "sourceSha256": "c68f0aa51b7b888e7d18c5827947f2b358165da3afac9a4f4ee6bdfd568e8d36",
         "target": "src/backend/ai/provider/config.ts",
-        "targetSha256": "2fab904ca4a159e5b2a8743f18682db9cab71ebe3fff8f05048d5ce4d1a5039f"
+        "targetSha256": "c2cc3d07f59c96ebdd5134fdf61b57ca4fcdd24359c173907701d3e35dd0b9f8"
       },
       {
         "classification": "semantic-port",
@@ -2827,21 +2827,21 @@
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/Agent.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/AiSdkGenerator.ts"],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/Agent.ts",
         "sourceSha256": "7c0024a4f7f8985c8a60f759d8af3e7337d9fcc38d2a1fe0b7b129f199e02fc3",
-        "target": "src/backend/ai/runtime/aiSdk/Agent.ts",
-        "targetSha256": "c58bc1a5c8ae6a8440a84a54016ed11548219a4a8495d4217cbf87c3bd7c929b"
+        "target": "src/backend/ai/generation/aiSdk/AiSdkGenerator.ts",
+        "targetSha256": "46072ecd7dde301c667c42ece905127d9c2332ff23f828472a18c8833ec70f9d"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/index.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/index.ts"],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/index.ts",
         "sourceSha256": "74303d2527b8307b75ee84e9d0e7090d7daef127d0090ef96122dd34c27b7576",
-        "target": "src/backend/ai/runtime/aiSdk/index.ts",
-        "targetSha256": "285c703141fb3ef75862c1d80d3806547d935a31aaedfd94491bf091c9e27123"
+        "target": "src/backend/ai/generation/aiSdk/index.ts",
+        "targetSha256": "8048fc313d8424017ee66f7c55ff60e5d89e23f050637325d36b5795f340d6c1"
       },
       {
         "classification": "blocked",
@@ -2949,13 +2949,13 @@
       {
         "classification": "semantic-port",
         "evidence": [
-          "mobile:src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts"
+          "mobile:src/backend/ai/generation/aiSdk/params/__tests__/buildAgentParams.test.ts"
         ],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
         "sourceSha256": "be731212fa494976f697112939c61ceaa8b5d66a66c330ec755b727bd5596939",
-        "target": "src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
-        "targetSha256": "539c43b980859a5268d27150c27acef8900ac932d90f44d774dc62d5fb6366fe"
+        "target": "src/backend/ai/generation/aiSdk/params/__tests__/buildAgentParams.test.ts",
+        "targetSha256": "7e5f15517e5886c1ffec920d2d63ac1581501cdeee3b3e3dbe02de2e2977b3b3"
       },
       {
         "classification": "semantic-port",
@@ -3013,12 +3013,12 @@
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/params/buildAgentParams.ts"],
         "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/params/buildAgentParams.ts",
         "sourceSha256": "fb3df0bf6f17740fc7637b4609fdaabf6956e44e66ab7777325ce8512b3e6846",
-        "target": "src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts",
-        "targetSha256": "e15777a60a042afc9bc806d93bced9b0f443f21fe2e2009c3ab152bbaf94cc97"
+        "target": "src/backend/ai/generation/aiSdk/params/buildAgentParams.ts",
+        "targetSha256": "8c59fb13968f8b27a7ca7074e3a71937ced65de85133867c02e4a3536959e4e3"
       },
       {
         "classification": "blocked",
@@ -4781,7 +4781,7 @@
         "source": "src/main/ai/utils/__tests__/anthropicHeaders.test.ts",
         "sourceSha256": "6a4914e49460f1e9bfd6ceba0e451851079f0bc5ea459089cfbb0fe001854c9d",
         "target": "packages/ai-runtime/src/utils/__tests__/anthropicHeaders.test.ts",
-        "targetSha256": "4945801b4b12cb1d65ff80bf3c467e1c1ef072307f1779251aa324316dbb6a60"
+        "targetSha256": "71aaf4e08efaae4a93ba897c6257a3145676dd6102b9465f081e795b28b73a5e"
       },
       {
         "classification": "semantic-port",
@@ -4831,7 +4831,7 @@
         "source": "src/main/ai/utils/__tests__/modelParameters.test.ts",
         "sourceSha256": "ff06e0bce11dd6d06b55b897485c806cb5554ca71c3feb78784986fa5fd193d0",
         "target": "packages/ai-runtime/src/utils/__tests__/modelParameters.test.ts",
-        "targetSha256": "a7c5e66fc2a5ca336fcb2dfe1ff505e0a8932521e7130b0ff3729edea36e4675"
+        "targetSha256": "3d20b15b825caa549fcbe117fd4eaef83de0c6c92db64cdee3ef764b64f94a4e"
       },
       {
         "classification": "semantic-port",
@@ -4840,7 +4840,7 @@
         "source": "src/main/ai/utils/__tests__/options.test.ts",
         "sourceSha256": "e3d805ee33b15143b01308a4189d73eb2ab6965d54c6ea37f49ff04aa59b84c5",
         "target": "packages/ai-runtime/src/utils/__tests__/options.test.ts",
-        "targetSha256": "c0fe55c201281910b0338df225386341cc7d583f570be5fd65b388db0cdf018d"
+        "targetSha256": "3b747f119af70f4fa01c7e18ecce817b76765af5699ffc9043a33553dd360864"
       },
       {
         "classification": "semantic-port",
@@ -4849,7 +4849,7 @@
         "source": "src/main/ai/utils/__tests__/provider.test.ts",
         "sourceSha256": "63ee804e0684ef6fda79d689709b820ec74f1473fc1c4ac87c9a2c2531c24ddc",
         "target": "packages/ai-runtime/src/utils/__tests__/provider.test.ts",
-        "targetSha256": "d2c04491b86f40a0234910e77e02b296637e6b320cb2e1be0cbcabd3104f0ba9"
+        "targetSha256": "0105dd1b2f9ee6e26174a9101774addb42aee7d1dddc91393444901c10cb231a"
       },
       {
         "classification": "semantic-port",
@@ -5045,7 +5045,7 @@
         "source": "src/backend/ai/README.md",
         "sourceSha256": "cd729d4624b906e0215330f5dd4233c36245552c68aed897df163fdf5e31bf68",
         "target": "src/backend/ai/README.md",
-        "targetSha256": "d99b35bb2c40aed66bf41aa95cf35e6188ac1d9f35ee028cc76057776512a514"
+        "targetSha256": "76c702d6380645e743c91077129b389bd9584dea453b2c57dd64ba6777e01c65"
       },
       {
         "classification": "semantic-port",
@@ -5080,7 +5080,7 @@
         "source": "src/backend/ai/__tests__/_harness/services.ts",
         "sourceSha256": "e47026f29130b1827c46979f751cec32eb6faad122ff85f9cb6f6048ca2bf186",
         "target": "src/backend/ai/__tests__/_harness/services.ts",
-        "targetSha256": "fe5697971397e01274e81ae337c0505279c91c0d2199b2d1698cce591515041b"
+        "targetSha256": "02a64182371962e964852f55b36684f829ce7dd36018b15710d662a466266450"
       },
       {
         "classification": "mobile-extension",
@@ -5216,7 +5216,7 @@
       {
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/hooks/__tests__/billingHook.test.ts",
-        "evidence": ["mobile:src/backend/ai/hooks/__tests__/billingHook.test.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/__tests__/aiUsagePlugin.test.ts"],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/hooks/__tests__/billingHook.test.ts",
         "sourceSha256": "629ae8b65cbaeade6aaa0807c15d2954f6607f02b5d10099e389450fe8af0439"
@@ -5224,7 +5224,7 @@
       {
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/hooks/billingHook.ts",
-        "evidence": ["mobile:src/backend/ai/hooks/billingHook.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiUsagePlugin.ts"],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/hooks/billingHook.ts",
         "sourceSha256": "dbc83caf4d71ba2a408f241825874b00c99e9a77e993a1692d49dc99bfe88c65"
@@ -5253,13 +5253,11 @@
         "sourceSha256": "2daa9ad7c5c60f773b29255eae51da7143b43732f0dddb8a3e3c57048bf9e051"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/mcp/__tests__/schemaBrand.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "The legacy Assistant MCP schema-brand test was retired with that protocol surface.",
         "source": "src/backend/ai/mcp/__tests__/schemaBrand.test.ts",
-        "sourceSha256": "3f6deddd467c02ee1d2b6afc344e736243c3e4415197de9fd3ae6f5c5d56d506",
-        "target": "src/backend/ai/mcp/__tests__/schemaBrand.test.ts",
-        "targetSha256": "3f6deddd467c02ee1d2b6afc344e736243c3e4415197de9fd3ae6f5c5d56d506"
+        "sourceSha256": "3f6deddd467c02ee1d2b6afc344e736243c3e4415197de9fd3ae6f5c5d56d506"
       },
       {
         "classification": "mobile-extension",
@@ -5268,7 +5266,7 @@
         "source": "src/backend/ai/mcp/index.ts",
         "sourceSha256": "19423ef3a56414096bea293109316272ca66de4b0f19004a61f853f6a4c3f5d7",
         "target": "src/backend/ai/mcp/index.ts",
-        "targetSha256": "19423ef3a56414096bea293109316272ca66de4b0f19004a61f853f6a4c3f5d7"
+        "targetSha256": "7b3e60adb2c134dfb3aa4a0e69abc17d646f0c2ad2cb2762db7948f500b54256"
       },
       {
         "classification": "explicit-exclusion",
@@ -5366,7 +5364,7 @@
         "source": "src/backend/ai/provider/__tests__/listModels.test.ts",
         "sourceSha256": "6ba1556f8f68b13334b9df6911d1e79e464d5a8053e024c3756a35364d2b791c",
         "target": "src/backend/ai/provider/__tests__/listModels.test.ts",
-        "targetSha256": "1859abca29b4cbdf317fbe18cff6b00706d1fe7e284c8eb7bc605cef3e05336f"
+        "targetSha256": "08b6477cce20797a5adb8aa2604efec77d37220df7b0d5c1140caa204c748fb1"
       },
       {
         "classification": "mobile-extension",
@@ -5531,24 +5529,24 @@
       {
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/runtime/aiSdk/Agent.ts",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/Agent.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/AiSdkGenerator.ts"],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/runtime/aiSdk/Agent.ts",
         "sourceSha256": "be012022d73ffe62ffd8cfe07d13253f5171bd3332fa6881276f3e480328fc44"
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/__tests__/AiSdkGenerator.test.ts"],
         "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
         "source": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
         "sourceSha256": "4fd1716689a1f593e5f21dcf05ad2de89541089219a658e45a974b1ae6e5ea11",
-        "target": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
-        "targetSha256": "72ba69d745cc918cc55044c0f66e7970f0975afab6138542ce68270a8abd5dd8"
+        "target": "src/backend/ai/generation/aiSdk/__tests__/AiSdkGenerator.test.ts",
+        "targetSha256": "780159242ac68f495977f3270be2dbaf4925030418ae6c007663b2df114be92e"
       },
       {
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/runtime/aiSdk/index.ts",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/index.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/index.ts"],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/runtime/aiSdk/index.ts",
         "sourceSha256": "285c703141fb3ef75862c1d80d3806547d935a31aaedfd94491bf091c9e27123"
@@ -5631,7 +5629,7 @@
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
         "evidence": [
-          "mobile:src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts"
+          "mobile:src/backend/ai/generation/aiSdk/params/__tests__/buildAgentParams.test.ts"
         ],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
@@ -5646,7 +5644,7 @@
         "source": "src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentPlugins.test.ts",
         "sourceSha256": "e2eadcc2a7597036565433c0976d59dee53e868dee4e04c67a327957ec3a1a09",
         "target": "packages/ai-runtime/src/runtime/aiSdk/params/__tests__/buildAgentPlugins.test.ts",
-        "targetSha256": "e2eadcc2a7597036565433c0976d59dee53e868dee4e04c67a327957ec3a1a09"
+        "targetSha256": "899febc08a78f8000303c15d08a04e6d1dfb230cf58512a7388b7bd30a4058f8"
       },
       {
         "classification": "semantic-port",
@@ -5671,7 +5669,7 @@
       {
         "classification": "semantic-port",
         "desktopSource": "src/main/ai/runtime/aiSdk/params/buildAgentParams.ts",
-        "evidence": ["mobile:src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts"],
+        "evidence": ["mobile:src/backend/ai/generation/aiSdk/params/buildAgentParams.ts"],
         "reason": "Classified by the corresponding desktop provenance record.",
         "source": "src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts",
         "sourceSha256": "9d3722ea57c351e2e790af484e3fad8115ebfbd60487210b3674cbefea60a0c6"
@@ -6374,11 +6372,11 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/citationIds.test.ts"],
+        "evidence": ["mobile:src/backend/ai/agent/tools/web/__tests__/citationIds.test.ts"],
         "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/__tests__/citationIds.test.ts",
         "sourceSha256": "0e3f5737ce462ba277622e6079b328b95b9ec6190636d17557afa37c2e69662b",
-        "target": "src/backend/ai/utils/__tests__/citationIds.test.ts",
+        "target": "src/backend/ai/agent/tools/web/__tests__/citationIds.test.ts",
         "targetSha256": "0e3f5737ce462ba277622e6079b328b95b9ec6190636d17557afa37c2e69662b"
       },
       {
@@ -6396,7 +6394,7 @@
         "source": "src/backend/ai/utils/__tests__/imageProviderOptions.test.ts",
         "sourceSha256": "179a662108be06d2c0148af4271c2528832887f056005e06f7d6306afffc3d78",
         "target": "packages/ai-runtime/src/utils/__tests__/imageProviderOptions.test.ts",
-        "targetSha256": "179a662108be06d2c0148af4271c2528832887f056005e06f7d6306afffc3d78"
+        "targetSha256": "fe85327ac980448284fe04e242ce4bd74679b82650fe92db064c1f1ac0af6973"
       },
       {
         "classification": "semantic-port",
@@ -6415,13 +6413,11 @@
         "sourceSha256": "c0fe55c201281910b0338df225386341cc7d583f570be5fd65b388db0cdf018d"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/promptVariables.test.ts"],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
+        "reason": "The unused mobile adapter was retired; portable prompt substitution remains owned and tested by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/__tests__/promptVariables.test.ts",
-        "sourceSha256": "fb7b253ce66ee9abf924ccc7b24b93bb1eab17cd80d8fe11d4470edca93f83cb",
-        "target": "src/backend/ai/utils/__tests__/promptVariables.test.ts",
-        "targetSha256": "fb7b253ce66ee9abf924ccc7b24b93bb1eab17cd80d8fe11d4470edca93f83cb"
+        "sourceSha256": "fb7b253ce66ee9abf924ccc7b24b93bb1eab17cd80d8fe11d4470edca93f83cb"
       },
       {
         "classification": "semantic-port",
@@ -6442,11 +6438,11 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/reasoningCatalog.test.ts"],
+        "evidence": ["mobile:src/backend/ai/provider/__tests__/reasoningCatalog.test.ts"],
         "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
         "source": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
         "sourceSha256": "26ac323f68b02a4fa5b0468b016c23b1b047ca563e2b1e7fb9d340a2a225f7bb",
-        "target": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
+        "target": "src/backend/ai/provider/__tests__/reasoningCatalog.test.ts",
         "targetSha256": "3c0d9a1ced8085aea84e98ed8d421fd93152290a20a71605610026b45c71ed41"
       },
       {
@@ -6500,11 +6496,11 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/citationIds.test.ts"],
+        "evidence": ["mobile:src/backend/ai/agent/tools/web/__tests__/citationIds.test.ts"],
         "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/citationIds.ts",
         "sourceSha256": "d2a9bd00a70b41bf7ff1f5beb8517560a58143285c1baed35ef289937fa5ab41",
-        "target": "src/backend/ai/utils/citationIds.ts",
+        "target": "src/backend/ai/agent/tools/web/citationIds.ts",
         "targetSha256": "45a9f58260ebd8e7dd7c9b28a4bda93f81458ae9b6596ea82898c72e8b9bcfbf"
       },
       {
@@ -6549,13 +6545,11 @@
         "sourceSha256": "4c945497e9e1c1b41b25e0e2fa3c2021aa809714c12eed8ebedd7312f2e3cc10"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/promptVariables.test.ts"],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
+        "reason": "The unused mobile adapter was retired; portable prompt substitution remains owned and tested by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/promptVariables.ts",
-        "sourceSha256": "ab9d3f3fba3495d90de37e4d909174022cf4164b4dddc66bac31672690ab1681",
-        "target": "src/backend/ai/utils/promptVariables.ts",
-        "targetSha256": "738fb1d426043e4912d8fc33c3e0ff41e63d8679f5812b7e0076e55e1be434ef"
+        "sourceSha256": "ab9d3f3fba3495d90de37e4d909174022cf4164b4dddc66bac31672690ab1681"
       },
       {
         "classification": "semantic-port",
@@ -6719,173 +6713,504 @@
   "backendOwned": [
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/__tests__/_runtimeConformance.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/__tests__/_runtimeConformance.ts",
-      "targetSha256": "a6adf76a04fbb0830b5f7e5bac523b02175f5c3e517580b6a3b49697755e380a"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/__tests__/FakeRuntime.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/__tests__/FakeRuntime.test.ts",
-      "targetSha256": "7fd78413c04bf23b7d84d12cc45325f95c0f1acb3c49e81bf04615f8559ab812"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/FakeRuntime.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/FakeRuntime.ts",
-      "targetSha256": "023417cee0b968b06b01e96cbdcfbd95093b7d58f33927769872d713112fe465"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/index.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/index.ts",
-      "targetSha256": "8a879ba71eadf53ba3236b8663beae0f07addcd3985d042736e0579f6ad4b5f8"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/pi/__tests__/PiRuntime.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/pi/__tests__/PiRuntime.test.ts",
-      "targetSha256": "e3eef66b2a3f47f132c77e76c0ce341e855d80d3f375ae7d31e62b4acd94c5e5"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/pi/modelMessages.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/pi/modelMessages.ts",
-      "targetSha256": "4469b55b417988115e4a8fa2c7968197bef70ff5ed2863a8d6c22d36b4d9079a"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/pi/PiRuntime.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/pi/PiRuntime.ts",
-      "targetSha256": "bbf131a80fb2231cc0825ca26f0e7f0516c3de9cddc767864f020b0c40cca256"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/RuntimeEventChannel.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/RuntimeEventChannel.ts",
-      "targetSha256": "6f8ac48f299e2a6d7649f6f2f5db26c100178ca07955b2a110288ac20a4c5f85"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agent/types.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agent/types.ts",
-      "targetSha256": "7fd8657fbc0af78d62f5037381df937f043ff481ce0bcd8084e03011433812d8"
-    },
-    {
-      "classification": "mobile-extension",
       "evidence": [
-        "mobile:src/backend/ai/agentHost/__tests__/agentDefinitions.integration.test.ts"
+        "mobile:src/backend/ai/agent/host/__tests__/agentDefinitions.integration.test.ts"
       ],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/agentDefinitions.integration.test.ts",
+      "target": "src/backend/ai/agent/host/__tests__/agentDefinitions.integration.test.ts",
       "targetSha256": "e50cdbaf510ed17bd46e1f5db05a1cd28235d6c3849eebabbc2a879a6ae44577"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionNaming.test.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/AgentSessionNaming.test.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/AgentSessionNaming.test.ts",
-      "targetSha256": "6bd5d3a598360867d79c12ee69a3f4870e3167ea54c2023a175abbc456e8b43a"
+      "target": "src/backend/ai/agent/host/__tests__/AgentSessionNaming.test.ts",
+      "targetSha256": "88a6c1ccc682055e4922e671b1440db0087e4650869423d56176bc0ca82f4e31"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionStore.test.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/AgentSessionUsageRecorder.test.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/AgentSessionStore.test.ts",
-      "targetSha256": "9b45d1ea03c1df5aedd2fc268e3e155aa2759565ce3481c6265d6b10151378c3"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/AgentSessionUsageRecorder.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/AgentSessionUsageRecorder.test.ts",
+      "target": "src/backend/ai/agent/host/__tests__/AgentSessionUsageRecorder.test.ts",
       "targetSha256": "b7f704c6cc098e2502b2a8fc52626e0ca061a6b92968f2e7bc4e3e262335b3f8"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/mapping.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/mapping.test.ts",
-      "targetSha256": "3b18520358f920380dc92f2bc54f595a06880346e8a89fe37fc0192d2f34e233"
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/contextCheckpoints.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/host/__tests__/contextCheckpoints.test.ts",
+      "targetSha256": "de88b0d4d94f9e53e199bf6e28aa92006c2ef2de7505a5ef84f485a0a5d64681"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/__tests__/MobileAgentHost.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/__tests__/MobileAgentHost.test.ts",
-      "targetSha256": "1a7fc6431601ec12895c2614f9e990a8c39159812b8f96d4bde0f8b5baed977c"
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/inferenceSnapshot.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/host/__tests__/inferenceSnapshot.test.ts",
+      "targetSha256": "e3c8a9a951eb3ffc2bd18524b443ac3a0ff5a808bb711a01a638f55a1ab099b1"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/agentDefinitions.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/mapping.test.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/agentDefinitions.ts",
-      "targetSha256": "bf1cfd880fb3e47bf707cfd2d88b4f3b6a02d3281dda4c0fbcf11c26f066b2a8"
+      "target": "src/backend/ai/agent/host/__tests__/mapping.test.ts",
+      "targetSha256": "7635c1b39ab888d9a909b821ff3131155328b16fd7bf604596940d6e94bce7df"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionNaming.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/__tests__/MobileAgentHost.test.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/AgentSessionNaming.ts",
-      "targetSha256": "7a97046ec37e5d0de54a967bbec0d9630455c5fa849d049d1fc41f275ef348f3"
+      "target": "src/backend/ai/agent/host/__tests__/MobileAgentHost.test.ts",
+      "targetSha256": "facbaeacd01651cc9468d7d0753dcfd93f4ee85982895483d0e0ff0d7e939651"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionStore.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/agentDefinitions.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/AgentSessionStore.ts",
-      "targetSha256": "157a181d2364d7133e16887714fdc88e68cf11e98ae464b147a3b8eeec43404c"
+      "target": "src/backend/ai/agent/host/agentDefinitions.ts",
+      "targetSha256": "f6418316bbf9944c7f67f0ab3c5cea9d2e60a2bff4884a04dcf5ecfc1cdf28fd"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/AgentSessionUsageRecorder.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/AgentSessionNaming.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/AgentSessionUsageRecorder.ts",
-      "targetSha256": "a3bebba1bf8d926940c8a7df60b0348d8b70ddba46ea95cdb91ea5b24badd609"
+      "target": "src/backend/ai/agent/host/AgentSessionNaming.ts",
+      "targetSha256": "a2586eababc70342088a6f39d0a5e39cfa91d8e13503f7f06176ac7dd9e9a532"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/InMemoryAgentSessionStore.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/AgentSessionUsageRecorder.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/InMemoryAgentSessionStore.ts",
-      "targetSha256": "b768ea950d88f35d392726a47d12e51d44c004fc6a37cecfc672300e6f7d4479"
+      "target": "src/backend/ai/agent/host/AgentSessionUsageRecorder.ts",
+      "targetSha256": "fc7f139a97ac6383e0954f35479f865c5ce33c8d3dad68c6fdcb9c5f71c8359e"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/mapping.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/mapping.ts",
-      "targetSha256": "2d285c99a57b952964dd182b80f5664b68a880b0471fa798b09b1f598cde1016"
+      "evidence": ["mobile:src/backend/ai/agent/host/contextCheckpoints.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/host/contextCheckpoints.ts",
+      "targetSha256": "ccbe4146ae6831ddac7cf117f198122a46f2238a89d9e35627184c3d6b1b4eea"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/MobileAgentHost.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/MobileAgentHost.ts",
-      "targetSha256": "b61ab85457d6e208945ca680f3384dcda2d33deba5510c7939d016df249dc8c7"
+      "evidence": ["mobile:src/backend/ai/agent/host/inferenceSnapshot.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/host/inferenceSnapshot.ts",
+      "targetSha256": "94443e77855a8e699181170c6f254d6dbc001835dfe4292c59147316fa94ffca"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/piModelResolver.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/mapping.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/piModelResolver.ts",
-      "targetSha256": "c6f1d0a0c3b2471a9d11c18c7689f25f7ba3a945a198605402834372388f01a3"
+      "target": "src/backend/ai/agent/host/mapping.ts",
+      "targetSha256": "623a6700230b744f203503e613695d0a88052497a21dea303f34b52b648dfd10"
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/agentHost/SqliteAgentSessionStore.ts"],
+      "evidence": ["mobile:src/backend/ai/agent/host/MobileAgentHost.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/agentHost/SqliteAgentSessionStore.ts",
-      "targetSha256": "9eb6d827991c2cd0d9cf781c9c153cd04a6e27f8b958200c7de98d49e6d26000"
+      "target": "src/backend/ai/agent/host/MobileAgentHost.ts",
+      "targetSha256": "db2a87b0c4e11929b6159a4b563ef2770bec10a8b09bce64d58bd244eff59262"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/index.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/index.ts",
+      "targetSha256": "3b956f9fd4eaacff165cff422381f4d22f68105ad99089108686a7f52d259353"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/piAdapter/__tests__/piApiAdapters.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/piAdapter/__tests__/piApiAdapters.test.ts",
+      "targetSha256": "70876dad18d2c53c8546b27606b58888dff79638e12ec54bc016371a6c9c0278"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/piAdapter/__tests__/piModelResolver.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/piAdapter/__tests__/piModelResolver.test.ts",
+      "targetSha256": "9296dc5af91617a849a6b7c024ffac9fb32dd90cdfdaf1fd1b2a0c5bd6f23b0f"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/piAdapter/piApiAdapters.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/piAdapter/piApiAdapters.ts",
+      "targetSha256": "c511aabf7334de5f9b8c7c17602bbd6568403099f0bb6039c05ef29ec64b65be"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/piAdapter/piModelResolver.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/piAdapter/piModelResolver.ts",
+      "targetSha256": "5417c94c22e32475917f2a4602d7234ce76cc978df21b56f751cae0c9d900cc4"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/__tests__/imageAttachments.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/__tests__/imageAttachments.test.ts",
+      "targetSha256": "33c9fe0de7d5630fbb7e27838ff9b577fcd7db62ddc10da5c7eb9713c022ac05"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/__tests__/managedFileResolver.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/__tests__/managedFileResolver.test.ts",
+      "targetSha256": "a5106ee6ebc13e8b1abd9daf446db28c92235e8baa8d0c76ff12a03b204a07fb"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/__tests__/textAttachments.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/__tests__/textAttachments.test.ts",
+      "targetSha256": "f1a5381742b2f35b2b5ceba6eff60b31be59a9ef4fac22b80c60c5564b0102c5"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/imageAttachments.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/imageAttachments.ts",
+      "targetSha256": "f04a7e9b5bc6978ef6bd2df8374fe07957ccbfd2d10043bc83e59be636266913"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/managedFileResolver.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/managedFileResolver.ts",
+      "targetSha256": "aedce0728eed4307d6e173ff2c837945896db710f2345c6fbc8078f77675e3af"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/resources/textAttachments.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/resources/textAttachments.ts",
+      "targetSha256": "828f96c9aa8954568b1f3b260e33b10e2db730a2fdb150e6aa42977f70d03098"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/__tests__/_runtimeConformance.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/__tests__/_runtimeConformance.ts",
+      "targetSha256": "3a0b296bf78f11c1cc4e0bbf3422616950380ab4953132c2e90d91e471b15f5b"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/__tests__/FakeRuntime.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/__tests__/FakeRuntime.test.ts",
+      "targetSha256": "b092d518997f5e054b630d7e26bd0e2b499954fedb3d0e39b4ee4ce0c84a1853"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/__tests__/raceAbort.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/__tests__/raceAbort.test.ts",
+      "targetSha256": "0f451b240b55ea930cb897c934caa0d75c3ad3c913240c33619cf1dfedd38d47"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/__tests__/runtimeContracts.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/__tests__/runtimeContracts.test.ts",
+      "targetSha256": "077a353884acf2d19e3a92c28f2fd9a310d5b8584df49559bd9737315300f7f0"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/FakeRuntime.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/FakeRuntime.ts",
+      "targetSha256": "5b5eb2a4eb05cac396e42729669f4690df83972f643396b46b4c748b36828b31"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/index.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/index.ts",
+      "targetSha256": "cb9540b2916d1a84e9b3f039791b4c195622649a30c89cae456b01c61b194824"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/pi/__tests__/piReactNativePatches.test.ts",
+      "targetSha256": "cdbd48c862103e6b23301d73724efa678d3e749fc92dd420259451018bc16a4b"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/pi/__tests__/PiRuntime.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/pi/__tests__/PiRuntime.test.ts",
+      "targetSha256": "6f4411b70f108044151ef84790974d68205ca5b04d4edafbefba5bdab8d1a046"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/pi/contextCompaction.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/pi/contextCompaction.ts",
+      "targetSha256": "bab19b55c164e63034781604b29aa7553f4bd8ff819d64480264cd1d3437cec8"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/pi/modelMessages.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/pi/modelMessages.ts",
+      "targetSha256": "335df1c05d0c73f544c9b118a67e17a9b793215e3ef7ccb745dc314f35312209"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/pi/PiRuntime.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/pi/PiRuntime.ts",
+      "targetSha256": "4a3fffe224a772d2f651dfed758a1d728aec337f9542aa34ad27b437f602b652"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/raceAbort.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/raceAbort.ts",
+      "targetSha256": "b4815faeeb75fde28dd2cb51b979efb4941df34dc262e3b9cd37bfafedb5b0ff"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/RuntimeEventChannel.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/RuntimeEventChannel.ts",
+      "targetSha256": "6f8ac48f299e2a6d7649f6f2f5db26c100178ca07955b2a110288ac20a4c5f85"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/runtimeSchemas.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/runtimeSchemas.ts",
+      "targetSha256": "c6bb9496ed809a9295472e4aa619c7db15f8f24df1ce8dae01811a009423e888"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/toolResults.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/toolResults.ts",
+      "targetSha256": "ae3e597d789259658052db7dd9df2a9548c054aaee84b8eb8d30bf197f54f9a0"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/runtime/types.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/runtime/types.ts",
+      "targetSha256": "3a24fa94cb22c3600d42e0a4ca6ca2ec1e303fcf428e0efe8884fdf0ddc75cbe"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/__tests__/AgentSessionStore.test.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/__tests__/AgentSessionStore.test.ts",
+      "targetSha256": "05e93fd301a865f64330c022d9995a58364cd4bda145aacde3d0007e72f7ba12"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/__tests__/messageSettlement.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/__tests__/messageSettlement.test.ts",
+      "targetSha256": "b3b18479abcfe5b61b54b918cfcc4607e4ba8eb803fda255053cb7395338b3de"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/AgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/AgentSessionStore.ts",
+      "targetSha256": "51d72aba0ada7009e1e5551089b15728ab9f62465b4baa811ec3ca2bf7771616"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/InMemoryAgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/InMemoryAgentSessionStore.ts",
+      "targetSha256": "53459245eb70cae9956fab8a478d64f05583fa9a41aec9c146eab3c3d628863a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/messageSettlement.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/messageSettlement.ts",
+      "targetSha256": "09a216cc916788431c77dfdf6ad347210e9a98d1fbbe102bfe0ad82817d8eb56"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/sessionStore/SqliteAgentSessionStore.ts"],
+      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/sessionStore/SqliteAgentSessionStore.ts",
+      "targetSha256": "db3ca67ad2de7554262b81114b01bd95bd876d2c12dcebe1b39a489dc2c87e96"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/__tests__/builtInToolSource.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/__tests__/builtInToolSource.test.ts",
+      "targetSha256": "4efd2dd0c2cf08a700c870ca6159b4d41c5c1d7531f61d28c6142bb023e56e15"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/__tests__/runtimeTools.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/__tests__/runtimeTools.test.ts",
+      "targetSha256": "bf3760a459c50ada50a73ca73698963318fe91149e1dfd19da2cc16ef985e23c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/__tests__/writeFileTool.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/__tests__/writeFileTool.test.ts",
+      "targetSha256": "ea58577083b4a37175affc655ad40d99caa0fb0d68277e8711a7770befcd1357"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/builtInToolSource.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/builtInToolSource.ts",
+      "targetSha256": "4cee2c9bcda579926abc03efdffbd94042f44b96443dfb051ec0eab623ec29ca"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/__tests__/deviceRuntimeTool.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/__tests__/deviceRuntimeTool.test.ts",
+      "targetSha256": "8bed095efb174231ad72939ce2d12f7a43a59bebe37b6cd2cf2bba2fd85af3e4"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/calendarTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/calendarTools.ts",
+      "targetSha256": "0c0a67baf9a5c834a4be0c976bbab16261e55589de17f735732a3963b4b21c6f"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/deviceRuntimeTool.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/deviceRuntimeTool.ts",
+      "targetSha256": "384c18de06bef2263a15c6828c2ee6f41cb563383a2fd452c3426f06215bcf61"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/deviceToolSchemas.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/deviceToolSchemas.ts",
+      "targetSha256": "67025225af7c2cf7e5ffbd4fcbfa511de71304915f76a5e8ffcf7b7d99e82fb4"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/healthTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/healthTools.ts",
+      "targetSha256": "9ff2bf07f83f1a230b5a1b296cca312896d15ed918ac0933750e11165639579e"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/index.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/index.ts",
+      "targetSha256": "ce71c0969fa1e378fdad014e32b053f230c5661b4852bf842b0a71a83d61c3d5"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/locationTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/locationTools.ts",
+      "targetSha256": "bd85ac5b9df52831f116f24731118e6a72d7f7e965104c4cbd76ed4cdd390f26"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/device/reminderTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/device/reminderTools.ts",
+      "targetSha256": "92ddf9eb14fca2d414e98eeb12112dce43b860502b444662f16ace4c84e880f4"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": [
+        "mobile:src/backend/ai/agent/tools/painting/__tests__/generateImageTool.test.ts"
+      ],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/painting/__tests__/generateImageTool.test.ts",
+      "targetSha256": "3d9ecb627f6604920f46f61500c9d98a6b9f7f4676e701ac24867afeb51ac439"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/painting/generateImage.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/painting/generateImage.ts",
+      "targetSha256": "5b961ec5c15dd866fd15af20310652d92170717c16147e36da84fe4bf135caa7"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/painting/generateImageSchema.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/painting/generateImageSchema.ts",
+      "targetSha256": "40ef73440eded0630798b6aca2cc4c31e05f20c88e44d4bc8a9aebcd087864c7"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/painting/generateImageTool.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/painting/generateImageTool.ts",
+      "targetSha256": "a2eae8d193c1326a03f02c93db2ecd2de8cf0b465e07a532cd5f383d2d0e33ee"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/painting/index.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/painting/index.ts",
+      "targetSha256": "2bf8ee52690834ce717d80c5e9730639db123b9ac1a51810c470c41844868a8b"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/runtimeTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/runtimeTools.ts",
+      "targetSha256": "c8ffd28312cec0b4477d4895cf49257b757cba2c12e804c7d3ac5567c145e73c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/runtimeToolSchema.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/runtimeToolSchema.ts",
+      "targetSha256": "f163aa2cf4f42328fdfde3aa158cb9df0cc163756162d105a2b9869f98186d09"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/web/__tests__/webTools.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/web/__tests__/webTools.test.ts",
+      "targetSha256": "33f9f73853a236f7bcf72b270422b5af09c261cb5aa84c827ac3c27d36334221"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/web/index.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/web/index.ts",
+      "targetSha256": "e8c2dd15d61cf36ee5c96bf614ff961a023a8cf626534398bb267bdc42c5e99c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/web/webLookup.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/web/webLookup.ts",
+      "targetSha256": "67f29dc758f23d36f49d5f04e50b484daf859d0e0b4a8a7ac388734e2c8c657f"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/web/webTools.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/web/webTools.ts",
+      "targetSha256": "b395b72515322e860a5d48f0a37bd7d3bdbe5f5250a3e7b5131f9ba93823a22d"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/agent/tools/writeFileTool.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/agent/tools/writeFileTool.ts",
+      "targetSha256": "50a5871c95d276c0ad1e9a4cdc7817bc4d9dadbc42857c0856b3bccc94e3be17"
     },
     {
       "classification": "mobile-extension",
@@ -6917,6 +7242,48 @@
     },
     {
       "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/mcp/__tests__/mcpRuntimeAdapter.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/mcp/__tests__/mcpRuntimeAdapter.test.ts",
+      "targetSha256": "2877f17578f1b7fa852abcf212cf60987d1dd05d47d459a2578625018a7a3031"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/mcp/mcpRuntimeAdapter.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/mcp/mcpRuntimeAdapter.ts",
+      "targetSha256": "c1c990c8b43d16d1df4595eb9fe4115005ac6a7e46e2287e18037fdc1caa0ba9"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/__tests__/languageServingPlan.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/__tests__/languageServingPlan.test.ts",
+      "targetSha256": "dfcc53ac7bcb1d2d7a58c92da26a575d74df7a247c3d1323c5c9b74d80acd792"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/__tests__/providerConnection.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/__tests__/providerConnection.test.ts",
+      "targetSha256": "1ac9ef5a505bff21fa608585a9ac6c64c6f200775538f01c50a7f72050837de2"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/__tests__/providerTransport.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/__tests__/providerTransport.test.ts",
+      "targetSha256": "a750b37b661a440f64d46b8bd0a80ebf81f6289f8a3b8cb1dc57c5d323b6a8ef"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/__tests__/systemModelSupport.test.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/__tests__/systemModelSupport.test.ts",
+      "targetSha256": "5e867b60c73f6253197850e1d5c91d2d11efb5a2b22e377ed366f9e6f7988370"
+    },
+    {
+      "classification": "mobile-extension",
       "evidence": ["mobile:src/backend/ai/provider/__tests__/VertexAuthClient.test.ts"],
       "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
       "target": "src/backend/ai/provider/__tests__/VertexAuthClient.test.ts",
@@ -6924,17 +7291,38 @@
     },
     {
       "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/languageServingPlan.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/languageServingPlan.ts",
+      "targetSha256": "bfa72548fa24f51c6e02f78747c6d34ff9cf3f6fb7c322161434aa0721b18585"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/providerConnection.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/providerConnection.ts",
+      "targetSha256": "b8c74f87477f988ad56ffe2acb4ae5cbe00409fff198c271507e97d92d4e30e4"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/providerTransport.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/providerTransport.ts",
+      "targetSha256": "86b28952e6e08b85006af72803f2ab87796d49cebadf124aabc5ccb5c493742e"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/systemModelSupport.ts"],
+      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
+      "target": "src/backend/ai/provider/systemModelSupport.ts",
+      "targetSha256": "bbca704c29f80d00d395b6d0ec9bcba7a17b7297c4edbc26f7decea003a23272"
+    },
+    {
+      "classification": "mobile-extension",
       "evidence": ["mobile:src/backend/ai/provider/VertexAuthClient.ts"],
       "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
       "target": "src/backend/ai/provider/VertexAuthClient.ts",
       "targetSha256": "6d814814a034a43febdcde53a7bdfcdaa0f6f1fa7bdb6e11bb554e558ed31d9a"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/runtime/pi/__tests__/piReactNativePatches.test.ts"],
-      "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/runtime/pi/__tests__/piReactNativePatches.test.ts",
-      "targetSha256": "593b7ab0d1d26a8d4736432fcaf50150551fc29afdb3a607485c8f9231fe63c6"
     }
   ]
 }

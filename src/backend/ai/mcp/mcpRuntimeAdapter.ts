@@ -8,7 +8,7 @@ import type {
   RuntimeToolCall,
   RuntimeToolRef,
 } from '@/backend/ai/agent';
-import { raceAbort } from '@/backend/ai/agent/raceAbort';
+import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 
 export const MCP_TOOL_CALL_TIMEOUT_MS = 60 * 1000;
 export const MCP_TOOL_RESULT_MAX_BYTES = 256 * 1024;

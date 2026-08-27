@@ -5,7 +5,7 @@ references, Runtime context checkpoint storage, and frontend integration active 
 Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
-[`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
+[`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port and the rollout
 plan for replacing the in-memory reference adapter. It implements the storage side of the
 [Agent Protocol](./agent-protocol.md) and follows the authority model direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568): mobile SQLite is the complete

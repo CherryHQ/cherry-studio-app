@@ -326,8 +326,8 @@ module.exports = defineConfig([
   // docs/references/agent/agent-runtime.md). Tests under __tests__ arrange
   // requests and may touch node builtins, so they are exempt.
   {
-    files: ['src/backend/ai/agent/**/*.{ts,tsx}'],
-    ignores: ['src/backend/ai/agent/**/__tests__/**/*.{ts,tsx}'],
+    files: ['src/backend/ai/agent/runtime/**/*.{ts,tsx}'],
+    ignores: ['src/backend/ai/agent/runtime/**/__tests__/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
