@@ -1,6 +1,8 @@
-import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+
+import type { PiLanguageEndpointType } from '@/backend/ai/provider/languageServingPlan';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
 
@@ -16,7 +18,7 @@ const context: Context = { messages: [] };
 const CASES: {
   api: SupportedPiApi;
   baseUrl: string;
-  endpointType: EndpointType;
+  endpointType: PiLanguageEndpointType;
   expectedBaseUrl: string;
   expectedFetch: FetchFunction | undefined;
   streamSimple: jest.Mock;
@@ -107,10 +109,5 @@ describe('Pi API adapters', () => {
         timeoutMs: 60_000,
       }),
     );
-  });
-
-  test('fails closed for endpoints outside the four supported protocols', () => {
-    expect(resolvePiApiAdapter(ENDPOINT_TYPE.OLLAMA_CHAT)).toBeUndefined();
-    expect(resolvePiApiAdapter(undefined)).toBeUndefined();
   });
 });
