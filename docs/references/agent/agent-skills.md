@@ -1,6 +1,6 @@
 # Agent Skills
 
-Status: **target direction; Skill persistence, loading, and Agent bindings are not yet implemented**.
+> Status: design. Skill persistence, loading, and Agent-to-Skill bindings are not implemented.
 
 Cherry Mobile Skills are application-owned instruction resources designed for the mobile Agent
 surface. Agent configuration selects which Skills are enabled. For each Session turn, the Host

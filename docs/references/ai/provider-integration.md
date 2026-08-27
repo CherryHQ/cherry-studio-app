@@ -1,6 +1,6 @@
 # AI Provider Integration
 
-Status: **as-built Agent and provider-service paths**.
+> Status: as-built.
 
 This reference defines the mobile AI provider/model request architecture. Terms follow
 [Domain Language](../domain-language.md).
@@ -22,7 +22,7 @@ selected Agent model through the Host-owned provider adapter. The current Pi bin
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
 
-When application tools land, the capability path is:
+Model-backed application tools use this capability path:
 
 ```text
 Mobile Agent Host → Pi Runtime → application-owned RuntimeTool
@@ -32,10 +32,10 @@ Mobile Agent Host → Pi Runtime → application-owned RuntimeTool
                          AiService / ai-core / AI SDK
 ```
 
-Image generation is the first intended use of this path. Office generation and managed-file edits
-use the same tool boundary but do not need AI SDK unless their application capability chooses it.
-Pi owns tool selection and iteration; the capability service owns provider configuration,
-credentials, request execution, usage, cancellation, output import, and cleanup. See
+Image generation uses this path today. Future model-backed capabilities use the same boundary but do
+not need AI SDK unless their application adapter chooses it. Pi owns tool selection and iteration;
+the capability service owns provider configuration, credentials, request execution, usage,
+cancellation, output import, and cleanup. See
 [Agent Tools And Controlled Resources](../agent/agent-tools-and-resources.md).
 
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
@@ -127,6 +127,5 @@ configuration and API-version settings influence the generated provider settings
 
 - Desktop Provider/Model semantics change.
 - Pi provider coverage expands.
-- Agent tools or attachments gain an application-owned runtime contract.
 - A new model-capability tool needs provider configuration, usage, or artifact semantics not covered
   by the application capability boundary.

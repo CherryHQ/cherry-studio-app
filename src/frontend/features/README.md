@@ -1,8 +1,7 @@
 # Feature Module Conventions
 
 This directory owns the app's features — screen implementations plus the feature-private
-components, hooks, context, runtime projections, session owners, and utils that back them (ADRs
-0010 and 0011). Expo
+components, hooks, context, runtime projections, session owners, and utils that back them. Expo
 Router route files in `src/app` stay thin and re-export from here.
 
 ## Route Adapter Rule
@@ -38,8 +37,8 @@ settings/
 ```
 
 A feature that subscribes to an app-owned runtime or owns a backend session keeps its React adapter
-in the feature (`chat/runtime/` for the shared Chat Runtime; painting's generation hook for its
-caller-owned session).
+in the feature. `chat/runtime/` observes the app-owned Mobile Agent Host; painting hooks observe the
+durable job ledger without owning the job lifetime.
 
 ## Imports
 

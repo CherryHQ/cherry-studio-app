@@ -1,7 +1,7 @@
 # Resource Scope Lifecycle
 
-> Status: Built and wired (`src/backend/core/resources/`). The coordinator stays domain-neutral;
-> its current production scope is painting jobs. Framework interfaces live in
+> Status: as-built. The coordinator stays domain-neutral; its current production scope is painting
+> jobs. Framework interfaces live in
 > [lifecycle-overview.md](./lifecycle-overview.md).
 
 ## Purpose

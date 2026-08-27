@@ -17,7 +17,7 @@ Use these roles for mobile-owned code:
 | --- | --- | --- |
 | `Module` | A frontend-visible workflow capability exposed through `Backend` | `PaintingsModule` |
 | `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `JobRuntime` |
-| `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `PaintingGenerationSession` |
+| `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `AgentRuntimeSession` |
 | `Client` | A boundary to one external account, protocol, or remote API | `VertexAuthClient` |
 | `Adapter` | A translation boundary for a platform or SDK; a precise capability noun may stand alone | `DevicePermissions` |
 | `Manager` | A coordinator whose defining job is owning a homogeneous pool or registry | `ConnectionManager` |
@@ -102,21 +102,14 @@ turns interrupted.
 
 ## Agent Tool Capabilities
 
-When application tools land, the Agent Host additionally owns current Agent Skill resolution, the
-monotonic turn resource ledger, immutable per-turn tool snapshots, tool terminalization, and
-artifact projection. Skill loading details remain deferred; the ownership split below is settled
-design, and Version 1 still resolves an empty tool snapshot.
+The Agent Host owns immutable per-turn tool snapshots, the monotonic resource ledger, approval
+coordination, tool terminalization, and artifact projection. Pi owns model context construction and
+the model → tool → result loop; it does not own system permissions, provider credentials, managed
+files, MCP clients, or side-effect policy. Each application capability adapter owns its validation,
+timeout, cancellation, cleanup, and error redaction.
 
-Pi owns model context construction and the model → tool → result loop. It does not own system
-permissions, provider credentials, managed files, MCP clients, or side-effect policy. Each
-application capability adapter owns one narrow operation and its validation, timeout, cancellation,
-cleanup, and error redaction:
-
-- `McpRuntimeService` owns Streamable HTTP clients and discovery caches;
-- device adapters own calendar permission and native calls;
-- Office and file adapters own temporary bytes and copy-on-write `file_entry` creation; and
-- the image capability owns `AiService`/AI SDK execution, usage, downloads, and managed output
-  import.
+The current tool inventory and binding rules live only in
+[Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md).
 
 An Agent tool may delegate to `JobRuntime`, but Version 1 still waits for terminal job state inside
 the active turn. The durable job ledger does not make the Agent turn resumable after process death.
@@ -124,16 +117,10 @@ See [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md)
 
 ## Painting Generation
 
-`PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
-`painting.generate` row. The host-owned `JobRuntime` claims and executes it, owns cancellation and
-terminal persistence, and can continue after the initiating route unmounts. The handler owns file
-preparation, AI generation, output persistence, failed-output cleanup, and its feature-specific
-background Activity session.
-
-`usePaintingGeneration` owns only screen state, polling, toast/query synchronization, and the
-receipt currently shown by that route. Returning to a receipt adopts its active job from the durable
-ledger. Explicit cancel reaches `JobRuntime.cancel()` and then deletes the receipt; deleting a
-painting through any Data API caller first fences its scope and drains the job.
+The app-owned `JobRuntime` owns painting execution, cancellation, and terminal persistence across
+route changes. Frontend hooks own only observation and UI synchronization. See
+[Job Runtime](./job-runtime.md#production-handler-paintinggenerate) for the durable workflow and
+resource-deletion contract.
 
 ## Other Long-Lived Resources
 

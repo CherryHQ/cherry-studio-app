@@ -1,6 +1,6 @@
 # File Model
 
-Status: as-built.
+> Status: as-built.
 
 How Cherry Mobile stores user- and generation-owned files. This model is mobile-native and
 deliberately diverges from Cherry Desktop's `FileEntry`: desktop's external-path entries, content

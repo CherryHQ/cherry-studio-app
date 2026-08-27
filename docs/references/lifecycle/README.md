@@ -1,12 +1,8 @@
 # Lifecycle
 
-> Status: Implemented. The framework, host-managed services, and resource-scope deletion paths are
-> wired in production.
+> Status: as-built.
 > Desktop source: `CherryHQ/cherry-studio@12498d68` — `src/main/core/lifecycle/`,
 > `src/main/core/application/`, `docs/references/lifecycle/`
-> Supersedes: the "no service registry, no lifecycle framework" stance previously recorded in
-> [runtime-ownership.md](../runtime-ownership.md), `src/bootstrap/README.md`, and
-> `src/bootstrap/composition/README.md`. Those documents are rewritten in Stage B.
 
 Mobile adopts Desktop's lifecycle framework rather than a mobile-specific invention. Business code
 reads identically on both platforms — `application.get('DbService')`, `@Injectable('JobRuntime')`,
@@ -23,7 +19,6 @@ Two subsystems have no desktop counterpart and are designed here for the first t
 | --- | --- |
 | [lifecycle-overview.md](./lifecycle-overview.md) | Framework interfaces, phases, service states, startup/shutdown sequences, failure and timeout semantics, `application.get()` rules |
 | [resource-scope.md](./resource-scope.md) | `ResourceScopeCoordinator`, the five-step deletion sequence, and painting-job integration |
-| [lifecycle-migration.md](./lifecycle-migration.md) | Historical A→B→D→C rollout and the decisions that remain active |
 
 ## Admission: does a module belong in lifecycle?
 
@@ -73,5 +68,5 @@ Every deviation is deliberate and load-bearing; the rationale for each lives in 
 ## Related
 
 - [runtime-ownership.md](../runtime-ownership.md) — ownership of long-lived resources and startup work
-- [job-manager-design.md](../job-manager-design.md) — the durable job ledger this design builds on
+- [job-runtime.md](../job-runtime.md) — the durable job ledger coordinated with resource scopes
 - [architecture-overview.md](../architecture-overview.md) — the frontend/backend seam

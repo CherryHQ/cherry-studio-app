@@ -96,7 +96,8 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 - Name leaf contracts `XxxModule` and caller-owned lifecycle objects `XxxSession`. Keep the aggregate
   name `Backend` and its capability keys unchanged.
 - Prefer one operation that owns a complete workflow over exposing every internal step.
-- Put cancellation on its owner, such as `cancel()` on a caller-owned generation session.
+- Put cancellation on its owner, such as `cancelGeneration(jobId)` on `PaintingsModule` or
+  `cancel()` on a caller-owned session.
 - Sessions that own resources, subscriptions, or in-flight work must expose `dispose()` and define
   who owns calling it.
 - Return structured results or emit semantic events. Do not perform routing, translation, toast, or
@@ -117,7 +118,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 | `file` | Encapsulates managed-file import, Expo URI resolution, and user-triggered deletion |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
-| `paintings` | Owns cancellable generation sessions, file preparation, persistence, cleanup, and file resolution |
+| `paintings` | Atomically creates painting receipts and durable jobs, cancels generation, and resolves files |
 | `permissions` | Coordinates stored permission policy with device status, recovery, and system settings |
 | `profile` | Encapsulates profile avatar storage and preference coordination |
 | `providers` | Combines provider removal policy with provider avatar storage |

@@ -14,16 +14,16 @@
  *   recovery runs lazily once before the first claim of this runtime.
  * - Claims are fenced by conditional UPDATEs (`WHERE status='running'`, the
  *   "weak fence"): within a single JS runtime and cold-start-only recovery, a
- *   stale attempt cannot outlive its process; run-token fencing arrives with
- *   the Phase 2 background windows (see docs/references/job-manager-design.md).
+ *   stale attempt cannot outlive its process. A second execution entry point
+ *   requires stronger persisted fencing; see docs/references/job-runtime.md.
  * - Delayed promotion rides one foreground timer plus every pump — timers are
  *   a latency optimization, never a correctness mechanism.
  *
  * Invariant: at most ONE live JobRuntime per process per database. Recovery
  * treats every active row outside this instance's in-flight and
  * startup-created sets as a prior-process leftover, so a second live instance
- * would reset/cancel the first one's active work. The container now holds that
- * invariant — see the class comment.
+ * would reset/cancel the first one's active work. The container holds that
+ * invariant.
  */
 import { loggerService } from '@logger';
 
@@ -136,7 +136,7 @@ export type JobRuntimeOptions = {
   keepAlive?: KeepAliveSource;
   /** Injectable clock for tests. */
   now?: () => number;
-  /** Progress sink; defaults to a no-op until a consumer exists (Phase 2+). */
+  /** Progress sink; defaults to a no-op until a consumer exists. */
   onProgress?: (jobId: string, progress: JobProgress) => void;
 };
 

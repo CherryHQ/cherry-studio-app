@@ -74,7 +74,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Universal Package](./universal-package.md): `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync.
 - [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
-- [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
+- [Lifecycle](./lifecycle/README.md): implemented service container, hosts, phases, and resource-scope coordination.
+- [Job Runtime](./job-runtime.md): durable enqueue, dispatch, cancellation, recovery, and painting generation.
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
 - [Agent Architecture](./agent/README.md): Pi-only conversation Runtime, Agent Protocol, tools,
   controlled resources, Skills, and persistence.
@@ -100,12 +101,11 @@ compatibility adapter or generic frontend selector for persistence services.
   `Backend.agent` and combines it with Data API transcript reads.
 - Pi is the only local Agent Runtime. `AiService` serves explicit-model, non-conversation
   generation and provider utilities; no parallel Topic/Chat runtime remains.
-- In the settled Agent tool direction, application-owned `RuntimeTool` adapters expose Streamable
-  HTTP MCP, device APIs, Office/image generation, and controlled managed-file operations to Pi. AI
-  SDK may implement a model capability behind a tool, but never owns the conversation or tool loop.
-- Controlled Skills are persisted description-only prompt resources. They are not executable tools
-  and cannot expand permission or the turn resource ledger.
-- Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
+- The Agent Host resolves immutable per-turn `RuntimeTool` snapshots from persisted bindings and
+  live application capability adapters. [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md)
+  owns the current capability inventory and permission rules.
+- Painting generation is enqueued into the app-owned `JobRuntime`; the durable ledger outlives the
+  initiating route and remains observable through the Jobs Data API.
 - App shutdown closes Agent Runtime sessions and awaits tracked Agent turns before disposing lower
   infrastructure.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.

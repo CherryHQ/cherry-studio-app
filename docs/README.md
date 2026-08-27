@@ -40,20 +40,16 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
-| [Agent Architecture](./references/agent/README.md) | Implemented Agent Host foundation and Pi-first local execution target design |
+| [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
 | [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
-| [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
+| [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Agent Session streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
+| [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
+| [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
-
-### Performance
-
-| Document | Description |
-| --- | --- |
-| [Topic Rendering Benchmark](./references/performance/topic-rendering-benchmark.md) | Historical baseline, fixture matrix, and current comparison criteria |
 
 ## Documentation Governance
 

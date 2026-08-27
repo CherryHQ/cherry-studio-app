@@ -79,10 +79,11 @@ A frontend-visible `XxxModule` contract that hides meaningful orchestration, lif
 or third-party complexity. Resource CRUD remains in the Data API.
 _Avoid_: XxxBackend, pass-through service, persistence wrapper
 
-**Painting Generation Session**:
-A caller-owned, isolated image-generation lifecycle. It owns cancellation, incomplete receipt retry
-state, and disposal independently from other sessions.
-_Avoid_: Painting Service, app runtime
+**Painting Generation Job**:
+A durable image-generation unit recorded in the job ledger. `JobRuntime` owns execution,
+cancellation, and recovery independently of the initiating route; the painting receipt owns the
+product result.
+_Avoid_: Painting Generation Session, caller-owned generation
 
 **Provider**:
 A user-configurable AI service endpoint with API keys, auth configuration, endpoint configuration, and runtime API feature flags.

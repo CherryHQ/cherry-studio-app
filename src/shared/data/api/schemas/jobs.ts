@@ -8,12 +8,6 @@
  * NOTE: Handler runtime types (JobHandler / JobContext / JobSettledEvent) are
  * NOT here — they belong to the backend runtime at
  * `src/backend/services/jobs/types.ts`. The frontend never instantiates them.
- *
- * Schedule vocabulary (`Trigger`, `CatchUpPolicy`, `JobScheduleSnapshot`, the
- * schedule DTOs and error codes) was removed together with the `job_schedule`
- * table: nothing on mobile reads or writes schedules. Phase 4 of
- * `docs/references/job-manager-design.md` re-authors them if a product feature
- * needs one.
  */
 
 import * as z from 'zod';
