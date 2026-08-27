@@ -41,6 +41,7 @@ They are the source of truth for how the repository works today.
 | --- | --- |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host foundation and Pi-first local execution target design |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
+| [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |

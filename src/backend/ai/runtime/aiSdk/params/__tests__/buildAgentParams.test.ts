@@ -77,6 +77,23 @@ async function buildReasoningOptions(input: {
 }
 
 describe('buildAgentParams assistant-less contract', () => {
+  it('uses the shared normalized wire model id', async () => {
+    const provider = createProvider('gemini');
+    const model = {
+      ...resolveModel(provider, 'gemini-2.5-flash'),
+      apiModelId: 'models/gemini-2.5-flash',
+    };
+
+    const result = await buildAgentParams({
+      request: { uniqueModelId: model.id },
+      services: createServices(),
+      provider,
+      model,
+    });
+
+    expect(result.sdkConfig.modelId).toBe('gemini-2.5-flash');
+  });
+
   it('serializes an explicit reasoning selection', async () => {
     await expect(
       buildReasoningOptions({

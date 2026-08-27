@@ -1,8 +1,3 @@
-import {
-  getExtraHeaders,
-  resolveEffectiveEndpoint,
-  resolveWireModelId,
-} from '@cherrystudio/ai-runtime/provider';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY, type EndpointType } from '@cherrystudio/provider-registry';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
@@ -15,9 +10,10 @@ import type {
   RuntimeModelPreflight,
   RuntimeUsageContext,
 } from '@/backend/ai/agent';
+import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
+import { resolveProviderLanguageTransportPolicy } from '@/backend/ai/provider/providerTransport';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -41,7 +37,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
     async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
-      const { adapter, configuredBaseUrl, model, preflight, provider, resolvedEndpoint } =
+      const { adapter, configuredBaseUrl, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
@@ -49,8 +45,11 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         throw new Error('Pi Runtime requires an API key from the selected provider.');
       }
 
-      const modelId = resolveWireModelId(model, resolvedEndpoint.endpointType);
-      const headers = { ...defaultAppHeaders(), ...getExtraHeaders(provider) };
+      const modelId = connection.wireModelId;
+      const headers = connection.headers;
+      const baseFetch = expoFetch as unknown as typeof globalThis.fetch;
+      const providerFetch =
+        resolveProviderLanguageTransportPolicy(provider)?.wrapFetch(baseFetch) ?? baseFetch;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(configuredBaseUrl),
@@ -66,7 +65,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
       const streamFn = await bindPiStream(adapter, {
         apiKey: selectedApiKey.value,
-        fetch: expoFetch as FetchFunction,
+        fetch: providerFetch as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: runtimeOptions.maxOutputTokens ?? piModel.maxTokens,
@@ -116,9 +115,13 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   ]);
   if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
 
-  const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
-  const adapter = resolveSupportedAdapter(provider, resolvedEndpoint.endpointType);
-  const configuredBaseUrl = resolvedEndpoint.baseUrl.trim();
+  const connection = resolveProviderConnection(provider, model);
+  const adapter = resolveSupportedAdapter(
+    provider,
+    connection.endpointType,
+    connection.adapterFamily,
+  );
+  const configuredBaseUrl = connection.baseUrl.trim();
   if (!configuredBaseUrl) {
     throw new Error('Pi Runtime requires a base URL from the selected provider.');
   }
@@ -129,10 +132,10 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   return {
     adapter,
     configuredBaseUrl,
+    connection,
     model,
     preflight: toPiModelPreflight(model),
     provider,
-    resolvedEndpoint,
   };
 }
 
@@ -156,10 +159,11 @@ export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
   };
 }
 
-function resolveSupportedAdapter(provider: Provider, endpointType: EndpointType | undefined) {
-  const adapterFamily = endpointType
-    ? provider.endpointConfigs?.[endpointType]?.adapterFamily
-    : undefined;
+function resolveSupportedAdapter(
+  provider: Provider,
+  endpointType: EndpointType | undefined,
+  adapterFamily: string | undefined,
+) {
   if (adapterFamily && NON_STANDARD_ADAPTER_FAMILIES.has(adapterFamily)) {
     throw new Error(`Pi Runtime does not support provider adapter family: ${adapterFamily}.`);
   }

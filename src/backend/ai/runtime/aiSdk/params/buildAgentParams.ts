@@ -1,10 +1,6 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import {
-  type ProviderConfig,
-  resolveEffectiveEndpoint,
-  resolveProviderOptionsKey,
-} from '@cherrystudio/ai-runtime/provider';
+import { type ProviderConfig, resolveProviderOptionsKey } from '@cherrystudio/ai-runtime/provider';
 import {
   buildAgentPlugins,
   createToolCallLimitStopCondition,
@@ -38,6 +34,7 @@ import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
+import { resolveProviderConnection } from '../../../provider/providerConnection';
 import type { AgentOptions } from '../Agent';
 
 export interface BuildAgentParamsDependencies {
@@ -71,8 +68,8 @@ export async function buildAgentParams({
   model,
   getRepairUsagePlugins,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
-  const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
-  const impliedCapability = endpointImpliedCapability(resolvedEndpoint.endpointType);
+  const connection = resolveProviderConnection(provider, model);
+  const impliedCapability = endpointImpliedCapability(connection.endpointType);
   if (
     model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING) ||
     model.capabilities.includes(MODEL_CAPABILITY.RERANK) ||
@@ -90,13 +87,13 @@ export async function buildAgentParams({
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },
-    { apiKeyOverride: request.apiKeyOverride, resolvedEndpoint },
+    { apiKeyOverride: request.apiKeyOverride, resolvedConnection: connection },
   );
-  const endpointType = resolvedEndpoint.endpointType;
+  const endpointType = connection.endpointType;
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
     actualProviderId: provider.id,
     endpointType,
-    gatewayProviderOptionsKey: resolvedEndpoint.providerOptionsKey,
+    gatewayProviderOptionsKey: connection.providerOptionsKey,
   });
   const reasoningEndpointType =
     sdkConfig.providerId === 'google-vertex-maas'
@@ -142,7 +139,7 @@ export async function buildAgentParams({
   });
   const tools = request.callOverrides?.tools;
   const repairToolCall = createAiRepair({
-    modelId: model.apiModelId ?? model.modelId,
+    modelId: connection.wireModelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,
     getUsagePlugins: getRepairUsagePlugins,
@@ -161,7 +158,7 @@ export async function buildAgentParams({
 
   return {
     credentialReceipt,
-    sdkConfig: { ...sdkConfig, modelId: model.apiModelId ?? model.modelId },
+    sdkConfig: { ...sdkConfig, modelId: connection.wireModelId },
     context: {
       abortSignal: request.requestOptions?.signal,
       requestId: Crypto.randomUUID(),

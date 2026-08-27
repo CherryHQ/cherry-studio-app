@@ -5,6 +5,10 @@ Status: **as-built Agent and provider-service paths**.
 This reference defines the mobile AI provider/model request architecture. Terms follow
 [Domain Language](../domain-language.md).
 
+The target ownership and staged migration for shared Provider connection facts are defined in
+[Provider Serving Boundaries](./provider-serving-boundaries.md). This document continues to describe
+the currently implemented runtime paths until each migration phase lands.
+
 ## Runtime Paths
 
 Agent conversation requests use one path:
@@ -14,8 +18,9 @@ MobileAgentHost -> PiRuntime -> piModelResolver -> provider/model services
 ```
 
 Pi is the only local Agent Runtime. It receives a normalized Agent transcript and resolves the
-selected Agent model through the Host-owned provider adapter. Provider coverage beyond the current
-OpenAI Responses-compatible Pi adapter is separate follow-up work.
+selected Agent model through the Host-owned provider adapter. The current Pi binding supports
+API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
+OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
 
 When application tools land, the capability path is:
 
@@ -57,12 +62,19 @@ documented runtime compatibility reason to diverge.
 
 ## AI SDK Provider Resolution
 
+`resolveProviderConnection()` is the shared, credential-selection-free connection resolver used by
+Pi and AI SDK request construction. It resolves the effective endpoint, endpoint-scoped adapter
+family, normalized wire model id, gateway provider-options key, and mobile/Provider request
+headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
+contain sensitive values, the result remains in memory and must not be persisted or logged.
+
 `resolveProviderAiSdkConfig()` converts a Provider and Model into the configuration used by
 `AiService`. Endpoint selection priority is:
 
 1. `model.endpointTypes[0]`;
-2. `provider.defaultChatEndpoint`;
-3. OpenAI chat completions fallback.
+2. a registered per-model gateway route;
+3. `provider.defaultChatEndpoint`;
+4. no selected endpoint, after which base-URL lookup applies its documented compatibility fallback.
 
 The endpoint and adapter-family logic chooses variants such as OpenAI, OpenAI-compatible, Azure,
 Azure Responses, Azure Anthropic, Gemini, CherryIN, NewAPI, AiHubMix, or Gateway. Provider settings
@@ -79,7 +91,8 @@ resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
 CherryAI:
 
 - resolves to `openai-compatible`;
-- signs `/chat/completions` requests with its provider-specific fetch wrapper;
+- signs `/chat/completions` requests through the shared `ProviderLanguageTransportPolicy` consumed
+  by Pi and AI SDK bindings;
 - adds `X-Client-ID`, `X-Timestamp`, and `X-Signature`.
 
 CherryIN uses the normal endpoint configuration and API-key path.
@@ -93,8 +106,10 @@ configuration and API-version settings influence the generated provider settings
 ## Transport
 
 - Pi Agent requests use the Expo-compatible fetch supplied by `piModelResolver`.
+- Pi and AI SDK request construction consume the same `ResolvedProviderConnection` facts before
+  applying their client-specific URL formatting and credential materialization.
 - Generic AI SDK provider configs rely on runtime/provider-package fetch behavior.
-- CherryAI adds its signing fetch wrapper.
+- CherryAI adds its shared signing transport policy over the selected client fetch.
 - Painting image-edit requests inject Expo fetch for local image inputs.
 
 ## Reopen When
