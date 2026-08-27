@@ -1,5 +1,4 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
-import FilterIcon from '@cherrystudio/app-icons/icons/filter';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ScrollShadow } from '@cherrystudio/ui/components';
@@ -58,7 +57,8 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openLibrary, openPaintings, openSessionList } =
+    useSidebarActions('Sidebar.Body');
 
   return (
     <>
@@ -74,17 +74,19 @@ function SidebarBodyDefault() {
       </View>
 
       <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
-        <Text className="font-medium text-muted-foreground text-sm">{t('navigation.recents')}</Text>
-        {/* Icon only, no surface: it sits on the section label's baseline, and a
-            chip there would outweigh the label it belongs to. Filtering itself
-            is not wired up yet. */}
+        <Text className="text-muted-foreground text-sm">{t('navigation.recents')}</Text>
+        {/* Text only, no surface: it sits on the section label's baseline, and a
+            chip there would outweigh the label it belongs to. The row's own
+            edges place it, so the press target grows through `hitSlop` rather
+            than padding that would push the label off that edge. */}
         <Pressable
-          accessibilityLabel={t('navigation.filterChats')}
+          accessibilityLabel={t('navigation.viewAll')}
           accessibilityRole="button"
-          className="-mr-1 p-1 active:opacity-60"
+          className="active:opacity-60"
           hitSlop={8}
+          onPress={openSessionList}
         >
-          <FilterIcon className="size-4 text-muted-foreground" />
+          <Text className="text-muted-foreground text-sm">{t('navigation.viewAll')}</Text>
         </Pressable>
       </View>
       <SidebarSessionList />
