@@ -23,10 +23,9 @@ export function SidebarSessionList() {
 }
 
 function SidebarSessionListView() {
-  const { t } = useTranslation();
   const { sessions } = useSessionListSessions();
   const { requestDelete, requestRename } = useSessionActionAlerts();
-  const { closeDrawer, openSessionList } = useSidebarActions('Sidebar session list');
+  const { closeDrawer } = useSidebarActions('Sidebar session list');
   const visibleSessions = useMemo(
     () => sessions.slice(0, appSidebar.recentSessionLimit),
     [sessions],
@@ -43,16 +42,6 @@ function SidebarSessionListView() {
           session={session}
         />
       ))}
-      <Pressable
-        accessibilityLabel={t('navigation.viewAll')}
-        accessibilityRole="button"
-        className="w-full active:bg-sidebar-accent"
-        onPress={openSessionList}
-      >
-        <Text className="px-5 py-2.5 text-base text-muted-foreground">
-          {t('navigation.viewAll')}
-        </Text>
-      </Pressable>
     </>
   );
 }

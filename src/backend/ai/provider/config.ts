@@ -17,15 +17,13 @@ import {
   formatApiHost,
   formatOllamaApiHost,
   getBaseUrl,
-  getExtraHeaders,
   isVertexMaasModelId,
   isWithTrailingSharp,
   normalizeVertexCredentials,
   type ProviderConfig,
   registerProviderExtensions,
-  resolveAiSdkProviderId,
+  resolveProviderVariant,
   type ResolvedEndpoint,
-  resolveEffectiveEndpoint,
   routeToEndpoint,
   stripArkUnsupportedIncludes,
   transformZhipuRequestBody,
@@ -34,9 +32,12 @@ import {
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
-import { generateSignature } from '@/backend/ai/provider/cherryai';
+import { resolveLanguageServingPlan } from '@/backend/ai/provider/languageServingPlan';
+import {
+  resolveProviderConnection,
+  type ResolvedProviderConnection,
+} from '@/backend/ai/provider/providerConnection';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
-import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -60,6 +61,7 @@ interface ProviderConfigRuntime {
 interface BuilderContext {
   actualProvider: Provider;
   model: Model;
+  connection: ResolvedProviderConnection;
   baseConfig: BaseConfig;
   endpoint?: string;
   endpointType?: EndpointType;
@@ -75,6 +77,7 @@ type ApiKeyBuilderContext = BuilderContext & {
 
 interface ProviderToAiSdkConfigOptions {
   apiKeyOverride?: string;
+  resolvedConnection?: ResolvedProviderConnection;
   resolvedEndpoint?: ResolvedEndpoint;
   sessionId?: string;
 }
@@ -174,12 +177,16 @@ export async function resolveProviderAiSdkConfig(
   runtime: ProviderConfigRuntime,
   options?: ProviderToAiSdkConfigOptions,
 ): Promise<ResolvedProviderAiSdkConfig> {
-  const { endpointType, baseUrl } =
-    options?.resolvedEndpoint ?? resolveEffectiveEndpoint(provider, model);
+  const resolvedConnection =
+    options?.resolvedConnection ??
+    resolveProviderConnection(provider, model, { resolvedEndpoint: options?.resolvedEndpoint });
+  const languageServingPlan = isImageGenerationModel(model)
+    ? undefined
+    : resolveLanguageServingPlan(provider, model, { resolvedConnection });
+  const connection = languageServingPlan?.connection ?? resolvedConnection;
+  const { endpointType, baseUrl } = connection;
 
-  const aiSdkProviderId = appProviderIdMap[
-    resolveAiSdkProviderId(provider, endpointType)
-  ] as StringKeys<AppProviderSettingsMap>;
+  const aiSdkProviderId = resolveConnectionAiSdkProviderId(connection);
 
   const formattedBaseUrl = formatBaseURL(baseUrl, provider, endpointType);
   const { baseURL, endpoint } = routeToEndpoint(formattedBaseUrl);
@@ -187,6 +194,7 @@ export async function resolveProviderAiSdkConfig(
   const ctx: BuilderContext = {
     actualProvider: provider,
     model,
+    connection,
     baseConfig: { baseURL, apiKey: '' },
     apiKeyOverride: options?.apiKeyOverride,
     endpoint,
@@ -269,7 +277,7 @@ export async function resolveProviderAiSdkConfig(
         endpoint: builderContext.endpoint,
         providerSettings: {
           ...builderContext.baseConfig,
-          headers: { ...defaultAppHeaders(), ...getExtraHeaders(builderContext.actualProvider) },
+          headers: { ...builderContext.connection.headers },
         },
       })),
     },
@@ -281,7 +289,7 @@ export async function resolveProviderAiSdkConfig(
         endpoint: builderContext.endpoint,
         providerSettings: {
           ...builderContext.baseConfig,
-          headers: { ...defaultAppHeaders(), ...getExtraHeaders(builderContext.actualProvider) },
+          headers: { ...builderContext.connection.headers },
         },
       })),
     },
@@ -308,8 +316,30 @@ export async function resolveProviderAiSdkConfig(
     resolved = await withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
   }
 
-  resolved.config.providerSettings.fetch ??= runtime.fetch;
+  const transportPolicy = languageServingPlan?.transportPolicy;
+  if (transportPolicy) {
+    resolved.config.providerSettings.fetch = transportPolicy.wrapFetch(
+      resolved.config.providerSettings.fetch ??
+        runtime.fetch ??
+        ((input, init) => globalThis.fetch(input, init)),
+    );
+  } else {
+    resolved.config.providerSettings.fetch ??= runtime.fetch;
+  }
   return resolved;
+}
+
+function resolveConnectionAiSdkProviderId(
+  connection: ResolvedProviderConnection,
+): StringKeys<AppProviderSettingsMap> {
+  const baseProviderId =
+    connection.adapterFamily && connection.adapterFamily in appProviderIdMap
+      ? appProviderIdMap[connection.adapterFamily]
+      : appProviderIdMap['openai-compatible'];
+  return resolveProviderVariant(
+    baseProviderId,
+    connection.endpointType,
+  ) as StringKeys<AppProviderSettingsMap>;
 }
 
 // ── Config Builders ──
@@ -331,10 +361,7 @@ function buildOpenCodeConfig(ctx: BuilderContext): ProviderConfig {
 
 function buildCommonOptions(ctx: BuilderContext) {
   const options: Record<string, any> = {
-    headers: {
-      ...defaultAppHeaders(),
-      ...getExtraHeaders(ctx.actualProvider),
-    },
+    headers: { ...ctx.connection.headers },
   };
   if (ctx.aiSdkProviderId === 'openai') {
     options.headers['X-Api-Key'] = ctx.baseConfig.apiKey;
@@ -370,35 +397,11 @@ function buildCherryAIConfig(ctx: BuilderContext): ProviderConfig<'openai-compat
     endpoint: ctx.endpoint,
     providerSettings: {
       ...ctx.baseConfig,
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
       includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
       name: ctx.actualProvider.id,
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const signature = generateSignature({
-          method: 'POST',
-          path: '/chat/completions',
-          query: '',
-          body: getJsonBody(init?.body),
-        });
-        return (ctx.runtime.fetch ?? globalThis.fetch)(input, {
-          ...init,
-          headers: { ...init?.headers, ...signature },
-        });
-      },
     },
   };
-}
-
-function getJsonBody(body: BodyInit | null | undefined): Record<string, unknown> | undefined {
-  if (typeof body !== 'string') {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(body) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
 }
 
 function formatAzureBaseURL(baseURL: string, forAnthropic: boolean): string {
@@ -427,7 +430,7 @@ async function buildAzureConfig(
       providerSettings: {
         ...ctx.baseConfig,
         baseURL: formatAzureBaseURL(ctx.baseConfig.baseURL, true),
-        headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+        headers: { ...ctx.connection.headers },
       },
     };
   }
@@ -440,7 +443,7 @@ async function buildAzureConfig(
   } = {
     ...ctx.baseConfig,
     baseURL: formatAzureBaseURL(ctx.baseConfig.baseURL, false),
-    headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+    headers: { ...ctx.connection.headers },
   };
 
   if (apiVersion) {
@@ -481,10 +484,7 @@ function buildOpenAICompatibleConfig(ctx: BuilderContext): ProviderConfig<'opena
 }
 
 function buildOllamaConfig(ctx: BuilderContext): ProviderConfig<'ollama'> {
-  const headers: Record<string, string> = {
-    ...defaultAppHeaders(),
-    ...getExtraHeaders(ctx.actualProvider),
-  };
+  const headers = { ...ctx.connection.headers };
   if (ctx.baseConfig.apiKey) {
     headers.Authorization = `Bearer ${ctx.baseConfig.apiKey}`;
   }
@@ -557,7 +557,7 @@ async function buildVertexConfig(ctx: BuilderContext): Promise<ResolvedProviderC
         location,
         ...(ctx.baseConfig.baseURL && { baseURL: ctx.baseConfig.baseURL }),
         ...(normalizedCredentials && { googleCredentials: normalizedCredentials }),
-        headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+        headers: { ...ctx.connection.headers },
       },
     };
   } else {
@@ -616,7 +616,7 @@ function buildAiHubMixConfig(ctx: BuilderContext): ProviderConfig<'aihubmix'> {
     providerSettings: {
       ...ctx.baseConfig,
       endpointBaseURLs: buildEndpointBaseURLs(ctx.actualProvider),
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
     },
   };
 }
@@ -628,7 +628,7 @@ function buildDmxapiConfig(ctx: BuilderContext): ProviderConfig<'dmxapi'> {
     providerSettings: {
       ...ctx.baseConfig,
       endpointBaseURLs: buildEndpointBaseURLs(ctx.actualProvider),
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
     },
   };
 }
@@ -639,7 +639,7 @@ function buildDashScopeConfig(ctx: BuilderContext): ProviderConfig<'dashscope'> 
     endpoint: ctx.endpoint,
     providerSettings: {
       ...ctx.baseConfig,
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
       includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
     },
   };
@@ -663,7 +663,7 @@ function buildCherryInConfig(ctx: BuilderContext): ProviderConfig {
       anthropicBaseURL,
       endpointType: mapGatewayEndpointType(ctx.endpointType),
       geminiBaseURL,
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
     },
   };
 }
@@ -688,7 +688,7 @@ function buildNewApiConfig(ctx: BuilderContext): ProviderConfig<'newapi'> {
       ...ctx.baseConfig,
       baseURL: formatNewApiBaseURL(rawBaseURL, ctx.endpointType),
       endpointType: mapGatewayEndpointType(ctx.endpointType),
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      headers: { ...ctx.connection.headers },
     },
   };
 }

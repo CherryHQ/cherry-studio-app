@@ -1,10 +1,5 @@
-import {
-  getExtraHeaders,
-  resolveEffectiveEndpoint,
-  resolveWireModelId,
-} from '@cherrystudio/ai-runtime/provider';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
-import { MODEL_CAPABILITY, type EndpointType } from '@cherrystudio/provider-registry';
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -15,25 +10,19 @@ import type {
   RuntimeModelPreflight,
   RuntimeUsageContext,
 } from '@/backend/ai/agent';
+import {
+  requirePiLanguageBinding,
+  resolveLanguageServingPlan,
+} from '@/backend/ai/provider/languageServingPlan';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 
 const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
 const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
 const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
-
-const NON_STANDARD_ADAPTER_FAMILIES = new Set([
-  'azure',
-  'azure-responses',
-  'bedrock',
-  'google-vertex',
-  'google-vertex-anthropic',
-]);
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -53,7 +42,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
     async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
-      const { adapter, configuredBaseUrl, model, preflight, provider, resolvedEndpoint } =
+      const { adapter, configuredBaseUrl, connection, model, preflight, provider, servingPlan } =
         await resolveConfiguredPiModel(runtimeModel);
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
@@ -64,8 +53,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         );
       }
 
-      const modelId = resolveWireModelId(model, resolvedEndpoint.endpointType);
-      const headers = { ...defaultAppHeaders(), ...getExtraHeaders(provider) };
+      const modelId = connection.wireModelId;
+      const headers = connection.headers;
+      const baseFetch = expoFetch as unknown as typeof globalThis.fetch;
+      const providerFetch = servingPlan.transportPolicy?.wrapFetch(baseFetch) ?? baseFetch;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(configuredBaseUrl),
@@ -84,7 +75,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
       const streamFn = await bindPiStream(adapter, {
         apiKey: selectedApiKey.value,
-        fetch: expoFetch as FetchFunction,
+        fetch: providerFetch as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: runtimeOptions.maxOutputTokens ?? piModel.maxTokens,
@@ -134,23 +125,20 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   ]);
   if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
 
-  const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
-  const adapter = resolveSupportedAdapter(provider, resolvedEndpoint.endpointType);
-  const configuredBaseUrl = resolvedEndpoint.baseUrl.trim();
-  if (!configuredBaseUrl) {
-    throw new Error('Pi Runtime requires a base URL from the selected provider.');
-  }
-  if (configuredBaseUrl.endsWith('#')) {
-    throw new Error('Pi Runtime does not support a separate custom endpoint path.');
-  }
+  const servingPlan = resolveLanguageServingPlan(provider, model);
+  const connection = servingPlan.connection;
+  const piBinding = requirePiLanguageBinding(servingPlan);
+  const adapter = resolvePiApiAdapter(piBinding.endpointType);
+  const configuredBaseUrl = connection.baseUrl.trim();
 
   return {
     adapter,
     configuredBaseUrl,
+    connection,
     model,
     preflight: toPiModelPreflight(model),
     provider,
-    resolvedEndpoint,
+    servingPlan,
   };
 }
 
@@ -172,31 +160,6 @@ export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
     maxOutputTokens,
     supportsTools: model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL),
   };
-}
-
-function resolveSupportedAdapter(provider: Provider, endpointType: EndpointType | undefined) {
-  const adapterFamily = endpointType
-    ? provider.endpointConfigs?.[endpointType]?.adapterFamily
-    : undefined;
-  if (adapterFamily && NON_STANDARD_ADAPTER_FAMILIES.has(adapterFamily)) {
-    throw new Error(`Pi Runtime does not support provider adapter family: ${adapterFamily}.`);
-  }
-
-  const adapter = resolvePiApiAdapter(endpointType);
-  if (!adapter) {
-    throw new Error(
-      `Pi Runtime does not support the selected endpoint: ${endpointType ?? 'unknown'}.`,
-    );
-  }
-  if (provider.authType !== 'api-key') {
-    throw new Error(
-      `Pi Runtime does not support provider authentication type: ${provider.authType}.`,
-    );
-  }
-  if (provider.authMethods?.length && !provider.authMethods.includes('api-key')) {
-    throw new Error('Pi Runtime does not support this provider authentication flow.');
-  }
-  return adapter;
 }
 
 function collectRedactionValues(apiKey: string, headers: Record<string, string>): string[] {

@@ -40,13 +40,19 @@ export const Playground: Story = {
             <ContentState.Loading title="Loading assistants" />
             <ContentState.Empty
               description="Create an assistant to get started."
-              icon={
-                <View className="size-14 items-center justify-center rounded-full bg-secondary">
-                  <BotIcon className="size-7 text-foreground" />
-                </View>
-              }
               primaryAction={{ children: 'Create assistant', onPress: fn() }}
               secondaryAction={{ children: 'Import', onPress: fn() }}
+              title="No assistants"
+            />
+            <ContentState.Empty
+              description="Create an assistant to get started."
+              icon={
+                <ContentState.Icon>
+                  <BotIcon className="size-7 text-foreground" />
+                </ContentState.Icon>
+              }
+              layout="page"
+              primaryAction={{ children: 'Create assistant', onPress: fn() }}
               title="No assistants"
             />
             <ContentState.Error
