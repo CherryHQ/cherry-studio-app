@@ -268,7 +268,9 @@ projection:
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full
-  history instead.
+  history instead. The store resolves anchor membership and loads rows after the anchor directly;
+  it also returns lightweight full-transcript Turn-id and file-reference indexes, so the Host does
+  not materialize the complete transcript merely to discard its checkpoint-covered prefix.
 - Turn reads and live-status transitions leave the store: the Host holds the active turn's live
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`
   from it plus the assistant message row. Terminal statuses derive from the message row alone,

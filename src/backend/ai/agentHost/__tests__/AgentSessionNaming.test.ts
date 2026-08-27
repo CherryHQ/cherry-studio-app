@@ -18,6 +18,7 @@ function deferred<TValue>() {
 function createNaming(input: {
   generateText?: AiService['generateText'];
   namingEnabled?: boolean;
+  signal?: AbortSignal;
 }) {
   const store = new InMemoryAgentSessionStore();
   const generateText = jest.fn(input.generateText ?? (async () => ({ text: 'Generated summary' })));
@@ -37,6 +38,7 @@ function createNaming(input: {
     provider: {
       getByProviderId: jest.fn(),
     } as unknown as Pick<ProviderService, 'getByProviderId'>,
+    ...(input.signal ? { signal: input.signal } : {}),
     store,
   });
   return { generateText, naming, store };
@@ -79,6 +81,24 @@ describe('AgentSessionNaming', () => {
         reasoningEffort: 'none',
         uniqueModelId: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
       }),
+    );
+  });
+
+  test('propagates the Host lifecycle signal to summary generation', async () => {
+    const controller = new AbortController();
+    const { generateText, naming, store } = createNaming({ signal: controller.signal });
+    const session = await store.createSession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+
+    await naming.maybeRenameFromConversationSummary({
+      assistantParts: [{ id: 'text-1', state: 'done', text: 'First answer', type: 'text' }],
+      sessionId: session.id,
+      userParts,
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ requestOptions: { signal: controller.signal } }),
     );
   });
 

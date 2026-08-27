@@ -25,6 +25,7 @@ type AgentSessionNamingDependencies = {
   model: Pick<ModelService, 'getById'>;
   preference: Pick<PreferenceService, 'get'>;
   provider: Pick<ProviderService, 'getByProviderId'>;
+  signal?: AbortSignal;
   store: AgentSessionStore;
 };
 
@@ -77,7 +78,9 @@ export class AgentSessionNaming {
 
   private track(run: () => Promise<AgentSessionView | null>): Promise<AgentSessionView | null> {
     const promise = run().catch((error: unknown) => {
-      logger.warn('Failed to auto-rename Agent Session', error as Error);
+      if (!this.dependencies.signal?.aborted) {
+        logger.warn('Failed to auto-rename Agent Session', error as Error);
+      }
       return null;
     });
     this.inFlightWrites.add(promise);
@@ -89,11 +92,13 @@ export class AgentSessionNaming {
     sessionId: string,
     parts: readonly AgentInputPart[],
   ): Promise<AgentSessionView | null> {
+    this.dependencies.signal?.throwIfAborted();
     const userText = extractInputText(parts);
     const nextTitle = buildFirstUserMessageTitle(userText).slice(0, 255);
     if (!nextTitle) return null;
 
     const session = await this.dependencies.store.getSession(sessionId);
+    this.dependencies.signal?.throwIfAborted();
     if (!session || session.titleIsManual || !canAutoRename(session.title)) return null;
 
     return this.dependencies.store.autoRenameSession(sessionId, session.title, nextTitle);
@@ -109,7 +114,9 @@ export class AgentSessionNaming {
     this.summaryLocks.add(sessionId);
 
     try {
+      this.dependencies.signal?.throwIfAborted();
       const enabled = await this.dependencies.preference.get('agent.session_naming.enabled');
+      this.dependencies.signal?.throwIfAborted();
       if (!enabled) return null;
 
       const userText = extractInputText(input.userParts);
@@ -117,10 +124,13 @@ export class AgentSessionNaming {
       if (!userText || !assistantText) return null;
 
       const session = await this.dependencies.store.getSession(sessionId);
+      this.dependencies.signal?.throwIfAborted();
       if (!session || session.titleIsManual || !canAutoRename(session.title, userText)) return null;
 
       const uniqueModelId = await this.resolveNamingModelId();
+      this.dependencies.signal?.throwIfAborted();
       const system = await this.resolveNamingPrompt();
+      this.dependencies.signal?.throwIfAborted();
       const prompt = JSON.stringify([
         { mainText: userText, role: 'user' },
         { mainText: assistantText, role: 'assistant' },
@@ -130,11 +140,16 @@ export class AgentSessionNaming {
         reasoningEffort: 'none',
         system,
         uniqueModelId,
+        ...(this.dependencies.signal
+          ? { requestOptions: { signal: this.dependencies.signal } }
+          : {}),
       });
+      this.dependencies.signal?.throwIfAborted();
       const nextTitle = sanitizeConversationTitle(text).slice(0, 255);
       if (!nextTitle) return null;
 
       const latestSession = await this.dependencies.store.getSession(sessionId);
+      this.dependencies.signal?.throwIfAborted();
       if (
         !latestSession ||
         latestSession.titleIsManual ||

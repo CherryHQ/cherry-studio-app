@@ -13,6 +13,19 @@ export type StoredRuntimeContextCheckpoint = {
   checkpoint: unknown;
 };
 
+export type StoredRuntimeTurnContext = {
+  /** False only when an `afterTurnId` was requested but is not in this Session. */
+  anchorFound: boolean;
+  /** Model-visible history: full transcript or only rows after the requested turn. */
+  history: AgentMessageView[];
+  /** Distinguishes a truly empty Session from a checkpoint-trimmed history tail. */
+  hasMessages: boolean;
+  /** Lightweight authorization projection across the complete transcript. */
+  referencedFileEntryIds: string[];
+  /** Lightweight checkpoint-anchor projection across the complete transcript. */
+  sessionTurnIds: string[];
+};
+
 export type ReserveSubmissionResult = {
   /** Fresh correlation id shared by the reserved user/assistant pair. */
   turnId: string;
@@ -70,6 +83,15 @@ export interface AgentSessionStore {
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
+
+  /**
+   * Loads the bounded Runtime replay tail plus full-transcript authorization
+   * indexes without materializing every message in the Host.
+   */
+  loadRuntimeTurnContext(
+    sessionId: string,
+    afterTurnId: string | null,
+  ): Promise<StoredRuntimeTurnContext>;
 
   /** Returns the newest assistant row carrying an opaque checkpoint candidate. */
   getLatestContextCheckpoint(sessionId: string): Promise<StoredRuntimeContextCheckpoint | null>;

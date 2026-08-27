@@ -13,9 +13,9 @@ export type RuntimeContextCheckpointValidation =
   | { checkpoint: RuntimeContextCheckpoint; issue: null }
   | { checkpoint: null; issue: RuntimeContextCheckpointIssueCode };
 
-export function validateRuntimeContextCheckpoint(
+/** Validates the opaque artifact itself; anchor membership is Store-backed. */
+export function validateRuntimeContextCheckpointCandidate(
   value: unknown,
-  sessionTurnIds: ReadonlySet<string>,
 ): RuntimeContextCheckpointValidation {
   if (typeof value === 'object' && value !== null && 'version' in value && value.version !== 1) {
     return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_VERSION_UNSUPPORTED' };
@@ -29,9 +29,6 @@ export function validateRuntimeContextCheckpoint(
   }
   if (!parsed.success) {
     return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_INVALID' };
-  }
-  if (!sessionTurnIds.has(parsed.data.anchorTurnId)) {
-    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
   }
 
   let payloadBytes: number;
@@ -47,40 +44,16 @@ export function validateRuntimeContextCheckpoint(
   return { checkpoint: parsed.data, issue: null };
 }
 
-export function selectRuntimeContext<THistoryItem extends { turnId: string | null }>(
-  history: THistoryItem[],
-  candidate: unknown,
-): {
-  checkpoint: RuntimeContextCheckpoint | null;
-  history: THistoryItem[];
-  issue: RuntimeContextCheckpointIssueCode | null;
-} {
-  if (candidate === null || candidate === undefined) {
-    return { checkpoint: null, history, issue: null };
-  }
-
-  const sessionTurnIds = new Set(
-    history.flatMap((turn) => (turn.turnId === null ? [] : [turn.turnId])),
-  );
-  const validation = validateRuntimeContextCheckpoint(candidate, sessionTurnIds);
+export function validateRuntimeContextCheckpoint(
+  value: unknown,
+  sessionTurnIds: ReadonlySet<string>,
+): RuntimeContextCheckpointValidation {
+  const validation = validateRuntimeContextCheckpointCandidate(value);
   if (!validation.checkpoint) {
-    return { checkpoint: null, history, issue: validation.issue };
+    return validation;
   }
-
-  const checkpoint = validation.checkpoint;
-  let anchorIndex = -1;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (history[index]?.turnId === checkpoint.anchorTurnId) {
-      anchorIndex = index;
-      break;
-    }
+  if (!sessionTurnIds.has(validation.checkpoint.anchorTurnId)) {
+    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
   }
-  if (anchorIndex < 0) {
-    return { checkpoint: null, history, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
-  }
-  return {
-    checkpoint,
-    history: history.slice(anchorIndex + 1),
-    issue: null,
-  };
+  return validation;
 }

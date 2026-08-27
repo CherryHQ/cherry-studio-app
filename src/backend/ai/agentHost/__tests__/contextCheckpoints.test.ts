@@ -1,33 +1,23 @@
-import type { RuntimeHistoryTurn } from '@/backend/ai/agent';
-
 import {
   MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES,
-  selectRuntimeContext,
   validateRuntimeContextCheckpoint,
+  validateRuntimeContextCheckpointCandidate,
 } from '../contextCheckpoints';
 
-const history: RuntimeHistoryTurn[] = [
-  {
-    turnId: 'turn-1',
-    messages: [{ role: 'user', parts: [{ type: 'text', text: 'one' }] }],
-  },
-  {
-    turnId: 'turn-2',
-    messages: [{ role: 'user', parts: [{ type: 'text', text: 'two' }] }],
-  },
-];
-
 describe('Runtime context checkpoints', () => {
-  test('replays a valid checkpoint with only complete turns after its anchor', () => {
+  test('accepts a valid candidate whose anchor belongs to the Session', () => {
     const checkpoint = {
       version: 1 as const,
       anchorTurnId: 'turn-1',
       payload: { summary: 'one' },
     };
 
-    expect(selectRuntimeContext(history, checkpoint)).toEqual({
+    expect(validateRuntimeContextCheckpointCandidate(checkpoint)).toEqual({
       checkpoint,
-      history: [history[1]],
+      issue: null,
+    });
+    expect(validateRuntimeContextCheckpoint(checkpoint, new Set(['turn-1']))).toEqual({
+      checkpoint,
       issue: null,
     });
   });
@@ -39,17 +29,20 @@ describe('Runtime context checkpoints', () => {
       { version: 2, anchorTurnId: 'turn-1', payload: {} },
       'CONTEXT_CHECKPOINT_VERSION_UNSUPPORTED',
     ],
-    [
-      'missing anchor',
-      { version: 1, anchorTurnId: 'missing', payload: {} },
-      'CONTEXT_CHECKPOINT_ANCHOR_INVALID',
-    ],
-  ] as const)('falls back to full history for a %s checkpoint', (_name, candidate, issue) => {
-    expect(selectRuntimeContext(history, candidate)).toEqual({
+  ] as const)('rejects a %s checkpoint candidate', (_name, candidate, issue) => {
+    expect(validateRuntimeContextCheckpointCandidate(candidate)).toEqual({
       checkpoint: null,
-      history,
       issue,
     });
+  });
+
+  test('rejects a candidate whose anchor does not belong to the Session', () => {
+    expect(
+      validateRuntimeContextCheckpoint(
+        { version: 1, anchorTurnId: 'missing', payload: {} },
+        new Set(['turn-1']),
+      ),
+    ).toEqual({ checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' });
   });
 
   test('rejects an oversized payload without truncating it', () => {
@@ -64,14 +57,5 @@ describe('Runtime context checkpoints', () => {
       issue: 'CONTEXT_CHECKPOINT_TOO_LARGE',
     });
     expect(checkpoint.payload).toHaveLength(MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES);
-  });
-
-  test('keeps the full grouped history byte-equivalent when no checkpoint exists', () => {
-    const serialized = JSON.stringify(history);
-
-    const selected = selectRuntimeContext(history, null);
-
-    expect(selected.checkpoint).toBeNull();
-    expect(JSON.stringify(selected.history)).toBe(serialized);
   });
 });

@@ -189,8 +189,9 @@ implementations therefore receive only an executable effort level.
 
 File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
 file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates the
-live entry and managed blob before message reservation. The Host has a process-local ledger of the
-managed ids referenced by the current input and visible history. A Runtime never reads the device
+live entry and managed blob before message reservation. The Host authorizes tools from managed ids
+referenced by the current input and complete Session transcript, while it resolves attachment
+content only for the current input and checkpoint-visible history. A Runtime never reads the device
 filesystem. For supported images, the Host enforces the shared JPEG/PNG/GIF/WebP whitelist plus
 at most 9 images, 10 MiB per file, 20 MiB total, and a conservative context reserve of 4,096 input
 tokens per image plus 1,024 tokens for text. This remains the Host's current-input admission ceiling;
@@ -496,17 +497,21 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 
 1. The Host validates that the Session is idle.
 2. It validates that the Session target is `local`, resolves the current Agent, public model facts,
-   input and history, then creates the turn resource ledger.
+   the latest checkpoint candidate, its Store-loaded history tail, and lightweight authorization
+   indexes, then creates the turn resource ledger. Invalid candidates load the full history.
 3. It freezes the immutable tool catalog against that ledger and builds the versioned,
    credential-free inference snapshot from the same model, options, and tools sent to the Runtime.
-4. It preflights attachments, then atomically persists the user message and assistant placeholder
-   with the selected model id and inference snapshot.
-5. The Host uses its injected Pi Runtime, loads the latest valid context checkpoint, and normalizes
-   instructions, model, grouped structured history after its anchor, the immutable tool snapshot,
-   input, and options. Invalid candidates fall back to the full history.
+4. It preflights attachments and opens the injected Pi Runtime Session. Only after that succeeds
+   does it atomically persist the user message and assistant placeholder with the selected model id
+   and inference snapshot.
+5. The Host normalizes instructions, model, grouped structured history after the checkpoint anchor,
+   the immutable tool snapshot, input, and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
-8. Terminal message and turn state commit before the Host publishes terminal protocol events.
+8. Terminal message and turn state commit before the Host publishes terminal protocol events. A
+   transient terminal-write failure retries the same outcome; a persistently unwritable store makes
+   that Host generation reject new submissions and leaves startup reconciliation to settle the
+   durable placeholder.
 
 The Runtime never writes application storage. The Host never interprets Pi-native events outside
 the Pi implementation.
@@ -515,6 +520,10 @@ the Pi implementation.
 
 Route unmount does not own or cancel execution; the app-owned Host and Runtime session do. A
 foreground transition creates a fresh protocol observation from the Host snapshot.
+
+Host shutdown closes submission admission before aborting both in-flight admission work and active
+turns. Attachment reads and automatic naming generation inherit the same lifecycle cancellation
+boundary; shutdown joins admissions before closing Runtime Sessions.
 
 Local execution depends on the Mobile JavaScript process. If the process is suspended or killed and
 the turn cannot reach a terminal event, startup reconciliation marks the persisted placeholder and
