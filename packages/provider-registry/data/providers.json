@@ -482,9 +482,6 @@
       "name": "PPIO"
     },
     {
-      "apiFeatures": {
-        "developerRole": false
-      },
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "Qiniu - AI model provider",
       "endpointConfigs": {
@@ -1608,8 +1605,7 @@
     },
     {
       "apiFeatures": {
-        "arrayContent": false,
-        "developerRole": false
+        "arrayContent": false
       },
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "Poe - AI model provider",
@@ -1905,5 +1901,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "94468af9e56a8bbe"
+  "version": "88bac0adf8300df6"
 }

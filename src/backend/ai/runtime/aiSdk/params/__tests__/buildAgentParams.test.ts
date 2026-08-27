@@ -15,7 +15,6 @@ function createProvider(providerId: string): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
-      developerRole: true,
       reportsActualCost: false,
       serviceTier: true,
       streamOptions: true,
@@ -77,6 +76,54 @@ async function buildReasoningOptions(input: {
 }
 
 describe('buildAgentParams assistant-less contract', () => {
+  it.each([ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, ENDPOINT_TYPE.OPENAI_RESPONSES])(
+    'uses system instructions for the native OpenAI adapter on %s',
+    async (endpointType) => {
+      const provider = createProvider('openai');
+      provider.defaultChatEndpoint = endpointType;
+      provider.endpointConfigs = {
+        ...provider.endpointConfigs,
+        [endpointType]: { adapterFamily: 'openai', baseUrl: 'https://api.openai.com' },
+      };
+      const model = {
+        ...resolveModel(provider, 'gpt-4o-mini'),
+        endpointTypes: [endpointType],
+      };
+
+      const result = await buildAgentParams({
+        request: { uniqueModelId: model.id },
+        services: createServices(),
+        provider,
+        model,
+      });
+
+      expect(result.options.providerOptions).toEqual({
+        openai: { systemMessageMode: 'system' },
+      });
+    },
+  );
+
+  it('does not allow a call override to restore the developer role', async () => {
+    const provider = createProvider('openai');
+    const model = resolveModel(provider, 'gpt-4o-mini');
+
+    const result = await buildAgentParams({
+      request: {
+        callOverrides: {
+          providerOptions: { openai: { systemMessageMode: 'developer' } },
+        },
+        uniqueModelId: model.id,
+      },
+      services: createServices(),
+      provider,
+      model,
+    });
+
+    expect(result.options.providerOptions).toEqual({
+      openai: { systemMessageMode: 'system' },
+    });
+  });
+
   it('serializes an explicit reasoning selection', async () => {
     await expect(
       buildReasoningOptions({

@@ -54,6 +54,9 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(configuredBaseUrl),
+        ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
+          ? { compat: { supportsDeveloperRole: false } }
+          : {}),
         contextWindow: preflight.contextWindow,
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
         headers,

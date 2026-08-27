@@ -82,7 +82,6 @@ export type AuthConfig =
 
 export type ApiFeatures = {
   arrayContent?: boolean;
-  developerRole?: boolean;
   serviceTier?: boolean;
   streamOptions?: boolean;
   verbosity?: boolean;
@@ -93,7 +92,6 @@ export type RuntimeApiFeatures = Required<ApiFeatures>;
 
 export const DEFAULT_API_FEATURES: RuntimeApiFeatures = {
   arrayContent: true,
-  developerRole: false,
   serviceTier: false,
   streamOptions: true,
   verbosity: false,
