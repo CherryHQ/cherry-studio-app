@@ -653,24 +653,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
-      if (
-        (request.input.some((part) => part.type === 'file') ||
-          request.history.some((turn) =>
-            turn.messages.some((message) => message.parts.some((part) => part.type === 'file')),
-          )) &&
-        !resolution.model.input.includes('image')
-      ) {
-        this.emit(turn, {
-          type: 'failed',
-          error: {
-            code: 'unsupported_input',
-            message: 'The selected model does not support image input.',
-            retryable: false,
-          },
-        });
-        return;
-      }
-
       const conversation = toPiConversation(request, resolution.model);
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop

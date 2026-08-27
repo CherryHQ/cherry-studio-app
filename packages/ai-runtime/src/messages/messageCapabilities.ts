@@ -40,6 +40,17 @@ function gatedModality(mediaType: string): GatedModality | undefined {
   return undefined;
 }
 
+/** Return the provider-visible note for an unsupported media type. */
+export function unsupportedMediaNote(
+  mediaType: string,
+  caps: MediaCapabilities,
+): string | undefined {
+  const modality = gatedModality(mediaType);
+  return modality && caps[modality] === false
+    ? `[${modality} attachment omitted: this model does not accept ${modality} input]`
+    : undefined;
+}
+
 /**
  * Replace `file` parts whose modality the model can't accept with a text note.
  *
@@ -57,13 +68,10 @@ export function stripUnsupportedMedia<T extends UIMessage = UIMessage>(
     let changed = false;
     const parts = message.parts.map((part) => {
       if (part.type !== 'file') return part;
-      const modality = gatedModality(part.mediaType);
-      if (!modality || caps[modality] !== false) return part;
+      const note = unsupportedMediaNote(part.mediaType, caps);
+      if (!note) return part;
       changed = true;
-      return {
-        type: 'text',
-        text: `[${modality} attachment omitted: this model does not accept ${modality} input]`,
-      };
+      return { type: 'text', text: note };
     });
     return changed ? ({ ...message, parts } as T) : message;
   });

@@ -1585,43 +1585,121 @@ describe('MobileAgentHost', () => {
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
-  test('rejects unsupported models and endpoints before reserving image messages', async () => {
+  test('replaces current and historical images after switching to a text-only model', async () => {
+    const firstFact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'first.png',
+      size: 128,
+    };
+    const secondFact = {
+      fileEntryId: SECOND_FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'second.png',
+      size: 128,
+    };
+    const facts = new Map([
+      [FILE_ENTRY_ID, firstFact],
+      [SECOND_FILE_ENTRY_ID, secondFact],
+    ]);
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      })
+      .script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      });
+    jest
+      .spyOn(runtime, 'preflightModel')
+      .mockResolvedValueOnce({
+        contextWindow: 128_000,
+        inputModalities: ['text', 'image'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: true,
+      })
+      .mockResolvedValueOnce({
+        contextWindow: 128_000,
+        inputModalities: ['text'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: true,
+      });
+    const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
+    const files: ManagedFileResolver = {
+      readAsBytes: async () => undefined,
+      readAsDataUrl,
+      resolveAvailable: async (ids) =>
+        new Map([...facts].filter(([fileEntryId]) => ids.includes(fileEntryId))),
+    };
+    const host = createHost(runtime, noOpNaming, files);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the image turn');
+    events.length = 0;
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [
+        { type: 'text', text: 'Continue.' },
+        { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID, mediaType: 'image/png' },
+      ],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the text-only follow-up turn');
+
+    const replayedUser = requests[1]?.history
+      .flatMap((turn) => turn.messages)
+      .find((message) => message.role === 'user');
+    expect(replayedUser?.parts).toEqual([
+      {
+        type: 'text',
+        text: '[image attachment omitted: this model does not accept image input]',
+      },
+    ]);
+    expect(requests[1]?.input).toEqual([
+      { type: 'text', text: 'Continue.' },
+      {
+        type: 'text',
+        text: '[image attachment omitted: this model does not accept image input]',
+      },
+    ]);
+    expect(readAsDataUrl).toHaveBeenCalledTimes(1);
+    const transcript = await store.listMessages(session.id);
+    expect(transcript[0]?.parts[0]).toMatchObject({
+      type: 'file',
+      fileEntryId: FILE_ENTRY_ID,
+      purpose: 'input-attachment',
+    });
+    expect(transcript[2]?.parts[1]).toMatchObject({
+      type: 'file',
+      fileEntryId: SECOND_FILE_ENTRY_ID,
+      purpose: 'input-attachment',
+    });
+  });
+
+  test('rejects an unavailable model endpoint before reserving image messages', async () => {
     const fact = {
       fileEntryId: FILE_ENTRY_ID,
       mediaType: 'image/png',
       name: 'managed.png',
       size: 128,
     };
-    const textOnlyRuntime = new FakeRuntime({
-      descriptor: FAKE_DESCRIPTOR,
-      modelPreflight: {
-        contextWindow: 128_000,
-        inputModalities: ['text'],
-        maxInputTokens: 120_000,
-        maxOutputTokens: 8_000,
-        supportsTools: true,
-      },
-    });
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
       readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
-    const host = createHost(textOnlyRuntime, noOpNaming, files);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
-
-    await expect(
-      host.submitMessage({
-        sessionId: session.id,
-        parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
-      }),
-    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
-    expect(await store.listMessages(session.id)).toEqual([]);
-    expect(files.readAsDataUrl).not.toHaveBeenCalled();
-
     const unsupportedEndpointRuntime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     jest
       .spyOn(unsupportedEndpointRuntime, 'preflightModel')
