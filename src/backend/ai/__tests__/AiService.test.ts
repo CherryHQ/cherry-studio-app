@@ -5,7 +5,7 @@ import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/da
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
-const mockAgentConstructor = jest.fn();
+const mockGeneratorConstructor = jest.fn();
 
 jest.mock('@cherrystudio/ai-core', () => ({
   definePlugin: jest.fn((plugin) => plugin),
@@ -16,9 +16,9 @@ jest.mock('@/backend/ai/provider/cherryai', () => ({
   generateSignature: jest.fn(() => ({})),
 }));
 
-jest.mock('@/backend/ai/runtime/aiSdk/Agent', () => ({
-  Agent: jest.fn().mockImplementation((params) => {
-    mockAgentConstructor(params);
+jest.mock('@/backend/ai/generation/aiSdk/AiSdkGenerator', () => ({
+  AiSdkGenerator: jest.fn().mockImplementation((params) => {
+    mockGeneratorConstructor(params);
     return { generate: mockGenerate };
   }),
 }));
@@ -137,7 +137,7 @@ describe('AiService.checkModel', () => {
       await expect(service.checkModel({ timeout: 1000, uniqueModelId: model.id })).rejects.toThrow(
         `Mobile AI runtime does not support embedding or rerank models: ${model.id}`,
       );
-      expect(mockAgentConstructor).not.toHaveBeenCalled();
+      expect(mockGeneratorConstructor).not.toHaveBeenCalled();
     },
   );
 
@@ -151,7 +151,7 @@ describe('AiService.checkModel', () => {
       uniqueModelId: model.id,
     });
 
-    expect(mockAgentConstructor).toHaveBeenCalledWith(
+    expect(mockGeneratorConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: model.modelId, system: 'test' }),
     );
     expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal));

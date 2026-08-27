@@ -33,11 +33,11 @@ import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { createAiUsagePlugin } from './hooks/billingHook';
+import { AiSdkGenerator, buildAgentParams } from './generation/aiSdk';
+import type { BuildAgentParamsDependencies } from './generation/aiSdk/params/buildAgentParams';
+import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import { listModels as listProviderModels } from './provider/listModels';
 import { VertexAuthClient } from './provider/VertexAuthClient';
-import { Agent, buildAgentParams } from './runtime/aiSdk';
-import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -227,7 +227,7 @@ export class AiService extends BaseService {
     );
     repairUsagePlugins.current = [usagePlugin];
 
-    const agent = new Agent({
+    const generator = new AiSdkGenerator({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
@@ -240,7 +240,7 @@ export class AiService extends BaseService {
     });
 
     // prompt and messages are mutually exclusive in AI SDK; preserve that.
-    return agent.generate(
+    return generator.generate(
       request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
       signal,
     );

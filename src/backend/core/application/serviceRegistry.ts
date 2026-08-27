@@ -1,5 +1,5 @@
-import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
-import { SqliteAgentSessionStore } from '@/backend/ai/agentHost/SqliteAgentSessionStore';
+import { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
+import { SqliteAgentSessionStore } from '@/backend/ai/agent/sessionStore/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { CacheService } from '@/backend/data/CacheService';

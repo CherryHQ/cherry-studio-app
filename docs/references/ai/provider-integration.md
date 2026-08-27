@@ -85,10 +85,10 @@ The endpoint and adapter-family logic chooses variants such as OpenAI, OpenAI-co
 Azure Responses, Azure Anthropic, Gemini, CherryIN, NewAPI, AiHubMix, or Gateway. Provider settings
 builders are centralized in `src/backend/ai/provider/config.ts`.
 
-`src/backend/ai/runtime/aiSdk/Agent.ts` is now a generate-only wrapper around the AI SDK. Request
-assembly in `buildAgentParams.ts` supports explicit reasoning, sampling/provider overrides, headers,
-timeouts, retries, and caller-supplied tools. It owns no conversation persistence or stream
-lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
+`src/backend/ai/generation/aiSdk/AiSdkGenerator.ts` is a generate-only wrapper around the AI SDK.
+Request assembly in `buildAgentParams.ts` supports explicit reasoning, sampling/provider overrides,
+headers, timeouts, retries, and caller-supplied tools. It owns no conversation persistence or
+stream lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
 resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
 
 Mobile sends application instructions with the `system` role on OpenAI Chat Completions and OpenAI

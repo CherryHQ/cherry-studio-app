@@ -1,6 +1,6 @@
 import { Uniwind } from 'uniwind';
 
-import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
+import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import { application } from '@/backend/core/application/Application';
