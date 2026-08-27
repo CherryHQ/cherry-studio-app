@@ -50,7 +50,9 @@ The latest user message is anchored below the content header. Text anchors use a
 cap; messages containing files use their full measured height. Initial Session entry and sending a
 message may position the list once. Streaming content and item-size changes never scroll it; after
 reserved anchor space is exhausted, `isAtEnd` reveals the scroll-to-bottom button. Clicking that
-button scrolls once and does not enable any ongoing follow behavior.
+button scrolls once and does not enable any ongoing follow behavior. `maintainVisibleContentPosition`
+stays enabled, and the readiness gate yields while touch, drag, or momentum interaction owns the
+list position.
 
 Keyboard lift is `whenAtEnd`, and it depends on `patches/react-native-keyboard-controller@…`: the
 patch makes a shrinking keyboard clamp the offset into the range that is valid *now* instead of

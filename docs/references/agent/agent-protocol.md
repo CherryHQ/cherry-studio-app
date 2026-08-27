@@ -1,7 +1,6 @@
 # Cherry Agent Protocol
 
-Status: **as built**, including managed image and bounded text resolution plus projection of
-configured tools into local MCP execution. Version 1 is local-only.
+> Status: as-built. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.

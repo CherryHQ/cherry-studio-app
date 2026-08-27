@@ -4,8 +4,8 @@
  * Keep aligned with desktop src/main/core/job/types.ts (and the constants
  * block of src/main/core/job/JobManager.ts). Mobile diffs are deliberate and
  * called out inline: `executionClass` on the handler, a global concurrency
- * default of 2 instead of 50, and no schedule/miss types until schedules land
- * (Phase 4).
+ * default of 2 instead of 50, and no schedule/miss types without a current
+ * mobile consumer.
  *
  * These runtime types stay app-side on purpose: the universal jobs schema
  * mirrors desktop src/shared (renderer-visible DTOs only) and must not grow
@@ -57,7 +57,7 @@ export interface JobContext<TPayload = unknown> {
    * surviving a restart (provider task IDs, cursors — the checkpoint channel).
    */
   patchMetadata(patch: Record<string, unknown>): Promise<void>;
-  /** Progress 0-100. No-op until a progress consumer exists (Phase 2+). */
+  /** Progress 0-100. No-op until a progress consumer exists. */
   reportProgress(progress: number, detail?: unknown): void;
   /** Pre-bound to `{ jobId, type }`. */
   logger: LoggerService;

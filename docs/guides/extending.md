@@ -64,15 +64,32 @@ mobile-only owners by role: `Module`, `Runtime`, `Session`, `Client`, `Adapter`,
 add an `Impl` suffix or a forwarding `Service` wrapper. See
 [Runtime Ownership](../references/runtime-ownership.md#role-names).
 
-Version 1 Agent turns are tool-less. New Agent tools require an application-owned JSON-Schema
-contract, configuration and permission policy, plus a Pi adapter. Do not expose AI SDK `ToolSet` as
-the Agent Host contract or restore the retired Chat `ToolResolver`. Provider-native plugins remain
-provider adapter concerns. Add a registry only when explicit assembly becomes measurably hard to
-maintain.
+New Agent tools require an application-owned JSON-Schema contract, approval and permission policy,
+capability adapter, and Pi `RuntimeTool` projection. Add shared tools to the system capability
+catalog; use an Agent-owned binding only for MCP configuration. Follow
+[Agent Tools And Controlled Resources](../references/agent/agent-tools-and-resources.md); do not
+expose AI SDK `ToolSet` as the Agent Host contract or restore the retired Chat `ToolResolver`.
+Provider-native plugins remain provider adapter concerns.
 
 The external web-search stack is a workflow precedent: desktop-aligned provider drivers and
 `WebSearchService` under `backend/services`, a narrow `WebSearchModule` for provider checks,
-frontend settings, and thin Expo Router routes. It is not currently attached to Agent turns.
+frontend settings, and thin Expo Router routes. Agent turns expose `web_search` and `web_fetch` as
+temporary system capabilities selected by the composer for one submission.
+
+### Add A Job Handler
+
+1. Register the payload through `JobRegistry` declaration merging.
+2. Implement the typed handler in its owning backend domain.
+3. Declare its execution class, recovery policy, idempotency rule, timeout, cancellation behavior,
+   and resource scopes.
+4. Add it to `JobHandlerRegistry`; a payload declaration alone does not register execution.
+5. Use `enqueueTx()` when business intent and work must commit atomically.
+6. Expose observation through the Jobs Data API and keep navigation, cache invalidation,
+   translation, and user feedback in the frontend owner.
+
+Until resource-scope cancellation intent is persisted, do not register a scoped handler with
+`recovery: 'retry'`: a process restart could otherwise revive work cancelled for a deleted resource.
+See [Job Runtime](../references/job-runtime.md).
 
 ## Add UI
 

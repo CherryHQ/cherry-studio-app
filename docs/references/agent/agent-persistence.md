@@ -1,13 +1,10 @@
 # Agent Persistence
 
-Status: **schema, durable store, Agent CRUD, tool binding CRUD, Session reads, managed attachment
-references, Runtime context checkpoint storage, and frontend integration active in production**.
-Version 1 is local-only.
+> Status: as-built. Version 1 is local-only.
 
-This document defines the durable SQLite schema behind the Host-owned
-[`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
-plan for replacing the in-memory reference adapter. It implements the storage side of the
-[Agent Protocol](./agent-protocol.md) and follows the authority model direction of
+This document defines the durable SQLite schema and production adapter behind the Host-owned
+[`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port. It implements the
+storage side of the [Agent Protocol](./agent-protocol.md) and follows the authority model direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568): mobile SQLite is the complete
 record for mobile-originated Agent Sessions only.
 
@@ -27,10 +24,9 @@ record for mobile-originated Agent Sessions only.
   migrated.
 
 Out of scope: branching columns, background turns, Mobile Skill configuration/loading, and broader
-Pi provider coverage. The retired `assistant`/`topic`/`message` tables were removed separately after
-Agent surfaces became authoritative. The Host projects Agent-specific MCP bindings into each
-Runtime snapshot. System capabilities are resolved independently and require no Agent persistence;
-the composer carries web-search and image-generation selection only on the current submission.
+Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
+System capabilities are resolved independently and require no Agent persistence; the composer
+carries web-search and image-generation selection only on the current submission.
 
 ## Current limitations
 
@@ -44,13 +40,11 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
   updated fields because the read/merge happens before the serialized write transaction.
 - Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
   `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
+- Agent deletion is soft so historical Sessions retain their definition and avatar reference.
+  Replacing an avatar deletes the previous file, but soft deletion does not reclaim the current
+  avatar; no orphan cleanup exists yet.
 
 ## Decisions
-
-**Agent tables were parallel first, then the old schema was dropped.** The retired `message` table
-was a parent-linked tree while an Agent Session transcript is linear
-([Branching](./agent-protocol.md#branching) forks into a new Session instead). Old data was
-deliberately discarded rather than converted between incompatible models.
 
 **No persisted Runtime identity.** There is no `runtime_binding` column. Runtime ids never appear in
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
@@ -68,8 +62,8 @@ For Version 1, every file is imported into `file_entry` before submission or too
 initializes a turn resource ledger from managed file ids in the current input and Session transcript,
 then may add only validated entries created by application capabilities during that turn. Those
 durable references already live on messages, while the monotonic same-turn ledger is process-local,
-so no generic `resource_scope` column is added. A future broad Agent-to-library grant requires an
-explicit relation rather than a directory path or opaque JSON scope.
+so no generic `resource_scope` column is added. Any broad Agent-to-library grant requires an explicit
+relation rather than a directory path or opaque JSON scope.
 
 **Turn is a projection, not a table.** Decomposed by requirement, a V1 Turn is three things and
 none of them needs a row of its own:
@@ -85,11 +79,7 @@ none of them needs a row of its own:
   turn-level error gets an `error` column on the message row.
 
 The Host synthesizes `AgentTurnView` from the assistant message row plus its live state; the
-protocol keeps Turn as a UI-facing concept unchanged. An earlier draft kept an `agent_turn`
-table to avoid reshaping the already-implemented store port; with zero consumers of
-`Backend.agent`, fitting the schema to the code rather than the requirement was the wrong
-trade and the port is reshaped instead. If background or parallel turns ever become product
-requirements, a turn (or execution) entity earns its table then.
+protocol keeps Turn as a UI-facing concept unchanged.
 
 **Approvals are not persisted.** Sessions cannot resume: boot reconciliation interrupts every
 unfinished turn, so a persisted pending approval is dead on arrival. Pending approvals live in
@@ -103,8 +93,8 @@ unanswerable approval. No `agent_approval` table.
 user-avatar pattern ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
 WebP under `{documentDirectory}/agent-avatars/`, referenced as
 `agent-avatar-file:{agentId}.{uuid}.webp`, never as an absolute `file://` path. `file_entry` is for
-user-visible library content with independent lifecycle; an avatar is replace-in-place and dies
-with the Agent.
+user-visible library content with independent lifecycle; an avatar is replace-in-place and remains
+attached to a soft-deleted Agent for historical Sessions.
 
 Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
 `PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
@@ -134,7 +124,7 @@ during upsert/replace. Third-party MCP writes default to `ask` and the Data API 
 display names never resolve or retarget a dangling binding. The Host reads the effective MCP
 projection; Pi does not read persistence. The data resolver deterministically selects a specific
 MCP tool row before its server default and reports missing Server/discovery facts as effective
-unavailability without deleting or retargeting the row. Runtime projection remains as described in
+unavailability without deleting or retargeting the row. Runtime projection is described in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings).
 
 The physical table and typed Data API retain the `builtin` variant to read existing databases
@@ -142,9 +132,7 @@ without a destructive migration. Those rows are legacy compatibility data: the H
 and the Agent editor omits them when replacing bindings. Shared system capabilities and temporary
 composer selections are never persisted here.
 
-Skill configuration remains deferred. Only the ownership boundary is settled: the current Agent
-configuration will select the mobile-supported Skills available to its Sessions. Pi reads neither
-tool nor Skill persistence directly.
+Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 
 **Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
@@ -183,8 +171,8 @@ Indexes: `orderKeyIndex('agent')`, `agent_created_at_idx`.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v4 | Preserved across stable-identity upserts |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE CASCADE | Hard Agent cleanup removes bindings; soft delete does not |
-| `source` | text | NOT NULL, CHECK `builtin`/`mcp` identity shape | |
-| `capabilityId` | text | NULL | Required only for `builtin` |
+| `source` | text | NOT NULL, CHECK `builtin`/`mcp` identity shape | `builtin` is legacy compatibility data |
+| `capabilityId` | text | NULL | Retained only for legacy `builtin` rows |
 | `mcpServerId` | text | NULL, no FK | Required only for `mcp`; survives server deletion |
 | `rawToolName` | text | NULL | NULL is the MCP server default |
 | `enabled` | integer (bool) | NOT NULL DEFAULT `true` | Server deletion sets related rows false in the same transaction |
@@ -192,10 +180,9 @@ Indexes: `orderKeyIndex('agent')`, `agent_created_at_idx`.
 | `displayNameSnapshot` | text | NULL | Repair-only UI context; never authority |
 | `createdAt` / `updatedAt` | integer | helper defaults | Stable row timestamps |
 
-The built-in partial unique index remains for legacy-row compatibility. Active MCP configuration is
-enforced by partial unique indexes on `(agentId, mcpServerId)` for server defaults and
-`(agentId, mcpServerId, rawToolName)` for specific tools. Plain indexes cover Agent listing/cascade
-and MCP server delete-time disabling.
+Partial unique indexes retain `(agentId, capabilityId)` for legacy built-ins and enforce
+`(agentId, mcpServerId)` for MCP server defaults plus `(agentId, mcpServerId, rawToolName)` for
+specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server delete-time disabling.
 
 ### `agent_session`
 
@@ -211,9 +198,6 @@ and MCP server delete-time disabling.
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
 recency; no `orderKey`).
-
-Future additive columns (not created now): `forkedFromSessionId`, `forkedFromMessageId`
-([Branching](./agent-protocol.md#branching)).
 
 ### `agent_session_message`
 
@@ -290,52 +274,6 @@ projection:
 - Row ↔ view mapping converts epoch millis to ISO strings and validates `data` against the
   protocol schema on read paths that leave the store.
 
-The existing `InMemoryAgentSessionStore` behavior tests generalize into a store conformance suite
-run against both adapters, mirroring the Runtime conformance approach. The Agent Protocol —
-including `AgentTurnView`, its events, and its invariants — does not change; only the Host-private
-storage boundary moves.
-
-## Rollout
-
-1. **Port reshape.** Move Turn projection and live state into the Host, slim `AgentSessionStore`
-   to message-centric operations, and update the in-memory adapter and conformance tests. This
-   lands first so the schema implements the settled port.
-2. **Schema + migration.** Add the three schema modules, run `pnpm db:generate`, register the SQL
-   in `migrations.ts`, add the agent FTS statements to `customSql.ts`.
-3. **`SqliteAgentSessionStore`.** Implement against the port, pass the shared conformance suite,
-   and bind it as the production `AgentSessionStore` in `serviceRegistry` (done — the in-memory
-   adapter remains the conformance reference).
-4. **Agent rows.** Expose Agent CRUD through the Data API and use the `agent`-table-backed
-   `AgentDefinitionSource` in the production Host (done). The table starts empty and retired
-   Assistant data is not copied.
-5. **Session reads.** Expose recency-ordered Session lists and cursor-paginated linear transcript
-   history through the Data API. Keep these historical reads independent of executable Agent
-   lookup, and route Session rename/delete through the Host lifecycle boundary (done).
-6. **Frontend and retirement.** Agent UI consumes `Backend.agent`; the incompatible legacy Chat
-   tables/runtime are removed without data conversion (done).
-7. **MCP binding persistence and projection.** Add mobile-owned binding schemas, migration, Data
-   API, deterministic default/override resolution, dangling MCP preservation, and Host projection
-   (done). Legacy built-in rows remain readable but have no Runtime authority.
-8. **Avatar workflow.** Generalize `userContentImageStorage` over its directory and stored-name
-   rules, add `agentAvatarStorage` plus the `PUT /agents/:id/avatar` endpoint, and project
-   `avatarUri` at read time (done).
-9. **Follow-ups (separate implementation slices).** Avatar files orphaned by a soft-deleted Agent
-   are never reclaimed — a tombstoned Agent still renders in its historical Sessions, so the file
-   cannot be dropped at delete time. Also: Skill binding persistence, managed attachment and
-   artifact projection, fork columns, and broader Pi provider coverage.
-
-## Rejected alternatives
-
-- `runtime_binding` column — Version 1 has one local engine and no local implementation choice.
-- Generic `resource_scope` column — Version 1 file authority derives from explicit managed file refs
-  already persisted in input and transcript parts plus the process-local monotonic turn ledger. A
-  later broad library grant needs a normalized Agent-to-file relation, not an opaque scope blob.
-- `agent_turn` table — kept in an earlier draft to avoid reshaping the already-implemented store
-  port, i.e. fitting the schema to the code. By requirement, every durable turn fact lives on the
-  assistant message and every live turn state is process-local; with zero consumers of
-  `Backend.agent`, the port reshape is cheaper now than a redundant entity forever.
-- `agent_approval` table — every row is dead after restart because a turn is never resumed.
-- `emoji` column / `file_entry` avatar — avatars are managed derived files, not library content.
-- Session soft delete — the store contract is hard delete; soft delete would leak into every
-  query and the partial unique index.
-- Session `orderKey` — session lists order by recency (`lastActivityAt`).
+A shared store conformance suite runs against both adapters, mirroring the Runtime conformance
+approach. The Agent Protocol, including `AgentTurnView`, its events, and its invariants, remains
+independent of the Host-private storage boundary.

@@ -1,6 +1,6 @@
 # Lifecycle Overview
 
-> Status: Implemented.
+> Status: as-built.
 > Desktop source: `CherryHQ/cherry-studio@12498d68` — `src/main/core/lifecycle/`,
 > `src/main/core/application/`
 > Admission rules and the desktop divergence index live in [README.md](./README.md).
@@ -23,12 +23,12 @@ LifecycleManager            phase ordering, dependency graph, teardown and its o
 it is replaceable, which is what makes per-test service graphs and Fast Refresh possible. Production
 installs exactly one host and never replaces it.
 
-Code lives in `src/backend/core/lifecycle/` (framework) and `src/backend/core/application/`
-(orchestrator), mirroring desktop's `src/main/core/`. The location is forced, not stylistic: CRUD
-data services under `src/backend/data/` must resolve `DbService` through `application`, and the
-existing `backendLayer` lint rule forbids `src/backend/**` from importing `@/bootstrap`. See
-[where the code lives](./lifecycle-migration.md#where-the-code-lives) for the no-barrel rule and the
-one registry exemption that follow.
+Code lives in `src/backend/core/lifecycle/` (framework), `src/backend/core/application/`
+(orchestrator), and `src/backend/core/resources/` (domain-neutral fencing and draining). The
+location is forced, not stylistic: CRUD data services under `src/backend/data/` resolve `DbService`
+through `application`, and the `backendLayer` lint rule forbids `src/backend/**` from importing
+`@/bootstrap`. No barrel re-exports the concrete service registry; `serviceRegistry.ts` is the one
+assembly exception allowed to import concrete constructors.
 
 ## Phases
 
@@ -201,8 +201,7 @@ export const application = new Application()
 | `src/frontend/**`, `src/app/**` | **No** | `useBackendModule()`, Data API hooks, preference hooks |
 
 The frontend ban is the mobile equivalent of desktop's renderer/IPC boundary, which enforces the
-same separation physically. It is enforced by an eslint layer rule, not convention — see
-[lifecycle-migration.md](./lifecycle-migration.md#lint-and-ownership-rules).
+same separation physically. The repository's ESLint layer rules enforce it.
 
 ### Timing semantics
 

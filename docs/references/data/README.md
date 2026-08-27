@@ -98,7 +98,7 @@ the ownership and lifecycle rules those operations follow.
 its owning backend domain, including:
 
 - the app-owned Mobile Agent Host under `src/backend/ai`;
-- painting generation sessions and incomplete receipts;
+- painting receipt creation and durable job orchestration;
 - provider/model pull, reconcile, health, and avatar workflows;
 - MCP runtime coordination;
 - permission policy and profile avatar workflows.

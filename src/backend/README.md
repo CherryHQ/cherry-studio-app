@@ -10,7 +10,7 @@ isolation.
 | Area | Ownership |
 | --- | --- |
 | [`data`](./data/README.md) | Desktop-aligned cache, preferences, SQLite, Data API handlers, and persistence services |
-| [`ai`](./ai/README.md) | AI SDK/provider adaptation, MCP runtime, app-owned Chat Runtime, and request tool resolution |
+| [`ai`](./ai/README.md) | AI SDK/provider adaptation, MCP runtime, the Mobile Agent Host, and Pi Runtime tool projection |
 | [`services`](./services/README.md) | Workflow module factories, mobile platform adapters and clients, avatars, and web search |
 
 ## Alignment And Naming

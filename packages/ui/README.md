@@ -330,39 +330,9 @@ is used inside a scroll surface.
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.
 
-`BottomSheet` is the shared height-regulated mobile sheet. It deliberately exposes one small API: the
-caller provides a localized title, controlled visibility, a close action, and its content. The
-sheet owns the drag handle, scrim, safe areas, rounded card geometry, swipe/scrim dismissal,
-Android back handling, and accessibility escape behavior with one implementation on iOS and
-Android. It has no close button; dismissal follows mobile sheet gestures:
-
-```tsx
-<BottomSheet onClose={close} open={isOpen} size="large" title="Models">
-  <ModelList />
-</BottomSheet>
-```
-
-Feature components own their internal content and scrolling. A feature with a second level keeps
-that state locally and supplies `backAction` only while the nested level is visible:
-
-```tsx
-<BottomSheet
-  backAction={detail ? { accessibilityLabel: "Back", onPress: showRoot } : undefined}
-  onClose={close}
-  open={isOpen}
-  size={detail ? "compact" : "medium"}
-  title={detail ? "Theme" : "Settings"}
->
-  {detail ? <ThemeOptions /> : <SettingsRows />}
-</BottomSheet>
-```
-
-Set `dismissible={false}` only for blocking flows such as a pending approval. The public API does
-not expose the underlying sheet library, detents, geometry, close reasons, or platform-specific
-styling. Pass exactly one height specification: `size` accepts the shared `compact`, `medium`, or
-`large` spec, resolving to 40%, 60%, or 80% of the available screen height; `height` accepts a fixed
-React Native logical-pixel value and is clamped to the available screen height. Features choose the
-appropriate semantic token or fixed height without calculating native detents.
+`BottomSheet` is the shared height-regulated mobile sheet. Its public API, ownership, dismissal,
+height, nested-page, and platform behavior live in the colocated
+[Bottom Sheet reference](./src/components/bottom-sheet/README.md).
 
 `Composer` is a shared input surface: a text field that grows with its content and, under it, a
 toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` —
@@ -435,51 +405,12 @@ do — so a tool that merely acts keeps its identity while the user types. Senda
 attachment the caller holds, an image model that has to be picked first, or a mode that needs no
 prompt at all.
 
-Only the platform-divergent chrome sits behind a `.ios` / `.android` seam: `Surface` for the material
-(Liquid Glass on iOS 26+, a plain rounded surface elsewhere) and `composerTextStyle.*` for the text
-field's line height, which iOS has to override. Layout, state, and the collapse animation are identical
-on both platforms and stay in `composer.tsx` rather than being duplicated into a `composer.ios` /
-`composer.android` pair that would drift.
+Only platform-divergent material and text metrics use `.ios` / `.android` files. Layout, state, and
+collapse behavior stay shared. `Composer.Input` forwards every paste to `onPaste`; the caller decides
+which payloads to use.
 
-`Composer.Input` wraps its field in `expo-paste-input`'s `TextInputWrapper` and forwards every paste
-to `onPaste`, unfiltered — text included, though the field has already handled it. Which pastes are
-worth acting on is the caller's question, and only the caller can answer it. The wrapper is there
-even when no handler is passed: it costs one native view, and making the field's hierarchy depend on
-a callback would mean a caller adding paste support later has to debug a layout change they did not
-make.
-
-The line height override is worth understanding before touching the field's padding. Tailwind's
-`text-base` carries a 24pt line height, 6pt more than the font needs, and UIKit puts all of that extra
-leading below the baseline instead of splitting it. The glyphs end up low inside their own box while
-the caret, which tracks the line box, stays centered — so padding cannot fix it, since shifting the
-field moves both together and centering one puts the other 3pt out. Only the line height closes the
-gap. 20 leaves a 1pt glyph offset that is invisible at this size while keeping enough leading for CJK
-to breathe when the field wraps.
-
-`Surface` takes its geometry in `style`, never `className` — `GlassView` ignores `className`, so
-anything expressed there would apply to the fallback branch only and the two would silently diverge.
-That includes content alignment, which is why callers own it.
-
-The measured geometry lives in `composer.layout.ts` so the parts cannot drift apart. The toolbar's
-buttons are sized to their icons rather than to their reach — the circle is 32pt and the rest of the
-44pt target comes from slop. Everything inside sits flush against the surface's own padding, so the
-buttons, the field, and any row stacked above them share one left edge. The alternative — indenting
-the text so its ink lines up with the icons', since lucide draws its 24pt icons with ~4pt of margin
-inside the box — is what this did while the buttons were bare glyphs. Once they grew visible tinted
-circles the circle's edge became what the eye lines up against, and a row above the field is as
-likely to be a filled pill as it is to be text.
-
-Visible toolbar actions and pills are tinted rather than left as plain glass. A `GlassView` renders
-nothing when it sits on another one — the material has nothing behind it to refract — so an untinted
-button on the composer's own surface is invisible, not merely faint. `Composer.Action` resolves the
-tint from its `className` and hands it to both branches, which is why callers never pass one. The
-morph menu is the exception: its shared trigger/panel surface deliberately keeps the native glass
-untinted while retaining `bg-secondary` for non-glass fallbacks.
-
-Rows above the field — an attachment strip, a status line, a selected-tool tag — are placed by the
-order they are written, not by named slots, and a row that never disappears is just a `View`. What is
-not free is the swell and shrink, so that is what `Composer.Collapsible` provides: render `null` to
-collapse it and the surface follows.
+Rows above the field follow composition order rather than named slots. Use `Composer.Collapsible`
+only when a conditional row should animate the surface height:
 
 ```tsx
 <Composer.Collapsible>
@@ -487,50 +418,10 @@ collapse it and the surface follows.
 </Composer.Collapsible>
 ```
 
-It holds the last non-empty frame until the collapse lands, so callers write a plain conditional
-instead of keeping a copy around for the animation to shrink.
-
-The package deliberately ships no attachment strip. It had one, and every real consumer wanted a
-shape it did not have — images and files side by side, horizontal scrolling, tap to preview — so what
-generalised was the collapse, not the thumbnails. Callers write their own row inside a
-`Composer.Collapsible` and tell the composer about it through `canSend`.
-
-`composer.motion.ts` pairs the package's curves with durations and names each pairing after the
-gesture it belongs to, so anything that changes the composer's size settles on one curve and a row
-swelling while the menu closes reads as one gesture rather than as two animations that happen to
-overlap. Neither is configurable — two rows in one surface moving at different speeds reads as
-broken, not as customisable — and reduced motion lands everything on its final size instead.
-
-The height is measured and driven by a shared value rather than left to a layout animation. A layout
-animation tweens the row's own frame *after* its parent has committed the new one, so the surface
-would snap to its final height while the row slid into place; driving the height directly makes the
-surface reflow with it, on one.
-
-Measuring the content is where the trap is. A collapsed row is a zero-height clip, and a child
-measured inside one never lays out at all — `onLayout` never fires, so the height the animation is
-waiting for never arrives and the row stays shut forever, silently and only when it starts closed.
-The content is floated out of flow so it keeps its natural height whatever the clip above it is
-doing. The chat input floats its own content column for the same reason.
-
-`Composer.Menu` is a circular trigger that morphs into a panel, sized from its items. It is private
-to the composer — the morph is tuned to open out of a toolbar button, so it is not exported on its
-own. The panel is laid out at full size from the first frame and the closed button is a clip window
-over it, so the children are measured once instead of on every animation frame. While open it moves
-into a `Portal`: it has to paint over whatever sits beside it, and its dismiss catcher has to reach
-the whole screen — an in-place one only receives touches inside its ancestors' bounds. It stays there
-until the close animation lands, so the collapse does not play back under the neighbouring content.
-`Composer.Menu.Item` closes the menu before running `onPress`, and the context provider travels with
-the menu into the portal, since the portal re-renders its children under the host rather than
-teleporting the React node.
-
-Both of the panel's axes are measured and driven by shared values, which is what lets an open menu
-grow to children that swap in under it rather than snapping to them. React state read inside
-`useAnimatedStyle` cannot do this: the new size arrives in one commit, with no frames in between.
-That, plus `closeOnPress={false}` on the item that leads inward, is the whole of what a caller needs
-to build a second level — a media menu whose "Photos" row opens a grid in place. The menu itself has
-no notion of levels, and `width` is a floor rather than a size, so it stays usable outside the one
-screen this was built for. It also will not clamp: a panel grows up and to the right out of its
-trigger, so children that want most of the screen have to size themselves against the window.
+The package deliberately ships no attachment strip; callers compose their own row and pass its
+presence through `canSend`. `Composer.Menu` is private to the composer and supports nested content:
+use `closeOnPress={false}` for an item that replaces the panel contents. `width` is a floor, and
+callers that need most of the screen must bound their children to the window.
 
 ## Motion
 
@@ -548,8 +439,8 @@ deceleration and the right default for anything that moves or resizes something 
 `easing.overshoot` is for something arriving out of nothing, where the overshoot *is* the arrival.
 
 Components pair the two and name the pairing after the gesture rather than exporting a curve of their
-own, which is what `composer.motion.ts` does. Nothing here is a full motion system yet: it covers the
-package's own components, and the app still has its own easings to bring across.
+own, which is what `composer.motion.ts` does. This vocabulary covers package components; app-local
+easings remain outside it.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
@@ -570,8 +461,7 @@ typed activity name. Infrastructure injects the resolved theme and staged logo a
 time. Compact and banner surfaces show their timer when `compactLabel` is absent and replace the
 timer with that short status when present. The banner presents `title` and optional `attribution` on its first
 row, then the latest single-line `preview` with elapsed time on its second row. Overflow is truncated
-from the head so the newest content remains visible. A future Android renderer should consume the
-same presentation semantics while owning its own native layout in this package.
+from the head so the newest content remains visible.
 
 The expanded surface repeats the title and attribution header, shows up to three lines of the latest
 `preview`, and puts elapsed time at the lower trailing edge. When `compactLabel` is present, banner
@@ -579,22 +469,8 @@ and expanded timers both show that short status instead.
 
 ## Storybook
 
-Stories are development-only assets kept outside the runtime source tree, matching the desktop UI
-package structure:
-
-```txt
-packages/ui/stories/components/primitives/button.stories.tsx
-```
-
-Run the native Storybook entry with:
-
-```sh
-pnpm storybook
-```
-
-The command opens Storybook in Expo Go, keeping it isolated from the Cherry Studio development
-client. Use `pnpm storybook:clear` after changing Storybook or Metro configuration. Storybook is
-enabled by entry-point swapping, so the normal Expo entry and production bundles do not import it.
+Stories are development-only assets outside the runtime source tree. Their ownership, structure,
+application adapters, and commands live in the [Stories Guide](./stories/README.md).
 
 ## Icon Sync
 
@@ -656,12 +532,6 @@ It renders general, model, and provider SVG sources to transparent 72px lossless
 WebPs with `sharp`, writes light and dark assets under `src/icons-webp`, and generates static
 `require()` registries for Metro. SVGs using `currentColor` are rendered as
 theme foreground WebP pairs.
-
-Current generated counts:
-
-- General icons: 22
-- Provider icons: 156
-- Model icons: 168
 
 ## WebP Runtime
 

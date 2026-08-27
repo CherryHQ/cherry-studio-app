@@ -1,18 +1,16 @@
 # Agent Tools And Controlled Resources
 
-Status: **MCP binding persistence, Runtime tool contracts, the Pi adapter, HTTP MCP Runtime
-adaptation, system capability adapters, and Host projection are implemented**. Version 1 is
-local-only.
+> Status: as-built. Version 1 is local-only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
 image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and composer-selected temporary capabilities, then combines it with
-the Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and file
-capabilities are available to every Agent when their system gates pass. Web search and image
+the Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and
+`write_file` are available to every Agent when their system gates pass. Web search and image
 generation enter only the turn whose composer selected them; they are never Agent configuration.
-Office generation does not exist yet. Sections that a shipped tool still diverges from carry an
-**As-built** note.
+Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
+diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -31,10 +29,10 @@ Mobile Agent Host
             ↓ RuntimeTool.execute()
     application capability adapter
             ├─ Streamable HTTP MCP
-            ├─ device calendar
-            ├─ Office generation, inspection, and patching
+            ├─ device capabilities
+            ├─ web search and fetch
             ├─ image generation → AiService / @cherrystudio/ai-core / AI SDK
-            └─ managed-file read and copy-on-write edit
+            └─ managed-file write
 ```
 
 Pi never imports `AiService`, AI SDK, Expo modules, SQLite services, or MCP persistence. A
@@ -65,17 +63,17 @@ includes the source namespace and a stable digest, rejects collisions within the
 never falls back to display-name matching. The Host snapshots a display name separately so
 historical UI remains understandable after configuration changes.
 
-**As-built.** Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its
-provider alias, which is unambiguous because the catalog is Cherry-owned and collision-free.
+Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its provider alias,
+which is unambiguous because the catalog is Cherry-owned and collision-free.
 `src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
 own platform, permission, application-configuration, approval, and optional temporary-capability
-gates. The Agent editor neither reads nor overrides this catalog.
+gates. The Agent editor neither reads nor overrides it.
 
 `web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
 requires `image-generation` and a configured drawing model. The composer sends these selections on
-`submitMessage`; a successful send clears the selection and no value is written to the Agent.
-System device and file capabilities have no Agent-specific switch. The inference snapshot records
-the tools that actually entered the immutable turn.
+`submitMessage`; a successful send clears them, and they are never persisted on the Agent. System
+device and file capabilities have no Agent-specific switch. The inference snapshot records the
+tools that entered the immutable turn.
 
 The logical binding model is:
 
@@ -96,14 +94,14 @@ default. There is at most one MCP server default per `(agentId, serverId)` and o
 per `(agentId, serverId, rawToolName)`. A deleted server or tool leaves a disabled/dangling binding
 for explicit user repair; it never retargets by display name.
 
-The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. They still
-accept historical `builtin` rows for migration-free compatibility, but the Host ignores those rows
-and the Agent editor drops them on its next binding replacement. MCP server ids intentionally have
-no foreign key: deleting a server disables its rows without erasing their stable identity, display
-snapshot, or approval. Upsert and replace preserve the row id for a stable identity, reject
-duplicates atomically, and cannot create authorization for a missing server unless that exact
-dangling identity already exists. Bindings belong to Cherry persistence, the Host resolves them,
-and Pi must never read them directly.
+The physical SQLite shape and typed Data API are implemented in `agent_tool_binding`. They retain
+the `builtin` variant to read existing databases without a destructive migration, but the Host
+ignores those legacy rows and the Agent editor drops them on its next binding replacement. MCP
+server ids intentionally have no foreign key: deleting a server disables its rows without erasing
+their stable identity, display snapshot, or approval. Upsert and replace preserve the row id for a
+stable identity, reject duplicates atomically, and cannot create authorization for a missing server
+unless that exact dangling identity already exists. Bindings belong to Cherry persistence, the Host
+resolves them, and Pi must never read them directly.
 
 The data resolver chooses a specific tool row before its server default, then combines that policy
 with the current stored Server state and caller-supplied discovery fact. It reports `unbound`,
@@ -131,9 +129,7 @@ fallback action with broader access.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name. Version 1 does not expose a shell, workspace, JavaScript code mode,
-dynamic extension, or unrestricted filesystem tool. If a large MCP catalog later needs discovery,
-Cherry may add bounded search/describe/call meta-tools, but no meta-tool may expand the frozen
-catalog or bypass its individual approval policies.
+dynamic extension, unrestricted filesystem tool, or catalog-expanding meta-tool.
 
 ## Controlled File Ledger
 
@@ -142,11 +138,11 @@ receives a [`file_entry`](../data/file-model.md) id. Protocol operations and fil
 that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
 import sources, never authority.
 
-**As-built.** The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools
-receive only its membership view; `generate_image` rejects an `image_id` outside that view before
-touching the global managed-file service. A Host-owned catalog wrapper validates and grants every
-built-in artifact before returning the tool result to Pi, and Host event projection repeats the
-grant idempotently. `write_file` needs no read grant because it only creates entries.
+The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools receive only
+its membership view; `generate_image` rejects an `image_id` outside that view before touching the
+global managed-file service. A Host-owned catalog wrapper validates and grants every built-in
+artifact before returning the tool result to Pi, and Host event projection repeats the grant
+idempotently. `write_file` needs no read grant because it only creates entries.
 
 For Version 1, the Host derives the initial ledger grants from:
 
@@ -164,12 +160,7 @@ immutable; only this ledger grows monotonically.
 An MCP payload or model-produced string never grants access merely because it looks like a
 `cherry://file/` ref. An MCP result is ordinary remote data unless a separate Cherry importer
 validates its bytes, creates a managed entry, and records the new id. The ledger never grants access
-to the whole file library or app sandbox. A future “allow this Agent to access these library files”
-feature earns an explicit persisted relation, not a broad directory path.
-
-Managed content is immutable. An edit tool reads an allowed entry, creates a new entry, and returns
-the new reference. It never overwrites the source blob. The source and result remain separate
-library entries, making every edit copy-on-write and preserving the original.
+to the whole file library or app sandbox.
 
 ## Tool Results And Artifacts
 
@@ -188,97 +179,18 @@ display metadata. Its content is not automatically projected as a model attachme
 history. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
-**As-built.** `write_file` returns its status and new `fileEntryId` under `value`, plus the created
-managed entry under `artifacts`; `generate_image` returns `{ id, name }` refs under `value` and each
-imported image under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts,
-and the Host persists both the result envelope and the file parts. Device and web capabilities
-return portable JSON with no artifacts.
+`write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
+under `artifacts`; `generate_image` returns `{ id, name }` refs under `value` and each imported image
+under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
+persists both the result envelope and the file parts. Device and web capabilities return portable
+JSON with no artifacts.
 
 If a capability delegates work to `JobRuntime`, its Runtime tool still waits for a terminal result
 or cancellation during Version 1. A route unmount does not cancel it, but process death interrupts
 the Agent turn. Background tool continuation and later turn reattachment require a separate
 protocol design and are not implied by the durable job ledger; that design must use the
-OS-sanctioned continuation mechanisms recorded in
-[Agent Architecture](./README.md#open-questions).
-
-## Office Files
-
-Office support is one application capability family, not a model or renderer contract. The model's
-tool call is already the controlled structured-generation step; Version 1 does not start a hidden
-AI SDK request to turn prose into a second JSON payload. Cherry validates the call and
-deterministically generates or patches the file with a replaceable local renderer.
-
-### Application Contracts
-
-Cherry owns separate, versioned JSON contracts for new-file generation and existing-file edits:
-
-- `DocumentSpecV1`, `WorkbookSpecV1`, and `PresentationSpecV1` describe semantic content such as
-  sections, sheets, slide layouts, tables, charts, style presets, and managed image references.
-- `DocumentEditOperationV1`, `WorkbookEditOperationV1`, and `PresentationEditOperationV1` describe
-  bounded operations against an imported file revision, such as replacing a paragraph, writing a
-  cell range, or replacing text in one slide shape.
-
-These names describe logical contracts; their physical TypeScript modules land with the Office
-capability. Each contract has one strict Zod source of truth that exports portable JSON Schema for
-the Runtime tool. Unknown fields fail validation. Contracts use `fileEntryId` for managed inputs and
-never expose renderer classes, provider options, device paths, raw OOXML, ZIP entries, macros, or
-executable code.
-
-The contracts remain stable when the local implementation changes. A renderer adapter translates
-the Cherry contract into an open-source library's API; library-specific input must not leak back
-into the tool definition, transcript, or persistence model.
-
-### New File Generation
-
-Document, workbook, and presentation creation are separate capabilities because their useful
-schemas and limits differ. A generation callback:
-
-1. validates the versioned Cherry spec and every referenced managed file;
-2. resolves only the style preset, template, and assets authorized by the call;
-3. invokes the local format renderer with the turn `AbortSignal` and size limits;
-4. imports the completed `.docx`, `.xlsx`, or `.pptx` bytes into managed storage; and
-5. returns the new entry as a `created` artifact.
-
-The renderer owns OOXML correctness, packaging, temporary bytes, and cleanup. Pi never sees binary
-output. A template is an in-scope managed Office file, not a path or executable Skill; filling one
-creates a derived entry and never mutates the template.
-
-### Existing File Inspection And Edit
-
-An Office file must be imported into managed storage before an Agent can inspect or edit it. The
-inspector returns bounded metadata, compatibility warnings, outlines, and revision-local selectors;
-callers read additional content by page, section, sheet/range, slide, or selector instead of loading
-the entire file into model context.
-
-Edit tools accept the source `fileEntryId` plus format-specific operations that target selectors
-returned for that exact revision. A selector is not authority and cannot be reused with another
-entry. The callback rechecks the source ledger grant and operation limits, patches a copy, validates
-the result, and imports it as a `derived` artifact. Further edits target the new entry and re-inspect
-it when new selectors are needed.
-
-The patch engine preserves package parts and relationships it does not understand. It must not parse
-only Cherry's supported subset and regenerate the whole file, because that would silently discard
-unsupported Office features. When preservation cannot be guaranteed, the inspector reports the
-limitation and the mutation fails closed rather than returning a lossy file.
-
-### Initial Surface And Scope
-
-The logical built-in catalog is:
-
-- `create_document`, `create_workbook`, and `create_presentation`;
-- `inspect_office_file` and `read_office_content`; and
-- `edit_document`, `edit_workbook`, and `edit_presentation`.
-
-Version 1 supports controlled new-file generation, managed-template filling, and a documented set
-of format-specific patch operations. It does not promise a full Office editor, arbitrary OOXML
-mutation, legacy `.doc`/`.xls`/`.ppt`, macro-enabled files, format conversion, or pixel-identical
-rendering. The capability matrix must identify supported content and operations before an edit is
-offered.
-
-Generated and derived files remain inside Cherry's file library. Saving or sharing one to a system
-destination is an explicit user action; it copies the bytes out and never makes the external path
-authoritative. If export later becomes an Agent tool, it is a separate side-effecting capability
-with its own approval policy.
+OS-sanctioned continuation mechanisms described in
+[Job Runtime](../job-runtime.md#current-boundaries).
 
 ## Capability Rules
 
@@ -324,39 +236,22 @@ with its own approval policy.
   generation for the turn and a drawing model is configured. Its input schema is built from that
   model's capability block so the model is never offered a parameter its provider rejects.
 
-### Office Generation
+### Managed File Write
 
-- Office tools use the Cherry-owned specs and edit operations defined in
-  [Office Files](#office-files); open-source renderer schemas are private adapter details.
-- Every successful generation or edit returns `.docx`, `.xlsx`, or `.pptx` as a managed artifact.
-- Existing-file edits require an in-scope source entry, preserve unsupported package content, and
-  always produce a new entry.
-
-### Managed File Read And Edit
-
-- Read tools accept only an in-scope `fileEntryId` and return bounded extracted content or metadata,
-  not an arbitrary path.
-- Edit tools use format-specific application services and copy-on-write output. There is no generic
-  unrestricted byte writer in Version 1.
-
-**As-built.** `write_file` is the one writer that ships. It does not weaken the rule above: it
-accepts a display name rather than a path, writes bounded UTF-8 text (1 MB) as a *new* entry, and
-can neither address nor overwrite an existing one. The model receives
-`{ status, fileEntryId, filename, size }`; a name it could correct returns
+`write_file` is the only general file writer. It accepts a display name rather than a path, writes
+bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. The
+model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
 opaque failure. It runs without approval because it has no destructive form, and the Host offers it
-only to models that support function calling — handing tools to a model that cannot call them fails
+only to models that support function calling. Handing tools to a model that cannot call them fails
 the whole turn. Implementation: `src/backend/ai/agentHost/tools/`.
-- Input size, extracted-text size, generated-file size, timeout, and cancellation limits are
-  enforced by the capability service before provider or filesystem work grows without bound.
 
 ### Skill Boundary
 
-- The Host resolves only the Mobile Skills enabled in the current Agent configuration.
-- A Skill is instruction context, not a Runtime capability, and cannot add tools or change approval,
-  permission, MCP, or managed-resource policy.
-- Skill loading, prompt projection, and history behavior remain follow-up design. See
-  [Agent Skills](./agent-skills.md).
+- Mobile Skill persistence, binding resolution, and prompt projection are not implemented.
+- The target contract treats a Skill as instruction context, not a Runtime capability; it cannot add
+  tools or change approval, permission, MCP, or managed-resource policy.
+- See [Agent Skills](./agent-skills.md) for that explicitly deferred boundary.
 
 ## Approval And Failure Policy
 
@@ -397,12 +292,8 @@ desktop event labels or persistence shapes.
   adapters.
 - MCP exposes only configured Streamable HTTP tools without losing other persisted transport data.
 - Calendar access requires both OS permission and tool policy.
-- Office, image, and edited-file outputs are managed artifacts backed by validated `file_entry` ids.
-- Office tool inputs use versioned Cherry specs or edit operations rather than raw OOXML,
-  executable code, paths, or renderer-specific objects.
-- Office edits are copy-on-write and fail closed when unsupported content cannot be preserved.
-- File reads and edits cannot escape the explicit turn resource ledger; only validated
-  application-created outputs can extend it, and edits never mutate source bytes.
+- Managed-file tools accept no arbitrary paths; only validated application-created outputs can
+  extend the turn resource ledger, and `write_file` never overwrites an existing entry.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.

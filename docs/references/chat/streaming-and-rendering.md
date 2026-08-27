@@ -1,6 +1,6 @@
 # Chat Streaming And Rendering
 
-Status: **as-built Agent Session chat path**.
+> Status: as-built.
 
 This reference defines Cherry Studio Mobile's Agent Session stream, transcript window, live
 projection, and message rendering boundaries. Terms follow [Domain Language](../domain-language.md)
@@ -28,8 +28,9 @@ and [Cherry Agent Protocol](../agent/agent-protocol.md).
 - finalizes the assistant message and turn before publishing terminal events.
 
 Version 1 routes the local execution target to Pi. The Agent client branches on protocol
-capabilities, never on Runtime identity. The current local Host reports attachments unsupported, so
-the chat composer does not expose an attachment picker.
+capabilities, never on Runtime identity. Attachment admission is capability-driven: the composer
+imports managed images, while the Host revalidates authoritative metadata and resolves bounded
+managed image or text input before execution.
 
 ## Frontend Observation Boundary
 
