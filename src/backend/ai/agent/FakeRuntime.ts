@@ -63,12 +63,6 @@ const DEFAULT_DESCRIPTOR: RuntimeDescriptor = {
   },
 };
 
-const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
-
-function isTerminal(event: RuntimeEvent): boolean {
-  return TERMINAL_TYPES.has(event.type);
-}
-
 /**
  * Normalize an unknown thrown value into a {@link RuntimeError} that carries no
  * credentials or stack trace (conformance item 10). Native messages are
@@ -149,15 +143,14 @@ function validateRequest(
     };
   }
   if (!capabilities.attachments) {
-    const inputHasAttachment = request.input.some(
-      (part) => part.type === 'file' || part.type === 'text-attachment',
-    );
-    const historyHasAttachment = request.history.some((turn) =>
-      turn.messages.some((message) =>
-        message.parts.some((part) => part.type === 'file' || part.type === 'text-attachment'),
-      ),
-    );
-    if (inputHasAttachment || historyHasAttachment) {
+    if (
+      request.input.some((part) => part.type === 'file' || part.type === 'text-attachment') ||
+      request.history.some((turn) =>
+        turn.messages.some((message) =>
+          message.parts.some((part) => part.type === 'file' || part.type === 'text-attachment'),
+        ),
+      )
+    ) {
       return {
         code: 'unsupported_input',
         message: 'This runtime does not support file attachments.',
@@ -179,7 +172,6 @@ type ActiveTurn = {
   abortController: AbortController;
   approvalWaiters: Map<string, ApprovalWaiter>;
   toolParts: Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>;
-  terminated: boolean;
 };
 
 class FakeRuntimeSession implements AgentRuntimeSession {
@@ -215,7 +207,6 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       abortController: new AbortController(),
       approvalWaiters: new Map(),
       toolParts: new Map(),
-      terminated: false,
     };
     this.activeTurn = turn;
 
@@ -244,7 +235,7 @@ class FakeRuntimeSession implements AgentRuntimeSession {
 
   async cancel(turnId: string): Promise<void> {
     const turn = this.activeTurn;
-    if (!turn || turn.turnId !== turnId || turn.terminated) {
+    if (!turn || turn.turnId !== turnId) {
       return; // idempotent no-op
     }
     turn.abortController.abort();
@@ -258,7 +249,7 @@ class FakeRuntimeSession implements AgentRuntimeSession {
     decision: 'approve' | 'deny';
   }): Promise<void> {
     const turn = this.activeTurn;
-    if (!turn || turn.turnId !== input.turnId || turn.terminated) {
+    if (!turn || turn.turnId !== input.turnId) {
       return;
     }
     const waiter = turn.approvalWaiters.get(input.approvalId);
@@ -275,21 +266,22 @@ class FakeRuntimeSession implements AgentRuntimeSession {
     }
     this.closed = true;
     const turn = this.activeTurn;
-    if (turn && !turn.terminated) {
+    if (turn) {
       turn.abortController.abort();
       this.rejectApprovals(turn, new Error('The session was closed.'));
       this.emitFor(turn, { type: 'cancelled' });
     }
-    this.activeTurn = undefined;
     // Release scripted resources.
     this.programs.length = 0;
   }
 
   private emitFor(turn: ActiveTurn, event: RuntimeEvent): void {
-    if (turn.terminated) {
+    if (this.activeTurn !== turn) {
       return; // no output may follow a terminal event
     }
-    if (isTerminal(event)) {
+    const isTerminal =
+      event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
+    if (isTerminal) {
       this.interruptUnsettledToolParts(turn);
     } else if (
       (event.type === 'part.add' || event.type === 'part.replace') &&
@@ -298,13 +290,10 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       turn.toolParts.set(event.part.toolCallId, event.part);
     }
     turn.channel.push(event);
-    if (isTerminal(event)) {
-      turn.terminated = true;
+    if (isTerminal) {
       turn.channel.end();
       this.rejectApprovals(turn, new Error('The turn ended.'));
-      if (this.activeTurn === turn) {
-        this.activeTurn = undefined;
-      }
+      this.activeTurn = undefined;
     }
   }
 
@@ -331,7 +320,7 @@ class FakeRuntimeSession implements AgentRuntimeSession {
 
   private waitForApproval(turn: ActiveTurn, approvalId: string): Promise<'approve' | 'deny'> {
     return new Promise<'approve' | 'deny'>((resolve, reject) => {
-      if (turn.terminated) {
+      if (this.activeTurn !== turn) {
         reject(new Error('The turn has already ended.'));
         return;
       }

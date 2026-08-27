@@ -101,9 +101,7 @@ import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAtta
 import {
   createAgentInferenceSnapshot,
   type AgentInferenceModelResolver,
-  type AgentModelToolSupportResolver,
   resolveAgentInferenceModel,
-  resolveAgentModelToolSupport,
 } from './inferenceSnapshot';
 import {
   createTurnResourceLedger,
@@ -158,7 +156,6 @@ type MobileAgentHostOverrides = {
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
   >;
-  modelSupportsTools: AgentModelToolSupportResolver;
   runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
@@ -244,7 +241,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
   private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
-  private readonly modelSupportsTools: MobileAgentHostOverrides['modelSupportsTools'];
   private readonly runtimeTools: MobileAgentHostOverrides['runtimeTools'];
   private readonly lifecycleAbortController = new AbortController();
   private acceptingSubmissions = true;
@@ -277,7 +273,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
     this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
-    this.modelSupportsTools = overrides.modelSupportsTools ?? resolveAgentModelToolSupport;
     this.runtimeTools =
       overrides.runtimeTools ??
       createAgentRuntimeToolResolver({
@@ -341,7 +336,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
     this.runtimeSessions.clear();
     await Promise.allSettled(closing);
-    await Promise.allSettled([...this.runningTurns]);
+    await Promise.allSettled(this.runningTurns);
     await this.naming.drain();
     await this.usage.drain();
   }
@@ -528,19 +523,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         signal.throwIfAborted();
         fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
       }
-      if (tools.length > 0) {
-        let supportsTools = false;
-        try {
-          supportsTools = await raceAbort(this.modelSupportsTools(agent.model), signal);
-        } catch {
-          signal.throwIfAborted();
-        }
-        if (!supportsTools) {
-          fail(
-            'CAPABILITY_UNSUPPORTED',
-            'The selected model does not support native tool calling.',
-          );
-        }
+      const modelPreflight = await this.preflightModel(runtime, agent, signal);
+      if (tools.length > 0 && !modelPreflight.supportsTools) {
+        fail('CAPABILITY_UNSUPPORTED', 'The selected model does not support native tool calling.');
       }
       const inferenceSnapshot = createAgentInferenceSnapshot({
         model: inferenceModel,
@@ -548,7 +533,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         tools,
       });
 
-      const modelPreflight = await this.preflightModel(runtime, agent, signal);
       this.assertAttachmentRequestSupported(
         runtime,
         parts,

@@ -41,7 +41,7 @@ export class AgentSessionUsageRecorder {
   }
 
   async drain(): Promise<void> {
-    await Promise.allSettled([...this.inFlight]);
+    await Promise.allSettled(this.inFlight);
   }
 
   private async recordNow(input: RecordAgentSessionUsageInput): Promise<void> {

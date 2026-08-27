@@ -199,21 +199,14 @@ function extractParamValues(
   }
 
   const parsed = buildParamsSchema(support, mode).parse(candidate);
-  const regularEntries = Object.entries(supports).flatMap(([key, spec]) => {
+  const paramValues: Record<string, unknown> = {};
+  for (const [key, spec] of Object.entries(supports)) {
     const value = parsed[key];
-    if (value === undefined || (spec.type === 'size' && spec.pairedEnumKey)) {
-      return [];
+    if (value !== undefined) {
+      paramValues[spec.type === 'size' && spec.pairedEnumKey ? spec.pairedEnumKey : key] = value;
     }
-    return [[key, value]];
-  });
-  const pairedSizeEntries = Object.entries(supports).flatMap(([key, spec]) => {
-    const value = parsed[key];
-    if (value === undefined || spec.type !== 'size' || !spec.pairedEnumKey) {
-      return [];
-    }
-    return [[spec.pairedEnumKey, value]];
-  });
-  return Object.fromEntries([...regularEntries, ...pairedSizeEntries]);
+  }
+  return paramValues as ParamValues;
 }
 
 async function resolveInputImages(

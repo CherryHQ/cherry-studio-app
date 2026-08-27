@@ -29,13 +29,7 @@ type AgentSessionNamingDependencies = {
   store: AgentSessionStore;
 };
 
-function extractInputText(parts: readonly AgentInputPart[]): string {
-  return parts
-    .flatMap((part) => (part.type === 'text' && part.text.trim() ? [part.text.trim()] : []))
-    .join('\n\n');
-}
-
-function extractAssistantText(parts: readonly AgentMessagePart[]): string {
+function extractText(parts: readonly (AgentInputPart | AgentMessagePart)[]): string {
   return parts
     .flatMap((part) => (part.type === 'text' && part.text.trim() ? [part.text.trim()] : []))
     .join('\n\n');
@@ -73,7 +67,7 @@ export class AgentSessionNaming {
   }
 
   async drain(): Promise<void> {
-    await Promise.allSettled([...this.inFlightWrites]);
+    await Promise.allSettled(this.inFlightWrites);
   }
 
   private track(run: () => Promise<AgentSessionView | null>): Promise<AgentSessionView | null> {
@@ -93,7 +87,7 @@ export class AgentSessionNaming {
     parts: readonly AgentInputPart[],
   ): Promise<AgentSessionView | null> {
     this.dependencies.signal?.throwIfAborted();
-    const userText = extractInputText(parts);
+    const userText = extractText(parts);
     const nextTitle = buildFirstUserMessageTitle(userText).slice(0, 255);
     if (!nextTitle) return null;
 
@@ -119,8 +113,8 @@ export class AgentSessionNaming {
       this.dependencies.signal?.throwIfAborted();
       if (!enabled) return null;
 
-      const userText = extractInputText(input.userParts);
-      const assistantText = extractAssistantText(input.assistantParts);
+      const userText = extractText(input.userParts);
+      const assistantText = extractText(input.assistantParts);
       if (!userText || !assistantText) return null;
 
       const session = await this.dependencies.store.getSession(sessionId);
