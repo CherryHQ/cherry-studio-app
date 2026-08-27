@@ -3,6 +3,8 @@ import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
+import { matchesModelTypeFilter, type ModelTypeFilter } from './modelTypeFilter';
+
 export type ModelPickerModelItem = {
   key: string;
   model: Model;
@@ -59,14 +61,16 @@ const MODEL_PICKER_TAG_LABEL_KEYS = {
 export function getModelPickerModelItem(
   modelId: string | null,
   {
+    modelType = 'all',
     models,
     providers,
   }: {
+    modelType?: ModelTypeFilter;
     models: readonly Model[];
     providers: readonly Provider[];
   },
 ): ModelPickerModelItem | undefined {
-  const selectableModels = getSelectableModelPickerModels(models, providers);
+  const selectableModels = getSelectableModelPickerModels(models, providers, modelType);
   const model = selectableModels.find((item) => item.id === modelId);
   const provider = model ? providers.find((item) => item.id === model.providerId) : undefined;
 
@@ -97,13 +101,15 @@ export function getModelPickerRowTags(model: Model): ModelPickerTag[] {
 }
 
 export function getAvailableModelPickerFilterTags({
+  modelType = 'all',
   models,
   providers,
 }: {
+  modelType?: ModelTypeFilter;
   models: readonly Model[];
   providers: readonly Provider[];
 }): ModelPickerTag[] {
-  const selectableModels = getSelectableModelPickerModels(models, providers);
+  const selectableModels = getSelectableModelPickerModels(models, providers, modelType);
 
   return getAvailableModelPickerFilterTagsForModels(selectableModels);
 }
@@ -128,11 +134,13 @@ export function filterModelsByModelPickerTags(
 }
 
 export function buildModelPickerGroups({
+  modelType = 'all',
   models,
   providers,
   searchText,
   selectedTags = [],
 }: {
+  modelType?: ModelTypeFilter;
   models: readonly Model[];
   providers: readonly Provider[];
   searchText: string;
@@ -140,7 +148,7 @@ export function buildModelPickerGroups({
 }): ModelPickerGroup[] {
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
   const keywords = getSearchKeywords(searchText);
-  const selectableModels = getSelectableModelPickerModels(models, providers);
+  const selectableModels = getSelectableModelPickerModels(models, providers, modelType);
   const filteredModels = selectableModels.filter((model) => {
     const provider = providerById.get(model.providerId);
 
@@ -231,20 +239,11 @@ function matchesModelPickerSelectedTags(
   return selectedTags.every((tag) => matchesModelPickerTag(model, tag));
 }
 
-// Capabilities for models that can't be used in chat, so they're excluded from the picker.
-const CHAT_UNSUPPORTED_CAPABILITIES = [
-  MODEL_CAPABILITY.AUDIO_RECOGNITION,
-  MODEL_CAPABILITY.EMBEDDING,
-  MODEL_CAPABILITY.RERANK,
-] as const;
-
-function isChatCapableModel(model: Model): boolean {
-  return !CHAT_UNSUPPORTED_CAPABILITIES.some((capability) =>
-    model.capabilities.includes(capability),
-  );
-}
-
-function getSelectableModelPickerModels(models: readonly Model[], providers: readonly Provider[]) {
+function getSelectableModelPickerModels(
+  models: readonly Model[],
+  providers: readonly Provider[],
+  modelType: ModelTypeFilter,
+) {
   const enabledProviderIds = new Set(
     providers.flatMap((provider) => (provider.isEnabled ? [provider.id] : [])),
   );
@@ -254,7 +253,7 @@ function getSelectableModelPickerModels(models: readonly Model[], providers: rea
       model.isEnabled &&
       !model.isHidden &&
       enabledProviderIds.has(model.providerId) &&
-      isChatCapableModel(model),
+      matchesModelTypeFilter(model, modelType),
   );
 }
 

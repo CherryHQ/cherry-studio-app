@@ -84,6 +84,7 @@ export function PaintingInput({
   const { models: enabledImageModels } = useModels({
     capability: MODEL_CAPABILITY.IMAGE_GENERATION,
     enabled: true,
+    isSystemSupported: true,
   });
   const { providers: enabledProviders } = useProviders({ enabled: true });
   const enabledProviderIds = new Set(enabledProviders.map((provider) => provider.id));
@@ -287,11 +288,11 @@ export function PaintingInput({
       ) : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
+          modelType="image"
           open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
-          selectedTags={[MODEL_CAPABILITY.IMAGE_GENERATION]}
         />
       ) : null}
     </>

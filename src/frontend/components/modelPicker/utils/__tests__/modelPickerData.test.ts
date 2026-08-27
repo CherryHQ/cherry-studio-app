@@ -267,10 +267,10 @@ describe('model picker data helpers', () => {
       }),
     ];
     const groups = buildModelPickerGroups({
+      modelType: 'image',
       models: imageModels,
       providers,
       searchText: '',
-      selectedTags: [MODEL_CAPABILITY.IMAGE_GENERATION],
     });
 
     expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([

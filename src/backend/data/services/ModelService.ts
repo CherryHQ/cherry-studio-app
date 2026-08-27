@@ -7,7 +7,7 @@ import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type {
   CreateModelDto,
-  ListModelsQuery,
+  ModelListQuery,
   UpdateModelDto,
 } from '@/shared/data/api/schemas/models';
 import {
@@ -298,7 +298,7 @@ export class ModelService {
     return this.dbService.getDb();
   }
 
-  async list(query: ListModelsQuery = {}): Promise<Model[]> {
+  async list(query: ModelListQuery = {}): Promise<Model[]> {
     const conditions: SQL[] = [];
     if (query.providerId) {
       conditions.push(eq(userModelTable.providerId, query.providerId));

@@ -44,7 +44,13 @@ describe('ModelPickerDrawer', () => {
   beforeEach(() => {
     act(() => {
       renderer = create(
-        <ModelPickerDrawer onClose={jest.fn()} onSelect={jest.fn()} open selectedModelId={null} />,
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={jest.fn()}
+          onSelect={jest.fn()}
+          open
+          selectedModelId={null}
+        />,
       );
     });
   });
