@@ -60,6 +60,7 @@ const agents: AgentDefinitionSource = {
       instructions: 'Be brief.',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
+      toolApprovalMode: 'default',
     };
   },
 };
@@ -126,7 +127,8 @@ const stubTool: RuntimeTool = {
   execute: async () => ({ value: { status: 'ok' }, artifacts: [] }),
 };
 
-type HostToolOverrides = {
+type HostOverrides = {
+  agents?: AgentDefinitionSource;
   resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
 };
 
@@ -136,7 +138,7 @@ function createHost(
   files: ManagedFileResolver = noFiles,
   tools: SystemCapabilitySource = noOpTools,
   resolveInferenceModel = inferenceModel,
-  toolOverrides: HostToolOverrides = {},
+  overrides: HostOverrides = {},
 ): MobileAgentHost {
   return new MobileAgentHost(
     store,
@@ -147,12 +149,12 @@ function createHost(
     unusedWebSearchService,
     runtime,
     {
-      agents,
+      agents: overrides.agents ?? agents,
       files,
       inferenceModel: resolveInferenceModel,
       naming,
       runtimeTools: {
-        resolve: toolOverrides.resolveRuntimeTools ?? (async () => []),
+        resolve: overrides.resolveRuntimeTools ?? (async () => []),
       },
       usage,
       tools,
@@ -824,6 +826,55 @@ describe('MobileAgentHost', () => {
             ref: tool.ref,
           },
         ],
+      },
+    });
+  });
+
+  test('auto approval promotes ask tools without overriding auto or deny policies', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      requests.push(controller.request);
+      controller.emit({ type: 'completed' });
+    });
+    const makeTool = (approval: RuntimeTool['approval'], index: number): RuntimeTool => ({
+      approval,
+      description: `Tool ${index}`,
+      displayName: `Tool ${index}`,
+      execute: async () => ({ artifacts: [], value: null }),
+      inputSchema: { type: 'object' },
+      providerName: `tool_${index}`,
+      ref: { capabilityId: `tool_${index}`, source: 'builtin' },
+    });
+    const tools = [makeTool('ask', 1), makeTool('auto', 2), makeTool('deny', 3)];
+    const autoAgents: AgentDefinitionSource = {
+      async getAgent(agentId) {
+        const agent = await agents.getAgent(agentId);
+        return agent ? { ...agent, toolApprovalMode: 'auto' } : null;
+      },
+    };
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
+      agents: autoAgents,
+      resolveRuntimeTools: async () => tools,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      parts: [{ type: 'text', text: 'Run tools.' }],
+      sessionId: session.id,
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the auto-approval turn');
+
+    expect(requests[0]?.tools.map((tool) => tool.approval)).toEqual(['auto', 'auto', 'deny']);
+    expect(tools.map((tool) => tool.approval)).toEqual(['ask', 'auto', 'deny']);
+    expect((await store.listMessages(session.id))[1]?.inferenceSnapshot).toMatchObject({
+      status: 'supported',
+      snapshot: {
+        tools: [{ approval: 'auto' }, { approval: 'auto' }, { approval: 'deny' }],
       },
     });
   });

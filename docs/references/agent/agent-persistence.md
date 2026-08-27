@@ -1,6 +1,6 @@
 # Agent Persistence
 
-> Status: as-built. Version 1 is local-only.
+> Status: as-built. Mobile Agent execution is device-local only.
 
 This document defines the durable SQLite schema and production adapter behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It
@@ -50,8 +50,10 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 
 **No persisted Runtime identity.** There is no `runtime_binding` column. Runtime ids never appear in
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
-Version 1 has one execution target and one local engine: `local → Pi`. Application composition
-injects Pi directly into the Host, so there is no local implementation choice to persist.
+Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
+composition injects Pi directly into the Host, so there is no implementation choice to persist.
+Cloud and LAN desktop control are separate domains and must not reuse Mobile Agent definitions,
+Sessions, settings, or execution-target values.
 `contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
@@ -59,8 +61,8 @@ active turn.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
-no workspace reference. `execution_target` carries application intent (`{"kind":"local"}` in V1).
-For Version 1, every file is imported into `file_entry` before submission or tool use. The Host
+no workspace reference. `execution_target` records the mobile boundary (`{"kind":"local"}`). Every
+file is imported into `file_entry` before submission or tool use. The Host
 initializes a turn resource ledger from managed file ids in the current input and Session transcript,
 then may add only validated entries created by application capabilities during that turn. Those
 durable references already live on messages, while the monotonic same-turn ledger is process-local,
@@ -122,12 +124,14 @@ are never deleted individually in V1.
 snapshot. A missing `rawToolName` is the server default; a specific row overrides it. MCP server ids
 deliberately have no foreign key, so deleting a server atomically disables but does not erase its
 bindings. Partial unique indexes enforce the stable identities and the service preserves row ids
-during upsert/replace. Third-party MCP writes default to `ask` and the Data API rejects `auto`;
+during upsert/replace. Third-party MCP writes default to `ask` and the binding Data API rejects `auto`;
 display names never resolve or retarget a dangling binding. The Host reads the effective MCP
 projection; Pi does not read persistence. The data resolver deterministically selects a specific
 MCP tool row before its server default and reports missing Server/discovery facts as effective
 unavailability without deleting or retargeting the row. Runtime projection is described in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings).
+The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `ask` policy to
+`auto`; it does not rewrite bindings or make an unavailable tool executable.
 
 The physical table and typed Data API retain the `builtin` variant to read existing databases
 without a destructive migration. Those rows are legacy compatibility data: the Host ignores them,
@@ -162,6 +166,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `avatar` | text | NULL | Stable file reference; NULL renders the default avatar |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `settings` | text (json) | NOT NULL | Inference params (temperature, reasoning, max tokens) |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
@@ -194,7 +199,7 @@ specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server del
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
 | `title` | text | NOT NULL DEFAULT `''` | |
 | `titleIsManual` | integer (bool) | NOT NULL DEFAULT `false` | |
-| `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Application intent, never a Runtime id |
+| `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
 | `lastActivityAt` | integer | NOT NULL | Updated only when a turn reserves or finalizes |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 

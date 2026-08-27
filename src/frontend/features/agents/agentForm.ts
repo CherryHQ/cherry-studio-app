@@ -1,5 +1,9 @@
 import type { CreateAgentDto } from '@/shared/data/api/schemas/agents';
-import type { Agent } from '@/shared/data/types/agent';
+import {
+  type Agent,
+  DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+  type AgentToolApprovalMode,
+} from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentFormState = {
@@ -12,6 +16,7 @@ export type AgentFormState = {
   instructions: string;
   modelId: UniqueModelId | null;
   name: string;
+  toolApprovalMode: AgentToolApprovalMode;
 };
 
 type BuildAgentDtoOptions = {
@@ -25,6 +30,7 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
     instructions: agent?.instructions ?? '',
     modelId: agent?.modelId ?? null,
     name: agent?.name ?? '',
+    toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   };
 }
 
@@ -44,6 +50,7 @@ export function buildAgentDto(
       instructions: form.instructions,
       ...(options.inheritDefaultModel ? {} : { modelId: form.modelId }),
       name,
+      toolApprovalMode: form.toolApprovalMode,
     },
   };
 }

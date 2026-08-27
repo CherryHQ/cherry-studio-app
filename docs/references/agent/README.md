@@ -1,6 +1,6 @@
 # Agent Architecture
 
-> Status: as-built. Version 1 is local-only.
+> Status: as-built. Mobile Agent execution is device-local only.
 
 This directory documents Cherry Mobile's conversation execution boundary. Cherry owns Agents,
 Sessions, persistence, application capabilities, and the frontend protocol. Pi is the sole local
@@ -35,7 +35,8 @@ both sides.
 
 ## Current Contract
 
-- Execution target is `local`; there is no local engine registry or persisted Runtime choice.
+- Execution target is always `local`; there is no local engine registry or persisted Runtime
+  choice. Cloud and LAN desktop control are separate domains and do not execute Mobile Agents.
 - One Session permits at most one active turn, while different Sessions may run concurrently.
 - Mobile SQLite is the complete record for mobile-originated Sessions. The retired
   Assistant/Topic/Message tables and Chat Runtime are not compatibility paths.

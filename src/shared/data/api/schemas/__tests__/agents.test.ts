@@ -22,6 +22,17 @@ describe('agent api schemas', () => {
     );
   });
 
+  test.each([CreateAgentSchema, UpdateAgentSchema])(
+    'accepts only supported tool approval modes',
+    (schema) => {
+      expect(schema.safeParse({ name: 'Agent', toolApprovalMode: 'default' }).success).toBe(true);
+      expect(schema.safeParse({ name: 'Agent', toolApprovalMode: 'auto' }).success).toBe(true);
+      expect(schema.safeParse({ name: 'Agent', toolApprovalMode: 'full-access' }).success).toBe(
+        false,
+      );
+    },
+  );
+
   test('keeps unknown settings fields in update payloads', () => {
     expect(
       UpdateAgentSchema.parse({

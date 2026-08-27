@@ -1,6 +1,6 @@
 # Agent Tools And Controlled Resources
 
-> Status: as-built. Version 1 is local-only.
+> Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
 image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
@@ -67,8 +67,9 @@ historical UI remains understandable after configuration changes.
 Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its provider alias,
 which is unambiguous because the catalog is Cherry-owned and collision-free.
 `src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
-own platform, permission, application-configuration, approval, and optional temporary-capability
-gates. The Agent editor neither reads nor overrides it.
+own platform, permission, application-configuration, base approval, and optional
+temporary-capability gates. The Agent editor cannot change availability or those base policies; its
+approval preference only changes whether effective `ask` calls show an interactive prompt.
 
 `web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
 requires `image-generation` and a configured drawing model. The composer snapshots its frontend
@@ -87,7 +88,14 @@ type AgentToolBinding = {
   enabled: boolean
   approval: 'auto' | 'ask' | 'deny'
 }
+
+type AgentToolApprovalMode = 'default' | 'auto'
 ```
+
+`default` preserves every Runtime tool's resolved `auto` / `ask` / `deny` policy. `auto` promotes
+only effective `ask` tools to `auto`; existing `auto` and hard `deny` policies remain unchanged.
+This preference lives on the Mobile Agent rather than on an execution target and applies from the
+next turn.
 
 For MCP, omitting `rawToolName` defines the server default and enables discovery subject to the
 server-level disabled-tool list; a specific `(serverId, rawToolName)` binding overrides that
@@ -120,7 +128,9 @@ Before admitting a turn, the Host resolves tools in this order:
 3. Project only system capabilities implemented and available on the current mobile platform.
 4. Read the current Agent's enabled MCP bindings and resolve their executable descriptors.
 5. Apply system permission state, model tool-calling support, and application policy.
-6. Freeze stable refs, provider-safe aliases, callbacks, and approval modes into `RuntimeTool[]` for
+6. Apply the Agent approval preference to the combined system and MCP catalog (`ask → auto` only in
+   automatic mode; `deny` remains denied).
+7. Freeze stable refs, provider-safe aliases, callbacks, and effective approval modes into `RuntimeTool[]` for
    the turn.
 
 Configuration changes affect the next turn. Permission and resource checks that can change outside
@@ -208,8 +218,9 @@ OS-sanctioned continuation mechanisms described in
   generation that produced them. An endpoint edit, invalidation, or reconnect makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
   catalog, even when the server row keeps the same URL.
-- Third-party MCP tools execute only with per-call `ask` approval in this version. An explicit
-  `deny` remains denied, while any legacy `auto` row is downgraded to `ask` during projection.
+- Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
+  denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
+  approval mode may then promote that effective turn policy to `auto` without rewriting the row.
 
 ### System Calendar
 
@@ -232,10 +243,11 @@ OS-sanctioned continuation mechanisms described in
 - Pi supplies the validated generation request but does not construct provider SDK options or own
   provider credentials, usage accounting, download, persistence, or cleanup.
 - Successful output is imported into managed file storage before the tool reports an artifact.
-- Cost-bearing or externally submitted generation uses the application-owned `ask` policy; Agents
-  cannot override it. `generate_image` is absent from the catalog unless the composer selected image
-  generation for the turn and a drawing model is configured. Its input schema is built from that
-  model's capability block so the model is never offered a parameter its provider rejects.
+- Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
+  An Agent in automatic approval mode can skip that prompt, but `generate_image` is still absent
+  unless the composer selected image generation for the turn and a drawing model is configured.
+  Its input schema is built from that model's capability block so the model is never offered a
+  parameter its provider rejects.
 
 ### Managed File Write
 
@@ -258,7 +270,8 @@ the whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 Tool configuration, OS permission, turn resource ledger, and per-call approval are independent
 gates. All must allow execution. `auto` skips only the interactive approval sheet; it does not
-bypass the other gates. `deny` is fail-closed and no callback runs.
+bypass the other gates, expose a missing tool, or broaden application-managed data access. `deny`
+is fail-closed and no callback runs.
 
 Every callback receives the turn `AbortSignal`, applies a capability-specific timeout, redacts
 credentials and private payloads from errors, and returns portable values. Cancellation propagates
@@ -277,6 +290,9 @@ ports those semantics but not the Electron/Node execution surface. Desktop works
 JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and executable Skill
 trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
 adapters are semantic ports.
+
+Cloud and LAN desktop control may reuse the user-interface concept of an approval request, but they
+do not execute Mobile Agents and must own separate identities, policy, transport, and audit state.
 
 Desktop also keeps pending approvals in process memory, emits a terminal denied tool output when the
 user refuses a call, finalizes non-terminal tool parts when a stream is interrupted, and omits an

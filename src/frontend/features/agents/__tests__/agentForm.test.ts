@@ -13,6 +13,7 @@ describe('createAgentFormState', () => {
       modelId: 'openai::gpt-5',
       name: 'Researcher',
       settings: { temperature: 0.4 },
+      toolApprovalMode: 'auto',
     } as unknown as Agent);
 
     // Seeded from the resolved uri, not the stored reference: the draft is
@@ -23,11 +24,15 @@ describe('createAgentFormState', () => {
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
+      toolApprovalMode: 'auto',
     });
   });
 
   it('starts a new agent with no avatar draft', () => {
-    expect(createAgentFormState().avatarUri).toBeNull();
+    expect(createAgentFormState()).toMatchObject({
+      avatarUri: null,
+      toolApprovalMode: 'default',
+    });
   });
 });
 
@@ -71,6 +76,7 @@ describe('buildAgentDto', () => {
       instructions: 'system prompt',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
+      toolApprovalMode: 'default',
     });
   });
 });

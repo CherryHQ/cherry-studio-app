@@ -1,6 +1,6 @@
 # Cherry Agent Runtime
 
-> Status: as-built. Version 1 is local-only.
+> Status: as-built. Mobile Agent execution is device-local only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -30,10 +30,11 @@ Promotion to a workspace package happens only when a real independent consumer e
 
 ## Local execution binding
 
-Version 1 accepts only the `local` execution target. Application composition injects one Pi Runtime
-directly into the Host. There is no Runtime registry, no implementation-selection Router, and no
-persisted Runtime binding. Agent configuration, Session configuration, model selection, and tool
-availability never select another local engine.
+Mobile Agent accepts only the `local` execution target. Application composition injects one Pi
+Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
+and no persisted Runtime binding. Agent configuration, Session configuration, model selection, and
+tool availability never select another engine or execution device. Cloud and LAN desktop control
+use a separate execution domain.
 
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. Mobile Skill persistence and prompt projection are not implemented;

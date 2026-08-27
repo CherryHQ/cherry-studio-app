@@ -1,6 +1,6 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AgentSettings } from '@/shared/data/types/agent';
+import type { AgentSettings, AgentToolApprovalMode } from '@/shared/data/types/agent';
 
 import {
   createUpdateDeleteTimestamps,
@@ -14,9 +14,10 @@ import { userModelTable } from './userModel';
  * Agent table - stores user-configured Agent definitions
  * (docs/references/agent/agent-persistence.md).
  *
- * Per-Agent tool policy is normalized in `agent_tool_binding`; skill references
- * remain deferred. Agent CRUD never rewrites either relation. The fixed built-in
- * Runtime catalog is Host-owned and is not stored on this row.
+ * Per-Agent MCP availability is normalized in `agent_tool_binding`; the broad
+ * interactive approval preference lives on this row. Agent CRUD never rewrites
+ * the binding relation. The fixed built-in Runtime catalog is Host-owned and is
+ * not stored on this row. Skill references remain deferred.
  * Sessions reference agents via FK (ON DELETE RESTRICT); agents soft-delete
  * first, so live Sessions never orphan.
  */
@@ -35,6 +36,11 @@ export const agentTable = sqliteTable(
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // JSON blob: inference params; creation supplies the product default
     settings: text({ mode: 'json' }).$type<AgentSettings>().notNull(),
+    // Per-Agent interactive approval preference. This does not enable tools.
+    toolApprovalMode: text({ enum: ['default', 'auto'] })
+      .$type<AgentToolApprovalMode>()
+      .notNull()
+      .default('default'),
     ...orderKeyColumns,
     ...createUpdateDeleteTimestamps,
   },

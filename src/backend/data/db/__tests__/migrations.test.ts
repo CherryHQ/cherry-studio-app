@@ -251,6 +251,9 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
         VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
       `);
+      expect(
+        database.prepare("SELECT tool_approval_mode FROM agent WHERE id = 'agent-1'").get(),
+      ).toEqual({ tool_approval_mode: 'default' });
       expect(() =>
         database.exec(`
           INSERT INTO agent_tool_binding (

@@ -1,6 +1,6 @@
 # Cherry Agent Protocol
 
-> Status: as-built. Version 1 is local-only.
+> Status: as-built. Mobile Agent execution is device-local only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
@@ -15,6 +15,9 @@ Version 1 uses an in-process interface. Operation inputs, results, snapshots, an
 JSON-safe values validated at the boundary. Subscription callbacks and unsubscribe handles are
 process-local transport mechanics, not protocol data. JSON safety keeps application values portable;
 this document does not define a network wire protocol.
+
+Cloud control and LAN desktop control are separate product domains. They do not execute a Mobile
+Agent, reuse its Session or settings, or extend `AgentExecutionTarget` with remote variants.
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
@@ -52,18 +55,18 @@ type AgentSessionView = {
 }
 ```
 
-`executionTarget` expresses application intent, not implementation choice. Version 1 defines and
-accepts only `local`. Runtime ids and Pi/provider-SDK implementation details never appear in
-protocol values.
+`executionTarget` expresses the Mobile Agent boundary, not implementation choice. It defines and
+accepts only `local`, meaning this mobile app. Runtime ids and Pi/provider-SDK implementation
+details never appear in protocol values.
 
 `agentId` identifies the application-owned Agent configuration — the settings the user edits in the
-application (instructions, model, and MCP extensions). That configuration is live: before each
-turn, the Host resolves its current state and builds the Runtime execution request from it, so an
-application-level edit applies from the next turn. Shared system capabilities are not Agent
-configuration. The frontend selects web search per Session and snapshots that selection into each
-submission, while image generation is selected by the submission that needs it. Configuration
-never selects a different local engine: `local` always means Pi. The client does not duplicate
-configuration or select an implementation.
+application (instructions, model, tool-approval preference, and MCP extensions). That configuration
+is live: before each turn, the Host resolves its current state and builds the Runtime execution
+request from it, so an application-level edit applies from the next turn. Shared system
+capabilities are not Agent configuration. The frontend selects web search per Session and snapshots
+that selection into each submission, while image generation is selected by the submission that
+needs it. Configuration never selects a different engine or device: `local` always means Pi running
+in this mobile app. The client does not duplicate configuration or select an implementation.
 
 ### Turn
 

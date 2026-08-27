@@ -14,6 +14,7 @@ describe('AgentSessionUsageRecorder', () => {
         model: { modelId: 'configured-model', providerId: 'provider-1' },
         name: 'Agent One',
         options: {},
+        toolApprovalMode: 'default',
       },
       assistantMessageId: 'message-1',
       report: {
