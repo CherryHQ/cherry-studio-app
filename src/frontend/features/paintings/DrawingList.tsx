@@ -203,12 +203,17 @@ export function DrawingList() {
         <ContentState.Loading className="h-32" />
       ) : (
         <ContentState.Empty
-          className="min-h-48 flex-1 px-6 pb-24"
+          description={t('painting.history.emptyDescription')}
+          icon={
+            <ContentState.Icon>
+              <ImageIcon className="size-7 text-foreground" />
+            </ContentState.Icon>
+          }
+          layout="page"
           primaryAction={{
             accessibilityLabel: t('painting.history.createNew'),
             children: t('painting.history.createNew'),
             onPress: handleCreatePainting,
-            size: 'default',
             testID: 'painting-history-create',
           }}
           testID="painting-history-empty"
