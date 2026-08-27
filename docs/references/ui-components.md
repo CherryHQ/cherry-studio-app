@@ -120,6 +120,12 @@ System back gestures are never recreated in a general-purpose horizontal swipe c
 gestures start outside system back-gesture edge zones, and the navigation owner handles the platform
 back contract.
 
+The target cancellation and priority rules for tap, long press, scrolling, app-defined pan, and
+native text selection are defined in
+[Interaction And Gesture Arbitration](./interaction-and-gesture-arbitration.md). That reference is
+currently `Status: design`; existing components are not assumed to conform without verification at
+their native and cross-platform interaction boundaries.
+
 ## Visual System
 
 Color, typography, spacing, radius, elevation, opacity, and animation semantics come from the same
@@ -157,6 +163,8 @@ Reviewable from the change itself:
 Reviewable by running the app:
 
 - Controls expose accessible labels, state, disabled/loading behavior, and usable touch targets.
+- A committed scroll or app-defined pan cancels competing tap and long-press candidates;
+  cancellation remains inert through pointer-up.
 - Text scales and wraps without fixed dimensions clipping its content.
 - Platform enhancement failure leaves the control recognizable and usable.
 - Ambiguous icon-only actions provide an accessible label and tooltip or menu context where the

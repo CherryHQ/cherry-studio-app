@@ -57,12 +57,13 @@ type AgentSessionView = {
 accepts only `local`. Runtime ids and Pi/provider-SDK implementation details never appear in
 protocol values.
 
-`agentId` identifies the application-owned Agent configuration — the assistant/agent settings the
-user edits in the application (instructions, model, tools). That configuration is live: before
-each turn, the Host resolves its current state and builds the Runtime execution request from it,
-so an application-level edit applies from the next turn. Configuration never selects a different
-local engine: `local` always means Pi. The client does not duplicate configuration or select an
-implementation.
+`agentId` identifies the application-owned Agent configuration — the settings the user edits in the
+application (instructions, model, and MCP extensions). That configuration is live: before each
+turn, the Host resolves its current state and builds the Runtime execution request from it, so an
+application-level edit applies from the next turn. Shared system capabilities are not Agent
+configuration. The client may activate web search or image generation only for the submission that
+needs it. Configuration never selects a different local engine: `local` always means Pi. The client
+does not duplicate configuration or select an implementation.
 
 ### Turn
 
@@ -281,6 +282,7 @@ interface AgentProtocol {
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
+    temporaryCapabilities?: Array<'web-search' | 'image-generation'>
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
@@ -309,6 +311,12 @@ The model snapshot closes the gap while the same selection is persisted to the A
 snapshot is turn-local and is never written to Agent configuration. Omitting either field inherits
 the Agent definition loaded for that turn; an explicit reasoning `default` uses the selected model's
 default instead of the Agent's configured effort.
+
+`temporaryCapabilities` is also turn-local and is never written to Agent configuration. The Host
+uses `web-search` to admit `web_search` and `web_fetch`, and `image-generation` to admit
+`generate_image` when its other system gates pass. Omitting the array admits neither temporary
+capability. The assistant's inference snapshot records the concrete tools that were frozen for the
+turn, so history does not depend on reconstructing composer state.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;

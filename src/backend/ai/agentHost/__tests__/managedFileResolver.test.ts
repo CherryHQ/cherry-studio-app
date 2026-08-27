@@ -1,4 +1,3 @@
-import type { AgentMessageView } from '@/shared/contracts/agent';
 import { FileEntryIdSchema, FileEntrySchema } from '@/shared/data/types/file';
 
 import { createManagedFileResolver, createTurnResourceLedger } from '../managedFileResolver';
@@ -79,30 +78,6 @@ describe('managedFileResolver', () => {
   });
 
   test('keeps historical managed ids in the ledger without requiring them to resolve', () => {
-    const history: AgentMessageView[] = [
-      {
-        createdAt: '2026-08-26T00:00:00.000Z',
-        id: 'message-1',
-        parts: [
-          {
-            fileEntryId: MISSING_BLOB_ID,
-            id: 'input-0',
-            mediaType: 'image/png',
-            name: 'missing.png',
-            purpose: 'input-attachment',
-            type: 'file',
-          },
-        ],
-        role: 'user',
-        sessionId: 'session-1',
-        status: 'success',
-        turnId: 'turn-1',
-        updatedAt: '2026-08-26T00:00:00.000Z',
-        usage: null,
-        modelId: null,
-        inferenceSnapshot: null,
-      },
-    ];
     const inputFiles = new Map([
       [
         AVAILABLE_ID,
@@ -115,7 +90,7 @@ describe('managedFileResolver', () => {
       ],
     ]);
 
-    const ledger = createTurnResourceLedger(inputFiles, history);
+    const ledger = createTurnResourceLedger(inputFiles, [MISSING_BLOB_ID]);
     ledger.grantFile(GENERATED_ID);
 
     expect([...ledger.fileEntryIds]).toEqual([AVAILABLE_ID, MISSING_BLOB_ID, GENERATED_ID]);

@@ -5,12 +5,7 @@ import type { ComponentType } from 'react';
 
 import { type ToolMentionId, toolMentions } from '@/frontend/utils/toolMentions';
 
-/**
- * Web search is a setting on the assistant rather than a property of one
- * message: it stays on until it is turned off, and the desktop client models it
- * the same way. So the menu shows it as a switch, and the assistant record is
- * the source of truth — there is no separate composer state to keep in sync.
- */
+/** Web search is enabled by the composer for one submitted turn. */
 export const chatInputWebSearchAction = {
   icon: GlobeIcon,
   titleKey: 'chat.actions.webSearch',
@@ -23,9 +18,9 @@ const mentionIcons = {
 } satisfies Record<ToolMentionId, ComponentType<LucideIconProps>>;
 
 /**
- * Tools invoked for a single message by naming them in the draft. Picking one
- * from the menu only writes its name in; from there the text carries it, which
- * is what makes it visible in the sent message.
+ * Tools invoked for one turn by naming them in the draft. The mention keeps the
+ * choice visible in the sent message while the submit payload enables the
+ * matching temporary capability.
  */
 export const chatInputMentionActions = toolMentions.map((mention) => ({
   icon: mentionIcons[mention.id],

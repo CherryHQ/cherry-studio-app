@@ -23,6 +23,11 @@ When an implementation differs between iOS and Android, follow
 [Platform Variants](../references/naming-conventions.md#platform-variants): keep the full component
 family in its own directory and use matching `.ios.tsx` and `.android.tsx` files.
 
+When a target combines tap, long press, scrolling, app-defined pan, or native text selection, also
+read [Interaction And Gesture Arbitration](../references/interaction-and-gesture-arbitration.md).
+It is a target design, not a statement that current components already satisfy the contract. Define
+the eligible interactions and cancellation order before choosing a gesture implementation.
+
 ## Compose Component APIs
 
 Use the project `vercel-composition-patterns` skill when creating or substantially changing a
@@ -41,6 +46,7 @@ list's `renderItem`.
 ## Acceptance
 
 - Shared controls retain accessible labels, states, scalable text, and usable platform fallbacks.
+- Competing gestures have one documented winner and cancelled interactions do not fire on release.
 - Feature components keep business state and translations outside CherryUI.
 - Visual changes are inspected in light and dark themes on a device.
 - iOS device work in parallel worktrees follows

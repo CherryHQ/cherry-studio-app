@@ -153,6 +153,9 @@ export class AgentSessionChatClient {
 
         entry.observation = observation;
         this.installSnapshot(entry, observation.snapshot);
+        // A fresh Host snapshot can reflect terminal events missed while this
+        // session had no observers. Refresh the durable transcript projection.
+        this.options.onTranscriptChanged?.(sessionId);
         isSnapshotInstalled = true;
         for (const event of queuedEvents) {
           this.applyEvent(entry, event);
@@ -199,7 +202,10 @@ export class AgentSessionChatClient {
   async submitMessage(
     sessionId: string,
     parts: AgentInputPart[],
-    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
+    overrides: Pick<
+      AgentSubmitMessageInput,
+      'modelId' | 'reasoningEffort' | 'temporaryCapabilities'
+    > = {},
   ) {
     await this.observe(sessionId);
     return this.protocol.submitMessage({ parts, sessionId, ...overrides });

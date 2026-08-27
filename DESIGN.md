@@ -2,7 +2,13 @@
 
 Rules for visual decisions: where colour comes from, how hierarchy is built, when a surface or border is allowed, and where literal values are still permitted.
 
-Interaction component ownership is in [UI Components](docs/references/ui-components.md). Router structure and safe areas are in [Navigation And Insets](docs/references/navigation-and-insets.md). Naming is in [Naming Conventions](docs/references/naming-conventions.md). Local and remote validation ownership is in [Testing And CI](docs/guides/testing-and-ci.md).
+Interaction component ownership is in [UI Components](docs/references/ui-components.md). The target
+contract for competing tap, long-press, scroll, pan, and text-selection interactions is in
+[Interaction And Gesture Arbitration](docs/references/interaction-and-gesture-arbitration.md),
+which is currently a design rather than an as-built reference. Router structure and safe areas are
+in [Navigation And Insets](docs/references/navigation-and-insets.md). Naming is in
+[Naming Conventions](docs/references/naming-conventions.md). Local and remote validation ownership
+is in [Testing And CI](docs/guides/testing-and-ci.md).
 
 ## Priority Order
 

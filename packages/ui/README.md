@@ -83,6 +83,11 @@ size step and decides how links open:
 />;
 ```
 
+When rendering selectable content inside a scroll surface, follow the selection and
+scroll-cancellation contract in
+[Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
+and verify the native interaction boundary on each supported platform.
+
 Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
 variables, MessageList geometry, and settings previews on the same three-step scale.
@@ -315,6 +320,12 @@ Android uses `PopupMenu`. Each keeps the system style for destructive items. `ta
 button-like dropdowns, and `longPress` is for contextual
 actions without taking over the child's normal tap. Expo Router page previews remain owned by
 `Link.Preview` / `Link.Menu`, not this component.
+
+The target priority and cancellation behavior between menu recognition and ancestor scrolling is
+documented in
+[Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
+as `Status: design`. Verify the native interaction boundary on each supported platform when a menu
+is used inside a scroll surface.
 
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.

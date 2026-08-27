@@ -12,6 +12,8 @@ const WRITE_BASE = {
 } as const;
 
 const BuiltinAgentToolBindingInputSchema = z.strictObject({
+  // Backward-compatible wire shape only. The Agent editor no longer creates it
+  // and the Host does not use it to authorize system capabilities.
   ...WRITE_BASE,
   approval: AgentToolApprovalSchema.default('ask'),
   capabilityId: z.string().min(1),

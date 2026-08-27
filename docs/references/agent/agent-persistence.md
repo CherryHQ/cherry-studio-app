@@ -26,10 +26,11 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Out of scope: branching columns, background turns, persisted tool binding projection, Mobile Skill
-configuration/loading, and broader Pi provider coverage. The retired `assistant`/`topic`/`message`
-tables were removed separately after Agent surfaces became authoritative. Persisted bindings are
-not yet projected into the Runtime snapshot; the current Host supplies a fixed `write_file` tool.
+Out of scope: branching columns, background turns, Mobile Skill configuration/loading, and broader
+Pi provider coverage. The retired `assistant`/`topic`/`message` tables were removed separately after
+Agent surfaces became authoritative. The Host projects Agent-specific MCP bindings into each
+Runtime snapshot. System capabilities are resolved independently and require no Agent persistence;
+the composer carries web-search and image-generation selection only on the current submission.
 
 ## Current limitations
 
@@ -124,18 +125,22 @@ installs a per-Session barrier, waits any already-admitted submission to install
 then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
 are never deleted individually in V1.
 
-**Tool bindings are mobile-owned configuration.** `agent_tool_binding` stores a stable built-in
-capability or MCP `(serverId, rawToolName?)` identity, its enabled state, approval policy, and an
-optional display snapshot. A missing `rawToolName` is the server default; a specific row overrides
-it. MCP server ids deliberately have no foreign key, so deleting a server atomically disables but
-does not erase its bindings. Three partial unique indexes enforce the stable identities and the
-service preserves row ids during upsert/replace. Third-party MCP writes default to `ask` and the
-Data API rejects `auto`; display names never resolve or retarget a dangling binding. The Host and Pi
-still do not read this table in the current slice. The data resolver deterministically selects a
-specific MCP tool row before its server default and reports missing Server/discovery facts as
-effective unavailability without deleting or retargeting the row. Runtime projection remains as
-described in
+**MCP bindings are mobile-owned Agent configuration.** `agent_tool_binding` stores a stable MCP
+`(serverId, rawToolName?)` identity, its enabled state, approval policy, and an optional display
+snapshot. A missing `rawToolName` is the server default; a specific row overrides it. MCP server ids
+deliberately have no foreign key, so deleting a server atomically disables but does not erase its
+bindings. Partial unique indexes enforce the stable identities and the service preserves row ids
+during upsert/replace. Third-party MCP writes default to `ask` and the Data API rejects `auto`;
+display names never resolve or retarget a dangling binding. The Host reads the effective MCP
+projection; Pi does not read persistence. The data resolver deterministically selects a specific
+MCP tool row before its server default and reports missing Server/discovery facts as effective
+unavailability without deleting or retargeting the row. Runtime projection remains as described in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-catalog-and-bindings).
+
+The physical table and typed Data API retain the `builtin` variant to read existing databases
+without a destructive migration. Those rows are legacy compatibility data: the Host ignores them,
+and the Agent editor omits them when replacing bindings. Shared system capabilities and temporary
+composer selections are never persisted here.
 
 Skill configuration remains deferred. Only the ownership boundary is settled: the current Agent
 configuration will select the mobile-supported Skills available to its Sessions. Pi reads neither
@@ -187,9 +192,10 @@ Indexes: `orderKeyIndex('agent')`, `agent_created_at_idx`.
 | `displayNameSnapshot` | text | NULL | Repair-only UI context; never authority |
 | `createdAt` / `updatedAt` | integer | helper defaults | Stable row timestamps |
 
-Partial unique indexes enforce `(agentId, capabilityId)` for built-ins, `(agentId, mcpServerId)`
-for MCP server defaults, and `(agentId, mcpServerId, rawToolName)` for specific MCP tools. Plain
-indexes cover Agent listing/cascade and MCP server delete-time disabling.
+The built-in partial unique index remains for legacy-row compatibility. Active MCP configuration is
+enforced by partial unique indexes on `(agentId, mcpServerId)` for server defaults and
+`(agentId, mcpServerId, rawToolName)` for specific tools. Plain indexes cover Agent listing/cascade
+and MCP server delete-time disabling.
 
 ### `agent_session`
 
@@ -268,7 +274,9 @@ projection:
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full
-  history instead.
+  history instead. The store resolves anchor membership and loads rows after the anchor directly;
+  it also returns lightweight full-transcript Turn-id and file-reference indexes, so the Host does
+  not materialize the complete transcript merely to discard its checkpoint-covered prefix.
 - Turn reads and live-status transitions leave the store: the Host holds the active turn's live
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`
   from it plus the assistant message row. Terminal statuses derive from the message row alone,
@@ -305,9 +313,9 @@ storage boundary moves.
    lookup, and route Session rename/delete through the Host lifecycle boundary (done).
 6. **Frontend and retirement.** Agent UI consumes `Backend.agent`; the incompatible legacy Chat
    tables/runtime are removed without data conversion (done).
-7. **Tool binding persistence.** Add mobile-owned binding schemas, migration, Data API, deterministic
-   default/override resolution, and dangling MCP preservation (done). Runtime projection remains a
-   separate slice.
+7. **MCP binding persistence and projection.** Add mobile-owned binding schemas, migration, Data
+   API, deterministic default/override resolution, dangling MCP preservation, and Host projection
+   (done). Legacy built-in rows remain readable but have no Runtime authority.
 8. **Avatar workflow.** Generalize `userContentImageStorage` over its directory and stored-name
    rules, add `agentAvatarStorage` plus the `PUT /agents/:id/avatar` endpoint, and project
    `avatarUri` at read time (done).

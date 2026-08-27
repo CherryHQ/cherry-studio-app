@@ -1,11 +1,10 @@
 /**
  * Web search and fetch.
  *
- * These are the only built-in tools that reach a third-party service the user
- * configures separately, so the catalog leaves them off until an Agent binding
- * turns them on — the same opt-in the retired per-Assistant web-search switch
- * provided. Provider resolution, mapping, and error classification live in
- * `webLookup`; this file is only the Runtime tool wrapper.
+ * These reach a third-party service configured globally, so the system catalog
+ * injects them only for turns whose composer enabled web search. Provider
+ * resolution, mapping, and error classification live in `webLookup`; this file
+ * is only the Runtime tool wrapper.
  */
 
 import {

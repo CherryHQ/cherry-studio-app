@@ -16,10 +16,8 @@ type ChatInputMenuItemsProps = {
  * are a chat concept — painting has nothing to do with web search — so the
  * composer takes them as a slot rather than knowing they exist.
  *
- * The two kinds do not share a control, because they do not share a lifetime: a
- * mention applies to the message being written, while the web search switch
- * outlives it — which is why one writes into the draft and the other into the
- * assistant record.
+ * Image generation stays visible as a mention in the draft; web search is a
+ * turn-only switch. Neither choice is persisted to Agent configuration.
  */
 export function ChatInputMenuItems({
   isWebSearchEnabled,

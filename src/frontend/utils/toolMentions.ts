@@ -3,8 +3,9 @@
  *
  * A mention is a Markdown link whose URL carries the tool id and whose text
  * carries the name the user saw: `[Create image](tool://create-image)`. The
- * mention *is* the state — nothing else records that a message asked for the
- * tool, which is what makes it visible in the conversation afterwards.
+ * mention is the durable state — the composer derives a turn-only capability
+ * request from it at submit time, but does not persist a second Agent setting.
+ * This is what keeps the request visible in the conversation afterwards.
  *
  * The id lives in the URL rather than being recovered from the name, so a
  * message keeps meaning the same tool after the app's language changes, and so

@@ -37,7 +37,7 @@ import type {
   RuntimeTool,
   RuntimeUsageReport,
 } from '@/backend/ai/agent';
-import { PiRuntime } from '@/backend/ai/agent';
+import { PiRuntime, raceAbort } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import {
@@ -93,7 +93,10 @@ import {
 import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
-import { selectRuntimeContext, validateRuntimeContextCheckpoint } from './contextCheckpoints';
+import {
+  validateRuntimeContextCheckpoint,
+  validateRuntimeContextCheckpointCandidate,
+} from './contextCheckpoints';
 import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAttachments';
 import {
   createAgentInferenceSnapshot,
@@ -126,7 +129,10 @@ import {
   resolveManagedTextAttachments,
   TextAttachmentError,
 } from './textAttachments';
-import { type AgentToolSource, createBuiltInToolSource } from './tools/builtInToolSource';
+import {
+  createSystemCapabilitySource,
+  type SystemCapabilitySource,
+} from './tools/builtInToolSource';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -142,6 +148,8 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
   update: () => {},
 };
 
+const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
+
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
   files: ManagedFileResolver;
@@ -153,7 +161,7 @@ type MobileAgentHostOverrides = {
   modelSupportsTools: AgentModelToolSupportResolver;
   runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
-  tools: AgentToolSource;
+  tools: SystemCapabilitySource;
 };
 
 /**
@@ -176,6 +184,19 @@ type ActiveTurnState = {
   usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
 };
+
+type AdmissionState = {
+  abortController: AbortController;
+  completion: Promise<void>;
+};
+
+class TerminalPersistenceError extends Error {
+  override readonly name = 'TerminalPersistenceError';
+
+  constructor(readonly failure: unknown) {
+    super('The Agent Host could not persist a terminal turn state.');
+  }
+}
 
 function fail(code: AgentErrorView['code'], message: string, retryable = false): never {
   throw new AgentProtocolError({ code, message, retryable });
@@ -211,7 +232,7 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
-  private readonly admittingSessions = new Map<string, Promise<void>>();
+  private readonly admittingSessions = new Map<string, AdmissionState>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
   private readonly runtimeSessions = new Map<
@@ -225,6 +246,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
   private readonly modelSupportsTools: MobileAgentHostOverrides['modelSupportsTools'];
   private readonly runtimeTools: MobileAgentHostOverrides['runtimeTools'];
+  private readonly lifecycleAbortController = new AbortController();
+  private acceptingSubmissions = true;
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -249,6 +272,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         model: modelService,
         preference: preferenceService,
         provider: providerService,
+        signal: this.lifecycleAbortController.signal,
         store,
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
@@ -268,14 +292,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   private lazyAgents: AgentDefinitionSource | undefined;
 
-  private get toolSource(): AgentToolSource {
+  private get systemCapabilities(): SystemCapabilitySource {
     return (
       this.overrides.tools ??
-      (this.lazyTools ??= createBuiltInToolSource({ webSearch: this.webSearchService }))
+      (this.lazySystemCapabilities ??= createSystemCapabilitySource({
+        webSearch: this.webSearchService,
+      }))
     );
   }
 
-  private lazyTools: AgentToolSource | undefined;
+  private lazySystemCapabilities: SystemCapabilitySource | undefined;
 
   /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
@@ -289,8 +315,22 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
    * leave live work behind a torn-down listener surface.
    */
   protected override async onStop(): Promise<void> {
+    this.acceptingSubmissions = false;
+    const reason = new Error('The Agent Host is stopping.');
+    this.lifecycleAbortController.abort(reason);
     for (const state of this.activeTurns.values()) {
-      state.abortController.abort(new Error('The Agent Host is stopping.'));
+      state.abortController.abort(reason);
+    }
+    for (const admission of this.admittingSessions.values()) {
+      admission.abortController.abort(reason);
+    }
+    await Promise.allSettled(
+      [...this.admittingSessions.values()].map(({ completion }) => completion),
+    );
+    // An admission already committing its reservation may have installed a
+    // turn while the first abort pass was running.
+    for (const state of this.activeTurns.values()) {
+      state.abortController.abort(reason);
     }
     const closing = [...this.runtimeSessions.values()].map(({ session }) =>
       session
@@ -357,7 +397,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     try {
       const admission = this.admittingSessions.get(sessionId);
       if (admission) {
-        await admission;
+        await admission.completion;
       }
       const active = this.activeTurns.get(sessionId);
       if (active) {
@@ -391,14 +431,19 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.assertIdle(sessionId);
     // Synchronous admission guard: a second submit that interleaves at any
     // await below still fails SESSION_BUSY (invariant 1).
-    const admission = createCompletionSignal();
-    this.admittingSessions.set(sessionId, admission.promise);
+    const completion = createCompletionSignal();
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    this.admittingSessions.set(sessionId, {
+      abortController,
+      completion: completion.promise,
+    });
     try {
-      const session = await this.store.getSession(sessionId);
+      const session = await raceAbort(this.store.getSession(sessionId), signal);
       if (!session) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
-      const configuredAgent = await this.requireAgent(session.agentId);
+      const configuredAgent = await raceAbort(this.requireAgent(session.agentId), signal);
       const agent = applyTurnOverrides(configuredAgent, parsed);
       const runtime = this.routeExecutionTarget(session.executionTarget);
       if (
@@ -408,57 +453,88 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
       }
 
-      // History is everything stored before this turn.
-      const priorMessages = await this.store.listMessages(sessionId);
-      const storedContextCandidate = await this.store.getLatestContextCheckpoint(sessionId);
-      const runtimeContext = selectRuntimeContext(
-        priorMessages,
-        storedContextCandidate?.checkpoint ?? null,
+      const storedContextCandidate = await raceAbort(
+        this.store.getLatestContextCheckpoint(sessionId),
+        signal,
       );
-      if (runtimeContext.issue) {
+      const checkpointValidation = storedContextCandidate
+        ? validateRuntimeContextCheckpointCandidate(storedContextCandidate.checkpoint)
+        : null;
+      const requestedCheckpoint = checkpointValidation?.checkpoint ?? null;
+      const storedTurnContext = await raceAbort(
+        this.store.loadRuntimeTurnContext(sessionId, requestedCheckpoint?.anchorTurnId ?? null),
+        signal,
+      );
+      const runtimeContextCheckpoint =
+        requestedCheckpoint && storedTurnContext.anchorFound ? requestedCheckpoint : null;
+      const runtimeContextIssue =
+        checkpointValidation?.issue ??
+        (requestedCheckpoint && !storedTurnContext.anchorFound
+          ? 'CONTEXT_CHECKPOINT_ANCHOR_INVALID'
+          : null);
+      if (runtimeContextIssue) {
         logger.warn('Agent context checkpoint rejected; replaying full history', {
-          code: runtimeContext.issue,
+          code: runtimeContextIssue,
           checkpointMessageId: storedContextCandidate?.assistantMessageId,
           sessionId,
         });
       }
       const { availableFiles, inputFiles, parts } = await this.resolveManagedInput(
         parsed.parts,
-        priorMessages,
+        storedTurnContext.history,
+        signal,
       );
-      const resources = createTurnResourceLedger(inputFiles, priorMessages, availableFiles);
+      const resources = createTurnResourceLedger(
+        inputFiles,
+        storedTurnContext.referencedFileEntryIds,
+        availableFiles,
+      );
 
-      // Freeze built-in and configured tools for the turn so mid-turn changes
+      // Freeze system capabilities and configured MCP tools for the turn so mid-turn changes
       // cannot alter the active catalog. The catalog closes over this turn's
-      // resource ledger, never a global file surface. Built-in discovery
-      // remains optional; configured binding resolution fails closed.
-      let builtInTools: readonly RuntimeTool[] = [];
+      // resource ledger, never a global file surface. System capability
+      // resolution remains optional; configured MCP binding resolution fails closed.
+      let systemTools: readonly RuntimeTool[] = [];
       let configuredTools: readonly RuntimeTool[] = [];
       if (runtime.descriptor.capabilities.tools) {
         try {
-          builtInTools = await this.toolSource.getTools({
-            agentId: agent.id,
-            model: agent.model,
-            resources,
-          });
+          systemTools = await raceAbort(
+            this.systemCapabilities.getTools({
+              model: agent.model,
+              resources,
+              temporaryCapabilities: new Set(parsed.temporaryCapabilities ?? []),
+            }),
+            signal,
+          );
         } catch (error) {
+          signal.throwIfAborted();
           logger.warn(
-            'Failed to resolve built-in Agent tools; continuing without them',
+            'Failed to resolve system capabilities; continuing without them',
             error as Error,
           );
         }
-        configuredTools = await this.runtimeTools
-          .resolve(agent.id)
-          .catch(() =>
-            fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.'),
-          );
+        try {
+          configuredTools = await raceAbort(this.runtimeTools.resolve(agent.id), signal);
+        } catch {
+          signal.throwIfAborted();
+          fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
+        }
       }
-      const tools = [...builtInTools, ...configuredTools];
-      const inferenceModel = await this.inferenceModel(agent.model).catch(() =>
-        fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.'),
-      );
+      const tools = [...systemTools, ...configuredTools];
+      let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
+      try {
+        inferenceModel = await raceAbort(this.inferenceModel(agent.model), signal);
+      } catch {
+        signal.throwIfAborted();
+        fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
+      }
       if (tools.length > 0) {
-        const supportsTools = await this.modelSupportsTools(agent.model).catch(() => false);
+        let supportsTools = false;
+        try {
+          supportsTools = await raceAbort(this.modelSupportsTools(agent.model), signal);
+        } catch {
+          signal.throwIfAborted();
+        }
         if (!supportsTools) {
           fail(
             'CAPABILITY_UNSUPPORTED',
@@ -472,19 +548,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         tools,
       });
 
-      const modelPreflight = await this.preflightModel(runtime, agent);
+      const modelPreflight = await this.preflightModel(runtime, agent, signal);
       this.assertAttachmentRequestSupported(
         runtime,
         parts,
-        runtimeContext.history,
+        storedTurnContext.history,
         resources,
         modelPreflight,
       );
       const runtimeTextAttachments = await this.resolveRuntimeTextAttachments(
         parts,
-        runtimeContext.history,
+        storedTurnContext.history,
         resources,
+        signal,
       );
+
+      // Open the Runtime before creating durable pending rows. A failed open
+      // must leave no reservation that startup reconciliation has to repair.
+      const runtimeSession = await this.getRuntimeSession(sessionId, runtime, signal);
+      signal.throwIfAborted();
 
       const userParts: AgentMessagePart[] = parts.map((part, index) =>
         part.type === 'text'
@@ -506,7 +588,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         modelId: inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot,
       });
-      const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
       // The Turn projection starts here: reservation time is the turn start.
       const turn: AgentTurnView = {
@@ -520,11 +601,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       };
       const state: ActiveTurnState = {
         agent,
-        abortController: new AbortController(),
+        abortController,
         turn,
         assistantMessage: reserved.assistantMessage,
         autoNamePromise: null,
-        autoNameUserParts: priorMessages.length === 0 ? parts : null,
+        autoNameUserParts: storedTurnContext.hasMessages ? null : parts,
         backgroundReply: this.startBackgroundReply({
           agentId: agent.id,
           agentName: agent.name,
@@ -534,10 +615,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         pendingApprovals: new Map(),
         pendingContextCheckpoint: null,
         resources,
-        sessionTurnIds: new Set([
-          ...priorMessages.flatMap((message) => (message.turnId ? [message.turnId] : [])),
-          reserved.turnId,
-        ]),
+        sessionTurnIds: new Set([...storedTurnContext.sessionTurnIds, reserved.turnId]),
         usage: null,
         runtimeSession,
       };
@@ -546,7 +624,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
       this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
       this.publish(sessionId, { type: 'turn.updated', turn });
-      if (state.autoNameUserParts) {
+      if (state.autoNameUserParts && !signal.aborted) {
         state.autoNamePromise = this.naming.maybeRenameFromFirstUserMessage(
           sessionId,
           state.autoNameUserParts,
@@ -558,9 +636,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sessionId,
         agent,
         state,
-        runtimeContext.history,
+        storedTurnContext.history,
         parts,
-        runtimeContext.checkpoint,
+        runtimeContextCheckpoint,
         runtimeTextAttachments,
         tools,
       );
@@ -580,7 +658,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       };
     } finally {
       this.admittingSessions.delete(sessionId);
-      admission.resolve();
+      completion.resolve();
     }
   }
 
@@ -707,23 +785,35 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }),
       );
     } catch (error) {
+      if (error instanceof TerminalPersistenceError) {
+        this.handleTerminalPersistenceFailure(sessionId, state, error);
+        return;
+      }
       if (state.abortController.signal.aborted) {
-        await this.finalize(sessionId, state, 'cancelled', null).catch(() => undefined);
+        try {
+          await this.finalize(sessionId, state, 'cancelled', null);
+        } catch (finalizeError) {
+          this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
+        }
         return;
       }
       logger.error('Agent turn failed outside the runtime event stream', error as Error);
-      await this.finalize(
-        sessionId,
-        state,
-        'failed',
-        toAgentErrorView({
-          code: 'host_error',
-          message: 'The turn failed unexpectedly.',
-          retryable: false,
-          origin: 'host',
-          ...(error instanceof Error ? { name: error.name } : {}),
-        }),
-      ).catch(() => undefined);
+      try {
+        await this.finalize(
+          sessionId,
+          state,
+          'failed',
+          toAgentErrorView({
+            code: 'host_error',
+            message: 'The turn failed unexpectedly.',
+            retryable: false,
+            origin: 'host',
+            ...(error instanceof Error ? { name: error.name } : {}),
+          }),
+        );
+      } catch (finalizeError) {
+        this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
+      }
     }
   }
 
@@ -865,7 +955,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // Invariant 5: the terminal message state (including the turn-level error)
     // commits before the terminal events publish. The terminal turn view is a
     // projection of that committed message.
-    const finalized = await this.store.finalizeAssistantMessage({
+    const finalized = await this.persistTerminalState({
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
@@ -926,9 +1016,52 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
   }
 
+  private async persistTerminalState(
+    input: Parameters<AgentSessionStore['finalizeAssistantMessage']>[0],
+  ): Promise<AgentMessageView> {
+    let lastFailure: unknown;
+    for (const delayMs of TERMINAL_PERSISTENCE_RETRY_DELAYS_MS) {
+      if (delayMs > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      }
+      try {
+        return await this.store.finalizeAssistantMessage(input);
+      } catch (error) {
+        lastFailure = error;
+      }
+    }
+    throw new TerminalPersistenceError(lastFailure);
+  }
+
+  private handleTerminalPersistenceFailure(
+    sessionId: string,
+    state: ActiveTurnState,
+    error: unknown,
+  ): void {
+    // There is no valid volatile terminal projection without its durable row.
+    // Fail the entire Host generation closed and retain the active turn; the
+    // next generation's startup reconciliation will mark the placeholder
+    // interrupted once persistence is available again.
+    this.acceptingSubmissions = false;
+    const failure = error instanceof TerminalPersistenceError ? error.failure : error;
+    logger.error(
+      'Agent Host entered a fatal state after terminal persistence failed',
+      failure as Error,
+      {
+        assistantMessageId: state.assistantMessage.id,
+        sessionId,
+        turnId: state.turn.id,
+      },
+    );
+  }
+
   // ── Helpers ──
 
-  private async resolveManagedInput(parts: AgentInputPart[], history: AgentMessageView[]) {
+  private async resolveManagedInput(
+    parts: AgentInputPart[],
+    history: AgentMessageView[],
+    signal: AbortSignal,
+  ) {
     const fileEntryIds = parts.flatMap((part) => {
       if (part.type !== 'file') {
         return [];
@@ -952,11 +1085,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     let availableFiles: Awaited<ReturnType<ManagedFileResolver['resolveAvailable']>> = new Map();
     if (fileEntryIds.length > 0 || historicalFileEntryIds.length > 0) {
       try {
-        availableFiles = await this.files.resolveAvailable([
-          ...fileEntryIds,
-          ...historicalFileEntryIds,
-        ]);
+        availableFiles = await raceAbort(
+          this.files.resolveAvailable([...fileEntryIds, ...historicalFileEntryIds]),
+          signal,
+        );
       } catch {
+        signal.throwIfAborted();
         fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.');
       }
     }
@@ -996,10 +1130,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private async preflightModel(
     runtime: AgentRuntime,
     agent: AgentDefinition,
+    signal: AbortSignal,
   ): Promise<RuntimeModelPreflight> {
     try {
-      return await runtime.preflightModel(agent.model);
+      return await raceAbort(runtime.preflightModel(agent.model), signal);
     } catch {
+      signal.throwIfAborted();
       fail(
         'CAPABILITY_UNSUPPORTED',
         'The selected model or provider endpoint cannot execute this turn.',
@@ -1071,6 +1207,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     input: AgentInputPart[],
     history: AgentMessageView[],
     resources: TurnResourceLedger,
+    signal: AbortSignal,
   ): Promise<RuntimeAttachmentContents> {
     const currentFileEntryIds = input.flatMap((part) =>
       part.type === 'file' ? [part.fileEntryId] : [],
@@ -1092,9 +1229,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         currentFileEntryIds,
         historicalFileEntryIds,
         readBytes: (file, signal) => this.files.readAsBytes(file, signal),
-        signal: new AbortController().signal,
+        signal,
       });
     } catch (error) {
+      signal.throwIfAborted();
       if (error instanceof TextAttachmentError) {
         fail(
           error.failure === 'unavailable' ? 'ATTACHMENT_UNAVAILABLE' : 'ATTACHMENT_INVALID',
@@ -1142,6 +1280,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private assertIdle(sessionId: string): void {
+    if (!this.acceptingSubmissions) {
+      fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
+    }
     if (this.deletingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session is being deleted.');
     }
@@ -1194,17 +1335,33 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private async getRuntimeSession(
     sessionId: string,
     runtime: AgentRuntime,
+    signal: AbortSignal,
   ): Promise<AgentRuntimeSession> {
+    signal.throwIfAborted();
     const cached = this.runtimeSessions.get(sessionId);
     if (cached && cached.runtimeId === runtime.descriptor.id) {
       return cached.session;
     }
     if (cached) {
-      await cached.session.close();
+      this.runtimeSessions.delete(sessionId);
+      await raceAbort(cached.session.close(), signal);
     }
-    const session = await runtime.open();
-    this.runtimeSessions.set(sessionId, { runtimeId: runtime.descriptor.id, session });
-    return session;
+    const opening = runtime.open();
+    try {
+      const session = await raceAbort(opening, signal);
+      signal.throwIfAborted();
+      this.runtimeSessions.set(sessionId, { runtimeId: runtime.descriptor.id, session });
+      return session;
+    } catch (error) {
+      if (signal.aborted) {
+        void opening
+          .then((session) => session.close())
+          .catch((closeError: unknown) =>
+            logger.warn('Failed to close an aborted runtime session open', closeError as Error),
+          );
+      }
+      throw error;
+    }
   }
 
   private publish(sessionId: string, event: AgentEvent): void {

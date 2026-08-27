@@ -21,5 +21,8 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   the current Agent composer and is snapshotted into each submission; it never updates Agent
   configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
   the selected model's default.
-- Web search, tool mentions, follow-up queues, and steering are not part of the Version 1 Agent
-  Session composer.
+- The composer menu owns temporary capabilities. Web search adds `web-search` to the next
+  submission; the create-image mention adds `image-generation`. Neither mutates Agent
+  configuration. A successful send clears the web selection and the sent draft; failed submission
+  preserves both for retry.
+- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
