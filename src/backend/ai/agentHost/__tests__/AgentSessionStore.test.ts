@@ -29,6 +29,8 @@ const INTERRUPTED: AgentErrorView = {
 };
 
 const MODEL_ID = 'mock-provider::mock-model' as const;
+const INPUT_FILE_ID = '00000000-0000-7000-8000-000000000001';
+const ARTIFACT_FILE_ID = '00000000-0000-7000-8000-000000000002';
 const INFERENCE_SNAPSHOT: AgentInferenceSnapshotV1 = {
   version: 1,
   model: {
@@ -305,6 +307,68 @@ describe.each([
     expect(transcript[0]?.turnId).toBe(transcript[1]?.turnId);
     expect(transcript[2]?.turnId).toBe(transcript[3]?.turnId);
     expect(transcript[0]?.turnId).not.toBe(transcript[2]?.turnId);
+  });
+
+  test('loads a checkpoint tail separately from full-transcript authorization indexes', async () => {
+    const session = await store.createSession({ agentId });
+    const first = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [
+        {
+          fileEntryId: INPUT_FILE_ID,
+          id: 'input-0',
+          mediaType: 'image/png',
+          name: 'input.png',
+          purpose: 'input-attachment',
+          type: 'file',
+        },
+      ],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      status: 'success',
+      parts: [
+        {
+          fileEntryId: ARTIFACT_FILE_ID,
+          id: 'artifact-0',
+          mediaType: 'text/plain',
+          name: 'result.txt',
+          purpose: 'artifact',
+          type: 'file',
+        },
+      ],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+    });
+    const second = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: second.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+    });
+
+    const tail = await store.loadRuntimeTurnContext(session.id, first.turnId);
+
+    expect(tail).toMatchObject({
+      anchorFound: true,
+      hasMessages: true,
+      referencedFileEntryIds: expect.arrayContaining([INPUT_FILE_ID, ARTIFACT_FILE_ID]),
+      sessionTurnIds: expect.arrayContaining([first.turnId, second.turnId]),
+    });
+    expect(tail.history.map((message) => message.turnId)).toEqual([second.turnId, second.turnId]);
+
+    const missingAnchor = await store.loadRuntimeTurnContext(session.id, 'missing-turn');
+    expect(missingAnchor.anchorFound).toBe(false);
+    expect(missingAnchor.history).toHaveLength(4);
   });
 
   test('stores a checkpoint on the assistant terminal write and reads the newest candidate', async () => {

@@ -962,6 +962,41 @@ describe('MobileAgentHost', () => {
     expect(host.isDestroyed).toBe(true);
   });
 
+  test('aborts an in-flight submission admission before stopping', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(fake);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const getSession = store.getSession.bind(store);
+    jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
+      admissionStarted.resolve();
+      await releaseAdmission.promise;
+      return getSession(sessionId);
+    });
+
+    const submission = host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Stop before admission completes.' }],
+    });
+    await admissionStarted.promise;
+
+    await host._doStop();
+
+    await expect(submission).rejects.toThrow('The Agent Host is stopping.');
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Do not admit after stop.' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
+    releaseAdmission.resolve();
+  });
+
   test('updates an active background reply when its Session is renamed', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
@@ -1491,6 +1526,56 @@ describe('MobileAgentHost', () => {
         },
       ]),
     );
+  });
+
+  test('retries the same terminal outcome when persistence fails transiently', async () => {
+    const events: AgentEvent[] = [];
+    const host = hostWithText(['Recovered']);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await host.observeSession(session.id, (event) => events.push(event));
+    const finalize = jest
+      .spyOn(store, 'finalizeAssistantMessage')
+      .mockRejectedValueOnce(new Error('database busy'))
+      .mockRejectedValueOnce(new Error('database busy'));
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Retry the terminal write.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the retried turn to settle');
+
+    expect(finalize).toHaveBeenCalledTimes(3);
+    expect(finalize.mock.calls.map(([input]) => input.status)).toEqual([
+      'success',
+      'success',
+      'success',
+    ]);
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+    expect((await store.listMessages(session.id))[1]?.status).toBe('success');
+  });
+
+  test('does not reserve transcript rows when the Runtime session cannot open', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    jest.spyOn(runtime, 'open').mockRejectedValueOnce(new Error('runtime unavailable'));
+    const reserve = jest.spyOn(store, 'reserveSubmission');
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Do not persist this.' }],
+      }),
+    ).rejects.toThrow('runtime unavailable');
+
+    expect(reserve).not.toHaveBeenCalled();
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
   test('rejects unsupported models and endpoints before reserving image messages', async () => {

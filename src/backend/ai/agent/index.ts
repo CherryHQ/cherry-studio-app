@@ -38,6 +38,7 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export { FakeRuntime } from './FakeRuntime';
+export { raceAbort, settleWithin } from './raceAbort';
 export {
   createDeniedToolResult,
   createErrorToolResult,

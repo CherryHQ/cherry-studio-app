@@ -116,6 +116,19 @@ describe('AgentSessionChatClient', () => {
     });
   });
 
+  test('invalidates the durable transcript after installing a fresh observation snapshot', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+
+    await client.observe('session-1');
+
+    expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
+  });
+
   test('cancels the active turn with the correlated session and turn ids', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;
     const protocol = protocolWithObservation(async (_sessionId, nextListener) => {

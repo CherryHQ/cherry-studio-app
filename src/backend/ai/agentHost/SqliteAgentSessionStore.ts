@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, or, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -167,6 +167,81 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .where(eq(agentSessionMessageTable.sessionId, sessionId))
       .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
     return rows.map(toAgentMessageView);
+  }
+
+  async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
+    const db = this.dbService.getDb();
+    const [anchor] =
+      afterTurnId === null
+        ? []
+        : await db
+            .select({
+              createdAt: agentSessionMessageTable.createdAt,
+              id: agentSessionMessageTable.id,
+            })
+            .from(agentSessionMessageTable)
+            .where(
+              and(
+                eq(agentSessionMessageTable.sessionId, sessionId),
+                eq(agentSessionMessageTable.turnId, afterTurnId),
+              ),
+            )
+            .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+            .limit(1);
+    const anchorFound = afterTurnId === null || anchor !== undefined;
+    const historyCondition =
+      anchorFound && anchor
+        ? and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            or(
+              gt(agentSessionMessageTable.createdAt, anchor.createdAt),
+              and(
+                eq(agentSessionMessageTable.createdAt, anchor.createdAt),
+                gt(agentSessionMessageTable.id, anchor.id),
+              ),
+            ),
+          )
+        : eq(agentSessionMessageTable.sessionId, sessionId);
+
+    const [historyRows, messageRows, turnRows, fileRows] = await Promise.all([
+      db
+        .select()
+        .from(agentSessionMessageTable)
+        .where(historyCondition)
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id),
+      db
+        .select({ id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, sessionId))
+        .limit(1),
+      db
+        .select({ turnId: agentSessionMessageTable.turnId })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            isNotNull(agentSessionMessageTable.turnId),
+          ),
+        )
+        .groupBy(agentSessionMessageTable.turnId),
+      db.all<{ fileEntryId: string | null }>(sql`
+        SELECT DISTINCT json_extract(part.value, '$.fileEntryId') AS "fileEntryId"
+        FROM agent_session_message AS message,
+             json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId}
+          AND json_extract(part.value, '$.type') = 'file'
+      `),
+    ]);
+
+    return {
+      anchorFound,
+      hasMessages: messageRows.length > 0,
+      history: historyRows.map(toAgentMessageView),
+      referencedFileEntryIds: fileRows
+        .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
+        .sort(),
+      sessionTurnIds: turnRows.flatMap(({ turnId }) => (turnId === null ? [] : [turnId])).sort(),
+    };
   }
 
   async getLatestContextCheckpoint(sessionId: string) {

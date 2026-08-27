@@ -4,7 +4,6 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
 } from '@/backend/services/file/fileStorage';
-import type { AgentMessageView } from '@/shared/contracts/agent';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -16,7 +15,7 @@ export type ManagedFileFact = {
 };
 
 export type TurnResourceLedger = {
-  /** Managed ids explicitly referenced by the current input or visible history. */
+  /** Managed ids explicitly referenced by the current input or Session transcript. */
   fileEntryIds: ReadonlySet<string>;
   /** Current input facts validated before the message reservation. */
   inputFiles: ReadonlyMap<string, ManagedFileFact>;
@@ -115,20 +114,15 @@ export function createManagedFileResolver(
 
 export function createTurnResourceLedger(
   inputFiles: ReadonlyMap<string, ManagedFileFact>,
-  history: readonly AgentMessageView[],
+  authorizedFileEntryIds: readonly string[],
   availableFiles: ReadonlyMap<string, ManagedFileFact> = inputFiles,
 ): TurnResourceLedger {
   const fileEntryIds = new Set<string>(inputFiles.keys());
 
-  for (const message of history) {
-    for (const part of message.parts) {
-      if (part.type !== 'file') {
-        continue;
-      }
-      const parsed = FileEntryIdSchema.safeParse(part.fileEntryId);
-      if (parsed.success) {
-        fileEntryIds.add(parsed.data);
-      }
+  for (const fileEntryId of authorizedFileEntryIds) {
+    const parsed = FileEntryIdSchema.safeParse(fileEntryId);
+    if (parsed.success) {
+      fileEntryIds.add(parsed.data);
     }
   }
 

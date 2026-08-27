@@ -169,6 +169,41 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
   }
 
+  async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
+    const transcript = this.messages.get(sessionId) ?? [];
+    let anchorIndex = -1;
+    if (afterTurnId !== null) {
+      for (let index = transcript.length - 1; index >= 0; index -= 1) {
+        if (transcript[index]?.view.turnId === afterTurnId) {
+          anchorIndex = index;
+          break;
+        }
+      }
+    }
+    const anchorFound = afterTurnId === null || anchorIndex >= 0;
+    const history = (
+      anchorFound && afterTurnId !== null ? transcript.slice(anchorIndex + 1) : transcript
+    ).map((stored) => stored.view);
+    const referencedFileEntryIds = [
+      ...new Set(
+        transcript.flatMap(({ view }) =>
+          view.parts.flatMap((part) => (part.type === 'file' ? [part.fileEntryId] : [])),
+        ),
+      ),
+    ].sort();
+    const sessionTurnIds = [
+      ...new Set(transcript.flatMap(({ view }) => (view.turnId === null ? [] : [view.turnId]))),
+    ].sort();
+
+    return cloneJson({
+      anchorFound,
+      hasMessages: transcript.length > 0,
+      history,
+      referencedFileEntryIds,
+      sessionTurnIds,
+    });
+  }
+
   async getLatestContextCheckpoint(sessionId: string) {
     const transcript = this.messages.get(sessionId) ?? [];
     for (let index = transcript.length - 1; index >= 0; index -= 1) {
