@@ -25,6 +25,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type FileEntry, type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
 import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
+import type { TurnFileScope } from '../../managedFileResolver';
 import { type GenerateImageToolInput, limitGenerateImageInputIds } from './generateImageSchema';
 
 const logger = loggerService.withContext('GenerateImageTool');
@@ -51,6 +52,8 @@ export const PAINTING_GENERATE_NOT_SUPPORTED_NOTE =
   "The configured drawing model can't generate a new image without input images. Ask for image references or tell the user to choose a generation-capable drawing model.";
 export const PAINTING_INPUT_IMAGE_ERROR_NOTE =
   'One or more image references could not be read as images. Ask the user for valid generated-image file entry ids.';
+export const PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE =
+  'One or more image references are not part of this conversation. Only file entry ids visible in this session may be used; ask the user to attach the image instead.';
 
 export type ConfiguredPaintingModel = {
   support: ImageGenerationSupport | null;
@@ -98,7 +101,8 @@ export async function generateImageFromPrompt(
   dependencies: PaintingToolDependencies,
   input: GenerateImageToolInput,
   signal: AbortSignal,
-  configuredModel: ConfiguredPaintingModel | null = null,
+  configuredModel: ConfiguredPaintingModel | null,
+  turnFiles: TurnFileScope,
 ): Promise<PaintingResult> {
   throwIfAborted(signal);
   const resolvedModel = configuredModel ?? (await resolveConfiguredPaintingModel(dependencies));
@@ -120,6 +124,12 @@ export async function generateImageFromPrompt(
 
   let inputImages: string[] | undefined;
   if (mode === 'edit') {
+    // The turn ledger is the authority for what this conversation may read. A
+    // valid-looking id from anywhere else (another session, the wider library)
+    // proves existence, not authorization.
+    if ((input.image_ids ?? []).some((id) => !turnFiles.fileEntryIds.has(id))) {
+      return { error: PAINTING_INPUT_IMAGE_NOT_IN_TURN_NOTE };
+    }
     try {
       inputImages = await resolveInputImages(dependencies, input.image_ids ?? []);
     } catch (error) {

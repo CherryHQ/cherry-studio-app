@@ -83,6 +83,7 @@ export async function bindPiStream(
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
       maxTokens: options?.maxTokens ?? binding.maxTokens,
+      signal: options?.signal,
       temperature: options?.temperature ?? binding.temperature,
       timeoutMs: binding.timeoutMs,
     });

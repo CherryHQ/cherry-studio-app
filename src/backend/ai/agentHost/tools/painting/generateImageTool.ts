@@ -3,6 +3,7 @@ import * as z from 'zod';
 
 import type { RuntimeTool } from '@/backend/ai/agent';
 
+import type { TurnFileScope } from '../../managedFileResolver';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import {
   type ConfiguredPaintingModel,
@@ -24,6 +25,7 @@ export { GENERATE_IMAGE_TOOL_NAME };
 export function createGenerateImageTool(
   dependencies: PaintingToolDependencies,
   configuredModel: ConfiguredPaintingModel | null,
+  turnFiles: TurnFileScope,
 ): RuntimeTool {
   const inputSchema = buildGenerateImageToolSchema(configuredModel?.support);
 
@@ -36,7 +38,7 @@ export function createGenerateImageTool(
     // Generation spends the user's provider quota, so it asks unless an Agent
     // binding says otherwise (agent-tools-and-resources.md, Image Generation).
     approval: 'ask',
-    async execute(input, context) {
+    async execute({ input, signal }) {
       const parsed = inputSchema.safeParse(input);
       if (!parsed.success) {
         return {
@@ -52,8 +54,9 @@ export function createGenerateImageTool(
       const result = await generateImageFromPrompt(
         dependencies,
         parsed.data as GenerateImageToolInput,
-        context.signal,
+        signal,
         configuredModel,
+        turnFiles,
       );
       if (isPaintingError(result)) {
         return {

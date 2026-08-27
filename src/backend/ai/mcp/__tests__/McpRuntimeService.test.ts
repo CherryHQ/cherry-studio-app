@@ -285,6 +285,8 @@ describe('Runtime tool adapter', () => {
       {
         description: 'Search issues',
         displayName: 'Issue Search',
+        endpointUrl: server.endpointUrl,
+        generation: expect.any(Number),
         inputSchema: {
           properties: { query: { minLength: 1, type: 'string' } },
           required: ['query'],
@@ -330,7 +332,11 @@ describe('Runtime tool adapter', () => {
     const controller = new AbortController();
 
     await expect(
-      tool!.execute({ query: 'cherry' }, { signal: controller.signal, toolCallId: 'call-1' }),
+      tool!.execute({
+        input: { query: 'cherry' },
+        signal: controller.signal,
+        toolCallId: 'call-1',
+      }),
     ).resolves.toEqual({
       artifacts: [],
       value: {
@@ -348,6 +354,7 @@ describe('Runtime tool adapter', () => {
   it.each([
     { disabledTools: ['search'] },
     { isEnabled: false },
+    { endpointUrl: 'https://b.example/mcp' },
     { endpointUrl: 'ftp://private.example/mcp' },
   ])('refuses execution after the server policy changes', async (serverPatch) => {
     const client = makeClient(makeRawTools(['search']));
@@ -359,12 +366,35 @@ describe('Runtime tool adapter', () => {
     Object.assign(server, serverPatch);
 
     await expect(
-      tool!.execute(
-        { query: 'cherry' },
-        { signal: new AbortController().signal, toolCallId: 'call-1' },
-      ),
+      tool!.execute({
+        input: { query: 'cherry' },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
     expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it('does not revive a frozen tool after the same endpoint is rediscovered', async () => {
+    const firstClient = makeClient(makeRawTools(['search']));
+    const secondClient = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValueOnce(firstClient).mockResolvedValue(secondClient);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const [frozenTool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+
+    service.invalidateServer(server.id);
+    await service.listExecutableToolDescriptors(server.id);
+
+    await expect(
+      frozenTool!.execute({
+        input: { query: 'cherry' },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(secondClient.callTool).not.toHaveBeenCalled();
   });
 });
 

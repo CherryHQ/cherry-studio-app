@@ -159,6 +159,7 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
 @Injectable('McpRuntimeService')
 @ServicePhase(Phase.PostReady)
 export class McpRuntimeService extends BaseService implements McpModule {
+  private nextGeneration = 0;
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
 
@@ -210,11 +211,19 @@ export class McpRuntimeService extends BaseService implements McpModule {
       );
     }
     const disabledTools = new Set(server.disabledTools);
+    const state = this.runtimeStates.get(server.id);
+    if (!state) {
+      throw unavailableToolError();
+    }
     return definitions
       .filter((tool) => !disabledTools.has(tool.name))
       .map((tool) => ({
         description: tool.description ?? '',
         displayName: tool.title ?? tool.annotations?.title ?? tool.name,
+        // Pin the catalog to both its endpoint and live connection generation;
+        // edits, invalidation, or reconnects cannot retarget a frozen tool.
+        endpointUrl: server.endpointUrl,
+        generation: state.generation,
         inputSchema: prepareMcpInputSchema(tool.inputSchema),
         rawToolName: tool.name,
         serverId: server.id,
@@ -224,7 +233,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Adapt an already selected catalog without reading Agent bindings or injecting the Host. */
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[] {
     return createMcpRuntimeTools(selections, {
-      invoke: (ref, input, signal) => this.invokeTool(ref, input, signal),
+      invoke: (ref, input, signal, discoveredEndpointUrl, discoveredGeneration) =>
+        this.invokeTool(ref, input, signal, discoveredEndpointUrl, discoveredGeneration),
     });
   }
 
@@ -275,7 +285,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
       return current;
     }
 
-    const generation = current ? current.generation + 1 : 0;
     if (current) {
       this.retireState(current);
     }
@@ -284,7 +293,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       abort: new AbortController(),
       discoveredToolNames: new Set(),
       endpointUrl: server.endpointUrl,
-      generation,
+      generation: this.allocateGeneration(),
       serverId: server.id,
     };
     this.runtimeStates.set(server.id, state);
@@ -398,7 +407,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       return;
     }
 
-    state.generation += 1;
+    state.generation = this.allocateGeneration();
     state.abort.abort();
     state.abort = new AbortController();
     state.connectionPromise = undefined;
@@ -412,7 +421,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (this.runtimeStates.get(state.serverId) === state) {
       this.runtimeStates.delete(state.serverId);
     }
-    state.generation += 1;
+    state.generation = this.allocateGeneration();
     state.abort.abort();
     state.connectionPromise = undefined;
     if (state.client) {
@@ -425,10 +434,18 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return this.runtimeStates.get(state.serverId) === state && state.generation === generation;
   }
 
+  private allocateGeneration(): number {
+    const generation = this.nextGeneration;
+    this.nextGeneration += 1;
+    return generation;
+  }
+
   private async invokeTool(
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
+    discoveredEndpointUrl: string,
+    discoveredGeneration: number,
   ): Promise<unknown> {
     if (input === null || Array.isArray(input) || typeof input !== 'object') {
       throw new McpRuntimeToolError(
@@ -451,11 +468,17 @@ export class McpRuntimeService extends BaseService implements McpModule {
     ) {
       throw unavailableToolError();
     }
+    // An endpoint edit retargets the server row, but never a frozen catalog:
+    // the tool the user saw and approved fails unavailable instead.
+    if (server.endpointUrl !== discoveredEndpointUrl) {
+      throw unavailableToolError();
+    }
 
     const state = this.runtimeStates.get(server.id);
     if (
       !state ||
       state.endpointUrl !== server.endpointUrl ||
+      state.generation !== discoveredGeneration ||
       !state.discoveredToolNames.has(ref.rawToolName)
     ) {
       throw unavailableToolError();

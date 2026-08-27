@@ -5,6 +5,7 @@ import { createManagedFileResolver, createTurnResourceLedger } from '../managedF
 
 const AVAILABLE_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
 const MISSING_BLOB_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000002');
+const GENERATED_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000003');
 
 describe('managedFileResolver', () => {
   test('returns authoritative facts only when both the live row and managed blob exist', async () => {
@@ -115,8 +116,9 @@ describe('managedFileResolver', () => {
     ]);
 
     const ledger = createTurnResourceLedger(inputFiles, history);
+    ledger.grantFile(GENERATED_ID);
 
-    expect([...ledger.fileEntryIds]).toEqual([AVAILABLE_ID, MISSING_BLOB_ID]);
+    expect([...ledger.fileEntryIds]).toEqual([AVAILABLE_ID, MISSING_BLOB_ID, GENERATED_ID]);
     expect(ledger.inputFiles).toBe(inputFiles);
   });
 });

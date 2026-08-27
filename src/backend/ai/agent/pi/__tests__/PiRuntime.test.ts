@@ -26,6 +26,7 @@ import {
 import { PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX, toPiConversation } from '../modelMessages';
 import {
   DEFAULT_PI_RUNTIME_LIMITS,
+  PI_TURN_SETTLE_GRACE_MS,
   PiRuntime,
   type PiModelResolution,
   type PiRuntimeAgent,
@@ -431,6 +432,7 @@ const harness: RuntimeConformanceHarness = {
   sourceFiles: [
     path.resolve(__dirname, '../../types.ts'),
     path.resolve(__dirname, '../../RuntimeEventChannel.ts'),
+    path.resolve(__dirname, '../../raceAbort.ts'),
     path.resolve(__dirname, '../../toolResults.ts'),
     path.resolve(__dirname, '../PiRuntime.ts'),
     path.resolve(__dirname, '../contextCompaction.ts'),
@@ -1141,9 +1143,53 @@ describe('PiRuntime mapping', () => {
       systemPrompt: 'Be helpful.\n\nPrior system note.',
       thinkingLevel: 'high',
     });
-    expect(holder.lastOptions?.streamFn).toBe(holder.resolution.streamFn);
+    expect(holder.lastOptions?.streamFn).not.toBe(holder.resolution.streamFn);
     expect(holder.lastOptions?.getApiKey).toBeUndefined();
     await session.close();
+  });
+
+  test('propagates cancellation into provider streams and bounds a stuck Pi loop', async () => {
+    jest.useFakeTimers();
+    try {
+      const runtime = createTestRuntime();
+      const holder = holders.get(runtime);
+      if (!holder) throw new Error('missing Runtime holder');
+      let providerSignal: AbortSignal | undefined;
+      const providerStream: PiModelResolution['streamFn'] = (_model, _context, options) => {
+        providerSignal = options?.signal;
+        return undefined as never;
+      };
+      holder.resolution = { ...holder.resolution, streamFn: providerStream };
+      let markStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        markStarted = resolve;
+      });
+      arrange(runtime, () => {
+        markStarted();
+        return new Promise<void>(() => undefined);
+      });
+      const session = await runtime.open();
+      const eventsPromise = collect(session.execute(baseRequest('turn-stuck-cancel')));
+      await started;
+      const upstream = new AbortController();
+      const streamFn = holder.lastOptions?.streamFn;
+      if (!streamFn) throw new Error('Pi stream function was not installed.');
+
+      streamFn(holder.resolution.model, undefined as never, { signal: upstream.signal } as never);
+      expect(providerSignal?.aborted).toBe(false);
+
+      const cancelling = session.cancel('turn-stuck-cancel');
+      const events = await eventsPromise;
+
+      expect(events.at(-1)).toEqual({ type: 'cancelled' });
+      expect(providerSignal?.aborted).toBe(true);
+      await jest.advanceTimersByTimeAsync(PI_TURN_SETTLE_GRACE_MS);
+      await cancelling;
+      await session.close();
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   test('rejects tools for a model without native tool calling before starting Pi', async () => {
@@ -1335,6 +1381,55 @@ describe('PiRuntime mapping', () => {
       ]),
     );
     expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
+  test('does not publish a second approval when a provider reuses a pending call id', async () => {
+    const runtime = createTestRuntime();
+    let executionCount = 0;
+    let duplicateResult: unknown;
+    const tool = askTool(() => {
+      executionCount += 1;
+    });
+    arrange(runtime, async (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Duplicate approval program requires one tool.');
+      const first = piTool.execute('duplicate-call', { fileEntryId: 'file-1' }, context.signal);
+      duplicateResult = (
+        await piTool.execute('duplicate-call', { fileEntryId: 'file-2' }, context.signal)
+      ).details;
+      await first;
+      await emitText(context, 'Duplicate handled.');
+    });
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    const collecting = (async () => {
+      for await (const event of session.execute(
+        baseRequest('turn-duplicate-approval', { tools: [tool] }),
+      )) {
+        events.push(event);
+      }
+    })();
+    await waitFor(
+      () => events.some((event) => event.type === 'approval.requested'),
+      'the first approval request',
+    );
+
+    await session.respondApproval({
+      approvalId: 'approval-duplicate-call',
+      decision: 'deny',
+      turnId: 'turn-duplicate-approval',
+    });
+    await collecting;
+
+    expect(events.filter((event) => event.type === 'approval.requested')).toHaveLength(1);
+    expect(duplicateResult).toMatchObject({
+      value: {
+        status: 'error',
+        error: { code: 'duplicate_tool_call_id', retryable: false },
+      },
+    });
+    expect(executionCount).toBe(0);
     await session.close();
   });
 
@@ -1564,10 +1659,10 @@ describe('PiRuntime mapping', () => {
       maxToolSteps: 8,
       turnTimeoutMs: 5,
     });
-    arrange(runtime, async (context) => {
-      await new Promise<void>((resolve) => {
-        context.signal.addEventListener('abort', () => resolve(), { once: true });
-      });
+    let agentSignal: AbortSignal | undefined;
+    arrange(runtime, (context) => {
+      agentSignal = context.signal;
+      return new Promise<void>(() => undefined);
     });
     const session = await runtime.open();
 
@@ -1579,6 +1674,7 @@ describe('PiRuntime mapping', () => {
         error: { code: 'turn_timeout', message: 'The Agent turn timed out.', retryable: true },
       },
     ]);
+    expect(agentSignal?.aborted).toBe(true);
     await session.close();
   });
 });

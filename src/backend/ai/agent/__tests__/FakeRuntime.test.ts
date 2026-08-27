@@ -199,7 +199,8 @@ const harness: RuntimeConformanceHarness = {
             approvalId,
           },
         });
-        const output = await tool.execute(toolInput, {
+        const output = await tool.execute({
+          input: toolInput,
           signal: controller.signal,
           toolCallId,
         });

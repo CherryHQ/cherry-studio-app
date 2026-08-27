@@ -139,6 +139,12 @@ type RuntimeToolResult = {
   artifacts: RuntimeArtifact[]
 }
 
+type RuntimeToolCall = {
+  input: RuntimeJsonValue
+  signal: AbortSignal
+  toolCallId: string
+}
+
 type RuntimeExecutionRequest = {
   turnId: string
   instructions: string
@@ -296,10 +302,7 @@ type RuntimeTool = {
   description: string
   inputSchema: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
-  execute(
-    input: RuntimeJsonValue,
-    context: { signal: AbortSignal; toolCallId: string },
-  ): Promise<RuntimeToolResult>
+  execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
 }
 ```
 
@@ -475,16 +478,15 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 ## Host execution flow
 
 1. The Host validates that the Session is idle.
-2. It validates that the Session target is `local` and resolves the current Agent, public model
-    facts, input, and immutable tool catalog.
-3. It builds the versioned, credential-free inference snapshot from the same model, options, and
-    tools that will be sent to the Runtime.
-4. It atomically persists the user message and assistant placeholder with the selected model id and
-    inference snapshot.
-5. The Host uses its injected Pi Runtime, creates the turn resource ledger, loads the latest valid
-   context checkpoint, and normalizes instructions, model, grouped structured history after its
-   anchor, the immutable tool snapshot, input, and options. Invalid candidates fall back to the full
-   history.
+2. It validates that the Session target is `local`, resolves the current Agent, public model facts,
+   input and history, then creates the turn resource ledger.
+3. It freezes the immutable tool catalog against that ledger and builds the versioned,
+   credential-free inference snapshot from the same model, options, and tools sent to the Runtime.
+4. It preflights attachments, then atomically persists the user message and assistant placeholder
+   with the selected model id and inference snapshot.
+5. The Host uses its injected Pi Runtime, loads the latest valid context checkpoint, and normalizes
+   instructions, model, grouped structured history after its anchor, the immutable tool snapshot,
+   input, and options. Invalid candidates fall back to the full history.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.

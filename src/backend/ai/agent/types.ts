@@ -149,6 +149,17 @@ export type RuntimeContextCheckpoint = {
   payload: RuntimeJsonValue;
 };
 
+/**
+ * One tool invocation. A single object on purpose: a positional context
+ * parameter can be silently dropped by an implementation, while an ignored
+ * `signal` field stays visible at the destructuring site.
+ */
+export type RuntimeToolCall = {
+  input: RuntimeJsonValue;
+  signal: AbortSignal;
+  toolCallId: string;
+};
+
 export type RuntimeTool = {
   ref: RuntimeToolRef;
   providerName: string;
@@ -156,10 +167,7 @@ export type RuntimeTool = {
   description: string;
   inputSchema: RuntimeJsonValue;
   approval: 'auto' | 'ask' | 'deny';
-  execute(
-    input: RuntimeJsonValue,
-    context: { signal: AbortSignal; toolCallId: string },
-  ): Promise<RuntimeToolResult>;
+  execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 
 export type RuntimeExecutionRequest = {

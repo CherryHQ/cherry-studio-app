@@ -20,6 +20,8 @@ function descriptor(overrides: Partial<McpExecutableToolDescriptor> = {}) {
   return {
     description: 'Search the remote service',
     displayName: 'Search',
+    endpointUrl: 'https://mcp.example/mcp',
+    generation: 7,
     inputSchema: VALID_INPUT_SCHEMA,
     rawToolName: 'search',
     serverId: '00000000-0000-4000-8000-000000000001',
@@ -92,9 +94,32 @@ describe('MCP Runtime adapter', () => {
 
     const tool = createTool(capability);
     await expect(
-      tool.execute({ query: 42 }, { signal: new AbortController().signal, toolCallId: 'call-1' }),
+      tool.execute({
+        input: { query: 42 },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      }),
     ).rejects.toMatchObject({ code: 'mcp_tool_input_invalid', retryable: false });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('carries the frozen endpoint generation into invocation', async () => {
+    const invoke = jest.fn(async () => null);
+    const tool = createTool({ invoke });
+
+    await tool.execute({
+      input: { query: 'cherry' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+    });
+
+    expect(invoke).toHaveBeenCalledWith(
+      expect.objectContaining({ rawToolName: 'search', source: 'mcp' }),
+      { query: 'cherry' },
+      expect.any(AbortSignal),
+      'https://mcp.example/mcp',
+      7,
+    );
   });
 
   it('propagates cancellation and discards a late result', async () => {
@@ -117,10 +142,11 @@ describe('MCP Runtime adapter', () => {
     const tool = createTool(capability);
     const controller = new AbortController();
 
-    const execution = tool.execute(
-      { query: 'cherry' },
-      { signal: controller.signal, toolCallId: 'call-1' },
-    );
+    const execution = tool.execute({
+      input: { query: 'cherry' },
+      signal: controller.signal,
+      toolCallId: 'call-1',
+    });
     controller.abort();
 
     await expect(execution).rejects.toMatchObject({ code: 'mcp_tool_cancelled' });
@@ -135,10 +161,11 @@ describe('MCP Runtime adapter', () => {
       const capability = {
         invoke: jest.fn(() => new Promise(() => undefined)),
       } satisfies McpToolInvocationCapability;
-      const execution = createTool(capability).execute(
-        { query: 'cherry' },
-        { signal: new AbortController().signal, toolCallId: 'call-1' },
-      );
+      const execution = createTool(capability).execute({
+        input: { query: 'cherry' },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      });
 
       jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
       await expect(execution).rejects.toMatchObject({
@@ -161,7 +188,11 @@ describe('MCP Runtime adapter', () => {
     };
 
     const error = await createTool(capability)
-      .execute({ query: 'cherry' }, { signal: new AbortController().signal, toolCallId: 'call-1' })
+      .execute({
+        input: { query: 'cherry' },
+        signal: new AbortController().signal,
+        toolCallId: 'call-1',
+      })
       .catch((failure: unknown) => failure);
 
     expect(error).toMatchObject({
@@ -192,10 +223,11 @@ describe('MCP Runtime adapter', () => {
       const tool = createTool({ invoke: jest.fn(async () => remotePayload) });
 
       await expect(
-        tool.execute(
-          { query: 'cherry' },
-          { signal: new AbortController().signal, toolCallId: 'call-1' },
-        ),
+        tool.execute({
+          input: { query: 'cherry' },
+          signal: new AbortController().signal,
+          toolCallId: 'call-1',
+        }),
       ).resolves.toEqual({ artifacts: [], value: remotePayload });
     },
   );
@@ -206,10 +238,11 @@ describe('MCP Runtime adapter', () => {
       invoke: jest.fn(async () => ({ content: [{ data: binary, type: 'image' }] })),
     });
 
-    const output = await tool.execute(
-      { query: 'cherry' },
-      { signal: new AbortController().signal, toolCallId: 'call-1' },
-    );
+    const output = await tool.execute({
+      input: { query: 'cherry' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+    });
     const serialized = JSON.stringify(output);
 
     expect(output).toMatchObject({

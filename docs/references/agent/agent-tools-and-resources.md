@@ -8,8 +8,8 @@ The built-in catalog ships device calendar and reminders, health, location, web 
 image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's persisted built-in bindings, then combines it with
-persisted executable MCP bindings. Office generation and the turn resource ledger do not exist yet.
-Sections that a shipped tool still diverges from carry an **As-built** note.
+persisted executable MCP bindings. Office generation does not exist yet. Sections that a shipped
+tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -121,10 +121,10 @@ tool.
 
 Before admitting a turn, the Host resolves tools in this order:
 
-1. Read the current Agent's enabled built-in and MCP bindings.
-2. Project only capabilities implemented on the current mobile platform.
-3. Resolve configured MCP servers and their currently enabled tool descriptors.
-4. Create the turn resource ledger from controlled managed-file facts.
+1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
+2. Read the current Agent's enabled built-in and MCP bindings.
+3. Project only capabilities implemented on the current mobile platform.
+4. Resolve configured MCP servers and their currently enabled tool descriptors.
 5. Apply system permission state, model tool-calling support, and application policy.
 6. Freeze stable refs, provider-safe aliases, callbacks, and approval modes into `RuntimeTool[]` for
    the turn.
@@ -147,16 +147,17 @@ receives a [`file_entry`](../data/file-model.md) id. Protocol operations and fil
 that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
 import sources, never authority.
 
-**As-built.** There is no `TurnResourceLedger` yet. `write_file` needs none: it only creates
-entries and never reads one, so it has no input to authorize. `generate_image` does accept
-`image_ids`, and until the ledger exists it authorizes them only by resolving each id to an
-available managed image entry — it cannot yet tell a transcript-visible image from any other library
-entry. Closing that gap is the first job of the ledger.
+**As-built.** The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools
+receive only its membership view; `generate_image` rejects an `image_id` outside that view before
+touching the global managed-file service. A Host-owned catalog wrapper validates and grants every
+built-in artifact before returning the tool result to Pi, and Host event projection repeats the
+grant idempotently. `write_file` needs no read grant because it only creates entries.
 
 For Version 1, the Host derives the initial ledger grants from:
 
 - managed files attached to the current user input;
-- managed file parts already visible in the Session transcript whose entries remain available; and
+- valid managed-file refs already visible in the Session transcript (the read callback still
+  revalidates that the entry remains available); and
 - files created by earlier tools in the same active turn.
 
 The Host creates a `TurnResourceLedger` containing explicit readable and derivable `fileEntryId`
@@ -290,13 +291,15 @@ with its own approval policy.
 
 - Persistence retains desktop-compatible `stdio`, `sse`, `streamableHttp`, `inMemory`, and unknown
   transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
-- `McpRuntimeService` owns clients, discovery caches, connection disposal, credentials, and wire
+- `McpRuntimeService` owns clients, live discovery state, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
-- The Host freezes the discovered tools for the turn. A reconnect may refresh the next snapshot but
-  cannot silently replace the active catalog.
+- The Host freezes the discovered tools for the turn, including the endpoint URL and live Runtime
+  generation that produced them. An endpoint edit, invalidation, or reconnect makes an old callback
+  unavailable; rediscovery may populate the next snapshot but never silently retargets the active
+  catalog, even when the server row keeps the same URL.
 - Third-party MCP tools execute only with per-call `ask` approval in this version. An explicit
   `deny` remains denied, while any legacy `auto` row is downgraded to `ask` during projection.
 

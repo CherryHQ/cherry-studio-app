@@ -22,7 +22,20 @@ export type TurnResourceLedger = {
   inputFiles: ReadonlyMap<string, ManagedFileFact>;
   /** Current and historical facts whose row and managed blob passed preflight. */
   availableFiles: ReadonlyMap<string, ManagedFileFact>;
+  /**
+   * Monotonic Host-side grant: an artifact produced during this turn joins the
+   * ledger so the model may reference it later in the same turn. Only the Host
+   * or its catalog wrapper calls this with validated ids; tools never widen
+   * their own scope.
+   */
+  grantFile(fileEntryId: FileEntryId): void;
 };
+
+/** The slice of the turn ledger a tool may consult: membership, not content. */
+export type TurnFileScope = Pick<TurnResourceLedger, 'fileEntryIds'>;
+
+/** Host-owned catalog capability: tools can consult membership; the wrapper grants outputs. */
+export type TurnToolResources = Pick<TurnResourceLedger, 'fileEntryIds' | 'grantFile'>;
 
 /** Host-only managed-file boundary. It never exposes a device path to Pi. */
 export interface ManagedFileResolver {
@@ -119,7 +132,14 @@ export function createTurnResourceLedger(
     }
   }
 
-  return { availableFiles, fileEntryIds, inputFiles };
+  return {
+    availableFiles,
+    fileEntryIds,
+    inputFiles,
+    grantFile(fileEntryId) {
+      fileEntryIds.add(fileEntryId);
+    },
+  };
 }
 
 function throwIfAborted(signal: AbortSignal): void {

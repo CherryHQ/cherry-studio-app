@@ -88,6 +88,21 @@ describe('service registry', () => {
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
   });
 
+  test('stops MobileAgentHost before retiring tool Runtime state', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.PostReady),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+
+    // Initialization is dependency-first; teardown reverses these layers.
+    expect(layerOf('McpRuntimeService')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('McpRuntimeService')).toBeLessThan(layerOf('MobileAgentHost'));
+    expect(layerOf('WebSearchService')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('WebSearchService')).toBeLessThan(layerOf('MobileAgentHost'));
+  });
+
   test('declares the background policy of long-running and native-surface owners', () => {
     expect(getAppStatePolicy(services.JobRuntime)).toBe('continue');
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');

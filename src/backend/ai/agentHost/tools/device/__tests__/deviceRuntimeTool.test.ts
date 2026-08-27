@@ -77,7 +77,7 @@ describe('createDeviceRuntimeTool', () => {
     });
 
     await expect(
-      tool.execute({ id: 'event-1' }, { signal: controller.signal, toolCallId: 'call-1' }),
+      tool.execute({ input: { id: 'event-1' }, signal: controller.signal, toolCallId: 'call-1' }),
     ).rejects.toThrow();
   });
 
@@ -88,7 +88,7 @@ describe('createDeviceRuntimeTool', () => {
     const tool = build({ run });
 
     await expect(
-      tool.execute({ id: 'event-1' }, { signal: controller.signal, toolCallId: 'call-1' }),
+      tool.execute({ input: { id: 'event-1' }, signal: controller.signal, toolCallId: 'call-1' }),
     ).rejects.toThrow();
     expect(run).not.toHaveBeenCalled();
   });
@@ -117,5 +117,5 @@ function execute(
   tool: ReturnType<typeof build>,
   input: RuntimeJsonValue,
 ): Promise<RuntimeToolResult> {
-  return tool.execute(input, { signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
 }

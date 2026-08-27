@@ -14,6 +14,7 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
+import { raceAbort, settleWithin } from '../raceAbort';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
 import {
   createDeniedToolResult,
@@ -113,6 +114,19 @@ const TURN_TIMEOUT_ERROR: RuntimeError = {
   message: 'The Agent turn timed out.',
   retryable: true,
 };
+const DUPLICATE_TOOL_CALL_ERROR: RuntimeError = {
+  code: 'duplicate_tool_call_id',
+  message: 'The provider reused a tool call id while its approval was pending.',
+  retryable: false,
+};
+
+/**
+ * After `cancel()`/`close()` abort a turn, the underlying pi loop gets this
+ * long to unwind before the Runtime settles the terminal outcome itself. The
+ * loop's late settlement is then discarded by the terminal fence in `emit()`.
+ * Keep it well below the Host's five-second service teardown ceiling.
+ */
+export const PI_TURN_SETTLE_GRACE_MS = 1_000;
 
 const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
@@ -446,7 +460,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     turn.abortController.abort();
     turn.agent?.abort();
     this.rejectApprovals(turn, new Error('The turn was cancelled.'));
-    await turn.agent?.waitForIdle().catch(() => undefined);
+    await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
     this.emit(turn, { type: 'cancelled' });
   }
 
@@ -472,7 +486,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.abortController.abort();
       turn.agent?.abort();
       this.rejectApprovals(turn, new Error('The session was closed.'));
-      await turn.agent?.waitForIdle().catch(() => undefined);
+      await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
       this.emit(turn, { type: 'cancelled' });
     }
     this.activeTurn = undefined;
@@ -482,7 +496,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
     let unsubscribe: (() => void) | undefined;
     let secrets: readonly string[] = [];
     try {
-      const resolution = await this.dependencies.resolveModel(request.model, request.options);
+      const resolution = await raceAbort(
+        this.dependencies.resolveModel(request.model, request.options),
+        turn.abortController.signal,
+      );
       secrets = sensitiveValues(resolution);
       turn.usageContext = resolution.usageContext;
       if (turn.terminated || turn.cancelRequested) return;
@@ -520,11 +537,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
 
       const conversation = toPiConversation(request, resolution.model);
+      // Compose the turn signal into every provider call: cancellation must
+      // reach the HTTP transport directly, not only through pi's own loop
+      // signal — which is absent in the pre-agent window and third-party after.
+      const streamFn: PiModelResolution['streamFn'] = (model, context, options) =>
+        resolution.streamFn(model, context, {
+          ...options,
+          signal: options?.signal
+            ? AbortSignal.any([options.signal, turn.abortController.signal])
+            : turn.abortController.signal,
+        });
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple:
           this.contextOptions.completeSimple ??
           (async (model, context, options) => {
-            const stream = await resolution.streamFn(model, context, options);
+            const stream = await streamFn(model, context, options);
             return stream.result();
           }),
       };
@@ -534,18 +561,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
         ...textAttachmentBodies(request),
       ];
       const thinkingLevel = resolveThinkingLevel(request, resolution);
-      const contextPlan = await planPiContext({
-        checkpoint: request.contextCheckpoint,
-        conversation,
-        model: resolution.model,
-        models,
-        options: this.contextOptions,
-        outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
-        redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
-        signal: turn.abortController.signal,
-        thinkingLevel,
-        tools: request.tools,
-      });
+      const contextPlan = await raceAbort(
+        planPiContext({
+          checkpoint: request.contextCheckpoint,
+          conversation,
+          model: resolution.model,
+          models,
+          options: this.contextOptions,
+          outputReserveTokens: request.options.maxOutputTokens ?? resolution.model.maxTokens,
+          redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
+          signal: turn.abortController.signal,
+          thinkingLevel,
+          tools: request.tools,
+        }),
+        turn.abortController.signal,
+      );
       if (turn.terminated) return;
       if (turn.timedOut) {
         this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
@@ -593,7 +623,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           }
           return turn.limitError !== undefined || turn.timedOut || turn.cancelRequested;
         },
-        streamFn: resolution.streamFn,
+        streamFn,
         toolExecution: 'parallel',
       };
       const agent = this.createAgent
@@ -606,7 +636,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
       unsubscribe = agent.subscribe((event) => this.handlePiEvent(turn, event));
 
-      await agent.prompt(conversation.prompt);
+      // Consumer-side cancellation: the abort releases this wait immediately
+      // rather than trusting the third-party loop to return. A late settlement
+      // is fenced by `turn.terminated` in `emit()` and `handlePiEvent()`.
+      await raceAbort(agent.prompt(conversation.prompt), turn.abortController.signal);
       if (turn.terminated) return;
       if (turn.timedOut) {
         this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
@@ -822,6 +855,20 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     if (runtimeTool.approval === 'ask') {
       const approvalId = `approval-${toolCallId}`;
+      // A failed registration must never publish an approval card: a duplicate
+      // provider call id would orphan the earlier waiter, so the collision
+      // settles this call as an error instead (fail closed).
+      if (turn.approvalWaiters.has(approvalId)) {
+        const output = createErrorToolResult(DUPLICATE_TOOL_CALL_ERROR);
+        this.replaceToolPart(turn, part, {
+          state: 'error',
+          error: DUPLICATE_TOOL_CALL_ERROR,
+          output,
+        });
+        turn.failedToolCalls.add(toolCallId);
+        turn.settledToolCalls.add(toolCallId);
+        return this.piToolResult(output);
+      }
       // Register before publishing the request: callers may cancel as soon as
       // they observe that event, and cancellation must always find the waiter.
       const decisionPromise = this.waitForApproval(turn, approvalId);
@@ -866,7 +913,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const callbackSignal = signal
         ? AbortSignal.any([turn.abortController.signal, signal])
         : turn.abortController.signal;
-      const output = await runtimeTool.execute(input, {
+      const output = await runtimeTool.execute({
+        input,
         signal: callbackSignal,
         toolCallId,
       });

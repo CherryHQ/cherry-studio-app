@@ -82,11 +82,13 @@ describe('Pi API adapters', () => {
       timeoutMs: 60_000,
     });
     const model = { api: testCase.api } as PiModel<SupportedPiApi>;
+    const signal = new AbortController().signal;
     const result = streamFn(model, context, {
       fetch: jest.fn() as unknown as FetchFunction,
       headers: { 'X-Request': 'request' },
       maxTokens: 32,
       reasoning: 'high',
+      signal,
     });
 
     expect(result).toBe(mockStreamResult);
@@ -100,6 +102,7 @@ describe('Pi API adapters', () => {
         maxRetries: 0,
         maxTokens: 32,
         reasoning: 'high',
+        signal,
         temperature: 0.2,
         timeoutMs: 60_000,
       }),

@@ -31,8 +31,10 @@ import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
 } from '@/shared/data/types/builtInTool';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import type { TurnToolResources } from '../managedFileResolver';
 import {
   createCalendarTools,
   createHealthTools,
@@ -70,9 +72,15 @@ export type BuiltInToolScope = {
   platform: string;
 };
 
+export type { TurnFileScope, TurnToolResources } from '../managedFileResolver';
+
 export type AgentToolSource = {
   /** The tools this turn may use; empty when the model cannot call any. */
-  getTools(input: { agentId: string; model: RuntimeModel }): Promise<readonly RuntimeTool[]>;
+  getTools(input: {
+    agentId: string;
+    model: RuntimeModel;
+    resources: TurnToolResources;
+  }): Promise<readonly RuntimeTool[]>;
 };
 
 export type BuiltInToolSourceDependencies = DeviceToolDependencies &
@@ -87,7 +95,7 @@ export function createBuiltInToolSource(
   overrides: Partial<BuiltInToolSourceDependencies> = {},
 ): AgentToolSource {
   return {
-    async getTools({ agentId, model }) {
+    async getTools({ agentId, model, resources }) {
       const deps = resolveDependencies(overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
@@ -95,11 +103,11 @@ export function createBuiltInToolSource(
       }
 
       const scope = await resolveScope(deps, agentId);
-      const catalog = createCatalog(deps, scope);
+      const catalog = createCatalog(deps, scope, resources);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const approval = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
-        return approval && tool ? [{ ...tool, approval }] : [];
+        return approval && tool ? [bindTurnResources({ ...tool, approval }, resources)] : [];
       });
     },
   };
@@ -151,6 +159,7 @@ function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string
 function createCatalog(
   deps: BuiltInToolSourceDependencies,
   scope: BuiltInToolScope,
+  resources: TurnToolResources,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -160,13 +169,31 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
-    createGenerateImageTool(deps.painting, scope.paintingModel),
+    createGenerateImageTool(deps.painting, scope.paintingModel, resources),
   ];
   return new Map(
     tools.flatMap((tool) =>
       tool.ref.source === 'builtin' ? [[tool.ref.capabilityId, tool] as const] : [],
     ),
   );
+}
+
+/** Grant validated built-in artifacts before Pi can start its next tool step. */
+function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): RuntimeTool {
+  return {
+    ...tool,
+    async execute(call) {
+      const output = await tool.execute(call);
+      for (const artifact of output.artifacts) {
+        const fileEntryId = FileEntryIdSchema.safeParse(artifact.ref.fileEntryId);
+        if (!fileEntryId.success) {
+          throw new Error('Built-in tool returned an invalid managed file artifact.');
+        }
+        resources.grantFile(fileEntryId.data);
+      }
+      return output;
+    },
+  };
 }
 
 async function resolveScope(

@@ -2,6 +2,7 @@ import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '@/backend
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import type { TurnFileScope } from '../../../managedFileResolver';
 import type { ConfiguredPaintingModel, PaintingToolDependencies } from '../generateImage';
 import { createGenerateImageTool } from '../generateImageTool';
 
@@ -18,11 +19,17 @@ const MODEL: ConfiguredPaintingModel = {
   support: null,
   uniqueModelId: createUniqueModelId('openai', 'gpt-image-1'),
 };
+const EDIT_MODEL: ConfiguredPaintingModel = {
+  support: { modes: { edit: { supports: {} } } },
+  uniqueModelId: MODEL.uniqueModelId,
+};
+
+const TURN_FILES: TurnFileScope = { fileEntryIds: new Set([ENTRY.id]) };
 
 describe('createGenerateImageTool', () => {
   test('imports generated images before reporting them as artifacts', async () => {
     const deps = createDependencies();
-    const tool = createGenerateImageTool(deps, MODEL);
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
     const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
 
@@ -43,7 +50,7 @@ describe('createGenerateImageTool', () => {
 
   test('tells the model to stop when no drawing model is configured', async () => {
     const deps = createDependencies();
-    const tool = createGenerateImageTool(deps, null);
+    const tool = createGenerateImageTool(deps, null, TURN_FILES);
 
     const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
 
@@ -58,7 +65,7 @@ describe('createGenerateImageTool', () => {
         throw new Error('provider exploded');
       },
     });
-    const tool = createGenerateImageTool(deps, MODEL);
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
     const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
 
@@ -79,7 +86,7 @@ describe('createGenerateImageTool', () => {
     deps.files.createInternalEntry
       .mockResolvedValueOnce(ENTRY)
       .mockRejectedValueOnce(new Error('disk full'));
-    const tool = createGenerateImageTool(deps, MODEL);
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
     const result = await execute(tool, { prompt: 'A cherry orchard at dawn' });
 
@@ -90,7 +97,7 @@ describe('createGenerateImageTool', () => {
 
   test('rejects an empty prompt without calling the provider', async () => {
     const deps = createDependencies();
-    const tool = createGenerateImageTool(deps, MODEL);
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES);
 
     const result = await execute(tool, { prompt: '   ' });
 
@@ -98,8 +105,25 @@ describe('createGenerateImageTool', () => {
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
   });
 
+  test('rejects an image id outside the turn before reading the file', async () => {
+    const deps = createDependencies();
+    const tool = createGenerateImageTool(deps, EDIT_MODEL, { fileEntryIds: new Set() });
+
+    const result = await execute(tool, {
+      image_ids: [ENTRY.id],
+      prompt: 'Turn this into a watercolor.',
+    });
+
+    expect(result.value).toMatchObject({
+      status: 'error',
+      message: expect.stringContaining('not part of this conversation'),
+    });
+    expect(deps.files.resolve).not.toHaveBeenCalled();
+    expect(deps.ai.generateImage).not.toHaveBeenCalled();
+  });
+
   test('carries the stable built-in ref and asks before spending provider quota', () => {
-    const tool = createGenerateImageTool(createDependencies(), MODEL);
+    const tool = createGenerateImageTool(createDependencies(), MODEL, TURN_FILES);
 
     expect(tool.ref).toEqual({ source: 'builtin', capabilityId: 'generate_image' });
     expect(tool.approval).toBe('ask');
@@ -129,5 +153,5 @@ function createDependencies(overrides: { generateImage?: () => Promise<never> } 
 }
 
 function execute(tool: RuntimeTool, input: RuntimeJsonValue): Promise<RuntimeToolResult> {
-  return tool.execute(input, { signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
 }
