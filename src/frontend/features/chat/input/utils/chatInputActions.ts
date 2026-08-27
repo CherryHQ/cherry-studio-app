@@ -5,7 +5,7 @@ import type { ComponentType } from 'react';
 
 import { type ToolMentionId, toolMentions } from '@/frontend/utils/toolMentions';
 
-/** Web search is enabled by the composer for one submitted turn. */
+/** Web search is enabled by the composer for the current Session. */
 export const chatInputWebSearchAction = {
   icon: GlobeIcon,
   titleKey: 'chat.actions.webSearch',

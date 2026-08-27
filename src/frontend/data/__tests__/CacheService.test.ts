@@ -1,3 +1,5 @@
+import { DefaultPersistCache } from '@/shared/data/cache/cacheSchemas';
+
 import { CacheService, createInMemoryKvStorage } from '../CacheService';
 
 const MEMORY_KEY = 'internal.memory_probe.frontend' as const;
@@ -264,15 +266,16 @@ describe('CacheService getStats', () => {
       jest.advanceTimersByTime(1001);
 
       const stats = service.getStats(true);
+      const persistKeyCount = Object.keys(DefaultPersistCache).length;
       expect(stats.summary.memory.totalCount).toBe(2);
       expect(stats.summary.memory.validCount).toBe(1);
       expect(stats.summary.memory.expiredCount).toBe(1);
       expect(stats.summary.memory.withTTLCount).toBe(1);
       expect(stats.summary.memory.hookReferences).toBe(1);
-      expect(stats.summary.persist.totalCount).toBe(1);
+      expect(stats.summary.persist.totalCount).toBe(persistKeyCount);
       expect(stats.summary.total.estimatedBytes).toBeGreaterThan(0);
       expect(stats.details.memory).toHaveLength(2);
-      expect(stats.details.persist).toHaveLength(1);
+      expect(stats.details.persist).toHaveLength(persistKeyCount);
     } finally {
       jest.useRealTimers();
     }

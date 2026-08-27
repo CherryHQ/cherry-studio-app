@@ -39,6 +39,7 @@ import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnV
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import { useChatInputWebSearchSelection } from './hooks/useChatInputWebSearchSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getChatInputTemporaryCapabilities } from './utils/chatInputCapabilities';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
@@ -62,6 +63,10 @@ const focusTransitionMotion = {
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
   const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
+  const { isWebSearchEnabled, setIsWebSearchEnabled } = useChatInputWebSearchSelection({
+    agentId,
+    sessionId,
+  });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
@@ -97,13 +102,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     );
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
-  const composerIdentity = sessionId ?? agentId ?? null;
-  const [webSearchSelection, setWebSearchSelection] = useState({
-    enabled: false,
-    identity: composerIdentity,
-  });
-  const isWebSearchEnabled =
-    webSearchSelection.identity === composerIdentity ? webSearchSelection.enabled : false;
   const isInputActiveRef = useRef(false);
   const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
@@ -143,10 +141,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
-  const setWebSearchEnabled = useCallback(
-    (enabled: boolean) => setWebSearchSelection({ enabled, identity: composerIdentity }),
-    [composerIdentity],
-  );
   const handleMentionPress = useCallback(
     (mentionId: ToolMentionId) => {
       const mention = toolMentions.find((candidate) => candidate.id === mentionId);
@@ -222,9 +216,9 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
           : {}),
         ...(temporaryCapabilities.length > 0 ? { temporaryCapabilities } : {}),
       }).then(() => {
-        setWebSearchSelection((current) =>
-          current.identity === composerIdentity ? { ...current, enabled: false } : current,
-        );
+        if (!sessionId) {
+          setIsWebSearchEnabled(false);
+        }
       });
     },
     [
@@ -234,8 +228,9 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       reasoningEfforts,
       selectedModelId,
       sendMessage,
-      composerIdentity,
       isWebSearchEnabled,
+      sessionId,
+      setIsWebSearchEnabled,
     ],
   );
   const getSendErrorLabel = useCallback(
@@ -299,7 +294,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                     <ChatInputMenuItems
                       isWebSearchEnabled={isWebSearchEnabled}
                       onMentionPress={handleMentionPress}
-                      onWebSearchChange={setWebSearchEnabled}
+                      onWebSearchChange={setIsWebSearchEnabled}
                     />
                   </ComposerMenu>
                   <ComposerModelPill
