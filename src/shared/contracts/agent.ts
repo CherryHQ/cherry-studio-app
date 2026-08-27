@@ -160,8 +160,6 @@ export type AgentFailureReason = z.infer<typeof AgentFailureReasonSchema>;
 export const AgentFailureSnapshotSchema = z.strictObject({
   version: z.literal(1),
   reasonCode: AgentFailureReasonSchema,
-  message: z.string().max(4_000),
-  retryable: z.boolean(),
   source: z.strictObject({
     layer: z.enum(['provider', 'runtime', 'host', 'tool']),
     name: z.string().max(256).optional(),

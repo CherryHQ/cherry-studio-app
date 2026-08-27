@@ -471,6 +471,12 @@ traces. `code` and `name` retain the source identity when it is available; `cont
 allowlisted, bounded snapshot. Messages and response bodies are credential-redacted before they
 cross the Runtime boundary. Request bodies, URLs, headers, and stacks are never included.
 
+Supported Pi Provider adapters attach a terminal diagnostic at the SDK catch boundary before the
+assistant error reaches the Runtime. That diagnostic preserves only the original error identity,
+HTTP status, bounded response body, and explicit retryability. The Runtime ignores diagnostics from
+recovered transport attempts, then redacts and projects the terminal diagnostic into `RuntimeError`.
+This keeps the original terminal failure distinct from an earlier WebSocket or stream fallback.
+
 A `context.checkpoint` event is non-terminal. The Host retains only the latest valid candidate from
 the active execution and commits it atomically with a successful assistant terminal result. Failed,
 cancelled, or interrupted turns never persist a candidate, and oversized payloads are rejected

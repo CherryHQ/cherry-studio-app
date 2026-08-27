@@ -84,8 +84,6 @@ export function toAgentErrorView(error: RuntimeError): AgentErrorView {
       ...(finishReason !== undefined ? { finishReason } : {}),
       ...(responseBody !== undefined ? { responseBody } : {}),
     }),
-    message,
-    retryable: error.retryable,
     source: {
       layer: error.origin ?? 'runtime',
       code,

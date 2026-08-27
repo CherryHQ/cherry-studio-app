@@ -137,6 +137,19 @@ const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
 const REDACTED_SECRET = '[REDACTED]';
 
 const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
+const TERMINAL_ERROR_DIAGNOSTIC_TYPES = new Set([
+  'pi_messages_response_failure',
+  'provider_response_failure',
+]);
+const RETRYABLE_PROVIDER_ERROR_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENETDOWN',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+]);
 
 type ApprovalWaiter = {
   reject(reason: Error): void;
@@ -287,7 +300,7 @@ function terminalExecutionError(message: AssistantMessage): unknown {
   const diagnostics = message.diagnostics ?? [];
   for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
     const diagnostic = diagnostics[index];
-    if (!diagnostic?.error) continue;
+    if (!diagnostic?.error || !TERMINAL_ERROR_DIAGNOSTIC_TYPES.has(diagnostic.type)) continue;
     const details = diagnostic.details;
     const statusCode = details?.statusCode ?? details?.status;
     const responseBody = diagnosticResponseBody(details);
@@ -296,11 +309,38 @@ function terminalExecutionError(message: AssistantMessage): unknown {
       ...(diagnostic.error.code !== undefined ? { code: String(diagnostic.error.code) } : {}),
       ...(diagnostic.error.name ? { name: diagnostic.error.name } : {}),
       ...(statusCode !== undefined ? { statusCode } : {}),
+      ...(typeof details?.retryable === 'boolean' ? { retryable: details.retryable } : {}),
       ...(message.rawStopReason ? { finishReason: message.rawStopReason } : {}),
       ...(responseBody ? { responseBody } : {}),
     };
   }
   return message.errorMessage;
+}
+
+function isRetryableProviderFailure(
+  code: string,
+  message: string,
+  statusCode: number | undefined,
+): boolean {
+  const embeddedStatus = message.match(
+    /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/iu,
+  )?.[1];
+  const leadingStatus = message.match(/^\s*([1-5]\d{2})(?=\s|:|$)/u)?.[1];
+  const resolvedStatusCode = statusCode ?? Number(embeddedStatus ?? leadingStatus ?? Number.NaN);
+  if (
+    resolvedStatusCode === 408 ||
+    resolvedStatusCode === 409 ||
+    resolvedStatusCode === 425 ||
+    resolvedStatusCode === 429 ||
+    resolvedStatusCode >= 500
+  ) {
+    return true;
+  }
+  if (RETRYABLE_PROVIDER_ERROR_CODES.has(code.toUpperCase())) return true;
+
+  return /(?:connection (?:failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
+    message,
+  );
 }
 
 function normalizeExecutionError(
@@ -344,13 +384,7 @@ function normalizeExecutionError(
       : typeof record?.retryable === 'boolean'
         ? record.retryable
         : undefined;
-  const retryable =
-    explicitRetryable ??
-    (statusCode === 408 ||
-      statusCode === 409 ||
-      statusCode === 425 ||
-      statusCode === 429 ||
-      (statusCode !== undefined && statusCode >= 500));
+  const retryable = explicitRetryable ?? isRetryableProviderFailure(code, message, statusCode);
 
   return {
     code,

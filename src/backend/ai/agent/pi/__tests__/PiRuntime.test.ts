@@ -1091,6 +1091,59 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('does not reuse a recovered transport diagnostic as the terminal failure identity', async () => {
+    const runtime = createTestRuntime();
+    arrange(runtime, async (context) => {
+      const failed = assistantMessage({
+        errorMessage: '503: upstream temporarily unavailable',
+        stopReason: 'error',
+        diagnostics: [
+          {
+            type: 'provider_transport_failure',
+            timestamp: 1,
+            error: {
+              name: 'ConnectionError',
+              message: 'WebSocket connection reset before the SSE fallback.',
+              code: 'ECONNRESET',
+            },
+          },
+        ],
+      });
+      await context.emit({ type: 'turn_end', message: failed, toolResults: [] });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-after-transport-fallback')));
+
+    expect(events.at(-1)).toEqual({
+      type: 'failed',
+      error: {
+        code: 'runtime_error',
+        message: '503: upstream temporarily unavailable',
+        retryable: true,
+        origin: 'provider',
+        context: { providerId: 'mock-provider', modelId: 'mock-model' },
+      },
+    });
+    await session.close();
+  });
+
+  test('marks transient provider transport errors as retryable without an HTTP status', async () => {
+    const runtime = createTestRuntime();
+    arrange(runtime, () => {
+      throw Object.assign(new Error('fetch failed: connection reset'), { code: 'ECONNRESET' });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(session.execute(baseRequest('turn-network-error')));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      error: { code: 'ECONNRESET', retryable: true },
+    });
+    await session.close();
+  });
+
   test('maps complete context, Agent options, stream parts, and usage', async () => {
     const runtime = createTestRuntime();
     const holder = arrange(runtime, async (context) => {

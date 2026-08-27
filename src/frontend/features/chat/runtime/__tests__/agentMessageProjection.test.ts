@@ -32,8 +32,6 @@ describe('agentMessageProjection', () => {
               failure: {
                 version: 1,
                 reasonCode: 'permission',
-                message: 'OpenAI API error (403): access denied',
-                retryable: false,
                 source: { layer: 'provider', code: 'access_denied' },
                 context: { statusCode: 403, providerId: 'openai', modelId: 'gpt-test' },
               },

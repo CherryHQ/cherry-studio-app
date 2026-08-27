@@ -419,8 +419,21 @@ export function describeRuntimeConformance(harness: RuntimeConformanceHarness): 
 
       const serialized = JSON.stringify(error);
       expect(serialized).not.toContain(arranged.secret);
-      // No stack trace leaks through the normalized shape.
-      expect(Object.keys(error).sort()).toEqual(['code', 'message', 'retryable']);
+      expect(Object.keys(error)).toEqual(expect.arrayContaining(['code', 'message', 'retryable']));
+      expect(
+        Object.keys(error).every((key) =>
+          ['code', 'context', 'message', 'name', 'origin', 'retryable'].includes(key),
+        ),
+      ).toBe(true);
+      expect(error).not.toHaveProperty('stack');
+      if (error.context) {
+        expect(
+          Object.keys(error.context).every((key) =>
+            ['finishReason', 'modelId', 'providerId', 'responseBody', 'statusCode'].includes(key),
+          ),
+        ).toBe(true);
+        expect(error.context).not.toHaveProperty('stack');
+      }
       expect(serialized).not.toContain('\n    at ');
     } finally {
       await session.close();

@@ -35,6 +35,18 @@ const NON_STANDARD_ADAPTER_FAMILIES = new Set([
   'google-vertex-anthropic',
 ]);
 
+class PiModelResolutionError extends Error {
+  readonly retryable = false;
+
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PiModelResolutionError';
+  }
+}
+
 export function createPiModelResolver(): PiRuntimeDependencies {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
@@ -46,7 +58,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
       if (!selectedApiKey.value.trim()) {
-        throw new Error('Pi Runtime requires an API key from the selected provider.');
+        throw new PiModelResolutionError(
+          'invalid_api_key',
+          'Pi Runtime requires an API key from the selected provider.',
+        );
       }
 
       const modelId = resolveWireModelId(model, resolvedEndpoint.endpointType);

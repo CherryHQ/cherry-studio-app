@@ -405,8 +405,6 @@ type AgentFailureSnapshot = {
     | 'parse'
     | 'internal'
     | 'unknown'
-  message: string
-  retryable: boolean
   source: {
     layer: 'provider' | 'runtime' | 'host' | 'tool'
     name?: string
@@ -424,9 +422,11 @@ type AgentFailureSnapshot = {
 
 `EXECUTION_FAILED` remains the closed protocol envelope. New execution failures carry the
 versioned `failure` snapshot so source identity is not overwritten by that envelope; the UI derives
-localized copy from `reasonCode` and keeps the provider message as detail. `failure` is optional so
-historical persisted rows remain readable. Native errors, request bodies, credentials, and stack
-traces stay behind the Host boundary.
+localized copy from `reasonCode` and keeps the sanitized source message from the outer
+`AgentErrorView` as detail. The outer `message` and `retryable` fields are the single authoritative
+facts; the nested snapshot does not duplicate them. `failure` is optional so historical persisted
+rows remain readable. Native errors, request bodies, credentials, and stack traces stay behind the
+Host boundary.
 
 ## Invariants
 

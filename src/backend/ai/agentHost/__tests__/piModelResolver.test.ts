@@ -260,7 +260,12 @@ describe('Pi model resolver', () => {
       value: '',
     });
 
-    await expect(resolve(resolver)).rejects.toThrow('requires an API key');
+    await expect(resolve(resolver)).rejects.toMatchObject({
+      code: 'invalid_api_key',
+      message: expect.stringContaining('requires an API key'),
+      name: 'PiModelResolutionError',
+      retryable: false,
+    });
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
 });

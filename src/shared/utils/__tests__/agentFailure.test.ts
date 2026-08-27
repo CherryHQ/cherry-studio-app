@@ -11,6 +11,8 @@ describe('classifyAgentFailureReason', () => {
     [{ message: 'self-signed certificate' }, 'proxy_tls'],
     [{ message: 'MCP transport timed out' }, 'mcp'],
     [{ message: 'request failed', statusCode: 503 }, 'provider_unavailable'],
+    [{ message: '503: upstream temporarily unavailable' }, 'provider_unavailable'],
+    [{ message: 'Pi Runtime requires an API key from the selected provider.' }, 'auth'],
     [{ message: 'unclassified provider response' }, 'unknown'],
   ] as const)('classifies %o as %s', (facts, expected) => {
     expect(classifyAgentFailureReason(facts)).toBe(expected);

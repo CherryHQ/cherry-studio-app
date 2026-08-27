@@ -31,8 +31,6 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
     ({
       version: 1,
       reasonCode: classifyAgentFailureReason({ code: error.code, message: error.message }),
-      message: error.message,
-      retryable: error.retryable,
       source: { layer: 'host', code: error.code },
     } as const);
 
@@ -40,6 +38,8 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
     type: 'data-error',
     data: {
       code: error.code,
+      message: error.message,
+      retryable: error.retryable,
       ...failure,
     },
   } as CherryMessagePart;

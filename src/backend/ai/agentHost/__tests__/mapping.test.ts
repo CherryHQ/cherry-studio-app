@@ -33,8 +33,6 @@ describe('Agent Host mappings', () => {
       failure: {
         version: 1,
         reasonCode: 'permission',
-        message: 'OpenAI API error (403): access denied',
-        retryable: false,
         source: { layer: 'provider', name: 'AI_APICallError', code: 'access_denied' },
         context: {
           statusCode: 403,

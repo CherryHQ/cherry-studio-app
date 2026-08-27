@@ -116,8 +116,6 @@ describe('Agent tool and managed-file contracts', () => {
     const failure = {
       version: 1,
       reasonCode: 'permission',
-      message: 'OpenAI API error (403): access denied',
-      retryable: false,
       source: { layer: 'provider', name: 'AI_APICallError', code: 'access_denied' },
       context: {
         statusCode: 403,
@@ -128,8 +126,8 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
     const error = {
       code: 'EXECUTION_FAILED',
-      message: failure.message,
-      retryable: failure.retryable,
+      message: 'OpenAI API error (403): access denied',
+      retryable: false,
       failure,
     } as const;
 

@@ -72,7 +72,9 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
   const embeddedStatus = text.match(
     /\b(?:status(?: code)?|http|api error)\D{0,12}([1-5]\d{2})\b/u,
   )?.[1];
+  const leadingStatus = text.match(/(?:^|\n)\s*([1-5]\d{2})(?=\s|:|$)/u)?.[1];
   const statusCode = facts.statusCode ?? (embeddedStatus ? Number(embeddedStatus) : undefined);
+  const resolvedStatusCode = statusCode ?? (leadingStatus ? Number(leadingStatus) : undefined);
 
   if (
     includesAny(text, [
@@ -90,20 +92,29 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
   }
 
   if (
-    statusCode === 401 ||
-    includesAny(text, ['invalid_api_key', 'authentication', 'unauthorized'])
+    resolvedStatusCode === 401 ||
+    includesAny(text, [
+      'invalid_api_key',
+      'authentication',
+      'unauthorized',
+      'requires an api key',
+      'no api key',
+      'api key is missing',
+      'api key was not provided',
+      'incorrect api key',
+    ])
   ) {
     return 'auth';
   }
   if (
-    statusCode === 404 ||
+    resolvedStatusCode === 404 ||
     includesAny(text, ['model_not_found', 'model not found', 'model does not exist']) ||
     (text.includes('model with id') && text.includes('not found'))
   ) {
     return 'model_not_found';
   }
   if (
-    statusCode === 402 ||
+    resolvedStatusCode === 402 ||
     includesAny(text, [
       'quota',
       'insufficient_balance',
@@ -116,13 +127,16 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
   ) {
     return 'quota';
   }
-  if (statusCode === 403 || includesAny(text, ['forbidden', 'access denied'])) {
+  if (resolvedStatusCode === 403 || includesAny(text, ['forbidden', 'access denied'])) {
     return 'permission';
   }
-  if (statusCode === 429 || includesAny(text, ['rate_limit', 'rate limit', 'too many requests'])) {
+  if (
+    resolvedStatusCode === 429 ||
+    includesAny(text, ['rate_limit', 'rate limit', 'too many requests'])
+  ) {
     return 'rate_limit';
   }
-  if (statusCode === 408) {
+  if (resolvedStatusCode === 408) {
     return 'timeout';
   }
   if (
@@ -137,12 +151,15 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
   ) {
     return 'context_length';
   }
-  if (statusCode === 413 || includesAny(text, ['payload too large', 'request entity too large'])) {
+  if (
+    resolvedStatusCode === 413 ||
+    includesAny(text, ['payload too large', 'request entity too large'])
+  ) {
     return 'payload_too_large';
   }
   if (
-    statusCode === 529 ||
-    (statusCode !== undefined && statusCode >= 500) ||
+    resolvedStatusCode === 529 ||
+    (resolvedStatusCode !== undefined && resolvedStatusCode >= 500) ||
     includesAny(text, ['overloaded', 'overload'])
   ) {
     return 'provider_unavailable';
