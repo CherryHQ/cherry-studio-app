@@ -68,6 +68,11 @@ family, normalized wire model id, gateway provider-options key, and mobile/Provi
 headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
 contain sensitive values, the result remains in memory and must not be persisted or logged.
 
+For language models, `resolveLanguageServingPlan()` adds declared authentication facts, the shared
+language transport policy, and a typed Pi compatibility result. Pi requires that result before
+selecting a credential. AI SDK language configuration consumes the same plan but retains its own
+broader Provider and IAM projections. Image models bypass the language plan.
+
 `resolveProviderAiSdkConfig()` converts a Provider and Model into the configuration used by
 `AiService`. Endpoint selection priority is:
 

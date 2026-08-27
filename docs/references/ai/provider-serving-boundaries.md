@@ -1,6 +1,6 @@
 # Provider Serving Boundaries
 
-Status: **Phase 1 landed; Phase 3 started; Phase 2 remains design**.
+Status: **Phase 1 landed; Phases 2 and 3 started**.
 
 This reference defines how Cherry Mobile shares Provider connection facts without turning image,
 language, embedding, rerank, audio, or video execution into one universal adapter. It complements
@@ -70,6 +70,12 @@ Language support is protocol-oriented, not Provider-id-oriented. Standard Provid
 usable by declaring a supported endpoint and adapter family in the registry; adding a Provider must
 not require another entry in a Pi-specific Provider table.
 
+`resolveLanguageServingPlan()` is the shared language control-plane result. It contains the resolved
+connection, declared authentication facts, shared language transport policy, and a typed Pi
+compatibility result. AI SDK language configuration consumes the same plan but keeps its broader
+authentication and Provider projection inside the AI SDK binding. Image models bypass this plan and
+consume only `ResolvedProviderConnection`.
+
 The Pi binding owns only Pi mechanics:
 
 - endpoint/protocol family to Pi API-family mapping;
@@ -137,11 +143,17 @@ must prove tool calls, reasoning, images, usage, cancellation, and error parity 
 model id, and common request headers consumed by Pi and AI SDK request construction. Existing
 credential selection and capability executors remain unchanged.
 
-### Phase 2: language serving materialization
+### Phase 2: language serving materialization — started
 
-1. Introduce one language serving result that classifies supported protocol and auth behavior.
-2. Move shared compatibility errors and credential receipts to that boundary.
-3. Keep Pi and AI SDK projections client-specific.
+`LanguageServingPlan` now classifies declared auth behavior and returns a typed supported or
+unsupported Pi binding before credential selection or network execution. Pi compatibility failures
+carry stable codes while preserving the existing user-facing messages. Pi and non-image AI SDK
+configuration consume this plan; their native model/config projections remain client-specific.
+
+Credential selection and its non-secret receipt still belong to the binding that materializes the
+credential because AI SDK supports IAM paths that Pi cannot execute. A later slice may share an
+API-key credential materializer if it removes real duplication without selecting unnecessary keys
+for IAM Providers.
 
 ### Phase 3: shared transport policies — started
 

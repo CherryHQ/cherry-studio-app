@@ -32,11 +32,11 @@ import {
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
+import { resolveLanguageServingPlan } from '@/backend/ai/provider/languageServingPlan';
 import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
-import { resolveProviderLanguageTransportPolicy } from '@/backend/ai/provider/providerTransport';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
@@ -177,9 +177,13 @@ export async function resolveProviderAiSdkConfig(
   runtime: ProviderConfigRuntime,
   options?: ProviderToAiSdkConfigOptions,
 ): Promise<ResolvedProviderAiSdkConfig> {
-  const connection =
+  const resolvedConnection =
     options?.resolvedConnection ??
     resolveProviderConnection(provider, model, { resolvedEndpoint: options?.resolvedEndpoint });
+  const languageServingPlan = isImageGenerationModel(model)
+    ? undefined
+    : resolveLanguageServingPlan(provider, model, { resolvedConnection });
+  const connection = languageServingPlan?.connection ?? resolvedConnection;
   const { endpointType, baseUrl } = connection;
 
   const aiSdkProviderId = resolveConnectionAiSdkProviderId(connection);
@@ -312,9 +316,7 @@ export async function resolveProviderAiSdkConfig(
     resolved = await withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
   }
 
-  const transportPolicy = isImageGenerationModel(model)
-    ? undefined
-    : resolveProviderLanguageTransportPolicy(provider);
+  const transportPolicy = languageServingPlan?.transportPolicy;
   if (transportPolicy) {
     resolved.config.providerSettings.fetch = transportPolicy.wrapFetch(
       resolved.config.providerSettings.fetch ??

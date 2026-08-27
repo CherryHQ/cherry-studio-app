@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -89,6 +89,28 @@ describe('providerToAiSdkConfig', () => {
 
     expect(config.providerId).toBe('openai-compatible');
     expect(config.providerSettings.fetch).toBeUndefined();
+  });
+
+  it('keeps CherryAI image execution outside the language transport policy', async () => {
+    const provider = createProvider({
+      id: 'cherryai',
+      presetProviderId: 'cherryai',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          baseUrl: 'https://api.cherry-ai.com',
+        },
+      },
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    });
+    const model = {
+      ...createModel(provider.id, 'image-model'),
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+    };
+
+    const config = await providerToAiSdkConfig(provider, model, createRuntime());
+
+    expect(config.providerSettings.fetch).toBeUndefined();
+    expect(generateSignature).not.toHaveBeenCalled();
   });
 
   it('resolves registered adapter extensions before falling back to openai-compatible', async () => {

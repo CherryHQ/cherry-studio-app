@@ -15,8 +15,10 @@ owns the mobile platform and application-service boundaries around that package.
   production Pi provider/model resolution adapter. Version 1 binds `local` directly to Pi without
   a Runtime registry or implementation router.
 - `provider/` resolves credential-selection-free connection facts shared by Pi and AI SDK request
-  construction, owns shared Provider HTTP transport policies, injects Expo environment values and
-  app headers, then builds AI SDK provider configuration from mobile data services.
+  construction, materializes the shared language serving plan and typed compatibility result, owns
+  shared Provider HTTP transport policies, injects Expo environment values and app headers, then
+  builds AI SDK provider configuration from mobile data services. Image execution consumes shared
+  connection facts but bypasses the language plan.
 - `runtime/aiSdk/` builds the AI SDK request parameters used by `AiService`; it is not a conversation
   runtime and owns no persisted turn state.
 - `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
