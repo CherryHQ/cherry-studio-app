@@ -1,5 +1,3 @@
-import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -18,45 +16,6 @@ export type ModelPickerGroup = {
   provider: Provider;
   title: string;
 };
-
-export const MODEL_PICKER_TAGS = [
-  MODEL_CAPABILITY.IMAGE_RECOGNITION,
-  MODEL_CAPABILITY.AUDIO_RECOGNITION,
-  MODEL_CAPABILITY.EMBEDDING,
-  MODEL_CAPABILITY.REASONING,
-  MODEL_CAPABILITY.FUNCTION_CALL,
-  MODEL_CAPABILITY.WEB_SEARCH,
-  MODEL_CAPABILITY.RERANK,
-  MODEL_CAPABILITY.IMAGE_GENERATION,
-  MODEL_CAPABILITY.CODE_EXECUTION,
-] as const;
-
-export const MODEL_PICKER_FILTER_TAGS = [
-  MODEL_CAPABILITY.REASONING,
-  MODEL_CAPABILITY.IMAGE_RECOGNITION,
-  MODEL_CAPABILITY.FUNCTION_CALL,
-  MODEL_CAPABILITY.WEB_SEARCH,
-  MODEL_CAPABILITY.EMBEDDING,
-  MODEL_CAPABILITY.RERANK,
-  'free',
-] as const;
-
-export type ModelPickerTag =
-  | (typeof MODEL_PICKER_TAGS)[number]
-  | (typeof MODEL_PICKER_FILTER_TAGS)[number];
-
-const MODEL_PICKER_TAG_LABEL_KEYS = {
-  [MODEL_CAPABILITY.AUDIO_RECOGNITION]: 'models.capability.audioRecognition',
-  [MODEL_CAPABILITY.CODE_EXECUTION]: 'models.capability.codeExecution',
-  [MODEL_CAPABILITY.EMBEDDING]: 'models.capability.embedding',
-  [MODEL_CAPABILITY.FUNCTION_CALL]: 'models.capability.functionCall',
-  [MODEL_CAPABILITY.IMAGE_GENERATION]: 'models.capability.imageGeneration',
-  [MODEL_CAPABILITY.IMAGE_RECOGNITION]: 'models.capability.imageRecognition',
-  [MODEL_CAPABILITY.REASONING]: 'models.capability.reasoning',
-  [MODEL_CAPABILITY.RERANK]: 'models.capability.rerank',
-  [MODEL_CAPABILITY.WEB_SEARCH]: 'models.capability.webSearch',
-  free: 'models.capability.free',
-} as const satisfies Record<ModelPickerTag, string>;
 
 export function getModelPickerModelItem(
   modelId: string | null,
@@ -81,70 +40,16 @@ export function getModelPickerModelItem(
   return createModelPickerItem({ model, provider, suffix: 'selected' });
 }
 
-export function getModelPickerTagLabelKey(tag: ModelPickerTag) {
-  return MODEL_PICKER_TAG_LABEL_KEYS[tag];
-}
-
-export function getModelPickerTags(model: Model): ModelPickerTag[] {
-  return MODEL_PICKER_TAGS.filter((tag) => matchesModelPickerTag(model, tag));
-}
-
-/**
- * The badges a model row shows, wherever one is drawn. Free is not a declared
- * capability — it is read off the model — so it is not among the tags above and
- * has to be appended.
- */
-export function getModelPickerRowTags(model: Model): ModelPickerTag[] {
-  const tags = getModelPickerTags(model);
-
-  return isFreeModel(model) ? [...tags, 'free'] : tags;
-}
-
-export function getAvailableModelPickerFilterTags({
-  modelType = 'all',
-  models,
-  providers,
-}: {
-  modelType?: ModelTypeFilter;
-  models: readonly Model[];
-  providers: readonly Provider[];
-}): ModelPickerTag[] {
-  const selectableModels = getSelectableModelPickerModels(models, providers, modelType);
-
-  return getAvailableModelPickerFilterTagsForModels(selectableModels);
-}
-
-export function getAvailableModelPickerFilterTagsForModels(
-  models: readonly Model[],
-): ModelPickerTag[] {
-  if (models.length === 0) {
-    return [];
-  }
-
-  return MODEL_PICKER_FILTER_TAGS.filter((tag) =>
-    models.some((model) => matchesModelPickerTag(model, tag)),
-  );
-}
-
-export function filterModelsByModelPickerTags(
-  models: readonly Model[],
-  selectedTags: readonly ModelPickerTag[],
-): Model[] {
-  return models.filter((model) => matchesModelPickerSelectedTags(model, selectedTags));
-}
-
 export function buildModelPickerGroups({
   modelType = 'all',
   models,
   providers,
   searchText,
-  selectedTags = [],
 }: {
   modelType?: ModelTypeFilter;
   models: readonly Model[];
   providers: readonly Provider[];
   searchText: string;
-  selectedTags?: readonly ModelPickerTag[];
 }): ModelPickerGroup[] {
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
   const keywords = getSearchKeywords(searchText);
@@ -152,10 +57,7 @@ export function buildModelPickerGroups({
   const filteredModels = selectableModels.filter((model) => {
     const provider = providerById.get(model.providerId);
 
-    return provider
-      ? matchesModelPickerKeywords(model, provider, keywords) &&
-          matchesModelPickerSelectedTags(model, selectedTags)
-      : false;
+    return provider ? matchesModelPickerKeywords(model, provider, keywords) : false;
   });
   const groups: ModelPickerGroup[] = [];
 
@@ -198,45 +100,6 @@ function createModelPickerItem({
     modelId: model.id,
     provider,
   };
-}
-
-export function isFreeModel(model: Model): boolean {
-  if (model.providerId === 'cherryai') {
-    return true;
-  }
-
-  return [model.id, model.modelId, model.name, model.presetModelId]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase()
-    .includes('free');
-}
-
-function matchesModelPickerTag(model: Model, tag: ModelPickerTag): boolean {
-  if (tag === 'free') {
-    return isFreeModel(model);
-  }
-
-  switch (tag) {
-    case MODEL_CAPABILITY.AUDIO_RECOGNITION:
-      return (
-        model.capabilities.includes(MODEL_CAPABILITY.AUDIO_RECOGNITION) ||
-        Boolean(model.inputModalities?.includes(MODALITY.AUDIO))
-      );
-    default:
-      return model.capabilities.includes(tag);
-  }
-}
-
-function matchesModelPickerSelectedTags(
-  model: Model,
-  selectedTags: readonly ModelPickerTag[],
-): boolean {
-  if (selectedTags.length === 0) {
-    return true;
-  }
-
-  return selectedTags.every((tag) => matchesModelPickerTag(model, tag));
 }
 
 function getSelectableModelPickerModels(

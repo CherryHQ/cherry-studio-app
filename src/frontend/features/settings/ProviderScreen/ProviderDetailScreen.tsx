@@ -1,23 +1,14 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { type MenuItem, Spinner, useAlert } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { type AppSearchFilterProps, useAppSearch } from '@/frontend/components/appSearch';
-import { ModelAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import {
-  filterModelsByType,
-  getModelTypeCounts,
-  type ModelTypeFilter,
-  ModelTypeFilterBar,
-} from '@/frontend/components/modelPicker';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
+import type { Model } from '@/shared/data/types/model';
 
 import {
   buildApiKeyEntriesFromInput,
@@ -40,11 +31,18 @@ import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/P
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
 import { ProviderModelCheckSection } from './models/components/ProviderModelCheckSection';
+import { ProviderModelPurposeTabs } from './models/components/ProviderModelPurposeTabs';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { useProviderModelRemove } from './models/hooks/useProviderModelRemove';
 import { useProviderModelSelection } from './models/hooks/useProviderModelSelection';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
-import { filterModelsByKeywords } from './models/utils/providerModelSearch';
+import {
+  filterProviderModelsByPurpose,
+  getEffectiveProviderModelPurpose,
+  getProviderModelPurposeCounts,
+  hasMultipleProviderModelPurposes,
+  type ProviderModelPurpose,
+} from './models/utils/providerModelPurpose';
 
 export default function ProviderDetailSettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
@@ -53,14 +51,31 @@ export default function ProviderDetailSettingsScreen() {
   }>();
   const { t } = useTranslation();
   const router = useRouter();
-  const { open: openAppSearch } = useAppSearch();
   const { alert } = useAlert();
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
-  const [modelFocusRequest, setModelFocusRequest] = useState<{ modelId: UniqueModelId }>();
+  const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
+  const {
+    isFiltering: isModelSearchActive,
+    query: modelSearchText,
+    results: searchedModels,
+    setQuery: setModelSearchText,
+  } = useInlineSearch({
+    fields: (model: Model) => [model.id, model.modelId, model.name, model.group, model.description],
+    items: models,
+  });
+  const modelPurposeCounts = useMemo(() => getProviderModelPurposeCounts(models), [models]);
+  const effectiveModelPurpose = getEffectiveProviderModelPurpose(modelPurpose, modelPurposeCounts);
+  const listedModels = useMemo(
+    () => filterProviderModelsByPurpose(searchedModels, effectiveModelPurpose),
+    [effectiveModelPurpose, searchedModels],
+  );
+  const isModelListFiltered = isModelSearchActive || effectiveModelPurpose !== 'all';
+  const showsModelPurposeTabs = hasMultipleProviderModelPurposes(modelPurposeCounts);
   const { isDefaultModel, removeModels } = useProviderModelRemove();
   const modelSelection = useProviderModelSelection();
+  const { enterEditing: enterModelSelectionMode } = modelSelection;
   const {
     apiKeys,
     apiKeysQuery,
@@ -203,42 +218,17 @@ export default function ProviderDetailSettingsScreen() {
     }),
     [isModelPullLoading, openModelPullSettings, provider],
   );
-  const openModelSearch = useCallback(() => {
-    if (!provider) {
-      return;
-    }
-
-    void openAppSearch<Model, ModelTypeFilter, Model[]>({
-      emptyText: t('settings.provider.models.search.empty'),
-      filter: {
-        component: ProviderModelTypeSearchFilter,
-        context: models,
-        initialValue: 'all',
-      },
-      getAccessibilityLabel: (model) => model.name,
-      keyExtractor: (model) => model.id,
-      placeholder: t('modelPicker.searchPlaceholder'),
-      renderItem: (model) => <ProviderModelSearchResult model={model} provider={provider} />,
-      search: ({ filters, query }) => ({
-        groups: [
-          {
-            items: filterModelsByType(filterModelsByKeywords(query, models), filters),
-            key: 'models',
-          },
-        ],
-      }),
-    }).then((outcome) => {
-      if (outcome.type === 'selected') {
-        setModelFocusRequest({ modelId: outcome.item.id });
-      }
-    });
-  }, [models, openAppSearch, provider, t]);
   // The chat default is the one model the service refuses to delete, so it is
   // also the one row a selection leaves alone — including "select all".
   const selectableIds = useMemo(
     () => models.filter((model) => !isDefaultModel(model)).map((model) => model.id),
     [isDefaultModel, models],
   );
+  const enterModelSelection = useCallback(() => {
+    setModelSearchText('');
+    setModelPurpose('all');
+    enterModelSelectionMode();
+  }, [enterModelSelectionMode, setModelSearchText]);
   const modelMenuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -257,12 +247,12 @@ export default function ProviderDetailSettingsScreen() {
         disabled: selectableIds.length === 0,
         id: 'select-models',
         label: t('settings.provider.models.selection.start'),
-        onPress: modelSelection.enterEditing,
+        onPress: enterModelSelection,
       },
     ],
     [
       isModelPullLoading,
-      modelSelection.enterEditing,
+      enterModelSelection,
       openModelAddSettings,
       openModelPullSettings,
       provider,
@@ -273,14 +263,6 @@ export default function ProviderDetailSettingsScreen() {
   const modelActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('navigation.search'),
-        disabled: !provider || models.length === 0,
-        icon: SearchIcon,
-        key: 'search-models',
-        onPress: openModelSearch,
-        type: 'icon',
-      },
-      {
         accessibilityLabel: t('common.more'),
         disabled: !provider,
         icon: EllipsisIcon,
@@ -289,7 +271,7 @@ export default function ProviderDetailSettingsScreen() {
         type: 'menu',
       },
     ],
-    [modelMenuItems, models.length, openModelSearch, provider, t],
+    [modelMenuItems, provider, t],
   );
   const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
   const selectedModels = useMemo(
@@ -306,9 +288,11 @@ export default function ProviderDetailSettingsScreen() {
   const handleTabChange = useCallback(
     (tab: ProviderDetailTab) => {
       exitModelSelection();
+      setModelSearchText('');
+      setModelPurpose('all');
       setActiveTab(tab);
     },
-    [exitModelSelection],
+    [exitModelSelection, setModelSearchText],
   );
   const requestRemoveSelectedModels = useCallback(() => {
     if (selectedModels.length === 0) {
@@ -456,16 +440,36 @@ export default function ProviderDetailSettingsScreen() {
           </ScrollView>
         </>
       ) : (
-        <ProviderModelList
-          addAction={addAction}
-          isDefaultModel={isDefaultModel}
-          isLoading={modelsQuery.isPending}
-          focusRequest={modelFocusRequest}
-          models={models}
-          provider={provider}
-          pullAction={modelPullAction}
-          selection={modelListSelection}
-        />
+        <>
+          {modelSelection.isEditing || models.length === 0 ? null : (
+            <>
+              <InlineSearch
+                onChangeText={setModelSearchText}
+                placeholder={t('modelPicker.searchPlaceholder')}
+                value={modelSearchText}
+              />
+              {showsModelPurposeTabs ? (
+                <View className="px-4 pb-3">
+                  <ProviderModelPurposeTabs
+                    onChange={setModelPurpose}
+                    value={effectiveModelPurpose}
+                  />
+                </View>
+              ) : null}
+            </>
+          )}
+          <ProviderModelList
+            addAction={addAction}
+            groupByPurpose={effectiveModelPurpose === 'all'}
+            isDefaultModel={isDefaultModel}
+            isFiltered={isModelListFiltered}
+            isLoading={modelsQuery.isPending}
+            models={listedModels}
+            provider={provider}
+            pullAction={modelPullAction}
+            selection={modelListSelection}
+          />
+        </>
       )}
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
@@ -481,28 +485,6 @@ export default function ProviderDetailSettingsScreen() {
         }
       />
     </>
-  );
-}
-
-function ProviderModelTypeSearchFilter({
-  context: models,
-  onChange,
-  query,
-  value,
-}: AppSearchFilterProps<ModelTypeFilter, Model[]>) {
-  const counts = getModelTypeCounts(filterModelsByKeywords(query, models));
-
-  return <ModelTypeFilterBar counts={counts} onSelect={onChange} selectedFilter={value} />;
-}
-
-function ProviderModelSearchResult({ model, provider }: { model: Model; provider: Provider }) {
-  return (
-    <View className="min-h-12 flex-row items-center gap-3">
-      <ModelAvatar model={model} provider={provider} />
-      <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-        {model.name}
-      </Text>
-    </View>
   );
 }
 

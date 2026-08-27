@@ -4,12 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
-import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
+import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerList } from './ModelPickerList';
-
-const DEFAULT_SELECTED_TAGS: readonly ModelPickerTag[] = [];
 
 type ModelPickerDrawerProps = {
   modelType: ModelTypeFilter;
@@ -17,7 +15,6 @@ type ModelPickerDrawerProps = {
   onSelect: (item: ModelPickerModelItem) => void;
   open: boolean;
   providerId?: string;
-  selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
   title?: string;
 };
@@ -29,7 +26,6 @@ export function ModelPickerDrawer({
   onSelect,
   open,
   providerId,
-  selectedTags = DEFAULT_SELECTED_TAGS,
   selectedModelId,
   title,
 }: ModelPickerDrawerProps) {
@@ -57,7 +53,6 @@ export function ModelPickerDrawer({
         providerId={providerId}
         searchText={searchText}
         selectedModelId={selectedModelId}
-        selectedTags={selectedTags}
       />
     </BottomSheet>
   );
@@ -72,11 +67,10 @@ function ModelPickerDrawerContent({
   open,
   providerId,
   searchText,
-  selectedTags,
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
-  'modelType' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId' | 'selectedTags'
+  'modelType' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId'
 > & {
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
@@ -88,7 +82,6 @@ function ModelPickerDrawerContent({
     modelType,
     providerId,
     searchText: deferredSearchText,
-    selectedTags,
   });
   const listItems = useMemo(() => buildModelPickerListItems(groups), [groups]);
 

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ModelSearchFieldProps } from './ModelSearchField.types';
 
-export function ModelSearchField({ setSearchText }: ModelSearchFieldProps) {
+export function ModelSearchField({ placeholder, setSearchText }: ModelSearchFieldProps) {
   const { t } = useTranslation();
 
   return (
@@ -12,7 +12,7 @@ export function ModelSearchField({ setSearchText }: ModelSearchFieldProps) {
       hideNavigationBar={false}
       hideWhenScrolling={false}
       obscureBackground={false}
-      placeholder={t('navigation.search')}
+      placeholder={placeholder ?? t('navigation.search')}
       placement="stacked"
       onCancelButtonPress={() => setSearchText('')}
       onChangeText={(event) => setSearchText(event.nativeEvent.text)}

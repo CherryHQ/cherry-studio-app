@@ -8,5 +8,6 @@ export type InlineSearchProps = {
    * native field agree.
    */
   onChangeText: (value: string) => void;
+  placeholder?: string;
   value: string;
 };

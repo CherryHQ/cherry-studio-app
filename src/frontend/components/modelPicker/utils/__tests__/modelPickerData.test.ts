@@ -7,14 +7,7 @@ import {
   type Provider,
 } from '@/shared/data/types/provider';
 
-import {
-  buildModelPickerGroups,
-  filterModelsByModelPickerTags,
-  getAvailableModelPickerFilterTags,
-  getAvailableModelPickerFilterTagsForModels,
-  getModelPickerModelItem,
-  getModelPickerRowTags,
-} from '../modelPickerData';
+import { buildModelPickerGroups, getModelPickerModelItem } from '../modelPickerData';
 import { buildModelPickerListItems } from '../modelPickerListItems';
 
 function createProvider(input: {
@@ -221,34 +214,6 @@ describe('model picker data helpers', () => {
     expect(getModelPickerModelItem('openai::hidden-model', { models, providers })).toBeUndefined();
   });
 
-  test('returns available filter tags from selectable models', () => {
-    expect(
-      getAvailableModelPickerFilterTags({
-        models,
-        providers,
-      }),
-    ).toEqual([
-      MODEL_CAPABILITY.REASONING,
-      MODEL_CAPABILITY.IMAGE_RECOGNITION,
-      MODEL_CAPABILITY.FUNCTION_CALL,
-      MODEL_CAPABILITY.WEB_SEARCH,
-    ]);
-  });
-
-  test('filters models by selected tags using intersection semantics', () => {
-    const groups = buildModelPickerGroups({
-      models,
-      providers,
-      searchText: '',
-      selectedTags: [MODEL_CAPABILITY.REASONING],
-    });
-
-    expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
-      'anthropic::claude-3-5-sonnet',
-      'deepseek::deepseek-r1',
-    ]);
-  });
-
   test('shows only enabled image-generation models for the painting picker', () => {
     const imageModels = [
       ...models,
@@ -276,62 +241,6 @@ describe('model picker data helpers', () => {
     expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
       'openai::gpt-image-2',
     ]);
-  });
-
-  // Every list that draws a model row reads its badges from here, so the picker
-  // sheet and the provider screens cannot drift apart on what a model claims.
-  test('badges a row with its capabilities, and with free last when it is', () => {
-    const paid = createModel({
-      capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.REASONING],
-      modelId: 'paid-model',
-      name: 'Paid Model',
-      providerId: 'custom',
-    });
-
-    expect(getModelPickerRowTags(paid)).toEqual([
-      MODEL_CAPABILITY.IMAGE_RECOGNITION,
-      MODEL_CAPABILITY.REASONING,
-    ]);
-    expect(getModelPickerRowTags({ ...paid, name: 'Paid Model (free)' })).toEqual([
-      MODEL_CAPABILITY.IMAGE_RECOGNITION,
-      MODEL_CAPABILITY.REASONING,
-      'free',
-    ]);
-  });
-
-  test('filters arbitrary model collections by their available tags', () => {
-    const pullModels = [
-      createModel({
-        capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
-        modelId: 'reasoning-tools',
-        name: 'Reasoning Tools',
-        providerId: 'custom',
-      }),
-      createModel({
-        capabilities: [MODEL_CAPABILITY.REASONING],
-        isEnabled: false,
-        modelId: 'reasoning-only',
-        name: 'Reasoning Only',
-        providerId: 'custom',
-      }),
-      createModel({
-        capabilities: [MODEL_CAPABILITY.AUDIO_RECOGNITION],
-        modelId: 'audio-only',
-        name: 'Audio Only',
-        providerId: 'custom',
-      }),
-    ];
-
-    expect(getAvailableModelPickerFilterTagsForModels(pullModels)).toEqual([
-      MODEL_CAPABILITY.REASONING,
-      MODEL_CAPABILITY.FUNCTION_CALL,
-    ]);
-    expect(
-      filterModelsByModelPickerTags(pullModels, [
-        MODEL_CAPABILITY.REASONING,
-        MODEL_CAPABILITY.FUNCTION_CALL,
-      ]),
-    ).toEqual([pullModels[0]]);
   });
 
   test('builds list items up to the visible limit without a trailing empty group', () => {

@@ -10,12 +10,17 @@ type ModelSearchControlsProps = ModelSearchFieldProps & {
 
 export function ModelSearchControls({
   children,
+  placeholder,
   searchText,
   setSearchText,
 }: ModelSearchControlsProps) {
   return (
     <View className="gap-3 px-4 py-3">
-      <ModelSearchField searchText={searchText} setSearchText={setSearchText} />
+      <ModelSearchField
+        placeholder={placeholder}
+        searchText={searchText}
+        setSearchText={setSearchText}
+      />
       {children}
     </View>
   );

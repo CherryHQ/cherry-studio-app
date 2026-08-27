@@ -7,6 +7,8 @@ import type { ProviderModelPullChromeProps } from './ProviderModelPullChrome.typ
 export function ProviderModelPullChrome({
   isAllSelected,
   isApplying,
+  isSelectionScoped,
+  isToggleAllDisabled,
   onApply,
   onToggleAll,
   selectedCount,
@@ -14,9 +16,13 @@ export function ProviderModelPullChrome({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const selectAllLabel = t(
-    isAllSelected
-      ? 'settings.provider.models.selection.deselectAll'
-      : 'settings.provider.models.selection.selectAll',
+    isSelectionScoped
+      ? isAllSelected
+        ? 'settings.provider.models.selection.deselectVisible'
+        : 'settings.provider.models.selection.selectVisible'
+      : isAllSelected
+        ? 'settings.provider.models.selection.deselectAll'
+        : 'settings.provider.models.selection.selectAll',
   );
   const applyLabel =
     selectedCount === 0
@@ -33,9 +39,9 @@ export function ProviderModelPullChrome({
         <Pressable
           accessibilityLabel={selectAllLabel}
           accessibilityRole="button"
-          accessibilityState={{ disabled: isApplying }}
+          accessibilityState={{ disabled: isApplying || isToggleAllDisabled }}
           className="items-center justify-center rounded-full border border-border bg-field px-5 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
-          disabled={isApplying}
+          disabled={isApplying || isToggleAllDisabled}
           onPress={onToggleAll}
         >
           <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
