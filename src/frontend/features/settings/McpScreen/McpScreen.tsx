@@ -1,9 +1,11 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { ContentState } from '@cherrystudio/ui/components';
+import { ContentState, Image } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import type { HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
@@ -17,6 +19,10 @@ import { SettingsServiceRow } from '../components/SettingsServiceRow';
 export function McpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { theme } = useUniwind();
+  // The same mark the settings list uses for this row, so the empty state names
+  // the thing it is empty of rather than standing in for it with a glyph.
+  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
   const { error, isLoading, refetch, servers } = useMcpServersApi();
   const { summaries } = useMcpServerRuntimeSummaries(servers);
   const [pressedServerId, setPressedServerId] = useState<string>();
@@ -72,11 +78,23 @@ export function McpScreen() {
         />
       ) : servers.length === 0 ? (
         <ContentState.Empty
-          className="flex-1 px-6 pb-20"
+          description={t('settings.mcp.emptyDescription')}
+          icon={
+            mcpIcon ? (
+              <ContentState.Icon>
+                <Image
+                  cachePolicy="memory-disk"
+                  className="size-7"
+                  contentFit="contain"
+                  source={mcpIcon}
+                />
+              </ContentState.Icon>
+            ) : null
+          }
+          layout="page"
           primaryAction={{
             children: t('settings.mcp.emptyAction'),
             onPress: openCreate,
-            size: 'default',
             testID: 'mcp-empty-create',
           }}
           title={t('settings.mcp.empty')}
