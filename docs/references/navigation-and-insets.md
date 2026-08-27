@@ -104,13 +104,28 @@ Agent editing, painting input, provider connectivity checks, and model settings 
 place. Focusing search expands the sheet from `large` to `full`; a non-empty query keeps it expanded
 after the keyboard is dismissed, and clearing an unfocused search restores `large`.
 
-Model-service search, Agent search, and provider model search use the root `/search` route. It is one
-fixed view: callers adapt data, matching, optional filters, and result content rather than supplying
-business-specific search screens. Native back or an interactive pop cancels without calling business
-logic; selection resolves only after the route's exit transition completes. The route title is always
-Search, and it does not query or render a full result set until the user enters non-whitespace text.
-Provider model pull keeps persistent local search because its matching rows retain management or
-multi-selection actions.
+The app has two search shapes, and which one a screen takes follows from where the answer lives.
+
+A screen that already holds everything it can match keeps its search in place, through
+`components/inlineSearch`. The field sits between the screen's `RouteHeader` and its content: iOS
+mounts `Stack.SearchBar` with `placement="stacked"`, giving it a row under the title, while Android
+draws CherryUI's `SearchField` in that same spot. Android's own header search bar exists but arrives
+as a toolbar menu item, pinned right of the screen's actions and styled by the platform rather than
+by CherryUI, so it is deliberately not used. Agent list, model-service list, and MCP server list are
+all this shape.
+
+Search that has to leave the screen to find its answer — because results are paginated server-side,
+carry filters, or are not the rows the screen already draws — uses the root `/search` route. It is
+one fixed view: callers adapt data, matching, optional filters, and result content rather than
+supplying business-specific search screens. Native back or an interactive pop cancels without
+calling business logic; selection resolves only after the route's exit transition completes. The
+route title is always Search, and it does not query or render a full result set until the user
+enters non-whitespace text. Session search and provider model search are this shape.
+
+The two share their matching rules through `frontend/utils/search`, which is keyword-based: a query
+splits on whitespace and every keyword has to appear across an item's searchable fields. They share
+nothing else. Provider model pull keeps its own local search because its matching rows retain
+management and multi-selection actions that neither shape models.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 

@@ -1,5 +1,4 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { Section } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -7,8 +6,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { useAppSearch } from '@/frontend/components/appSearch';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds } from '@/frontend/utils/constants';
 import type { Provider } from '@/shared/data/types/provider';
@@ -37,7 +36,6 @@ const renderProviderSectionHeader = ({ section }: { section: ProviderListSection
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { open: openAppSearch } = useAppSearch();
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
 
@@ -90,9 +88,17 @@ export default function ProviderSettingsScreen() {
       })),
     [openProvider, providers],
   );
+  const {
+    query,
+    results: listedProviderItems,
+    setQuery,
+  } = useInlineSearch({
+    fields: (item: ProviderListRow) => [item.name],
+    items: providerItems,
+  });
   const providerSections = useMemo<ProviderListSection[]>(() => {
-    const enabledProviders = providerItems.filter(({ isEnabled }) => isEnabled);
-    const disabledProviders = providerItems.filter(({ isEnabled }) => !isEnabled);
+    const enabledProviders = listedProviderItems.filter(({ isEnabled }) => isEnabled);
+    const disabledProviders = listedProviderItems.filter(({ isEnabled }) => !isEnabled);
 
     return [
       {
@@ -108,8 +114,8 @@ export default function ProviderSettingsScreen() {
         }),
       },
     ].filter(({ data }) => data.length > 0);
-  }, [providerItems, t]);
-  const measuredItemCount = providerItems.length + providerSections.length;
+  }, [listedProviderItems, t]);
+  const measuredItemCount = listedProviderItems.length + providerSections.length;
   const [measuredList, setMeasuredList] = useState<{ height: number; itemCount: number }>();
   const handleContentSizeChange = useCallback(
     (_width: number, height: number) => setMeasuredList({ height, itemCount: measuredItemCount }),
@@ -118,44 +124,13 @@ export default function ProviderSettingsScreen() {
   const cardHeight =
     measuredList?.itemCount === measuredItemCount
       ? measuredList.height
-      : providerItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
+      : listedProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
         providerSections.length * PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT;
-  const openProviderSearch = useCallback(() => {
-    void openAppSearch<Provider>({
-      emptyText: t('settings.provider.search.empty'),
-      getAccessibilityLabel: (provider) => provider.name,
-      keyExtractor: (provider) => provider.id,
-      placeholder: t('navigation.search'),
-      renderItem: (provider) => <ProviderSearchResult provider={provider} />,
-      search: ({ query }) => {
-        const normalizedQuery = query.trim().toLocaleLowerCase();
-        const items = normalizedQuery
-          ? providers.filter((provider) =>
-              provider.name.toLocaleLowerCase().includes(normalizedQuery),
-            )
-          : providers;
-
-        return { groups: [{ items, key: 'providers' }] };
-      },
-    }).then((outcome) => {
-      if (outcome.type === 'selected') {
-        openProvider(outcome.item);
-      }
-    });
-  }, [openAppSearch, openProvider, providers, t]);
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
-      {
-        accessibilityLabel: t('navigation.search'),
-        disabled: providers.length === 0,
-        icon: SearchIcon,
-        key: 'search-providers',
-        onPress: openProviderSearch,
-        type: 'icon',
-      },
       {
         accessibilityLabel: t('settings.provider.add.title'),
         icon: PlusIcon,
@@ -164,14 +139,15 @@ export default function ProviderSettingsScreen() {
         type: 'icon',
       },
     ],
-    [openCreateProvider, openProviderSearch, providers.length, t],
+    [openCreateProvider, t],
   );
 
   return (
     <>
       <RouteHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
+      <InlineSearch onChangeText={setQuery} value={query} />
       <View className="flex-1 px-4 pb-5">
-        {providerItems.length > 0 ? (
+        {listedProviderItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">
             <View style={{ height: cardHeight, maxHeight: '100%' }}>
               <SectionList
@@ -205,21 +181,6 @@ export default function ProviderSettingsScreen() {
         )}
       </View>
     </>
-  );
-}
-
-function ProviderSearchResult({ provider }: { provider: Provider }) {
-  return (
-    <View className="min-h-12 flex-row items-center gap-3">
-      <ProviderAvatar
-        presetProviderId={provider.presetProviderId}
-        providerId={provider.id}
-        providerName={provider.name}
-      />
-      <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-        {provider.name}
-      </Text>
-    </View>
   );
 }
 

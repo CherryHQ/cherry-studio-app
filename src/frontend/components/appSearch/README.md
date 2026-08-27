@@ -1,7 +1,14 @@
 # App Search
 
-This app-shell module owns the single transient route used by currently connected product search
-entries.
+This app-shell module owns the single transient search route.
+
+## When To Use It
+
+Take this route when a screen cannot answer the query itself: results are paginated server-side,
+carry filters, or are not the rows the screen already draws. A screen that already holds everything
+it can match keeps its search in place with [Inline Search](../inlineSearch/README.md) instead.
+
+The two share their matching rules through `@/frontend/utils/search` and nothing else.
 
 ## Contract
 
@@ -30,5 +37,6 @@ items are never serialized into navigation state. Only one app-search session ca
 App Search is the application's one transient single-selection search view. Extend a business
 request through its search function, filter control, grouping, and result renderer. Do not add
 business-specific route variants or arbitrary full-page render slots. A workflow that needs a
-different interaction contract, such as persistent or multi-selection search, owns a separate
-feature instead of becoming another App Search mode.
+different interaction contract owns a separate feature instead of becoming another App Search mode —
+persistent in-place search is [Inline Search](../inlineSearch/README.md), and multi-selection search
+belongs to whichever feature needs it.
