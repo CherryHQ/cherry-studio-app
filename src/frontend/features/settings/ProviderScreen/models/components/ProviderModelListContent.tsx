@@ -1,14 +1,15 @@
-import {
-  LegendList,
-  type LegendListRef,
-  type LegendListRenderItemProps,
-} from '@legendapp/list/react-native';
-import { memo, type ReactElement, useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { memo, type ReactElement, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View } from 'react-native';
 
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
+import {
+  buildProviderModelListItems,
+  type ProviderModelListItem,
+} from '../utils/providerModelListItems';
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
 
 /**
@@ -20,23 +21,16 @@ export type ProviderModelListSelection = {
   selectedIds: ReadonlySet<UniqueModelId>;
 };
 
-export type ProviderModelListFocusRequest = {
-  modelId: UniqueModelId;
-};
-
 export type ProviderModelListContentProps = {
-  focusRequest?: ProviderModelListFocusRequest;
+  groupByPurpose: boolean;
   isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
-  ListHeaderComponent?: ReactElement;
   models: Model[];
-  onScrollBeginDrag?: () => void;
   provider: Provider | undefined;
   selection?: ProviderModelListSelection;
 };
 
 type ProviderModelListExtraData = {
-  focusedModelId?: UniqueModelId;
   isDefaultModel: (model: Model) => boolean;
   provider: Provider | undefined;
   selection: ProviderModelListSelection | undefined;
@@ -47,72 +41,78 @@ type ProviderModelListExtraData = {
  * is a label until the screen starts selecting, and a checkbox after.
  */
 export function ProviderModelListContent({
-  focusRequest,
+  groupByPurpose,
   isDefaultModel,
   ListEmptyComponent,
-  ListHeaderComponent,
   models,
-  onScrollBeginDrag,
   provider,
   selection,
 }: ProviderModelListContentProps) {
-  const listRef = useRef<LegendListRef>(null);
-  useEffect(() => {
-    if (!focusRequest) {
-      return;
-    }
-
-    const index = models.findIndex((model) => model.id === focusRequest.modelId);
-    if (index < 0) {
-      return;
-    }
-
-    const frame = requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.35 });
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [focusRequest, models]);
+  const { t } = useTranslation();
+  const listItems = useMemo(
+    () => buildProviderModelListItems(models, groupByPurpose),
+    [groupByPurpose, models],
+  );
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
-      focusedModelId: focusRequest?.modelId,
       isDefaultModel,
       provider,
       selection,
     }),
-    [focusRequest, isDefaultModel, provider, selection],
+    [isDefaultModel, provider, selection],
   );
   const renderItem = useCallback(
-    ({ extraData: itemExtraData, item }: LegendListRenderItemProps<Model>) => (
-      <ModelRow
-        canRemove={!itemExtraData.isDefaultModel(item)}
-        isFocused={item.id === itemExtraData.focusedModelId}
-        isSelected={itemExtraData.selection?.selectedIds.has(item.id) ?? false}
-        model={item}
-        provider={itemExtraData.provider}
-        onToggleSelected={itemExtraData.selection?.onToggleModel}
-      />
-    ),
-    [],
+    ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
+      if (item.type === 'section') {
+        return (
+          <View
+            className={
+              item.isFirstSection
+                ? 'flex-row items-center justify-between px-4 pt-3 pb-2'
+                : 'flex-row items-center justify-between px-4 pt-5 pb-2'
+            }
+          >
+            <Text className="font-medium text-foreground-tertiary text-sm">
+              {t(
+                item.purpose === 'chat'
+                  ? 'settings.provider.models.section.chat'
+                  : 'settings.provider.models.section.painting',
+              )}
+            </Text>
+            <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
+              {item.count}
+            </Text>
+          </View>
+        );
+      }
+
+      return (
+        <ModelRow
+          canRemove={!itemExtraData.isDefaultModel(item.model)}
+          isSelected={itemExtraData.selection?.selectedIds.has(item.model.id) ?? false}
+          model={item.model}
+          provider={itemExtraData.provider}
+          onToggleSelected={itemExtraData.selection?.onToggleModel}
+        />
+      );
+    },
+    [t],
   );
-  const keyExtractor = useCallback((item: Model) => item.id, []);
 
   return (
     <LegendList
-      ref={listRef}
       automaticallyAdjustsScrollIndicatorInsets
       contentContainerStyle={styles.contentContainer}
       contentInsetAdjustmentBehavior="automatic"
-      data={models}
+      data={listItems}
       estimatedItemSize={providerModelRowEstimatedHeight}
       extraData={extraData}
+      getItemType={getProviderModelListItemType}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
-      keyExtractor={keyExtractor}
+      keyExtractor={providerModelListKeyExtractor}
       ListEmptyComponent={ListEmptyComponent}
-      ListHeaderComponent={ListHeaderComponent}
       maintainVisibleContentPosition={false}
-      onScrollBeginDrag={onScrollBeginDrag}
       recycleItems
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
@@ -123,14 +123,12 @@ export function ProviderModelListContent({
 
 const ModelRow = memo(function ModelRow({
   canRemove,
-  isFocused,
   isSelected,
   model,
   onToggleSelected,
   provider,
 }: {
   canRemove: boolean;
-  isFocused: boolean;
   isSelected: boolean;
   model: Model;
   /** Given only while selecting; its absence is what leaves the row a plain label. */
@@ -143,7 +141,6 @@ const ModelRow = memo(function ModelRow({
 
   return (
     <ProviderModelRow
-      className={isFocused ? 'bg-foreground/5' : undefined}
       model={model}
       provider={provider}
       selection={
@@ -155,10 +152,21 @@ const ModelRow = memo(function ModelRow({
   );
 });
 
+function providerModelListKeyExtractor(item: ProviderModelListItem) {
+  return item.key;
+}
+
+function getProviderModelListItemType(item: ProviderModelListItem) {
+  return item.type;
+}
+
 const styles = StyleSheet.create({
   contentContainer: {
     flexGrow: 1,
     paddingBottom: 96,
+  },
+  counter: {
+    fontVariant: ['tabular-nums'],
   },
   list: {
     flex: 1,

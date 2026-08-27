@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 
 import type { ModelSearchFieldProps } from './ModelSearchField.types';
 
-export function ModelSearchField({ searchText, setSearchText }: ModelSearchFieldProps) {
+export function ModelSearchField({
+  placeholder,
+  searchText,
+  setSearchText,
+}: ModelSearchFieldProps) {
   const { t } = useTranslation();
 
   return (
@@ -12,7 +16,7 @@ export function ModelSearchField({ searchText, setSearchText }: ModelSearchField
       clearAccessibilityLabel={t('common.clear')}
       onChangeText={setSearchText}
       onClear={() => setSearchText('')}
-      placeholder={t('navigation.search')}
+      placeholder={placeholder ?? t('navigation.search')}
       value={searchText}
     />
   );

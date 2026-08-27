@@ -8,15 +8,15 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import {
   ProviderModelListContent,
-  type ProviderModelListFocusRequest,
   type ProviderModelListSelection,
 } from '../models/components/ProviderModelListContent';
 import type { ProviderModelAction } from '../models/types';
 
 type ProviderModelListProps = {
   addAction?: ProviderModelAction;
-  focusRequest?: ProviderModelListFocusRequest;
+  groupByPurpose?: boolean;
   isDefaultModel: (model: Model) => boolean;
+  isFiltered?: boolean;
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
@@ -28,8 +28,9 @@ type ProviderModelListProps = {
 
 export function ProviderModelList({
   addAction,
-  focusRequest,
+  groupByPurpose = false,
   isDefaultModel,
+  isFiltered = false,
   isLoading,
   models,
   provider,
@@ -37,14 +38,19 @@ export function ProviderModelList({
   selection,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
-  const hasNoModels = !isLoading && models.length === 0;
+  const hasNoVisibleModels = !isLoading && models.length === 0;
 
   return (
     <ProviderModelListContent
-      focusRequest={focusRequest}
+      groupByPurpose={groupByPurpose}
       isDefaultModel={isDefaultModel}
       ListEmptyComponent={
-        hasNoModels && pullAction && addAction ? (
+        hasNoVisibleModels && isFiltered ? (
+          <ContentState.Empty
+            className="flex-1 px-6 pb-24"
+            title={t('settings.provider.models.search.empty')}
+          />
+        ) : hasNoVisibleModels && pullAction && addAction ? (
           <ContentState.Empty
             className="flex-1 px-6 pb-24"
             primaryAction={{

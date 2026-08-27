@@ -1,4 +1,4 @@
-import { Section, Spinner } from '@cherrystudio/ui/components';
+import { Spinner } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -6,18 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/components/headers';
-import {
-  filterModelsByType,
-  getModelTypeCounts,
-  ModelSearchControls,
-  ModelTypeFilterBar,
-  type ModelTypeFilter,
-} from '@/frontend/components/modelPicker';
+import { ModelSearchControls } from '@/frontend/components/modelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';
+import { ProviderModelPurposeTabs } from './models/components/ProviderModelPurposeTabs';
 import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
@@ -35,6 +30,13 @@ import {
   type ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
+import {
+  filterProviderModelsByPurpose,
+  getEffectiveProviderModelPurpose,
+  getProviderModelPurposeCounts,
+  hasMultipleProviderModelPurposes,
+  type ProviderModelPurpose,
+} from './models/utils/providerModelPurpose';
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
@@ -145,24 +147,25 @@ function ProviderModelPullPreviewPage({
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
-  const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>('all');
+  const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const missingCount = preview.missing.length;
+  const previewModels = useMemo(() => [...preview.added, ...preview.missing], [preview]);
+  const modelPurposeCounts = useMemo(
+    () => getProviderModelPurposeCounts(previewModels),
+    [previewModels],
+  );
+  const effectiveModelPurpose = getEffectiveProviderModelPurpose(modelPurpose, modelPurposeCounts);
+  const showsModelPurposeTabs = hasMultipleProviderModelPurposes(modelPurposeCounts);
   const searchedPreview = useMemo(
     () => filterProviderModelPullPreview(preview, deferredSearchText),
     [deferredSearchText, preview],
   );
   const displayedPreview = useMemo(
     () => ({
-      added: filterModelsByType(searchedPreview.added, typeFilter),
-      missing: filterModelsByType(searchedPreview.missing, typeFilter),
+      added: filterProviderModelsByPurpose(searchedPreview.added, effectiveModelPurpose),
+      missing: filterProviderModelsByPurpose(searchedPreview.missing, effectiveModelPurpose),
     }),
-    [searchedPreview, typeFilter],
-  );
-  const typeCounts = useMemo(
-    // Counted over what the search left behind but before the type filter, so a
-    // tab's number says how many models picking it would show.
-    () => getModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
-    [searchedPreview],
+    [effectiveModelPurpose, searchedPreview],
   );
   const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
     useProviderModelPullSelection({
@@ -190,12 +193,13 @@ function ProviderModelPullPreviewPage({
     [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
-  // Everything the active search and type filter leave on screen. Selection
+  // Everything the active search and purpose filter leave on screen. Selection
   // actions stay in this persistent workflow so they can operate on the query.
   const displayedIds = useMemo(
     () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
     [displayedPreview],
   );
+  const isSelectionScoped = deferredSearchText.trim().length > 0 || effectiveModelPurpose !== 'all';
   const handleApply = useCallback(() => {
     void applySelection().then((didApply) => {
       if (didApply) {
@@ -227,14 +231,14 @@ function ProviderModelPullPreviewPage({
           ) : null
         }
         ListHeaderComponent={
-          // The platform controls put native iOS search in the navigation bar
-          // and Android search in the list header while keeping the filter here.
-          <ModelSearchControls searchText={searchText} setSearchText={setSearchText}>
-            <ModelTypeFilterBar
-              counts={typeCounts}
-              selectedFilter={typeFilter}
-              onSelect={setTypeFilter}
-            />
+          <ModelSearchControls
+            placeholder={t('modelPicker.searchPlaceholder')}
+            searchText={searchText}
+            setSearchText={setSearchText}
+          >
+            {showsModelPurposeTabs ? (
+              <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
+            ) : null}
           </ModelSearchControls>
         }
         maintainVisibleContentPosition={false}
@@ -246,6 +250,8 @@ function ProviderModelPullPreviewPage({
       <ProviderModelPullChrome
         isAllSelected={displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id))}
         isApplying={isApplying}
+        isSelectionScoped={isSelectionScoped}
+        isToggleAllDisabled={displayedIds.length === 0}
         selectedCount={selectedIds.size}
         onApply={handleApply}
         onToggleAll={() => toggleAll(displayedIds)}
@@ -326,12 +332,18 @@ function PullSectionHeader({
   title: string;
 }) {
   return (
-    // `px-4` rather than the header's own `px-3`, so the title starts where the
-    // model names below it do.
-    <Section.Header
-      className={isFirstSection ? 'px-4 pb-2' : 'mt-3 px-4 pb-2'}
-      title={`${title} (${count})`}
+    <View
+      className={
+        isFirstSection
+          ? 'flex-row items-center gap-2 px-4 pb-2'
+          : 'mt-3 flex-row items-center gap-2 px-4 pb-2'
+      }
     >
+      <Text className="font-medium text-foreground-tertiary text-sm">{title}</Text>
+      <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
+        {count}
+      </Text>
+      <View className="flex-1" />
       <Pressable
         accessibilityLabel={actionLabel}
         accessibilityRole="button"
@@ -342,7 +354,7 @@ function PullSectionHeader({
       >
         <Text className="font-medium text-foreground text-sm">{actionLabel}</Text>
       </Pressable>
-    </Section.Header>
+    </View>
   );
 }
 
@@ -377,6 +389,9 @@ const PullModelRow = memo(function PullModelRow({
 });
 
 const styles = StyleSheet.create({
+  counter: {
+    fontVariant: ['tabular-nums'],
+  },
   list: {
     flex: 1,
   },

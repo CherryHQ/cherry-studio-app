@@ -6,20 +6,27 @@ import type { ProviderModelPullChromeProps } from './ProviderModelPullChrome.typ
 export function ProviderModelPullChrome({
   isAllSelected,
   isApplying,
+  isSelectionScoped,
+  isToggleAllDisabled,
   onApply,
   onToggleAll,
   selectedCount,
 }: ProviderModelPullChromeProps) {
   const { t } = useTranslation();
+  const toggleAllLabel = t(
+    isSelectionScoped
+      ? isAllSelected
+        ? 'settings.provider.models.selection.deselectVisible'
+        : 'settings.provider.models.selection.selectVisible'
+      : isAllSelected
+        ? 'settings.provider.models.selection.deselectAll'
+        : 'settings.provider.models.selection.selectAll',
+  );
 
   return (
     <Stack.Toolbar placement="bottom">
-      <Stack.Toolbar.Button disabled={isApplying} onPress={onToggleAll}>
-        {t(
-          isAllSelected
-            ? 'settings.provider.models.selection.deselectAll'
-            : 'settings.provider.models.selection.selectAll',
-        )}
+      <Stack.Toolbar.Button disabled={isApplying || isToggleAllDisabled} onPress={onToggleAll}>
+        {toggleAllLabel}
       </Stack.Toolbar.Button>
       {/* Pushes the confirm to the trailing edge, where a commit belongs. */}
       <Stack.Toolbar.Spacer />

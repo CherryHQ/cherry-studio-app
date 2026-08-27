@@ -13,7 +13,7 @@ import type { InlineSearchProps } from './InlineSearch.types';
  * the glass circle every other top action wears. A row of its own sidesteps the
  * ordering entirely, and it is the placement Android's field is drawn to match.
  */
-export function InlineSearch({ onChangeText, value: _value }: InlineSearchProps) {
+export function InlineSearch({ onChangeText, placeholder, value: _value }: InlineSearchProps) {
   const { t } = useTranslation();
 
   return (
@@ -25,7 +25,7 @@ export function InlineSearch({ onChangeText, value: _value }: InlineSearchProps)
       obscureBackground={false}
       onCancelButtonPress={() => onChangeText('')}
       onChangeText={(event) => onChangeText(event.nativeEvent.text)}
-      placeholder={t('navigation.search')}
+      placeholder={placeholder ?? t('navigation.search')}
       placement="stacked"
     />
   );

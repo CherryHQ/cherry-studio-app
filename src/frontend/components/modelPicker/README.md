@@ -10,10 +10,10 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.
-- `ModelPickerIcon` and `ModelPickerTagChip` render model metadata used by picker consumers.
+- `ModelPickerIcon` renders model identity used by picker consumers.
 - `ModelSearchControls` keeps persistent workflow search native in the iOS header and inline on
-  Android. `ModelTypeFilterBar` renders the model-type control. Search adapters derive its counts
-  from the current query so a type's displayed count matches the results it can reveal.
+  Android. Product workflows own their purpose controls rather than exposing provider capability
+  taxonomies through the shared picker.
 - `useModelSettingSelections` reads and updates model selection preferences.
 - Model setting and model type helpers are exported from `index.ts`.
 

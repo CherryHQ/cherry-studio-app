@@ -3,12 +3,11 @@ import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/avatar';
-import { getModelPickerRowTags, ModelPickerTagChip } from '@/frontend/components/modelPicker';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-/** `py-2` around the tallest thing in the row, which is the 26 avatar. */
-export const providerModelRowEstimatedHeight = 42;
+/** Most rows are one line; a distinct API model id adds one compact metadata line. */
+export const providerModelRowEstimatedHeight = 48;
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
@@ -47,7 +46,8 @@ export function ProviderModelRow({
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
 }) {
-  const tags = getModelPickerRowTags(model);
+  const hasDistinctModelId = model.modelId.trim() !== model.name.trim();
+  const accessibilityLabel = hasDistinctModelId ? `${model.name}, ${model.modelId}` : model.name;
   const rowClassName = className
     ? `flex-row items-center gap-3 px-4 py-2 ${className}`
     : 'flex-row items-center gap-3 px-4 py-2';
@@ -63,33 +63,34 @@ export function ProviderModelRow({
           draws, and the one the picker sheet draws beside the same single line
           of text. */}
       <ModelAvatar model={model} provider={provider} />
-      {/* The one part of the row that gives: the capabilities and the action
-          keep their natural width, so a long model id ellipsizes rather than
-          pushing them off the end. */}
-      <Text
-        className={
-          tone === 'struck'
-            ? 'min-w-0 flex-1 text-base text-foreground line-through'
-            : 'min-w-0 flex-1 text-base text-foreground'
-        }
-        numberOfLines={1}
-      >
-        {model.name}
-      </Text>
-      {tags.length > 0 ? (
-        <View className="flex-row items-center gap-1">
-          {tags.map((tag) => (
-            <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-          ))}
-        </View>
-      ) : null}
+      <View className="min-w-0 flex-1">
+        <Text
+          className={
+            tone === 'struck'
+              ? 'text-base text-foreground line-through'
+              : 'text-base text-foreground'
+          }
+          numberOfLines={1}
+        >
+          {model.name}
+        </Text>
+        {hasDistinctModelId ? (
+          <Text
+            selectable={!selection}
+            className="text-foreground-tertiary text-xs"
+            numberOfLines={1}
+          >
+            {model.modelId}
+          </Text>
+        ) : null}
+      </View>
       {children}
     </>
   );
 
   if (!selection) {
     return (
-      <View accessibilityLabel={model.name} accessible className={rowClassName}>
+      <View accessibilityLabel={accessibilityLabel} accessible className={rowClassName}>
         {content}
       </View>
     );
@@ -97,7 +98,7 @@ export function ProviderModelRow({
 
   return (
     <Pressable
-      accessibilityLabel={model.name}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selection.isSelected, disabled: selection.isDisabled }}
       className={`${rowClassName} active:bg-foreground/5`}
