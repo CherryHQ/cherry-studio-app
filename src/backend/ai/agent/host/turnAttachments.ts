@@ -26,7 +26,7 @@ import {
 } from '../resources/textAttachments';
 import { raceAbort, unsupportedMediaNote } from '../runtime';
 import type { AgentRuntime, RuntimeInputPart, RuntimeModelPreflight } from '../runtime';
-import type { RuntimeAttachmentContents } from './mapping';
+import type { RuntimeAttachmentContents } from './turnRuntimeInput';
 
 const NO_IMAGE_MEDIA_CAPABILITIES = { image: false, video: true, audio: true } as const;
 

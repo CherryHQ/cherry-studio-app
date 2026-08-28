@@ -1,44 +1,11 @@
 import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
 
-import { toAgentErrorView, toRuntimeHistory, toRuntimeInputParts } from '../mapping';
+import { toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
-describe('Agent Host mappings', () => {
-  test('preserves provider identity behind the closed protocol error code', () => {
-    expect(
-      toAgentErrorView({
-        code: 'access_denied',
-        message: 'OpenAI API error (403): access denied',
-        retryable: false,
-        origin: 'provider',
-        name: 'AI_APICallError',
-        context: {
-          statusCode: 403,
-          providerId: 'openai',
-          modelId: 'gpt-test',
-          responseBody: '{"error":"access_denied"}',
-        },
-      }),
-    ).toEqual({
-      code: 'EXECUTION_FAILED',
-      message: 'OpenAI API error (403): access denied',
-      retryable: false,
-      failure: {
-        version: 1,
-        reasonCode: 'permission',
-        source: { layer: 'provider', name: 'AI_APICallError', code: 'access_denied' },
-        context: {
-          statusCode: 403,
-          providerId: 'openai',
-          modelId: 'gpt-test',
-          responseBody: '{"error":"access_denied"}',
-        },
-      },
-    });
-  });
-
+describe('Turn Runtime input assembly', () => {
   test('projects only ledger-authorized managed image content into Runtime input', () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const image = {

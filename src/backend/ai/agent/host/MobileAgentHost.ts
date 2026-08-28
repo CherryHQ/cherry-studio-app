@@ -113,11 +113,10 @@ import {
   toAgentErrorView,
   toAgentMessagePart,
   toAgentUsageView,
-  toRuntimeHistory,
-  toRuntimeInputParts,
-} from './mapping';
+} from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import { prepareTurn, type TurnPlan, type TurnPreparationDependencies } from './turnPreparation';
+import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
