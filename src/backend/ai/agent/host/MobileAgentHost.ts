@@ -132,6 +132,19 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
   update: () => {},
 };
 
+/**
+ * Runtime events after which the background-reply surface must re-read the
+ * assistant message. Declaring the set here rather than notifying inside each
+ * branch means a newly handled event cannot silently stop refreshing the live
+ * notification — a drift no test would catch.
+ */
+const MESSAGE_SURFACE_EVENTS: ReadonlySet<RuntimeEvent['type']> = new Set([
+  'approval.resolved',
+  'part.add',
+  'part.replace',
+  'text.delta',
+]);
+
 const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
 
 type MobileAgentHostOverrides = {
@@ -614,6 +627,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
+        if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
+          state.backgroundReply.update(state.assistantMessage);
+        }
         if (isTerminal) {
           return;
         }
@@ -687,7 +703,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'part.add', index: event.index, part },
         });
-        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'text.delta': {
@@ -700,7 +715,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'text.append', partId: event.partId, text: event.text },
         });
-        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'part.replace': {
@@ -714,7 +728,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'part.replace', part },
         });
-        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'approval.requested': {
@@ -738,7 +751,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           state.turn = { ...state.turn, status: 'running' };
           this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
-        state.backgroundReply.update(state.assistantMessage);
         this.publish(sessionId, { type: 'approval.resolved', approval });
         return false;
       }
