@@ -1,3 +1,5 @@
+import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
+
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../types';
 import {
   createPiDeferredToolDiscoveryTools,
@@ -28,22 +30,34 @@ function mcpTool(
   };
 }
 
-function execute(tool: RuntimeTool, input: RuntimeJsonValue, toolCallId = 'call-1') {
-  return tool.execute({ input, signal: SIGNAL, toolCallId });
+function runInternalTool(
+  _toolCallId: string,
+  _signal: AbortSignal | undefined,
+  operation: () => RuntimeToolResult | Promise<RuntimeToolResult>,
+) {
+  return Promise.resolve().then(operation);
+}
+
+function execute(tool: PiAgentTool, input: RuntimeJsonValue, toolCallId = 'call-1') {
+  return tool.execute(toolCallId, input as never, SIGNAL);
 }
 
 describe('createPiDeferredToolDiscoveryTools', () => {
   test('searches names and descriptions and returns TypeScript call signatures', async () => {
     const searchIssues = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
     const listFiles = mcpTool('mcp_server_1_list_files', 'List files');
-    const tools = createPiDeferredToolDiscoveryTools([searchIssues, listFiles], async () => ({
-      value: null,
-      artifacts: [],
-    }));
-    const search = tools.find((tool) => tool.providerName === PI_TOOL_SEARCH_TOOL_NAME);
+    const tools = createPiDeferredToolDiscoveryTools(
+      [searchIssues, listFiles],
+      async () => ({
+        value: null,
+        artifacts: [],
+      }),
+      runInternalTool,
+    );
+    const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
 
-    const result = await execute(search, { query: 'repository' });
+    const result = (await execute(search, { query: 'repository' })).details as RuntimeToolResult;
     const serialized = JSON.stringify(result.value);
 
     expect(serialized).toContain('mcp_server_1_search_issues');
@@ -56,10 +70,11 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     const search = createPiDeferredToolDiscoveryTools(
       [mcpTool('mcp_server_1_getHTTPResponse', '')],
       async () => ({ value: null, artifacts: [] }),
-    ).find((tool) => tool.providerName === PI_TOOL_SEARCH_TOOL_NAME);
+      runInternalTool,
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
 
-    const result = await execute(search, { query: 'http response' });
+    const result = (await execute(search, { query: 'http response' })).details as RuntimeToolResult;
 
     expect(JSON.stringify(result.value)).toContain('mcp_server_1_getHTTPResponse');
   });
@@ -68,43 +83,42 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
     const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
     const invokeTarget = jest.fn(async () => targetResult);
-    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget);
-    const describeTool = tools.find((tool) => tool.providerName === PI_TOOL_DESCRIBE_TOOL_NAME);
-    const callTool = tools.find((tool) => tool.providerName === PI_TOOL_CALL_TOOL_NAME);
+    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runInternalTool);
+    const describeTool = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME);
+    const callTool = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
     if (!describeTool || !callTool) throw new Error('Missing deferred-discovery tools.');
 
-    const description = await execute(describeTool, { name: target.providerName }, 'describe-1');
+    const description = (await execute(describeTool, { name: target.providerName }, 'describe-1'))
+      .details as RuntimeToolResult;
     const catalogCallInput: RuntimeJsonValue = {
       name: target.providerName,
       params: { query: 'bug' },
     };
-    const result = await execute(callTool, catalogCallInput, 'catalog-call-1');
+    const result = (await execute(callTool, catalogCallInput, 'catalog-call-1'))
+      .details as RuntimeToolResult;
     const described = description.value as { declaration: string };
 
     expect(JSON.stringify(description.value)).toContain('Find repository issues');
     expect(described.declaration).toContain(`name: "${target.providerName}"`);
     expect(result).toEqual(targetResult);
-    expect(invokeTarget).toHaveBeenCalledWith(
-      target,
-      expect.objectContaining({
-        input: { query: 'bug' },
-        toolCallId: 'catalog-call-1',
-      }),
-      catalogCallInput,
-    );
+    expect(invokeTarget).toHaveBeenCalledWith(target, { query: 'bug' }, 'catalog-call-1', SIGNAL);
   });
 
   test('limits an unfiltered catalog browse to twenty tools', async () => {
     const catalog = Array.from({ length: 25 }, (_, index) =>
       mcpTool(`mcp_server_1_tool_${String(index).padStart(2, '0')}`, `Tool ${index}`),
     );
-    const search = createPiDeferredToolDiscoveryTools(catalog, async () => ({
-      value: null,
-      artifacts: [],
-    })).find((tool) => tool.providerName === PI_TOOL_SEARCH_TOOL_NAME);
+    const search = createPiDeferredToolDiscoveryTools(
+      catalog,
+      async () => ({
+        value: null,
+        artifacts: [],
+      }),
+      runInternalTool,
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
 
-    const result = await execute(search, {});
+    const result = (await execute(search, {})).details as RuntimeToolResult;
     const value = result.value as {
       matchedNamespaces: { tools: unknown[] }[];
     };

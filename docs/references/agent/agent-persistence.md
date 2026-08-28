@@ -52,6 +52,10 @@ Mobile Agent has one execution target and one engine: `local → Pi` in this mob
 composition injects Pi directly into the Host, so there is no implementation choice to persist.
 Cloud and LAN desktop control are separate domains and must not reuse Mobile Agent definitions,
 Sessions, or execution-target values.
+Future remote Agent Sessions remain authoritative on the remote service. A mobile HTTP adapter may
+map them into Agent Protocol values for the application, but it does not copy them into these tables
+as a second source of truth or represent remote execution as a local Runtime binding. Any offline
+cache or projection requires a separate versioned wire and invalidation design.
 `contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an

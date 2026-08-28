@@ -1,4 +1,4 @@
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { AgentMessage, AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 import {
   compact,
   estimateContextTokens,
@@ -14,7 +14,7 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
-import type { RuntimeContextCheckpoint, RuntimeExecutionRequest, RuntimeTool } from '../types';
+import type { RuntimeContextCheckpoint } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
 
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
@@ -88,10 +88,12 @@ type ProjectedContext = {
   metadata: WeakMap<object, MessageMetadata>;
 };
 
+type PiToolSchema = Pick<PiAgentTool, 'name' | 'description' | 'parameters'>;
+
 export function estimatePiContextFixedCosts(input: {
   conversation: PiConversation;
   outputReserveTokens: number;
-  tools: RuntimeTool[];
+  tools: readonly PiToolSchema[];
 }): PiContextFixedCosts {
   const systemInstructionsTokens = estimateTextTokens(input.conversation.systemPrompt);
   const currentInputTokens = estimateContextTokens([input.conversation.prompt]).tokens;
@@ -133,7 +135,7 @@ export async function planPiContext(input: {
   redactSummary: (summary: string) => string;
   signal: AbortSignal;
   thinkingLevel: Parameters<typeof compact>[5];
-  tools: RuntimeExecutionRequest['tools'];
+  tools: readonly PiToolSchema[];
 }): Promise<PiContextPlan> {
   const projected = projectContext(input.checkpoint, input.conversation.historyTurns);
   const settings = input.options?.settings ?? resolveCompactionSettings(input.model.contextWindow);
@@ -400,8 +402,8 @@ function createCompactionSummary(summary: string, tokensBefore: number): AgentMe
   return { role: 'compactionSummary', summary, tokensBefore, timestamp: Date.now() };
 }
 
-function serializeTool(tool: RuntimeTool): string {
-  return `${tool.providerName}\n${tool.description}\n${safeJsonStringify(tool.inputSchema)}`;
+function serializeTool(tool: PiToolSchema): string {
+  return `${tool.name}\n${tool.description}\n${safeJsonStringify(tool.parameters)}`;
 }
 
 function safeJsonStringify(value: unknown): string {

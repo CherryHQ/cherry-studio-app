@@ -44,7 +44,6 @@ import { toPiConversation } from './modelMessages';
 import {
   createPiDeferredToolDiscoveryTools,
   PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
-  PI_TOOL_CALL_TOOL_NAME,
 } from './piDeferredToolDiscovery';
 
 export type PiModelResolution = {
@@ -167,11 +166,6 @@ type ToolPartBase = {
   providerName: string;
   toolCallId: string;
   toolRef: RuntimeTool['ref'];
-};
-
-type ToolCallProjection = {
-  input: RuntimeJsonValue;
-  providerName: string;
 };
 
 /**
@@ -654,7 +648,25 @@ class PiRuntimeSession implements AgentRuntimeSession {
       secrets = resolution.redactionValues;
       turn.usageContext = resolution.usageContext;
       if (this.settleIfEnding(turn)) return;
-      if (request.tools.length > 0 && !resolution.supportsTools) {
+      const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
+      const mcpTools = request.tools.filter(
+        (tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny',
+      );
+      const deferredToolDiscoveryTools =
+        mcpTools.length > 0
+          ? createPiDeferredToolDiscoveryTools(
+              mcpTools,
+              (target, input, toolCallId, signal) =>
+                this.runRuntimeTool(target, toolCallId, input, signal, turn),
+              (toolCallId, signal, operation) =>
+                this.runPiInternalTool(toolCallId, signal, operation, turn),
+            )
+          : [];
+      const piTools = [
+        ...directTools.map((tool) => this.toPiTool(tool, turn)),
+        ...deferredToolDiscoveryTools,
+      ];
+      if (piTools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
           type: 'failed',
           error: {
@@ -664,25 +676,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
           },
         });
         return;
-      }
-      const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
-      const mcpTools = request.tools.filter(
-        (tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny',
-      );
-      const deferredToolDiscoveryTools =
-        mcpTools.length > 0
-          ? createPiDeferredToolDiscoveryTools(mcpTools, (target, call, catalogCallInput) =>
-              this.runRuntimeTool(target, call.toolCallId, call.input, call.signal, turn, {
-                input: catalogCallInput,
-                providerName: PI_TOOL_CALL_TOOL_NAME,
-              }),
-            )
-          : [];
-      const exposedTools = [...directTools, ...deferredToolDiscoveryTools];
-      for (const tool of deferredToolDiscoveryTools) {
-        if (tool.providerName !== PI_TOOL_CALL_TOOL_NAME) {
-          turn.toolsByProviderName.set(tool.providerName, tool);
-        }
       }
       const baseConversation = toPiConversation(request, resolution.model);
       const conversation =
@@ -727,7 +720,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
           signal: turn.abortController.signal,
           thinkingLevel,
-          tools: exposedTools,
+          tools: piTools,
         }),
         turn.abortController.signal,
       );
@@ -758,11 +751,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           systemPrompt: conversation.systemPrompt,
           thinkingLevel,
-          tools: exposedTools.map((tool) =>
-            tool.providerName === PI_TOOL_CALL_TOOL_NAME
-              ? this.toDelegatingPiTool(tool, turn)
-              : this.toPiTool(tool, turn),
-          ),
+          tools: piTools,
         },
         shouldStopAfterTurn: ({ toolResults }) => {
           if (toolResults.length > 0) {
@@ -957,27 +946,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
     };
   }
 
-  /** tool_call delegates to the target RuntimeTool, which owns the persisted part and approval. */
-  private toDelegatingPiTool(runtimeTool: RuntimeTool, turn: ActiveTurn): PiAgentTool {
-    return {
-      name: runtimeTool.providerName,
-      label: runtimeTool.displayName,
-      description: runtimeTool.description,
-      parameters: runtimeTool.inputSchema as never,
-      execute: async (toolCallId, params, signal) => {
-        const callbackSignal = signal
-          ? AbortSignal.any([turn.abortController.signal, signal])
-          : turn.abortController.signal;
-        const output = await runtimeTool.execute({
-          input: toRuntimeJson(params, {}),
-          signal: callbackSignal,
-          toolCallId,
-        });
-        return this.piToolResult(output);
-      },
-    };
-  }
-
   private async runTool(
     runtimeTool: RuntimeTool,
     toolCallId: string,
@@ -990,20 +958,65 @@ class PiRuntimeSession implements AgentRuntimeSession {
     );
   }
 
+  private async runPiInternalTool(
+    toolCallId: string,
+    signal: AbortSignal | undefined,
+    operation: () => RuntimeToolResult | Promise<RuntimeToolResult>,
+    turn: ActiveTurn,
+  ): Promise<RuntimeToolResult> {
+    if (turn.phase !== 'running' || signal?.aborted) {
+      const output = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+      turn.failedToolCalls.add(toolCallId);
+      turn.settledToolCalls.add(toolCallId);
+      return output;
+    }
+
+    turn.toolCallCount += 1;
+    if (turn.toolCallCount > this.limits.maxToolCalls) {
+      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
+      turn.limitError = TOOL_CALL_LIMIT_ERROR;
+      turn.failedToolCalls.add(toolCallId);
+      turn.settledToolCalls.add(toolCallId);
+      return output;
+    }
+
+    try {
+      const output = await operation();
+      if (turn.phase !== 'running' || signal?.aborted) {
+        const interrupted = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+        turn.failedToolCalls.add(toolCallId);
+        turn.settledToolCalls.add(toolCallId);
+        return interrupted;
+      }
+      turn.settledToolCalls.add(toolCallId);
+      return output;
+    } catch (error) {
+      if (turn.phase !== 'running' || signal?.aborted) {
+        const interrupted = createInterruptedToolResult(INTERRUPTED_TOOL_REASON);
+        turn.failedToolCalls.add(toolCallId);
+        turn.settledToolCalls.add(toolCallId);
+        return interrupted;
+      }
+      const executionError = normalizeToolExecutionError(error);
+      const output = createErrorToolResult(executionError);
+      turn.failedToolCalls.add(toolCallId);
+      turn.settledToolCalls.add(toolCallId);
+      return output;
+    }
+  }
+
   private async runRuntimeTool(
     runtimeTool: RuntimeTool,
     toolCallId: string,
     input: RuntimeJsonValue,
     signal: AbortSignal | undefined,
     turn: ActiveTurn,
-    projection?: ToolCallProjection,
   ): Promise<RuntimeToolResult> {
-    const projectedInput = projection?.input ?? input;
     const part = this.ensureToolPart(turn, {
       displayName: runtimeTool.displayName,
       id: `tool-${toolCallId}`,
-      input: projectedInput,
-      providerName: projection?.providerName ?? runtimeTool.providerName,
+      input,
+      providerName: runtimeTool.providerName,
       toolCallId,
       toolRef: runtimeTool.ref,
     });

@@ -1,4 +1,6 @@
-import type { RuntimeJsonValue, RuntimeTool, RuntimeToolCall, RuntimeToolResult } from '../types';
+import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
+
+import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 
 export const PI_TOOL_SEARCH_TOOL_NAME = 'tool_search';
 export const PI_TOOL_DESCRIBE_TOOL_NAME = 'tool_describe';
@@ -47,89 +49,115 @@ const CALL_INPUT_SCHEMA = {
 
 type InvokeTargetTool = (
   target: RuntimeTool,
-  call: RuntimeToolCall,
-  catalogCallInput: RuntimeJsonValue,
+  input: RuntimeJsonValue,
+  toolCallId: string,
+  signal: AbortSignal | undefined,
+) => Promise<RuntimeToolResult>;
+
+type RunInternalTool = (
+  toolCallId: string,
+  signal: AbortSignal | undefined,
+  operation: () => RuntimeToolResult | Promise<RuntimeToolResult>,
 ) => Promise<RuntimeToolResult>;
 
 /**
- * Project one frozen MCP catalog into three provider-independent tools for
- * deferred tool discovery. The caller owns the actual target invocation so it
- * can re-enter the mobile Runtime's approval, cancellation, and event boundary.
+ * Project one frozen MCP catalog into three Pi-private model tools for deferred
+ * discovery. Search and describe never cross the Runtime boundary; only the
+ * resolved target re-enters Runtime approval, cancellation, and event handling.
  */
 export function createPiDeferredToolDiscoveryTools(
   tools: readonly RuntimeTool[],
   invokeTarget: InvokeTargetTool,
-): RuntimeTool[] {
+  runInternalTool: RunInternalTool,
+): PiAgentTool[] {
   const catalog = new Map(tools.map((tool) => [tool.providerName, tool]));
 
-  const searchTool: RuntimeTool = {
-    ref: { source: 'builtin', capabilityId: PI_TOOL_SEARCH_TOOL_NAME },
-    providerName: PI_TOOL_SEARCH_TOOL_NAME,
-    displayName: 'Search tools',
+  const searchTool: PiAgentTool = {
+    name: PI_TOOL_SEARCH_TOOL_NAME,
+    label: 'Search tools',
     description:
       'Search the available MCP tool catalog. Returns matching names, descriptions, and TypeScript signatures for use with tool_call.',
-    inputSchema: SEARCH_INPUT_SCHEMA,
-    approval: 'auto',
-    async execute({ input }) {
-      const query = isRecord(input) && typeof input.query === 'string' ? input.query : '';
-      const matches = rankTools([...catalog.values()], query)
-        .slice(0, SEARCH_RESULT_LIMIT)
-        .map((tool) => ({
-          name: tool.providerName,
-          description: tool.description,
-          declaration: toolToTypeScript(tool),
-        }));
+    parameters: SEARCH_INPUT_SCHEMA as never,
+    async execute(toolCallId, params, signal) {
+      const output = await runInternalTool(toolCallId, signal, () => {
+        const query = isRecord(params) && typeof params.query === 'string' ? params.query : '';
+        const matches = rankTools([...catalog.values()], query)
+          .slice(0, SEARCH_RESULT_LIMIT)
+          .map((tool) => ({
+            name: tool.providerName,
+            description: tool.description,
+            declaration: toolToTypeScript(tool),
+          }));
 
-      return {
-        value: {
-          matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: matches }] : [],
-        },
-        artifacts: [],
-      };
+        return {
+          value: {
+            matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: matches }] : [],
+          },
+          artifacts: [],
+        };
+      });
+      return toPiToolResult(output);
     },
   };
 
-  const describeTool: RuntimeTool = {
-    ref: { source: 'builtin', capabilityId: PI_TOOL_DESCRIBE_TOOL_NAME },
-    providerName: PI_TOOL_DESCRIBE_TOOL_NAME,
-    displayName: 'Describe tool',
+  const describeTool: PiAgentTool = {
+    name: PI_TOOL_DESCRIBE_TOOL_NAME,
+    label: 'Describe tool',
     description: 'Get the complete description and TypeScript signature for one discovered tool.',
-    inputSchema: DESCRIBE_INPUT_SCHEMA,
-    approval: 'auto',
-    async execute({ input }) {
-      const name = isRecord(input) && typeof input.name === 'string' ? input.name : '';
-      const tool = catalog.get(name);
-      if (!tool) throw new Error(`Tool not found: ${name}`);
-      return {
-        value: {
-          name: tool.providerName,
-          description: tool.description,
-          declaration: toolToTypeScript(tool),
-        },
-        artifacts: [],
-      };
+    parameters: DESCRIBE_INPUT_SCHEMA as never,
+    async execute(toolCallId, params, signal) {
+      const output = await runInternalTool(toolCallId, signal, () => {
+        const name = isRecord(params) && typeof params.name === 'string' ? params.name : '';
+        const tool = catalog.get(name);
+        if (!tool) throw toolNotFoundError(name);
+        return {
+          value: {
+            name: tool.providerName,
+            description: tool.description,
+            declaration: toolToTypeScript(tool),
+          },
+          artifacts: [],
+        };
+      });
+      return toPiToolResult(output);
     },
   };
 
-  const callTool: RuntimeTool = {
-    ref: { source: 'builtin', capabilityId: PI_TOOL_CALL_TOOL_NAME },
-    providerName: PI_TOOL_CALL_TOOL_NAME,
-    displayName: 'Call tool',
+  const callTool: PiAgentTool = {
+    name: PI_TOOL_CALL_TOOL_NAME,
+    label: 'Call tool',
     description:
       'Call one MCP tool using an exact name and params matching a signature returned by tool_search or tool_describe.',
-    inputSchema: CALL_INPUT_SCHEMA,
-    approval: 'auto',
-    async execute(call) {
-      const input = isRecord(call.input) ? call.input : {};
+    parameters: CALL_INPUT_SCHEMA as never,
+    async execute(toolCallId, params, signal) {
+      const input = isRecord(params) ? params : {};
       const name = typeof input.name === 'string' ? input.name : '';
-      const params = isRecord(input.params) ? input.params : {};
+      const targetInput = (isRecord(input.params) ? input.params : {}) as RuntimeJsonValue;
       const tool = catalog.get(name);
-      if (!tool) throw new Error(`Tool not found: ${name}`);
-      return invokeTarget(tool, { ...call, input: params }, call.input);
+      const output = tool
+        ? await invokeTarget(tool, targetInput, toolCallId, signal)
+        : await runInternalTool(toolCallId, signal, () => {
+            throw toolNotFoundError(name);
+          });
+      return toPiToolResult(output);
     },
   };
 
   return [searchTool, describeTool, callTool];
+}
+
+function toPiToolResult(output: RuntimeToolResult) {
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify(output) }],
+    details: output,
+  };
+}
+
+function toolNotFoundError(name: string) {
+  return Object.assign(new Error(`Tool not found: ${name}`), {
+    code: 'tool_not_found',
+    retryable: false,
+  });
 }
 
 function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] {
@@ -141,7 +169,7 @@ function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] 
     documents.reduce((sum, document) => sum + document.length, 0) / documents.length || 1;
   const documentFrequency = new Map<string, number>();
   for (const document of documents) {
-    for (const term of document) {
+    for (const term of new Set(document)) {
       documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
     }
   }
@@ -177,7 +205,7 @@ function tokenize(value: string): string[] {
     .replace(/([\p{Lu}]+)([\p{Lu}][\p{Ll}])/gu, '$1 $2')
     .replace(/([\p{Ll}\d])([\p{Lu}])/gu, '$1 $2')
     .toLowerCase();
-  return [...new Set(normalized.match(/[\p{L}\p{N}]+/gu) ?? [])];
+  return normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 function toolToTypeScript(tool: RuntimeTool): string {

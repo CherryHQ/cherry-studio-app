@@ -36,6 +36,12 @@ and no persisted Runtime binding. Agent configuration, Session configuration, mo
 tool availability never select another engine or execution device. Cloud and LAN desktop control
 use a separate execution domain.
 
+Future remote Agent support does not add a `RemoteRuntime` to this process. A mobile-owned HTTP
+adapter sits at the application-protocol boundary, converts the remote service's wire data into
+Agent Protocol values, and leaves execution and authoritative Session state on the remote service.
+The local Host never turns remote tools into `RuntimeTool` callbacks. See
+[Agent Architecture](./README.md#approved-future-remote-boundary).
+
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. Mobile Skill persistence and prompt projection are not implemented;
 their target boundary is documented separately and does not change the current Runtime input. The
@@ -309,8 +315,10 @@ type RuntimeTool = {
 ```
 
 `ref` is the stable application identity used by approval and audit, and by MCP persistence.
-`providerName` is only the deterministic function alias exposed to the model for this contract;
-`displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
+`providerName` is the deterministic catalog alias by which a Runtime identifies the tool. A Runtime
+may expose that alias as a direct model function or as the exact target name accepted by a private
+model-binding tool; that encoding never changes the tool's `ref`, approval, input, or persisted
+identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
 
 The Host supplies an immutable tool snapshot after applying the system catalog, temporary composer

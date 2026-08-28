@@ -13,11 +13,18 @@ a snapshot.
 
 Version 1 uses an in-process interface. Operation inputs, results, snapshots, and events are
 JSON-safe values validated at the boundary. Subscription callbacks and unsubscribe handles are
-process-local transport mechanics, not protocol data. JSON safety keeps application values portable;
-this document does not define a network wire protocol.
+process-local transport mechanics, not protocol data. JSON safety keeps application values
+portable; this document does not define a network wire protocol.
 
 Cloud control and LAN desktop control are separate product domains. They do not execute a Mobile
 Agent, reuse its Session or definition, or extend `AgentExecutionTarget` with remote variants.
+
+The approved future remote boundary preserves that distinction: a mobile-owned HTTP adapter calls
+the remote service and maps its wire DTOs and events into a future versioned Agent Protocol
+representation accepted by the application. The remote API is not this in-process interface, and
+remote data remains authoritative on the service rather than being copied into the Mobile Agent
+Host or its Session store. Version 1 does not yet accept, select, or route a remote source. See
+[Agent Architecture](./README.md#approved-future-remote-boundary).
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.

@@ -576,10 +576,15 @@ describe('PiRuntime mapping', () => {
       ],
       tools: [askTool(() => undefined)],
     });
+    const piTools = request.tools.map((tool) => ({
+      name: tool.providerName,
+      description: tool.description,
+      parameters: tool.inputSchema as never,
+    }));
     const costs = estimatePiContextFixedCosts({
       conversation: toPiConversation(request, holder.resolution.model),
       outputReserveTokens: 512,
-      tools: request.tools,
+      tools: piTools,
     });
     const costsWithoutTextAttachment = estimatePiContextFixedCosts({
       conversation: toPiConversation(
@@ -587,7 +592,7 @@ describe('PiRuntime mapping', () => {
         holder.resolution.model,
       ),
       outputReserveTokens: 512,
-      tools: request.tools,
+      tools: piTools,
     });
 
     expect(costs).toMatchObject({
@@ -1271,15 +1276,18 @@ describe('PiRuntime mapping', () => {
             {
               type: 'toolCall',
               id: 'historic-call',
-              name: 'mcp_server_2_lookup_c3d4',
-              arguments: { query: 'Cherry Studio' },
+              name: PI_TOOL_CALL_TOOL_NAME,
+              arguments: {
+                name: 'mcp_server_2_lookup_c3d4',
+                params: { query: 'Cherry Studio' },
+              },
             },
           ],
         },
         {
           role: 'toolResult',
           toolCallId: 'historic-call',
-          toolName: 'mcp_server_2_lookup_c3d4',
+          toolName: PI_TOOL_CALL_TOOL_NAME,
           details: { value: { found: true }, artifacts: [] },
         },
       ],
@@ -1462,10 +1470,14 @@ describe('PiRuntime mapping', () => {
     const holder = arrange(runtime, async (context) => {
       const tools = context.options.initialState?.tools ?? [];
       const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+      const describe = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME);
       const call = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
-      if (!search || !call) throw new Error('Deferred-discovery tools were not exposed.');
+      if (!search || !describe || !call) {
+        throw new Error('Deferred-discovery tools were not exposed.');
+      }
       searchResult = (await search.execute('search-call', { query: 'repository' }, context.signal))
         .details;
+      await describe.execute('describe-call', { name: targetTool.providerName }, context.signal);
       await call.execute(
         'catalog-call',
         { name: targetTool.providerName, params: { query: 'bug' } },
@@ -1514,6 +1526,14 @@ describe('PiRuntime mapping', () => {
       },
     });
     expect(JSON.stringify(searchResult)).not.toContain(deniedTool.providerName);
+    expect(
+      events.some(
+        (event) =>
+          (event.type === 'part.add' || event.type === 'part.replace') &&
+          event.part.type === 'tool' &&
+          (event.part.toolCallId === 'search-call' || event.part.toolCallId === 'describe-call'),
+      ),
+    ).toBe(false);
     expect(executedInput).toEqual({ query: 'bug' });
     expect(events.find((event) => event.type === 'approval.requested')).toMatchObject({
       approval: {
@@ -1533,13 +1553,155 @@ describe('PiRuntime mapping', () => {
       ),
     ).toMatchObject({
       part: {
-        providerName: PI_TOOL_CALL_TOOL_NAME,
+        providerName: targetTool.providerName,
         toolRef: targetTool.ref,
         displayName: targetTool.displayName,
-        input: { name: targetTool.providerName, params: { query: 'bug' } },
+        input: { query: 'bug' },
         output: { value: { total: 1 }, artifacts: [] },
       },
     });
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
+  test('returns an internal error for an unknown deferred target without emitting a tool part', async () => {
+    const runtime = createTestRuntime();
+    const targetTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
+      providerName: 'mcp_server_1_search_issues_a1b2',
+      displayName: 'Search issues',
+      description: 'Find repository issues.',
+      inputSchema: { type: 'object' },
+      approval: 'ask',
+      execute: async () => ({ value: { total: 1 }, artifacts: [] }),
+    };
+    let errorDetails: unknown;
+    arrange(runtime, async (context) => {
+      const call = context.options.initialState?.tools?.find(
+        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+      );
+      if (!call) throw new Error('Missing tool_call.');
+      errorDetails = (
+        await call.execute(
+          'unknown-catalog-call',
+          { name: 'mcp_server_1_missing_a1b2', params: {} },
+          context.signal,
+        )
+      ).details;
+      await emitText(context, 'The requested tool is unavailable.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-unknown-deferred-target', { tools: [targetTool] })),
+    );
+
+    expect(errorDetails).toEqual({
+      value: {
+        status: 'error',
+        error: {
+          code: 'tool_not_found',
+          message: 'Tool not found: mcp_server_1_missing_a1b2',
+          retryable: false,
+        },
+      },
+      artifacts: [],
+    });
+    expect(
+      events.some(
+        (event) =>
+          (event.type === 'part.add' || event.type === 'part.replace') &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'unknown-catalog-call',
+      ),
+    ).toBe(false);
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
+  test('projects a deferred target failure onto the real MCP tool identity', async () => {
+    const runtime = createTestRuntime();
+    const targetTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
+      providerName: 'mcp_server_1_search_issues_a1b2',
+      displayName: 'Search issues',
+      description: 'Find repository issues.',
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        required: ['query'],
+      },
+      approval: 'auto',
+      execute: async () => {
+        throw Object.assign(new Error('Query must be non-empty.'), {
+          code: 'invalid_tool_input',
+          retryable: false,
+        });
+      },
+    };
+    let errorDetails: unknown;
+    arrange(runtime, async (context) => {
+      const call = context.options.initialState?.tools?.find(
+        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+      );
+      if (!call) throw new Error('Missing tool_call.');
+      errorDetails = (
+        await call.execute(
+          'catalog-error-call',
+          { name: targetTool.providerName, params: { query: '' } },
+          context.signal,
+        )
+      ).details;
+      await emitText(context, 'The search failed.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-deferred-target-error', { tools: [targetTool] })),
+    );
+
+    expect(errorDetails).toEqual({
+      value: {
+        status: 'error',
+        error: {
+          code: 'invalid_tool_input',
+          message: 'Query must be non-empty.',
+          retryable: false,
+        },
+      },
+      artifacts: [],
+    });
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'catalog-error-call' &&
+          event.part.state === 'error',
+      ),
+    ).toMatchObject({
+      part: {
+        providerName: targetTool.providerName,
+        toolRef: targetTool.ref,
+        displayName: targetTool.displayName,
+        input: { query: '' },
+        error: {
+          code: 'invalid_tool_input',
+          message: 'Query must be non-empty.',
+          retryable: false,
+          origin: 'tool',
+        },
+        output: errorDetails,
+      },
+    });
+    expect(
+      events.some(
+        (event) =>
+          (event.type === 'part.add' || event.type === 'part.replace') &&
+          event.part.type === 'tool' &&
+          event.part.providerName === PI_TOOL_CALL_TOOL_NAME,
+      ),
+    ).toBe(false);
     expect(events.at(-1)).toEqual({ type: 'completed' });
     await session.close();
   });

@@ -140,8 +140,8 @@ fallback action with broader access.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
-The Runtime exposes system capabilities directly and projects eligible MCP tools through three
-application-owned catalog tools:
+The Pi binding exposes system capabilities directly and translates eligible MCP tools into three
+Pi-private catalog tools for the active model loop:
 
 - `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
   including TypeScript call signatures.
@@ -149,10 +149,18 @@ application-owned catalog tools:
 - `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
   `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
 
+These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
+and `tool_describe` stay inside Pi's active loop and do not become Runtime output parts or persisted
+Agent tool calls. An invalid `tool_call` target returns an internal error to the model without
+claiming that an application tool ran. Once a target resolves, the Runtime emits and persists only
+that target's stable ref, catalog alias, display snapshot, parameters, approval, and result. When
+reconstructing Pi history, the Pi message adapter wraps a persisted MCP target call back into
+`tool_call({ name, params })`.
+
 MCP tools with effective `deny` policy are absent from discovery. The Host still materializes and
-freezes the complete executable MCP catalog before the Runtime starts; deferred tool discovery
-reduces model tool schema and provider tool-count pressure, but does not make MCP discovery or
-transport lazy.
+freezes the complete executable MCP catalog before the Runtime starts. The inference snapshot
+records that real catalog, not Pi's private binding tools. Deferred tool discovery reduces model
+tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
 Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
@@ -310,6 +318,9 @@ adapters are semantic ports.
 
 Cloud and LAN desktop control may reuse the user-interface concept of an approval request, but they
 do not execute Mobile Agents and must own separate identities, policy, transport, and audit state.
+Those future Remote Agent tools are owned and executed by the remote Agent service. They are
+different from a local Agent's Streamable HTTP MCP tools: the latter remain in the local Host/Pi
+tool loop, while only their individual MCP request crosses to a remote endpoint.
 
 Desktop also keeps pending approvals in process memory, emits a terminal denied tool output when the
 user refuses a call, finalizes non-terminal tool parts when a stream is interrupted, and omits an
