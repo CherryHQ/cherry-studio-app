@@ -198,27 +198,22 @@ const runtimeContractLayer = {
 
 // Pi isolation (Success Criterion 1 in docs/references/ai/target-architecture.md):
 // outside the Pi zone, backend code reaches Pi only through the AgentRuntime
-// contract. The zone is agent/runtime/pi plus agent/piAdapter; its own blocks
-// below spell their unions without this ban, and `serviceRegistry.ts` stays
+// contract. The zone is the single directory agent/runtime/pi; its own block
+// below spells its union without this ban, and `serviceRegistry.ts` stays
 // exempt because binding the concrete Runtime is assembly. Relative specifiers
-// bypass alias globs, so the raw directory names are banned as well.
-const piZoneFiles = [
-  'src/backend/ai/agent/runtime/pi/**/*.{ts,tsx}',
-  'src/backend/ai/agent/piAdapter/**/*.{ts,tsx}',
-];
+// bypass alias globs, so the raw directory name is banned as well.
+const piZoneFiles = ['src/backend/ai/agent/runtime/pi/**/*.{ts,tsx}'];
 
 const piIsolation = {
   group: [
     '@earendil-works/*',
     '@earendil-works/*/**',
-    ...aliasRoots(['backend/ai/agent/runtime/pi', 'backend/ai/agent/piAdapter']),
+    ...aliasRoots(['backend/ai/agent/runtime/pi']),
     '**/pi',
     '**/pi/**',
-    '**/piAdapter',
-    '**/piAdapter/**',
   ],
   message:
-    'Pi is one Runtime implementation. Depend on the AgentRuntime contract; only agent/runtime/pi and agent/piAdapter may name Pi modules or @earendil-works packages.',
+    'Pi is one Runtime implementation. Depend on the AgentRuntime contract; only agent/runtime/pi may name Pi modules or @earendil-works packages.',
 };
 
 // `generation/` is the private implementation of AiService: the AI SDK path
@@ -400,9 +395,15 @@ module.exports = defineConfig([
   },
   // The Pi implementation honors the same contract constraints but is the one
   // Runtime directory allowed to name Pi modules and @earendil-works packages.
+  // The exception below matches the boundary the PiRuntime conformance harness
+  // draws with its `sourceFiles` list, so lint and conformance agree on which
+  // files must stay pure.
   {
     files: ['src/backend/ai/agent/runtime/pi/**/*.{ts,tsx}'],
-    ignores: ['src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}'],
+    ignores: [
+      'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
+      'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
+    ],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
@@ -410,12 +411,13 @@ module.exports = defineConfig([
       ],
     },
   },
-  // The rest of the Pi zone: the adapter binds Pi to app providers and models
-  // (it may use Expo and the Data API), and Pi runtime tests arrange fixtures
-  // with node builtins. Both keep only the backend layer rule.
+  // `piModelResolver.ts` is the Pi zone's one bridge from app entities to Pi: it
+  // reads Provider and Model records and materializes an Expo-backed fetch,
+  // which is precisely what the contract layer may not do. Pi runtime tests
+  // arrange fixtures with node builtins. Both keep only the backend layer rule.
   restrictedImports(
     [
-      'src/backend/ai/agent/piAdapter/**/*.{ts,tsx}',
+      'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
       'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
     ],
     [backendLayer],

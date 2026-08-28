@@ -8,10 +8,10 @@ import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
-import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '../runtime';
-import type { PiModelResolution, PiRuntimeDependencies } from '../runtime/pi/PiRuntime';
+import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
+import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
 
 const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
 const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
