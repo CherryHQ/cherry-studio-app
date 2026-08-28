@@ -19,7 +19,9 @@ jest.mock('../../surface', () => {
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-down', () => {
   const React = jest.requireActual('react');
-  return (props: object) => React.createElement('ArrowDownIcon', props);
+  return function MockArrowDownIcon(props: object) {
+    return React.createElement('ArrowDownIcon', props);
+  };
 });
 
 jest.mock('uniwind', () => ({
@@ -121,5 +123,23 @@ describe('ScrollToBottomButton', () => {
       pointerEvents: 'none',
       style: [{ transform: [{ scale: 0.8 }] }, { opacity: 0 }],
     });
+  });
+
+  it('uses the list edge when there is no floating accessory', () => {
+    act(() => {
+      renderer = create(
+        <ScrollToBottomButton
+          accessibilityLabel="Scroll to bottom"
+          gap={5}
+          isAtBottom={false}
+          onPress={jest.fn()}
+        />,
+      );
+    });
+
+    expect(renderer!.root.findAllByType('AnimatedView')[0].props.style).toEqual([
+      { alignItems: 'center', left: 0, position: 'absolute', right: 0 },
+      { bottom: 5 },
+    ]);
   });
 });

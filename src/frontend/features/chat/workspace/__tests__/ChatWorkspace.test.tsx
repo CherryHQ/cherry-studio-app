@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem, MessageListProps } from '@/frontend/components/messages';
@@ -7,11 +6,6 @@ import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 
-const mockInputHeightShared = {
-  get: jest.fn(() => 80),
-  set: jest.fn(),
-  value: 80,
-} as unknown as SharedValue<number>;
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
 const mockRespondApproval = jest.fn(async () => undefined);
@@ -182,7 +176,6 @@ function createWorkspaceElement(
 ) {
   return (
     <ChatWorkspace
-      bottomAccessoryHeight={isPreview ? undefined : mockInputHeightShared}
       contentBottomInset={isPreview ? 12 : 96}
       isAssistantToolbarEnabled={!isPreview}
       keyboardOffset={isPreview ? 0 : 26}
@@ -230,7 +223,7 @@ describe('ChatWorkspace message rendering integration', () => {
     requestAnimationFrameSpy.mockRestore();
   });
 
-  test('merges live rows with displayable history and passes dock layout', () => {
+  test('merges live rows with displayable history and passes list layout', () => {
     const pendingUserMessage = createMessage('user-pending', 'user', 'pending');
     const messages = [
       createMessage('system-1', 'system'),
@@ -251,7 +244,6 @@ describe('ChatWorkspace message rendering integration', () => {
       'user-pending',
     ]);
     expect(mockMessageListProps?.enteringMessageId).toBe('user-pending');
-    expect(mockMessageListProps?.bottomAccessoryHeight).toBe(mockInputHeightShared);
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
@@ -285,10 +277,9 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
-  test('omits the internal scroll button accessory in preview', () => {
+  test('uses preview insets and hides assistant actions in preview', () => {
     renderer = renderWorkspace(true, [createMessage('assistant-1', 'assistant')]);
 
-    expect(mockMessageListProps?.bottomAccessoryHeight).toBeUndefined();
     expect(mockMessageListProps?.contentBottomInset).toBe(12);
     expect(mockMessageListProps?.keyboardOffset).toBe(0);
     expect(renderer.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);

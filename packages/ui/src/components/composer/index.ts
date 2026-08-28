@@ -18,3 +18,4 @@ export type {
   ComposerToolbarProps,
 } from './composer.types';
 export { useComposerDockLayout } from './hooks/use-composer-dock-layout';
+export { composerContentGap, getComposerKeyboardStickyOffset } from './utils/composer-dock-layout';

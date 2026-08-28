@@ -58,8 +58,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   it; caller-owned replacement buttons, such as painting settings, use the
   same action.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. `useComposerDockLayout` remains CherryUI's measurement and
-  content-inset primitive.
+  `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
+  CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
 - `utils/composerAttachments` is deep-imported on purpose (see `index.ts`).
 
 ## What is deliberately *not* pluggable
