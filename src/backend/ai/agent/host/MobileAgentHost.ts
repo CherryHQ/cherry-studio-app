@@ -76,7 +76,6 @@ import {
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { createPiModelResolver } from '../piAdapter/piModelResolver';
 import {
   managedFileResolver,
   type ManagedFileResolver,
@@ -89,7 +88,7 @@ import type {
   RuntimeEvent,
   RuntimeUsageReport,
 } from '../runtime';
-import { PiRuntime, raceAbort } from '../runtime';
+import { raceAbort } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
 import {
@@ -212,6 +211,7 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
   'BackgroundReplyRuntime',
   'McpRuntimeService',
   'WebSearchService',
+  'AgentRuntime',
 ])
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
@@ -234,8 +234,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private acceptingSubmissions = true;
 
   /**
-   * Lifecycle composition supplies the selected store adapter. Production
-   * binds `local` directly to Pi; tests may replace the Runtime and Agent ports.
+   * Lifecycle composition supplies the selected store adapter and the Runtime
+   * bound at the composition root (`AgentRuntime` registration); tests may
+   * replace the Runtime and Agent ports.
    */
   constructor(
     private readonly store: AgentSessionStore,
@@ -244,7 +245,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     private readonly backgroundReply: BackgroundReplyLifecycle,
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
-    private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver()),
+    private readonly runtime: AgentRuntime,
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();

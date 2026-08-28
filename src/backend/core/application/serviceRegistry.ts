@@ -1,4 +1,5 @@
 import { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
+import { PiRuntimeService } from '@/backend/ai/agent/runtime/pi/PiRuntimeService';
 import { SqliteAgentSessionStore } from '@/backend/ai/agent/sessionStore/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
@@ -44,6 +45,7 @@ export const services = {
   McpRuntimeService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
+  AgentRuntime: PiRuntimeService,
   MobileAgentHost,
   JobHandlerRegistry,
   JobRuntime,

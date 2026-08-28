@@ -43,8 +43,9 @@ injected Pi Runtime remains stable for the Host lifetime.
 
 ## Production Pi binding
 
-The production Host binds `local` directly to Pi and injects provider/model resolution through an
-application adapter. The Runtime itself imports neither Expo transport nor application data
+The composition root binds the `AgentRuntime` registration to Pi and injects it into the Host;
+provider/model resolution enters through an application adapter. The Host never constructs a
+Runtime. The Runtime itself imports neither Expo transport nor application data
 services. Current provider coverage includes API-key-authenticated Anthropic Messages, Google
 Generate Content, OpenAI Chat Completions, and OpenAI Responses endpoints. Unsupported endpoint,
 non-standard adapter family, or authentication types fail before partial execution.
