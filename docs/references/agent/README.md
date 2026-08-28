@@ -73,6 +73,8 @@ both sides.
 
 ## Related
 
+- [Backend AI Target Architecture](../ai/target-architecture.md) — approved target structure, seam
+  rules, and migration status for `src/backend/ai`
 - [Architecture Overview](../architecture-overview.md) — dependency direction and layer ownership
 - [Runtime Ownership](../runtime-ownership.md) — Host lifetime, observation, and shutdown
 - [Chat Streaming And Rendering](../chat/streaming-and-rendering.md) — transcript windows, live
