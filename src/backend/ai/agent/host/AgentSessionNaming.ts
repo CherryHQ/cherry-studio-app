@@ -10,7 +10,7 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { AgentInputPart, AgentMessagePart, AgentSessionView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 
@@ -159,7 +159,7 @@ export class AgentSessionNaming {
     }
   }
 
-  private async resolveNamingModelId(): Promise<string | null> {
+  private async resolveNamingModelId(): Promise<UniqueModelId | null> {
     const [configured, defaultModelId] = await Promise.all([
       this.dependencies.preference.get('agent.session_naming.model_id'),
       this.dependencies.preference.get('agent.default_model_id'),
