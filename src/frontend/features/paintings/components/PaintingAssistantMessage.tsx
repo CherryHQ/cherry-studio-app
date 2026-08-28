@@ -93,7 +93,7 @@ export function PaintingAssistantMessage({
   const failureMessage = error?.message ?? interruption?.message;
   if (status !== 'generating' && (error || interruption)) {
     return (
-      <View className="w-full px-4 py-3">
+      <View className="w-full">
         <View className="flex-row items-start gap-2 rounded-md border border-border bg-card p-3">
           <CircleAlertIcon className="mt-0.5 size-5 text-destructive" />
           <View className="min-w-0 flex-1 gap-0.5">
@@ -163,7 +163,7 @@ export function PaintingAssistantMessage({
   });
 
   return (
-    <View className="w-full px-4 py-3">
+    <View className="w-full">
       <View className="relative w-full" onLayout={handlePreviewLayout}>
         {showLoader ? (
           previewWidth > 0 ? (

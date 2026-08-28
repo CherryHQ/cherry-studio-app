@@ -22,8 +22,8 @@ export function MessagesStoryFrame({
           contentInsetAdjustmentBehavior="automatic"
         >
           {examples.map(({ label, message }) => (
-            <View key={message.id}>
-              <Text className="px-4 font-medium text-foreground-tertiary text-sm">{label}</Text>
+            <View className="gap-2 px-4" key={message.id}>
+              <Text className="font-medium text-foreground-tertiary text-sm">{label}</Text>
               {message.role === 'user' ? (
                 <UserMessage message={message} />
               ) : (

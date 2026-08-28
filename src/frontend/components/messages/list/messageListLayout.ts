@@ -1,9 +1,19 @@
+import { resolveUserMessageContentAnchorMaxSize } from '../rows/userMessageLayout';
 import type { MessageListItem } from '../types';
 
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 export const ANCHOR_TOP_GAP = 12;
-export const ANCHOR_MAX_TEXT_LINES = 2;
-export const USER_MESSAGE_VERTICAL_PADDING = 32;
+export const MESSAGE_ROW_HORIZONTAL_PADDING = 16;
+export const MESSAGE_ROW_VERTICAL_PADDING = {
+  assistant: 12,
+  user: 8,
+} as const satisfies Record<MessageListItem['role'], number>;
+
+export function resolveUserMessageAnchorMaxSize(bodyLineHeight: number) {
+  return (
+    resolveUserMessageContentAnchorMaxSize(bodyLineHeight) + MESSAGE_ROW_VERTICAL_PADDING.user * 2
+  );
+}
 
 // 流式助手消息高度持续变化，不能成为 MVCP 的锚点，否则它会把已钉顶的用户消息向下推。
 function shouldRestoreMessagePosition(item: MessageListItem): boolean {
