@@ -12,12 +12,12 @@ history, message rows and parts, live-turn anchoring, and entry motion.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, entry-motion,
   bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered state that is
   not carried by message items. Single-turn workspaces can opt into animating their first anchor.
-- `AssistantMessage` owns the standard assistant row: pending placeholder, structured parts, and
-  entry motion. Its `children` render after the message body, so a feature composes its own accessory
-  (a toolbar, for example) into an otherwise standard message instead of teaching this module about
-  that feature's state. The slot is unconditional, including while the placeholder is up; an
-  accessory holds the message and decides for itself when to appear.
-- `UserMessage` owns the standard user row, including managed attachments and the text bubble.
+- `AssistantMessage` owns standard assistant content: the pending placeholder, structured parts,
+  and entry motion. Its `children` render after the message body, so a feature composes its own
+  accessory (a toolbar, for example) without teaching this module about that feature's state. The
+  slot is unconditional, including while the placeholder is up; an accessory holds the message and
+  decides for itself when to appear.
+- `UserMessage` owns standard user content, including managed attachments and the text bubble.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
 
@@ -39,12 +39,50 @@ The module accepts only visible `user` and `assistant` messages. A feature that 
 roles must explicitly filter or adapt them before crossing this interface. Feature runtime,
 persistence entities, composer state, and tool-approval orchestration remain with their owners.
 
+### Composition And Layout Contract
+
+The screen composes the message history and composer as sibling regions. Within the history, layout
+ownership flows from the list toward intrinsic content:
+
+```text
+ChatScreen or PaintingComposer
+├── message workspace
+│   └── MessageList
+│       └── list-owned row frame
+│           └── feature role renderer
+│               └── UserMessage or AssistantMessage
+│                   └── MessageParts
+│                       └── individual part renderers
+└── Composer.Dock
+```
+
+- The screen owns whether the message list and composer exist and passes their measured top and
+  bottom insets across the list API.
+- `MessageList` owns scrolling, content insets, row gutters, role-level row spacing, anchoring, and
+  the placement of every rendered message. The feature renderer supplies content; it does not
+  recreate list spacing.
+- `UserMessage` and `AssistantMessage` own role presentation inside the row frame. They may define
+  intrinsic width, internal grouping, bubbles, surfaces, and entry motion, but do not add list or
+  screen gutters.
+- `MessageParts` owns part order and spacing. Each part renderer owns only its internal visual and
+  interaction contract; it does not position sibling parts or reach into the row frame.
+- Feature-owned accessories, such as the assistant toolbar, compose after the message body. Their
+  spacing from the body belongs to the assistant composition, not to an individual part.
+- Parent layout must not copy private child padding. The latest-user text cap is the one current
+  cross-layer geometry requirement: the user-message owner exposes its content-height contract,
+  and the list derives the final capped row height by adding its own row padding. Messages with
+  file parts continue to use their full measured height.
+
+Exact spacing values live in code, not this document. Changing a list gutter or row inset must have
+one list-owned source; changing intrinsic message padding must update the content owner's explicit
+geometry contract when anchoring depends on it.
+
 ## List Behavior
 
 `MessageList` owns its `LegendList` ref, role-based recycling types, latest-user anchor derivation,
-keyboard lift, at-bottom shared value, entry-animation provider, and the business wiring for the
-optional CherryUI scroll-to-bottom button. Callers provide stable message item references and
-only the layout insets and callbacks they own.
+keyboard lift, at-bottom shared value, row frames, entry-animation provider, and the business wiring
+for the optional CherryUI scroll-to-bottom button. Callers provide stable message item references
+and only the layout insets and callbacks they own.
 
 The latest user message is anchored below the content header. Text anchors use a two-line height
 cap; messages containing files use their full measured height. Initial Session entry and sending a
@@ -69,12 +107,12 @@ and anchoring.
 ## Organization
 
 - `MessageList.tsx` is the wiring layer. `list/` owns its layout policy, anchor pinning, readiness
-  gate, interaction lock, and dev-only instrumentation.
-- `rows/` owns the standard user and assistant row layouts.
+  gate, role-level row frame, interaction lock, and dev-only instrumentation.
+- `rows/` owns the intrinsic user and assistant presentation inside the list-owned row frame.
 - `motion/` carries the private slide-in provider shared by the list and rows.
-- `parts/` adapts Cherry message schema parts into CherryUI primitives. `parts/tools/` owns tool
-  dispatch and tool-specific adapters; `parts/tools/metaTool/` composes explicit search, inspect,
-  invoke, and exec variants.
+- `parts/` owns ordered part composition and adapts Cherry message schema parts into CherryUI
+  primitives. `parts/tools/` owns tool dispatch and tool-specific adapters;
+  `parts/tools/metaTool/` composes explicit search, inspect, invoke, and exec variants.
 - `parts/tools/builtInTool/` owns shared built-in tool labels. Only its `builtInToolIcon/` family is
   platform-specific.
 

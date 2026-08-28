@@ -41,7 +41,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const slideInStyle = useAssistantMessageSlideInStyle(message.id);
 
   return (
-    <Animated.View className="w-full gap-2 px-4 py-3" style={slideInStyle}>
+    <Animated.View className="w-full gap-2" style={slideInStyle}>
       <AssistantMessageBody message={message} />
       {children}
     </Animated.View>

@@ -43,11 +43,38 @@ Apply this rule prospectively. Do not migrate an untouched `forwardRef` componen
 Render callbacks remain appropriate when a parent must supply item data, such as a virtualized
 list's `renderItem`.
 
+## Own Layout At The Container Boundary
+
+A container owns the placement of its immediate children: flow, alignment, external spacing,
+content insets, and constraints imposed by the available region. A child owns its intrinsic
+content, internal spacing, surface, typography, and interactions. Natural child-size changes still
+participate in layout; a child must not reach outward with margins, offsets, or parent-specific
+positioning to arrange its siblings.
+
+- Put sibling spacing on their common container with `gap` or container padding. Do not distribute
+  half of a gap across child margins.
+- Keep reusable content components free of screen and list gutters. The screen, list, grid, or row
+  frame that places them owns those external insets.
+- Do not repeat a child's private padding or internal dimensions as a magic number in its parent.
+  When parent behavior genuinely needs child geometry, prefer measured size; otherwise expose the
+  smallest explicit layout contract from the child owner and derive the parent value from it.
+- A composition component owns the ordering and spacing of the parts it combines. Individual parts
+  own only their internal presentation and interaction unless their public API explicitly states a
+  layout role.
+- In a virtualized list, keep viewport and content insets at the list boundary, row placement in a
+  list-owned row frame, and rendered item content below that frame. Size estimates and anchoring
+  must include the row frame without teaching item content about virtualization.
+
+This complements the single-owner spacing rule in [`DESIGN.md`](../../DESIGN.md#shape-and-spacing):
+the visual specification defines how spacing is chosen, while this guide defines which component
+owns it.
+
 ## Acceptance
 
 - Shared controls retain accessible labels, states, scalable text, and usable platform fallbacks.
 - Competing gestures have one documented winner and cancelled interactions do not fire on release.
 - Feature components keep business state and translations outside CherryUI.
+- Containers own external placement and reusable children do not carry screen-specific gutters.
 - Visual changes are inspected in light and dark themes on a device.
 - iOS device work in parallel worktrees follows
   [Parallel Device Testing](./parallel-device-testing.md).

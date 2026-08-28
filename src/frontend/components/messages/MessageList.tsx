@@ -11,14 +11,14 @@ import { usePreference } from '@/frontend/data/hooks';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import {
-  ANCHOR_MAX_TEXT_LINES,
   ANCHOR_TOP_GAP,
   getAnchoredUserMessageIndex,
   getMessageRowType,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
   messageKeyExtractor,
-  USER_MESSAGE_VERTICAL_PADDING,
+  resolveUserMessageAnchorMaxSize,
 } from './list/messageListLayout';
+import { MessageListRow } from './list/MessageListRow';
 import { useMessageListAnchorPin } from './list/useMessageListAnchorPin';
 import {
   emitProgrammaticScroll,
@@ -77,7 +77,9 @@ export function MessageList({
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const renderMessageRow = useCallback(
-    ({ item }: LegendListRenderItemProps<MessageListItem>) => renderMessage(item),
+    ({ item }: LegendListRenderItemProps<MessageListItem>) => (
+      <MessageListRow message={item} renderMessage={renderMessage} />
+    ),
     [renderMessage],
   );
   const handleStartReached = useCallback(() => {
@@ -93,14 +95,13 @@ export function MessageList({
   const anchorHasFile = anchorMessage?.data.parts?.some((part) => part.type === 'file') ?? false;
   const anchorMaxSize = anchorHasFile
     ? undefined
-    : ANCHOR_MAX_TEXT_LINES * resolveTypographyScale(fontSizeStep).base.lineHeight +
-      USER_MESSAGE_VERTICAL_PADDING;
+    : resolveUserMessageAnchorMaxSize(resolveTypographyScale(fontSizeStep).base.lineHeight);
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
   // 被锚定用户消息的固定落点：距内容区顶部（导航栏/安全区之下）ANCHOR_TOP_GAP。
   // anchoredEndSpace 与钉顶滚动共用同一偏移，保证「预留空白算出的位置」和「滚动落点」一致。
   const anchorOffset = contentTopInset + ANCHOR_TOP_GAP;
   const contentContainerStyle = useMemo(
-    () => ({ paddingBottom: contentBottomInset, paddingTop: 12 }),
+    () => ({ paddingBottom: contentBottomInset, paddingTop: ANCHOR_TOP_GAP }),
     [contentBottomInset],
   );
 
