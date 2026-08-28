@@ -17,7 +17,7 @@ export function useProviderDetailSettings(providerId: string) {
     staleTime: providerModelStaleTime,
   });
   const updateProviderMutation = useMutation('PATCH', '/providers/:id', {
-    refresh: ['/providers', `/providers/${providerId}`],
+    refresh: ['/providers', '/providers/page', `/providers/${providerId}`],
   });
   const updateProvider = updateProviderMutation.trigger;
   const updateProviderEnabled = useCallback(

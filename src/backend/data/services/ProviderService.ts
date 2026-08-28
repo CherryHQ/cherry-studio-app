@@ -1,5 +1,6 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { loggerService } from '@logger';
+import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, type SQL } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
@@ -10,6 +11,8 @@ import type {
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { ProviderListPageQuery } from '@/shared/data/api/schemas/providers';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { EndpointType } from '@/shared/data/types/model';
 import type {
   ApiKeyEntry,
@@ -28,6 +31,16 @@ import {
 
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
+
+const logger = loggerService.withContext('ProviderService');
+const DEFAULT_PROVIDER_PAGE_LIMIT = 20;
+const MAX_PROVIDER_PAGE_LIMIT = 100;
+
+type ProviderCursor = {
+  isEnabled: boolean;
+  orderKey: string;
+  providerId: string;
+};
 
 export type CreateProviderInput = {
   apiFeatures?: InsertUserProviderRow['apiFeatures'];
@@ -265,6 +278,64 @@ function isMobileSupportedProviderRow(row: Pick<UserProviderRow, 'presetProvider
   );
 }
 
+function encodeProviderCursor(cursor: ProviderCursor): string {
+  return encodeURIComponent(
+    JSON.stringify([cursor.isEnabled ? 1 : 0, cursor.orderKey, cursor.providerId]),
+  );
+}
+
+function decodeProviderCursor(raw: string | undefined): ProviderCursor | null {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const value = JSON.parse(decodeURIComponent(raw)) as unknown;
+    if (
+      !Array.isArray(value) ||
+      value.length !== 3 ||
+      (value[0] !== 0 && value[0] !== 1) ||
+      typeof value[1] !== 'string' ||
+      value[1].length === 0 ||
+      typeof value[2] !== 'string' ||
+      value[2].length === 0
+    ) {
+      throw new Error('Invalid provider cursor shape');
+    }
+
+    return {
+      isEnabled: value[0] === 1,
+      orderKey: value[1],
+      providerId: value[2],
+    };
+  } catch {
+    logger.warn('decodeCursor: cursor unparseable, falling back to first page', {
+      context: 'providers',
+      cursor: raw,
+    });
+    return null;
+  }
+}
+
+function afterProviderCursor(cursor: ProviderCursor): SQL {
+  const afterWithinSection = or(
+    gt(userProviderTable.orderKey, cursor.orderKey),
+    and(
+      eq(userProviderTable.orderKey, cursor.orderKey),
+      gt(userProviderTable.providerId, cursor.providerId),
+    ),
+  )!;
+
+  if (cursor.isEnabled) {
+    return or(
+      eq(userProviderTable.isEnabled, false),
+      and(eq(userProviderTable.isEnabled, true), afterWithinSection),
+    )!;
+  }
+
+  return and(eq(userProviderTable.isEnabled, false), afterWithinSection)!;
+}
+
 function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
   return {
     apiFeatures: input.apiFeatures ?? null,
@@ -311,6 +382,54 @@ export class ProviderService {
             .orderBy(asc(userProviderTable.orderKey));
 
     return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
+  }
+
+  async listPage(query: ProviderListPageQuery = {}): Promise<CursorPaginationResponse<Provider>> {
+    const limit = Math.min(
+      Math.max(query.limit ?? DEFAULT_PROVIDER_PAGE_LIMIT, 1),
+      MAX_PROVIDER_PAGE_LIMIT,
+    );
+    const cursor = decodeProviderCursor(query.cursor);
+    const excludedProviderIds = [...providerRegistryService.getExcludedProviderIds()];
+    const conditions: SQL[] = [];
+
+    if (excludedProviderIds.length > 0) {
+      conditions.push(
+        or(
+          isNull(userProviderTable.presetProviderId),
+          notInArray(userProviderTable.presetProviderId, excludedProviderIds),
+        )!,
+      );
+    }
+    if (cursor) {
+      conditions.push(afterProviderCursor(cursor));
+    }
+
+    const rows = await this.db
+      .select()
+      .from(userProviderTable)
+      .where(and(...conditions))
+      .orderBy(
+        desc(userProviderTable.isEnabled),
+        asc(userProviderTable.orderKey),
+        asc(userProviderTable.providerId),
+      )
+      .limit(limit + 1);
+    const pageRows = rows.slice(0, limit);
+    const last = pageRows.at(-1);
+
+    return {
+      items: pageRows.map(rowToProvider),
+      ...(rows.length > limit && last
+        ? {
+            nextCursor: encodeProviderCursor({
+              isEnabled: last.isEnabled,
+              orderKey: last.orderKey,
+              providerId: last.providerId,
+            }),
+          }
+        : {}),
+    };
   }
 
   async getByProviderId(providerId: string): Promise<Provider> {

@@ -1,0 +1,2 @@
+export const PROVIDER_LIST_PAGE_SIZE = 20;
+export const PROVIDER_LIST_STALE_TIME = 1000 * 60 * 5;

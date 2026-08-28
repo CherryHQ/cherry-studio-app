@@ -27,7 +27,13 @@ export function useProviderApiServiceQueries(providerId: string) {
     retry: false,
   });
   const saveMutation = useMutation('PATCH', '/providers/:id', {
-    refresh: ['/models', '/providers', `/providers/${providerId}`, `/providers/${providerId}/auth`],
+    refresh: [
+      '/models',
+      '/providers',
+      '/providers/page',
+      `/providers/${providerId}`,
+      `/providers/${providerId}/auth`,
+    ],
   });
   const replaceMutation = useMutation('PUT', '/providers/:id/api-keys', {
     onMutate: async (variables) => {
@@ -42,7 +48,12 @@ export function useProviderApiServiceQueries(providerId: string) {
     onError: (_error, _variables, context) => {
       restoreQuerySnapshot(queryClient, context?.apiKeys);
     },
-    refresh: ['/providers', `/providers/${providerId}`, `/providers/${providerId}/api-keys`],
+    refresh: [
+      '/providers',
+      '/providers/page',
+      `/providers/${providerId}`,
+      `/providers/${providerId}/api-keys`,
+    ],
   });
   const saveProviderRequest = saveMutation.trigger;
   const replaceApiKeysRequest = replaceMutation.trigger;

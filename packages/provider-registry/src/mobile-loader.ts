@@ -15,6 +15,10 @@ type RegistryBundle = {
   providers: { version: string; providers: ProviderConfig[] };
 };
 
+type ModelsBundle = RegistryBundle['models'];
+type ProviderModelsBundle = RegistryBundle['providerModels'];
+type ProvidersBundle = RegistryBundle['providers'];
+
 /**
  * Preset providers whose only authentication path is a provider OAuth login.
  * The app has no OAuth sign-in, so these rows can never be configured and are
@@ -28,20 +32,23 @@ const MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
   'openai-codex',
 ]);
 
-let parsedBundle: RegistryBundle | null = null;
+let parsedModels: ModelsBundle | null = null;
+let parsedProviderModels: ProviderModelsBundle | null = null;
+let parsedProviders: ProvidersBundle | null = null;
 
-function loadBundle(): RegistryBundle {
-  if (parsedBundle) {
-    return parsedBundle;
-  }
+function loadModelsBundle(): ModelsBundle {
+  parsedModels ??= ModelListSchema.parse(modelsRegistry);
+  return parsedModels;
+}
 
-  parsedBundle = {
-    models: ModelListSchema.parse(modelsRegistry),
-    providerModels: ProviderModelListSchema.parse(providerModelsRegistry),
-    providers: ProviderListSchema.parse(providersRegistry),
-  };
+function loadProviderModelsBundle(): ProviderModelsBundle {
+  parsedProviderModels ??= ProviderModelListSchema.parse(providerModelsRegistry);
+  return parsedProviderModels;
+}
 
-  return parsedBundle;
+function loadProvidersBundle(): ProvidersBundle {
+  parsedProviders ??= ProviderListSchema.parse(providersRegistry);
+  return parsedProviders;
 }
 
 export class MobileRegistryLoader {
@@ -52,19 +59,22 @@ export class MobileRegistryLoader {
   private overrideByApiKey: Map<string, ProviderModelOverride> | null = null;
   private overrideByNormApiKey: Map<string, ProviderModelOverride> | null = null;
   private overridesByProvider: Map<string, ProviderModelOverride[]> | null = null;
+  private providerById: Map<string, ProviderConfig> | null = null;
 
   loadModels(): ModelConfig[] {
-    const models = loadBundle().models.models ?? [];
+    const models = loadModelsBundle().models ?? [];
     this.buildModelIndex(models);
     return models;
   }
 
   loadProviders(): ProviderConfig[] {
-    return loadBundle().providers.providers ?? [];
+    const providers = loadProvidersBundle().providers ?? [];
+    this.buildProviderIndex(providers);
+    return providers;
   }
 
   loadProviderModels(): ProviderModelOverride[] {
-    const overrides = loadBundle().providerModels.overrides ?? [];
+    const overrides = loadProviderModelsBundle().overrides ?? [];
     this.buildOverrideIndex(overrides);
     return overrides;
   }
@@ -73,16 +83,20 @@ export class MobileRegistryLoader {
     return MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS.has(providerId);
   }
 
+  getExcludedProviderIds(): readonly string[] {
+    return [...MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS];
+  }
+
   getModelsVersion(): string {
-    return loadBundle().models.version;
+    return loadModelsBundle().version;
   }
 
   getProvidersVersion(): string {
-    return loadBundle().providers.version;
+    return loadProvidersBundle().version;
   }
 
   getProviderModelsVersion(): string {
-    return loadBundle().providerModels.version;
+    return loadProviderModelsBundle().version;
   }
 
   findModel(modelId: string): ModelConfig | null {
@@ -93,7 +107,8 @@ export class MobileRegistryLoader {
   }
 
   findProvider(providerId: string): ProviderConfig | null {
-    return this.loadProviders().find((provider) => provider.id === providerId) ?? null;
+    this.loadProviders();
+    return this.providerById?.get(providerId) ?? null;
   }
 
   findOverride(providerId: string, modelId: string): ProviderModelOverride | null {
@@ -123,6 +138,7 @@ export class MobileRegistryLoader {
     this.overrideByApiKey = null;
     this.overrideByNormApiKey = null;
     this.overridesByProvider = null;
+    this.providerById = null;
   }
 
   private buildModelIndex(models: ModelConfig[]): void {
@@ -140,6 +156,14 @@ export class MobileRegistryLoader {
         this.modelByNormId.set(normalizedId, model);
       }
     }
+  }
+
+  private buildProviderIndex(providers: ProviderConfig[]): void {
+    if (this.providerById) {
+      return;
+    }
+
+    this.providerById = new Map(providers.map((provider) => [provider.id, provider]));
   }
 
   private buildOverrideIndex(overrides: ProviderModelOverride[]): void {
