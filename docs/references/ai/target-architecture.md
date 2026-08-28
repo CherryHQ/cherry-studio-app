@@ -97,8 +97,8 @@ New module and directory names are chosen at implementation time following
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | This document; retire the `ai-runtime` desktop-sync trust workflow | In progress |
-| 1 | Seal the seam: Runtime binding at the composition root, split the Pi language binding out of `provider/`, neutral usage shape in the contract, static capability query, Pi-isolation lint rule | Pending |
+| 0 | This document; retire the `ai-runtime` desktop-sync trust workflow | Landed |
+| 1 | Seal the seam: Runtime binding at the composition root, split the Pi language binding out of `provider/`, neutral usage shape in the contract, language capability query behind `LanguageServingSupport`, Pi-isolation lint rule | Landed |
 | 2 | Host decomposition | Partially landed (#696: `turnPreparation.ts`, `turnAttachments.ts`, Pi lifecycle phases). Remaining: converge naming/usage/background-reply behind the turn-observer seam |
 | 3 | Fold `generation/` into `AiService`, shrink provider config to its AI SDK consumers, inline the consumed `packages/ai-runtime` symbols, delete the package | Pending |
 
