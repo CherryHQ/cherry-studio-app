@@ -48,61 +48,13 @@ export type PiLanguageBinding =
       status: 'unsupported';
     };
 
-export interface LanguageServingPlan {
-  bindings: {
-    pi: PiLanguageBinding;
-  };
-  connection: ResolvedProviderConnection;
-}
-
-interface ResolveLanguageServingPlanOptions {
-  resolvedConnection?: ResolvedProviderConnection;
-}
-
 /**
- * Resolve language-serving facts before projecting them into Pi or AI SDK objects.
+ * Decide whether Pi can serve one provider connection.
  *
- * The result is intentionally credential-selection-free. It may contain sensitive
- * configured headers through `connection`, so it remains ephemeral and must not be
- * persisted or logged.
+ * This is Pi's own compatibility policy over runtime-agnostic connection
+ * facts; the provider layer supplies the facts and never sees this decision.
  */
-export function resolveLanguageServingPlan(
-  provider: Provider,
-  model: Model,
-  options: ResolveLanguageServingPlanOptions = {},
-): LanguageServingPlan {
-  const connection = options.resolvedConnection ?? resolveProviderConnection(provider, model);
-
-  return {
-    bindings: {
-      pi: resolvePiLanguageBinding(provider, connection),
-    },
-    connection,
-  };
-}
-
-export class LanguageServingCompatibilityError extends Error {
-  readonly binding: LanguageServingCompatibilityIssue['binding'];
-  readonly code: LanguageServingCompatibilityCode;
-
-  constructor(issue: LanguageServingCompatibilityIssue) {
-    super(issue.message);
-    this.name = 'LanguageServingCompatibilityError';
-    this.binding = issue.binding;
-    this.code = issue.code;
-  }
-}
-
-export function requirePiLanguageBinding(
-  plan: LanguageServingPlan,
-): Extract<PiLanguageBinding, { status: 'supported' }> {
-  if (plan.bindings.pi.status === 'unsupported') {
-    throw new LanguageServingCompatibilityError(plan.bindings.pi.issue);
-  }
-  return plan.bindings.pi;
-}
-
-function resolvePiLanguageBinding(
+export function resolvePiLanguageBinding(
   provider: Provider,
   connection: ResolvedProviderConnection,
 ): PiLanguageBinding {
@@ -150,6 +102,35 @@ function resolvePiLanguageBinding(
   }
 
   return { endpointType: connection.endpointType, status: 'supported' };
+}
+
+/** Whether Pi can serve one configured model. The language half of system model support. */
+export function supportsPiLanguageModel(provider: Provider, model: Model): boolean {
+  return (
+    resolvePiLanguageBinding(provider, resolveProviderConnection(provider, model)).status ===
+    'supported'
+  );
+}
+
+export class LanguageServingCompatibilityError extends Error {
+  readonly binding: LanguageServingCompatibilityIssue['binding'];
+  readonly code: LanguageServingCompatibilityCode;
+
+  constructor(issue: LanguageServingCompatibilityIssue) {
+    super(issue.message);
+    this.name = 'LanguageServingCompatibilityError';
+    this.binding = issue.binding;
+    this.code = issue.code;
+  }
+}
+
+export function requirePiLanguageBinding(
+  binding: PiLanguageBinding,
+): Extract<PiLanguageBinding, { status: 'supported' }> {
+  if (binding.status === 'unsupported') {
+    throw new LanguageServingCompatibilityError(binding.issue);
+  }
+  return binding;
 }
 
 function isPiLanguageEndpointType(

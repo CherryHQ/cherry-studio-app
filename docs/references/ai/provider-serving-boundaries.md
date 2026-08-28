@@ -1,6 +1,7 @@
 # Provider Serving Boundaries
 
-Status: **Phase 1 landed; Phases 2 and 3 started**.
+Status: **Phases 1 and 2 landed (Phase 2 reshaped by the
+[target architecture](./target-architecture.md)); Phase 3 started**.
 
 This reference defines how Cherry Mobile shares Provider connection facts without turning image,
 language, embedding, rerank, audio, or video execution into one universal adapter. It complements
@@ -70,11 +71,12 @@ Language support is protocol-oriented, not Provider-id-oriented. Standard Provid
 usable by declaring a supported endpoint and adapter family in the registry; adding a Provider must
 not require another entry in a Pi-specific Provider table.
 
-`resolveLanguageServingPlan()` is the shared language control-plane result. It contains the resolved
-connection, declared authentication facts, shared language transport policy, and a typed Pi
-compatibility result. AI SDK language configuration consumes the same plan but keeps its broader
-authentication and Provider projection inside the AI SDK binding. Image models bypass this plan and
-consume only `ResolvedProviderConnection`.
+The provider layer owns the runtime-agnostic language control plane: `ResolvedProviderConnection`
+plus the shared language transport policy. The typed Pi compatibility decision
+(`resolvePiLanguageBinding`) lives with the Pi binding and consumes those facts; the provider layer
+never sees the decision. System model support asks the bound Runtime through
+`LanguageServingSupport`, so replacing the Runtime replaces that answer with it. AI SDK language
+configuration and image models consume the connection facts directly.
 
 The Pi binding owns only Pi mechanics:
 
@@ -143,12 +145,14 @@ must prove tool calls, reasoning, images, usage, cancellation, and error parity 
 model id, and common request headers consumed by Pi and AI SDK request construction. Existing
 credential selection and capability executors remain unchanged.
 
-### Phase 2: language serving materialization — started
+### Phase 2: language serving materialization — landed, reshaped
 
-`LanguageServingPlan` now classifies declared auth behavior and returns a typed supported or
-unsupported Pi binding before credential selection or network execution. Pi compatibility failures
-carry stable codes while preserving the existing user-facing messages. Pi and non-image AI SDK
-configuration consume this plan; their native model/config projections remain client-specific.
+The typed supported-or-unsupported Pi binding is classified before credential selection or network
+execution, with stable compatibility codes and unchanged user-facing messages. The plan wrapper was
+later dissolved by the target architecture: the decision (`resolvePiLanguageBinding`) moved into
+the Pi adapter, the provider layer keeps only runtime-agnostic facts, and system model support
+reaches the decision through the Runtime binding (`LanguageServingSupport`). Native model/config
+projections remain client-specific.
 
 Credential selection and its non-secret receipt still belong to the binding that materializes the
 credential because AI SDK supports IAM paths that Pi cannot execute. A later slice may share an

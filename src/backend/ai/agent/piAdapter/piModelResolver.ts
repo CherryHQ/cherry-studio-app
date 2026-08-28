@@ -3,10 +3,7 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import {
-  requirePiLanguageBinding,
-  resolveLanguageServingPlan,
-} from '@/backend/ai/provider/languageServingPlan';
+import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -19,6 +16,7 @@ import type {
   RuntimeUsageContext,
 } from '../runtime';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
+import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 
 const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
 const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
@@ -42,9 +40,8 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
     },
     async resolveModel(runtimeModel, runtimeOptions): Promise<PiModelResolution> {
-      const { adapter, model, preflight, provider, servingPlan } =
+      const { adapter, connection, model, preflight, provider } =
         await resolveConfiguredPiModel(runtimeModel);
-      const { connection } = servingPlan;
 
       const selectedApiKey = await providerService.resolveApiKey(provider.id);
       if (!selectedApiKey.value.trim()) {
@@ -124,16 +121,16 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
   ]);
   if (!model) throw new Error(`Model is not configured: ${uniqueModelId}`);
 
-  const servingPlan = resolveLanguageServingPlan(provider, model);
-  const piBinding = requirePiLanguageBinding(servingPlan);
+  const connection = resolveProviderConnection(provider, model);
+  const piBinding = requirePiLanguageBinding(resolvePiLanguageBinding(provider, connection));
   const adapter = resolvePiApiAdapter(piBinding.endpointType);
 
   return {
     adapter,
+    connection,
     model,
     preflight: toPiModelPreflight(model),
     provider,
-    servingPlan,
   };
 }
 

@@ -1,5 +1,9 @@
+import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
+import { supportsPiLanguageModel } from '../../piAdapter/piLanguageBinding';
 import { createPiModelResolver } from '../../piAdapter/piModelResolver';
 import type {
   AgentRuntime,
@@ -16,11 +20,12 @@ import { PiRuntime } from './PiRuntime';
  * This service is the only place that names a concrete Runtime. Replacing the
  * Runtime means adding an implementation directory and re-pointing the
  * `AgentRuntime` registration; consumers depend on the `AgentRuntime` contract
- * and never construct a Runtime themselves.
+ * and never construct a Runtime themselves. It also answers language serving
+ * support, so system model support swaps together with the Runtime.
  */
 @Injectable('AgentRuntime')
 @ServicePhase(Phase.PostReady)
-export class PiRuntimeService extends BaseService implements AgentRuntime {
+export class PiRuntimeService extends BaseService implements AgentRuntime, LanguageServingSupport {
   private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver());
 
   get descriptor(): RuntimeDescriptor {
@@ -33,5 +38,9 @@ export class PiRuntimeService extends BaseService implements AgentRuntime {
 
   open(): Promise<AgentRuntimeSession> {
     return this.runtime.open();
+  }
+
+  supportsLanguageModel(provider: Provider, model: Model): boolean {
+    return supportsPiLanguageModel(provider, model);
   }
 }
