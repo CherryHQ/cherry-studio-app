@@ -24,7 +24,12 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
       return;
     }
 
-    router.back();
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/');
   }, [onBack, router]);
 
   return useMemo<HeaderToolbarAction>(

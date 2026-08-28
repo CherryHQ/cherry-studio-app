@@ -27,19 +27,17 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
       navigateAgents: () => {
-        navigation.navigate('agents');
         navigation.closeDrawer();
+        router.push('/agents');
       },
       openLibrary: () => {
-        navigation.navigate('library');
         navigation.closeDrawer();
+        router.push('/library');
       },
       openPaintings: () => {
-        navigation.navigate('drawings');
         navigation.closeDrawer();
+        router.push('/drawings');
       },
-      // Settings lives in the root stack so it can push over the drawer and
-      // return to the exact drawer-backed route that opened it.
       openSettings: () => {
         navigation.closeDrawer();
         router.push('/settings');
@@ -49,8 +47,8 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         router.push('/sessions');
       },
       startNewChat: () => {
-        navigation.navigate('agents');
         navigation.closeDrawer();
+        router.push('/agents');
       },
     }),
     [navigation, router],
