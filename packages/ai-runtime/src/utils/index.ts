@@ -10,6 +10,5 @@ export * from './promptVariables';
 export * from './providerIds';
 export * from './reasoning';
 export * from './reasoningSerializers';
-export * from './serializeError';
 export * from './usageCapture';
 export * from './websearch';

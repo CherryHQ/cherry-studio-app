@@ -99,7 +99,9 @@ New module and directory names are chosen at implementation time following
 3. Swapping the Runtime touches one new directory plus one composition line.
 4. The orchestration core contains protocol orchestration and invariants only; turn preparation
    and attachment materialization are testable without a Host instance.
-5. `packages/ai-runtime` is deleted and the desktop-sync trust workflow is retired.
+5. The desktop-sync trust workflow is retired, `packages/ai-runtime` states an identity that
+   matches what it is, and it exports nothing without a consumer. (This criterion originally read
+   "the package is deleted"; see [Package Disposition](#package-disposition).)
 6. Existing Host and Runtime conformance suites stay green through every phase; the invariant list
    in [Agent Protocol](../agent/agent-protocol.md#invariants) is the permanent baseline.
 
@@ -110,7 +112,24 @@ New module and directory names are chosen at implementation time following
 | 0 | This document; retire the `ai-runtime` desktop-sync trust workflow | Landed |
 | 1 | Seal the seam: Runtime binding at the composition root, split the Pi language binding out of `provider/`, neutral usage shape in the contract, language capability query behind `LanguageServingSupport`, Pi-isolation lint rule | Landed |
 | 2 | Host decomposition | Landed (#696: `turnPreparation.ts`, `turnAttachments.ts`, Pi lifecycle phases; then the mapping split into `turnRuntimeInput.ts`/`runtimeProjection.ts` and the run-loop background-reply notification) |
-| 3 | Fold `generation/` into `AiService`, shrink provider config to its AI SDK consumers, inline the consumed `packages/ai-runtime` symbols, delete the package | Pending |
+| 3 | Make the AI SDK path private to `AiService`, inject app services into the built-in tool catalog, reposition `packages/ai-runtime` and remove its unconsumed exports | Landed |
+
+## Package Disposition
+
+`packages/ai-runtime` is **not** deleted. The plan assumed the app consumed a small slice of a
+mostly-dead desktop port, so inlining the consumed symbols would shrink the tree. Measurement on
+2026-08-28 showed the opposite: 55 consumed symbols pull a transitive closure of 79 files / 10,898
+lines — **84% of the package's 12,941 non-test lines**, dominated by per-vendor provider adaptation.
+
+Moving that into `src/backend/ai/provider/` would relocate ~11k lines without removing any
+complexity, and per-vendor adapters are well served by a package boundary. So the disposition
+changed to: keep the package, give it an identity that matches what it does (vendor adaptation for
+the AI SDK path, not a migration staging area), and delete what nothing consumes — 22 modules and
+their tests, plus the now-empty `messages` subpath.
+
+One deliberate exception: `custom/wire/` has no static consumer but carries the boundary tests that
+pin our request shaping against upstream AI SDK packages for the image vendors. Deleting a tested
+guard to improve a dead-code number is the wrong trade; it stays, and the README says why.
 
 Phase 1 precedes 2 and 3; the contract shape must settle before code moves against it. Phases 2
 and 3 are independent of each other.

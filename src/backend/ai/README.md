@@ -1,7 +1,10 @@
 # Mobile AI Adapters
 
-Portable AI behavior lives in the private source package `@cherrystudio/ai-runtime`. This directory
-owns the mobile platform and application-service boundaries around that package.
+Two execution paths live here: the conversation turn, which runs on the Agent Runtime contract with
+Pi as its implementation, and non-conversation generation, which runs on the AI SDK behind
+`AiService`. Vendor adaptation for the second path lives in the private source package
+`@cherrystudio/ai-runtime`; this directory owns the mobile platform and application-service
+boundaries around it.
 
 ## Backend Ownership
 

@@ -12,12 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "exports": {
-    "./messages": {
-      "types": "./src/messages/index.ts",
-      "react-native": "./src/messages/index.ts",
-      "import": "./src/messages/index.ts",
-      "default": "./src/messages/index.ts"
-    },
     "./provider": {
       "types": "./src/provider/index.ts",
       "react-native": "./src/provider/index.ts",
