@@ -255,8 +255,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
    */
   constructor(
     private readonly store: AgentSessionStore,
-    aiService: AiService,
-    preferenceService: PreferenceService,
+    private readonly aiService: AiService,
+    private readonly preferenceService: PreferenceService,
     private readonly backgroundReply: BackgroundReplyLifecycle,
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
@@ -295,6 +295,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return (
       this.overrides.tools ??
       (this.lazySystemCapabilities ??= createSystemCapabilitySource({
+        ai: this.aiService,
+        preference: this.preferenceService,
         webSearch: this.webSearchService,
       }))
     );

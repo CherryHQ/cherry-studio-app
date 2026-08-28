@@ -11,6 +11,7 @@ import type { TurnToolResources } from '../../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../../runtime';
 import {
   createSystemCapabilitySource,
+  type SystemCapabilityServices,
   type SystemCapabilitySourceDependencies,
 } from '../builtInToolSource';
 import type { ConfiguredPaintingModel } from '../painting';
@@ -138,7 +139,7 @@ describe('createSystemCapabilitySource', () => {
     jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
     const resources: TurnToolResources = { fileEntryIds: new Set(), grantFile };
-    const source = createSystemCapabilitySource(dependencies({}));
+    const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
       model: MODEL,
       resources,
@@ -172,7 +173,7 @@ async function resolve(
   scenario: Scenario,
   options: { platform?: string } = {},
 ): Promise<readonly RuntimeTool[]> {
-  const source = createSystemCapabilitySource({
+  const source = createSystemCapabilitySource(SERVICES, {
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
@@ -182,6 +183,14 @@ async function resolve(
     temporaryCapabilities: new Set(scenario.temporaryCapabilities ?? []),
   });
 }
+
+// Every test supplies the full painting/webSearch overrides below, so these
+// services only satisfy the required parameter; the overrides win.
+const SERVICES: SystemCapabilityServices = {
+  ai: { generateImage: jest.fn() },
+  preference: { get: jest.fn() },
+  webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
+} as unknown as SystemCapabilityServices;
 
 function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDependencies> {
   return {
