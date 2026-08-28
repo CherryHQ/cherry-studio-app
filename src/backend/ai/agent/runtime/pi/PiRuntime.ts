@@ -164,22 +164,30 @@ type ToolPartBase = {
   toolRef: RuntimeTool['ref'];
 };
 
+/**
+ * Turn lifecycle. The first transition out of `running` wins the phase — it is
+ * never retargeted — and only the terminal fence in `emit()` reaches
+ * `terminated`. The published terminal event is a separate concern: during
+ * `timing-out` the run loop's timeout failure still races the unconditional
+ * `cancelled` from `cancel()`/`close()`, and the fence keeps whichever lands
+ * first.
+ */
+type TurnPhase = 'running' | 'cancelling' | 'timing-out' | 'terminated';
+
 type ActiveTurn = {
   abortController: AbortController;
   agent?: PiRuntimeAgent;
   approvalWaiters: Map<string, ApprovalWaiter>;
   channel: RuntimeEventChannel;
-  cancelRequested: boolean;
   currentMessageOrdinal?: number;
   failedToolCalls: Set<string>;
   hasUsage: boolean;
   limitError?: RuntimeError;
   nextMessageOrdinal: number;
   nextPartIndex: number;
+  phase: TurnPhase;
   settledToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
-  terminated: boolean;
-  timedOut: boolean;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
   toolParts: Map<string, ToolPartBase>;
@@ -563,15 +571,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
     const turn: ActiveTurn = {
       abortController: new AbortController(),
       approvalWaiters: new Map(),
-      cancelRequested: false,
       channel,
       failedToolCalls: new Set(),
       hasUsage: false,
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
+      phase: 'running',
       settledToolCalls: new Set(),
-      terminated: false,
-      timedOut: false,
       toolCallCount: 0,
       toolParts: new Map(),
       toolStepCount: 0,
@@ -596,7 +602,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
   async cancel(turnId: string): Promise<void> {
     const turn = this.activeTurn;
     if (!turn || turn.turnId !== turnId) return;
-    turn.cancelRequested = true;
+    this.advancePhase(turn, 'cancelling');
     this.abortExecution(turn, new Error('The turn was cancelled.'));
     await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
     this.emit(turn, { type: 'cancelled' });
@@ -620,7 +626,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.closed = true;
     const turn = this.activeTurn;
     if (turn) {
-      turn.cancelRequested = true;
+      this.advancePhase(turn, 'cancelling');
       this.abortExecution(turn, new Error('The session was closed.'));
       await settleWithin(turn.agent?.waitForIdle(), PI_TURN_SETTLE_GRACE_MS);
       this.emit(turn, { type: 'cancelled' });
@@ -637,11 +643,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       );
       secrets = resolution.redactionValues;
       turn.usageContext = resolution.usageContext;
-      if (turn.terminated || turn.cancelRequested) return;
-      if (turn.timedOut) {
-        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
-        return;
-      }
+      if (this.settleIfEnding(turn)) return;
       if (request.tools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
           type: 'failed',
@@ -693,25 +695,16 @@ class PiRuntimeSession implements AgentRuntimeSession {
         }),
         turn.abortController.signal,
       );
-      if (turn.terminated) return;
-      if (turn.timedOut) {
-        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
-        return;
-      }
+      if (this.settleIfEnding(turn)) return;
       if (!contextPlan.ok) {
-        this.emit(
-          turn,
-          turn.cancelRequested
-            ? { type: 'cancelled' }
-            : {
-                type: 'failed',
-                error: {
-                  code: contextPlan.code,
-                  message: contextPlan.message,
-                  retryable: contextPlan.retryable,
-                },
-              },
-        );
+        this.emit(turn, {
+          type: 'failed',
+          error: {
+            code: contextPlan.code,
+            message: contextPlan.message,
+            retryable: contextPlan.retryable,
+          },
+        });
         return;
       }
       if (contextPlan.usage) {
@@ -738,7 +731,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
               turn.limitError = TOOL_STEP_LIMIT_ERROR;
             }
           }
-          return turn.limitError !== undefined || turn.timedOut || turn.cancelRequested;
+          return turn.limitError !== undefined || turn.phase !== 'running';
         },
         streamFn,
         toolExecution: 'parallel',
@@ -747,7 +740,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         ? this.createAgent(agentOptions)
         : await createDefaultAgent(agentOptions);
       turn.agent = agent;
-      if (turn.terminated || turn.cancelRequested) {
+      if (this.settleIfEnding(turn)) {
         agent.abort();
         return;
       }
@@ -755,17 +748,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
       // Consumer-side cancellation: the abort releases this wait immediately
       // rather than trusting the third-party loop to return. A late settlement
-      // is fenced by `turn.terminated` in `emit()` and `handlePiEvent()`.
+      // is fenced by the terminated phase in `emit()` and `handlePiEvent()`.
       await raceAbort(agent.prompt(conversation.prompt), turn.abortController.signal);
-      if (turn.terminated) return;
-      if (turn.timedOut) {
-        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
-        return;
-      }
-      if (turn.cancelRequested) {
-        this.emit(turn, { type: 'cancelled' });
-        return;
-      }
+      if (this.settleIfEnding(turn, { emitCancelled: true })) return;
 
       const terminal = turn.terminalMessage;
       if (!terminal) {
@@ -821,21 +806,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
           break;
       }
     } catch (error) {
-      if (!turn.terminated) {
-        this.emit(
-          turn,
-          turn.timedOut
-            ? { type: 'failed', error: TURN_TIMEOUT_ERROR }
-            : turn.cancelRequested
-              ? { type: 'cancelled' }
-              : {
-                  type: 'failed',
-                  error: normalizeExecutionError(error, secrets, {
-                    providerId: turn.usageContext?.providerId ?? request.model.providerId,
-                    modelId: turn.usageContext?.modelId ?? request.model.modelId,
-                  }),
-                },
-        );
+      if (!this.settleIfEnding(turn, { emitCancelled: true })) {
+        this.emit(turn, {
+          type: 'failed',
+          error: normalizeExecutionError(error, secrets, {
+            providerId: turn.usageContext?.providerId ?? request.model.providerId,
+            modelId: turn.usageContext?.modelId ?? request.model.modelId,
+          }),
+        });
       }
     } finally {
       unsubscribe?.();
@@ -843,7 +821,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
   }
 
   private handlePiEvent(turn: ActiveTurn, event: PiAgentEvent): void {
-    if (turn.terminated) return;
+    if (turn.phase === 'terminated') return;
     switch (event.type) {
       case 'message_start':
         if (event.message.role === 'assistant') {
@@ -955,7 +933,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolRef: runtimeTool.ref,
     });
 
-    if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+    if (turn.phase !== 'running' || signal?.aborted) {
       return this.interruptToolCall(turn, part);
     }
 
@@ -1029,7 +1007,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.settledToolCalls.add(toolCallId);
         return this.piToolResult(DENIED_TOOL_RESULT);
       }
-      if (turn.cancelRequested || turn.terminated || signal?.aborted) {
+      if (turn.phase !== 'running' || signal?.aborted) {
         return this.interruptToolCall(turn, part);
       }
     }
@@ -1044,7 +1022,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         signal: callbackSignal,
         toolCallId,
       });
-      if (turn.cancelRequested || turn.terminated || turn.timedOut || callbackSignal.aborted) {
+      if (turn.phase !== 'running' || callbackSignal.aborted) {
         return this.interruptToolCall(turn, part);
       }
       this.replaceToolPart(turn, part, { state: 'output-available', output });
@@ -1053,11 +1031,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       return this.piToolResult(output);
     } catch (error) {
       const isInterrupted =
-        turn.cancelRequested ||
-        turn.terminated ||
-        turn.timedOut ||
-        turn.abortController.signal.aborted ||
-        signal?.aborted;
+        turn.phase !== 'running' || turn.abortController.signal.aborted || signal?.aborted;
       if (isInterrupted) {
         return this.interruptToolCall(turn, part);
       }
@@ -1156,7 +1130,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Pi may surface the rejection used to unwind an approval waiter as a
       // native error result. During cancellation the Runtime terminalizer owns
       // the outcome, so keep the part live and normalize it as interrupted.
-      if (turn.cancelRequested) continue;
+      if (turn.phase === 'cancelling') continue;
       const base = this.ensureToolPartFromProviderCall(
         turn,
         result.toolCallId,
@@ -1192,7 +1166,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private waitForApproval(turn: ActiveTurn, approvalId: string): Promise<'approve' | 'deny'> {
     return new Promise((resolve, reject) => {
-      if (turn.cancelRequested || turn.terminated) {
+      if (turn.phase !== 'running') {
         reject(new Error('The turn is no longer active.'));
         return;
       }
@@ -1211,14 +1185,45 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.rejectApprovals(turn, approvalError);
   }
 
+  /**
+   * Moves the turn out of `running` exactly once; a turn already cancelling,
+   * timing out, or terminated keeps its first outcome.
+   */
+  private advancePhase(turn: ActiveTurn, phase: 'cancelling' | 'timing-out'): boolean {
+    if (turn.phase !== 'running') return false;
+    turn.phase = phase;
+    return true;
+  }
+
+  /**
+   * The single early-exit check for the run loop: reports whether the turn is
+   * past `running` and settles the outcome that is this loop's to publish. A
+   * timeout failure is always published here; `cancelled` only where the loop
+   * owns it (`emitCancelled`) — otherwise `cancel()`/`close()` publish it
+   * after their settle grace, and the terminal fence keeps exactly one.
+   */
+  private settleIfEnding(turn: ActiveTurn, options?: { emitCancelled?: boolean }): boolean {
+    switch (turn.phase) {
+      case 'running':
+        return false;
+      case 'cancelling':
+        if (options?.emitCancelled) this.emit(turn, { type: 'cancelled' });
+        return true;
+      case 'timing-out':
+        this.emit(turn, { type: 'failed', error: TURN_TIMEOUT_ERROR });
+        return true;
+      case 'terminated':
+        return true;
+    }
+  }
+
   private timeoutTurn(turn: ActiveTurn): void {
-    if (turn.terminated || turn.timedOut) return;
-    turn.timedOut = true;
+    if (!this.advancePhase(turn, 'timing-out')) return;
     this.abortExecution(turn, new Error('The Agent turn timed out.'));
   }
 
   private emit(turn: ActiveTurn, event: RuntimeEvent): void {
-    if (turn.terminated) return;
+    if (turn.phase === 'terminated') return;
     if (event.type === 'usage') turn.usageReported = true;
     const isTerminal =
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
@@ -1235,7 +1240,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
       }
       this.interruptUnsettledToolParts(turn);
-      turn.terminated = true;
+      turn.phase = 'terminated';
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));
     }
     turn.channel.push(event);
