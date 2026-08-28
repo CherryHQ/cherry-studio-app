@@ -15,7 +15,11 @@
  * fields without updating the spec first.
  */
 
-import type { AiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
+import type {
+  AiUsagePricingSnapshot,
+  ServingCredentialReceipt,
+} from '@/shared/data/types/aiUsageRecord';
+import type { Currency } from '@/shared/data/types/model';
 
 /** A JSON-safe value. Tool schemas, tool input/output, and history payloads use it. */
 export type RuntimeJsonValue =
@@ -237,8 +241,21 @@ export type RuntimeUsage = {
   cacheWriteTokens?: number;
 };
 
-/** Provider-resolution snapshot captured before execution starts. */
-export type RuntimeUsageContext = Omit<AiUsageCaptureContext, 'source' | 'messageRef'>;
+/**
+ * Provider-resolution snapshot captured before execution starts. JSON-safe and
+ * structurally aligned with the mobile usage-record capture context; the Host
+ * completes it with source and message attribution before recording.
+ */
+export type RuntimeUsageContext = {
+  providerId: string;
+  providerName: string | null;
+  modelId: string;
+  modelName: string | null;
+  pricingSnapshot: AiUsagePricingSnapshot | null;
+  trustProviderReportedCost: boolean;
+  reportedCostCurrency: Currency | null;
+  credentialReceipt: ServingCredentialReceipt;
+};
 
 export type RuntimeUsageReport = {
   usage: RuntimeUsage;
