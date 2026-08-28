@@ -12,7 +12,7 @@ const visibilityMotion = { duration: duration.fast, easing: easing.settle } as c
 
 export type ScrollToBottomButtonProps = {
   accessibilityLabel: string;
-  bottomAccessoryHeight: SharedValue<number>;
+  bottomAccessoryHeight?: SharedValue<number>;
   gap: number;
   isAtBottom: boolean;
   onPress: () => void;
@@ -33,7 +33,10 @@ export function ScrollToBottomButton({
     { borderColor: surfaceTokens.borderColor, borderWidth: surfaceTokens.borderWidth },
   ];
 
-  const wrapStyle = useAnimatedStyle(() => ({ bottom: bottomAccessoryHeight.get() + gap }));
+  const wrapStyle = useAnimatedStyle(
+    () => ({ bottom: (bottomAccessoryHeight?.get() ?? 0) + gap }),
+    [bottomAccessoryHeight, gap],
+  );
   const containerStyle = useAnimatedStyle(
     () => ({ transform: [{ scale: withTiming(isAtBottom ? 0.8 : 1, visibilityMotion) }] }),
     [isAtBottom],

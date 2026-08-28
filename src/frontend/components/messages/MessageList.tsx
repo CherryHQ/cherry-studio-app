@@ -255,7 +255,7 @@ export function MessageList({
             className="flex-1"
           />
         </ScrollShadow>
-        {bottomAccessoryHeight && messages.length > 0 ? (
+        {messages.length > 0 ? (
           <ScrollToBottomButton
             accessibilityLabel={t('chat.message.scrollToBottom')}
             bottomAccessoryHeight={bottomAccessoryHeight}

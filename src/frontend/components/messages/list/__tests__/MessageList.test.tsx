@@ -78,7 +78,7 @@ let mockSlideInFlight: MessageSlideInFlight | undefined;
 let mockScrollButtonProps:
   | {
       accessibilityLabel: string;
-      bottomAccessoryHeight: SharedValue<number>;
+      bottomAccessoryHeight?: SharedValue<number>;
       gap: number;
       isAtBottom: boolean;
       onPress: () => void;
@@ -132,7 +132,7 @@ jest.mock('@legendapp/list/keyboard', () => {
 jest.mock('@cherrystudio/ui/components', () => ({
   ScrollToBottomButton: (props: {
     accessibilityLabel: string;
-    bottomAccessoryHeight: SharedValue<number>;
+    bottomAccessoryHeight?: SharedValue<number>;
     gap: number;
     isAtBottom: boolean;
     onPress: () => void;
@@ -399,7 +399,7 @@ describe('MessageList anchoring and manual scrolling', () => {
     expect(mockLatestListProps?.onStartReached).toBeUndefined();
   });
 
-  test('owns the entering-message provider and optional scroll button', () => {
+  test('owns the entering-message provider and positions the scroll button above its accessory', () => {
     const bottomAccessoryHeight = {
       get: jest.fn(() => 88),
       set: jest.fn(),
@@ -430,7 +430,11 @@ describe('MessageList anchoring and manual scrolling', () => {
     mockScrollButtonProps = undefined;
     act(() => renderer?.update(<MessageList {...listProps(props.messages)} />));
 
-    expect(mockScrollButtonProps).toBeUndefined();
+    expect(mockScrollButtonProps).toMatchObject({
+      accessibilityLabel: 'translated:chat.message.scrollToBottom',
+      gap: 5,
+    });
+    expect(mockScrollButtonProps?.bottomAccessoryHeight).toBeUndefined();
     // 入场 id 落地后刻意不清：待发消息落库常在飞行中途，清掉会让行当帧跳回落点。
     expect(mockSlideInFlight?.activeMessageId.get()).toBe('user-1');
   });
