@@ -12,6 +12,7 @@ describe('provider Data API handlers', () => {
       getAuthConfig: jest.fn(async () => null),
       getByProviderId: jest.fn(async () => provider),
       list: jest.fn(async () => [provider]),
+      listPage: jest.fn(async () => ({ items: [provider] })),
       listApiKeys: jest.fn(async () => ({ keys: [apiKey] })),
       replaceApiKeys: jest.fn(async () => provider),
       update: jest.fn(async () => provider),
@@ -20,6 +21,7 @@ describe('provider Data API handlers', () => {
     const handlers = createProviderHandlers(service as unknown as ProviderService);
 
     await handlers['/providers'].GET({ query: { enabled: true } });
+    await handlers['/providers/page'].GET({ query: { limit: 20 } });
     await handlers['/providers'].POST({
       body: { name: 'Provider', providerId: 'provider-1' },
     });
@@ -46,6 +48,7 @@ describe('provider Data API handlers', () => {
     await handlers['/providers/:id/auth'].GET({ params: { id: 'provider-1' } });
 
     expect(service.list).toHaveBeenCalledWith({ enabled: true });
+    expect(service.listPage).toHaveBeenCalledWith({ limit: 20 });
     expect(service.create).toHaveBeenCalledWith({ name: 'Provider', providerId: 'provider-1' });
     expect(service.getByProviderId).toHaveBeenCalledWith('provider-1');
     expect(service.update).toHaveBeenCalledWith('provider-1', { name: 'Renamed' });

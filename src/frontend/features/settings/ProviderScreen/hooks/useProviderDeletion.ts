@@ -1,5 +1,5 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,12 +7,16 @@ import { useTranslation } from 'react-i18next';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import {
   dataApiCollectionFilters,
+  removeItemsFromInfiniteData,
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { refreshProviderModelQueries } from '../models/utils/refreshProviderModelQueries';
+
+type ProviderListData = InfiniteData<CursorPaginationResponse<Provider>, string | undefined>;
 
 /**
  * Deleting the provider, from wherever the action is offered — currently the
@@ -34,10 +38,20 @@ export function useProviderDeletion() {
         dataApiCollectionFilters('/providers'),
         (current) => current?.filter((item) => item.id !== providerIdToDelete),
       );
+      const providerPages = await updateQueriesOptimistically<ProviderListData>(
+        queryClient,
+        dataApiCollectionFilters('/providers/page'),
+        (current) =>
+          removeItemsFromInfiniteData(
+            current,
+            new Set(providerIdToDelete ? [providerIdToDelete] : []),
+          ),
+      );
 
-      return { providers };
+      return { providerPages, providers };
     },
     onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.providerPages);
       restoreQuerySnapshot(queryClient, context?.providers);
     },
     onSuccess: async (_result, variables) => {
@@ -46,7 +60,7 @@ export function useProviderDeletion() {
         await refreshProviderModelQueries(queryClient, variables.params.id);
       }
     },
-    refresh: ['/providers'],
+    refresh: ['/providers', '/providers/page'],
   });
   const deleteProvider = deleteProviderMutation.trigger;
   const requestDelete = useCallback(

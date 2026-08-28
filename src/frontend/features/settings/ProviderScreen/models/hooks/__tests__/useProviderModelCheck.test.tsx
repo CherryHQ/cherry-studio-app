@@ -30,6 +30,7 @@ jest.mock('@/frontend/data', () => ({
     providers: {
       detail: (providerId: string) => ['providers', providerId],
       list: () => ['providers'],
+      page: () => ['providers', 'page'],
     },
   },
   useBackendModule: () => ({ checkHealth: mockCheckHealth }),

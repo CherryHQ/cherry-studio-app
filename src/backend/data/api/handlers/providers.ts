@@ -8,6 +8,9 @@ export function createProviderHandlers(service: ProviderService): HandlersFor<Pr
       GET: ({ query }) => service.list(query),
       POST: ({ body }) => service.create(body),
     },
+    '/providers/page': {
+      GET: ({ query }) => service.listPage(query),
+    },
     '/providers/:id': {
       DELETE: ({ params }) => service.delete(params.id),
       GET: ({ params }) => service.getByProviderId(params.id),

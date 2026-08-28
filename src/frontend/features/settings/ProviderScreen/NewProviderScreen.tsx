@@ -31,10 +31,10 @@ export default function NewProviderScreen() {
   const providerAvatars = useProviderAvatarActions();
 
   const createProviderMutation = useMutation('POST', '/providers', {
-    refresh: ['/providers'],
+    refresh: ['/providers', '/providers/page'],
   });
   const enableProviderMutation = useMutation('PATCH', '/providers/:id', {
-    refresh: ['/providers'],
+    refresh: ['/providers', '/providers/page'],
   });
   const createProvider = createProviderMutation.trigger;
   const enableProvider = enableProviderMutation.trigger;

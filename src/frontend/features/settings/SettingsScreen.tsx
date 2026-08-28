@@ -16,9 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/components/headers';
-import { usePreference } from '@/frontend/data/hooks';
+import { usePreference, usePrefetchInfiniteQuery } from '@/frontend/data/hooks';
 
 import { ProfileHero } from './profileHero';
+import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -26,11 +27,23 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const [userName] = usePreference('app.user.name');
+  const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
   }, [router]);
+  const prepareProviderSettings = useCallback(() => {
+    router.prefetch('/settings/provider');
+    void prefetchInfiniteQuery('/providers/page', {
+      limit: PROVIDER_LIST_PAGE_SIZE,
+      staleTime: PROVIDER_LIST_STALE_TIME,
+    });
+  }, [prefetchInfiniteQuery, router]);
+  const openProviderSettings = useCallback(() => {
+    prepareProviderSettings();
+    router.push('/settings/provider');
+  }, [prepareProviderSettings, router]);
 
   const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
@@ -56,7 +69,8 @@ export default function SettingsScreen() {
             <Section.Item
               label={t('settings.items.modelService')}
               leading={<CloudIcon className="size-5 text-foreground" />}
-              onPress={() => router.push('/settings/provider')}
+              onPress={openProviderSettings}
+              onPressIn={prepareProviderSettings}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}

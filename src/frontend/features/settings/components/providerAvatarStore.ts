@@ -26,8 +26,8 @@ function invalidate(): void {
 
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).
- * The lookup is a synchronous file-system stat, cached per `providerId`, so the
- * avatar is available on first render without a cascading re-render.
+ * The lookup uses the storage module's shared directory index and is cached per
+ * `providerId`, so rendering many rows does not rescan the same directory.
  */
 export function useProviderAvatar(providerId: string): string | undefined {
   const providers = useBackendModule('providers');
