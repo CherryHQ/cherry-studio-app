@@ -41,6 +41,11 @@ import type {
 } from '../types';
 import { planPiContext, type PiContextCompactionOptions } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
+import {
+  createPiDeferredToolDiscoveryTools,
+  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
+  PI_TOOL_CALL_TOOL_NAME,
+} from './piDeferredToolDiscovery';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -162,6 +167,11 @@ type ToolPartBase = {
   providerName: string;
   toolCallId: string;
   toolRef: RuntimeTool['ref'];
+};
+
+type ToolCallProjection = {
+  input: RuntimeJsonValue;
+  providerName: string;
 };
 
 /**
@@ -655,7 +665,33 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
-      const conversation = toPiConversation(request, resolution.model);
+      const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
+      const mcpTools = request.tools.filter(
+        (tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny',
+      );
+      const deferredToolDiscoveryTools =
+        mcpTools.length > 0
+          ? createPiDeferredToolDiscoveryTools(mcpTools, (target, call, catalogCallInput) =>
+              this.runRuntimeTool(target, call.toolCallId, call.input, call.signal, turn, {
+                input: catalogCallInput,
+                providerName: PI_TOOL_CALL_TOOL_NAME,
+              }),
+            )
+          : [];
+      const exposedTools = [...directTools, ...deferredToolDiscoveryTools];
+      for (const tool of deferredToolDiscoveryTools) {
+        if (tool.providerName !== PI_TOOL_CALL_TOOL_NAME) {
+          turn.toolsByProviderName.set(tool.providerName, tool);
+        }
+      }
+      const baseConversation = toPiConversation(request, resolution.model);
+      const conversation =
+        deferredToolDiscoveryTools.length > 0
+          ? {
+              ...baseConversation,
+              systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
+            }
+          : baseConversation;
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
@@ -691,7 +727,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           redactSummary: (summary) => redactCompactionSummary(summary, compactionRedactions),
           signal: turn.abortController.signal,
           thinkingLevel,
-          tools: request.tools,
+          tools: exposedTools,
         }),
         turn.abortController.signal,
       );
@@ -722,7 +758,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
           model: resolution.model,
           systemPrompt: conversation.systemPrompt,
           thinkingLevel,
-          tools: this.toPiTools(request.tools, turn),
+          tools: exposedTools.map((tool) =>
+            tool.providerName === PI_TOOL_CALL_TOOL_NAME
+              ? this.toDelegatingPiTool(tool, turn)
+              : this.toPiTool(tool, turn),
+          ),
         },
         shouldStopAfterTurn: ({ toolResults }) => {
           if (toolResults.length > 0) {
@@ -906,15 +946,36 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
   }
 
-  private toPiTools(tools: RuntimeTool[], turn: ActiveTurn): PiAgentTool[] {
-    return tools.map((runtimeTool) => ({
+  private toPiTool(runtimeTool: RuntimeTool, turn: ActiveTurn): PiAgentTool {
+    return {
       name: runtimeTool.providerName,
       label: runtimeTool.displayName,
       description: runtimeTool.description,
       parameters: runtimeTool.inputSchema as never,
       execute: (toolCallId, params, signal) =>
         this.runTool(runtimeTool, toolCallId, toRuntimeJson(params, {}), signal, turn),
-    }));
+    };
+  }
+
+  /** tool_call delegates to the target RuntimeTool, which owns the persisted part and approval. */
+  private toDelegatingPiTool(runtimeTool: RuntimeTool, turn: ActiveTurn): PiAgentTool {
+    return {
+      name: runtimeTool.providerName,
+      label: runtimeTool.displayName,
+      description: runtimeTool.description,
+      parameters: runtimeTool.inputSchema as never,
+      execute: async (toolCallId, params, signal) => {
+        const callbackSignal = signal
+          ? AbortSignal.any([turn.abortController.signal, signal])
+          : turn.abortController.signal;
+        const output = await runtimeTool.execute({
+          input: toRuntimeJson(params, {}),
+          signal: callbackSignal,
+          toolCallId,
+        });
+        return this.piToolResult(output);
+      },
+    };
   }
 
   private async runTool(
@@ -924,11 +985,25 @@ class PiRuntimeSession implements AgentRuntimeSession {
     signal: AbortSignal | undefined,
     turn: ActiveTurn,
   ) {
+    return this.piToolResult(
+      await this.runRuntimeTool(runtimeTool, toolCallId, input, signal, turn),
+    );
+  }
+
+  private async runRuntimeTool(
+    runtimeTool: RuntimeTool,
+    toolCallId: string,
+    input: RuntimeJsonValue,
+    signal: AbortSignal | undefined,
+    turn: ActiveTurn,
+    projection?: ToolCallProjection,
+  ): Promise<RuntimeToolResult> {
+    const projectedInput = projection?.input ?? input;
     const part = this.ensureToolPart(turn, {
       displayName: runtimeTool.displayName,
       id: `tool-${toolCallId}`,
-      input,
-      providerName: runtimeTool.providerName,
+      input: projectedInput,
+      providerName: projection?.providerName ?? runtimeTool.providerName,
       toolCallId,
       toolRef: runtimeTool.ref,
     });
@@ -948,13 +1023,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
       });
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
-      return this.piToolResult(output);
+      return output;
     }
 
     if (runtimeTool.approval === 'deny') {
       this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
       turn.settledToolCalls.add(toolCallId);
-      return this.piToolResult(DENIED_TOOL_RESULT);
+      return DENIED_TOOL_RESULT;
     }
 
     if (runtimeTool.approval === 'ask') {
@@ -971,7 +1046,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         turn.failedToolCalls.add(toolCallId);
         turn.settledToolCalls.add(toolCallId);
-        return this.piToolResult(output);
+        return output;
       }
       // Register before publishing the request: callers may cancel as soon as
       // they observe that event, and cancellation must always find the waiter.
@@ -1005,7 +1080,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (decision === 'deny') {
         this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
         turn.settledToolCalls.add(toolCallId);
-        return this.piToolResult(DENIED_TOOL_RESULT);
+        return DENIED_TOOL_RESULT;
       }
       if (turn.phase !== 'running' || signal?.aborted) {
         return this.interruptToolCall(turn, part);
@@ -1028,7 +1103,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       this.replaceToolPart(turn, part, { state: 'output-available', output });
       turn.settledToolCalls.add(toolCallId);
       this.emitArtifacts(turn, toolCallId, output);
-      return this.piToolResult(output);
+      return output;
     } catch (error) {
       const isInterrupted =
         turn.phase !== 'running' || turn.abortController.signal.aborted || signal?.aborted;
@@ -1044,7 +1119,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       });
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
-      return this.piToolResult(output);
+      return output;
     }
   }
 
@@ -1060,7 +1135,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.replaceToolPart(turn, part, { state: 'interrupted', output });
     turn.failedToolCalls.add(part.toolCallId);
     turn.settledToolCalls.add(part.toolCallId);
-    return this.piToolResult(output);
+    return output;
   }
 
   private emitArtifacts(turn: ActiveTurn, toolCallId: string, output: RuntimeToolResult): void {

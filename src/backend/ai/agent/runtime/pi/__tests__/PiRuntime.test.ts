@@ -25,6 +25,12 @@ import {
 } from '../contextCompaction';
 import { PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX, toPiConversation } from '../modelMessages';
 import {
+  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
+  PI_TOOL_CALL_TOOL_NAME,
+  PI_TOOL_DESCRIBE_TOOL_NAME,
+  PI_TOOL_SEARCH_TOOL_NAME,
+} from '../piDeferredToolDiscovery';
+import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PI_TURN_SETTLE_GRACE_MS,
   PiRuntime,
@@ -36,8 +42,8 @@ import {
 } from '../PiRuntime';
 
 const ERROR_SECRET = 'test-key';
-const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
-const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
+const TOOL_REF = { source: 'builtin', capabilityId: 'delete_file' } as const;
+const TOOL_PROVIDER_NAME = 'builtin_delete_file_a1b2';
 const TOOL_DISPLAY_NAME = 'Delete file';
 
 type TestAgentContext = {
@@ -438,6 +444,7 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../PiRuntime.ts'),
     path.resolve(__dirname, '../contextCompaction.ts'),
     path.resolve(__dirname, '../modelMessages.ts'),
+    path.resolve(__dirname, '../piDeferredToolDiscovery.ts'),
   ],
 };
 
@@ -1412,6 +1419,128 @@ describe('PiRuntime mapping', () => {
         purpose: 'artifact',
       },
     });
+    await session.close();
+  });
+
+  test('exposes MCP tools through deferred discovery and calls the target through its approval boundary', async () => {
+    const runtime = createTestRuntime();
+    let executedInput: unknown;
+    let searchResult: unknown;
+    const builtInTool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'location_get_current' },
+      providerName: 'location_get_current',
+      displayName: 'Get current location',
+      description: 'Get the current device location.',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: { latitude: 1, longitude: 2 }, artifacts: [] }),
+    };
+    const targetTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
+      providerName: 'mcp_server_1_search_issues_a1b2',
+      displayName: 'Search issues',
+      description: 'Find repository issues.',
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        required: ['query'],
+      },
+      approval: 'ask',
+      execute: async ({ input }) => {
+        executedInput = input;
+        return { value: { total: 1 }, artifacts: [] };
+      },
+    };
+    const deniedTool: RuntimeTool = {
+      ...targetTool,
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_issue' },
+      providerName: 'mcp_server_1_delete_issue_c3d4',
+      displayName: 'Delete issue',
+      description: 'Delete one repository issue.',
+      approval: 'deny',
+    };
+    const holder = arrange(runtime, async (context) => {
+      const tools = context.options.initialState?.tools ?? [];
+      const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+      const call = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
+      if (!search || !call) throw new Error('Deferred-discovery tools were not exposed.');
+      searchResult = (await search.execute('search-call', { query: 'repository' }, context.signal))
+        .details;
+      await call.execute(
+        'catalog-call',
+        { name: targetTool.providerName, params: { query: 'bug' } },
+        context.signal,
+      );
+      await emitText(context, 'Found one issue.');
+    });
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    const collecting = (async () => {
+      for await (const event of session.execute(
+        baseRequest('turn-deferred-discovery', { tools: [builtInTool, targetTool, deniedTool] }),
+      )) {
+        events.push(event);
+      }
+    })();
+    await waitFor(
+      () => events.some((event) => event.type === 'approval.requested'),
+      'the MCP target approval request',
+    );
+
+    await session.respondApproval({
+      approvalId: 'approval-catalog-call',
+      decision: 'approve',
+      turnId: 'turn-deferred-discovery',
+    });
+    await collecting;
+
+    expect(holder.lastOptions?.initialState?.tools?.map((tool) => tool.name)).toEqual([
+      builtInTool.providerName,
+      PI_TOOL_SEARCH_TOOL_NAME,
+      PI_TOOL_DESCRIBE_TOOL_NAME,
+      PI_TOOL_CALL_TOOL_NAME,
+    ]);
+    expect(holder.lastOptions?.initialState?.systemPrompt).toContain(
+      PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
+    );
+    expect(searchResult).toMatchObject({
+      value: {
+        matchedNamespaces: [
+          {
+            namespace: 'mcp',
+            tools: [expect.objectContaining({ name: targetTool.providerName })],
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(searchResult)).not.toContain(deniedTool.providerName);
+    expect(executedInput).toEqual({ query: 'bug' });
+    expect(events.find((event) => event.type === 'approval.requested')).toMatchObject({
+      approval: {
+        toolCallId: 'catalog-call',
+        toolRef: targetTool.ref,
+        displayName: targetTool.displayName,
+        input: { query: 'bug' },
+      },
+    });
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'catalog-call' &&
+          event.part.state === 'output-available',
+      ),
+    ).toMatchObject({
+      part: {
+        providerName: PI_TOOL_CALL_TOOL_NAME,
+        toolRef: targetTool.ref,
+        displayName: targetTool.displayName,
+        input: { name: targetTool.providerName, params: { query: 'bug' } },
+        output: { value: { total: 1 }, artifacts: [] },
+      },
+    });
+    expect(events.at(-1)).toEqual({ type: 'completed' });
     await session.close();
   });
 

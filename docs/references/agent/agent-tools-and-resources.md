@@ -139,8 +139,25 @@ permission, deleted file, or disconnected server fails closed; the callback neve
 fallback action with broader access.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
-application function by name. Version 1 does not expose a shell, workspace, JavaScript code mode,
-dynamic extension, unrestricted filesystem tool, or catalog-expanding meta-tool.
+application function by name: every callable target must still exist in the frozen turn catalog.
+The Runtime exposes system capabilities directly and projects eligible MCP tools through three
+application-owned catalog tools:
+
+- `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
+  including TypeScript call signatures.
+- `tool_describe` returns the complete description and signature for one exact discovered name.
+- `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
+  `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
+
+MCP tools with effective `deny` policy are absent from discovery. The Host still materializes and
+freezes the complete executable MCP catalog before the Runtime starts; deferred tool discovery
+reduces model tool schema and provider tool-count pressure, but does not make MCP discovery or
+transport lazy.
+Configuration changes therefore still affect the next turn only.
+
+Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
+extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
+are never compiled or executed.
 
 ## Controlled File Ledger
 
