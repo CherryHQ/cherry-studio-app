@@ -14,7 +14,8 @@ owns the mobile platform and application-service boundaries around that package.
   import application protocol types, persistence, React, or Expo modules (ESLint-enforced).
 - `agent/host/` owns the Mobile Agent Host, the only adapter between the Agent Protocol
   (`@/shared/contracts/agent`) and the Runtime contract, plus Agent definition and protocol
-  projection policy. Version 1 binds `local` directly to Pi without a Runtime registry.
+  projection policy. The concrete Runtime enters through the composition root's `AgentRuntime`
+  registration; the Host never constructs one.
 - `agent/sessionStore/`, `agent/resources/`, `agent/tools/`, and `agent/piAdapter/` respectively own
   transcript persistence, managed turn resources, executable Agent capabilities, and the mobile
   provider/model adaptation required to construct Pi.
