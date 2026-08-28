@@ -22,6 +22,13 @@ export type MessagePartReasoningProps = {
   testID?: string;
 };
 
+export type MessagePartDetailProps = {
+  children: ReactNode;
+  onClose: () => void;
+  testID?: string;
+  title: string;
+};
+
 export type MessagePartPendingProps = {
   accessibilityLabel: string;
   testID?: string;
@@ -32,15 +39,20 @@ export type MessagePartUnknownProps = {
   testID?: string;
 };
 
-export type MessagePartToolProps = {
-  children: ReactNode;
+export type MessagePartSummaryProps = {
   icon?: ComponentType<LucideIconProps>;
   imageSource?: ImageSource | number;
+  onPress: () => void;
   state: 'complete' | 'running';
   statusText?: string;
   statusTone?: MessagePartTone;
   testID?: string;
   title: string;
+};
+
+export type MessagePartToolProps = Omit<MessagePartSummaryProps, 'onPress'> & {
+  children: ReactNode;
+  detailTitle?: string;
 };
 
 export type MessagePartErrorProps = {

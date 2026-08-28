@@ -1,7 +1,12 @@
 import { View } from 'react-native';
 
 import type { MessagePartRootProps } from '../message-part.types';
-import { MessagePartReasoning, MessagePartTool } from './message-part-disclosure';
+import {
+  MessagePartDetail,
+  MessagePartReasoning,
+  MessagePartSummary,
+  MessagePartTool,
+} from './message-part-disclosure';
 import { MessagePartError } from './message-part-feedback';
 import { MessagePartPending } from './message-part-pending';
 import { MessagePartPlaceholder } from './message-part-placeholder';
@@ -24,6 +29,7 @@ function MessagePartRoot({ children, className, ...props }: MessagePartRootProps
 }
 
 export const MessagePart = Object.assign(MessagePartRoot, {
+  Detail: MessagePartDetail,
   Error: MessagePartError,
   Pending: MessagePartPending,
   Placeholder: MessagePartPlaceholder,
@@ -31,6 +37,7 @@ export const MessagePart = Object.assign(MessagePartRoot, {
   SectionTitle: MessagePartSectionTitle,
   Source: MessagePartSource,
   Status: MessagePartStatus,
+  Summary: MessagePartSummary,
   TextSection: MessagePartTextSection,
   Tool: MessagePartTool,
   Translation: MessagePartTranslation,
