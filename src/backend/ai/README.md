@@ -32,6 +32,8 @@ Pure provider implementations, request types, and parameter policies must not be
 Current execution and tool boundaries live in
 [Agent Architecture](../../../docs/references/agent/README.md) and
 [Agent Tools And Controlled Resources](../../../docs/references/agent/agent-tools-and-resources.md).
+The approved target structure and migration status for this directory live in
+[Backend AI Target Architecture](../../../docs/references/ai/target-architecture.md).
 
 ## Sync Trust
 
