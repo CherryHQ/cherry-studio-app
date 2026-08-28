@@ -2,8 +2,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatScreen } from '../ChatScreen';
 
-const mockHandleInputHeightChange = jest.fn();
-const mockInputHeightShared = { value: 122 };
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
 let dockProps: Record<string, unknown> | undefined;
@@ -11,13 +9,12 @@ let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionIsLoading: boolean;
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useComposerDockLayout: () => ({
-    contentBottomInset: 130,
-    handleInputHeightChange: mockHandleInputHeightChange,
-    inputHeight: 122,
-    inputHeightShared: mockInputHeightShared,
-    keyboardOffset: 26,
-  }),
+  composerContentGap: 8,
+  getComposerKeyboardStickyOffset: () => 26,
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 }),
 }));
 
 jest.mock('@/frontend/components/composer', () => ({
@@ -84,19 +81,19 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('shares CherryUI dock measurements with the workspace and composer', () => {
+  it('keeps the composer in normal flow and shares only keyboard geometry', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
 
     expect(chatWorkspaceProps).toMatchObject({
-      bottomAccessoryHeight: mockInputHeightShared,
-      contentBottomInset: 130,
+      contentBottomInset: 8,
       keyboardOffset: 26,
     });
     expect(dockProps).toMatchObject({
-      onHeightChange: mockHandleInputHeightChange,
+      layoutMode: 'flow',
     });
+    expect(dockProps?.onHeightChange).toBeUndefined();
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       dismissKeyboardOnSend: false,

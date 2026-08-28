@@ -1,6 +1,7 @@
-import { useComposerDockLayout } from '@cherrystudio/ui/components';
+import { composerContentGap, getComposerKeyboardStickyOffset } from '@cherrystudio/ui/components';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/composer';
 import { MainHeader } from '@/frontend/components/headers';
@@ -33,10 +34,9 @@ export function ChatScreen() {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
-  const composerDockLayout = useComposerDockLayout();
-  const contentBottomInset = hasComposer
-    ? composerDockLayout.contentBottomInset
-    : PREVIEW_CONTENT_BOTTOM_INSET;
+  const { bottom: bottomInset } = useSafeAreaInsets();
+  const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
+  const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
   return (
     <>
@@ -47,9 +47,8 @@ export function ChatScreen() {
             assistantAvatarUri={agent.agent?.avatarUri}
             assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview}
-            bottomAccessoryHeight={hasComposer ? composerDockLayout.inputHeightShared : undefined}
             contentBottomInset={contentBottomInset}
-            keyboardOffset={hasComposer ? composerDockLayout.keyboardOffset : 0}
+            keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}
             renderGateKey={sessionId}
             sessionId={sessionId}
@@ -59,7 +58,7 @@ export function ChatScreen() {
         )}
         {hasComposer ? (
           <ComposerSessionProvider>
-            <ComposerDock onHeightChange={composerDockLayout.handleInputHeightChange}>
+            <ComposerDock layoutMode="flow">
               <ChatInput
                 agentId={resolvedAgentId}
                 dismissKeyboardOnSend={false}

@@ -378,10 +378,11 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
-`Composer.Dock` floats a composed input above screen content, applies horizontal and safe-area
-insets, follows the keyboard, and reports its measured height. Pair it with
-`useComposerDockLayout()` when content above the dock needs the reserved inset, keyboard offset, or
-shared live height used by another floating control:
+`Composer.Dock` applies horizontal and safe-area insets and follows the keyboard. It floats above
+screen content by default. Use `layoutMode="flow"` when the parent should reserve its space through
+normal flex layout; this avoids measuring the dock back into React state. Pair the floating mode
+with `useComposerDockLayout()` when content behind the dock needs the reserved inset, keyboard
+offset, or shared live height used by another floating control:
 
 ```tsx
 const dock = useComposerDockLayout();

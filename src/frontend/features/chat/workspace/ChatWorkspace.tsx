@@ -3,7 +3,6 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
 
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation';
@@ -33,7 +32,6 @@ type ChatWorkspaceProps = {
   assistantAvatarUri?: null | string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
-  bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
@@ -44,7 +42,6 @@ type ChatWorkspaceProps = {
 export function ChatWorkspace({
   assistantAvatarUri,
   assistantName,
-  bottomAccessoryHeight,
   contentBottomInset,
   keyboardOffset,
   messageWindow,
@@ -149,7 +146,6 @@ export function ChatWorkspace({
       >
         <MessageList
           key={listRenderKey}
-          bottomAccessoryHeight={bottomAccessoryHeight}
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
           enteringMessageId={live.enteringUserMessageId}

@@ -127,4 +127,18 @@ describe('Composer.Dock', () => {
       opened: 0,
     });
   });
+
+  it('can participate in parent flow without measuring its animated height', () => {
+    act(() => {
+      renderer = create(
+        <ComposerDock layoutMode="flow">
+          <View />
+        </ComposerDock>,
+      );
+    });
+
+    const container = renderer!.root.findByProps({ pointerEvents: 'box-none' });
+    expect(container.props.className).toBe('z-10 shrink-0');
+    expect(container.props.onLayout).toBeUndefined();
+  });
 });
