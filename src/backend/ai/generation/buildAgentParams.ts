@@ -34,9 +34,9 @@ import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { resolveProviderAiSdkConfig } from '../../../provider/config';
-import { resolveProviderConnection } from '../../../provider/providerConnection';
-import type { AiSdkGeneratorOptions } from '../AiSdkGenerator';
+import { resolveProviderConnection } from '../provider/providerConnection';
+import type { AiSdkGeneratorOptions } from './AiSdkGenerator';
+import { resolveProviderAiSdkConfig } from './providerConfig';
 
 export interface BuildAgentParamsDependencies {
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;

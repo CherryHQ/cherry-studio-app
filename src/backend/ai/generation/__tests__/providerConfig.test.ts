@@ -4,7 +4,7 @@ import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderSer
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
-import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../config';
+import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../providerConfig';
 
 describe('providerToAiSdkConfig', () => {
   it('leaves generic OpenAI-compatible providers on the default fetch', async () => {
