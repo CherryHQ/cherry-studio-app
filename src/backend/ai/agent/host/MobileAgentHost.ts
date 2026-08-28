@@ -74,6 +74,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { parseUniqueModelId } from '@/shared/data/types/model';
+import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
 import { isAiSupportedImageMediaType } from '@/shared/utils/imageFileTypes';
 
 import { createPiModelResolver } from '../piAdapter/piModelResolver';
@@ -1446,21 +1447,17 @@ function applyTurnOverrides(
 }
 
 /**
- * Applies only the Agent's interactive approval preference. Tool availability,
- * hard denies, system permission, and callback-level resource checks are left
- * untouched and continue to fail closed.
+ * Applies only the Agent's interactive approval preference; the value-level
+ * rule lives in the shared policy module next to the MCP approval floor.
  */
 function applyAgentToolApprovalMode(
   tools: readonly RuntimeTool[],
   mode: AgentDefinition['toolApprovalMode'],
 ): RuntimeTool[] {
-  if (mode === 'default') {
-    return [...tools];
-  }
-
-  return tools.map((tool) =>
-    tool.approval === 'ask' ? { ...tool, approval: 'auto' as const } : tool,
-  );
+  return tools.map((tool) => {
+    const approval = applyToolApprovalMode(tool.approval, mode);
+    return approval === tool.approval ? tool : { ...tool, approval };
+  });
 }
 
 function imageAttachmentLimitMessage(limit: ImageAttachmentLimit): string {

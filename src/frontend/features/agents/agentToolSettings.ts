@@ -1,6 +1,7 @@
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
+import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
 export type McpToolBindingDraft = Extract<WriteAgentToolBinding, { source: 'mcp' }>;
 
@@ -44,7 +45,7 @@ export function createAgentToolBindingDraft(
     binding.source === 'mcp'
       ? [
           {
-            approval: binding.approval === 'deny' ? 'deny' : 'ask',
+            approval: clampMcpToolApproval(binding.approval),
             displayNameSnapshot: binding.displayNameSnapshot,
             enabled: binding.enabled,
             ...(binding.rawToolName ? { rawToolName: binding.rawToolName } : {}),
@@ -110,7 +111,7 @@ export function setAgentMcpServerEnabled(
 
   const restored = option.binding ?? option.originalBinding;
   const nextBinding: McpToolBindingDraft = restored
-    ? { ...restored, approval: restored.approval === 'deny' ? 'deny' : 'ask', enabled: true }
+    ? { ...restored, approval: clampMcpToolApproval(restored.approval), enabled: true }
     : {
         approval: 'ask',
         displayNameSnapshot: option.server?.name ?? option.displayName,

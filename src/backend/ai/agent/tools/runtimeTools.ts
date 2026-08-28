@@ -1,5 +1,6 @@
 import type { McpExecutableToolDescriptor, McpRuntimeToolSelection } from '@/backend/ai/mcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
 import type { RuntimeTool } from '../runtime';
 
@@ -73,9 +74,10 @@ export function createAgentRuntimeToolResolver(input: {
           return [
             {
               descriptor,
-              // Mobile never grants third-party MCP automatic approval. Preserve
-              // an explicit deny; safely downgrade any legacy auto row to ask.
-              approval: resolved.approval === 'deny' ? 'deny' : 'ask',
+              // An MCP row on its own is never auto: the shared policy keeps an
+              // explicit deny and clamps everything else to ask. The Host may
+              // later promote ask to auto for Agents whose approval mode says so.
+              approval: clampMcpToolApproval(resolved.approval),
             },
           ];
         },
