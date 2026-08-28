@@ -10,8 +10,11 @@
  *
  * The write-free stretch between admission and the first durable row lives in
  * `./turnPreparation` (gates and the frozen `TurnPlan`); attachment admission
- * and materialization live in `./turnAttachments`. This class keeps admission,
- * reservation, execution, and terminal settlement.
+ * and materialization live in `./turnAttachments`. The two adaptation
+ * directions are separate modules: `./turnRuntimeInput` assembles the Runtime
+ * request, `./runtimeProjection` projects Runtime output back onto the
+ * protocol. This class keeps admission, reservation, execution, and terminal
+ * settlement.
  *
  * Protocol invariants implemented here (agent-protocol.md):
  * 1.  one active turn per Session (synchronous admission guard);

@@ -43,11 +43,16 @@ src/backend/ai/
 │   │                    terminal persistence, restart reconciliation. Protocol invariants only.
 │   │                    Turn preparation (turnPreparation.ts) and attachment materialization
 │   │                    (turnAttachments.ts) stay write-free and testable without a Host.
-│   │                    Side effects (naming, usage, background reply) converge behind one
-│   │                    explicitly ordered turn-observer seam.
+│   │                    The two adaptation directions are separate: turnRuntimeInput.ts
+│   │                    assembles the Runtime request, runtimeProjection.ts projects Runtime
+│   │                    output onto the protocol. Side effects (naming, usage, background
+│   │                    reply) keep explicit call sites; per-event notification is driven
+│   │                    from the run loop, not repeated in each branch.
 │   ├── runtime/
 │   │   ├── types.ts     The seam contract. No imports from packages/* ports. Neutral usage
-│   │   │                shape. Model preflight and static capability queries live here.
+│   │   │                shape. Model preflight lives here; the language-serving question
+│   │   │                needs app entities, so it is a separate interface the Runtime
+│   │   │                implementation answers (see Seam Rule 4).
 │   │   ├── FakeRuntime.ts  Conformance double; updated with every contract change.
 │   │   └── pi/          Everything Pi-specific: PiRuntime, the current piAdapter/ content
 │   │                    (model resolution, API adapters, stream binding), the Pi language
@@ -75,9 +80,14 @@ New module and directory names are chosen at implementation time following
 3. **One binding point.** The composition root creates and registers the Runtime. Replacing the
    Runtime means adding one implementation directory and changing one composition line. The Host
    never constructs a Runtime.
-4. **Capability questions go through the contract.** "Can this model serve?" is answered by the
-   Runtime's preflight and static capability surface, not by importing a specific runtime's binding
-   logic. Image-generation support stays an AI SDK concern and is not routed through the seam.
+4. **Capability questions go through the bound Runtime.** "Can this model serve?" is answered by
+   the Runtime, never by importing a specific runtime's binding logic. Per-turn questions use the
+   contract's `preflightModel`. The settings-level question needs the full `Provider` and `Model`
+   records — which the contract may not import (Rule 2) and which a `RuntimeModel` id cannot
+   recover, since remote provider model lists are not persisted. It is therefore declared as
+   `LanguageServingSupport` in the provider layer and implemented by the Runtime service, so
+   re-pointing the `AgentRuntime` registration swaps both answers together. Image-generation
+   support stays an AI SDK concern and is not routed through the seam.
 5. **Normalized history is the seam currency.** The Host side maps protocol transcripts into the
    normalized Runtime shape; each Runtime maps that shape into its own messages. Neither side
    imports the other's mapping.
@@ -99,7 +109,7 @@ New module and directory names are chosen at implementation time following
 | --- | --- | --- |
 | 0 | This document; retire the `ai-runtime` desktop-sync trust workflow | Landed |
 | 1 | Seal the seam: Runtime binding at the composition root, split the Pi language binding out of `provider/`, neutral usage shape in the contract, language capability query behind `LanguageServingSupport`, Pi-isolation lint rule | Landed |
-| 2 | Host decomposition | Partially landed (#696: `turnPreparation.ts`, `turnAttachments.ts`, Pi lifecycle phases). Remaining: converge naming/usage/background-reply behind the turn-observer seam |
+| 2 | Host decomposition | Landed (#696: `turnPreparation.ts`, `turnAttachments.ts`, Pi lifecycle phases; then the mapping split into `turnRuntimeInput.ts`/`runtimeProjection.ts` and the run-loop background-reply notification) |
 | 3 | Fold `generation/` into `AiService`, shrink provider config to its AI SDK consumers, inline the consumed `packages/ai-runtime` symbols, delete the package | Pending |
 
 Phase 1 precedes 2 and 3; the contract shape must settle before code moves against it. Phases 2
