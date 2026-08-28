@@ -5,7 +5,6 @@
   "private": true,
   "sideEffects": false,
   "scripts": {
-    "ai-runtime:check": "tsx scripts/check-desktop-sync.ts",
     "check": "pnpm typecheck && pnpm test && pnpm check:boundaries",
     "check:boundaries": "tsx scripts/check-boundaries.ts",
     "test": "vitest run",

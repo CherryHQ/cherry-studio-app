@@ -34,16 +34,3 @@ Current execution and tool boundaries live in
 [Agent Tools And Controlled Resources](../../../docs/references/agent/agent-tools-and-resources.md).
 The approved target structure and migration status for this directory live in
 [Backend AI Target Architecture](../../../docs/references/ai/target-architecture.md).
-
-## Sync Trust
-
-`packages/ai-runtime/desktop-sync-map.json` retains the complete desktop and historical mobile
-inventories. Run the package check with a clean desktop checkout before treating a port as trusted:
-
-```bash
-pnpm --filter @cherrystudio/ai-runtime check
-pnpm --filter @cherrystudio/ai-runtime ai-runtime:check --desktop-root <desktop-root>
-```
-
-The implemented-port check passes independently while the broader desktop audit continues to report
-the classified blocked backlog. Do not convert an unexplained desktop gap into an exclusion.

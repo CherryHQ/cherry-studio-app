@@ -1,8 +1,8 @@
 # AI Runtime Instructions
 
-When changing mapped or ported source, or changing behavior synchronized from Desktop, read
-[README.md](README.md), update the provenance evidence, and run `pnpm check` plus
-`pnpm ai-runtime:check --desktop-root <path>` from this directory. A port is trusted only while both
-gates pass. Other package changes use the relevant checks in
-[Testing And CI](../../docs/guides/testing-and-ci.md). Keep platform behavior behind backend adapters
-and expose package behavior only through the five declared subpaths.
+This package is dissolving into `src/backend/ai`; do not add new modules here. Read
+[README.md](README.md) and
+[Backend AI Target Architecture](../../docs/references/ai/target-architecture.md) before changing
+source. Run `pnpm check` from this directory, keep platform behavior behind backend adapters, and
+expose package behavior only through the five declared subpaths. Other package changes use the
+relevant checks in [Testing And CI](../../docs/guides/testing-and-ci.md).

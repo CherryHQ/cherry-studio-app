@@ -18,15 +18,7 @@ const CLASSIFICATIONS = [
   'explicit-exclusion',
   'blocked',
 ] as const;
-const ORDINARY_AGENT_SOURCES = [
-  'packages/aiCore/src/core/agents/createAgent.ts',
-  'src/main/ai/runtime/aiSdk/Agent.ts',
-] as const;
-const DELEGATED_AI_RUNTIME_CLASSIFICATIONS = [
-  'semantic-port',
-  'explicit-exclusion',
-  'blocked',
-] as const;
+const ORDINARY_AGENT_SOURCE = 'packages/aiCore/src/core/agents/createAgent.ts';
 const DELEGATED_SERVICE_CLASSIFICATIONS = [
   'semantic-port',
   'mobile-extension',
@@ -755,103 +747,6 @@ function classifyFileComparison(
   return result;
 }
 
-async function loadDelegatedAiRuntimeClassifications(
-  desktopRoot: string,
-  mobileRoot: string,
-  delegatedManifest: string,
-  sourceFiles: string[],
-  explicitExclusions: string[],
-): Promise<Record<Classification, string[]>> {
-  const value = await readJson(path.join(mobileRoot, delegatedManifest));
-  if (!isRecord(value) || value.schemaVersion !== 2 || !isRecord(value.desktop)) {
-    throw new Error('[desktop-sync-audit] invalid delegated AI runtime manifest');
-  }
-  if (value.desktop.sourceRoot !== 'src/main/ai' || !Array.isArray(value.desktop.files)) {
-    throw new Error('[desktop-sync-audit] invalid delegated AI runtime desktop records');
-  }
-
-  const records = value.desktop.files.map((record, index) => {
-    if (
-      !isRecord(record) ||
-      typeof record.source !== 'string' ||
-      typeof record.sourceSha256 !== 'string' ||
-      !DELEGATED_AI_RUNTIME_CLASSIFICATIONS.includes(
-        record.classification as (typeof DELEGATED_AI_RUNTIME_CLASSIFICATIONS)[number],
-      )
-    ) {
-      throw new Error(
-        `[desktop-sync-audit] invalid delegated AI runtime desktop record at index ${index}`,
-      );
-    }
-    assertRelativeRepoPath(record.source, `delegated AI runtime desktop.files[${index}].source`);
-    if (!/^[a-f0-9]{64}$/.test(record.sourceSha256)) {
-      throw new Error(
-        `[desktop-sync-audit] invalid delegated AI runtime source hash: ${record.source}`,
-      );
-    }
-    return {
-      classification:
-        record.classification as (typeof DELEGATED_AI_RUNTIME_CLASSIFICATIONS)[number],
-      source: record.source,
-      sourceSha256: record.sourceSha256,
-    };
-  });
-
-  const delegatedSources = records.map(({ source }) => source);
-  if (new Set(delegatedSources).size !== delegatedSources.length) {
-    throw new Error('[desktop-sync-audit] delegated AI runtime sources must be unique');
-  }
-  const delegatedSourceSet = new Set(delegatedSources);
-  const sourceFileSet = new Set(sourceFiles);
-  const unclassified = sourceFiles.filter((source) => !delegatedSourceSet.has(source));
-  const stale = delegatedSources.filter((source) => !sourceFileSet.has(source));
-  if (unclassified.length > 0 || stale.length > 0) {
-    throw new Error(
-      `[desktop-sync-audit] delegated AI runtime manifest does not cover the desktop source set: ${[
-        ...unclassified.map((source) => `unclassified:${source}`),
-        ...stale.map((source) => `stale:${source}`),
-      ]
-        .sort()
-        .join(', ')}`,
-    );
-  }
-
-  for (const { classification, source } of records) {
-    const excluded = explicitExclusions.some((glob) => pathMatchesGlob(source, glob));
-    if ((classification === 'explicit-exclusion') !== excluded) {
-      throw new Error(
-        `[desktop-sync-audit] delegated AI runtime exclusion disagrees with the root manifest: ${source}`,
-      );
-    }
-  }
-
-  const sourceDrift = (
-    await Promise.all(
-      records.map(async ({ source, sourceSha256 }) => ({
-        drifted:
-          createHash('sha256')
-            .update(await readFile(path.join(desktopRoot, source)))
-            .digest('hex') !== sourceSha256,
-        source,
-      })),
-    )
-  )
-    .filter(({ drifted }) => drifted)
-    .map(({ source }) => source)
-    .sort();
-  if (sourceDrift.length > 0) {
-    throw new Error(
-      `[desktop-sync-audit] delegated AI runtime source hash drift: ${sourceDrift.join(', ')}`,
-    );
-  }
-
-  const classifications = emptyClassifications();
-  for (const { classification, source } of records) {
-    classifications[classification].push(source);
-  }
-  return classifications;
-}
-
 async function loadDelegatedServiceClassifications(
   desktopRoot: string,
   mobileRoot: string,
@@ -1104,18 +999,7 @@ async function auditDomain(
           targetOnly: [],
         }
       : await compareDomainFiles(desktopRoot, mobileRoot, domain);
-  let classifications = classifyFileComparison(domain.strategy, comparison);
-  if (id === 'ai-runtime' && delegatedManifest) {
-    const mobileExtensions = classifications['mobile-extension'];
-    classifications = await loadDelegatedAiRuntimeClassifications(
-      desktopRoot,
-      mobileRoot,
-      delegatedManifest,
-      sourceFiles,
-      domain.explicitExclusions ?? [],
-    );
-    classifications['mobile-extension'] = mobileExtensions;
-  }
+  const classifications = classifyFileComparison(domain.strategy, comparison);
   if (id === 'services' && delegatedManifest) {
     const delegated = await loadDelegatedServiceClassifications(
       desktopRoot,
@@ -1199,26 +1083,8 @@ async function auditDomain(
     });
   }
 
-  if (id === 'ai-runtime') {
-    const exclusions = domain.explicitExclusions ?? [];
-    const ordinaryAgentExcluded = ORDINARY_AGENT_SOURCES.filter((source) =>
-      exclusions.some((glob) => pathMatchesGlob(source, glob)),
-    );
-    addInvariant(invariants, {
-      domain: id,
-      id: 'ordinary-chat-agent-is-not-excluded',
-      message: 'Ordinary AI SDK Agent primitives must remain in synchronization scope.',
-      ok: ordinaryAgentExcluded.length === 0,
-    });
-    if (classifications.blocked.length > 0) {
-      blockers.push(
-        `${classifications.blocked.length} desktop AI files remain blocked by the delegated provenance audit.`,
-      );
-    }
-  }
-
   if (id === 'ai-core') {
-    const ordinaryAgentFile = ORDINARY_AGENT_SOURCES[0];
+    const ordinaryAgentFile = ORDINARY_AGENT_SOURCE;
     addInvariant(invariants, {
       domain: id,
       id: 'ai-core-create-agent-mirrored',
