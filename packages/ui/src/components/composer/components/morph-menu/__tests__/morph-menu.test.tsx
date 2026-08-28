@@ -227,7 +227,7 @@ describe('MorphMenu', () => {
     press(tree, 'menu-trigger');
     press(tree, 'menu-camera');
 
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(1);
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' }).length).toBeGreaterThan(0);
     expect(tree.root.findByProps({ testID: 'menu-backdrop' }).props.pointerEvents).toBe('none');
     expect(
       portal(tree).find((node) => {

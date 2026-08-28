@@ -11,12 +11,6 @@ let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionIsLoading: boolean;
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  Composer: {
-    Dock: ({ children, ...props }: { children?: React.ReactNode }) => {
-      dockProps = props;
-      return children;
-    },
-  },
   useComposerDockLayout: () => ({
     contentBottomInset: 130,
     handleInputHeightChange: mockHandleInputHeightChange,
@@ -27,6 +21,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 
 jest.mock('@/frontend/components/composer', () => ({
+  ComposerDock: ({ children, ...props }: { children?: React.ReactNode }) => {
+    dockProps = props;
+    return children;
+  },
   ComposerSessionProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 

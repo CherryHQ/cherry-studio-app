@@ -46,15 +46,12 @@ export function ComposerField({ onBlur, onFocus, placeholder, style }: ComposerF
     return { link: mentionStyle, linkVariants: { '^tool:': mentionStyle } };
   }, [brand]);
 
-  const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(
-    (event) => {
-      // Focus is the only event that is allowed to reconnect the dock after a
-      // sheet or native picker has replaced the input context.
-      resumeKeyboardTracking();
-      onFocus?.(event);
-    },
-    [onFocus, resumeKeyboardTracking],
-  );
+  const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
+    // Focus is the only event that is allowed to reconnect the dock after a
+    // sheet or native picker has replaced the input context.
+    resumeKeyboardTracking();
+    onFocus?.();
+  }, [onFocus, resumeKeyboardTracking]);
 
   return (
     <Composer.Input
