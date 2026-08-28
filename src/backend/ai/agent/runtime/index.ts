@@ -46,6 +46,3 @@ export {
   createInterruptedToolResult,
   TOOL_EXECUTION_ERROR,
 } from './toolResults';
-
-export type { PiModelResolution, PiRuntimeDependencies } from './pi/PiRuntime';
-export { PiRuntime } from './pi/PiRuntime';

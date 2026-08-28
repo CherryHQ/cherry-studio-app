@@ -8,13 +8,8 @@ import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
-import type {
-  PiModelResolution,
-  PiRuntimeDependencies,
-  RuntimeModel,
-  RuntimeModelPreflight,
-  RuntimeUsageContext,
-} from '../runtime';
+import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '../runtime';
+import type { PiModelResolution, PiRuntimeDependencies } from '../runtime/pi/PiRuntime';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 
