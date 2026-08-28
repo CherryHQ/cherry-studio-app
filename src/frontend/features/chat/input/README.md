@@ -14,6 +14,10 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
 - The resting composer is one row. Focusing it reveals the model pill and reasoning-effort gauge on
   the toolbar below without remounting the field, draft, or send control.
+- Native media pickers and model/settings Sheets replace the live input context: the shared
+  composer pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
+  It reconnects keyboard tracking only when the field receives focus again. Menu and effort
+  overlays preserve the existing keyboard context instead.
 - Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.

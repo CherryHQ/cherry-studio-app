@@ -3,7 +3,7 @@ import { type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { useComposerFieldDismiss } from '../hooks/useComposerFieldDismiss';
+import { useComposerPresentationActions } from '../context/ComposerProvider';
 
 type ComposerModelPillProps = PropsWithChildren<{
   /** Composed model icon; the pill falls back to the label's initial. */
@@ -18,12 +18,11 @@ type ComposerModelPillProps = PropsWithChildren<{
  */
 export function ComposerModelPill({ children, icon, label, onPress }: ComposerModelPillProps) {
   const { t } = useTranslation();
-  const dismissField = useComposerFieldDismiss();
+  const { runInputReplacement } = useComposerPresentationActions();
 
   const handlePress = useCallback(() => {
-    dismissField();
-    onPress();
-  }, [dismissField, onPress]);
+    void runInputReplacement(onPress);
+  }, [onPress, runInputReplacement]);
 
   if (!label) {
     return (

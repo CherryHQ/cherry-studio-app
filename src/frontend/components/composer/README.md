@@ -51,13 +51,15 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerModelPill` — the model button. Its `icon` is a composed `ModelPickerIcon`, and
   `children` trail the label inside the pill.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
-  draft and its managed attachments.
-- `useComposerFieldDismiss` — take the keyboard down and blur before opening a
-  picker or settings surface that replaces the input context. The model pill
-  does this itself; caller-owned buttons decide whether their overlay should
-  dismiss or preserve the live input.
-- `Composer.Dock` / `useComposerDockLayout` from CherryUI — floating the composer at the bottom
-  of a screen, and what the content above it reserves.
+  draft, its managed attachments, and the presentation transition for its
+  input context.
+- `useComposerPresentationActions` — presents a Sheet or native picker that
+  replaces the live input context. The model pill and media menu already use
+  it; caller-owned replacement buttons, such as painting settings, use the
+  same action.
+- `ComposerDock` — connects that input-context state to CherryUI's
+  `Composer.Dock`. `useComposerDockLayout` remains CherryUI's measurement and
+  content-inset primitive.
 - `utils/composerAttachments` is deep-imported on purpose (see `index.ts`).
 
 ## What is deliberately *not* pluggable
@@ -92,18 +94,23 @@ walk to verify it.
   send transfers a newly imported entry out of temporary Composer ownership;
   failed-send restoration restores that ownership with the draft.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
-  field-ref contexts, split so dispatch-only components skip keystroke re-renders.
+  field-ref contexts, plus the input-presentation transition. Its contexts are
+  split so dispatch-only components and the dock skip keystroke re-renders.
+- `components/ComposerDock.tsx`: pins or reconnects CherryUI's keyboard-tracking
+  dock according to the current input context.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
   turn into, with tests.
 
 ## Behavior notes
 
-- Opening the ＋ menu leaves the keyboard and field focus unchanged so its
-  portalled panel stays anchored to the trigger. Camera, photo, and file rows
-  close the menu, await `useComposerFieldDismiss()`, and only then open their
-  system picker. Success and cancellation both return with the keyboard closed;
-  caller-owned tool rows do not dismiss or blur. The chat effort slider also
-  keeps focus and covers the live keyboard.
+- Input surfaces have two policies. An overlay (the ＋ menu or chat effort
+  slider) preserves field focus and the live keyboard. A replacement (model or
+  settings Sheet, camera, photo library, or file picker) first disables dock
+  keyboard tracking, blurs the field, awaits keyboard dismissal, and leaves one
+  render frame for the closed UI to become inert before presenting. The dock
+  stays at its resting bottom position after the replacement closes; the next
+  real field focus reconnects keyboard tracking. Success and cancellation use
+  the same path.
 - Transient attachments render their own progress tile while they are imported
   into managed storage. Any importing attachment disables send; text editing,
   removal, and tools remain available. The send boundary rechecks readiness and

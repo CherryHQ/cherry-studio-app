@@ -1,8 +1,8 @@
-import { Composer, useComposerDockLayout } from '@cherrystudio/ui/components';
+import { useComposerDockLayout } from '@cherrystudio/ui/components';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
-import { ComposerSessionProvider } from '@/frontend/components/composer';
+import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/composer';
 import { MainHeader } from '@/frontend/components/headers';
 import {
   useAgentApiById,
@@ -57,13 +57,13 @@ export function ChatScreen() {
         )}
         {hasComposer ? (
           <ComposerSessionProvider>
-            <Composer.Dock onHeightChange={composerDockLayout.handleInputHeightChange}>
+            <ComposerDock onHeightChange={composerDockLayout.handleInputHeightChange}>
               <ChatInput
                 agentId={resolvedAgentId}
                 dismissKeyboardOnSend={false}
                 sessionId={sessionId}
               />
-            </Composer.Dock>
+            </ComposerDock>
           </ComposerSessionProvider>
         ) : null}
       </View>

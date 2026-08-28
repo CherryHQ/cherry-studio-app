@@ -7,6 +7,7 @@
 // consumers and its node-env tests do not have to load this barrel and,
 // through it, the native modules the pickers and the field pull in.
 export { ComposerAttachments } from './components/ComposerAttachments';
+export { ComposerDock } from './components/ComposerDock';
 export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
@@ -16,6 +17,6 @@ export {
   type ComposerAttachmentStore,
   useComposerActions,
   useComposerMeta,
+  useComposerPresentationActions,
   useComposerState,
 } from './context/ComposerProvider';
-export { useComposerFieldDismiss } from './hooks/useComposerFieldDismiss';

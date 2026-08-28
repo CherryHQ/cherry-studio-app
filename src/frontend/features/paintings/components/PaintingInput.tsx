@@ -11,7 +11,7 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerFieldDismiss,
+  useComposerPresentationActions,
   useComposerState,
 } from '@/frontend/components/composer';
 import {
@@ -143,12 +143,10 @@ export function PaintingInput({
     setIsModelPickerOpen(false);
   }, []);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
-  const dismissField = useComposerFieldDismiss();
+  const { runInputReplacement } = useComposerPresentationActions();
   const openSettings = useCallback(() => {
-    // The pill does this for itself; a sheet opened from the toolbar has to ask.
-    dismissField();
-    setIsSettingsOpen(true);
-  }, [dismissField]);
+    void runInputReplacement(() => setIsSettingsOpen(true));
+  }, [runInputReplacement]);
   const handleParamValueChange = useCallback(
     (key: string, value: unknown) => {
       if (!selectedModelId) {

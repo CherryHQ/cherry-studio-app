@@ -9,11 +9,17 @@ import {
   useComposerMeta,
   useComposerState,
 } from '../../context/ComposerProvider';
+import { ComposerDock } from '../ComposerDock';
 import { ComposerMenu } from '../ComposerMenu';
 
 type MockMenuItemProps = {
   label: string;
   onPress: () => void;
+};
+
+type MockDockProps = {
+  children?: ReactNode;
+  keyboardTrackingEnabled?: boolean;
 };
 
 const mockBlur = jest.fn();
@@ -26,6 +32,7 @@ const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
+let mockDockProps: MockDockProps | undefined;
 
 jest.mock('@cherrystudio/app-icons/icons/camera', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/file', () => () => null);
@@ -46,7 +53,12 @@ jest.mock('@cherrystudio/ui/components', () => {
     });
   }
 
-  return { Composer: { Menu: Object.assign(MockMenu, { Item: MockMenuItem }) } };
+  function MockDock(props: MockDockProps) {
+    mockDockProps = props;
+    return React.createElement(View, null, props.children);
+  }
+
+  return { Composer: { Dock: MockDock, Menu: Object.assign(MockMenu, { Item: MockMenuItem }) } };
 });
 
 jest.mock('expo-image-picker', () => ({
@@ -72,10 +84,20 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 
 describe('ComposerMenu', () => {
   let renderer: ReactTestRenderer | undefined;
+  let frameCallbacks: FrameRequestCallback[];
+  let requestAnimationFrameSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockComposerState = undefined;
+    mockDockProps = undefined;
+    frameCallbacks = [];
+    requestAnimationFrameSpy = jest
+      .spyOn(global, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frameCallbacks.push(callback);
+        return frameCallbacks.length;
+      });
     mockKeyboardDismiss.mockResolvedValue(undefined);
     mockRequestCameraPermission.mockResolvedValue({ granted: true });
     mockLaunchCamera.mockResolvedValue({ canceled: true });
@@ -86,6 +108,7 @@ describe('ComposerMenu', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    requestAnimationFrameSpy.mockRestore();
   });
 
   it('waits for field dismissal before opening the photo picker', async () => {
@@ -97,11 +120,14 @@ describe('ComposerMenu', () => {
 
     expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
     expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
     expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
 
     await act(async () => {
       dismissal.resolve();
       await dismissal.promise;
+      await flushPromises();
+      flushAnimationFrames();
       await flushPromises();
     });
 
@@ -126,6 +152,8 @@ describe('ComposerMenu', () => {
       cameraDismissal.resolve();
       await cameraDismissal.promise;
       await flushPromises();
+      flushAnimationFrames();
+      await flushPromises();
     });
     expect(mockRequestCameraPermission).toHaveBeenCalledTimes(1);
     expect(mockLaunchCamera).toHaveBeenCalledTimes(1);
@@ -136,6 +164,8 @@ describe('ComposerMenu', () => {
     await act(async () => {
       documentDismissal.resolve();
       await documentDismissal.promise;
+      await flushPromises();
+      flushAnimationFrames();
       await flushPromises();
     });
     expect(mockPickDocument).toHaveBeenCalledTimes(1);
@@ -158,7 +188,7 @@ describe('ComposerMenu', () => {
     render();
 
     act(() => press('chat.media.file'));
-    await act(flushPromises);
+    await act(flushInputReplacement);
 
     expect(mockComposerState?.attachments).toEqual([
       expect.objectContaining({
@@ -170,6 +200,7 @@ describe('ComposerMenu', () => {
     ]);
     expect(mockBlur).toHaveBeenCalledTimes(1);
     expect(mockFocus).not.toHaveBeenCalled();
+    expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
   });
 
   it('does not dismiss the field when a caller-owned tool is selected', () => {
@@ -190,6 +221,7 @@ describe('ComposerMenu', () => {
     act(() => {
       renderer = create(
         <ComposerProvider>
+          <ComposerDock onHeightChange={jest.fn()} />
           <FieldProbe />
           <ComposerMenu>{children}</ComposerMenu>
         </ComposerProvider>,
@@ -204,6 +236,18 @@ describe('ComposerMenu', () => {
 
     if (!item) throw new Error(`Missing menu item: ${label}`);
     item.props.onPress();
+  }
+
+  function flushAnimationFrames() {
+    const callbacks = frameCallbacks;
+    frameCallbacks = [];
+    callbacks.forEach((callback) => callback(0));
+  }
+
+  async function flushInputReplacement() {
+    await flushPromises();
+    flushAnimationFrames();
+    await flushPromises();
   }
 });
 
