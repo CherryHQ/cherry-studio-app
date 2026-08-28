@@ -29,11 +29,9 @@ import {
 const logger = loggerService.withContext('AgentChatWorkspace');
 const gateLog = loggerService.withContext('AgentChatGate');
 
-function renderChatMessage(message: MessageListItem) {
-  return <ChatMessage message={message} />;
-}
-
 type ChatWorkspaceProps = {
+  assistantAvatarUri?: null | string;
+  assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
@@ -44,6 +42,8 @@ type ChatWorkspaceProps = {
 };
 
 export function ChatWorkspace({
+  assistantAvatarUri,
+  assistantName,
   bottomAccessoryHeight,
   contentBottomInset,
   keyboardOffset,
@@ -63,6 +63,27 @@ export function ChatWorkspace({
     [live.liveMessages, messages],
   );
   const listMessages = useMemo(() => toAgentMessageListItems(mergedMessages), [mergedMessages]);
+  const assistantPresentation = useMemo(
+    () => ({
+      avatarUri: assistantAvatarUri,
+      name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
+    }),
+    [assistantAvatarUri, assistantName, t],
+  );
+  const renderChatMessage = useCallback(
+    (message: MessageListItem) => (
+      <ChatMessage
+        assistantPresentation={assistantPresentation}
+        isMessageActionsEnabled={isAssistantToolbarEnabled}
+        message={message}
+      />
+    ),
+    [assistantPresentation, isAssistantToolbarEnabled],
+  );
+  const messageListExtraData = useMemo(
+    () => ({ assistantPresentation, isAssistantToolbarEnabled }),
+    [assistantPresentation, isAssistantToolbarEnabled],
+  );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>
       live.pendingApprovals.map((approval) => ({
@@ -132,6 +153,7 @@ export function ChatWorkspace({
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
           enteringMessageId={live.enteringUserMessageId}
+          extraData={messageListExtraData}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}

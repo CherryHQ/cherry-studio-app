@@ -36,19 +36,26 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     return null;
   }
 
+  if (!copyText) {
+    return null;
+  }
+
   return (
-    <View className="flex-row items-center gap-4" testID="assistant-message-toolbar">
-      {copyText ? (
-        <Button
-          accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
-          className="size-4 overflow-visible p-0"
-          icon={isCopied ? <CheckIcon /> : <CopyIcon />}
-          onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
-          size="sm"
-          testID="assistant-message-copy"
-          variant="ghost"
-        />
-      ) : null}
+    <View className="min-h-7 flex-row items-center" testID="assistant-message-toolbar">
+      <Button
+        accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
+        icon={
+          isCopied ? (
+            <CheckIcon className="text-muted-foreground" />
+          ) : (
+            <CopyIcon className="text-muted-foreground" />
+          )
+        }
+        onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
+        size="xs"
+        testID="assistant-message-copy"
+        variant="ghost"
+      />
     </View>
   );
 });

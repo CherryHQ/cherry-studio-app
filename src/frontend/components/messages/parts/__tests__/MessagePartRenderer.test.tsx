@@ -32,7 +32,9 @@ describe('MessagePartRenderer', () => {
     let renderer: ReactTestRenderer | undefined;
 
     act(() => {
-      renderer = create(<MessagePartRenderer isStreaming={false} part={part} />);
+      renderer = create(
+        <MessagePartRenderer isStreaming={false} isTextSelectionEnabled part={part} />,
+      );
     });
 
     expect(renderer?.toJSON()).toBeNull();

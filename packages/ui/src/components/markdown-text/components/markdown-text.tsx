@@ -13,6 +13,7 @@ import { resolveSyntaxColors } from '../utils/syntax-colors';
 const markdownThemeVariables = [
   '--color-foreground',
   '--color-background',
+  '--color-primary',
   '--color-muted-foreground',
   '--color-link',
   '--color-border',
@@ -28,6 +29,7 @@ export type MarkdownTextProps = {
   isStreaming?: boolean;
   markdown: string;
   onLinkPress: (url: string) => void;
+  selectable?: boolean;
 };
 
 function createMarkdownTypographyStyle(
@@ -37,23 +39,56 @@ function createMarkdownTypographyStyle(
   const scale = resolveTypographyScale(fontSizeStep);
 
   return {
-    paragraph: scale.base,
-    h1: scale['2xl'],
-    h2: scale.xl,
-    h3: scale.lg,
-    h4: scale.base,
-    h5: scale.base,
-    h6: scale.sm,
-    blockquote: scale.base,
-    list: scale.base,
-    code: { fontFamily: monoFontFamily },
-    codeBlock: { ...scale.sm, fontFamily: monoFontFamily },
-    table: scale.sm,
+    paragraph: { ...scale.base, marginBottom: 12, marginTop: 0 },
+    h1: { ...scale['2xl'], fontWeight: '600', marginBottom: 10, marginTop: 18 },
+    h2: { ...scale.xl, fontWeight: '600', marginBottom: 8, marginTop: 18 },
+    h3: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 16 },
+    h4: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+    h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+    h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+    blockquote: {
+      ...scale.base,
+      borderRadius: 8,
+      borderWidth: 2,
+      gapWidth: 10,
+      marginBottom: 12,
+      marginTop: 4,
+      padding: 12,
+    },
+    list: {
+      ...scale.base,
+      bulletSize: 5,
+      gapWidth: 8,
+      itemSpacing: 4,
+      marginBottom: 12,
+      marginLeft: 20,
+      marginTop: 0,
+      markerFontWeight: '500',
+    },
+    code: { fontFamily: monoFontFamily, fontSize: scale.sm.fontSize },
+    codeBlock: {
+      ...scale.sm,
+      borderRadius: 10,
+      borderWidth: 1,
+      fontFamily: monoFontFamily,
+      marginBottom: 14,
+      marginTop: 4,
+      padding: 12,
+    },
+    table: {
+      ...scale.sm,
+      borderRadius: 10,
+      borderWidth: 1,
+      cellPaddingHorizontal: 10,
+      cellPaddingVertical: 8,
+      marginBottom: 14,
+      marginTop: 4,
+    },
     math: {
       fontSize: scale.base.fontSize,
-      marginBottom: 8,
+      marginBottom: 14,
       marginTop: 4,
-      padding: 4,
+      padding: 12,
       textAlign: 'center',
     },
   };
@@ -64,11 +99,13 @@ export function MarkdownText({
   isStreaming = false,
   markdown,
   onLinkPress,
+  selectable = true,
 }: MarkdownTextProps) {
   const { theme } = useUniwind();
   const [
     foregroundValue,
     backgroundValue,
+    primaryValue,
     mutedForegroundValue,
     linkValue,
     borderValue,
@@ -80,6 +117,7 @@ export function MarkdownText({
   ] = useCSSVariable(markdownThemeVariables);
   const foreground = resolveCSSString(foregroundValue);
   const background = resolveCSSString(backgroundValue);
+  const primary = resolveCSSString(primaryValue);
   const mutedForeground = resolveCSSString(mutedForegroundValue);
   const link = resolveCSSString(linkValue);
   const border = resolveCSSString(borderValue);
@@ -104,8 +142,8 @@ export function MarkdownText({
       h6: { ...typography.h6, color: foreground },
       blockquote: {
         ...typography.blockquote,
-        backgroundColor: background,
-        borderColor: mutedForeground,
+        backgroundColor: secondary,
+        borderColor: primary,
         color: mutedForeground,
       },
       list: {
@@ -127,12 +165,19 @@ export function MarkdownText({
         color: foreground,
         syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
-      link: { color: link },
+      link: { color: link, underline: true },
       strong: { color: foreground },
       em: { color: foreground },
       strikethrough: { color: mutedForeground },
       underline: { color: foreground },
-      thematicBreak: { color: mutedForeground },
+      image: {
+        borderRadius: 10,
+        marginBottom: 14,
+        marginTop: 4,
+        maxHeight: 320,
+        resizeMode: 'contain',
+      },
+      thematicBreak: { color: border, height: 1, marginBottom: 20, marginTop: 20 },
       table: {
         ...typography.table,
         borderColor: border,
@@ -147,10 +192,13 @@ export function MarkdownText({
         checkedColor: foreground,
         checkedTextColor: mutedForeground,
         checkmarkColor: foreground,
+        checkboxBorderRadius: 4,
+        checkboxSize: 16,
       },
-      math: { ...typography.math, backgroundColor: background, color: foreground },
+      math: { ...typography.math, backgroundColor: codeBlock, color: foreground },
       inlineMath: { color: foreground },
-      spoiler: { color: foreground },
+      highlight: { backgroundColor: secondary, color: foreground },
+      spoiler: { color: mutedForeground, solid: { borderRadius: 4 } },
     };
   }, [
     background,
@@ -163,6 +211,7 @@ export function MarkdownText({
     link,
     monoFontFamily,
     mutedForeground,
+    primary,
     secondary,
     theme,
   ]);
@@ -175,7 +224,7 @@ export function MarkdownText({
       markdownStyle={markdownStyle}
       md4cFlags={{ latexMath: true, underline: false }}
       onLinkPress={handleLinkPress}
-      selectable
+      selectable={selectable}
     />
   );
 }

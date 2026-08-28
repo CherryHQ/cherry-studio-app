@@ -44,6 +44,8 @@ export function ChatScreen() {
       <View className="flex-1 bg-background">
         {isSessionAvailable && sessionId ? (
           <ChatWorkspace
+            assistantAvatarUri={agent.agent?.avatarUri}
+            assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview}
             bottomAccessoryHeight={hasComposer ? composerDockLayout.inputHeightShared : undefined}
             contentBottomInset={contentBottomInset}

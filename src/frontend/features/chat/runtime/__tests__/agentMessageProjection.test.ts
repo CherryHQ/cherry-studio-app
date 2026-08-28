@@ -1,4 +1,5 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { mergeAgentMessageViews, toAgentMessageListItem } from '../agentMessageProjection';
 
@@ -20,6 +21,39 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('projects presentation metadata captured for the individual message', () => {
+    const modelId = createUniqueModelId('openai', 'gpt-5');
+    const item = toAgentMessageListItem(
+      message('assistant-model-snapshot', {
+        inferenceSnapshot: {
+          status: 'supported',
+          snapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: modelId,
+              providerId: 'openai',
+              modelId: 'gpt-5',
+              name: 'GPT-5',
+            },
+            parameters: {},
+            tools: [],
+          },
+        },
+        modelId,
+      }),
+    );
+
+    expect(item).toMatchObject({
+      createdAt: '2026-08-25T00:00:00.000Z',
+      model: {
+        id: modelId,
+        modelId: 'gpt-5',
+        name: 'GPT-5',
+        providerId: 'openai',
+      },
+    });
+  });
+
   test('projects the provider error message into the shared error renderer', () => {
     const item = toAgentMessageListItem(
       message('assistant-error', {
@@ -175,6 +209,49 @@ describe('agentMessageProjection', () => {
         ],
       },
     });
+  });
+
+  test('projects builtin web lookup results as source URL parts', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-web-sources', {
+        parts: [
+          {
+            displayName: 'Web search',
+            id: 'tool-1',
+            input: { query: 'Cherry Studio' },
+            output: {
+              value: [
+                {
+                  content: 'Cherry Studio docs',
+                  id: 'aaaa1111-1',
+                  title: 'Cherry Studio',
+                  url: 'https://cherry-ai.com',
+                },
+              ],
+              artifacts: [],
+            },
+            providerName: 'web_search',
+            state: 'output-available',
+            toolCallId: 'call-1',
+            toolRef: { source: 'builtin', capabilityId: 'web_search' },
+            type: 'tool',
+          },
+          { id: 'text-1', state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
+        ],
+        status: 'success',
+      }),
+    );
+
+    expect(item?.data.parts).toEqual([
+      expect.objectContaining({ toolName: 'web_search', type: 'dynamic-tool' }),
+      { state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
+      {
+        sourceId: 'aaaa1111-1',
+        title: 'Cherry Studio',
+        type: 'source-url',
+        url: 'https://cherry-ai.com',
+      },
+    ]);
   });
 
   test('projects a managed file reference into the shared unavailable-aware renderer', () => {

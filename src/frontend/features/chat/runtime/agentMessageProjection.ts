@@ -1,3 +1,9 @@
+import {
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  webSearchOutputSchema,
+} from '@cherrystudio/universal/ai/builtinTools';
+
 import type { MessageListItem } from '@/frontend/components/messages';
 import {
   type AgentErrorView,
@@ -119,14 +125,77 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   }
 }
 
+type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
+
+function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
+  if (part.state !== 'output-available' || part.toolRef.source !== 'builtin') {
+    return [];
+  }
+
+  const capabilityId = part.toolRef.capabilityId;
+  if (capabilityId !== WEB_SEARCH_TOOL_NAME && capabilityId !== WEB_FETCH_TOOL_NAME) {
+    return [];
+  }
+
+  const result = AgentToolResultSchema.safeParse(part.output);
+  if (!result.success) {
+    return [];
+  }
+
+  const output = webSearchOutputSchema.safeParse(result.data.value);
+  if (!output.success) {
+    return [];
+  }
+
+  return output.data.map((source) => ({
+    sourceId: String(source.id),
+    title: source.title,
+    type: 'source-url',
+    url: source.url,
+  }));
+}
+
+function toDisplayParts(parts: readonly AgentMessagePart[]): CherryMessagePart[] {
+  const displayParts = parts.map(toDisplayPart);
+  // Keep synthetic sources at the tail so tool-result updates cannot shift the
+  // index-based render identity of later persisted parts.
+  const sourceParts = parts.flatMap((part) => (part.type === 'tool' ? toSourceUrlParts(part) : []));
+
+  return [...displayParts, ...sourceParts];
+}
+
+function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
+  if (message.inferenceSnapshot?.status !== 'supported') {
+    return undefined;
+  }
+
+  const snapshot = message.inferenceSnapshot.snapshot.model;
+  const name = snapshot.name.trim();
+
+  if (!name) {
+    return undefined;
+  }
+
+  return {
+    id: snapshot.uniqueModelId,
+    modelId: snapshot.modelId,
+    name,
+    providerId: snapshot.providerId,
+  };
+}
+
 export function toAgentMessageListItem(message: AgentMessageView): MessageListItem | undefined {
   if (message.role !== 'user' && message.role !== 'assistant') {
     return undefined;
   }
 
+  const model = resolveMessageModel(message);
+
   return {
-    data: { parts: message.parts.map(toDisplayPart) },
+    createdAt: message.createdAt,
+    data: { parts: toDisplayParts(message.parts) },
     id: message.id,
+    ...(model ? { model } : {}),
     role: message.role,
     status: toDisplayStatus(message.status),
   };

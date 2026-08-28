@@ -5,13 +5,15 @@ import type { MessageListItem } from '../../types';
 import { AssistantMessage } from '../AssistantMessage';
 
 // 正文渲染成宿主元素而不是 null，组合槽位的测试才能在树里定位它、断言正文与配件的先后。
-const mockMessageParts = jest.fn((props: { message: MessageListItem }) =>
-  createElement('MessageParts', props),
+const mockMessageParts = jest.fn(
+  (props: { isTextSelectionEnabled: boolean; message: MessageListItem }) =>
+    createElement('MessageParts', props),
 );
 const mockMessagePartPending = jest.fn((_props: { accessibilityLabel: string }) => null);
 
 jest.mock('../../parts/MessageParts', () => ({
-  MessageParts: (props: { message: MessageListItem }) => mockMessageParts(props),
+  MessageParts: (props: { isTextSelectionEnabled: boolean; message: MessageListItem }) =>
+    mockMessageParts(props),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -75,8 +77,18 @@ describe('AssistantMessage', () => {
       renderer = create(<AssistantMessage message={message} />);
     });
 
-    expect(mockMessageParts).toHaveBeenCalledWith({ message });
+    expect(mockMessageParts).toHaveBeenCalledWith({ isTextSelectionEnabled: true, message });
     expect(mockMessagePartPending).not.toHaveBeenCalled();
+  });
+
+  test('passes an explicit text-selection policy to structured parts', () => {
+    const message = createAssistantMessage('success', [{ text: 'Answer', type: 'text' }]);
+
+    act(() => {
+      renderer = create(<AssistantMessage isTextSelectionEnabled={false} message={message} />);
+    });
+
+    expect(mockMessageParts).toHaveBeenCalledWith({ isTextSelectionEnabled: false, message });
   });
 
   test('renders composed children after the message body', () => {

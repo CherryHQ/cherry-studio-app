@@ -2,7 +2,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { MessagePartStatusProps } from '../message-part.types';
 
-const statusClassName = 'flex-row items-center gap-2 py-0.5';
+const statusClassName = '-mx-2 min-h-10 flex-row items-center gap-1.5 rounded-lg px-2 py-1';
 
 export function MessagePartStatus({
   accessibilityLabel,
@@ -15,7 +15,8 @@ export function MessagePartStatus({
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        className={`${statusClassName} active:opacity-60`}
+        className={`${statusClassName} active:bg-secondary-active active:opacity-80`}
+        hitSlop={4}
         onPress={onPress}
         testID={testID}
       >
@@ -33,7 +34,7 @@ export function MessagePartStatus({
 
 export function MessagePartStatusTextFloor() {
   return (
-    <Text accessible={false} className="text-base">
+    <Text accessible={false} className="text-sm">
       {'\u00A0'}
     </Text>
   );

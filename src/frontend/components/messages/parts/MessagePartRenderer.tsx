@@ -16,6 +16,7 @@ import { UnknownPart } from './UnknownPart';
 
 type MessagePartRendererProps = {
   isStreaming: boolean;
+  isTextSelectionEnabled: boolean;
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -23,6 +24,7 @@ type MessagePartRendererProps = {
 
 export function MessagePartRenderer({
   isStreaming,
+  isTextSelectionEnabled,
   part,
   renderMode = 'markdown',
   resolvedText,
@@ -36,6 +38,7 @@ export function MessagePartRenderer({
       return (
         <TextPart
           isStreaming={isStreaming}
+          isTextSelectionEnabled={isTextSelectionEnabled}
           part={part}
           renderMode={renderMode}
           resolvedText={resolvedText}
@@ -44,13 +47,31 @@ export function MessagePartRenderer({
     case 'reasoning':
       return <ReasoningPart isStreaming={isStreaming} part={part} />;
     case 'data-code':
-      return <CodePart isStreaming={isStreaming} part={part} />;
+      return (
+        <CodePart
+          isStreaming={isStreaming}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          part={part}
+        />
+      );
     case 'data-compact':
-      return <CompactPart isStreaming={isStreaming} part={part} />;
+      return (
+        <CompactPart
+          isStreaming={isStreaming}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          part={part}
+        />
+      );
     case 'data-error':
       return <ErrorPart part={part} />;
     case 'data-translation':
-      return <TranslationPart isStreaming={isStreaming} part={part} />;
+      return (
+        <TranslationPart
+          isStreaming={isStreaming}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          part={part}
+        />
+      );
     case 'data-video':
       return null;
     case 'file':

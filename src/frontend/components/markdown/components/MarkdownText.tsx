@@ -9,9 +9,15 @@ type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
   isStreaming?: boolean;
   markdown: string;
+  selectable?: boolean;
 };
 
-export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: MarkdownTextProps) {
+export function MarkdownText({
+  fontSizeStep,
+  isStreaming = false,
+  markdown,
+  selectable = true,
+}: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
 
   return (
@@ -20,6 +26,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
       isStreaming={isStreaming}
       markdown={markdown}
       onLinkPress={handleLinkPress}
+      selectable={selectable}
     />
   );
 }

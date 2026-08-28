@@ -7,7 +7,10 @@ import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
 import { partitionUserMessageParts } from './partitionUserMessageParts';
 import { UserMessageAttachments } from './UserMessageAttachments';
-import { USER_MESSAGE_BUBBLE_PADDING } from './userMessageLayout';
+import {
+  USER_MESSAGE_BUBBLE_HORIZONTAL_PADDING,
+  USER_MESSAGE_BUBBLE_VERTICAL_PADDING,
+} from './userMessageLayout';
 
 type UserMessageProps = {
   message: MessageListItem;
@@ -19,14 +22,18 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
 
   return (
     <Animated.View className="w-full items-end" style={slideInStyle}>
-      <View className="max-w-[86%]">
+      <View className="max-w-[88%]">
         <View className="items-end gap-2">
           {attachments.length > 0 ? (
             <UserMessageAttachments attachments={attachments} messageId={message.id} />
           ) : null}
           {bodyMessage ? (
-            <View className="self-end rounded-xl bg-chat-user" style={styles.bubble}>
-              <MessageParts message={bodyMessage} renderMode="plainText" />
+            <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
+              <MessageParts
+                isTextSelectionEnabled={false}
+                message={bodyMessage}
+                renderMode="plainText"
+              />
             </View>
           ) : null}
         </View>
@@ -37,6 +44,7 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
 
 const styles = StyleSheet.create({
   bubble: {
-    padding: USER_MESSAGE_BUBBLE_PADDING,
+    paddingHorizontal: USER_MESSAGE_BUBBLE_HORIZONTAL_PADDING,
+    paddingVertical: USER_MESSAGE_BUBBLE_VERTICAL_PADDING,
   },
 });

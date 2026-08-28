@@ -17,6 +17,7 @@ const mockRetry = jest.fn(async () => undefined);
 const mockRespondApproval = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
+const mockTranslate = (key: string) => key;
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -47,12 +48,13 @@ jest.mock('@cherrystudio/ui/components', () => {
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
+    Menu: ({ children }: { children: ReactNode }) => children,
     useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: mockTranslate }),
 }));
 
 jest.mock('@/frontend/components/messages', () => ({
@@ -68,6 +70,13 @@ jest.mock('@/frontend/components/messages', () => ({
   UserMessage: ({ message }: { message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('UserMessage', { message });
+  },
+}));
+
+jest.mock('@/frontend/components/avatar', () => ({
+  AgentAvatar: (props: object) => {
+    const { createElement } = jest.requireActual('react');
+    return createElement('AgentAvatar', props);
   },
 }));
 

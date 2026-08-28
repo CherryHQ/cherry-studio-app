@@ -325,11 +325,11 @@ describe('MessageList anchoring and manual scrolling', () => {
       renderer = create(<MessageList {...listProps(textMessages)} />);
     });
 
-    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(80);
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(84);
 
     mockFontSizeStep = 2;
     act(() => renderer?.update(<MessageList {...listProps(textMessages)} />));
-    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(84);
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(88);
 
     const fileMessages = [
       createMessage('user-1', 'user', [filePart()]),
