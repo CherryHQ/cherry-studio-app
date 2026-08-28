@@ -3,7 +3,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { AgentAvatar } from '@/frontend/components/avatar';
+import { AgentAvatar, ModelAvatar } from '@/frontend/components/avatar';
 import {
   AssistantMessage,
   type MessageListItem,
@@ -29,6 +29,8 @@ function renderChatAssistantMessage(
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
 ) {
+  const createdAt = formatMessageCreatedAt(message.createdAt);
+
   return (
     <View className="w-full gap-2.5">
       <View className="w-full flex-row items-center gap-2">
@@ -38,13 +40,25 @@ function renderChatAssistantMessage(
           size={24}
           uri={presentation.avatarUri}
         />
-        <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
+        <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
           <Text className="shrink font-semibold text-foreground text-sm" numberOfLines={1}>
             {presentation.name}
           </Text>
-          {message.modelName ? (
-            <Text className="min-w-0 flex-1 text-muted-foreground text-sm" numberOfLines={1}>
-              {message.modelName}
+          {message.model ? (
+            <View className="min-w-0 shrink flex-row items-center gap-1">
+              <ModelAvatar model={message.model} size={16} />
+              <Text className="min-w-0 shrink text-muted-foreground text-sm" numberOfLines={1}>
+                {message.model.name}
+              </Text>
+            </View>
+          ) : null}
+          {createdAt ? (
+            <Text
+              className="shrink-0 text-foreground-tertiary text-xs tabular-nums"
+              numberOfLines={1}
+              testID="assistant-message-time"
+            >
+              {createdAt}
             </Text>
           ) : null}
         </View>
@@ -54,6 +68,24 @@ function renderChatAssistantMessage(
       </AssistantMessage>
     </View>
   );
+}
+
+function formatMessageCreatedAt(createdAt: string | undefined): string | undefined {
+  if (!createdAt) {
+    return undefined;
+  }
+
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
+
+  return `${month}/${day} ${hour}:${minute}`;
 }
 
 export const ChatMessage = memo(function ChatMessage({

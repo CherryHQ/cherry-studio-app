@@ -160,12 +160,24 @@ function toDisplayParts(part: AgentMessagePart): CherryMessagePart[] {
   return part.type === 'tool' ? [displayPart, ...toSourceUrlParts(part)] : [displayPart];
 }
 
-function resolveMessageModelName(message: AgentMessageView): string | undefined {
+function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
   if (message.inferenceSnapshot?.status !== 'supported') {
     return undefined;
   }
 
-  return message.inferenceSnapshot.snapshot.model.name.trim() || undefined;
+  const snapshot = message.inferenceSnapshot.snapshot.model;
+  const name = snapshot.name.trim();
+
+  if (!name) {
+    return undefined;
+  }
+
+  return {
+    id: snapshot.uniqueModelId,
+    modelId: snapshot.modelId,
+    name,
+    providerId: snapshot.providerId,
+  };
 }
 
 export function toAgentMessageListItem(message: AgentMessageView): MessageListItem | undefined {
@@ -173,12 +185,13 @@ export function toAgentMessageListItem(message: AgentMessageView): MessageListIt
     return undefined;
   }
 
-  const modelName = resolveMessageModelName(message);
+  const model = resolveMessageModel(message);
 
   return {
+    createdAt: message.createdAt,
     data: { parts: message.parts.flatMap(toDisplayParts) },
     id: message.id,
-    ...(modelName ? { modelName } : {}),
+    ...(model ? { model } : {}),
     role: message.role,
     status: toDisplayStatus(message.status),
   };

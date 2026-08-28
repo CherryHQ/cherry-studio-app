@@ -21,7 +21,7 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
-  test('projects the model name captured for the individual message', () => {
+  test('projects presentation metadata captured for the individual message', () => {
     const modelId = createUniqueModelId('openai', 'gpt-5');
     const item = toAgentMessageListItem(
       message('assistant-model-snapshot', {
@@ -43,7 +43,15 @@ describe('agentMessageProjection', () => {
       }),
     );
 
-    expect(item?.modelName).toBe('GPT-5');
+    expect(item).toMatchObject({
+      createdAt: '2026-08-25T00:00:00.000Z',
+      model: {
+        id: modelId,
+        modelId: 'gpt-5',
+        name: 'GPT-5',
+        providerId: 'openai',
+      },
+    });
   });
 
   test('projects the provider error message into the shared error renderer', () => {

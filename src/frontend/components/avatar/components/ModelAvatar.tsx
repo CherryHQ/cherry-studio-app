@@ -7,9 +7,9 @@ import type { Provider } from '@/shared/data/types/provider';
 import { BrandAvatar, BrandAvatarIcon } from './BrandAvatar';
 
 type ModelAvatarProps = {
-  model: Model;
-  /** Absent while the model's provider is still loading; the initial stands in. */
-  provider: Provider | undefined;
+  model: Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>;
+  /** Optional provider metadata refines custom-provider icon resolution. */
+  provider?: Pick<Provider, 'id' | 'presetProviderId'>;
   size?: number;
 };
 
@@ -24,8 +24,8 @@ type ModelAvatarProps = {
 export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const providerIconId = provider?.presetProviderId ?? provider?.id;
-  const iconSource = providerIconId ? resolveIcon(model.modelId, providerIconId) : undefined;
+  const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
+  const iconSource = resolveIcon(model.modelId, providerIconId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
 
   if (!iconSource) {

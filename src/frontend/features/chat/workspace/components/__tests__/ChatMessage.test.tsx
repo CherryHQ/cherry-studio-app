@@ -19,9 +19,14 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/avatar', () => ({
-  AgentAvatar: () => null,
-}));
+jest.mock('@/frontend/components/avatar', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    AgentAvatar: () => null,
+    ModelAvatar: (props: object) =>
+      createElement('ModelAvatar', { ...props, testID: 'assistant-message-model-avatar' }),
+  };
+});
 
 jest.mock('@/frontend/components/messages', () => {
   const { createElement } = jest.requireActual('react');
@@ -60,6 +65,34 @@ describe('ChatMessage', () => {
     });
 
     expect(mockMenuItems).toMatchObject([{ disabled: false, id: 'copy' }]);
+  });
+
+  test('shows the model identity and local creation time for the individual message', () => {
+    act(() => {
+      renderer = create(
+        renderMessage({
+          ...createMessage('success'),
+          createdAt: '2026-08-28T15:02:00',
+          model: {
+            id: 'qwen::qwen3.8-max-preview',
+            modelId: 'qwen3.8-max-preview',
+            name: 'Qwen3.8 Max Preview',
+            providerId: 'qwen',
+          },
+        }),
+      );
+    });
+
+    expect(renderer?.root.findByProps({ testID: 'assistant-message-time' }).props.children).toBe(
+      '08/28 15:02',
+    );
+    expect(
+      renderer?.root.findByProps({ testID: 'assistant-message-model-avatar' }).props.model,
+    ).toMatchObject({
+      modelId: 'qwen3.8-max-preview',
+      name: 'Qwen3.8 Max Preview',
+      providerId: 'qwen',
+    });
   });
 });
 
