@@ -434,6 +434,7 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../../RuntimeEventChannel.ts'),
     path.resolve(__dirname, '../../raceAbort.ts'),
     path.resolve(__dirname, '../../toolResults.ts'),
+    path.resolve(__dirname, '../../unsupportedMedia.ts'),
     path.resolve(__dirname, '../PiRuntime.ts'),
     path.resolve(__dirname, '../contextCompaction.ts'),
     path.resolve(__dirname, '../modelMessages.ts'),

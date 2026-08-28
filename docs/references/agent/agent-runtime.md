@@ -447,7 +447,16 @@ type RuntimeUsage = {
   cacheWriteTokens?: number
 }
 
-type RuntimeUsageContext = Omit<AiUsageCaptureContext, 'source' | 'messageRef'>
+type RuntimeUsageContext = {
+  providerId: string
+  providerName: string | null
+  modelId: string
+  modelName: string | null
+  pricingSnapshot: AiUsagePricingSnapshot | null
+  trustProviderReportedCost: boolean
+  reportedCostCurrency: Currency | null
+  credentialReceipt: ServingCredentialReceipt
+}
 
 type RuntimeError = {
   code: string

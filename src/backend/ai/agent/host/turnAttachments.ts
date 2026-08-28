@@ -4,8 +4,6 @@
  * failures; the primitives under `../resources` stay protocol-free.
  */
 
-import { unsupportedMediaNote } from '@cherrystudio/ai-runtime/messages';
-
 import {
   AgentProtocolError,
   type AgentErrorView,
@@ -26,7 +24,7 @@ import {
   resolveManagedTextAttachments,
   TextAttachmentError,
 } from '../resources/textAttachments';
-import { raceAbort } from '../runtime';
+import { raceAbort, unsupportedMediaNote } from '../runtime';
 import type { AgentRuntime, RuntimeInputPart, RuntimeModelPreflight } from '../runtime';
 import type { RuntimeAttachmentContents } from './mapping';
 

@@ -1,4 +1,3 @@
-import { unsupportedMediaNote } from '@cherrystudio/ai-runtime/messages';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -18,6 +17,7 @@ import type {
   RuntimeMessagePart,
   RuntimeTextAttachmentPart,
 } from '../types';
+import { unsupportedMediaNote } from '../unsupportedMedia';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
