@@ -54,9 +54,9 @@ src/backend/ai/
 │   │   │                needs app entities, so it is a separate interface the Runtime
 │   │   │                implementation answers (see Seam Rule 4).
 │   │   ├── FakeRuntime.ts  Conformance double; updated with every contract change.
-│   │   └── pi/          Everything Pi-specific: PiRuntime, the current piAdapter/ content
-│   │                    (model resolution, API adapters, stream binding), the Pi language
-│   │                    binding decision, context compaction, Pi message mapping.
+│   │   └── pi/          Everything Pi-specific: PiRuntime, model resolution, API adapters,
+│   │                    stream binding, the Pi language binding decision, context
+│   │                    compaction, Pi message mapping.
 │   ├── sessionStore/    Unchanged.
 │   ├── tools/           Unchanged structure; service access via injected narrow interfaces
 │   │                    instead of application.get.
@@ -73,8 +73,11 @@ New module and directory names are chosen at implementation time following
 
 ## Seam Rules
 
-1. **Pi isolation.** Outside `agent/runtime/pi/` (including the current `agent/piAdapter/` until it
-   moves), no file imports Pi symbols or `@earendil-works/*`. Enforced by lint, not convention.
+1. **Pi isolation.** Outside `agent/runtime/pi/`, no file imports Pi symbols or
+   `@earendil-works/*`. Enforced by lint, not convention. Within the zone, only
+   `piModelResolver.ts` may reach the Data API and Expo — it is the bridge from Provider and Model
+   records to a Pi model, and lint scopes that exemption to the same file the conformance harness
+   leaves out of its purity list.
 2. **Contract purity.** `agent/runtime/types.ts` depends on no `packages/*` port. The usage report
    uses a neutral shape defined in the contract; the Pi resolver maps into it.
 3. **One binding point.** The composition root creates and registers the Runtime. Replacing the
@@ -113,6 +116,7 @@ New module and directory names are chosen at implementation time following
 | 1 | Seal the seam: Runtime binding at the composition root, split the Pi language binding out of `provider/`, neutral usage shape in the contract, language capability query behind `LanguageServingSupport`, Pi-isolation lint rule | Landed |
 | 2 | Host decomposition | Landed (#696: `turnPreparation.ts`, `turnAttachments.ts`, Pi lifecycle phases; then the mapping split into `turnRuntimeInput.ts`/`runtimeProjection.ts` and the run-loop background-reply notification) |
 | 3 | Make the AI SDK path private to `AiService`, inject app services into the built-in tool catalog, reposition `packages/ai-runtime` and remove its unconsumed exports | Landed |
+| 4 | Fold `agent/piAdapter/` into `agent/runtime/pi/` so the Pi zone is one directory | Landed |
 
 ## Package Disposition
 

@@ -48,6 +48,8 @@ describe('MobileRegistryLoader', () => {
     const loader = new MobileRegistryLoader();
     const overrides = loader.loadProviderModels();
 
+    expect(loader.getExcludedProviderIds()).toEqual(['copilot', 'grok-cli', 'openai-codex']);
+
     for (const providerId of ['copilot', 'grok-cli', 'openai-codex']) {
       expect(loader.isProviderExcluded(providerId)).toBe(true);
       expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });

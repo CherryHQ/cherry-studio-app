@@ -3,8 +3,6 @@ import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lif
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { supportsPiLanguageModel } from '../../piAdapter/piLanguageBinding';
-import { createPiModelResolver } from '../../piAdapter/piModelResolver';
 import type {
   AgentRuntime,
   AgentRuntimeSession,
@@ -12,6 +10,8 @@ import type {
   RuntimeModel,
   RuntimeModelPreflight,
 } from '../types';
+import { supportsPiLanguageModel } from './piLanguageBinding';
+import { createPiModelResolver } from './piModelResolver';
 import { PiRuntime } from './PiRuntime';
 
 /**

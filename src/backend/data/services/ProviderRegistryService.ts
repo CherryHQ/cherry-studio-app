@@ -364,6 +364,10 @@ export class ProviderRegistryService {
     return this.loader.isProviderExcluded(providerId);
   }
 
+  getExcludedProviderIds(): readonly string[] {
+    return this.loader.getExcludedProviderIds();
+  }
+
   getProviderDisplayMetadata(
     providerId: string,
     presetProviderId?: string,

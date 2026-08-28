@@ -1,3 +1,4 @@
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { EndpointType } from '@/shared/data/types/model';
 import type {
   ApiFeatures,
@@ -37,6 +38,11 @@ export type UpdateProviderApiKeyInput = {
   label?: string;
 };
 
+export type ProviderListPageQuery = {
+  cursor?: string;
+  limit?: number;
+};
+
 export type ProviderSchemas = {
   '/providers': {
     GET: {
@@ -46,6 +52,12 @@ export type ProviderSchemas = {
     POST: {
       body: CreateProviderInput;
       response: Provider;
+    };
+  };
+  '/providers/page': {
+    GET: {
+      query?: ProviderListPageQuery;
+      response: CursorPaginationResponse<Provider>;
     };
   };
   '/providers/:id': {

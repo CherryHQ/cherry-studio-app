@@ -1,5 +1,5 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Image, Section } from '@cherrystudio/ui/components';
+import { Image, Section, Switch, type SwitchProps } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
@@ -10,6 +10,7 @@ import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 export type SettingsServiceRowProps = {
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
   avatar?: ReactNode;
+  enabledSwitch?: SwitchProps;
   id: string;
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
@@ -25,6 +26,7 @@ export type SettingsServiceRowProps = {
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
   avatar,
+  enabledSwitch,
   hideSeparator = false,
   id,
   imageSource,
@@ -100,6 +102,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
                 {statusLabel}
               </Text>
             ) : null}
+            {enabledSwitch ? <Switch {...enabledSwitch} /> : null}
             <ChevronRightIcon className="size-5 text-muted-foreground" />
           </View>
         }

@@ -7,8 +7,8 @@ import {
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
-import type { PiRuntimeDependencies } from '../../runtime/pi/PiRuntime';
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
+import type { PiRuntimeDependencies } from '../PiRuntime';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
