@@ -31,7 +31,6 @@ const gateLog = loggerService.withContext('AgentChatGate');
 
 type ChatWorkspaceProps = {
   assistantAvatarUri?: null | string;
-  assistantModelName?: null | string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   bottomAccessoryHeight?: SharedValue<number>;
@@ -44,7 +43,6 @@ type ChatWorkspaceProps = {
 
 export function ChatWorkspace({
   assistantAvatarUri,
-  assistantModelName,
   assistantName,
   bottomAccessoryHeight,
   contentBottomInset,
@@ -68,16 +66,19 @@ export function ChatWorkspace({
   const assistantPresentation = useMemo(
     () => ({
       avatarUri: assistantAvatarUri,
-      modelName: assistantModelName,
       name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
     }),
-    [assistantAvatarUri, assistantModelName, assistantName, t],
+    [assistantAvatarUri, assistantName, t],
   );
   const renderChatMessage = useCallback(
     (message: MessageListItem) => (
-      <ChatMessage assistantPresentation={assistantPresentation} message={message} />
+      <ChatMessage
+        assistantPresentation={assistantPresentation}
+        isMessageActionsEnabled={isAssistantToolbarEnabled}
+        message={message}
+      />
     ),
-    [assistantPresentation],
+    [assistantPresentation, isAssistantToolbarEnabled],
   );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>

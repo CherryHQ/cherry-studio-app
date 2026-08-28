@@ -1,3 +1,9 @@
+import {
+  WEB_FETCH_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+  webSearchOutputSchema,
+} from '@cherrystudio/universal/ai/builtinTools';
+
 import type { MessageListItem } from '@/frontend/components/messages';
 import {
   type AgentErrorView,
@@ -119,14 +125,60 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   }
 }
 
+type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
+
+function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
+  if (part.state !== 'output-available' || part.toolRef.source !== 'builtin') {
+    return [];
+  }
+
+  const capabilityId = part.toolRef.capabilityId;
+  if (capabilityId !== WEB_SEARCH_TOOL_NAME && capabilityId !== WEB_FETCH_TOOL_NAME) {
+    return [];
+  }
+
+  const result = AgentToolResultSchema.safeParse(part.output);
+  if (!result.success) {
+    return [];
+  }
+
+  const output = webSearchOutputSchema.safeParse(result.data.value);
+  if (!output.success) {
+    return [];
+  }
+
+  return output.data.map((source) => ({
+    sourceId: String(source.id),
+    title: source.title,
+    type: 'source-url',
+    url: source.url,
+  }));
+}
+
+function toDisplayParts(part: AgentMessagePart): CherryMessagePart[] {
+  const displayPart = toDisplayPart(part);
+  return part.type === 'tool' ? [displayPart, ...toSourceUrlParts(part)] : [displayPart];
+}
+
+function resolveMessageModelName(message: AgentMessageView): string | undefined {
+  if (message.inferenceSnapshot?.status !== 'supported') {
+    return undefined;
+  }
+
+  return message.inferenceSnapshot.snapshot.model.name.trim() || undefined;
+}
+
 export function toAgentMessageListItem(message: AgentMessageView): MessageListItem | undefined {
   if (message.role !== 'user' && message.role !== 'assistant') {
     return undefined;
   }
 
+  const modelName = resolveMessageModelName(message);
+
   return {
-    data: { parts: message.parts.map(toDisplayPart) },
+    data: { parts: message.parts.flatMap(toDisplayParts) },
     id: message.id,
+    ...(modelName ? { modelName } : {}),
     role: message.role,
     status: toDisplayStatus(message.status),
   };

@@ -10,21 +10,18 @@ import {
   UserMessage,
 } from '@/frontend/components/messages';
 
-import {
-  useAssistantMessageActions,
-  useAssistantMessageActionsState,
-} from '../context/AssistantMessageActionsProvider';
+import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 
 export type AssistantMessagePresentation = Readonly<{
   avatarUri?: null | string;
-  modelName?: null | string;
   name: string;
 }>;
 
 type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
+  isMessageActionsEnabled: boolean;
   message: MessageListItem;
 };
 
@@ -45,9 +42,9 @@ function renderChatAssistantMessage(
           <Text className="shrink font-semibold text-foreground text-sm" numberOfLines={1}>
             {presentation.name}
           </Text>
-          {presentation.modelName ? (
+          {message.modelName ? (
             <Text className="min-w-0 flex-1 text-muted-foreground text-sm" numberOfLines={1}>
-              {presentation.modelName}
+              {message.modelName}
             </Text>
           ) : null}
         </View>
@@ -61,31 +58,32 @@ function renderChatAssistantMessage(
 
 export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
+  isMessageActionsEnabled,
   message,
 }: ChatMessageProps) {
   const { t } = useTranslation();
-  const { isAssistantToolbarEnabled } = useAssistantMessageActionsState();
   const { copyAssistantMessage } = useAssistantMessageActions();
   const copyText = useMemo(
     () =>
-      !isAssistantToolbarEnabled || message.status === 'pending'
+      !isMessageActionsEnabled || message.status === 'pending'
         ? ''
         : copyAssistantMessageText(message.data.parts ?? []),
-    [isAssistantToolbarEnabled, message],
+    [isMessageActionsEnabled, message],
   );
-  const menuItems = useMemo<readonly MenuItem[]>(
-    () =>
-      copyText
-        ? [
-            {
-              id: 'copy',
-              label: t('common.copy'),
-              onPress: () => copyAssistantMessage({ messageId: message.id, text: copyText }),
-            },
-          ]
-        : [],
-    [copyAssistantMessage, copyText, message.id, t],
-  );
+  const menuItems = useMemo<readonly MenuItem[]>(() => {
+    if (!isMessageActionsEnabled) {
+      return [];
+    }
+
+    return [
+      {
+        disabled: !copyText,
+        id: 'copy',
+        label: t('common.copy'),
+        onPress: () => copyAssistantMessage({ messageId: message.id, text: copyText }),
+      },
+    ];
+  }, [copyAssistantMessage, copyText, isMessageActionsEnabled, message.id, t]);
 
   return (
     <Menu items={menuItems} trigger="longPress">

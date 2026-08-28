@@ -6,6 +6,8 @@ import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/messa
 export type MessageListItem = Readonly<{
   data: Readonly<{ parts?: readonly CherryMessagePart[] }>;
   id: string;
+  /** Model name captured by this message's immutable inference snapshot. */
+  modelName?: string;
   role: 'assistant' | 'user';
   status: MessageStatus;
 }>;

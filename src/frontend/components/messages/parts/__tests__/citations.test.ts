@@ -3,6 +3,23 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { resolveMessageCitationText } from '../citations';
 
 describe('resolveMessageCitationText', () => {
+  test('resolves IDs from projected source URL parts', () => {
+    const parts = [
+      {
+        sourceId: 'aaaa1111-1',
+        title: 'Cherry Studio',
+        type: 'source-url',
+        url: 'https://cherry-ai.com',
+      },
+      { text: 'See [cite:aaaa1111-1].', type: 'text' },
+    ] satisfies CherryMessagePart[];
+
+    expect(resolveMessageCitationText(parts).get(1)).toEqual({
+      markdown: 'See [1](https://cherry-ai.com).',
+      plainText: 'See [1].',
+    });
+  });
+
   test('resolves message-local tool result IDs by first marker appearance', () => {
     const parts = [
       {

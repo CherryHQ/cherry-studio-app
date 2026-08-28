@@ -76,8 +76,8 @@ describe('AssistantMessageToolbar', () => {
     renderToolbar(createMessage('success', ' Answer '));
     const copyButton = renderer?.root.findByProps({ testID: 'assistant-message-copy' });
 
-    expect(copyButton?.props.className).toContain('size-4');
-    expect(copyButton?.props.className).toContain('overflow-visible');
+    expect(copyButton?.props.size).toBe('xs');
+    expect(copyButton?.props.variant).toBe('ghost');
     expect(copyButton?.props.accessibilityLabel).toBe('common.copy');
     await act(async () => {
       copyButton?.props.onPress();
@@ -94,6 +94,7 @@ describe('AssistantMessageToolbar', () => {
     renderToolbar(createMessage('success', '   '));
 
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
   });
 
   function renderToolbar(message: MessageListItem) {

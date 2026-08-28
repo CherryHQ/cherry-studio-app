@@ -45,7 +45,6 @@ export function ChatScreen() {
         {isSessionAvailable && sessionId ? (
           <ChatWorkspace
             assistantAvatarUri={agent.agent?.avatarUri}
-            assistantModelName={agent.agent?.modelName}
             assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview}
             bottomAccessoryHeight={hasComposer ? composerDockLayout.inputHeightShared : undefined}

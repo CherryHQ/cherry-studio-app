@@ -59,6 +59,18 @@ function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string
   const sourceByUrl = new Map<string, CitationSource>();
 
   for (const part of parts) {
+    if (part.type === 'source-url') {
+      const source = {
+        id: part.sourceId,
+        title: part.title ?? part.url,
+        url: part.url,
+      };
+      const existing = sourceByUrl.get(part.url);
+      sourceById.set(part.sourceId, existing ?? source);
+      if (!existing) sourceByUrl.set(part.url, source);
+      continue;
+    }
+
     if (!isCompletedStaticToolPart(part)) continue;
     const toolName = resolveToolName(part);
     if (!toolName || !CITABLE_TOOL_NAMES.has(toolName)) continue;
