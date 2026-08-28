@@ -5,21 +5,15 @@ import {
 } from '../brandAvatarStyles';
 
 describe('brand avatar styles', () => {
-  it.each([
-    'cherryai',
-    'cherryin',
-    'aihubmix',
-    'lmstudio',
-    'anthropic',
-    'yi',
-    'groq',
-    'aws-bedrock',
-  ])('contains the %s logo in the shared avatar frame', (providerId) => {
-    expect(getBrandAvatarIconDisplayConfig(providerId)).toEqual({
-      borderRadius: 5,
-      scale: 5 / 7,
-    });
-  });
+  it.each(['cherryin', 'aihubmix', 'lmstudio', 'anthropic', 'yi', 'groq', 'aws-bedrock'])(
+    'contains the %s logo in the shared avatar frame',
+    (providerId) => {
+      expect(getBrandAvatarIconDisplayConfig(providerId)).toEqual({
+        borderRadius: 5,
+        scale: 5 / 7,
+      });
+    },
+  );
 
   it('keeps trimmed brand assets at their native default scale', () => {
     expect(getBrandAvatarIconDisplayConfig('openai')).toEqual({

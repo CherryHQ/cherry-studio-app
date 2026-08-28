@@ -11,11 +11,6 @@ import type {
   UpdateModelDto,
 } from '@/shared/data/api/schemas/models';
 import {
-  CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
-  CHERRYAI_PROVIDER_ID,
-  isManagedCherryAiDefaultModel,
-} from '@/shared/data/presets/cherryai';
-import {
   createUniqueModelId,
   type EndpointType,
   type Model,
@@ -340,7 +335,6 @@ export class ModelService {
   }
 
   async create(input: CreateModelInput): Promise<Model> {
-    this.assertManagedDefaultMutationAllowed(input.providerId, input.modelId, 'create model');
     const row = (await this.dbService.withWriteTx((tx) =>
       insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
         pkColumn: userModelTable.id,
@@ -354,10 +348,6 @@ export class ModelService {
     if (inputs.length === 0) {
       return [];
     }
-    for (const input of inputs) {
-      this.assertManagedDefaultMutationAllowed(input.providerId, input.modelId, 'create model');
-    }
-
     const values = inputs.map(buildCreateValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
       const result: UserModelRow[] = [];
@@ -383,7 +373,6 @@ export class ModelService {
   }
 
   async update(providerId: string, modelId: string, dto: UpdateModelDto): Promise<Model> {
-    this.assertManagedDefaultPatchAllowed(providerId, modelId, dto);
     return this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select()
@@ -413,10 +402,6 @@ export class ModelService {
     if (items.length === 0) {
       return [];
     }
-    for (const { modelId, patch, providerId } of items) {
-      this.assertManagedDefaultPatchAllowed(providerId, modelId, patch);
-    }
-
     const rows = await this.dbService.withWriteTx(async (tx) => {
       const result: UserModelRow[] = [];
       for (const { modelId, patch, providerId } of items) {
@@ -466,7 +451,6 @@ export class ModelService {
   }
 
   async deleteByKey(providerId: string, modelId: string): Promise<void> {
-    this.assertManagedDefaultMutationAllowed(providerId, modelId, 'delete model');
     const id = createUniqueModelId(providerId, modelId);
     await this.assertNotUsedAsDefault(id, `delete model ${id}`);
 
@@ -488,7 +472,6 @@ export class ModelService {
   async bulkDelete(items: Array<{ modelId: string; providerId: string }>): Promise<void> {
     const uniqueItems = new Map<string, { modelId: string; providerId: string }>();
     for (const item of items) {
-      this.assertManagedDefaultMutationAllowed(item.providerId, item.modelId, 'delete model');
       uniqueItems.set(createUniqueModelId(item.providerId, item.modelId), item);
     }
     const ids = [...uniqueItems.keys()];
@@ -671,11 +654,7 @@ export class ModelService {
 
       const protectedIds = new Set(
         existingRows.flatMap((row) =>
-          !row.presetModelId ||
-          defaultIds.has(row.id) ||
-          (providerId === CHERRYAI_PROVIDER_ID && row.id === CHERRYAI_DEFAULT_UNIQUE_MODEL_ID)
-            ? [row.id]
-            : [],
+          !row.presetModelId || defaultIds.has(row.id) ? [row.id] : [],
         ),
       );
       const removableIds = existingRows.flatMap((row) =>
@@ -719,29 +698,6 @@ export class ModelService {
         : undefined;
       return { allRows, inserted, removedIds };
     });
-  }
-
-  private assertManagedDefaultPatchAllowed(
-    providerId: string,
-    modelId: string,
-    dto: UpdateModelDto,
-  ): void {
-    if (Object.keys(dto).length > 0) {
-      this.assertManagedDefaultMutationAllowed(providerId, modelId, 'update model');
-    }
-  }
-
-  private assertManagedDefaultMutationAllowed(
-    providerId: string,
-    modelId: string,
-    operation: string,
-  ): void {
-    if (isManagedCherryAiDefaultModel(providerId, modelId)) {
-      throw DataApiErrorFactory.invalidOperation(
-        `${operation} ${providerId}/${modelId}`,
-        'managed CherryAI default model cannot be modified',
-      );
-    }
   }
 
   private async assertNotUsedAsDefault(id: string, operation: string): Promise<void> {

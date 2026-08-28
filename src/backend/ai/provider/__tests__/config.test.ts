@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -6,73 +6,8 @@ import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../config';
 
-jest.mock('@/backend/ai/provider/cherryai', () => ({
-  generateSignature: jest.fn(() => ({
-    'X-Client-ID': 'cherry-studio',
-    'X-Timestamp': '1700000000',
-    'X-Signature': 'signed',
-  })),
-}));
-
-const { generateSignature } = jest.requireMock('@/backend/ai/provider/cherryai') as {
-  generateSignature: jest.Mock;
-};
-
 describe('providerToAiSdkConfig', () => {
-  beforeEach(() => {
-    generateSignature.mockClear();
-  });
-
-  it('adds CherryAI signing fetch for OpenAI-compatible chat completions', async () => {
-    const provider = createProvider({
-      id: 'cherryai',
-      presetProviderId: 'cherryai',
-      endpointConfigs: {
-        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
-          baseUrl: 'https://api.cherry-ai.com',
-        },
-      },
-      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-    });
-    const model = createModel(provider.id, 'glm-4.5-flash');
-
-    const config = await providerToAiSdkConfig(provider, model, createRuntime());
-
-    expect(config.providerId).toBe('openai-compatible');
-    expect(config.providerSettings).toMatchObject({
-      baseURL: 'https://api.cherry-ai.com',
-      name: 'cherryai',
-    });
-    expect(typeof config.providerSettings.fetch).toBe('function');
-
-    const fetchMock = jest.fn(async () => new Response(null, { status: 204 }));
-    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
-
-    await config.providerSettings.fetch?.('https://api.cherry-ai.com/chat/completions', {
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], model: model.modelId }),
-      headers: { Existing: 'header' },
-      method: 'POST',
-    });
-
-    expect(generateSignature).toHaveBeenCalledWith({
-      body: { messages: [{ role: 'user', content: 'hi' }], model: model.modelId },
-      method: 'POST',
-      path: '/chat/completions',
-      query: '',
-    });
-    expect(fetchMock).toHaveBeenCalledWith('https://api.cherry-ai.com/chat/completions', {
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], model: model.modelId }),
-      headers: {
-        Existing: 'header',
-        'X-Client-ID': 'cherry-studio',
-        'X-Timestamp': '1700000000',
-        'X-Signature': 'signed',
-      },
-      method: 'POST',
-    });
-  });
-
-  it('does not add CherryAI fetch to generic OpenAI-compatible providers', async () => {
+  it('leaves generic OpenAI-compatible providers on the default fetch', async () => {
     const provider = createProvider({
       id: 'custom-openai',
       presetProviderId: undefined,
@@ -89,28 +24,6 @@ describe('providerToAiSdkConfig', () => {
 
     expect(config.providerId).toBe('openai-compatible');
     expect(config.providerSettings.fetch).toBeUndefined();
-  });
-
-  it('keeps CherryAI image execution outside the language transport policy', async () => {
-    const provider = createProvider({
-      id: 'cherryai',
-      presetProviderId: 'cherryai',
-      endpointConfigs: {
-        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
-          baseUrl: 'https://api.cherry-ai.com',
-        },
-      },
-      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-    });
-    const model = {
-      ...createModel(provider.id, 'image-model'),
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-    };
-
-    const config = await providerToAiSdkConfig(provider, model, createRuntime());
-
-    expect(config.providerSettings.fetch).toBeUndefined();
-    expect(generateSignature).not.toHaveBeenCalled();
   });
 
   it('resolves registered adapter extensions before falling back to openai-compatible', async () => {

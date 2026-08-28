@@ -14,23 +14,6 @@ describe('provider WebP icon registry', () => {
     expect(resolveProviderIcon('azure-openai')).toBe(resolveProviderIcon('azureai'));
   });
 
-  test('uses the app icon for CherryAI instead of the CherryIN provider icon', async () => {
-    expect(resolveProviderIcon('cherryai')).toBe(PROVIDER_ICONS.cherryai);
-    expect(resolveProviderIcon('cherryai')).not.toBe(PROVIDER_ICONS.cherryin);
-
-    const appIconPath = join(process.cwd(), 'assets/icon.png');
-    const cherryAiPath = join(
-      process.cwd(),
-      'packages/ui/src/icons-webp/providers/light/cherryai.webp',
-    );
-    const [appIcon, providerIcon] = await Promise.all([
-      sharp(appIconPath).resize(72, 72, { fit: 'contain' }).ensureAlpha().raw().toBuffer(),
-      sharp(cherryAiPath).ensureAlpha().raw().toBuffer(),
-    ]);
-
-    expect(providerIcon).toEqual(appIcon);
-  });
-
   test('adapts the desktop virtual opencode provider to the general glyph', () => {
     expect(resolveProviderIcon('opencode')).toBe(GENERAL_ICONS['open-code']);
   });

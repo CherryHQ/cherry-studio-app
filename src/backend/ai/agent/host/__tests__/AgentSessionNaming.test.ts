@@ -2,10 +2,11 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
 
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import { AgentSessionNaming } from '../AgentSessionNaming';
+
+const DEFAULT_NAMING_MODEL_ID = 'openai::gpt-4o';
 
 function deferred<TValue>() {
   let resolve!: (value: TValue) => void;
@@ -16,16 +17,21 @@ function deferred<TValue>() {
 }
 
 function createNaming(input: {
+  defaultModelId?: string | null;
   generateText?: AiService['generateText'];
+  namingModelId?: string | null;
   namingEnabled?: boolean;
   signal?: AbortSignal;
 }) {
   const store = new InMemoryAgentSessionStore();
   const generateText = jest.fn(input.generateText ?? (async () => ({ text: 'Generated summary' })));
+  const defaultModelId =
+    input.defaultModelId === undefined ? DEFAULT_NAMING_MODEL_ID : input.defaultModelId;
   const preference = {
     get: jest.fn(async (key: string) => {
       if (key === 'agent.session_naming.enabled') return input.namingEnabled ?? true;
-      if (key === 'agent.session_naming.model_id') return null;
+      if (key === 'agent.session_naming.model_id') return input.namingModelId ?? null;
+      if (key === 'agent.default_model_id') return defaultModelId;
       if (key === 'agent.session_naming.prompt') return '';
       if (key === 'app.language') return 'en-us';
       return null;
@@ -33,10 +39,10 @@ function createNaming(input: {
   } as unknown as PreferenceService;
   const naming = new AgentSessionNaming({
     ai: { generateText } as Pick<AiService, 'generateText'>,
-    model: { getById: jest.fn() } as unknown as Pick<ModelService, 'getById'>,
+    model: { getById: jest.fn(async () => ({})) } as unknown as Pick<ModelService, 'getById'>,
     preference,
     provider: {
-      getByProviderId: jest.fn(),
+      getByProviderId: jest.fn(async () => ({ authMethods: [] })),
     } as unknown as Pick<ProviderService, 'getByProviderId'>,
     ...(input.signal ? { signal: input.signal } : {}),
     store,
@@ -79,9 +85,32 @@ describe('AgentSessionNaming', () => {
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         reasoningEffort: 'none',
-        uniqueModelId: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
+        uniqueModelId: DEFAULT_NAMING_MODEL_ID,
       }),
     );
+  });
+
+  test('keeps the first-message title when no usable naming model is configured', async () => {
+    const { generateText, naming, store } = createNaming({ defaultModelId: null });
+    const session = await store.createSession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+
+    await expect(
+      naming.maybeRenameFromConversationSummary({
+        assistantParts: [
+          { id: 'text-1', state: 'done', text: 'Earth blocks the sunlight.', type: 'text' },
+        ],
+        sessionId: session.id,
+        userParts,
+      }),
+    ).resolves.toBeNull();
+
+    expect(generateText).not.toHaveBeenCalled();
+    await expect(store.getSession(session.id)).resolves.toMatchObject({
+      title: 'Explain lunar eclipses',
+      titleIsManual: false,
+    });
   });
 
   test('propagates the Host lifecycle signal to summary generation', async () => {

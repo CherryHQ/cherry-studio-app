@@ -4,10 +4,6 @@ import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
 } from '@/backend/ai/provider/providerConnection';
-import {
-  resolveProviderLanguageTransportPolicy,
-  type ProviderLanguageTransportPolicy,
-} from '@/backend/ai/provider/providerTransport';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -57,7 +53,6 @@ export interface LanguageServingPlan {
     pi: PiLanguageBinding;
   };
   connection: ResolvedProviderConnection;
-  transportPolicy: ProviderLanguageTransportPolicy | undefined;
 }
 
 interface ResolveLanguageServingPlanOptions {
@@ -83,7 +78,6 @@ export function resolveLanguageServingPlan(
       pi: resolvePiLanguageBinding(provider, connection),
     },
     connection,
-    transportPolicy: resolveProviderLanguageTransportPolicy(provider),
   };
 }
 
