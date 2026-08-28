@@ -16,12 +16,6 @@ describe('agent api schemas', () => {
     },
   );
 
-  test('accepts partial settings updates without requiring the full settings object', () => {
-    expect(UpdateAgentSchema.safeParse({ settings: { reasoningEffort: 'high' } }).success).toBe(
-      true,
-    );
-  });
-
   test.each([CreateAgentSchema, UpdateAgentSchema])(
     'accepts only supported tool approval modes',
     (schema) => {
@@ -33,22 +27,17 @@ describe('agent api schemas', () => {
     },
   );
 
-  test('keeps unknown settings fields in update payloads', () => {
-    expect(
-      UpdateAgentSchema.parse({
-        settings: { futureSetting: { enabled: true }, temperature: 0.5 },
-      }),
-    ).toEqual({
-      settings: { futureSetting: { enabled: true }, temperature: 0.5 },
-    });
-  });
-
-  test('preserves explicit-undefined settings keys so a patch can clear them', () => {
-    const parsed = UpdateAgentSchema.parse({ settings: { temperature: undefined } });
-
-    expect(parsed.settings).toBeDefined();
-    expect(Object.keys(parsed.settings ?? {})).toContain('temperature');
-  });
+  test.each([CreateAgentSchema, UpdateAgentSchema])(
+    'rejects removed per-Agent inference settings',
+    (schema) => {
+      expect(
+        schema.safeParse({
+          name: 'Agent',
+          settings: { maxOutputTokens: 2048, reasoningEffort: 'high', temperature: 0.5 },
+        }).success,
+      ).toBe(false);
+    },
+  );
 
   test.each([CreateAgentSchema, UpdateAgentSchema])(
     'rejects avatar writes — the avatar workflow owns that column',

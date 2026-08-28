@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { type Agent, AgentSchema, AgentSettingsSchema } from '@/shared/data/types/agent';
+import { type Agent, AgentSchema } from '@/shared/data/types/agent';
 
 import { type OrderEndpoints } from './endpointHelpers';
 
@@ -14,7 +14,6 @@ const AGENT_MUTABLE_FIELDS = {
   instructions: true,
   modelId: true,
   name: true,
-  settings: true,
   toolApprovalMode: true,
 } as const;
 
@@ -24,12 +23,7 @@ export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .strict();
 export type CreateAgentDto = z.infer<typeof CreateAgentSchema>;
 
-export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
-  .partial()
-  .extend({
-    settings: AgentSettingsSchema.partial().optional(),
-  })
-  .strict();
+export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS).partial().strict();
 export type UpdateAgentDto = z.infer<typeof UpdateAgentSchema>;
 
 /**

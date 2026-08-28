@@ -95,11 +95,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const selectedModelLabel = selectedModel?.name;
   const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
-    useChatInputReasoningEffortSelection(
-      reasoningEfforts,
-      agent?.settings.reasoningEffort,
-      agentId,
-    );
+    useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
   const isInputActiveRef = useRef(false);
@@ -209,7 +205,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               reasoningEffort: getChatInputReasoningEffortSnapshot(
                 reasoningEffort,
                 isReasoningEffortSelected,
-                agent?.settings.reasoningEffort,
                 reasoningEfforts,
               ),
             }
@@ -222,7 +217,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       });
     },
     [
-      agent?.settings.reasoningEffort,
       isReasoningEffortSelected,
       reasoningEffort,
       reasoningEfforts,

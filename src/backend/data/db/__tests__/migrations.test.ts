@@ -104,7 +104,6 @@ describe('bundled SQLite migrations', () => {
         'instructions',
         'avatar',
         'model_id',
-        'settings',
         'order_key',
         'created_at',
         'updated_at',
@@ -234,8 +233,8 @@ describe('bundled SQLite migrations', () => {
       );
 
       database.exec(`
-        INSERT INTO agent (id, name, settings, order_key, created_at, updated_at)
-        VALUES ('agent-1', 'Agent', '{}', 'a0', 1, 1);
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
         INSERT INTO agent_tool_binding (
           id, agent_id, source, capability_id, enabled, approval, created_at, updated_at
         ) VALUES ('binding-builtin', 'agent-1', 'builtin', 'calendar.read', 1, 'auto', 1, 1);

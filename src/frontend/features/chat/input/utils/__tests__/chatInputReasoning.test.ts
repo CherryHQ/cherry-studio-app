@@ -61,16 +61,15 @@ describe('chat input reasoning', () => {
     ]);
   });
 
-  test('snapshots the assistant effort until the user selects a request override', () => {
+  test('snapshots the model default until the user selects a request override', () => {
     expect(getChatInputReasoningEffortSnapshot('high', false)).toBe('default');
-    expect(
-      getChatInputReasoningEffortSnapshot('default', false, 'high', ['default', 'low', 'high']),
-    ).toBe('high');
-    expect(
-      getChatInputReasoningEffortSnapshot('high', false, 'max', ['default', 'low', 'high']),
-    ).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('high', false, ['default', 'low', 'high'])).toBe(
+      'default',
+    );
     expect(getChatInputReasoningEffortSnapshot('high', true)).toBe('high');
-    expect(getChatInputReasoningEffortSnapshot('low', true, 'high')).toBe('low');
+    expect(getChatInputReasoningEffortSnapshot('low', true, ['default', 'low', 'high'])).toBe(
+      'low',
+    );
   });
 });
 

@@ -12,7 +12,6 @@ describe('createAgentFormState', () => {
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
-      settings: { temperature: 0.4 },
       toolApprovalMode: 'auto',
     } as unknown as Agent);
 

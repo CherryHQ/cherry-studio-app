@@ -17,7 +17,7 @@ process-local transport mechanics, not protocol data. JSON safety keeps applicat
 this document does not define a network wire protocol.
 
 Cloud control and LAN desktop control are separate product domains. They do not execute a Mobile
-Agent, reuse its Session or settings, or extend `AgentExecutionTarget` with remote variants.
+Agent, reuse its Session or definition, or extend `AgentExecutionTarget` with remote variants.
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
@@ -59,7 +59,7 @@ type AgentSessionView = {
 accepts only `local`, meaning this mobile app. Runtime ids and Pi/provider-SDK implementation
 details never appear in protocol values.
 
-`agentId` identifies the application-owned Agent configuration — the settings the user edits in the
+`agentId` identifies the application-owned Agent configuration — the definition the user edits in the
 application (instructions, model, tool-approval preference, and MCP extensions). That configuration
 is live: before each turn, the Host resolves its current state and builds the Runtime execution
 request from it, so an application-level edit applies from the next turn. Shared system

@@ -17,11 +17,7 @@ import {
 } from '@/shared/data/api/schemas/agents';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import {
-  type Agent,
-  DEFAULT_AGENT_SETTINGS,
-  DEFAULT_AGENT_TOOL_APPROVAL_MODE,
-} from '@/shared/data/types/agent';
+import { type Agent, DEFAULT_AGENT_TOOL_APPROVAL_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { modelService } from './ModelService';
@@ -46,7 +42,6 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     modelName,
     name: row.name,
     orderKey: row.orderKey,
-    settings: row.settings,
     toolApprovalMode: row.toolApprovalMode,
     updatedAt: timestampToISO(row.updatedAt),
   };
@@ -158,7 +153,6 @@ export class AgentService {
         {
           ...dto,
           modelId,
-          settings: dto.settings ?? DEFAULT_AGENT_SETTINGS,
           toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
         },
         { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },
@@ -175,14 +169,9 @@ export class AgentService {
       this.validateName(dto.name);
     }
 
-    const { settings: settingsPatch, ...columnFields } = dto;
     const updates = Object.fromEntries(
-      Object.entries(columnFields).filter(([, value]) => value !== undefined),
+      Object.entries(dto).filter(([, value]) => value !== undefined),
     ) as Partial<typeof agentTable.$inferInsert>;
-
-    if (settingsPatch !== undefined) {
-      updates.settings = { ...current.settings, ...settingsPatch };
-    }
 
     if (Object.keys(updates).length === 0) {
       return current;
