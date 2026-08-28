@@ -1819,4 +1819,51 @@ describe('PiRuntime mapping', () => {
     expect(agentSignal?.aborted).toBe(true);
     await session.close();
   });
+
+  test('interrupts a tool call arriving after the turn timeout without requesting approval', async () => {
+    const runtime = createTestRuntime({
+      maxToolCalls: 16,
+      maxToolSteps: 8,
+      turnTimeoutMs: 5,
+    });
+    const executed = jest.fn();
+    let lateCall: Promise<unknown> | undefined;
+    arrange(runtime, (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Timeout program requires one tool.');
+      return new Promise((resolve) => {
+        // The synchronous abort listener reaches the Runtime while the phase
+        // is `timing-out`, before the run loop publishes the timeout failure.
+        context.signal.addEventListener(
+          'abort',
+          () => {
+            lateCall = piTool.execute('late-call', {}, new AbortController().signal);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-timeout-late-tool', { tools: [askTool(executed)] })),
+    );
+
+    expect(executed).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === 'approval.requested')).toBe(false);
+    expect(
+      events.find(
+        (event) =>
+          event.type === 'part.replace' &&
+          event.part.type === 'tool' &&
+          event.part.toolCallId === 'late-call',
+      ),
+    ).toMatchObject({ part: { state: 'interrupted' } });
+    expect(events.at(-1)).toMatchObject({ type: 'failed', error: { code: 'turn_timeout' } });
+    await expect(lateCall).resolves.toMatchObject({
+      details: { value: { status: 'interrupted' } },
+    });
+    await session.close();
+  });
 });

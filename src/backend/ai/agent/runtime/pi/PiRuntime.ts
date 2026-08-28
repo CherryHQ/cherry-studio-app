@@ -165,9 +165,12 @@ type ToolPartBase = {
 };
 
 /**
- * Turn lifecycle. The first transition out of `running` wins — a later cancel
- * cannot retarget a timeout outcome and vice versa — and only the terminal
- * fence in `emit()` reaches `terminated`.
+ * Turn lifecycle. The first transition out of `running` wins the phase — it is
+ * never retargeted — and only the terminal fence in `emit()` reaches
+ * `terminated`. The published terminal event is a separate concern: during
+ * `timing-out` the run loop's timeout failure still races the unconditional
+ * `cancelled` from `cancel()`/`close()`, and the fence keeps whichever lands
+ * first.
  */
 type TurnPhase = 'running' | 'cancelling' | 'timing-out' | 'terminated';
 
