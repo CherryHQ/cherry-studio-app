@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "8f024b2f23686988eb0588539b7c6e072dd3c089dbab88a4bbd455966f7bff6a"
+        "targetSha256": "ed38bd9237235f016f96f9ebea72c848ac4a1fe940de1ad021d533c77aa68f3c"
       },
       {
         "classification": "blocked",
@@ -1664,7 +1664,7 @@
         "source": "src/main/ai/provider/__tests__/config.test.ts",
         "sourceSha256": "db84d5b4a9c61c9693bb4e6b2478051a577a6f2fb899baebc93a392f271078be",
         "target": "src/backend/ai/provider/__tests__/config.test.ts",
-        "targetSha256": "bb2f9cea9ba6db70bb136562cfbbcd961a6090c740e59c7d9b4ff272929a84f2"
+        "targetSha256": "45c2e34fce294a606ed7070835730264250543796238cad1480059ae1530f414"
       },
       {
         "classification": "semantic-port",
@@ -1754,13 +1754,11 @@
         "targetSha256": "2389e7624e985fd2b44ad5cf3365c06ac8078b5da3a23276be6f56cfc3fd93c7"
       },
       {
-        "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/cherryai.ts"],
-        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/data/db/seeding/seeders/PresetProviderSeeder.ts"],
+        "reason": "CherryAI request signing was retired with the unavailable managed free-model provider.",
         "source": "src/main/ai/provider/cherryai.ts",
-        "sourceSha256": "85c93d350aa0f4795eb686e5804e8f5066429e1f0c9bbffabfa55c6551d734b9",
-        "target": "packages/ai-runtime/src/provider/cherryai.ts",
-        "targetSha256": "c454c8ee18e80452fccd7b5ddbe7d2645555246fb24233a212f24109bbeb9abe"
+        "sourceSha256": "85c93d350aa0f4795eb686e5804e8f5066429e1f0c9bbffabfa55c6551d734b9"
       },
       {
         "classification": "semantic-port",
@@ -1778,7 +1776,7 @@
         "source": "src/main/ai/provider/config.ts",
         "sourceSha256": "c68f0aa51b7b888e7d18c5827947f2b358165da3afac9a4f4ee6bdfd568e8d36",
         "target": "src/backend/ai/provider/config.ts",
-        "targetSha256": "c2cc3d07f59c96ebdd5134fdf61b57ca4fcdd24359c173907701d3e35dd0b9f8"
+        "targetSha256": "0b402215182467c3f999c8a33236e93429efd63b558fe28af2098a0faf4b7cdd"
       },
       {
         "classification": "semantic-port",
@@ -5333,13 +5331,11 @@
         "sourceSha256": "b2f38da052991634c380b1cf26d77afdc6263c092ba42aff44b48c32246da211"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/provider/__tests__/cherryai.test.ts"],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/data/db/seeding/seeders/PresetProviderSeeder.ts"],
+        "reason": "The historical CherryAI signing adapter test was retired with the unavailable managed provider.",
         "source": "src/backend/ai/provider/__tests__/cherryai.test.ts",
-        "sourceSha256": "2615af7b04255066b82685f405a42215b9321844046cf22661fd58b37d824aed",
-        "target": "src/backend/ai/provider/__tests__/cherryai.test.ts",
-        "targetSha256": "0e5a6be4fcab8442794acd53003038401ccc39a0257ba04e581e7e0692f6bd66"
+        "sourceSha256": "2615af7b04255066b82685f405a42215b9321844046cf22661fd58b37d824aed"
       },
       {
         "classification": "semantic-port",
@@ -5378,13 +5374,11 @@
         "targetSha256": "845005a96b0a735c5ff7acf41d93cd01c76c10935266f083040e120d3acbd999"
       },
       {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/provider/__tests__/cherryai.test.ts"],
-        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
+        "classification": "explicit-exclusion",
+        "evidence": ["mobile:src/backend/data/db/seeding/seeders/PresetProviderSeeder.ts"],
+        "reason": "The historical CherryAI signing adapter was retired with the unavailable managed provider.",
         "source": "src/backend/ai/provider/cherryai.ts",
-        "sourceSha256": "70e7ceb36979b3e81f0beba4dd472aa4e7020ea872e6c9e96e27e0a9aaef72c2",
-        "target": "src/backend/ai/provider/cherryai.ts",
-        "targetSha256": "aa6b7d6eee0d9dac96c64c27669878df3083ba0b959cee902c06a6d3f17e1e78"
+        "sourceSha256": "70e7ceb36979b3e81f0beba4dd472aa4e7020ea872e6c9e96e27e0a9aaef72c2"
       },
       {
         "classification": "semantic-port",
@@ -6621,13 +6615,6 @@
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/cherryai.test.ts"],
-      "reason": "Package-owned injected-secret contract migrated from the historical mobile test.",
-      "target": "packages/ai-runtime/src/provider/__tests__/cherryai.test.ts",
-      "targetSha256": "5d5564ad947054e565af885bf7645d9f52e59e62d8bdd82e5663b311308f5600"
-    },
-    {
-      "classification": "mobile-extension",
       "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/fixtures.ts"],
       "reason": "Portable package support code has no one-to-one desktop source and is covered by package tests.",
       "target": "packages/ai-runtime/src/provider/__tests__/fixtures.ts",
@@ -6652,7 +6639,7 @@
       "evidence": ["mobile:packages/ai-runtime/src/provider/index.ts"],
       "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
       "target": "packages/ai-runtime/src/provider/index.ts",
-      "targetSha256": "b6581ce5619310f08c97be247ffb4fa82f1f04d2934900ba633cff3ff873bda8"
+      "targetSha256": "480d3b18b45d837ddbad217eee2ed8fe2679d9ca8333912d82147c387e4672ae"
     },
     {
       "classification": "mobile-extension",
@@ -6725,7 +6712,7 @@
       "evidence": ["mobile:src/backend/ai/agent/host/__tests__/AgentSessionNaming.test.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/agent/host/__tests__/AgentSessionNaming.test.ts",
-      "targetSha256": "88a6c1ccc682055e4922e671b1440db0087e4650869423d56176bc0ca82f4e31"
+      "targetSha256": "c6a1249253f042b5c268f00375976c623f36c1a9a1cd5c399c4d47e36ae09dcf"
     },
     {
       "classification": "mobile-extension",
@@ -6774,7 +6761,7 @@
       "evidence": ["mobile:src/backend/ai/agent/host/AgentSessionNaming.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/agent/host/AgentSessionNaming.ts",
-      "targetSha256": "a2586eababc70342088a6f39d0a5e39cfa91d8e13503f7f06176ac7dd9e9a532"
+      "targetSha256": "29198cbd33658281abe4e6c3eebe7e23f64e4d06247907d15c77f8611994ef7c"
     },
     {
       "classification": "mobile-extension",
@@ -6830,7 +6817,7 @@
       "evidence": ["mobile:src/backend/ai/agent/piAdapter/__tests__/piModelResolver.test.ts"],
       "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/agent/piAdapter/__tests__/piModelResolver.test.ts",
-      "targetSha256": "9296dc5af91617a849a6b7c024ffac9fb32dd90cdfdaf1fd1b2a0c5bd6f23b0f"
+      "targetSha256": "10390a9cb4cbc2fe867e2b0ccbb1ecc791bf73b02e72d9b4471181a19469c471"
     },
     {
       "classification": "mobile-extension",
@@ -6844,7 +6831,7 @@
       "evidence": ["mobile:src/backend/ai/agent/piAdapter/piModelResolver.ts"],
       "reason": "Mobile-owned Agent, platform, lifecycle, or contract behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/agent/piAdapter/piModelResolver.ts",
-      "targetSha256": "5417c94c22e32475917f2a4602d7234ce76cc978df21b56f751cae0c9d900cc4"
+      "targetSha256": "efc8e4769d3b8464f6d304a5f2890ffa92e0719fd53ec5eed5217a299f5ac27b"
     },
     {
       "classification": "mobile-extension",
@@ -7270,13 +7257,6 @@
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/provider/__tests__/providerTransport.test.ts"],
-      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/provider/__tests__/providerTransport.test.ts",
-      "targetSha256": "a750b37b661a440f64d46b8bd0a80ebf81f6289f8a3b8cb1dc57c5d323b6a8ef"
-    },
-    {
-      "classification": "mobile-extension",
       "evidence": ["mobile:src/backend/ai/provider/__tests__/systemModelSupport.test.ts"],
       "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/provider/__tests__/systemModelSupport.test.ts",
@@ -7294,7 +7274,7 @@
       "evidence": ["mobile:src/backend/ai/provider/languageServingPlan.ts"],
       "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/provider/languageServingPlan.ts",
-      "targetSha256": "bfa72548fa24f51c6e02f78747c6d34ff9cf3f6fb7c322161434aa0721b18585"
+      "targetSha256": "ca24e68434dc84730d3e2590b4565facc22e722931ff78cb4f8c28c55c9883e9"
     },
     {
       "classification": "mobile-extension",
@@ -7302,13 +7282,6 @@
       "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
       "target": "src/backend/ai/provider/providerConnection.ts",
       "targetSha256": "b8c74f87477f988ad56ffe2acb4ae5cbe00409fff198c271507e97d92d4e30e4"
-    },
-    {
-      "classification": "mobile-extension",
-      "evidence": ["mobile:src/backend/ai/provider/providerTransport.ts"],
-      "reason": "Mobile-owned AI backend behavior has no one-to-one desktop source.",
-      "target": "src/backend/ai/provider/providerTransport.ts",
-      "targetSha256": "86b28952e6e08b85006af72803f2ab87796d49cebadf124aabc5ccb5c493742e"
     },
     {
       "classification": "mobile-extension",

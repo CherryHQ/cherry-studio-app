@@ -9,7 +9,6 @@ import { StyleSheet, Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { useQuery } from '@/frontend/data';
-import { hiddenProviderListIds } from '@/frontend/utils/constants';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
@@ -50,13 +49,7 @@ export default function ProviderSettingsScreen() {
   const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
-  const providers = useMemo(
-    () =>
-      (providersQuery.data ?? []).filter(
-        (provider) => !hiddenProviderListIds.includes(provider.id),
-      ),
-    [providersQuery.data],
-  );
+  const providers = useMemo(() => providersQuery.data ?? [], [providersQuery.data]);
   const openProvider = useCallback(
     (provider: Provider) => {
       if (isNavigatingRef.current) {

@@ -17,7 +17,6 @@ const CONTAINED_BRAND_ICON_IDS = new Set([
   'aihubmix',
   'anthropic',
   'aws-bedrock',
-  'cherryai',
   'cherryin',
   'groq',
   'lmstudio',

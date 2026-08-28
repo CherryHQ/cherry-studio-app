@@ -38,8 +38,6 @@ describe('WebP icon registry', () => {
     expect(resolveProviderIcon('tokenhub')).toBe(PROVIDER_ICONS['tencent-cloud-ti']);
     expect(resolveProviderIcon('doubao')).toBe(PROVIDER_ICONS.volcengine);
     expect(resolveProviderIcon('dashscope')).toBe(PROVIDER_ICONS.bailian);
-    expect(resolveProviderIcon('cherryai')).toBe(PROVIDER_ICONS.cherryai);
-    expect(resolveProviderIcon('cherryai')).not.toBe(PROVIDER_ICONS.cherryin);
     expect(resolveProviderIcon('github-copilot-openai-compatible')).toBe(
       PROVIDER_ICONS['github-copilot'],
     );

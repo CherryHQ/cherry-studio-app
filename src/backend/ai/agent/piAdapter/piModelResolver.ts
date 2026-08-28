@@ -56,8 +56,6 @@ export function createPiModelResolver(): PiRuntimeDependencies {
 
       const modelId = connection.wireModelId;
       const headers = connection.headers;
-      const baseFetch = expoFetch as unknown as typeof globalThis.fetch;
-      const providerFetch = servingPlan.transportPolicy?.wrapFetch(baseFetch) ?? baseFetch;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(connection.baseUrl.trim()),
@@ -76,7 +74,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
       const streamFn = await bindPiStream(adapter, {
         apiKey: selectedApiKey.value,
-        fetch: providerFetch as FetchFunction,
+        fetch: expoFetch as unknown as FetchFunction,
         headers,
         maxRetries: 0,
         maxTokens: runtimeOptions.maxOutputTokens ?? piModel.maxTokens,

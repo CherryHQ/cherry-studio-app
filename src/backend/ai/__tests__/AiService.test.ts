@@ -12,10 +12,6 @@ jest.mock('@cherrystudio/ai-core', () => ({
   generateImage: jest.fn(),
 }));
 
-jest.mock('@/backend/ai/provider/cherryai', () => ({
-  generateSignature: jest.fn(() => ({})),
-}));
-
 jest.mock('@/backend/ai/generation/aiSdk/AiSdkGenerator', () => ({
   AiSdkGenerator: jest.fn().mockImplementation((params) => {
     mockGeneratorConstructor(params);

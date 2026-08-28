@@ -79,12 +79,3 @@ export const appSidebar = {
   headerBlurSize: 124, // progressive-blur depth behind the fixed header controls
   recentSessionLimit: 20, // most-recent sessions shown before the "view all" row
 } as const;
-
-// Providers that exist as rows but must never appear in the provider settings
-// list. `cherryai` is Cherry's own built-in service (api.cherry-ai.com): it is
-// seeded as a row only so the AI SDK can build a client for its free models
-// (`PresetProviderSeeder` appends it after the registry providers), and it has
-// no user-configurable Base URL or API key. Desktop hides it the same way —
-// `CHERRYAI_PROVIDER` lives outside `SYSTEM_PROVIDERS_CONFIG` and the settings
-// list reads `selectAllProviders`, which excludes it.
-export const hiddenProviderListIds: readonly string[] = ['cherryai'];

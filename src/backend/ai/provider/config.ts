@@ -109,18 +109,17 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
   if (isGeminiProvider(provider)) return formatApiHost(baseURL, appendApiVersion, 'v1beta');
 
   // Providers that don't append API version
-  const noVersionProviders = [
+  const noVersionProviders = new Set([
     'github',
     'copilot',
-    'cherryai',
     'perplexity',
     'newapi',
     'new-api',
     'azure-openai',
-  ];
+  ]);
   if (
-    noVersionProviders.includes(provider.id) ||
-    noVersionProviders.includes(provider.presetProviderId ?? '')
+    noVersionProviders.has(provider.id) ||
+    noVersionProviders.has(provider.presetProviderId ?? '')
   ) {
     return formatApiHost(baseURL, false);
   }
@@ -206,7 +205,6 @@ export async function resolveProviderAiSdkConfig(
 
   const builders: ConfigBuilderEntry[] = [
     { match: (p) => isPreset(p, 'opencode'), build: withSelectedApiKey(buildOpenCodeConfig) },
-    { match: (p) => isCherryAIProvider(p), build: withSelectedApiKey(buildCherryAIConfig) },
     { match: (p) => isOllamaProvider(p), build: withSelectedApiKey(buildOllamaConfig) },
     { match: (p) => isAzureOpenAIProvider(p), build: withSelectedApiKey(buildAzureConfig) },
     {
@@ -316,16 +314,7 @@ export async function resolveProviderAiSdkConfig(
     resolved = await withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
   }
 
-  const transportPolicy = languageServingPlan?.transportPolicy;
-  if (transportPolicy) {
-    resolved.config.providerSettings.fetch = transportPolicy.wrapFetch(
-      resolved.config.providerSettings.fetch ??
-        runtime.fetch ??
-        ((input, init) => globalThis.fetch(input, init)),
-    );
-  } else {
-    resolved.config.providerSettings.fetch ??= runtime.fetch;
-  }
+  resolved.config.providerSettings.fetch ??= runtime.fetch;
   return resolved;
 }
 
@@ -389,19 +378,6 @@ function mapGatewayEndpointType(
     default:
       return 'openai';
   }
-}
-
-function buildCherryAIConfig(ctx: BuilderContext): ProviderConfig<'openai-compatible'> {
-  return {
-    providerId: 'openai-compatible',
-    endpoint: ctx.endpoint,
-    providerSettings: {
-      ...ctx.baseConfig,
-      headers: { ...ctx.connection.headers },
-      includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
-      name: ctx.actualProvider.id,
-    },
-  };
 }
 
 function formatAzureBaseURL(baseURL: string, forAnthropic: boolean): string {
@@ -703,10 +679,6 @@ function isOllamaProvider(provider: Provider): boolean {
 
 function isGeminiProvider(provider: Provider): boolean {
   return isPreset(provider, 'gemini') || isPreset(provider, 'google');
-}
-
-function isCherryAIProvider(provider: Provider): boolean {
-  return isPreset(provider, 'cherryai');
 }
 
 function isImageGenerationModel(model: Model): boolean {

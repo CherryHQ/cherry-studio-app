@@ -15,7 +15,6 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 import { CATALOG_ONLY_PROVIDER_ICONS } from './catalog-only-provider-icons.generated';
-import { MOBILE_ONLY_PROVIDER_ICONS } from './mobile-only-provider-icons';
 
 type IconGroup = 'general' | 'models' | 'providers';
 
@@ -29,7 +28,6 @@ const imageSize = 72;
 const foregroundLight = 'rgba(0, 0, 0, 0.9)';
 const foregroundDark = 'rgba(255, 255, 255, 0.9)';
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const repoRoot = dirname(dirname(packageRoot));
 const sourceRoot = join(packageRoot, 'icons');
 const outputRoot = join(packageRoot, 'src/icons-webp');
 
@@ -143,27 +141,8 @@ async function renderIcon(
   await renderSvg(readFileSync(sourcePath, 'utf-8'), outputPath, foregroundColor, options);
 }
 
-async function renderRasterIcon(sourcePath: string, outputPath: string) {
-  await sharp(sourcePath)
-    .resize(imageSize, imageSize, {
-      background: { alpha: 0, b: 0, g: 0, r: 0 },
-      fit: 'contain',
-    })
-    .webp({
-      effort: 6,
-      lossless: true,
-    })
-    .toFile(outputPath);
-}
-
 function buildRegistrySource(group: IconGroup, entries: IconEntry[]) {
   const { catalog, key: keyType, label, resolver } = registryNames[group];
-  const mobileOnlyIconIds =
-    group === 'providers'
-      ? `const MOBILE_ONLY_PROVIDER_ICON_IDS = new Set(${JSON.stringify(Object.keys(MOBILE_ONLY_PROVIDER_ICONS))});
-
-`
-      : '';
   const resolverAlias =
     group === 'providers'
       ? `
@@ -184,8 +163,6 @@ export function resolveProviderIcon(iconId: string): IconSource | undefined {
   const aliasResolution =
     group === 'providers'
       ? `  const icons = ${catalog} as Record<string, IconSource>;
-  if (MOBILE_ONLY_PROVIDER_ICON_IDS.has(iconId)) return icons[iconId as ${keyType}];
-
   const key = PROVIDER_ID_ALIASES[iconId] ?? iconId;
 
   return (
@@ -227,7 +204,7 @@ export function resolveProviderIcon(iconId: string): IconSource | undefined {
 
   return `${writeGeneratedHeader(entries.length, label)}${aliasImport}import type { IconSource } from '../types';
 
-${mobileOnlyIconIds}export const ${catalog} = {
+export const ${catalog} = {
 ${objectBody}
 } as const satisfies Record<string, IconSource>;
 
@@ -321,13 +298,6 @@ export async function generateGroup(group: IconGroup, targetRoot = outputRoot, l
       join(targetRoot, group, 'catalog-only-manifest.json'),
       `${JSON.stringify(catalogOnlyManifest, null, 2)}\n`,
     );
-    for (const [assetName, source] of Object.entries(MOBILE_ONLY_PROVIDER_ICONS)) {
-      await renderRasterIcon(
-        join(repoRoot, source.sourcePath),
-        join(lightAssetDir, `${assetName}.webp`),
-      );
-      entries.push({ fileName: assetName, hasDark: false, key: assetName });
-    }
     entries.sort((left, right) => left.key.localeCompare(right.key));
   }
 

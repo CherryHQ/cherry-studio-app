@@ -286,6 +286,5 @@ export const PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
   aionly: 'ai-only',
   dashscope: 'bailian',
   zai: 'z-ai',
-  'minimax-global': 'minimax',
-  cherryai: 'cherryin'
+  'minimax-global': 'minimax'
 };

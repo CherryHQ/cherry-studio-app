@@ -10,7 +10,6 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { AgentInputPart, AgentMessagePart, AgentSessionView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
 import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
@@ -122,6 +121,7 @@ export class AgentSessionNaming {
       if (!session || session.titleIsManual || !canAutoRename(session.title, userText)) return null;
 
       const uniqueModelId = await this.resolveNamingModelId();
+      if (!uniqueModelId) return null;
       this.dependencies.signal?.throwIfAborted();
       const system = await this.resolveNamingPrompt();
       this.dependencies.signal?.throwIfAborted();
@@ -159,38 +159,56 @@ export class AgentSessionNaming {
     }
   }
 
-  private async resolveNamingModelId() {
-    const configured = await this.dependencies.preference.get('agent.session_naming.model_id');
-    if (!configured || !isUniqueModelId(configured)) return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
+  private async resolveNamingModelId(): Promise<string | null> {
+    const [configured, defaultModelId] = await Promise.all([
+      this.dependencies.preference.get('agent.session_naming.model_id'),
+      this.dependencies.preference.get('agent.default_model_id'),
+    ]);
+    const candidates = [
+      { key: 'agent.session_naming.model_id', value: configured },
+      { key: 'agent.default_model_id', value: defaultModelId },
+    ];
+    const visited = new Set<string>();
 
-    const model = await this.dependencies.model.getById(configured);
-    if (!model) {
-      logger.warn(
-        'agent.session_naming.model_id points to a missing model; falling back to managed CherryAI default model',
-        { configured },
-      );
-      return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
-    }
-
-    const { providerId } = parseUniqueModelId(configured);
-    try {
-      const provider = await this.dependencies.provider.getByProviderId(providerId);
-      if (provider.authMethods?.includes('external-cli')) {
-        logger.warn(
-          'agent.session_naming.model_id points to an external-CLI provider; falling back to managed CherryAI default model',
-          { configured },
-        );
-        return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
+    for (const candidate of candidates) {
+      if (!candidate.value || !isUniqueModelId(candidate.value) || visited.has(candidate.value)) {
+        continue;
       }
-    } catch (error) {
-      logger.warn(
-        'agent.session_naming.model_id points to a missing provider; falling back to managed CherryAI default model',
-        { configured, error: error as Error },
-      );
-      return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
+      visited.add(candidate.value);
+
+      // react-doctor-disable-next-line async-await-in-loop -- candidates are ordered by preference
+      const model = await this.dependencies.model.getById(candidate.value);
+      if (!model) {
+        logger.warn(
+          `${candidate.key} points to a missing model; skipping it for automatic session naming`,
+          { configured: candidate.value },
+        );
+        continue;
+      }
+
+      const { providerId } = parseUniqueModelId(candidate.value);
+      try {
+        // react-doctor-disable-next-line async-await-in-loop -- candidates are ordered by preference
+        const provider = await this.dependencies.provider.getByProviderId(providerId);
+        if (provider.authMethods?.includes('external-cli')) {
+          logger.warn(
+            `${candidate.key} points to an external-CLI provider; skipping it for automatic session naming`,
+            { configured: candidate.value },
+          );
+          continue;
+        }
+      } catch (error) {
+        logger.warn(
+          `${candidate.key} points to a missing provider; skipping it for automatic session naming`,
+          { configured: candidate.value, error: error as Error },
+        );
+        continue;
+      }
+
+      return candidate.value;
     }
 
-    return configured;
+    return null;
   }
 
   private async resolveNamingPrompt(): Promise<string> {
