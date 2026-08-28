@@ -15,19 +15,21 @@ boundaries around it.
   outside `AiService.ts` imports it (ESLint-enforced). It owns no persisted turn state.
 - `agent/runtime/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the
   Pi Runtime implementation (`docs/references/agent/agent-runtime.md`). This boundary must not
-  import application protocol types, persistence, React, or Expo modules (ESLint-enforced).
+  import application protocol types, persistence, React, or Expo modules (ESLint-enforced). The one
+  exception is `runtime/pi/piModelResolver.ts`, the single bridge that turns Provider and Model
+  records into a Pi model; lint and the conformance harness draw that line at the same file.
 - `agent/host/` owns the Mobile Agent Host, the only adapter between the Agent Protocol
   (`@/shared/contracts/agent`) and the Runtime contract, plus Agent definition and protocol
   projection policy. The concrete Runtime enters through the composition root's `AgentRuntime`
   registration; the Host never constructs one.
-- `agent/sessionStore/`, `agent/resources/`, `agent/tools/`, and `agent/piAdapter/` respectively own
-  transcript persistence, managed turn resources, executable Agent capabilities, and the mobile
-  provider/model adaptation required to construct Pi.
+- `agent/sessionStore/`, `agent/resources/`, and `agent/tools/` respectively own transcript
+  persistence, managed turn resources, and executable Agent capabilities. The mobile provider/model
+  adaptation required to construct Pi lives with Pi itself, in `agent/runtime/pi/`.
 - `provider/` is the runtime-agnostic connection-fact layer, and nothing more: it resolves
   credential-selection-free connection facts shared by Pi and AI SDK request construction, and
   declares the system model support factory whose language answer comes from the bound Runtime.
   Anything used by only one execution path belongs to that path — AI SDK provider configuration
-  lives in `generation/`, and the Pi language compatibility decision lives in `agent/piAdapter/`.
+  lives in `generation/`, and the Pi language compatibility decision lives in `agent/runtime/pi/`.
 - `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
   discovery used by MCP settings.
 - `devBench/` owns development-only provider fixtures and benchmark request helpers.
