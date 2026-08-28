@@ -33,6 +33,74 @@ A tool that returns managed artifacts already has them in the message: the Host 
 as a `purpose: 'artifact'` file part that draws its own card. A per-tool renderer therefore renders
 the *call*, never the artifact, or the same file appears twice.
 
+## Message Disclosure Contract
+
+Interactive message parts separate their compact presentation, interaction state, and expanded
+content. Tool renderers must compose these layers through the shared `MessagePart` primitives
+instead of creating feature-owned rows or sheets:
+
+| Layer | Owner | Contract |
+| --- | --- | --- |
+| Summary | `MessagePart.Summary` | Renders the leading icon slot, title, status text, tone, running animation, and disclosure chevron. |
+| Interaction | `MessagePart.Tool` | Owns local open/close state and connects the summary press to its detail. Business renderers do not lift this transient state. |
+| Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool, reasoning, and source details share this shell. |
+| Detail content | The part renderer | Supplies the business-specific content inside the shell. This content remains intentionally unconstrained until its visual variants are designed. |
+
+`MessagePart.Summary` standardizes an icon *slot*, not one icon. The slot has one size, position,
+and alignment; the product adapter chooses its `icon` or `imageSource`. An image source takes
+precedence over the icon component, and the wrench is only the fallback when neither is supplied.
+The adapter also derives localized title and status text plus the semantic status tone. It must not
+recreate the shared row geometry.
+
+`MessagePart.Tool` is the required outer composition for generic, MCP, web-search, write-file, and
+Meta tool calls. Those tool renderers remain separate while their detail semantics differ. A common
+summary row is not by itself a reason to merge their business adapters. Merge adapters only when
+they have the same dispatch rules, state interpretation, and detail-content contract.
+
+Reasoning and source groups retain their domain-specific compact triggers, but their expanded views
+must use `MessagePart.Detail`. New interactive message parts may introduce a distinct compact
+trigger only when their semantics cannot be expressed by `MessagePart.Summary`; they must not
+introduce another bottom-sheet shell.
+
+### Detail Content Status
+
+Detail content currently accepts arbitrary React children. Raw text, structured values, source
+links, and media therefore keep their existing feature-owned presentation. This is an explicit
+temporary boundary, not a recommendation to create more one-off layouts.
+
+Do not add a controlled detail-layout API until the text, structured-data, list, media, empty, and
+error variants have approved visual designs. When that work begins, evolve the single
+`MessagePart.Detail` boundary rather than adding parallel shells. The matching implementation TODO
+lives beside `MessagePartDetail` in `packages/ui/src/components/message-part/components/message-part-disclosure.tsx`.
+
+### Renderer Inventory And Visual Acceptance
+
+The visible non-tool part adapters are Text, Reasoning, Code, Compact, Error, Translation, File,
+Source URL/group, and Unknown. Pending is an assistant-row state rather than a persisted part
+adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
+render no separate message-list content.
+
+The tool content adapters are Generic, MCP, Web Search, Write File, Meta Search, Meta Inspect, Meta
+Invoke, and Meta Exec. Painting remains a feature-owned message renderer and is not a tool-detail
+variant. Count renderer families, disclosure layers, and visual states separately; combining them
+into one component total obscures ownership and does not measure duplication.
+
+Use the following Storybook stories as the visual inventory:
+
+- `Message Parts / Tools / States` covers the shared summary slot in running, complete, and error
+  states in light and dark themes.
+- `Messages / Playground / Light` and `Messages / Playground / Dark` exercise the production
+  message-part dispatch, including Generic, MCP, Web Search, Write File, and all Meta tool adapters.
+- `Messages / Painting` separates generating, single-result, multiple-result, failed, and
+  interrupted painting states.
+
+When adding or changing an interactive renderer, add a production-shaped fixture for each relevant
+state, inspect both themes on a device, open the detail, and confirm that the summary uses the shared
+slot and the expanded content uses the shared shell. Follow
+[`UI Development`](../../../../docs/guides/ui-development.md) and
+[`Parallel Device Testing`](../../../../docs/guides/parallel-device-testing.md) for the general visual
+and workspace acceptance rules.
+
 ## Ownership
 
 The module accepts only visible `user` and `assistant` messages. A feature that stores additional

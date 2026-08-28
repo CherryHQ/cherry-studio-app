@@ -1,9 +1,9 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
-import { BottomSheet } from '@cherrystudio/ui/components';
+import { MessagePart } from '@cherrystudio/ui/components';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
@@ -45,17 +45,8 @@ export function SourceGroup({ parts }: SourceGroupProps) {
         <ChevronRightIcon className="size-3.5 text-muted-foreground" />
       </Pressable>
       {isOpen ? (
-        <BottomSheet
-          onClose={() => setIsOpen(false)}
-          open
-          size="large"
-          title={t('chat.sources.title')}
-        >
-          <ScrollView
-            className="flex-1"
-            contentContainerClassName="gap-1 px-4 pb-4"
-            showsVerticalScrollIndicator={false}
-          >
+        <MessagePart.Detail onClose={() => setIsOpen(false)} title={t('chat.sources.title')}>
+          <View className="gap-1">
             {sources.map((source) => (
               <SourceLink
                 key={source.url}
@@ -64,8 +55,8 @@ export function SourceGroup({ parts }: SourceGroupProps) {
                 variant="listItem"
               />
             ))}
-          </ScrollView>
-        </BottomSheet>
+          </View>
+        </MessagePart.Detail>
       ) : null}
     </>
   );
