@@ -2,9 +2,8 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
 
-import type { PiLanguageEndpointType } from '@/backend/ai/provider/languageServingPlan';
-
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
+import type { PiLanguageEndpointType } from '../piLanguageBinding';
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();

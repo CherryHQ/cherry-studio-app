@@ -20,10 +20,10 @@ owns the mobile platform and application-service boundaries around that package.
   transcript persistence, managed turn resources, executable Agent capabilities, and the mobile
   provider/model adaptation required to construct Pi.
 - `provider/` resolves credential-selection-free connection facts shared by Pi and AI SDK request
-  construction, materializes the shared language serving plan and typed compatibility result, owns
-  shared Provider HTTP transport policies, injects Expo environment values and app headers, then
-  builds AI SDK provider configuration from mobile data services. Image execution consumes shared
-  connection facts but bypasses the language plan.
+  construction, owns shared Provider HTTP transport policies and the runtime-agnostic system model
+  support factory, injects Expo environment values and app headers, then builds AI SDK provider
+  configuration from mobile data services. The Pi language compatibility decision lives in
+  `agent/piAdapter/`, behind the Runtime binding.
 - `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
   discovery used by MCP settings.
 - `devBench/` owns development-only provider fixtures and benchmark request helpers.

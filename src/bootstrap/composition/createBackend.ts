@@ -1,6 +1,6 @@
 import {
-  filterModelsSupportedBySystem,
-  isModelSupportedBySystem,
+  createSystemModelSupport,
+  type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
 import {
   createMcpServerMutations,
@@ -47,9 +47,12 @@ export type BackendComposition = {
 
 export function createBackend(
   services: BackendServices,
-  infrastructure: { dbService: DbService },
+  infrastructure: { dbService: DbService; languageServing: LanguageServingSupport },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
+    infrastructure.languageServing,
+  );
   const systemModelSupport: SystemModelSupportFilter = {
     filter: async (candidateModels) =>
       filterModelsSupportedBySystem(candidateModels, await services.provider.list()),

@@ -6,6 +6,7 @@ const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
 const mockAgent = { kind: 'agent' };
+const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
@@ -66,6 +67,7 @@ jest.mock('@/frontend/features/paintings/PaintingActivity/PaintingActivity', () 
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
+    AgentRuntime: mockAgentRuntime,
     AiService: mockAi,
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
@@ -108,7 +110,10 @@ describe('createAppBootstrapRuntime', () => {
       paintingPresenter: expect.any(Object),
       translate: expect.any(Function),
     });
-    expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, { dbService: mockDb });
+    expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      dbService: mockDb,
+      languageServing: mockAgentRuntime,
+    });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);

@@ -3,7 +3,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { FetchFunction } from '@earendil-works/pi-ai';
 
-import type { PiLanguageEndpointType } from '@/backend/ai/provider/languageServingPlan';
+import type { PiLanguageEndpointType } from './piLanguageBinding';
 
 export type SupportedPiApi =
   | 'anthropic-messages'

@@ -3,6 +3,7 @@ import { Uniwind } from 'uniwind';
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
 import { serviceList } from '@/backend/core/application/serviceRegistry';
@@ -58,6 +59,7 @@ export function createAppBootstrapRuntime(
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
+  const languageServing = host.container.get<LanguageServingSupport>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
@@ -70,7 +72,7 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, { dbService });
+  const { backend, dataApiDependencies } = createBackend(services, { dbService, languageServing });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({

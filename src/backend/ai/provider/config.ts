@@ -32,7 +32,6 @@ import {
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
-import { resolveLanguageServingPlan } from '@/backend/ai/provider/languageServingPlan';
 import {
   resolveProviderConnection,
   type ResolvedProviderConnection,
@@ -179,10 +178,7 @@ export async function resolveProviderAiSdkConfig(
   const resolvedConnection =
     options?.resolvedConnection ??
     resolveProviderConnection(provider, model, { resolvedEndpoint: options?.resolvedEndpoint });
-  const languageServingPlan = isImageGenerationModel(model)
-    ? undefined
-    : resolveLanguageServingPlan(provider, model, { resolvedConnection });
-  const connection = languageServingPlan?.connection ?? resolvedConnection;
+  const connection = resolvedConnection;
   const { endpointType, baseUrl } = connection;
 
   const aiSdkProviderId = resolveConnectionAiSdkProviderId(connection);
