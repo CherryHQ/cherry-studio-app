@@ -36,7 +36,10 @@ jest.mock('expo-glass-effect', () => {
 });
 
 type SharedValueStub = { set: (next: number) => void; value: number };
+type TimingCallback = (finished: boolean) => void;
 let mockReducedMotion = false;
+let mockFinishTimingImmediately = true;
+let mockTimingCallbacks: TimingCallback[] = [];
 
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react');
@@ -68,7 +71,13 @@ jest.mock('react-native-reanimated', () => {
     // Land the animation immediately so the portal teardown a close schedules
     // runs within the same `act`.
     withTiming: (value: number, _config: unknown, callback?: (finished: boolean) => void) => {
-      callback?.(true);
+      if (callback) {
+        if (mockFinishTimingImmediately) {
+          callback(true);
+        } else {
+          mockTimingCallbacks.push(callback);
+        }
+      }
       return value;
     },
   };
@@ -92,6 +101,8 @@ describe('MorphMenu', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     mockReducedMotion = false;
+    mockFinishTimingImmediately = true;
+    mockTimingCallbacks = [];
     jest.clearAllMocks();
   });
 
@@ -206,6 +217,34 @@ describe('MorphMenu', () => {
     press(tree, 'menu-camera');
 
     expect(onPress).toHaveBeenCalledTimes(1);
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+  });
+
+  it('stops the closing portal from intercepting touches before its animation finishes', () => {
+    mockFinishTimingImmediately = false;
+    const tree = render();
+
+    press(tree, 'menu-trigger');
+    press(tree, 'menu-camera');
+
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' }).length).toBeGreaterThan(0);
+    expect(tree.root.findByProps({ testID: 'menu-backdrop' }).props.pointerEvents).toBe('none');
+    expect(
+      portal(tree).find((node) => {
+        const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
+
+        return (
+          node.props.pointerEvents === 'none' &&
+          style?.left === anchorRect.x &&
+          style?.top === anchorRect.y
+        );
+      }),
+    ).toBeDefined();
+
+    act(() => {
+      mockTimingCallbacks.splice(0).forEach((callback) => callback(true));
+    });
+
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 

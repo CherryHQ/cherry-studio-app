@@ -11,6 +11,8 @@ import {
 
 export type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<View | null>;
+  /** Stops following keyboard coordinates while another surface owns input. */
+  keyboardTrackingEnabled?: boolean;
   onHeightChange: (height: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }>;
@@ -18,6 +20,7 @@ export type ComposerDockProps = PropsWithChildren<{
 export function ComposerDock({
   children,
   containerRef,
+  keyboardTrackingEnabled = true,
   onHeightChange,
   onLayout,
 }: ComposerDockProps) {
@@ -42,7 +45,10 @@ export function ComposerDock({
         paddingHorizontal: composerHorizontalScreenInset,
       }}
     >
-      <KeyboardStickyView offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}>
+      <KeyboardStickyView
+        enabled={keyboardTrackingEnabled}
+        offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}
+      >
         {children}
       </KeyboardStickyView>
     </View>

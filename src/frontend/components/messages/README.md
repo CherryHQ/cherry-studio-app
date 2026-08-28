@@ -53,7 +53,7 @@ ChatScreen or PaintingComposer
 │               └── UserMessage or AssistantMessage
 │                   └── MessageParts
 │                       └── individual part renderers
-└── Composer.Dock
+└── ComposerDock
 ```
 
 - The screen owns whether the message list and composer exist and passes their measured top and

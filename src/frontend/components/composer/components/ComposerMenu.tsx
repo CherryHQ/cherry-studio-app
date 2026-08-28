@@ -10,8 +10,7 @@ import { View } from 'react-native';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useComposerActions } from '../context/ComposerProvider';
-import { useComposerFieldDismiss } from '../hooks/useComposerFieldDismiss';
+import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   createCameraAttachmentDraft,
@@ -44,70 +43,73 @@ const logger = loggerService.withContext('ComposerMenu');
 export function ComposerMenu({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
-  const dismissField = useComposerFieldDismiss();
+  const { runInputReplacement } = useComposerPresentationActions();
 
   const openCamera = useCallback(async () => {
-    await dismissField();
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    await runInputReplacement(async () => {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
 
-    if (!permission.granted) {
-      return;
-    }
+      if (!permission.granted) {
+        return;
+      }
 
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
 
-    if (result.canceled) {
-      return;
-    }
+      if (result.canceled) {
+        return;
+      }
 
-    addAttachments(result.assets.map((asset) => createCameraAttachmentDraft({ uri: asset.uri })));
-  }, [addAttachments, dismissField]);
+      addAttachments(result.assets.map((asset) => createCameraAttachmentDraft({ uri: asset.uri })));
+    });
+  }, [addAttachments, runInputReplacement]);
   const openPhotoLibrary = useCallback(async () => {
-    await dismissField();
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      mediaTypes: ['images'],
-      orderedSelection: true,
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-      quality: 1,
-      selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
+    await runInputReplacement(async () => {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: true,
+        mediaTypes: ['images'],
+        orderedSelection: true,
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+        quality: 1,
+        selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      addAttachments(
+        result.assets.map((asset) => {
+          const attachment = createPhotoAttachmentDraft({
+            fileName: asset.fileName ?? undefined,
+            id: asset.assetId ?? asset.uri,
+            uri: asset.uri,
+          });
+
+          return {
+            ...attachment,
+            mediaType: asset.mimeType ?? attachment.mediaType,
+            size: asset.fileSize ?? attachment.size,
+          };
+        }),
+      );
     });
-
-    if (result.canceled) {
-      return;
-    }
-
-    addAttachments(
-      result.assets.map((asset) => {
-        const attachment = createPhotoAttachmentDraft({
-          fileName: asset.fileName ?? undefined,
-          id: asset.assetId ?? asset.uri,
-          uri: asset.uri,
-        });
-
-        return {
-          ...attachment,
-          mediaType: asset.mimeType ?? attachment.mediaType,
-          size: asset.fileSize ?? attachment.size,
-        };
-      }),
-    );
-  }, [addAttachments, dismissField]);
+  }, [addAttachments, runInputReplacement]);
   const openDocumentPicker = useCallback(async () => {
-    await dismissField();
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: true,
-      type: '*/*',
+    await runInputReplacement(async () => {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: true,
+        type: '*/*',
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      addAttachments(result.assets.map(createDocumentAttachmentDraft));
     });
-
-    if (result.canceled) {
-      return;
-    }
-
-    addAttachments(result.assets.map(createDocumentAttachmentDraft));
-  }, [addAttachments, dismissField]);
+  }, [addAttachments, runInputReplacement]);
   // A picker that fails to open leaves no trace otherwise: the menu has already
   // closed, so the gesture just looks ignored.
   const present = useCallback((label: string, open: () => Promise<void>) => {

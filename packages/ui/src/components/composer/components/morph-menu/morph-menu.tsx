@@ -268,11 +268,16 @@ function MorphMenuRoot({
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
             onPress={close}
+            pointerEvents={isOpen ? 'auto' : 'none'}
             style={StyleSheet.absoluteFill}
             testID={testID ? `${testID}-backdrop` : undefined}
           />
 
-          <View className="absolute" style={[triggerFootprint, anchor]}>
+          <View
+            className="absolute"
+            pointerEvents={isOpen ? 'box-none' : 'none'}
+            style={[triggerFootprint, anchor]}
+          >
             {menu}
           </View>
         </Portal>

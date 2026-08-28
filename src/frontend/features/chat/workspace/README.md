@@ -8,9 +8,9 @@ and message rendering live in `@/frontend/components/messages`.
 
 - `ChatWorkspace` is exported from `index.ts` for Agent Session screens.
 - Internal workspace pieces should be imported through relative paths inside this module.
-- The docking itself (`Composer.Dock`, `useComposerDockLayout`) is not here — CherryUI owns the
-  reusable keyboard, safe-area, and measurement behavior. This module only connects those values
-  to Chat.
+- The docking itself (`ComposerDock`, `useComposerDockLayout`) is not here — the shared app
+  composer owns input-context transitions, while CherryUI owns reusable keyboard, safe-area, and
+  measurement behavior. This module only connects those values to Chat.
 
 ## Organization
 
