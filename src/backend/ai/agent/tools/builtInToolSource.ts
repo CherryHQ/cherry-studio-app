@@ -16,7 +16,6 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
-import { application } from '@/backend/core/application/Application';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -92,12 +91,25 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
   };
 
+/**
+ * The app services this catalog needs, supplied by whoever constructs it. The
+ * module owns its own storage and registry access, but a lifecycle-managed
+ * service is passed in: the container replaces instances across host
+ * generations, so reaching for one here would capture a stale binding.
+ */
+export type SystemCapabilityServices = {
+  ai: PaintingToolDependencies['ai'];
+  preference: PaintingToolDependencies['preference'];
+  webSearch: WebSearchToolDependencies['webSearch'];
+};
+
 export function createSystemCapabilitySource(
+  services: SystemCapabilityServices,
   overrides: Partial<SystemCapabilitySourceDependencies> = {},
 ): SystemCapabilitySource {
   return {
     async getTools({ model, resources, temporaryCapabilities }) {
-      const deps = resolveDependencies(overrides);
+      const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
         return [];
@@ -237,30 +249,30 @@ async function resolveDeviceAccess(
 }
 
 function resolveDependencies(
+  services: SystemCapabilityServices,
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
-    painting: overrides.painting ?? productionPaintingDependencies(),
+    painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,
     supportsToolCalling: overrides.supportsToolCalling ?? supportsToolCalling,
-    // Resolved per turn rather than captured: the container replaces service
-    // instances across host generations.
-    webSearch: overrides.webSearch ?? application.get('WebSearchService'),
+    webSearch: overrides.webSearch ?? services.webSearch,
   };
 }
 
-function productionPaintingDependencies(): PaintingToolDependencies {
-  const ai = application.get('AiService');
+function productionPaintingDependencies(
+  services: SystemCapabilityServices,
+): PaintingToolDependencies {
   return {
-    ai: { generateImage: (request) => ai.generateImage(request) },
+    ai: services.ai,
     files: {
       createInternalEntry: paintingFileStorage.createInternalEntry,
       discard: paintingFileStorage.discard,
       readDataUrl: paintingFileStorage.readDataUrl,
       resolve: fileContent.resolve,
     },
-    preference: application.get('PreferenceService'),
+    preference: services.preference,
     providerRegistry: providerRegistryService,
   };
 }
