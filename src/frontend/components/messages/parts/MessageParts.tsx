@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import type { MessageListItem } from '../types';
 import { resolveMessageCitationText } from './citations';
 import { MessagePartRenderer } from './MessagePartRenderer';
+import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
   message: MessageListItem;
@@ -27,10 +28,15 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   }
 
   const citationText = resolveMessageCitationText(parts);
+  const sourceParts = parts.filter((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
       {parts.map((part, index) => {
+        if (part.type === 'source-url') {
+          return null;
+        }
+
         const resolvedText = citationText.get(index);
         return (
           <MessagePartRenderer
@@ -42,6 +48,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
           />
         );
       })}
+      {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
     </View>
   );
 }

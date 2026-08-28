@@ -47,6 +47,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
+    Menu: ({ children }: { children: ReactNode }) => children,
     useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });
@@ -68,6 +69,13 @@ jest.mock('@/frontend/components/messages', () => ({
   UserMessage: ({ message }: { message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('UserMessage', { message });
+  },
+}));
+
+jest.mock('@/frontend/components/avatar', () => ({
+  AgentAvatar: (props: object) => {
+    const { createElement } = jest.requireActual('react');
+    return createElement('AgentAvatar', props);
   },
 }));
 

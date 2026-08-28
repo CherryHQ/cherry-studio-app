@@ -29,11 +29,10 @@ import {
 const logger = loggerService.withContext('AgentChatWorkspace');
 const gateLog = loggerService.withContext('AgentChatGate');
 
-function renderChatMessage(message: MessageListItem) {
-  return <ChatMessage message={message} />;
-}
-
 type ChatWorkspaceProps = {
+  assistantAvatarUri?: null | string;
+  assistantModelName?: null | string;
+  assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
@@ -44,6 +43,9 @@ type ChatWorkspaceProps = {
 };
 
 export function ChatWorkspace({
+  assistantAvatarUri,
+  assistantModelName,
+  assistantName,
   bottomAccessoryHeight,
   contentBottomInset,
   keyboardOffset,
@@ -63,6 +65,20 @@ export function ChatWorkspace({
     [live.liveMessages, messages],
   );
   const listMessages = useMemo(() => toAgentMessageListItems(mergedMessages), [mergedMessages]);
+  const assistantPresentation = useMemo(
+    () => ({
+      avatarUri: assistantAvatarUri,
+      modelName: assistantModelName,
+      name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
+    }),
+    [assistantAvatarUri, assistantModelName, assistantName, t],
+  );
+  const renderChatMessage = useCallback(
+    (message: MessageListItem) => (
+      <ChatMessage assistantPresentation={assistantPresentation} message={message} />
+    ),
+    [assistantPresentation],
+  );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>
       live.pendingApprovals.map((approval) => ({
@@ -132,6 +148,7 @@ export function ChatWorkspace({
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
           enteringMessageId={live.enteringUserMessageId}
+          extraData={assistantPresentation}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}

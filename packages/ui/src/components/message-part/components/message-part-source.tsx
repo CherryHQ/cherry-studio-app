@@ -11,10 +11,13 @@ export function MessagePartSource({
   variant = 'card',
   ...props
 }: MessagePartSourceProps) {
-  const containerClassName =
-    variant === 'card'
-      ? 'min-h-11 flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-2 active:opacity-70'
-      : '-mx-2 min-h-10 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-secondary-active active:opacity-80';
+  const isCard = variant === 'card';
+  const containerClassName = isCard
+    ? 'min-h-11 flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-2 active:opacity-70'
+    : '-mx-2 min-h-10 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-secondary-active active:opacity-80';
+  const iconClassName = isCard
+    ? 'size-4 shrink-0 text-foreground'
+    : 'size-4 shrink-0 text-muted-foreground';
 
   return (
     <Pressable
@@ -24,13 +27,17 @@ export function MessagePartSource({
       className={containerClassName}
       onPress={() => onPress(url)}
     >
-      <GlobeIcon className="size-4 shrink-0 text-foreground" />
+      <GlobeIcon className={iconClassName} />
       <View className="min-w-0 flex-1">
-        <Text className="font-medium text-foreground text-base" numberOfLines={1} selectable>
+        <Text
+          className={isCard ? 'font-medium text-foreground text-base' : 'text-foreground text-sm'}
+          numberOfLines={1}
+          selectable
+        >
           {label || url}
         </Text>
       </View>
-      <SquareArrowOutUpRightIcon className="size-4 shrink-0 text-foreground" />
+      <SquareArrowOutUpRightIcon className={iconClassName} />
     </Pressable>
   );
 }

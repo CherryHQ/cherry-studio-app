@@ -26,7 +26,7 @@ const runningTriggerPulseDurationMs = 700;
 
 const toneClassName = {
   danger: 'text-destructive',
-  default: 'text-foreground',
+  default: 'text-muted-foreground',
   warning: 'text-warning',
 } as const satisfies Record<MessagePartTone, string>;
 
@@ -47,10 +47,10 @@ export function MessagePartReasoning({
         testID={`${testID}-trigger`}
       >
         {state === 'running' ? <PrismSweep active /> : null}
-        <Text className="flex-1 text-foreground text-base" numberOfLines={1}>
+        <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={1}>
           {statusText}
         </Text>
-        <ChevronRightIcon className="size-4 text-foreground" />
+        <ChevronRightIcon className="size-3.5 text-muted-foreground" />
       </MessagePartStatus>
       {isOpen ? (
         <MessagePartSheet
@@ -88,22 +88,22 @@ export function MessagePartTool({
       {imageSource ? (
         <Image
           cachePolicy="memory-disk"
-          className="size-5 shrink-0"
+          className="size-4 shrink-0"
           contentFit="contain"
           source={imageSource}
         />
       ) : (
-        <Icon className={`size-5 ${colorClassName}`} />
+        <Icon className={`size-4 ${colorClassName}`} />
       )}
-      <Text className={`min-w-0 flex-1 text-base ${colorClassName}`} numberOfLines={1}>
+      <Text className={`min-w-0 flex-1 text-sm ${colorClassName}`} numberOfLines={1}>
         {title}
       </Text>
       {statusText ? (
-        <Text className={`max-w-[38%] shrink-0 text-base ${colorClassName}`} numberOfLines={1}>
+        <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
           {statusText}
         </Text>
       ) : null}
-      <ChevronRightIcon className={`size-4 shrink-0 ${colorClassName}`} />
+      <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
     </MessagePartStatus>
   );
 

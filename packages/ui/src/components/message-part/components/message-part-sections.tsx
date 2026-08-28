@@ -21,10 +21,10 @@ export function MessagePartValueSection({
       <View className="gap-1">
         {entries.map(([key, entryValue]) => (
           <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-mono text-foreground text-base" selectable>
+            <Text className="w-20 shrink-0 font-mono text-muted-foreground text-sm" selectable>
               {key}
             </Text>
-            <Text className="min-w-0 flex-1 font-mono text-foreground text-base" selectable>
+            <Text className="min-w-0 flex-1 font-mono text-foreground text-sm" selectable>
               {formatMessagePartValue(entryValue, maxLength)}
             </Text>
           </View>
@@ -41,8 +41,8 @@ export function MessagePartTextSection({ title, tone, value }: MessagePartTextSe
       <Text
         className={
           tone === 'danger'
-            ? 'font-mono text-destructive text-base'
-            : 'font-mono text-foreground text-base'
+            ? 'font-mono text-destructive text-sm'
+            : 'font-mono text-foreground text-sm'
         }
         selectable
       >
@@ -54,7 +54,7 @@ export function MessagePartTextSection({ title, tone, value }: MessagePartTextSe
 
 export function MessagePartSectionTitle({ title }: MessagePartSectionTitleProps) {
   return (
-    <Text className="text-foreground text-base" selectable>
+    <Text className="font-medium text-foreground text-sm" selectable>
       {title}
     </Text>
   );
