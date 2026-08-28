@@ -43,12 +43,12 @@ import {
   createAgentInferenceSnapshot,
   type AgentInferenceModelResolver,
 } from './inferenceSnapshot';
-import type { RuntimeAttachmentContents } from './mapping';
 import {
   assertAttachmentRequestSupported,
   resolveManagedInput,
   resolveRuntimeTextAttachments,
 } from './turnAttachments';
+import type { RuntimeAttachmentContents } from './turnRuntimeInput';
 
 const logger = loggerService.withContext('AgentTurnPreparation');
 
