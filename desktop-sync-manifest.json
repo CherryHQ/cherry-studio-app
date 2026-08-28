@@ -2,7 +2,6 @@
   "schemaVersion": 1,
   "repository": "https://github.com/CherryHQ/cherry-studio.git",
   "delegatedManifests": {
-    "ai-runtime": "packages/ai-runtime/desktop-sync-map.json",
     "design": "packages/design-tokens/src/sync-manifest.json"
   },
   "domains": {
@@ -119,23 +118,6 @@
           "keeps": "the whole file semantically",
           "adds": "one `as ImageGenerationMode | undefined` cast on Object.keys(modes)[0]; the app typechecks this package's source rather than its dist, so the widened key type surfaces here and not on desktop. This one gets clobbered on every sync"
         }
-      ]
-    },
-    "ai-runtime": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/main/ai"],
-      "targetPaths": ["src/backend/ai"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": [
-        "src/main/ai/agentSession/**",
-        "src/main/ai/agents/**",
-        "src/main/ai/observability/adapters/claudeCode/**",
-        "src/main/ai/runtime/claudeCode/**",
-        "src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts",
-        "src/main/ai/streamManager/buildCompactReplay.ts",
-        "src/main/ai/tools/adapters/claudeCode/**"
       ]
     },
     "shared-ai": {
