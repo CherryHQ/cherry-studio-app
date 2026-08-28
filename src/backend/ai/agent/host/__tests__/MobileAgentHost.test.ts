@@ -312,7 +312,15 @@ describe('MobileAgentHost', () => {
       sessionId: session.id,
       sessionTitle: '',
     });
-    expect(backgroundReplyTurn.update).toHaveBeenCalled();
+    // One notification per message-changing event (part.add, two text.delta,
+    // part.replace) — a handled event that stops notifying would show up here.
+    expect(backgroundReplyTurn.update).toHaveBeenCalledTimes(4);
+    expect(backgroundReplyTurn.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: submitted.assistantMessageId,
+        parts: [{ id: 'text-1', type: 'text', text: 'Hi', state: 'done' }],
+      }),
+    );
     expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('completed', {
       waitFor: expect.any(Promise),
     });
@@ -1427,6 +1435,11 @@ describe('MobileAgentHost', () => {
     expect(statuses).toEqual(['running', 'awaiting-approval', 'running', 'completed']);
     expect(events.some((event) => event.type === 'approval.resolved')).toBe(true);
     assertJsonRoundTrip(events);
+
+    // Awaiting approval is its own background-reply state, not a content
+    // refresh; resolving it goes back through the ordinary update path.
+    expect(backgroundReplyTurn.awaitApproval).toHaveBeenCalledTimes(1);
+    expect(backgroundReplyTurn.update).toHaveBeenCalled();
 
     const transcript = await store.listMessages(session.id);
     const toolPart = transcript[1]?.parts[0];
