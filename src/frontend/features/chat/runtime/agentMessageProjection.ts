@@ -155,9 +155,13 @@ function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): So
   }));
 }
 
-function toDisplayParts(part: AgentMessagePart): CherryMessagePart[] {
-  const displayPart = toDisplayPart(part);
-  return part.type === 'tool' ? [displayPart, ...toSourceUrlParts(part)] : [displayPart];
+function toDisplayParts(parts: readonly AgentMessagePart[]): CherryMessagePart[] {
+  const displayParts = parts.map(toDisplayPart);
+  // Keep synthetic sources at the tail so tool-result updates cannot shift the
+  // index-based render identity of later persisted parts.
+  const sourceParts = parts.flatMap((part) => (part.type === 'tool' ? toSourceUrlParts(part) : []));
+
+  return [...displayParts, ...sourceParts];
 }
 
 function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
@@ -189,7 +193,7 @@ export function toAgentMessageListItem(message: AgentMessageView): MessageListIt
 
   return {
     createdAt: message.createdAt,
-    data: { parts: message.parts.flatMap(toDisplayParts) },
+    data: { parts: toDisplayParts(message.parts) },
     id: message.id,
     ...(model ? { model } : {}),
     role: message.role,

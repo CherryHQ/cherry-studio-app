@@ -58,15 +58,22 @@ describe('MarkdownText', () => {
       );
       expect(props.markdownStyle).toEqual(
         expect.objectContaining({
-          paragraph: { color: 'foreground', fontSize: 20, lineHeight: 26 },
-          h1: { color: 'foreground', fontSize: 40, lineHeight: 48 },
-          h2: { color: 'foreground', fontSize: 32, lineHeight: 40 },
-          code: {
+          paragraph: expect.objectContaining({
+            color: 'foreground',
+            fontSize: 20,
+            lineHeight: 26,
+            marginBottom: 12,
+            marginTop: 0,
+          }),
+          h1: expect.objectContaining({ color: 'foreground', fontSize: 40, lineHeight: 48 }),
+          h2: expect.objectContaining({ color: 'foreground', fontSize: 32, lineHeight: 40 }),
+          code: expect.objectContaining({
             backgroundColor: 'inline-code',
             borderColor: 'border',
             color: 'inline-code-foreground',
             fontFamily: 'GeistMono-Regular',
-          },
+            fontSize: 18,
+          }),
           codeBlock: expect.objectContaining({
             backgroundColor: 'code-block',
             borderColor: 'border',
@@ -75,15 +82,15 @@ describe('MarkdownText', () => {
             fontSize: 18,
             lineHeight: 28,
           }),
-          math: {
-            backgroundColor: 'background',
+          math: expect.objectContaining({
+            backgroundColor: 'code-block',
             color: 'foreground',
             fontSize: 20,
-            marginBottom: 8,
+            marginBottom: 14,
             marginTop: 4,
-            padding: 4,
+            padding: 12,
             textAlign: 'center',
-          },
+          }),
         }),
       );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);

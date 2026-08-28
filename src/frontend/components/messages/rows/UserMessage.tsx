@@ -29,7 +29,11 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
           ) : null}
           {bodyMessage ? (
             <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
-              <MessageParts message={bodyMessage} renderMode="plainText" />
+              <MessageParts
+                isTextSelectionEnabled={false}
+                message={bodyMessage}
+                renderMode="plainText"
+              />
             </View>
           ) : null}
         </View>

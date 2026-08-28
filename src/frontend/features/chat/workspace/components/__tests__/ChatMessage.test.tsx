@@ -31,8 +31,8 @@ jest.mock('@/frontend/components/avatar', () => {
 jest.mock('@/frontend/components/messages', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    AssistantMessage: ({ children }: { children: ReactNode }) =>
-      createElement('AssistantMessage', null, children),
+    AssistantMessage: ({ children, ...props }: { children: ReactNode }) =>
+      createElement('AssistantMessage', props, children),
     UserMessage: () => createElement('UserMessage', null),
   };
 });
@@ -65,6 +65,16 @@ describe('ChatMessage', () => {
     });
 
     expect(mockMenuItems).toMatchObject([{ disabled: false, id: 'copy' }]);
+    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
+  });
+
+  test('keeps native text selection available when message actions are disabled', () => {
+    act(() => {
+      renderer = create(renderMessage(createMessage('success'), false));
+    });
+
+    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(true);
+    expect(mockMenuItems).toEqual([]);
   });
 
   test('shows the model identity and local creation time for the individual message', () => {
@@ -96,11 +106,11 @@ describe('ChatMessage', () => {
   });
 });
 
-function renderMessage(message: MessageListItem) {
+function renderMessage(message: MessageListItem, isMessageActionsEnabled = true) {
   return (
     <ChatMessage
       assistantPresentation={{ name: 'Assistant' }}
-      isMessageActionsEnabled
+      isMessageActionsEnabled={isMessageActionsEnabled}
       message={message}
     />
   );

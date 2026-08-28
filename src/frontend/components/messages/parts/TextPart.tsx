@@ -10,6 +10,7 @@ import { PartMarkdown } from './PartMarkdown';
 
 type TextPartProps = {
   isStreaming: boolean;
+  isTextSelectionEnabled: boolean;
   part: Extract<CherryMessagePart, { type: 'text' }>;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -44,6 +45,7 @@ function PlainTextWithMentions({ text }: { text: string }) {
 
 export function TextPart({
   isStreaming,
+  isTextSelectionEnabled,
   part,
   renderMode = 'markdown',
   resolvedText,
@@ -52,5 +54,11 @@ export function TextPart({
     return <PlainTextWithMentions text={resolvedText?.plainText ?? part.text} />;
   }
 
-  return <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />;
+  return (
+    <PartMarkdown
+      isStreaming={isStreaming}
+      markdown={resolvedText?.markdown ?? part.text}
+      selectable={isTextSelectionEnabled}
+    />
+  );
 }

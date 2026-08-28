@@ -26,6 +26,7 @@ type ChatMessageProps = {
 };
 
 function renderChatAssistantMessage(
+  isTextSelectionEnabled: boolean,
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
 ) {
@@ -63,7 +64,7 @@ function renderChatAssistantMessage(
           ) : null}
         </View>
       </View>
-      <AssistantMessage message={message}>
+      <AssistantMessage isTextSelectionEnabled={isTextSelectionEnabled} message={message}>
         <AssistantMessageToolbar message={message} />
       </AssistantMessage>
     </View>
@@ -95,6 +96,7 @@ export const ChatMessage = memo(function ChatMessage({
 }: ChatMessageProps) {
   const { t } = useTranslation();
   const { copyAssistantMessage } = useAssistantMessageActions();
+  const isTextSelectionEnabled = !isMessageActionsEnabled;
   const copyText = useMemo(
     () =>
       !isMessageActionsEnabled || message.status === 'pending'
@@ -123,7 +125,7 @@ export const ChatMessage = memo(function ChatMessage({
         {message.role === 'user' ? (
           <UserMessage message={message} />
         ) : (
-          renderChatAssistantMessage(message, assistantPresentation)
+          renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
         )}
       </View>
     </Menu>

@@ -236,6 +236,7 @@ describe('agentMessageProjection', () => {
             toolRef: { source: 'builtin', capabilityId: 'web_search' },
             type: 'tool',
           },
+          { id: 'text-1', state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
         ],
         status: 'success',
       }),
@@ -243,6 +244,7 @@ describe('agentMessageProjection', () => {
 
     expect(item?.data.parts).toEqual([
       expect.objectContaining({ toolName: 'web_search', type: 'dynamic-tool' }),
+      { state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
       {
         sourceId: 'aaaa1111-1',
         title: 'Cherry Studio',

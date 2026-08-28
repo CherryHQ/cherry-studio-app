@@ -80,6 +80,10 @@ export function ChatWorkspace({
     ),
     [assistantPresentation, isAssistantToolbarEnabled],
   );
+  const messageListExtraData = useMemo(
+    () => ({ assistantPresentation, isAssistantToolbarEnabled }),
+    [assistantPresentation, isAssistantToolbarEnabled],
+  );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>
       live.pendingApprovals.map((approval) => ({
@@ -149,7 +153,7 @@ export function ChatWorkspace({
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
           enteringMessageId={live.enteringUserMessageId}
-          extraData={assistantPresentation}
+          extraData={messageListExtraData}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}

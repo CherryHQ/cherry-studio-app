@@ -6,13 +6,22 @@ import { PartMarkdown } from './PartMarkdown';
 
 type TranslationPartProps = {
   isStreaming: boolean;
+  isTextSelectionEnabled: boolean;
   part: Extract<CherryMessagePart, { type: 'data-translation' }>;
 };
 
-export function TranslationPart({ isStreaming, part }: TranslationPartProps) {
+export function TranslationPart({
+  isStreaming,
+  isTextSelectionEnabled,
+  part,
+}: TranslationPartProps) {
   return (
     <MessagePart.Translation>
-      <PartMarkdown isStreaming={isStreaming} markdown={part.data.content} />
+      <PartMarkdown
+        isStreaming={isStreaming}
+        markdown={part.data.content}
+        selectable={isTextSelectionEnabled}
+      />
     </MessagePart.Translation>
   );
 }
