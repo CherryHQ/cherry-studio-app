@@ -68,7 +68,7 @@ describe('AgentService persistence', () => {
     sqlite.close();
   });
 
-  it('creates with default settings and inherits the default-model preference', async () => {
+  it('creates with definition defaults and inherits the default-model preference', async () => {
     insertUserModel(sqlite, 'openai', 'gpt-4');
     preferenceGet.mockResolvedValue('openai::gpt-4');
 
@@ -79,7 +79,6 @@ describe('AgentService persistence', () => {
       instructions: '',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
-      settings: {},
       toolApprovalMode: 'default',
     });
   });
@@ -115,23 +114,6 @@ describe('AgentService persistence', () => {
     ).rejects.toBeDefined();
   });
 
-  it('merges settings updates over the stored blob instead of replacing it', async () => {
-    const agent = await agentService.create({
-      name: 'Researcher',
-      settings: { futureSetting: true, temperature: 0.2 },
-    });
-
-    const updated = await agentService.update(agent.id, {
-      settings: { reasoningEffort: 'high' },
-    });
-
-    expect(updated.settings).toEqual({
-      futureSetting: true,
-      reasoningEffort: 'high',
-      temperature: 0.2,
-    });
-  });
-
   it('advances the Agent version when updates share one wall-clock millisecond', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(1_000);
     const agent = await agentService.create({ name: 'Researcher' });
@@ -141,21 +123,6 @@ describe('AgentService persistence', () => {
 
     expect(Date.parse(firstUpdate.updatedAt)).toBeGreaterThan(Date.parse(agent.updatedAt));
     expect(Date.parse(secondUpdate.updatedAt)).toBeGreaterThan(Date.parse(firstUpdate.updatedAt));
-  });
-
-  it('clears a stored setting when the patch carries the key as explicit undefined', async () => {
-    const agent = await agentService.create({
-      name: 'Researcher',
-      settings: { futureSetting: true, temperature: 0.2 },
-    });
-
-    const updated = await agentService.update(agent.id, {
-      settings: { temperature: undefined },
-    });
-
-    expect(updated.settings).toEqual({ futureSetting: true });
-    // The JSON column must not resurrect the key on a fresh read.
-    expect((await agentService.getById(agent.id)).settings).toEqual({ futureSetting: true });
   });
 
   it('filters by search and persists explicit ordering changes', async () => {

@@ -71,6 +71,13 @@
       "when": 1787834308152,
       "tag": "0009_agent-tool-approval-mode",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787895004379,
+      "tag": "0010_remove-agent-settings",
+      "breakpoints": true
     }
   ]
 }

@@ -15,8 +15,8 @@ describe('AgentSessionMessageService persistence', () => {
     await installTestHost({ DbService: testDb.dbService });
     sqlite
       .prepare(
-        `INSERT INTO agent (id, name, settings, order_key, created_at, updated_at)
-         VALUES ('agent-1', 'Agent', '{}', 'a0', 1, 1)`,
+        `INSERT INTO agent (id, name, order_key, created_at, updated_at)
+         VALUES ('agent-1', 'Agent', 'a0', 1, 1)`,
       )
       .run();
     insertSession(sqlite, 'session-1');

@@ -2,25 +2,6 @@ import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
-/**
- * Inference parameters for an Agent.
- *
- * Loose (passthrough) on purpose: the column is a JSON blob that outlives app
- * versions, so unknown keys written by a newer or older build must survive a
- * read-modify-write round trip instead of being silently dropped. Capability
- * toggles are deliberately absent — capabilities are tools, not agent booleans
- * (docs/references/agent/agent-persistence.md).
- */
-export const AgentSettingsSchema = z.looseObject({
-  temperature: z.number().min(0).max(2).optional(),
-  maxOutputTokens: z.number().int().positive().optional(),
-  reasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
-});
-export type AgentSettings = z.infer<typeof AgentSettingsSchema>;
-
-/** Creation default: every parameter unset means "use the model's defaults". */
-export const DEFAULT_AGENT_SETTINGS: AgentSettings = {};
-
 /** Controls only interactive tool approval; it never grants tool availability or resource access. */
 export const AgentToolApprovalModeSchema = z.enum(['default', 'auto']);
 export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
@@ -47,7 +28,6 @@ export const AgentSchema = z.strictObject({
   modelName: z.string().nullable(),
   name: z.string().min(1),
   orderKey: z.string(),
-  settings: AgentSettingsSchema,
   toolApprovalMode: AgentToolApprovalModeSchema,
   updatedAt: z.iso.datetime(),
 });

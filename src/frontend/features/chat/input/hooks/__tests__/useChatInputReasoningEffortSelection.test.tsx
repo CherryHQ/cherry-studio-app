@@ -1,4 +1,3 @@
-import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -8,13 +7,12 @@ import { useChatInputReasoningEffortSelection } from '../useChatInputReasoningEf
 type Snapshot = ReturnType<typeof useChatInputReasoningEffortSelection>;
 
 describe('useChatInputReasoningEffortSelection', () => {
-  test('shows the Agent effort without turning it into a local override', async () => {
+  test('uses the model default without turning it into a local override', async () => {
     let snapshot: Snapshot | undefined;
 
     await act(async () => {
       create(
         <Harness
-          agentEffort="high"
           availableEfforts={['default', 'low', 'high']}
           onSnapshot={(value) => {
             snapshot = value;
@@ -25,16 +23,15 @@ describe('useChatInputReasoningEffortSelection', () => {
 
     expect(snapshot).toMatchObject({
       isReasoningEffortSelected: false,
-      reasoningEffort: 'high',
+      reasoningEffort: 'default',
     });
   });
 
-  test('keeps a composer selection when the Agent value refreshes', async () => {
+  test('keeps a composer selection across a rerender', async () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;
-    const renderHarness = (agentEffort: ReasoningEffortOption) => (
+    const renderHarness = () => (
       <Harness
-        agentEffort={agentEffort}
         availableEfforts={['default', 'low', 'high']}
         onSnapshot={(value) => {
           snapshot = value;
@@ -43,10 +40,10 @@ describe('useChatInputReasoningEffortSelection', () => {
     );
 
     await act(async () => {
-      renderer = create(renderHarness('low'));
+      renderer = create(renderHarness());
     });
     await act(async () => snapshot?.selectReasoningEffort('high'));
-    await act(async () => renderer?.update(renderHarness('low')));
+    await act(async () => renderer?.update(renderHarness()));
 
     expect(snapshot).toMatchObject({
       isReasoningEffortSelected: true,
@@ -57,9 +54,8 @@ describe('useChatInputReasoningEffortSelection', () => {
   test('clears a composer selection when the Agent changes', async () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;
-    const renderHarness = (agentId: string, agentEffort: ReasoningEffortOption) => (
+    const renderHarness = (agentId: string) => (
       <Harness
-        agentEffort={agentEffort}
         agentId={agentId}
         availableEfforts={['default', 'low', 'high']}
         onSnapshot={(value) => {
@@ -69,30 +65,28 @@ describe('useChatInputReasoningEffortSelection', () => {
     );
 
     await act(async () => {
-      renderer = create(renderHarness('agent-a', 'low'));
+      renderer = create(renderHarness('agent-a'));
     });
     await act(async () => snapshot?.selectReasoningEffort('high'));
-    await act(async () => renderer?.update(renderHarness('agent-b', 'low')));
+    await act(async () => renderer?.update(renderHarness('agent-b')));
 
     expect(snapshot).toMatchObject({
       isReasoningEffortSelected: false,
-      reasoningEffort: 'low',
+      reasoningEffort: 'default',
     });
   });
 });
 
 function Harness({
-  agentEffort,
   agentId,
   availableEfforts,
   onSnapshot,
 }: {
-  agentEffort: ReasoningEffortOption;
   agentId?: string;
   availableEfforts: readonly ChatInputReasoningEffort[];
   onSnapshot: (snapshot: Snapshot) => void;
 }) {
-  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentEffort, agentId);
+  const snapshot = useChatInputReasoningEffortSelection(availableEfforts, agentId);
 
   useEffect(() => onSnapshot(snapshot), [onSnapshot, snapshot]);
   return null;

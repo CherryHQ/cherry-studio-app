@@ -2,8 +2,8 @@
  * Minimal Agent configuration source.
  *
  * Tool bindings and the fixed built-in catalog are resolved separately from the
- * definition. Agent lookup stays limited to id/name/model/instructions,
- * inference options, and the interactive tool-approval preference.
+ * definition. Agent lookup stays limited to id/name/model/instructions and the
+ * interactive tool-approval preference.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
@@ -49,17 +49,7 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         name: agent.name,
         instructions: agent.instructions,
         model: { providerId, modelId },
-        options: {
-          ...(agent.settings.maxOutputTokens !== undefined
-            ? { maxOutputTokens: agent.settings.maxOutputTokens }
-            : {}),
-          ...(agent.settings.reasoningEffort !== undefined
-            ? { reasoningEffort: agent.settings.reasoningEffort }
-            : {}),
-          ...(agent.settings.temperature !== undefined
-            ? { temperature: agent.settings.temperature }
-            : {}),
-        },
+        options: {},
         toolApprovalMode: agent.toolApprovalMode,
       };
     },

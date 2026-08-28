@@ -112,12 +112,11 @@ export function resolveAvailableChatInputReasoningEffort(
 export function getChatInputReasoningEffortSnapshot(
   reasoningEffort: ChatInputReasoningEffort,
   isReasoningEffortSelected: boolean,
-  assistantReasoningEffort?: ReasoningEffortOption,
   availableEfforts: readonly ChatInputReasoningEffort[] = [],
 ): ReasoningEffortOption {
   if (isReasoningEffortSelected) return reasoningEffort;
   return resolveAvailableChatInputReasoningEffort(
-    assistantReasoningEffort ?? CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+    CHAT_INPUT_DEFAULT_REASONING_EFFORT,
     availableEfforts,
   );
 }

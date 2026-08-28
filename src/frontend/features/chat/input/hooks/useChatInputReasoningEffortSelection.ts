@@ -1,4 +1,3 @@
-import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useCallback, useState } from 'react';
 
 import {
@@ -13,12 +12,11 @@ type ReasoningEffortOverride = {
 };
 
 /**
- * Owns the composer's per-turn reasoning selection. Agent configuration is an
- * inherited fallback only and is never mutated by this state.
+ * Owns the composer's per-turn reasoning selection. Without a local override,
+ * the selected model's default reasoning mode is used.
  */
 export function useChatInputReasoningEffortSelection(
   reasoningEfforts: readonly ChatInputReasoningEffort[],
-  agentReasoningEffort: ReasoningEffortOption = CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   agentId?: string | null,
 ) {
   const [override, setOverride] = useState<ReasoningEffortOverride | null>(null);
@@ -42,7 +40,7 @@ export function useChatInputReasoningEffortSelection(
   return {
     isReasoningEffortSelected: activeOverride !== null,
     reasoningEffort: resolveAvailableChatInputReasoningEffort(
-      activeOverride?.reasoningEffort ?? agentReasoningEffort,
+      activeOverride?.reasoningEffort ?? CHAT_INPUT_DEFAULT_REASONING_EFFORT,
       reasoningEfforts,
     ),
     selectReasoningEffort,

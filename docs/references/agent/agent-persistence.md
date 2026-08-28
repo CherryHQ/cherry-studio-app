@@ -38,8 +38,6 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
   or clearing its model can therefore make its existing Sessions unavailable through the public
   Host API even though their rows remain durable. The Data API's static Session and transcript
   reads remain available without resolving an executable Agent definition.
-- Concurrent partial updates to one Agent's settings are last-writer-wins and can lose independently
-  updated fields because the read/merge happens before the serialized write transaction.
 - Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
   `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
 - Agent deletion is soft so historical Sessions retain their definition and avatar reference.
@@ -53,7 +51,7 @@ protocol values or application data ([Agent Runtime](./agent-runtime.md), protoc
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
 composition injects Pi directly into the Host, so there is no implementation choice to persist.
 Cloud and LAN desktop control are separate domains and must not reuse Mobile Agent definitions,
-Sessions, settings, or execution-target values.
+Sessions, or execution-target values.
 `contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
@@ -146,7 +144,7 @@ store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
 Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
 transaction. The composer can therefore use it as a strict row version when reconciling optimistic
-model selection with settings edits and inactive query caches.
+model selection with Agent definition edits and inactive query caches.
 
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568
@@ -165,7 +163,6 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Stable file reference; NULL renders the default avatar |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `settings` | text (json) | NOT NULL | Inference params (temperature, reasoning, max tokens) |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |

@@ -1,6 +1,6 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AgentSettings, AgentToolApprovalMode } from '@/shared/data/types/agent';
+import type { AgentToolApprovalMode } from '@/shared/data/types/agent';
 
 import {
   createUpdateDeleteTimestamps,
@@ -34,8 +34,6 @@ export const agentTable = sqliteTable(
     // Default model: FK to user_model(id) — UniqueModelId "providerId::modelId"
     // Legitimately nullable: NULL = "no model selected yet"
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
-    // JSON blob: inference params; creation supplies the product default
-    settings: text({ mode: 'json' }).$type<AgentSettings>().notNull(),
     // Per-Agent interactive approval preference. This does not enable tools.
     toolApprovalMode: text({ enum: ['default', 'auto'] })
       .$type<AgentToolApprovalMode>()

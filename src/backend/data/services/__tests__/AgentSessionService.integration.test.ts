@@ -64,8 +64,8 @@ describe('AgentSessionService persistence', () => {
 function insertAgent(database: DatabaseSync, id: string): void {
   database
     .prepare(
-      `INSERT INTO agent (id, name, settings, order_key, created_at, updated_at)
-       VALUES (?, ?, '{}', ?, 1, 1)`,
+      `INSERT INTO agent (id, name, order_key, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 1)`,
     )
     .run(id, id, id);
 }

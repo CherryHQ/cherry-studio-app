@@ -130,9 +130,9 @@ function makeSqliteHarness(): StoreHarness {
         .run(MODEL_ID);
       sqlite
         .prepare(
-          'INSERT INTO agent (id, name, settings, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
         )
-        .run(id, 'Agent', '{}', 'a0', Date.now(), Date.now());
+        .run(id, 'Agent', 'a0', Date.now(), Date.now());
       return id;
     },
     raw: sqlite,
