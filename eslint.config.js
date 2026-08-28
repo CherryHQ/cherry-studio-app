@@ -221,6 +221,23 @@ const piIsolation = {
     'Pi is one Runtime implementation. Depend on the AgentRuntime contract; only agent/runtime/pi and agent/piAdapter may name Pi modules or @earendil-works packages.',
 };
 
+// `generation/` is the private implementation of AiService: the AI SDK path
+// for non-conversation work. Only `AiService.ts` may reach into it, so the
+// facade stays the single entry point and provider/ keeps to runtime-agnostic
+// connection facts. Relative specifiers bypass alias globs, hence the bare
+// directory name as well.
+const aiSdkGenerationZoneFiles = [
+  'src/backend/ai/AiService.ts',
+  'src/backend/ai/generation/**/*.{ts,tsx}',
+  'src/backend/ai/__tests__/**/*.{ts,tsx}',
+];
+
+const aiSdkGenerationPrivacy = {
+  group: [...aliasRoots(['backend/ai/generation']), '**/generation', '**/generation/**'],
+  message:
+    'generation/ is AiService private implementation. Depend on AiService instead of its AI SDK internals.',
+};
+
 const frontendLayer = layerPattern(
   ['app', 'backend', 'bootstrap'],
   'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
@@ -352,14 +369,17 @@ module.exports = defineConfig([
   ),
   {
     files: ['src/backend/**/*.{ts,tsx}'],
-    ignores: piZoneFiles,
+    ignores: [...piZoneFiles, ...aiSdkGenerationZoneFiles],
     rules: {
       '@typescript-eslint/no-restricted-imports': [
         'error',
-        { patterns: [backendLayer, piIsolation] },
+        { patterns: [backendLayer, piIsolation, aiSdkGenerationPrivacy] },
       ],
     },
   },
+  // The facade and its own implementation are the inside of the generation
+  // boundary; the Pi ban still applies to them.
+  restrictedImports(aiSdkGenerationZoneFiles, [backendLayer, piIsolation]),
   // The Agent Runtime contract and its FakeRuntime are process-local but must
   // stay independent of the application protocol, persistence, React, and Expo
   // (Runtime dependency rule and conformance item 11 in

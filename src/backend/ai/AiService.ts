@@ -33,11 +33,11 @@ import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { AiSdkGenerator, buildAgentParams } from './generation/aiSdk';
-import type { BuildAgentParamsDependencies } from './generation/aiSdk/params/buildAgentParams';
+import { AiSdkGenerator, buildAgentParams } from './generation';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
-import { listModels as listProviderModels } from './provider/listModels';
-import { VertexAuthClient } from './provider/VertexAuthClient';
+import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
+import { listModels as listProviderModels } from './generation/listModels';
+import { VertexAuthClient } from './generation/VertexAuthClient';
 
 // ── Request types ──────────────────────────────────────────────────
 
