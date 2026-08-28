@@ -1,5 +1,5 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Section, Spinner } from '@cherrystudio/ui/components';
+import { Section, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -8,7 +8,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch } from '@/frontend/components/inlineSearch';
-import { useInfiniteQuery, useQuery } from '@/frontend/data';
+import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -37,11 +37,18 @@ const renderProviderSectionHeader = ({ section }: { section: ProviderListSection
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { alert } = useAlert();
+  const { toast } = useToast();
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
+  const pendingProviderIdsRef = useRef(new Set<string>());
   const [query, setQuery] = useState('');
+  const [pendingProviderStates, setPendingProviderStates] = useState<ReadonlyMap<string, boolean>>(
+    new Map(),
+  );
   const keywords = useMemo(() => toSearchKeywords(query), [query]);
   const isFiltering = keywords.length > 0;
+  const hasPendingProviderUpdate = pendingProviderStates.size > 0;
 
   useFocusEffect(() => {
     if (!hasFocusedOnceRef.current) {
@@ -50,6 +57,50 @@ export default function ProviderSettingsScreen() {
     }
     isNavigatingRef.current = false;
   });
+
+  const updateProviderEnabledMutation = useMutation('PATCH', '/providers/:id', {
+    refresh: ({ args }) =>
+      args
+        ? ['/providers', '/providers/page', `/providers/${args.params.id}`]
+        : ['/providers', '/providers/page'],
+  });
+  const updateProviderEnabled = updateProviderEnabledMutation.trigger;
+  const toggleProviderEnabled = useCallback(
+    (provider: Provider, isEnabled: boolean) => {
+      if (provider.isEnabled === isEnabled || pendingProviderIdsRef.current.has(provider.id)) {
+        return;
+      }
+
+      pendingProviderIdsRef.current.add(provider.id);
+      setPendingProviderStates((current) => new Map(current).set(provider.id, isEnabled));
+
+      void updateProviderEnabled({
+        body: { isEnabled },
+        params: { id: provider.id },
+      })
+        .then(() => {
+          toast.show({
+            label: t(
+              isEnabled ? 'settings.provider.toast.enabled' : 'settings.provider.toast.disabled',
+              { name: provider.name },
+            ),
+            variant: 'success',
+          });
+        })
+        .catch(() => {
+          alert.show({ title: t('settings.provider.toast.toggleFailed') });
+        })
+        .finally(() => {
+          pendingProviderIdsRef.current.delete(provider.id);
+          setPendingProviderStates((current) => {
+            const next = new Map(current);
+            next.delete(provider.id);
+            return next;
+          });
+        });
+    },
+    [alert, t, toast, updateProviderEnabled],
+  );
 
   const providersPageQuery = useInfiniteQuery('/providers/page', {
     limit: PROVIDER_LIST_PAGE_SIZE,
@@ -86,20 +137,36 @@ export default function ProviderSettingsScreen() {
   );
   const providerItems = useMemo<ProviderListRow[]>(
     () =>
-      listedProviders.map((provider) => ({
-        avatar: (
-          <ProviderAvatar
-            presetProviderId={provider.presetProviderId}
-            providerId={provider.id}
-            providerName={provider.name}
-          />
-        ),
-        id: provider.id,
-        isEnabled: provider.isEnabled,
-        name: provider.name,
-        onPress: () => openProvider(provider),
-      })),
-    [listedProviders, openProvider],
+      listedProviders.map((provider) => {
+        const displayedEnabled = pendingProviderStates.get(provider.id) ?? provider.isEnabled;
+
+        return {
+          avatar: (
+            <ProviderAvatar
+              presetProviderId={provider.presetProviderId}
+              providerId={provider.id}
+              providerName={provider.name}
+            />
+          ),
+          enabledSwitch: {
+            accessibilityLabel: t(
+              displayedEnabled
+                ? 'settings.provider.disableProviderNamed'
+                : 'settings.provider.enableProviderNamed',
+              { name: provider.name },
+            ),
+            disabled: pendingProviderStates.has(provider.id),
+            onValueChange: (isEnabled) => toggleProviderEnabled(provider, isEnabled),
+            testID: `provider-enabled-switch-${provider.id}`,
+            value: displayedEnabled,
+          },
+          id: provider.id,
+          isEnabled: provider.isEnabled,
+          name: provider.name,
+          onPress: () => openProvider(provider),
+        };
+      }),
+    [listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
   );
   const providerSections = useMemo<ProviderListSection[]>(() => {
     const enabledProviders = providerItems.filter(({ isEnabled }) => isEnabled);
@@ -132,10 +199,10 @@ export default function ProviderSettingsScreen() {
       : providerItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
         providerSections.length * PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT;
   const loadMoreProviders = useCallback(() => {
-    if (!isFiltering) {
+    if (!isFiltering && !hasPendingProviderUpdate) {
       void loadNextProviderPage();
     }
-  }, [isFiltering, loadNextProviderPage]);
+  }, [hasPendingProviderUpdate, isFiltering, loadNextProviderPage]);
   const listFooter = useMemo(
     () =>
       providersPageQuery.isLoadingMore || (isFiltering && allProvidersQuery.isPending) ? (
