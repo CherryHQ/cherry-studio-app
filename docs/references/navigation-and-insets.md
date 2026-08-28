@@ -49,8 +49,8 @@ For v1, keep `false` as the conservative default. Enable it after navigation str
 
 Before enabling it, verify:
 
-- Normal stack back shows the correct preview.
-- Nested stack back inside drawer scenes targets the correct screen.
+- Normal root-stack and nested feature-stack back shows the correct preview.
+- Returning from a root-pushed feature screen targets the chat surface.
 - Modal / sheet dismissal matches platform expectations.
 - Local `BackHandler` usage does not break system preview.
 - Active generation, unsaved edits, and dangerous confirmations can block or confirm back correctly.
@@ -60,20 +60,19 @@ Before enabling it, verify:
 - `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
-- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `search`,
-  `sessions` (Agent Session management), `settings`, and `paintings` screens.
-- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
-  scenes: `(chat)` (the initial route), home, agents, and drawings. The sidebar is the
-  `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
-  `DrawerActions.openDrawer()` only reaches ancestors, so a screen that needs that hamburger has to
-  be a drawer scene — which is why the drawings history lives at `/drawings` rather than under the
-  root stack's `paintings` group.
-- Settings is a root-level modal (`src/app/settings/`) with its own nested Stack, opened from the
-  sidebar dock. iOS presents it as a page sheet: it covers the drawer instead of replacing it, so
-  dismissing it returns you to the sidebar. Its root screen keeps the native header — transparent
-  and untitled, with a `xmark` toolbar button where sub-screens put back — so the header does not
-  have to appear out of nothing when a sub-screen is pushed, which is what made the bar jump on
-  entry. Use `modal` and not `formSheet` for this shape — see below.
+- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `home`, `library`,
+  `agents`, `drawings`, `onboarding`, `search`, `sessions` (Agent Session management), `settings`,
+  and `paintings` flows. Directories with their own nested Stack hide the root header and draw the
+  feature header inside that nested Stack.
+- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
+  only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
+  and the full-width drawer gesture exists only on the chat surface.
+- The sidebar is the `features/sidebar` compound. Its destinations close the drawer and push
+  `library`, `agents`, `drawings`, `sessions`, or `settings` onto the root Stack. Their root
+  headers lead with back; popping returns to the exact chat route that opened them. A cold-start
+  deep link with no back history replaces to `/` when that leading action is pressed.
+- Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
+  root and child screens use back navigation like every other non-chat feature flow.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
   provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes
@@ -129,7 +128,9 @@ splits on whitespace and every keyword has to appear across an item's searchable
 nothing else. Provider model pull keeps its own local search because its matching rows retain
 management and multi-selection actions that neither shape models.
 
-Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
+Route-level sheets remain appropriate for page-like flows that need navigation history, deep
+linking, or system-back dismissal semantics. No current flow uses one: Settings is a normal
+root-stack card with a nested Stack, while local pickers use the shared component sheet.
 
 Reach for `presentation: 'modal'` rather than `'formSheet'` unless you actually need detents. On iOS both present as a page sheet, but with `formSheet` (`react-native-screens` 4.25) the sheet's content view comes up offset upward by the height of its own first child. A full-height first child — a `flex: 1` scroll view, say — is then entirely off screen, and the page looks empty apart from whatever is absolutely positioned. Fast Refresh re-lays-out the sheet and hides the bug, so verify this kind of screen from a cold start.
 
@@ -173,12 +174,17 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 - If a page must use an edge horizontal gesture, validate on Android that system back remains intact.
 - iOS interactive pop and Android system back are not the same product contract; do not flatten them into one JavaScript gesture.
 
-Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The global drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); on Android this coexists with system edge back and must be re-validated whenever predictive back is enabled.
+Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The
+chat-only drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); non-chat
+routes live above it in the root Stack and cannot expose it. On Android, the chat gesture still
+coexists with system edge back and must be re-validated whenever predictive back is enabled.
 
 ## Acceptance
 
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
+- Only the chat route exposes the sidebar button and full-width drawer gesture; every other route
+  exposes back and returns to chat.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
 - Opening model selection from chat input keeps the picker stable; focusing or clearing in-place
   search changes the sheet size without a competing route, back handler, or inset jump.

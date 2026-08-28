@@ -11,12 +11,11 @@ This module owns Expo Router header adapters used by the app screens.
 ## Organization
 
 - Route layouts declare the root screen's leading behavior with `RouteHeaderProvider`. The root
-  stack uses back, the drawer stack uses the drawer action, and exceptional full-screen routes can
-  explicitly use close.
-- `RouteHeader` automatically changes drawer-stack child screens to back. Business screens declare
-  only titles, right-side actions, and exceptional back interception. The drawer's own swipe is
-  turned off on those screens from `app/(drawer)/_layout.tsx`, so the leading action and the gesture
-  always agree on which screen owns the sidebar.
+  stack uses back and the chat-only drawer stack uses the drawer action.
+- Only chat lives inside `app/(drawer)`, so only `MainHeader` can resolve to the drawer action.
+  Business screens live in the root Stack, declare only titles, right-side actions, and exceptional
+  back interception, and inherit back from the root provider. When no navigation history exists,
+  the default back action replaces to `/`.
 - The right side defaults to empty. Business screens choose `menu`, `icon`, or `label` according to
   the action semantics; multiple secondary actions belong in a menu, while save/done remain direct.
 - `components/HeaderChrome` is the single native placement boundary. Android mounts actions through

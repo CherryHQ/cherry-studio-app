@@ -4,11 +4,8 @@ import { headerScreenOptions } from '@/frontend/components/headers';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-// The drawings history is a drawer scene, so it leads with a hamburger rather
-// than a back button — which means it needs its own nested stack for the native
-// `Stack.Toolbar` its Edit control uses. Creating and viewing paintings stays
-// on the root stack (`/paintings`, `/paintings/[paintingId]`): those are
-// full-screen flows reached from chat too, not drawer destinations.
+// Drawing history is a root-stack flow rather than a drawer scene. It keeps a
+// nested native stack because its Edit control uses `Stack.Toolbar`.
 export default function DrawingsStackLayout() {
   const foregroundColor = useThemeColor('foreground');
 
