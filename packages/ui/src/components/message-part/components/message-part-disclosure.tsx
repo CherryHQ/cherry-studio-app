@@ -15,7 +15,9 @@ import { BottomSheet } from '../../bottom-sheet';
 import { Image } from '../../image';
 import { PrismSweep } from '../../loading';
 import type {
+  MessagePartDetailProps,
   MessagePartReasoningProps,
+  MessagePartSummaryProps,
   MessagePartTone,
   MessagePartToolProps,
 } from '../message-part.types';
@@ -53,14 +55,13 @@ export function MessagePartReasoning({
         <ChevronRightIcon className="size-3.5 text-muted-foreground" />
       </MessagePartStatus>
       {isOpen ? (
-        <MessagePartSheet
-          contentClassName="px-4 pb-4"
+        <MessagePartDetail
           onClose={() => setIsOpen(false)}
           testID={`${testID}-detail`}
           title={detailTitle}
         >
           {children}
-        </MessagePartSheet>
+        </MessagePartDetail>
       ) : null}
     </View>
   );
@@ -68,6 +69,7 @@ export function MessagePartReasoning({
 
 export function MessagePartTool({
   children,
+  detailTitle,
   icon: Icon = WrenchIcon,
   imageSource,
   state,
@@ -77,12 +79,48 @@ export function MessagePartTool({
   title,
 }: MessagePartToolProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <View className="gap-1.5">
+      <MessagePartSummary
+        icon={Icon}
+        imageSource={imageSource}
+        onPress={() => setIsOpen(true)}
+        state={state}
+        statusText={statusText}
+        statusTone={statusTone}
+        testID={testID}
+        title={title}
+      />
+      {isOpen ? (
+        <MessagePartDetail
+          onClose={() => setIsOpen(false)}
+          testID={`${testID}-detail`}
+          title={detailTitle ?? title}
+        >
+          {children}
+        </MessagePartDetail>
+      ) : null}
+    </View>
+  );
+}
+
+export function MessagePartSummary({
+  icon: Icon = WrenchIcon,
+  imageSource,
+  onPress,
+  state,
+  statusText,
+  statusTone = 'default',
+  testID = 'message-part-summary',
+  title,
+}: MessagePartSummaryProps) {
   const colorClassName = toneClassName[statusTone];
   const isPulsing = state === 'running';
   const trigger = (
     <MessagePartStatus
       accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
-      onPress={() => setIsOpen(true)}
+      onPress={onPress}
       testID={`${testID}-trigger`}
     >
       {imageSource ? (
@@ -107,26 +145,12 @@ export function MessagePartTool({
     </MessagePartStatus>
   );
 
-  return (
-    <View className="gap-1.5">
-      {isPulsing ? (
-        <MessagePartRunningPulse testID={`${testID}-running-trigger`}>
-          {trigger}
-        </MessagePartRunningPulse>
-      ) : (
-        trigger
-      )}
-      {isOpen ? (
-        <MessagePartSheet
-          contentClassName="gap-2.5 px-4 pb-4"
-          onClose={() => setIsOpen(false)}
-          testID={`${testID}-detail`}
-          title={title}
-        >
-          <View className="gap-2.5">{children}</View>
-        </MessagePartSheet>
-      ) : null}
-    </View>
+  return isPulsing ? (
+    <MessagePartRunningPulse testID={`${testID}-running-trigger`}>
+      {trigger}
+    </MessagePartRunningPulse>
+  ) : (
+    trigger
   );
 }
 
@@ -160,24 +184,14 @@ function MessagePartRunningPulse({ children, testID }: { children: ReactNode; te
   );
 }
 
-function MessagePartSheet({
-  children,
-  contentClassName,
-  onClose,
-  testID,
-  title,
-}: {
-  children: ReactNode;
-  contentClassName: string;
-  onClose: () => void;
-  testID: string;
-  title: string;
-}) {
+export function MessagePartDetail({ children, onClose, testID, title }: MessagePartDetailProps) {
+  // TODO(message-part-detail): Replace arbitrary children with controlled detail layouts after the
+  // visual designs for text, structured data, lists, and media are finalized.
   return (
     <BottomSheet onClose={onClose} open size="large" testID={testID} title={title}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName={contentClassName}
+        contentContainerClassName="gap-2.5 px-4 pb-4"
         showsVerticalScrollIndicator={false}
       >
         {children}
