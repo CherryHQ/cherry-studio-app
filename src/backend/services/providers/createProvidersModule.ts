@@ -1,4 +1,10 @@
-import type { ProvidersModule } from '@/shared/contracts';
+import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
+
+import {
+  createPresetProviderInput,
+  isRecommendedPresetProvider,
+} from '@/backend/data/services/presetProviders';
+import type { ProviderRegistryUpdateEvent, ProvidersModule } from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
 type ProviderAvatarStorage = {
@@ -9,17 +15,60 @@ type ProviderAvatarStorage = {
 
 export type ProvidersModuleDependencies = {
   avatars: ProviderAvatarStorage;
+  catalog: {
+    isExcluded(providerId: string): boolean;
+    list(): ProtoProviderConfig[];
+  };
   canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
+  providers: {
+    create(input: ReturnType<typeof createPresetProviderInput>): Promise<Provider>;
+    find(providerId: string): Promise<Provider | null>;
+    list(): Promise<Provider[]>;
+  };
+  registryUpdates: {
+    subscribe(listener: (event: ProviderRegistryUpdateEvent) => void): () => void;
+  };
 };
 
 export function createProvidersModule({
   avatars,
+  catalog,
   canRemove,
+  providers,
+  registryUpdates,
 }: ProvidersModuleDependencies): ProvidersModule {
   return {
     canRemove,
+    importPreset: async (providerId) => {
+      const preset = catalog
+        .list()
+        .find((candidate) => candidate.id === providerId && !catalog.isExcluded(candidate.id));
+
+      if (!preset) {
+        throw new Error(`Provider preset '${providerId}' is unavailable`);
+      }
+
+      return (
+        (await providers.find(providerId)) ?? providers.create(createPresetProviderInput(preset))
+      );
+    },
+    listCatalog: async () => {
+      const installedProviderIds = new Set((await providers.list()).map((provider) => provider.id));
+
+      return catalog
+        .list()
+        .filter((provider) => !catalog.isExcluded(provider.id))
+        .map((provider) => ({
+          ...(provider.description ? { description: provider.description } : {}),
+          id: provider.id,
+          isInstalled: installedProviderIds.has(provider.id),
+          isRecommended: isRecommendedPresetProvider(provider.id),
+          name: provider.name,
+        }));
+    },
     persistAvatar: avatars.persist,
     removeAvatar: avatars.remove,
     resolveAvatar: avatars.resolve,
+    subscribeRegistryUpdates: registryUpdates.subscribe.bind(registryUpdates),
   };
 }

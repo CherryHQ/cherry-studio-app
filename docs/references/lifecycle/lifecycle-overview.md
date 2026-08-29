@@ -160,8 +160,9 @@ decorators all take explicit arguments, so `emitDecoratorMetadata` and construct
 are not needed.
 
 `@AppStatePolicy` is mobile-only and purely declarative — `'continue'`,
-`'background-presentation'`, or `'not-applicable'`. It drives no behaviour; it makes "what does this
-service do when the app backgrounds" auditable without reading each implementation.
+`'background-presentation'`, `'foreground-refresh'`, or `'not-applicable'`. It drives no behaviour;
+it makes "what does this service do when the app backgrounds" auditable without reading each
+implementation.
 
 ## Conditional capability
 

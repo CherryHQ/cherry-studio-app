@@ -1,3 +1,5 @@
+import * as z from 'zod';
+
 import modelsRegistry from '../data/models.json';
 import providerModelsRegistry from '../data/provider-models.json';
 import providersRegistry from '../data/providers.json';
@@ -15,9 +17,30 @@ type RegistryBundle = {
   providers: { version: string; providers: ProviderConfig[] };
 };
 
-type ModelsBundle = RegistryBundle['models'];
-type ProviderModelsBundle = RegistryBundle['providerModels'];
+export type ModelsBundle = RegistryBundle['models'];
+export type ProviderModelsBundle = RegistryBundle['providerModels'];
 type ProvidersBundle = RegistryBundle['providers'];
+
+/** Schema lane shared with the desktop-published remote registry. */
+export const REGISTRY_SCHEMA_VERSION = 1;
+
+/** Unsigned remote data may describe models, never provider routing or credentials. */
+export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
+export type RemoteRegistryFileName = (typeof REMOTE_REGISTRY_FILES)[number];
+
+export const CatalogManifestSchema = z.object({
+  files: z.record(z.string(), z.string()),
+  minAppVersion: z.string().min(1),
+  revision: z.number().int().nonnegative(),
+  schemaVersion: z.number().int(),
+  sourceAppVersion: z.string().min(1),
+});
+export type CatalogManifest = z.infer<typeof CatalogManifestSchema>;
+
+export type MobileRemoteRegistrySnapshot = {
+  models: ModelsBundle;
+  providerModels: ProviderModelsBundle;
+};
 
 /**
  * Preset providers whose only authentication path is a provider OAuth login.
@@ -52,6 +75,8 @@ function loadProvidersBundle(): ProvidersBundle {
 }
 
 export class MobileRegistryLoader {
+  private remoteModels: ModelsBundle | null = null;
+  private remoteProviderModels: ProviderModelsBundle | null = null;
   private modelById: Map<string, ModelConfig> | null = null;
   private modelByNormId: Map<string, ModelConfig> | null = null;
   private overrideByKey: Map<string, ProviderModelOverride> | null = null;
@@ -62,7 +87,7 @@ export class MobileRegistryLoader {
   private providerById: Map<string, ProviderConfig> | null = null;
 
   loadModels(): ModelConfig[] {
-    const models = loadModelsBundle().models ?? [];
+    const models = (this.remoteModels ?? loadModelsBundle()).models ?? [];
     this.buildModelIndex(models);
     return models;
   }
@@ -74,7 +99,7 @@ export class MobileRegistryLoader {
   }
 
   loadProviderModels(): ProviderModelOverride[] {
-    const overrides = loadProviderModelsBundle().overrides ?? [];
+    const overrides = (this.remoteProviderModels ?? loadProviderModelsBundle()).overrides ?? [];
     this.buildOverrideIndex(overrides);
     return overrides;
   }
@@ -88,7 +113,7 @@ export class MobileRegistryLoader {
   }
 
   getModelsVersion(): string {
-    return loadModelsBundle().version;
+    return (this.remoteModels ?? loadModelsBundle()).version;
   }
 
   getProvidersVersion(): string {
@@ -96,7 +121,36 @@ export class MobileRegistryLoader {
   }
 
   getProviderModelsVersion(): string {
-    return loadProviderModelsBundle().version;
+    return (this.remoteProviderModels ?? loadProviderModelsBundle()).version;
+  }
+
+  getBundledCatalogVersions(): { models: string; providerModels: string } {
+    return {
+      models: loadModelsBundle().version,
+      providerModels: loadProviderModelsBundle().version,
+    };
+  }
+
+  parseRemoteSnapshot(input: {
+    models: unknown;
+    providerModels: unknown;
+  }): MobileRemoteRegistrySnapshot {
+    return {
+      models: ModelListSchema.parse(input.models),
+      providerModels: ProviderModelListSchema.parse(input.providerModels),
+    };
+  }
+
+  installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
+    this.remoteModels = snapshot.models;
+    this.remoteProviderModels = snapshot.providerModels;
+    this.invalidate();
+  }
+
+  clearRemoteSnapshot(): void {
+    this.remoteModels = null;
+    this.remoteProviderModels = null;
+    this.invalidate();
   }
 
   findModel(modelId: string): ModelConfig | null {
