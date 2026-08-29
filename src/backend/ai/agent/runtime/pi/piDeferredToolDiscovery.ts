@@ -379,7 +379,7 @@ function createSearchOutput(
 ): RuntimeToolResult {
   return {
     value: {
-      matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: matches }] : [],
+      matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: [...matches] }] : [],
       ...(truncated ? { truncated: true } : {}),
     },
     artifacts: [],

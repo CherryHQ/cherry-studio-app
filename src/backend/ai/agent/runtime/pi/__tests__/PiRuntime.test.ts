@@ -777,7 +777,6 @@ describe('PiRuntime mapping', () => {
         toolResults: [toolResult],
         context: {
           messages: [context.prompt, toolMessage, toolResult],
-          model: holder.resolution.model,
           systemPrompt: 'Be helpful.',
           tools: context.options.initialState?.tools,
         },

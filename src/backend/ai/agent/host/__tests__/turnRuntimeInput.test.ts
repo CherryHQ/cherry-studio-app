@@ -202,7 +202,7 @@ describe('Turn Runtime input assembly', () => {
 
   test('replays persisted meta activity without turning it into a capability ref', () => {
     const metaRef = { source: 'meta', name: 'tool_search' } as const;
-    const output = { value: { matchedNamespaces: [] }, artifacts: [] } as const;
+    const output: JsonValue = { value: { matchedNamespaces: [] }, artifacts: [] };
     const message: AgentMessageView = {
       id: 'assistant-message',
       sessionId: 'session-1',
