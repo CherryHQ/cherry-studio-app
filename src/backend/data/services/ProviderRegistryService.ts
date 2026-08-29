@@ -23,7 +23,9 @@ import {
 } from '@cherrystudio/provider-registry';
 import {
   getMobileRegistryLoader,
+  type MobileRemoteRegistrySnapshot,
   type MobileRegistryLoader,
+  type RemoteRegistryFileName,
 } from '@cherrystudio/provider-registry/mobile';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -350,6 +352,28 @@ export class ProviderRegistryService {
 
   getProviderModelsVersion() {
     return this.loader.getProviderModelsVersion();
+  }
+
+  getCatalogVersion(file: RemoteRegistryFileName): string {
+    return file === 'models.json'
+      ? this.loader.getModelsVersion()
+      : this.loader.getProviderModelsVersion();
+  }
+
+  getBundledCatalogVersions() {
+    return this.loader.getBundledCatalogVersions();
+  }
+
+  parseRemoteSnapshot(input: { models: unknown; providerModels: unknown }) {
+    return this.loader.parseRemoteSnapshot(input);
+  }
+
+  installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
+    this.loader.installRemoteSnapshot(snapshot);
+  }
+
+  clearRemoteSnapshot(): void {
+    this.loader.clearRemoteSnapshot();
   }
 
   loadProviders() {

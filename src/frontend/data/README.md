@@ -9,6 +9,7 @@ src/frontend/data/
 ├── PreferenceProvider.tsx  # internal PreferenceClient injection for preference hooks
 ├── CacheService.ts         # frontend memory and persisted UI cache
 ├── QueryProvider.tsx       # React Query client and AppState focus bridge
+├── ProviderRegistryQueryBridge.tsx # invalidates model projections after a registry hot-swap
 ├── queryKeys/              # one file per endpoint family plus the public registry
 ├── hooks/                  # typed Data API, preference, and cache React bindings
 └── __tests__/              # entry-point service/provider tests

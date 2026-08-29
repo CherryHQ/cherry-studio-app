@@ -9,6 +9,7 @@ import {
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
@@ -32,6 +33,7 @@ import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
+import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -103,7 +105,20 @@ export function createBackend(
       remove: deleteProviderAvatar,
       resolve: getProviderAvatarUri,
     },
+    catalog: {
+      isExcluded: (providerId) => providerRegistryService.isProviderExcluded(providerId),
+      list: () => providerRegistryService.loadProviders(),
+    },
     canRemove: canDeleteProvider,
+    providers: {
+      create: (input) => services.provider.create(input),
+      find: async (providerId) => {
+        const row = await services.provider.getRowByProviderId(providerId);
+        return row ? services.provider.getByProviderId(providerId) : null;
+      },
+      list: () => services.provider.list(),
+    },
+    registryUpdates: providerRegistryUpdates,
   });
   const permissions = createPermissionsModule({
     device: {

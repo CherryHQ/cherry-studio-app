@@ -116,6 +116,8 @@ export type AppStatePolicyValue =
   | 'continue'
   /** Owns a native background surface (Live Activity, keep-alive audio). */
   | 'background-presentation'
+  /** Suspends ordinary work and checks for stale remote data on foreground entry. */
+  | 'foreground-refresh'
   /** Holds nothing that background transitions affect. */
   | 'not-applicable';
 

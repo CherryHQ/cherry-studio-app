@@ -212,20 +212,20 @@ export default function ProviderSettingsScreen() {
       ) : null,
     [allProvidersQuery.isPending, isFiltering, providersPageQuery.isLoadingMore, t],
   );
-  const openCreateProvider = useCallback(() => {
-    router.push('/settings/provider/new');
+  const openProviderCatalog = useCallback(() => {
+    router.push('/settings/provider/catalog');
   }, [router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('settings.provider.add.title'),
+        accessibilityLabel: t('settings.provider.catalog.title'),
         icon: PlusIcon,
-        key: 'create-provider',
-        onPress: openCreateProvider,
+        key: 'open-provider-catalog',
+        onPress: openProviderCatalog,
         type: 'icon',
       },
     ],
-    [openCreateProvider, t],
+    [openProviderCatalog, t],
   );
 
   return (

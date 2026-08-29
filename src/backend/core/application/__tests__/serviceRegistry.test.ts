@@ -116,5 +116,6 @@ describe('service registry', () => {
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
     expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
     expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.ProviderRegistryUpdaterService)).toBe('foreground-refresh');
   });
 });

@@ -1,3 +1,5 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -61,6 +63,10 @@ function StatusProbe() {
   return <Text>{`status:${state.status}`}</Text>;
 }
 
+function withQueryClient(children: ReactElement) {
+  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
+}
+
 beforeEach(() => {
   mockHideAsync.mockClear();
 });
@@ -73,11 +79,13 @@ describe('AppBootstrapProvider startup gate', () => {
 
     await act(async () => {
       renderer = create(
-        <AppBootstrapProvider createRuntime={() => runtime}>
-          <AppBootstrapGate>
-            <Text>gate-open</Text>
-          </AppBootstrapGate>
-        </AppBootstrapProvider>,
+        withQueryClient(
+          <AppBootstrapProvider createRuntime={() => runtime}>
+            <AppBootstrapGate>
+              <Text>gate-open</Text>
+            </AppBootstrapGate>
+          </AppBootstrapProvider>,
+        ),
       );
     });
 
@@ -93,11 +101,13 @@ describe('AppBootstrapProvider startup gate', () => {
 
     await act(async () => {
       renderer = create(
-        <AppBootstrapProvider createRuntime={() => runtime}>
-          <AppBootstrapGate>
-            <Text>gate-open</Text>
-          </AppBootstrapGate>
-        </AppBootstrapProvider>,
+        withQueryClient(
+          <AppBootstrapProvider createRuntime={() => runtime}>
+            <AppBootstrapGate>
+              <Text>gate-open</Text>
+            </AppBootstrapGate>
+          </AppBootstrapProvider>,
+        ),
       );
     });
     await flush();
@@ -123,9 +133,11 @@ describe('AppBootstrapProvider startup gate', () => {
 
     await act(async () => {
       renderer = create(
-        <AppBootstrapProvider createRuntime={() => runtime}>
-          <StatusProbe />
-        </AppBootstrapProvider>,
+        withQueryClient(
+          <AppBootstrapProvider createRuntime={() => runtime}>
+            <StatusProbe />
+          </AppBootstrapProvider>,
+        ),
       );
     });
     await flush();
