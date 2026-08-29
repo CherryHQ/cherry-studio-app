@@ -30,12 +30,28 @@ function mcpTool(
   };
 }
 
-function runInternalTool(
+async function runMetaTool(
   _toolCallId: string,
   _signal: AbortSignal | undefined,
-  operation: () => RuntimeToolResult | Promise<RuntimeToolResult>,
+  _activity: unknown,
+  operation: (modelOutputCharacterLimit: number) => {
+    activityOutput: RuntimeToolResult;
+    modelOutput: RuntimeToolResult;
+  },
 ) {
-  return Promise.resolve().then(operation);
+  return operation(Number.MAX_SAFE_INTEGER).modelOutput;
+}
+
+function runMetaToolWithLimit(modelOutputCharacterLimit: number) {
+  return async (
+    _toolCallId: string,
+    _signal: AbortSignal | undefined,
+    _activity: unknown,
+    operation: (limit: number) => {
+      activityOutput: RuntimeToolResult;
+      modelOutput: RuntimeToolResult;
+    },
+  ) => operation(modelOutputCharacterLimit).modelOutput;
 }
 
 function execute(tool: PiAgentTool, input: RuntimeJsonValue, toolCallId = 'call-1') {
@@ -52,7 +68,7 @@ describe('createPiDeferredToolDiscoveryTools', () => {
         value: null,
         artifacts: [],
       }),
-      runInternalTool,
+      runMetaTool,
     );
     const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
@@ -70,7 +86,7 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     const search = createPiDeferredToolDiscoveryTools(
       [mcpTool('mcp_server_1_getHTTPResponse', '')],
       async () => ({ value: null, artifacts: [] }),
-      runInternalTool,
+      runMetaTool,
     ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
 
@@ -83,7 +99,7 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
     const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
     const invokeTarget = jest.fn(async () => targetResult);
-    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runInternalTool);
+    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool);
     const describeTool = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME);
     const callTool = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
     if (!describeTool || !callTool) throw new Error('Missing deferred-discovery tools.');
@@ -114,7 +130,7 @@ describe('createPiDeferredToolDiscoveryTools', () => {
         value: null,
         artifacts: [],
       }),
-      runInternalTool,
+      runMetaTool,
     ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
     if (!search) throw new Error('Missing tool_search.');
 
@@ -124,5 +140,51 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     };
 
     expect(value.matchedNamespaces[0]?.tools).toHaveLength(20);
+  });
+
+  test('bounds oversized declarations with a valid generic signature', async () => {
+    const properties = Object.fromEntries(
+      Array.from({ length: 2_000 }, (_, index) => [
+        `field_${index}`,
+        { type: 'string', description: `Field ${index}` },
+      ]),
+    );
+    const tools = createPiDeferredToolDiscoveryTools(
+      [mcpTool('mcp_server_1_large_tool', 'Large tool', { type: 'object', properties })],
+      async () => ({ value: null, artifacts: [] }),
+      runMetaTool,
+    );
+    const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+    const describe = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME);
+    if (!search || !describe) throw new Error('Missing deferred-discovery tools.');
+
+    const searchResult = (await execute(search, { query: 'large' })).details as RuntimeToolResult;
+    const describeResult = (await execute(describe, { name: 'mcp_server_1_large_tool' }))
+      .details as RuntimeToolResult;
+
+    expect(JSON.stringify(searchResult).length).toBeLessThanOrEqual(32_000);
+    expect(JSON.stringify(searchResult)).toContain('params: Record<string, unknown>');
+    expect(JSON.stringify(describeResult)).toContain('params: Record<string, unknown>');
+  });
+
+  test('fits the complete search envelope within the live model-output budget', async () => {
+    const modelOutputCharacterLimit = 2_500;
+    const catalog = Array.from({ length: 20 }, (_, index) =>
+      mcpTool(
+        `mcp_server_1_tool_${String(index).padStart(2, '0')}`,
+        `Tool ${index} ${'description '.repeat(100)}`,
+      ),
+    );
+    const search = createPiDeferredToolDiscoveryTools(
+      catalog,
+      async () => ({ value: null, artifacts: [] }),
+      runMetaToolWithLimit(modelOutputCharacterLimit),
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+    if (!search) throw new Error('Missing tool_search.');
+
+    const result = (await execute(search, {})).details as RuntimeToolResult;
+
+    expect(JSON.stringify(result).length).toBeLessThanOrEqual(modelOutputCharacterLimit);
+    expect(result.value).toMatchObject({ truncated: true });
   });
 });

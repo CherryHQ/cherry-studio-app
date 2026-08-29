@@ -134,6 +134,8 @@ type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string }
 
+type RuntimeMessageToolRef = RuntimeToolRef | { source: 'meta'; name: string }
+
 type RuntimeArtifact = {
   ref: { kind: 'managed-file'; fileEntryId: string }
   mediaType: string
@@ -250,7 +252,7 @@ type RuntimeMessagePart =
   | {
       type: 'tool-call'
       toolCallId: string
-      toolRef: RuntimeToolRef
+      toolRef: RuntimeMessageToolRef
       providerName: string
       input: RuntimeJsonValue
     }
@@ -299,6 +301,12 @@ durable Turns. A split-turn cursor reconstructs the retained suffix from the Hos
 Turn so tool calls and results remain paired after restart. Summary calls reuse the current model
 transport, credentials, timeout, and cancellation signal, and their usage is added to the active
 Turn.
+
+Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
+Runtime re-estimates the live assistant request and tool-result messages together with system,
+tool-schema, attachment, output, and safety reserves. A continuation that no longer fits stops as
+`context_window_exceeded` before another provider request. Model-only catalog results additionally
+consume this live headroom while they are produced.
 
 ### Tools
 
@@ -418,7 +426,7 @@ type RuntimeOutputPart =
       id: string
       type: 'tool'
       toolCallId: string
-      toolRef: RuntimeToolRef
+      toolRef: RuntimeMessageToolRef
       providerName: string
       displayName: string
       state:
@@ -481,6 +489,11 @@ type RuntimeError = {
   }
 }
 ```
+
+`RuntimeToolRef` identifies an executable application capability and remains the only ref accepted
+by execution requests and approvals. `RuntimeMessageToolRef` additionally admits `meta` activity
+such as catalog search: it is observable and replayable model-loop history, but it is not executable
+through the Host capability catalog and never appears in an inference tool snapshot.
 
 Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. Before a
 terminal event, the Runtime settles every live tool part: denial includes the canonical denial

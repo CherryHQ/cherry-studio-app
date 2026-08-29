@@ -141,25 +141,34 @@ fallback action with broader access.
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
 The Pi binding exposes system capabilities directly and translates eligible MCP tools into three
-Pi-private catalog tools for the active model loop:
+catalog tools for the active model loop:
 
 - `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
-  including TypeScript call signatures.
-- `tool_describe` returns the complete description and signature for one exact discovered name.
+  including bounded TypeScript call signatures. Its complete serialized model result is capped by
+  both a 32,000-character ceiling and the live model-context headroom; a result that drops matches
+  reports `truncated: true`.
+- `tool_describe` returns one description and signature bounded by the same live headroom.
 - `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
   `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
 
 These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
-and `tool_describe` stay inside Pi's active loop and do not become Runtime output parts or persisted
-Agent tool calls. An invalid `tool_call` target returns an internal error to the model without
-claiming that an application tool ran. Once a target resolves, the Runtime emits and persists only
-that target's stable ref, catalog alias, display snapshot, parameters, approval, and result. When
-reconstructing Pi history, the Pi message adapter wraps a persisted MCP target call back into
-`tool_call({ name, params })`.
+and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives
+the bounded descriptions and signatures, while Runtime output and persistence keep only compact
+queries, target names, counts, truncation status, and errors. An invalid `tool_call` target or a
+dispatch rejected before execution emits failed meta activity containing only the requested target
+name; unresolved parameters are neither persisted nor displayed. Once a target resolves, the
+Runtime emits and persists only that target's stable MCP ref, catalog alias, display snapshot,
+actual parameters, approval, and result; it does not emit a duplicate `tool_call` wrapper. When
+reconstructing Pi history, the Pi message adapter replays meta activity under its own model-loop
+name and wraps a persisted MCP target call back into `tool_call({ name, params })`.
+
+Before every continuation of the model loop, Pi recalculates the complete live context including
+the assistant tool request and every tool result. If the next request cannot retain the output and
+safety reserves, the Runtime stops with `context_window_exceeded` before contacting the provider.
 
 MCP tools with effective `deny` policy are absent from discovery. The Host still materializes and
 freezes the complete executable MCP catalog before the Runtime starts. The inference snapshot
-records that real catalog, not Pi's private binding tools. Deferred tool discovery reduces model
+records that real catalog, not Pi's meta catalog tools. Deferred tool discovery reduces model
 tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
 Configuration changes therefore still affect the next turn only.
 

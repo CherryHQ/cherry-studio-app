@@ -56,18 +56,31 @@ export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
 export const AgentTemporaryCapabilitySchema = z.enum(['web-search', 'image-generation']);
 export type AgentTemporaryCapability = z.infer<typeof AgentTemporaryCapabilitySchema>;
 
+const AgentBuiltInToolRefSchema = z.strictObject({
+  source: z.literal('builtin'),
+  capabilityId: z.string().min(1),
+});
+const AgentMcpToolRefSchema = z.strictObject({
+  source: z.literal('mcp'),
+  serverId: z.string().min(1),
+  rawToolName: z.string().min(1),
+});
+
 export const AgentToolRefSchema = z.discriminatedUnion('source', [
-  z.strictObject({
-    source: z.literal('builtin'),
-    capabilityId: z.string().min(1),
-  }),
-  z.strictObject({
-    source: z.literal('mcp'),
-    serverId: z.string().min(1),
-    rawToolName: z.string().min(1),
-  }),
+  AgentBuiltInToolRefSchema,
+  AgentMcpToolRefSchema,
 ]);
 export type AgentToolRef = z.infer<typeof AgentToolRefSchema>;
+
+export const AgentMessageToolRefSchema = z.discriminatedUnion('source', [
+  AgentBuiltInToolRefSchema,
+  AgentMcpToolRefSchema,
+  z.strictObject({
+    source: z.literal('meta'),
+    name: z.string().min(1),
+  }),
+]);
+export type AgentMessageToolRef = z.infer<typeof AgentMessageToolRefSchema>;
 
 const AgentInferenceToolSnapshotSchema = z.strictObject({
   ref: AgentToolRefSchema,
@@ -271,7 +284,7 @@ const AgentToolMessagePartSchema = z
     id: z.string().min(1),
     type: z.literal('tool'),
     toolCallId: z.string(),
-    toolRef: AgentToolRefSchema,
+    toolRef: AgentMessageToolRefSchema,
     providerName: z.string(),
     displayName: z.string(),
     state: z.enum([

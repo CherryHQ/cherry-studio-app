@@ -8,11 +8,18 @@ export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
 export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `MCP tools are available through a searchable catalog.
 Use tool_search to discover relevant tools and their TypeScript signatures.
-Use tool_describe when you need the complete signature for one exact tool name.
+Narrow the search query when the result reports truncated: true.
+Use tool_describe when you need the bounded signature for one exact tool name.
 Use tool_call with an exact discovered name and params matching that signature.
 Do not guess tool names or parameters.`;
 
 const SEARCH_RESULT_LIMIT = 20;
+const SEARCH_RESULT_CHARACTER_LIMIT = 32_000;
+const TOOL_DECLARATION_CHARACTER_LIMIT = 8_000;
+const TOOL_DESCRIPTION_CHARACTER_LIMIT = 1_000;
+const MIN_TOOL_DECLARATION_CHARACTER_LIMIT = 512;
+const DISPATCH_ACTIVITY_NAME_CHARACTER_LIMIT = 256;
+const TOOL_SCHEMA_RENDER_CHARACTER_LIMIT = 32_000;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const MAX_NESTING_DEPTH = 5;
@@ -54,21 +61,33 @@ type InvokeTargetTool = (
   signal: AbortSignal | undefined,
 ) => Promise<RuntimeToolResult>;
 
-type RunInternalTool = (
+export type PiMetaToolActivity = {
+  displayName: string;
+  input: RuntimeJsonValue;
+  providerName: string;
+};
+
+export type PiMetaToolExecution = {
+  activityOutput: RuntimeToolResult;
+  modelOutput: RuntimeToolResult;
+};
+
+type RunMetaTool = (
   toolCallId: string,
   signal: AbortSignal | undefined,
-  operation: () => RuntimeToolResult | Promise<RuntimeToolResult>,
+  activity: PiMetaToolActivity,
+  operation: (modelOutputCharacterLimit: number) => PiMetaToolExecution,
 ) => Promise<RuntimeToolResult>;
 
 /**
- * Project one frozen MCP catalog into three Pi-private model tools for deferred
- * discovery. Search and describe never cross the Runtime boundary; only the
- * resolved target re-enters Runtime approval, cancellation, and event handling.
+ * Project one frozen MCP catalog into three Pi model-loop tools for deferred
+ * discovery. Search and describe publish compact meta activity while the full
+ * result stays in Pi; a resolved target re-enters Runtime tool execution.
  */
 export function createPiDeferredToolDiscoveryTools(
   tools: readonly RuntimeTool[],
   invokeTarget: InvokeTargetTool,
-  runInternalTool: RunInternalTool,
+  runMetaTool: RunMetaTool,
 ): PiAgentTool[] {
   const catalog = new Map(tools.map((tool) => [tool.providerName, tool]));
 
@@ -76,26 +95,41 @@ export function createPiDeferredToolDiscoveryTools(
     name: PI_TOOL_SEARCH_TOOL_NAME,
     label: 'Search tools',
     description:
-      'Search the available MCP tool catalog. Returns matching names, descriptions, and TypeScript signatures for use with tool_call.',
+      'Search the available MCP tool catalog. Returns matching names, descriptions, and TypeScript signatures for use with tool_call. Narrow the query when the result is truncated.',
     parameters: SEARCH_INPUT_SCHEMA as never,
     async execute(toolCallId, params, signal) {
-      const output = await runInternalTool(toolCallId, signal, () => {
-        const query = isRecord(params) && typeof params.query === 'string' ? params.query : '';
-        const matches = rankTools([...catalog.values()], query)
-          .slice(0, SEARCH_RESULT_LIMIT)
-          .map((tool) => ({
-            name: tool.providerName,
-            description: tool.description,
-            declaration: toolToTypeScript(tool),
-          }));
+      const input = (isRecord(params) ? params : {}) as RuntimeJsonValue;
+      const output = await runMetaTool(
+        toolCallId,
+        signal,
+        { displayName: 'Search tools', input, providerName: PI_TOOL_SEARCH_TOOL_NAME },
+        (modelOutputCharacterLimit) => {
+          const query = isRecord(params) && typeof params.query === 'string' ? params.query : '';
+          const searchResult = boundedSearchResult(
+            rankTools([...catalog.values()], query),
+            modelOutputCharacterLimit,
+          );
 
-        return {
-          value: {
-            matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: matches }] : [],
-          },
-          artifacts: [],
-        };
-      });
+          return {
+            modelOutput: searchResult.output,
+            activityOutput: {
+              value: {
+                matchedNamespaces:
+                  searchResult.matches.length > 0
+                    ? [
+                        {
+                          namespace: 'mcp',
+                          tools: searchResult.matches.map(({ name }) => ({ name })),
+                        },
+                      ]
+                    : [],
+                ...(searchResult.truncated ? { truncated: true } : {}),
+              },
+              artifacts: [],
+            },
+          };
+        },
+      );
       return toPiToolResult(output);
     },
   };
@@ -103,22 +137,27 @@ export function createPiDeferredToolDiscoveryTools(
   const describeTool: PiAgentTool = {
     name: PI_TOOL_DESCRIBE_TOOL_NAME,
     label: 'Describe tool',
-    description: 'Get the complete description and TypeScript signature for one discovered tool.',
+    description: 'Get the bounded description and TypeScript signature for one discovered tool.',
     parameters: DESCRIBE_INPUT_SCHEMA as never,
     async execute(toolCallId, params, signal) {
-      const output = await runInternalTool(toolCallId, signal, () => {
-        const name = isRecord(params) && typeof params.name === 'string' ? params.name : '';
-        const tool = catalog.get(name);
-        if (!tool) throw toolNotFoundError(name);
-        return {
-          value: {
-            name: tool.providerName,
-            description: tool.description,
-            declaration: toolToTypeScript(tool),
-          },
-          artifacts: [],
-        };
-      });
+      const input = (isRecord(params) ? params : {}) as RuntimeJsonValue;
+      const output = await runMetaTool(
+        toolCallId,
+        signal,
+        { displayName: 'Describe tool', input, providerName: PI_TOOL_DESCRIBE_TOOL_NAME },
+        (modelOutputCharacterLimit) => {
+          const name = isRecord(params) && typeof params.name === 'string' ? params.name : '';
+          const tool = catalog.get(name);
+          if (!tool) throw toolNotFoundError(name);
+          return {
+            modelOutput: boundedDescribeResult(tool, modelOutputCharacterLimit),
+            activityOutput: {
+              value: { name: tool.providerName },
+              artifacts: [],
+            },
+          };
+        },
+      );
       return toPiToolResult(output);
     },
   };
@@ -136,9 +175,18 @@ export function createPiDeferredToolDiscoveryTools(
       const tool = catalog.get(name);
       const output = tool
         ? await invokeTarget(tool, targetInput, toolCallId, signal)
-        : await runInternalTool(toolCallId, signal, () => {
-            throw toolNotFoundError(name);
-          });
+        : await runMetaTool(
+            toolCallId,
+            signal,
+            {
+              displayName: 'Call tool',
+              input: createPiDispatchActivityInput(input),
+              providerName: PI_TOOL_CALL_TOOL_NAME,
+            },
+            () => {
+              throw toolNotFoundError(name);
+            },
+          );
       return toPiToolResult(output);
     },
   };
@@ -208,9 +256,19 @@ function tokenize(value: string): string[] {
   return normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
-function toolToTypeScript(tool: RuntimeTool): string {
+function toolToTypeScript(
+  tool: RuntimeTool,
+  maxCharacters = TOOL_DECLARATION_CHARACTER_LIMIT,
+): string {
+  const characterLimit = Math.max(
+    MIN_TOOL_DECLARATION_CHARACTER_LIMIT,
+    Math.min(TOOL_DECLARATION_CHARACTER_LIMIT, maxCharacters),
+  );
   const description = docText(tool.description || tool.displayName || tool.providerName);
-  return [
+  if (!isJsonWithinCharacterLimit(tool.inputSchema, TOOL_SCHEMA_RENDER_CHARACTER_LIMIT)) {
+    return genericToolDeclaration(tool, description, characterLimit);
+  }
+  const declaration = [
     'type McpToolResult = { value: unknown; artifacts: unknown[] }',
     `/** ${description} */`,
     'declare function tool_call(input: {',
@@ -218,6 +276,156 @@ function toolToTypeScript(tool: RuntimeTool): string {
     `  params: ${jsonSchemaToTypeScript(tool.inputSchema)};`,
     '}): Promise<McpToolResult>;',
   ].join('\n');
+  if (declaration.length <= characterLimit) return declaration;
+  return genericToolDeclaration(tool, description, characterLimit);
+}
+
+function genericToolDeclaration(
+  tool: RuntimeTool,
+  description: string,
+  characterLimit: number,
+): string {
+  const fallback = [
+    'type McpToolResult = { value: unknown; artifacts: unknown[] }',
+    `/** ${description} Parameter schema omitted because it exceeds the catalog limit. */`,
+    'declare function tool_call(input: {',
+    `  name: ${JSON.stringify(tool.providerName)};`,
+    '  params: Record<string, unknown>;',
+    '}): Promise<McpToolResult>;',
+  ].join('\n');
+  if (fallback.length <= characterLimit) return fallback;
+  return [
+    'type McpToolResult = { value: unknown; artifacts: unknown[] }',
+    'declare function tool_call(input: {',
+    `  name: ${JSON.stringify(tool.providerName)};`,
+    '  params: Record<string, unknown>;',
+    '}): Promise<McpToolResult>;',
+  ].join('\n');
+}
+
+function isJsonWithinCharacterLimit(value: RuntimeJsonValue, characterLimit: number): boolean {
+  let remaining = characterLimit;
+  const visit = (item: RuntimeJsonValue, depth: number): boolean => {
+    if (item === null || typeof item === 'boolean' || typeof item === 'number') {
+      remaining -= String(item).length;
+      return remaining >= 0;
+    }
+    if (typeof item === 'string') {
+      remaining -= item.length + 2;
+      return remaining >= 0;
+    }
+    if (depth >= MAX_NESTING_DEPTH) return true;
+    if (Array.isArray(item)) {
+      remaining -= item.length + 2;
+      return remaining >= 0 && item.every((child) => visit(child, depth + 1));
+    }
+
+    const entries = Object.entries(item);
+    remaining -= entries.length + 2;
+    return (
+      remaining >= 0 &&
+      entries.every(([key, child]) => {
+        remaining -= key.length + 2;
+        return remaining >= 0 && visit(child, depth + 1);
+      })
+    );
+  };
+
+  return visit(value, 0);
+}
+
+type SearchMatch = { name: string; description: string; declaration: string };
+
+function boundedSearchResult(
+  tools: readonly RuntimeTool[],
+  requestedCharacterLimit: number,
+): { matches: SearchMatch[]; output: RuntimeToolResult; truncated: boolean } {
+  const characterLimit = Math.max(
+    0,
+    Math.min(SEARCH_RESULT_CHARACTER_LIMIT, Math.floor(requestedCharacterLimit)),
+  );
+  const matches: SearchMatch[] = [];
+  let truncated = tools.length > SEARCH_RESULT_LIMIT;
+  for (const tool of tools) {
+    if (matches.length >= SEARCH_RESULT_LIMIT) break;
+    const match = {
+      name: tool.providerName,
+      description: boundedText(
+        tool.description,
+        Math.min(TOOL_DESCRIPTION_CHARACTER_LIMIT, Math.max(1, Math.floor(characterLimit / 4))),
+      ),
+      declaration: toolToTypeScript(tool, Math.max(1, Math.floor(characterLimit / 2))),
+    };
+    const candidate = createSearchOutput([...matches, match], true);
+    if (JSON.stringify(candidate).length > characterLimit) {
+      truncated = true;
+      continue;
+    }
+    matches.push(match);
+  }
+
+  let output = createSearchOutput(matches, truncated);
+  while (matches.length > 0 && JSON.stringify(output).length > characterLimit) {
+    matches.pop();
+    truncated = true;
+    output = createSearchOutput(matches, truncated);
+  }
+  return { matches, output, truncated };
+}
+
+function createSearchOutput(
+  matches: readonly SearchMatch[],
+  truncated: boolean,
+): RuntimeToolResult {
+  return {
+    value: {
+      matchedNamespaces: matches.length > 0 ? [{ namespace: 'mcp', tools: matches }] : [],
+      ...(truncated ? { truncated: true } : {}),
+    },
+    artifacts: [],
+  };
+}
+
+function boundedDescribeResult(
+  tool: RuntimeTool,
+  requestedCharacterLimit: number,
+): RuntimeToolResult {
+  const characterLimit = Math.max(0, Math.floor(requestedCharacterLimit));
+  const description = boundedText(tool.description, TOOL_DESCRIPTION_CHARACTER_LIMIT);
+  const output: RuntimeToolResult = {
+    value: {
+      name: tool.providerName,
+      description,
+      declaration: toolToTypeScript(tool),
+    },
+    artifacts: [],
+  };
+  if (JSON.stringify(output).length <= characterLimit) return output;
+
+  const fallback: RuntimeToolResult = {
+    value: {
+      name: tool.providerName,
+      description: boundedText(description, 256),
+      declaration: toolToTypeScript(tool, Math.max(1, characterLimit - 512)),
+    },
+    artifacts: [],
+  };
+  if (JSON.stringify(fallback).length <= characterLimit) return fallback;
+
+  return {
+    value: {
+      name: tool.providerName,
+      description: '',
+      declaration: genericToolDeclaration(tool, '', MIN_TOOL_DECLARATION_CHARACTER_LIMIT),
+    },
+    artifacts: [],
+  };
+}
+
+export function createPiDispatchActivityInput(input: unknown): RuntimeJsonValue {
+  return isRecord(input) && typeof input.name === 'string'
+    ? { name: boundedText(input.name, DISPATCH_ACTIVITY_NAME_CHARACTER_LIMIT) }
+    : {};
 }
 
 function jsonSchemaToTypeScript(schema: unknown, depth = 0): string {
@@ -340,7 +548,14 @@ function literalType(value: unknown): string {
 }
 
 function docText(value: string): string {
-  return value.trim().split('\n')[0]?.replaceAll('*/', '*\\/') ?? '';
+  return boundedText(
+    value.trim().split('\n')[0]?.replaceAll('*/', '*\\/') ?? '',
+    TOOL_DESCRIPTION_CHARACTER_LIMIT,
+  );
+}
+
+function boundedText(value: string, maxCharacters: number): string {
+  return value.length > maxCharacters ? `${value.slice(0, maxCharacters - 1)}…` : value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

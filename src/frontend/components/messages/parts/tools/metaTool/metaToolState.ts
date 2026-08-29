@@ -2,7 +2,13 @@ import type { useTranslation } from 'react-i18next';
 
 import { getToolName, isRecord, type ToolMessagePart } from '../toolPartState';
 
-export type MetaToolName = 'tool_search' | 'tool_inspect' | 'tool_invoke' | 'tool_exec';
+export type MetaToolName =
+  | 'tool_search'
+  | 'tool_inspect'
+  | 'tool_describe'
+  | 'tool_invoke'
+  | 'tool_call'
+  | 'tool_exec';
 
 export type ToolSearchNamespace = {
   namespace: string;
@@ -11,6 +17,8 @@ export type ToolSearchNamespace = {
 
 export const META_TOOL_TITLE_KEYS = {
   tool_exec: 'chat.metaToolExec.title',
+  tool_call: 'chat.metaToolInvoke.title',
+  tool_describe: 'chat.metaToolInspect.title',
   tool_inspect: 'chat.metaToolInspect.title',
   tool_invoke: 'chat.metaToolInvoke.title',
   tool_search: 'chat.metaToolSearch.title',
@@ -18,7 +26,9 @@ export const META_TOOL_TITLE_KEYS = {
 
 const META_TOOL_NAMES = new Set<MetaToolName>([
   'tool_search',
+  'tool_describe',
   'tool_inspect',
+  'tool_call',
   'tool_invoke',
   'tool_exec',
 ]);
@@ -41,7 +51,12 @@ export function getMetaToolStatusText(
         : t('chat.metaToolSearch.resultCount', { count: toolCount });
     }
 
-    if (toolName === 'tool_inspect' || toolName === 'tool_invoke') {
+    if (
+      toolName === 'tool_describe' ||
+      toolName === 'tool_inspect' ||
+      toolName === 'tool_call' ||
+      toolName === 'tool_invoke'
+    ) {
       const input = isRecord(part.input) ? part.input : undefined;
       const targetToolName = typeof input?.name === 'string' ? input.name.trim() : '';
       return targetToolName || undefined;

@@ -200,6 +200,52 @@ describe('Turn Runtime input assembly', () => {
     ]);
   });
 
+  test('replays persisted meta activity without turning it into a capability ref', () => {
+    const metaRef = { source: 'meta', name: 'tool_search' } as const;
+    const output = { value: { matchedNamespaces: [] }, artifacts: [] } as const;
+    const message: AgentMessageView = {
+      id: 'assistant-message',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      parts: [
+        {
+          id: 'tool-search-part',
+          type: 'tool',
+          toolCallId: 'tool-search-call',
+          toolRef: metaRef,
+          providerName: 'tool_search',
+          displayName: 'Search tools',
+          state: 'output-available',
+          input: { query: 'calendar' },
+          output,
+        },
+      ],
+      usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+
+    expect(toRuntimeHistory([message])[0]?.messages[0]?.parts).toEqual([
+      {
+        type: 'tool-call',
+        toolCallId: 'tool-search-call',
+        toolRef: metaRef,
+        providerName: 'tool_search',
+        input: { query: 'calendar' },
+      },
+      {
+        type: 'tool-result',
+        toolCallId: 'tool-search-call',
+        output,
+        isError: false,
+      },
+    ]);
+  });
+
   test('projects persisted assistant usage for Pi context estimation', () => {
     const message: AgentMessageView = {
       id: 'assistant-message',

@@ -51,6 +51,8 @@ type AgentToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string }
 
+type AgentMessageToolRef = AgentToolRef | { source: 'meta'; name: string }
+
 type AgentSessionView = {
   id: string
   agentId: string
@@ -137,7 +139,7 @@ type AgentMessagePart =
       id: string
       type: 'tool'
       toolCallId: string
-      toolRef: AgentToolRef
+      toolRef: AgentMessageToolRef
       providerName: string
       displayName: string
       state:
@@ -220,11 +222,15 @@ part as untrusted user text with the authoritative name, media type, and `[compl
 resource ledger. Historical text read failures are omitted without rewriting the persisted file
 part. Extracted text never enters protocol values or persistence.
 
-`toolRef` is the stable application identity used by configuration, approval, persistence, and
-audit. `providerName` is the deterministic function alias used in model history; `displayName` is a
-snapshot for historical UI. For every persisted tool call, `output-available`, `denied`, `error`, and
-`interrupted` are terminal states with a paired normalized `RuntimeToolResult` JSON projection. No
-finalized message contains a tool left in `input-available`, `awaiting-approval`, or `running`.
+`AgentToolRef` is the stable application capability identity used by configuration, approval,
+snapshots, persistence, and audit. A message-only `meta` ref records a user-visible model-loop
+activity such as catalog search without claiming that an application capability ran; meta refs
+cannot enter configuration, approval, or inference snapshots. `providerName` is the deterministic
+function alias used in model history; `displayName` is a snapshot for historical UI. For every
+persisted tool call, `output-available`, `denied`, `error`, and `interrupted` are terminal states with
+a paired normalized `RuntimeToolResult` JSON projection. No finalized message contains a tool left
+in `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch persists only its
+requested target name and normalized error, never unresolved parameters.
 
 `usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
 the turn and commits the final value together with the terminal message state, so

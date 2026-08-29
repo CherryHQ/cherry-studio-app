@@ -20,6 +20,7 @@ import type { PiConversation, PiHistoryTurn } from './modelMessages';
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
 const PI_ESTIMATED_IMAGE_TOKENS = 1_200;
 
+export const PI_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
 export const PI_IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const PI_CONTEXT_SAFETY_MARGIN_TOKENS = 1_024;
 export const PI_COMPACTION_SETTINGS: CompactionSettings = {
@@ -90,38 +91,79 @@ type ProjectedContext = {
 
 type PiToolSchema = Pick<PiAgentTool, 'name' | 'description' | 'parameters'>;
 
-export function estimatePiContextFixedCosts(input: {
-  conversation: PiConversation;
+function estimatePiNonMessageContextCosts(input: {
+  imageMessages: readonly AgentMessage[];
   outputReserveTokens: number;
+  systemPrompt: string;
   tools: readonly PiToolSchema[];
-}): PiContextFixedCosts {
-  const systemInstructionsTokens = estimateTextTokens(input.conversation.systemPrompt);
-  const currentInputTokens = estimateContextTokens([input.conversation.prompt]).tokens;
+}) {
+  const systemInstructionsTokens = estimateTextTokens(input.systemPrompt);
   const toolSchemaTokens = input.tools.reduce(
     (total, tool) => total + estimateTextTokens(serializeTool(tool)),
     0,
   );
-  const imageCount =
-    input.conversation.history.reduce((total, message) => total + countImages(message), 0) +
-    countImages(input.conversation.prompt);
+  const imageCount = input.imageMessages.reduce(
+    (total, message) => total + countImages(message),
+    0,
+  );
   const attachmentTokens =
     imageCount * Math.max(0, PI_IMAGE_CONTEXT_TOKEN_RESERVE - PI_ESTIMATED_IMAGE_TOKENS);
   const outputReserveTokens = Math.max(0, input.outputReserveTokens);
   const safetyMarginTokens = PI_CONTEXT_SAFETY_MARGIN_TOKENS;
   return {
     systemInstructionsTokens,
-    currentInputTokens,
     toolSchemaTokens,
     attachmentTokens,
     outputReserveTokens,
     safetyMarginTokens,
     totalTokens:
       systemInstructionsTokens +
-      currentInputTokens +
       toolSchemaTokens +
       attachmentTokens +
       outputReserveTokens +
       safetyMarginTokens,
+  };
+}
+
+export function estimatePiMessagesTokens(messages: AgentMessage[]): number {
+  return estimateContextTokens(messages).tokens;
+}
+
+/** Remaining room for model-loop messages before another provider request. */
+export function estimatePiLoopContextHeadroomTokens(input: {
+  contextWindow: number;
+  messages: AgentMessage[];
+  outputReserveTokens: number;
+  systemPrompt: string;
+  tools: readonly PiToolSchema[];
+}): number {
+  const messageTokens = estimatePiMessagesTokens(input.messages);
+  const fixedCosts = estimatePiNonMessageContextCosts({
+    imageMessages: input.messages,
+    outputReserveTokens: input.outputReserveTokens,
+    systemPrompt: input.systemPrompt,
+    tools: input.tools,
+  });
+
+  return input.contextWindow - messageTokens - fixedCosts.totalTokens;
+}
+
+export function estimatePiContextFixedCosts(input: {
+  conversation: PiConversation;
+  outputReserveTokens: number;
+  tools: readonly PiToolSchema[];
+}): PiContextFixedCosts {
+  const currentInputTokens = estimateContextTokens([input.conversation.prompt]).tokens;
+  const fixedCosts = estimatePiNonMessageContextCosts({
+    imageMessages: [...input.conversation.history, input.conversation.prompt],
+    outputReserveTokens: input.outputReserveTokens,
+    systemPrompt: input.conversation.systemPrompt,
+    tools: input.tools,
+  });
+  return {
+    ...fixedCosts,
+    currentInputTokens,
+    totalTokens: fixedCosts.totalTokens + currentInputTokens,
   };
 }
 
@@ -415,7 +457,7 @@ function safeJsonStringify(value: unknown): string {
 }
 
 function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return Math.ceil(text.length / PI_ESTIMATED_CHARACTERS_PER_TOKEN);
 }
 
 function countImages(message: AgentMessage): number {

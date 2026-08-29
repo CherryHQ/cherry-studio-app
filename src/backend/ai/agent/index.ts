@@ -17,6 +17,8 @@ export type {
   RuntimeInputModality,
   RuntimeInputPart,
   RuntimeJsonValue,
+  RuntimeMessageToolRef,
+  RuntimeMetaToolRef,
   RuntimeMessage,
   RuntimeMessagePart,
   RuntimeModel,

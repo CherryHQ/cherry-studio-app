@@ -123,7 +123,14 @@ function getToolActivityLabel(part: ToolPart, t: BackgroundReplyTranslate): stri
 }
 
 function getToolName(part: ToolPart): string {
-  return part.toolRef.source === 'builtin' ? part.toolRef.capabilityId : part.toolRef.rawToolName;
+  switch (part.toolRef.source) {
+    case 'builtin':
+      return part.toolRef.capabilityId;
+    case 'mcp':
+      return part.toolRef.rawToolName;
+    case 'meta':
+      return part.toolRef.name;
+  }
 }
 
 function isActiveToolPart(part: ToolPart): boolean {

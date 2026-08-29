@@ -4,14 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { isRecord, type ToolMessagePart } from '../toolPartState';
 import { MetaToolFrame } from './MetaToolFrame';
 
-export function MetaToolInspectPart({ part }: { part: ToolMessagePart }) {
+type MetaToolInspectPartProps = {
+  part: ToolMessagePart;
+  toolName: 'tool_describe' | 'tool_inspect';
+};
+
+export function MetaToolInspectPart({ part, toolName }: MetaToolInspectPartProps) {
   const { t } = useTranslation();
   const input = isRecord(part.input) ? part.input : undefined;
 
   return (
-    <MetaToolFrame part={part} toolName="tool_inspect">
+    <MetaToolFrame part={part} toolName={toolName}>
       <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
-      {part.state === 'output-available' ? (
+      {toolName === 'tool_inspect' && part.state === 'output-available' ? (
         <MessagePart.TextSection
           title={t('chat.tool.jsdoc')}
           value={formatMessagePartValue(part.output)}
