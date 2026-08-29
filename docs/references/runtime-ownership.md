@@ -126,6 +126,9 @@ resource-deletion contract.
 
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
+- `ProviderRegistryUpdaterService` owns dual-source model-metadata refresh, validated cache
+  activation, foreground checks, request cancellation, and fallback to bundled data; the host stops
+  it.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   the host initializes and stops it.
 - Frontend cache owns subscriptions and MMKV-backed UI persistence.

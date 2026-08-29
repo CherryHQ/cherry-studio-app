@@ -12,6 +12,7 @@ import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -42,6 +43,7 @@ export const services = {
   BackgroundActivityManager,
   BackgroundReplyRuntime,
   WebSearchService,
+  ProviderRegistryUpdaterService,
   McpRuntimeService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,

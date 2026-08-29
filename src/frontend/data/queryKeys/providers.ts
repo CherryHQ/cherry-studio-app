@@ -4,6 +4,7 @@
 export const providerQueryKeys = {
   apiKeys: (providerId: string) => [`/providers/${providerId}/api-keys`] as const,
   authConfig: (providerId: string) => [`/providers/${providerId}/auth`] as const,
+  catalog: () => ['providers', 'catalog'] as const,
   detail: (providerId: string) => [`/providers/${providerId}`] as const,
   list: () => ['/providers'] as const,
   page: () => ['/providers/page'] as const,
