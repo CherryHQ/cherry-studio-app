@@ -30,7 +30,6 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
       testID="tool-part"
       title={title}
     >
-      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
       {part.state === 'output-error' ? (
         <MessagePart.TextSection
@@ -44,6 +43,7 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
           {t('chat.tool.noOutput')}
         </Text>
       ) : null}
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
     </MessagePart.Tool>
   );
 }

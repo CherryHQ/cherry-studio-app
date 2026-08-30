@@ -46,11 +46,6 @@ export function McpToolPart({ part }: McpToolPartProps) {
       testID="mcp-tool-part"
       title={title}
     >
-      <MessagePart.ValueSection
-        maxLength={MAX_ARG_VALUE_LENGTH}
-        title={t('chat.mcpTool.arguments')}
-        value={part.input}
-      />
       {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
       {readCherryMeta(part)?.settledByApp ? (
         <MessagePart.TextSection
@@ -65,6 +60,11 @@ export function McpToolPart({ part }: McpToolPartProps) {
           value={part.errorText}
         />
       ) : null}
+      <MessagePart.ValueSection
+        maxLength={MAX_ARG_VALUE_LENGTH}
+        title={t('chat.mcpTool.arguments')}
+        value={part.input}
+      />
     </MessagePart.Tool>
   );
 }
@@ -72,21 +72,11 @@ export function McpToolPart({ part }: McpToolPartProps) {
 function McpOutputSection({ output }: { output: unknown }) {
   const { t } = useTranslation();
   const normalized = normalizeMcpResult(output);
-  const images = normalized.content.filter(
-    (content): content is Extract<NormalizedMcpContent, { kind: 'image' }> =>
-      content.kind === 'image',
-  );
-  const fullText = normalized.content
-    .map((content) => formatNormalizedContent(content, t))
-    .filter((text): text is string => text !== undefined)
-    .join('\n\n');
-  const text = truncateText(
-    fullText,
-    MAX_OUTPUT_TEXT_LENGTH,
-    t('chat.mcpTool.truncated', { count: fullText.length }),
+  const visibleContent = normalized.content.filter(
+    (content) => content.kind !== 'text' || content.text.trim().length > 0,
   );
 
-  if (!text.trim() && images.length === 0) {
+  if (visibleContent.length === 0) {
     return (
       <Text className="text-foreground text-base italic" selectable>
         {t('chat.mcpTool.noOutput')}
@@ -95,33 +85,60 @@ function McpOutputSection({ output }: { output: unknown }) {
   }
 
   return (
-    <View className="gap-1">
-      {text ? (
-        <MessagePart.TextSection title={t('chat.mcpTool.response')} value={text} />
-      ) : (
-        <MessagePart.SectionTitle title={t('chat.mcpTool.response')} />
-      )}
-      {images.map((image) => (
-        <Image
-          className="h-44 w-full rounded-md"
-          contentFit="contain"
-          key={createImageKey(image.data)}
-          source={`data:${image.mimeType};base64,${image.data}`}
-        />
+    <View className="gap-2">
+      <MessagePart.SectionTitle title={t('chat.mcpTool.response')} />
+      {visibleContent.map((content, index) => (
+        <McpContentItem content={content} key={createContentKey(content, index)} t={t} />
       ))}
     </View>
   );
 }
 
+function McpContentItem({
+  content,
+  t,
+}: {
+  content: NormalizedMcpContent;
+  t: ReturnType<typeof useTranslation>['t'];
+}) {
+  if (content.kind === 'image') {
+    return (
+      <Image
+        className="h-44 w-full rounded-md"
+        contentFit="contain"
+        source={`data:${content.mimeType};base64,${content.data}`}
+      />
+    );
+  }
+
+  const text = formatNormalizedContent(content, t);
+  const value = truncateText(
+    text,
+    MAX_OUTPUT_TEXT_LENGTH,
+    t('chat.mcpTool.truncated', { count: text.length }),
+  );
+
+  return (
+    <Text
+      className={
+        content.kind === 'text' && isJsonText(content.text)
+          ? 'font-mono text-foreground text-sm'
+          : 'text-base text-foreground'
+      }
+      selectable
+    >
+      {value}
+    </Text>
+  );
+}
+
 function formatNormalizedContent(
-  content: NormalizedMcpContent,
+  content: Exclude<NormalizedMcpContent, { kind: 'image' }>,
   t: ReturnType<typeof useTranslation>['t'],
-): string | undefined {
+): string {
   switch (content.kind) {
     case 'text':
       return formatOutputText(content.text);
-    case 'image':
-      return undefined;
     case 'audio':
       return t('chat.mcpTool.audioUnavailable', { mimeType: content.mimeType });
     case 'resource':
@@ -173,12 +190,19 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
 
 function assertHandled(_part: never): void {}
 
-function createImageKey(data: string) {
+function createContentKey(content: NormalizedMcpContent, index: number) {
+  const value = content.kind === 'image' ? content.data : formatContentKeyValue(content);
   let hash = 0;
-  for (let index = 0; index < data.length; index += 1) {
-    hash = (hash * 31 + data.charCodeAt(index)) | 0;
+  for (let characterIndex = 0; characterIndex < value.length; characterIndex += 1) {
+    hash = (hash * 31 + value.charCodeAt(characterIndex)) | 0;
   }
-  return `mcp-image-${hash}`;
+  return `mcp-content-${index}-${hash}`;
+}
+
+function formatContentKeyValue(content: Exclude<NormalizedMcpContent, { kind: 'image' }>) {
+  if (content.kind === 'text') return content.text;
+  if (content.kind === 'audio') return content.mimeType;
+  return `${content.mimeType}-${content.uri}`;
 }
 
 function formatOutputText(text: string) {
@@ -186,6 +210,15 @@ function formatOutputText(text: string) {
     return JSON.stringify(JSON.parse(text), null, 2);
   } catch {
     return text;
+  }
+}
+
+function isJsonText(text: string) {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
   }
 }
 

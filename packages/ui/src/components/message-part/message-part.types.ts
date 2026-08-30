@@ -3,6 +3,8 @@ import type { ImageSource } from 'expo-image';
 import type { ComponentType, ReactNode } from 'react';
 import type { PressableProps, ViewProps } from 'react-native';
 
+import type { BottomSheetSizes } from '../bottom-sheet';
+
 export type MessagePartRootProps = ViewProps & {
   children: ReactNode;
 };
@@ -25,6 +27,7 @@ export type MessagePartReasoningProps = {
 export type MessagePartDetailProps = {
   children: ReactNode;
   onClose: () => void;
+  sizes?: BottomSheetSizes;
   testID?: string;
   title: string;
 };
@@ -84,6 +87,7 @@ export type MessagePartSectionTitleProps = {
 export type MessagePartTextSectionProps = MessagePartSectionTitleProps & {
   tone?: Extract<MessagePartTone, 'danger'>;
   value: string;
+  variant?: 'body' | 'code';
 };
 
 export type MessagePartValueSectionProps = MessagePartSectionTitleProps & {

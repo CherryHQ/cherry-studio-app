@@ -112,6 +112,7 @@ describe('MessagePart', () => {
     act(() => renderer!.root.findByProps({ testID: 'search-trigger' }).props.onPress());
 
     const detail = renderer!.root.findByProps({ testID: 'search-detail' });
+    expect(detail.props.sizes).toEqual(['compact', 'large']);
     expect(renderer!.root.findByProps({ children: 'Result details' })).toBeDefined();
 
     act(() => detail.props.onClose());
@@ -135,6 +136,7 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ active: true })).toBeDefined();
     expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    expect(renderer!.root.findByProps({ testID: 'thinking-detail' }).props.size).toBe('large');
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
   });
 

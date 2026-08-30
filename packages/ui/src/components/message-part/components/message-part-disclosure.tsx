@@ -25,6 +25,7 @@ import { MessagePartStatus } from './message-part-status';
 
 const runningTriggerOpacity = 0.55;
 const runningTriggerPulseDurationMs = 700;
+const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
 
 const toneClassName = {
   danger: 'text-destructive',
@@ -95,6 +96,7 @@ export function MessagePartTool({
       {isOpen ? (
         <MessagePartDetail
           onClose={() => setIsOpen(false)}
+          sizes={TOOL_DETAIL_SIZES}
           testID={`${testID}-detail`}
           title={detailTitle ?? title}
         >
@@ -184,11 +186,19 @@ function MessagePartRunningPulse({ children, testID }: { children: ReactNode; te
   );
 }
 
-export function MessagePartDetail({ children, onClose, testID, title }: MessagePartDetailProps) {
+export function MessagePartDetail({
+  children,
+  onClose,
+  sizes,
+  testID,
+  title,
+}: MessagePartDetailProps) {
   // TODO(message-part-detail): Replace arbitrary children with controlled detail layouts after the
   // visual designs for text, structured data, lists, and media are finalized.
+  const heightProps = sizes ? { sizes } : ({ size: 'large' } as const);
+
   return (
-    <BottomSheet onClose={onClose} open size="large" testID={testID} title={title}>
+    <BottomSheet {...heightProps} onClose={onClose} open testID={testID} title={title}>
       <ScrollView
         className="flex-1"
         contentContainerClassName="gap-2.5 px-4 pb-4"

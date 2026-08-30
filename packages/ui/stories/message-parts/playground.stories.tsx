@@ -217,8 +217,8 @@ export const AllStates: Story = {
                 testID="playground-tool-complete"
                 title="Calculator"
               >
-                <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
                 <MessagePart.TextSection title="Output" value="42" />
+                <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
               </MessagePart.Tool>
               <MessagePart.Tool
                 state="complete"
@@ -226,13 +226,13 @@ export const AllStates: Story = {
                 testID="playground-mcp-tool"
                 title="Filesystem: read_file"
               >
-                <MessagePart.ValueSection
-                  title="Arguments"
-                  value={{ path: '/Documents/project-plan.md' }}
-                />
                 <MessagePart.TextSection
                   title="Response"
                   value="# Project Plan\n\n- Define scope\n- Review sources"
+                />
+                <MessagePart.ValueSection
+                  title="Arguments"
+                  value={{ path: '/Documents/project-plan.md' }}
                 />
               </MessagePart.Tool>
               <MessagePart.Tool

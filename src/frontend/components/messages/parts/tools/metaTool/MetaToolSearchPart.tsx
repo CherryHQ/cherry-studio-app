@@ -14,7 +14,6 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
 
   return (
     <MetaToolFrame part={part} toolName="tool_search">
-      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' && namespaces.length === 0 ? (
         <Text className="text-foreground text-base italic" selectable>
           {t('chat.metaToolSearch.noResults')}
@@ -22,13 +21,18 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
       ) : null}
       {namespaces.map((group) => (
         <View className="gap-1.5" key={group.namespace}>
-          <Text className="text-foreground text-base" selectable>
+          <Text className="font-medium text-muted-foreground text-sm" selectable>
             {group.namespace} ({group.tools.length})
           </Text>
-          <View className="flex-row flex-wrap gap-1">
+          <View className="gap-1">
             {group.tools.map((tool) => (
-              <View className="max-w-full" key={`${group.namespace}-${tool.name}`}>
-                <Text className="font-mono text-foreground text-base" numberOfLines={1} selectable>
+              <View
+                className="flex-row items-center gap-2 py-0.5"
+                key={`${group.namespace}-${tool.name}`}
+                testID="meta-tool-search-result"
+              >
+                <View className="size-1.5 shrink-0 rounded-full bg-muted-foreground" />
+                <Text className="min-w-0 flex-1 font-mono text-foreground text-sm" selectable>
                   {tool.name}
                 </Text>
               </View>
@@ -43,6 +47,7 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
           value={part.errorText}
         />
       ) : null}
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
     </MetaToolFrame>
   );
 }

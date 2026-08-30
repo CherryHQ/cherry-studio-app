@@ -16,14 +16,6 @@ export function MetaToolExecPart({ part }: { part: ToolMessagePart }) {
 
   return (
     <MetaToolFrame part={part} toolName="tool_exec">
-      {code ? (
-        <MessagePart.TextSection title={t('chat.tool.code')} value={code} />
-      ) : (
-        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
-      )}
-      {logs.length > 0 ? (
-        <MessagePart.TextSection title={t('chat.tool.logs')} value={logs.join('\n')} />
-      ) : null}
       {typeof output?.error === 'string' ? (
         <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={output.error} />
       ) : null}
@@ -31,12 +23,14 @@ export function MetaToolExecPart({ part }: { part: ToolMessagePart }) {
         <MessagePart.TextSection
           title={t('chat.tool.result')}
           value={formatMessagePartValue(output.result)}
+          variant="code"
         />
       ) : null}
       {part.state === 'output-available' && !output ? (
         <MessagePart.TextSection
           title={t('chat.tool.response')}
           value={formatMessagePartValue(part.output)}
+          variant="code"
         />
       ) : null}
       {part.state === 'output-error' ? (
@@ -44,6 +38,18 @@ export function MetaToolExecPart({ part }: { part: ToolMessagePart }) {
           tone="danger"
           title={t('chat.tool.error')}
           value={part.errorText}
+        />
+      ) : null}
+      {code ? (
+        <MessagePart.TextSection title={t('chat.tool.code')} value={code} variant="code" />
+      ) : (
+        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
+      )}
+      {logs.length > 0 ? (
+        <MessagePart.TextSection
+          title={t('chat.tool.logs')}
+          value={logs.join('\n')}
+          variant="code"
         />
       ) : null}
     </MetaToolFrame>
