@@ -84,6 +84,9 @@ let mockScrollButtonProps:
       onPress: () => void;
     }
   | undefined;
+function getMockScrollButtonProps() {
+  return mockScrollButtonProps;
+}
 let mockFontSizeStep = 0;
 type MockAnimatedReaction = {
   prepare: () => unknown;
@@ -434,7 +437,7 @@ describe('MessageList anchoring and manual scrolling', () => {
       accessibilityLabel: 'translated:chat.message.scrollToBottom',
       gap: 5,
     });
-    expect(mockScrollButtonProps?.bottomAccessoryHeight).toBeUndefined();
+    expect(getMockScrollButtonProps()?.bottomAccessoryHeight).toBeUndefined();
     // 入场 id 落地后刻意不清：待发消息落库常在飞行中途，清掉会让行当帧跳回落点。
     expect(mockSlideInFlight?.activeMessageId.get()).toBe('user-1');
   });

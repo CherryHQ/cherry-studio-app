@@ -36,6 +36,12 @@ and no persisted Runtime binding. Agent configuration, Session configuration, mo
 tool availability never select another engine or execution device. Cloud and LAN desktop control
 use a separate execution domain.
 
+Future remote Agent support does not add a `RemoteRuntime` to this process. A mobile-owned HTTP
+adapter sits at the application-protocol boundary, converts the remote service's wire data into
+Agent Protocol values, and leaves execution and authoritative Session state on the remote service.
+The local Host never turns remote tools into `RuntimeTool` callbacks. See
+[Agent Architecture](./README.md#approved-future-remote-boundary).
+
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. Mobile Skill persistence and prompt projection are not implemented;
 their target boundary is documented separately and does not change the current Runtime input. The
@@ -127,6 +133,8 @@ type RuntimeJsonValue =
 type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string }
+
+type RuntimeMessageToolRef = RuntimeToolRef | { source: 'meta'; name: string }
 
 type RuntimeArtifact = {
   ref: { kind: 'managed-file'; fileEntryId: string }
@@ -244,7 +252,7 @@ type RuntimeMessagePart =
   | {
       type: 'tool-call'
       toolCallId: string
-      toolRef: RuntimeToolRef
+      toolRef: RuntimeMessageToolRef
       providerName: string
       input: RuntimeJsonValue
     }
@@ -294,6 +302,12 @@ Turn so tool calls and results remain paired after restart. Summary calls reuse 
 transport, credentials, timeout, and cancellation signal, and their usage is added to the active
 Turn.
 
+Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
+Runtime re-estimates the live assistant request and tool-result messages together with system,
+tool-schema, attachment, output, and safety reserves. A continuation that no longer fits stops as
+`context_window_exceeded` before another provider request. Model-only catalog results additionally
+consume this live headroom while they are produced.
+
 ### Tools
 
 ```ts
@@ -309,8 +323,10 @@ type RuntimeTool = {
 ```
 
 `ref` is the stable application identity used by approval and audit, and by MCP persistence.
-`providerName` is only the deterministic function alias exposed to the model for this contract;
-`displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
+`providerName` is the deterministic catalog alias by which a Runtime identifies the tool. A Runtime
+may expose that alias as a direct model function or as the exact target name accepted by a private
+model-binding tool; that encoding never changes the tool's `ref`, approval, input, or persisted
+identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
 
 The Host supplies an immutable tool snapshot after applying the system catalog, temporary composer
@@ -410,7 +426,7 @@ type RuntimeOutputPart =
       id: string
       type: 'tool'
       toolCallId: string
-      toolRef: RuntimeToolRef
+      toolRef: RuntimeMessageToolRef
       providerName: string
       displayName: string
       state:
@@ -473,6 +489,11 @@ type RuntimeError = {
   }
 }
 ```
+
+`RuntimeToolRef` identifies an executable application capability and remains the only ref accepted
+by execution requests and approvals. `RuntimeMessageToolRef` additionally admits `meta` activity
+such as catalog search: it is observable and replayable model-loop history, but it is not executable
+through the Host capability catalog and never appears in an inference tool snapshot.
 
 Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. Before a
 terminal event, the Runtime settles every live tool part: denial includes the canonical denial

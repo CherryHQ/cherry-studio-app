@@ -39,7 +39,7 @@ function descriptor(serverId: string, rawToolName: string): McpExecutableToolDes
 }
 
 describe('Agent Runtime MCP tool resolution', () => {
-  test('discovers only enabled bound servers and applies effective per-tool policy', async () => {
+  test('discovers only enabled allowed tools and applies effective per-tool policy', async () => {
     const listExecutableToolDescriptors = jest.fn(async (serverId: string) =>
       serverId === SERVER_A
         ? [descriptor(SERVER_A, 'search'), descriptor(SERVER_A, 'delete')]
@@ -77,7 +77,6 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(listExecutableToolDescriptors).toHaveBeenCalledTimes(2);
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_A, 'search'), approval: 'ask' },
-      { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'deny' },
     ]);
   });
 

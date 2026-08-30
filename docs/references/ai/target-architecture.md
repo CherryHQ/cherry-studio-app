@@ -1,7 +1,7 @@
 # Backend AI Target Architecture
 
-Status: **target state approved 2026-08-28; migration in progress** (see
-[Migration Status](#migration-status)).
+Status: **local target state landed 2026-08-28; future remote boundary approved but not
+implemented** (see [Migration Status](#migration-status)).
 
 This reference records the approved target structure for `src/backend/ai`, the seam rules that keep
 the conversation Runtime replaceable, and the success criteria each migration pull request is
@@ -21,11 +21,16 @@ implementation is heading and why.
 - **Pi is the sole conversation trunk.** The AI SDK path serves non-conversation generation only:
   `AiService` (generate text, generate image, model check, model listing) and the tools that call
   back into it.
-- **The Runtime seam stays at `agent/runtime/types.ts`.** Replacement candidates are a future
-  remote agent service and, as insurance, a different in-process loop. Nothing is designed for the
-  remote case now: no execution-target variants, no reattach or resume structure, no topology
-  assumptions. The `local`-only note in `src/shared/contracts/agent.ts` stands until that product
-  exists.
+- **The Runtime seam stays at `agent/runtime/types.ts`.** It is an in-process execution boundary for
+  the local Mobile Agent. Its replacement candidate is a different local loop, not a remote Agent
+  service.
+- **Future remote Agent integration sits at the application-protocol boundary.** A mobile-owned
+  HTTP adapter calls the remote service, receives its wire DTOs and events, and maps them into the
+  versioned Agent Protocol representation consumed by the application. The integration neither
+  requires nor depends on the remote service implementing the local TypeScript `AgentProtocol`
+  interface or exposing `AgentRuntime`; the service remains authoritative for its Agents, Sessions,
+  turns, tool execution, approvals, and persistence. The current `local`-only protocol value remains
+  as-built until that product defines its routing, versioning, reconnection, and cache behavior.
 - **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent.ts`), its event
   delta semantics, and the frontend projection. Below: the SQLite schema. Everything between the
   two boundaries may be redesigned.
@@ -94,6 +99,33 @@ New module and directory names are chosen at implementation time following
 5. **Normalized history is the seam currency.** The Host side maps protocol transcripts into the
    normalized Runtime shape; each Runtime maps that shape into its own messages. Neither side
    imports the other's mapping.
+
+## Future Remote Agent Integration Boundary
+
+Remote Agent integration does not extend the local Runtime seam across HTTP:
+
+```text
+Agent Client
+    ↕ Agent Protocol values
+Mobile Remote Agent Adapter
+    ↕ remote HTTP API and remote wire DTOs/events
+Remote Agent Service
+    ├─ authoritative Agent and Session data
+    ├─ execution and tool loop
+    └─ approvals and persistence
+```
+
+The mobile adapter owns HTTP request construction, authentication handoff, remote error
+normalization, event/snapshot translation, and conversion into the application protocol. It does
+not execute remote tools, persist a second authoritative Session, translate remote objects into
+`RuntimeTool` callbacks, or make the remote service conform to Pi or mobile Runtime internals.
+
+The Agent Client will continue to consume one application-facing protocol shape. Local Sessions are
+served by the Mobile Agent Host; future remote Sessions will be served through the HTTP adapter. Any
+local storage for remote data is a cache or projection whose invalidation and replay rules must be
+specified with the remote wire contract. The exact protocol extension for selecting and routing a
+remote source is intentionally deferred; it must be versioned rather than representing a remote
+Session as the current `{ kind: 'local' }` execution target.
 
 ## Success Criteria
 

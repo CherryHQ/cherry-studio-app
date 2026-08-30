@@ -89,6 +89,11 @@ export type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string };
 
+/** User-visible model-loop activity that is not an executable application capability. */
+export type RuntimeMetaToolRef = { source: 'meta'; name: string };
+
+export type RuntimeMessageToolRef = RuntimeToolRef | RuntimeMetaToolRef;
+
 export type RuntimeArtifact = {
   ref: { kind: 'managed-file'; fileEntryId: string };
   mediaType: string;
@@ -122,7 +127,7 @@ export type RuntimeMessagePart =
   | {
       type: 'tool-call';
       toolCallId: string;
-      toolRef: RuntimeToolRef;
+      toolRef: RuntimeMessageToolRef;
       providerName: string;
       input: RuntimeJsonValue;
     }
@@ -204,7 +209,7 @@ export type RuntimeOutputPart =
       id: string;
       type: 'tool';
       toolCallId: string;
-      toolRef: RuntimeToolRef;
+      toolRef: RuntimeMessageToolRef;
       providerName: string;
       displayName: string;
       state:

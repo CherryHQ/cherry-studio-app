@@ -203,7 +203,9 @@ describe('tool message detail sheets', () => {
 
   it.each([
     ['tool_search', 'chat.metaToolSearch.title', 'chat.metaToolSearch.noResults'],
+    ['tool_describe', 'chat.metaToolInspect.title', 'browser.open_url'],
     ['tool_inspect', 'chat.metaToolInspect.title', 'browser.open_url'],
+    ['tool_call', 'chat.metaToolInvoke.title', 'browser.open_url'],
     ['tool_invoke', 'chat.metaToolInvoke.title', 'browser.open_url'],
     ['tool_exec', 'chat.metaToolExec.title', undefined],
   ])('shows concise information for %s', async (toolName, expectedTitle, expectedStatus) => {
@@ -225,6 +227,24 @@ describe('tool message detail sheets', () => {
     });
 
     expect(findByTestID('meta-tool-part-detail').props.title).toBe(expectedTitle);
+  });
+
+  it('does not expose unresolved tool_call parameters', async () => {
+    await render(
+      <MetaToolPartRenderer
+        part={makeToolPart({
+          input: { name: 'missing.tool', params: { secret: 'must-not-render' } },
+          state: 'output-error',
+          toolName: 'tool_call',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('meta-tool-part-trigger').props.onPress();
+    });
+
+    expect(findText('must-not-render')).toHaveLength(0);
   });
 
   it.each([

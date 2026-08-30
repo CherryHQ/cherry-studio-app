@@ -71,13 +71,19 @@ export function createAgentRuntimeToolResolver(input: {
           if (!resolved.enabled || resolved.approval === null) {
             return [];
           }
+          const approval = clampMcpToolApproval(resolved.approval);
+          if (approval === 'deny') {
+            // Denied bindings remain durable configuration but are not part of
+            // the executable turn snapshot or the model-visible catalog.
+            return [];
+          }
           return [
             {
               descriptor,
               // An MCP row on its own is never auto: the shared policy keeps an
-              // explicit deny and clamps everything else to ask. The Host may
-              // later promote ask to auto for Agents whose approval mode says so.
-              approval: clampMcpToolApproval(resolved.approval),
+              // executable selection at ask. The Host may later promote ask to
+              // auto for Agents whose approval mode says so.
+              approval,
             },
           ];
         },

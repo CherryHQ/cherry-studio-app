@@ -2,6 +2,7 @@ import { RuntimeContextCheckpointSchema } from '../runtimeSchemas';
 import type {
   RuntimeArtifact,
   RuntimeContextCheckpoint,
+  RuntimeMessageToolRef,
   RuntimeTool,
   RuntimeToolRef,
   RuntimeToolResult,
@@ -41,6 +42,12 @@ describe('Agent Runtime settled contracts', () => {
     });
 
     expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });
+  });
+
+  test('keeps meta activity distinct from executable tool refs', () => {
+    const ref: RuntimeMessageToolRef = { source: 'meta', name: 'tool_search' };
+
+    expect(JSON.parse(JSON.stringify(ref))).toEqual(ref);
   });
 
   test('round-trips context checkpoints through the Runtime schema', () => {

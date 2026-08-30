@@ -4,6 +4,7 @@ import {
   AgentFailureSnapshotSchema,
   AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
+  AgentMessageToolRefSchema,
   AgentMessagePartSchema,
   AgentSubmitMessageInputSchema,
   AgentToolRefSchema,
@@ -94,6 +95,26 @@ describe('Agent tool and managed-file contracts', () => {
       expect(AgentToolRefSchema.parse(roundTrip(toolRef))).toEqual(toolRef);
     },
   );
+
+  test('accepts meta identity only for persisted message activity', () => {
+    const metaRef = { source: 'meta', name: 'tool_search' } as const;
+
+    expect(AgentMessageToolRefSchema.parse(roundTrip(metaRef))).toEqual(metaRef);
+    expect(AgentToolRefSchema.safeParse(metaRef).success).toBe(false);
+    expect(
+      AgentMessagePartSchema.parse({
+        id: 'tool-search-part',
+        type: 'tool',
+        toolCallId: 'tool-search-call',
+        toolRef: metaRef,
+        providerName: 'tool_search',
+        displayName: 'Search tools',
+        state: 'output-available',
+        input: { query: 'calendar' },
+        output: { value: { matchedNamespaces: [] }, artifacts: [] },
+      }),
+    ).toBeDefined();
+  });
 
   test('accepts managed file ids and rejects raw file URIs', () => {
     const input = {

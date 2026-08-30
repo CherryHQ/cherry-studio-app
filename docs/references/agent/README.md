@@ -2,9 +2,9 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-This directory documents Cherry Mobile's conversation execution boundary. Cherry owns Agents,
-Sessions, persistence, application capabilities, and the frontend protocol. Pi is the sole local
-conversation engine.
+This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated
+local execution, Cherry Mobile owns Agents, Sessions, persistence, application capabilities, and
+the frontend protocol. Pi is the sole local conversation engine.
 
 ## Boundaries
 
@@ -32,6 +32,32 @@ Application capability adapters
 
 The Agent Client never imports the Runtime contract. The Host is the only adapter that depends on
 both sides.
+
+## Approved Future Remote Boundary
+
+Remote Agent support is an application-protocol integration, not a remote implementation of the
+mobile Runtime:
+
+```text
+Agent Client
+    ↕ Agent Protocol values
+Mobile Remote Agent Adapter
+    ↕ remote HTTP API
+Remote Agent Service
+```
+
+The adapter calls the remote HTTP API and converts remote-owned snapshots, events, messages,
+approvals, and errors into the protocol values accepted by the application. The remote service owns
+the authoritative Agent, Session, execution, tool, approval, and persistence state; mobile storage
+may only cache or project that data under rules defined with the future wire contract. The remote
+integration neither requires nor depends on the service implementing the local TypeScript
+`AgentProtocol` interface. The mobile app does not wrap remote execution in `AgentRuntime` or copy
+remote tool callbacks into the local Host.
+
+This direction is approved but not as-built. Version 1 remains local-only; remote routing,
+authentication, event replay, reconnection, idempotency, and cache invalidation require a separately
+versioned wire design. See
+[Backend AI Target Architecture](../ai/target-architecture.md#future-remote-agent-integration-boundary).
 
 ## Current Contract
 
