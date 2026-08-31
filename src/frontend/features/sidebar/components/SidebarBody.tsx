@@ -4,7 +4,7 @@ import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -13,7 +13,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../useDockMetrics';
 import { SidebarNavRow } from './SidebarNavRow';
-import { SidebarSessionList } from './SidebarSessionList';
+import { SidebarRecents } from './SidebarRecents';
 
 /**
  * The sidebar's only scroller: nav rows and the recent sessions scroll together
@@ -57,8 +57,7 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings, openSessionList } =
-    useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
 
   return (
     <>
@@ -73,23 +72,7 @@ function SidebarBodyDefault() {
         <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
       </View>
 
-      <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
-        <Text className="text-muted-foreground text-sm">{t('navigation.recents')}</Text>
-        {/* Text only, no surface: it sits on the section label's baseline, and a
-            chip there would outweigh the label it belongs to. The row's own
-            edges place it, so the press target grows through `hitSlop` rather
-            than padding that would push the label off that edge. */}
-        <Pressable
-          accessibilityLabel={t('navigation.viewAll')}
-          accessibilityRole="button"
-          className="active:opacity-60"
-          hitSlop={8}
-          onPress={openSessionList}
-        >
-          <Text className="text-muted-foreground text-sm">{t('navigation.viewAll')}</Text>
-        </Pressable>
-      </View>
-      <SidebarSessionList />
+      <SidebarRecents />
     </>
   );
 }
