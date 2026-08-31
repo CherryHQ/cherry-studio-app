@@ -13,13 +13,9 @@ export type ProviderRegistryUpdateEvent = {
   source: 'cache' | 'gitcode' | 'github';
 };
 
-export type ProviderRegistryUpdateCheck =
-  | { revision?: number; status: 'current' }
-  | { revision: number; status: 'available' };
+export type ProviderRegistryUpdateCheck = { status: 'available' | 'current' };
 
-export type ProviderRegistryUpdateResult =
-  | { revision?: number; status: 'current' }
-  | { revision: number; status: 'updated' };
+export type ProviderRegistryUpdateResult = { status: 'current' | 'updated' };
 
 export interface ProvidersModule {
   applyRegistryUpdate(): Promise<ProviderRegistryUpdateResult>;

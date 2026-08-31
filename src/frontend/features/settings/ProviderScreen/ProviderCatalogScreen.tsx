@@ -152,10 +152,7 @@ export default function ProviderCatalogScreen() {
       alert.show({ title: t('settings.provider.catalog.registryUpdate.updateFailed') });
     },
     onSuccess: (result) => {
-      queryClient.setQueryData(registryUpdateQueryKey, {
-        revision: result.revision,
-        status: 'current',
-      });
+      queryClient.setQueryData(registryUpdateQueryKey, { status: 'current' });
       toast.show({
         label: t(
           result.status === 'updated'

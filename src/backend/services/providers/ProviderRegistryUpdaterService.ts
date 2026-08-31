@@ -48,11 +48,6 @@ type StagedSnapshot = {
   parsed: ReturnType<typeof providerRegistryService.parseRemoteSnapshot>;
 };
 
-type AvailableUpdate = {
-  manifest: CatalogManifest;
-  source: RegistryNetworkSource;
-};
-
 /**
  * Checks and applies model metadata from the desktop-published registry lane.
  *
@@ -67,7 +62,7 @@ type AvailableUpdate = {
 @AppStatePolicy('not-applicable')
 export class ProviderRegistryUpdaterService extends BaseService {
   private activeManifest: CatalogManifest | undefined;
-  private availableUpdate: AvailableUpdate | undefined;
+  private availableUpdateSource: RegistryNetworkSource | undefined;
   private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
   private checkInFlight: Promise<void> | undefined;
   private readonly requestControllers = new Set<AbortController>();
@@ -76,7 +71,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   protected async onReady(): Promise<void> {
     this.stopped = false;
     this.activeManifest = undefined;
-    this.availableUpdate = undefined;
+    this.availableUpdateSource = undefined;
     if (Platform.OS !== 'web') {
       await this.activateCachedSnapshot();
     }
@@ -120,7 +115,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
       ),
     );
     this.activeManifest = undefined;
-    this.availableUpdate = undefined;
+    this.availableUpdateSource = undefined;
     providerRegistryService.clearRemoteSnapshot();
     providerRegistryUpdates.clear();
   }
@@ -169,7 +164,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
         const manifest = await this.fetchManifest(source);
         reachedSource = true;
         if (this.isUpdateAvailable(manifest)) {
-          this.availableUpdate = { manifest, source };
+          this.availableUpdateSource = source;
           return;
         }
       } catch (error) {
@@ -182,7 +177,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
       }
     }
 
-    this.availableUpdate = undefined;
+    this.availableUpdateSource = undefined;
     if (!reachedSource && !this.stopped) {
       throw lastError ?? new Error('No provider registry source is available');
     }
@@ -192,14 +187,14 @@ export class ProviderRegistryUpdaterService extends BaseService {
     if (this.checkInFlight) {
       await this.checkInFlight;
     }
-    if (!this.availableUpdate) {
+    if (!this.availableUpdateSource) {
       await this.findAvailableUpdate();
     }
-    if (!this.availableUpdate) {
+    if (!this.availableUpdateSource) {
       return this.getCurrentUpdateStatus();
     }
 
-    const preferredSource = this.availableUpdate.source;
+    const preferredSource = this.availableUpdateSource;
     const sources = [
       preferredSource,
       ...this.getSourceOrder().filter((source) => source !== preferredSource),
@@ -218,8 +213,8 @@ export class ProviderRegistryUpdaterService extends BaseService {
         }
 
         await this.applySnapshot(staged, source);
-        this.availableUpdate = undefined;
-        return { revision: staged.manifest.revision, status: 'updated' };
+        this.availableUpdateSource = undefined;
+        return { status: 'updated' };
       } catch (error) {
         lastError = toError(error);
         if (!this.stopped) {
@@ -231,7 +226,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     if (lastError && !this.stopped) {
       throw lastError;
     }
-    this.availableUpdate = undefined;
+    this.availableUpdateSource = undefined;
     return this.getCurrentUpdateStatus();
   }
 
@@ -299,15 +294,11 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private getAvailableUpdateStatus(): ProviderRegistryUpdateCheck {
-    return this.availableUpdate
-      ? { revision: this.availableUpdate.manifest.revision, status: 'available' }
-      : this.getCurrentUpdateStatus();
+    return this.availableUpdateSource ? { status: 'available' } : this.getCurrentUpdateStatus();
   }
 
-  private getCurrentUpdateStatus(): { revision?: number; status: 'current' } {
-    return this.activeManifest
-      ? { revision: this.activeManifest.revision, status: 'current' }
-      : { status: 'current' };
+  private getCurrentUpdateStatus(): { status: 'current' } {
+    return { status: 'current' };
   }
 
   private assertCompatibleManifest(manifest: CatalogManifest): void {

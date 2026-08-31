@@ -418,9 +418,7 @@ function createDeleteTransaction(input: { providerId: string }) {
     })),
     select: jest.fn(() => ({
       from: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(async () => []),
-        })),
+        where: jest.fn(() => ({})),
       })),
     })),
     update: jest.fn(() => ({

@@ -75,6 +75,6 @@ export function createProvidersModule({
     persistAvatar: avatars.persist,
     removeAvatar: avatars.remove,
     resolveAvatar: avatars.resolve,
-    subscribeRegistryUpdates: registryUpdates.subscribe.bind(registryUpdates),
+    subscribeRegistryUpdates: registryUpdates.subscribe,
   };
 }

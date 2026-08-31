@@ -36,14 +36,10 @@ type ProviderListSection = { data: ProviderListRow[]; title: string };
 const keyExtractor = (item: ProviderListRow) => item.id;
 const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
   const { isEnabled: _isEnabled, menuItems, ...row } = item;
-  const providerRow = <SettingsServiceRow {...row} />;
-
-  return menuItems.length > 0 ? (
+  return (
     <Menu items={menuItems} trigger="longPress">
-      {providerRow}
+      <SettingsServiceRow {...row} />
     </Menu>
-  ) : (
-    providerRow
   );
 };
 const renderProviderSectionHeader = ({ section }: { section: ProviderListSection }) => (

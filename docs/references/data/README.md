@@ -169,7 +169,7 @@ Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder
 journaled under `app_state` keys prefixed with `seed:`.
 
 `ProviderRegistryUpdaterService` checks only `models.json` and `provider-models.json` when the user
-opens the Provider catalog. The screen reports an available revision, but downloads and activates
+opens the Provider catalog. The screen reports an available update, but downloads and activates
 the complete snapshot only after the user presses Update. China locale/zone signals prefer GitCode
 and other devices prefer GitHub; either source falls back to the other. A schema-validated,
 user-approved snapshot is committed to the lossy cache with its activation marker written last, and
