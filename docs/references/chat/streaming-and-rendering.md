@@ -47,7 +47,9 @@ Session id through `useSyncExternalStore`. The client:
 Selecting an Agent opens an isolated Draft composer and does not create a Session. The first send
 calls `startSession`: the Host completes write-free turn preparation, then atomically creates the
 Session and reserves its first user/assistant message pair. Only after that succeeds does the client
-establish observation and replace the Draft route with the durable Session route.
+install an observation snapshot and replace the Draft route with the durable Session route. The
+snapshot hands the first user/assistant pair directly to the message list, so the initial history
+query does not put a loading cover between send and streaming output.
 
 ## Transcript Window And Live Projection
 

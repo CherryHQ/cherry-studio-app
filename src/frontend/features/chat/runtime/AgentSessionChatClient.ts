@@ -19,6 +19,7 @@ export type AgentSessionChatState = {
   activeTurn: AgentTurnView | null;
   enteringUserMessageId?: string;
   error?: Error;
+  hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
   sessionId: string;
@@ -212,7 +213,7 @@ export class AgentSessionChatClient {
     });
     // The durable submission has succeeded even if observation later needs a
     // retry. Do not restore a Draft whose files now belong to persisted input.
-    void this.observe(session.id).catch(() => undefined);
+    await this.observe(session.id).catch(() => undefined);
     return session;
   }
 
@@ -290,11 +291,18 @@ export class AgentSessionChatClient {
 
   private installSnapshot(entry: SessionEntry, snapshot: AgentSessionSnapshot): void {
     entry.liveMessages.clear();
+    if (snapshot.activeUserMessage) {
+      entry.liveMessages.set(snapshot.activeUserMessage.id, snapshot.activeUserMessage);
+    }
     if (snapshot.streamingMessage) {
       entry.liveMessages.set(snapshot.streamingMessage.id, snapshot.streamingMessage);
     }
     this.updateState(entry, {
       activeTurn: snapshot.activeTurn,
+      ...(snapshot.activeUserMessage
+        ? { enteringUserMessageId: snapshot.activeUserMessage.id }
+        : {}),
+      hasHistoryBeforeActiveTurn: snapshot.hasHistoryBeforeActiveTurn ?? undefined,
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
       sessionId: snapshot.session.id,

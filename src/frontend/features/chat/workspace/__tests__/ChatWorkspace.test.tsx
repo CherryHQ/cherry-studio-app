@@ -18,6 +18,7 @@ let mockMessageListProps: MessageListProps | undefined;
 let mockAgentChatSession: {
   activeTurn: null;
   enteringUserMessageId?: string;
+  hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly [];
   sessionId: string;
@@ -159,11 +160,12 @@ function renderWorkspace(
   isPreview: boolean,
   messages: readonly AgentMessageView[],
   sessionId = 'session-1',
+  isLoadingInitial = false,
 ) {
   let renderer!: ReactTestRenderer;
 
   act(() => {
-    renderer = create(createWorkspaceElement(isPreview, messages, sessionId));
+    renderer = create(createWorkspaceElement(isPreview, messages, sessionId, isLoadingInitial));
   });
 
   return renderer;
@@ -173,6 +175,7 @@ function createWorkspaceElement(
   isPreview: boolean,
   messages: readonly AgentMessageView[],
   sessionId = 'session-1',
+  isLoadingInitial = false,
 ) {
   return (
     <ChatWorkspace
@@ -180,7 +183,7 @@ function createWorkspaceElement(
       isAssistantToolbarEnabled={!isPreview}
       keyboardOffset={isPreview ? 0 : 26}
       messageWindow={{
-        isLoadingInitial: false,
+        isLoadingInitial,
         isLoadingOlder: true,
         loadOlder: mockLoadOlder,
         messages,
@@ -293,6 +296,25 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(readyFrame).toBeDefined();
 
     act(() => readyFrame?.(0));
+    expect(mockCoverVisible).toBe(false);
+  });
+
+  test('shows a new Session first exchange without the history loading cover', () => {
+    const user = createMessage('user-1', 'user');
+    const assistant = createMessage('assistant-1', 'assistant', 'streaming');
+    mockAgentChatSession = {
+      ...mockAgentChatSession,
+      enteringUserMessageId: user.id,
+      hasHistoryBeforeActiveTurn: false,
+      liveMessages: [user, assistant],
+    };
+
+    renderer = renderWorkspace(false, [], 'session-1', true);
+
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
     expect(mockCoverVisible).toBe(false);
   });
 });

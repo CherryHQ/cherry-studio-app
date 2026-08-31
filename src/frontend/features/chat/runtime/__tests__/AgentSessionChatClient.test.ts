@@ -19,9 +19,11 @@ function deferred<TValue>() {
 function snapshot(): AgentSessionSnapshot {
   return {
     activeTurn: null,
+    activeUserMessage: null,
     agent: { id: 'agent-1', name: 'Agent' },
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
     pendingApprovals: [],
+    hasHistoryBeforeActiveTurn: null,
     session: {
       agentId: 'agent-1',
       createdAt: '2026-08-25T00:00:00.000Z',
@@ -32,6 +34,22 @@ function snapshot(): AgentSessionSnapshot {
       updatedAt: '2026-08-25T00:00:00.000Z',
     },
     streamingMessage: null,
+  };
+}
+
+function userMessage(): AgentMessageView {
+  return {
+    createdAt: '2026-08-25T00:00:00.000Z',
+    id: 'user-1',
+    parts: [{ id: 'input-0', state: 'done', text: 'Hello', type: 'text' }],
+    role: 'user',
+    sessionId: 'session-1',
+    status: 'success',
+    turnId: 'turn-1',
+    updatedAt: '2026-08-25T00:00:00.000Z',
+    usage: null,
+    modelId: null,
+    inferenceSnapshot: null,
   };
 }
 
@@ -67,8 +85,23 @@ function protocolWithObservation(
 
 describe('AgentSessionChatClient', () => {
   test('starts a durable Session from a Draft submission before observing it', async () => {
+    const initialSnapshot: AgentSessionSnapshot = {
+      ...snapshot(),
+      activeTurn: {
+        assistantMessageId: 'assistant-1',
+        endedAt: null,
+        error: null,
+        id: 'turn-1',
+        sessionId: 'session-1',
+        startedAt: '2026-08-25T00:00:00.000Z',
+        status: 'running',
+      },
+      activeUserMessage: userMessage(),
+      hasHistoryBeforeActiveTurn: false,
+      streamingMessage: assistantMessage(),
+    };
     const protocol = protocolWithObservation(async () => ({
-      snapshot: snapshot(),
+      snapshot: initialSnapshot,
       unsubscribe: jest.fn(),
     }));
     protocol.startSession.mockResolvedValue(snapshot().session);
@@ -85,6 +118,12 @@ describe('AgentSessionChatClient', () => {
       temporaryCapabilities: ['web-search'],
     });
     expect(protocol.observeSession).toHaveBeenCalledWith('session-1', expect.any(Function));
+    expect(client.getState('session-1')).toMatchObject({
+      enteringUserMessageId: 'user-1',
+      hasHistoryBeforeActiveTurn: false,
+      liveMessages: [{ id: 'user-1' }, { id: 'assistant-1' }],
+      status: 'ready',
+    });
   });
 
   test('keeps an admitted Draft submission successful when observation needs a retry', async () => {

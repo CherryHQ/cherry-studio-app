@@ -180,10 +180,12 @@ type ActiveTurnState = {
   agent: AgentDefinition;
   abortController: AbortController;
   turn: AgentTurnView;
+  activeUserMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
   autoNamePromise: Promise<AgentSessionView | null> | null;
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
+  hasHistoryBeforeActiveTurn: boolean;
   pendingApprovals: Map<string, AgentApprovalView>;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
@@ -605,6 +607,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           session,
           capabilities,
           activeTurn: active?.turn ?? null,
+          activeUserMessage: active?.activeUserMessage ?? null,
+          hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
           streamingMessage: active?.assistantMessage ?? null,
           pendingApprovals: active
             ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
@@ -655,6 +659,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       agent: plan.agent,
       abortController,
       turn,
+      activeUserMessage: reserved.userMessage,
       assistantMessage: reserved.assistantMessage,
       autoNamePromise: null,
       autoNameUserParts: plan.hasMessages ? null : plan.inputParts,
@@ -664,6 +669,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sessionId,
         sessionTitle,
       }),
+      hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
       pendingContextCheckpoint: null,
       resources: plan.resources,

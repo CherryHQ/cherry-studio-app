@@ -272,6 +272,39 @@ describe('MobileAgentHost', () => {
     ]);
   });
 
+  test('hands an active first exchange to a fresh Session observer', async () => {
+    const executionStarted = createDeferred();
+    const releaseExecution = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      executionStarted.resolve();
+      await releaseExecution.promise;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+
+    const session = await host.startSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await executionStarted.promise;
+    const [userMessage, assistantMessage] = await store.listMessages(session.id);
+    const observation = await host.observeSession(session.id, () => undefined);
+
+    expect(observation.snapshot).toMatchObject({
+      activeUserMessage: userMessage,
+      hasHistoryBeforeActiveTurn: false,
+      streamingMessage: assistantMessage,
+    });
+
+    observation.unsubscribe();
+    releaseExecution.resolve();
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'the observed initial turn to settle',
+    );
+  });
+
   test('does not create a Session when a Draft submission fails preparation', async () => {
     const reserveInitialSubmission = jest.spyOn(store, 'reserveInitialSubmission');
     const host = createHost(
@@ -312,6 +345,8 @@ describe('MobileAgentHost', () => {
       attachments: true,
     });
     expect(observation.snapshot.activeTurn).toBeNull();
+    expect(observation.snapshot.activeUserMessage).toBeNull();
+    expect(observation.snapshot.hasHistoryBeforeActiveTurn).toBeNull();
 
     const submitted = await host.submitMessage({
       sessionId: session.id,

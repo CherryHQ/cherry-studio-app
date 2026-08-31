@@ -439,14 +439,16 @@ export const AgentEventSchema = z.union([
 export type AgentEvent = z.infer<typeof AgentEventSchema>;
 
 /**
- * Live state composed over persisted messages. Persisted transcript pagination
- * remains a normal data read and is not duplicated here.
+ * Live state composed over persisted messages. Only the active turn's rows are
+ * repeated for route handoff; older transcript pagination remains a data read.
  */
 export const AgentSessionSnapshotSchema = z.strictObject({
   agent: AgentViewSchema,
   session: AgentSessionViewSchema,
   capabilities: AgentCapabilitiesSchema,
   activeTurn: AgentTurnViewSchema.nullable(),
+  activeUserMessage: AgentMessageViewSchema.nullable(),
+  hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
 });

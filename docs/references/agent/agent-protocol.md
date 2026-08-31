@@ -383,13 +383,17 @@ type AgentSessionSnapshot = {
   session: AgentSessionView
   capabilities: AgentCapabilities
   activeTurn: AgentTurnView | null
+  activeUserMessage: AgentMessageView | null
+  hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
   pendingApprovals: AgentApprovalView[]
 }
 ```
 
 Persisted transcript pagination remains a normal data read and is not duplicated in the runtime
-snapshot. The snapshot contains only live state that must be composed over persisted messages.
+snapshot. The snapshot contains only live state that must be composed over persisted messages. An
+active turn includes its user row and whether older history precedes it, so a newly created
+Session can render its first exchange immediately without waiting behind the history-layout cover.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished
