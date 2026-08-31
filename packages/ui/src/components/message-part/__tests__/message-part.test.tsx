@@ -5,6 +5,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { MessagePart } from '..';
 import { formatMessagePartValue, hasMessagePartValue } from '../utils/message-part-value';
 
+let mockBottomSheetProps: Record<string, unknown> = {};
+
 jest.mock(
   '@cherrystudio/app-icons/icons/chevron-right',
   () => jest.requireActual('react-native').View,
@@ -38,9 +40,10 @@ jest.mock('../../bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
 
   return {
-    BottomSheet: ({ children, ...props }: { children: ReactNode }) => (
-      <View {...props}>{children}</View>
-    ),
+    BottomSheet: ({ children, ...props }: { children: ReactNode }) => {
+      mockBottomSheetProps = props;
+      return <View {...props}>{children}</View>;
+    },
   };
 });
 
@@ -89,6 +92,10 @@ jest.mock('react-native-reanimated', () => {
 describe('MessagePart', () => {
   let renderer: ReactTestRenderer | undefined;
 
+  beforeEach(() => {
+    mockBottomSheetProps = {};
+  });
+
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
@@ -112,7 +119,7 @@ describe('MessagePart', () => {
     act(() => renderer!.root.findByProps({ testID: 'search-trigger' }).props.onPress());
 
     const detail = renderer!.root.findByProps({ testID: 'search-detail' });
-    expect(detail.props.sizes).toEqual(['compact', 'large']);
+    expect(mockBottomSheetProps.sizes).toEqual(['compact', 'large']);
     expect(renderer!.root.findByProps({ children: 'Result details' })).toBeDefined();
 
     act(() => detail.props.onClose());
@@ -136,7 +143,7 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ active: true })).toBeDefined();
     expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
-    expect(renderer!.root.findByProps({ testID: 'thinking-detail' }).props.size).toBe('large');
+    expect(mockBottomSheetProps.size).toBe('large');
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
   });
 

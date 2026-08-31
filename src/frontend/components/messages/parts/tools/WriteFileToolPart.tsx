@@ -52,6 +52,10 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
     );
   }
 
+  if (rejection === null) {
+    return <GenericToolPart part={part} />;
+  }
+
   return (
     <MessagePart.Tool
       icon={display?.icon}

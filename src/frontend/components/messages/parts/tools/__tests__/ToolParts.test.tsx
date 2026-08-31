@@ -362,7 +362,11 @@ describe('tool message detail sheets', () => {
       findByTestID('meta-tool-part-trigger').props.onPress();
     });
 
-    expect(findAllByTestID('meta-tool-search-result')).toHaveLength(2);
+    expect(
+      renderer?.root
+        .findAllByType(View)
+        .filter((node) => node.props.testID === 'meta-tool-search-result'),
+    ).toHaveLength(2);
   });
 
   it('uses code typography for a structured tool_invoke response', async () => {
