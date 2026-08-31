@@ -119,12 +119,7 @@ function mergeHeaders(defaults: HttpHeaders, requestHeaders?: HttpHeaders): Http
   if (requestHeaders) {
     headers.set(requestHeaders);
   }
-
-  const result: Record<string, string> = {};
-  headers.forEach((value, name) => {
-    result[name] = String(value);
-  });
-  return Object.freeze(result);
+  return Object.freeze(headers.toJSON(true));
 }
 
 function getRequestContext(config?: AxiosRequestConfig): HttpRequestContext | undefined {
