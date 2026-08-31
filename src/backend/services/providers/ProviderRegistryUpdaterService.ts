@@ -18,6 +18,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import type { ProviderRegistryUpdateCheck, ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
   invalidateProviderRegistrySnapshot,
@@ -35,9 +36,6 @@ const REGISTRY_SOURCES = {
   github: `https://raw.githubusercontent.com/CherryHQ/cherry-studio/refs/heads/${REMOTE_BRANCH}/${REMOTE_SUBPATH}`,
 } as const;
 
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-const FAILED_CHECK_RETRY_MS = 5 * 60 * 1000;
-const INITIAL_CHECK_DELAY_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_REGISTRY_FILE_BYTES = 5 * 1024 * 1024;
@@ -50,55 +48,65 @@ type StagedSnapshot = {
   parsed: ReturnType<typeof providerRegistryService.parseRemoteSnapshot>;
 };
 
+type AvailableUpdate = {
+  manifest: CatalogManifest;
+  source: RegistryNetworkSource;
+};
+
 /**
- * Pulls model metadata from the desktop-published registry lane.
+ * Checks and applies model metadata from the desktop-published registry lane.
  *
  * The payload is unsigned, so `providers.json` deliberately remains bundled:
  * remote data can improve model descriptions and capabilities, but can never
- * redirect credentials or change a provider's API destination.
+ * redirect credentials or change a provider's API destination. Network checks
+ * are requested by the provider catalog screen, and a complete snapshot is
+ * downloaded and activated only after an explicit user action.
  */
 @Injectable('ProviderRegistryUpdaterService')
 @ServicePhase(Phase.PostReady)
-@AppStatePolicy('foreground-refresh')
+@AppStatePolicy('not-applicable')
 export class ProviderRegistryUpdaterService extends BaseService {
   private activeManifest: CatalogManifest | undefined;
+  private availableUpdate: AvailableUpdate | undefined;
+  private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
   private checkInFlight: Promise<void> | undefined;
-  private nextAutomaticCheckAt = 0;
   private readonly requestControllers = new Set<AbortController>();
   private stopped = false;
 
   protected async onReady(): Promise<void> {
     this.stopped = false;
+    this.activeManifest = undefined;
+    this.availableUpdate = undefined;
     if (Platform.OS !== 'web') {
       await this.activateCachedSnapshot();
     }
-
-    this.registerAppStateListener((status) => {
-      if (status === 'active') {
-        void this.checkIfDue();
-      }
-    });
-    this.registerInterval(() => this.checkIfDue(), CHECK_INTERVAL_MS);
-
-    const initialCheck = setTimeout(() => void this.check(), INITIAL_CHECK_DELAY_MS);
-    this.registerDisposable(() => clearTimeout(initialCheck));
   }
 
-  /** Run one serialized update cycle. Network and validation failures never escape. */
-  public check(): Promise<void> {
+  /** Check the remote manifests without downloading or activating registry data. */
+  public checkForUpdate(): Promise<ProviderRegistryUpdateCheck> {
+    if (this.applyInFlight) {
+      return this.applyInFlight.then(() => this.getCurrentUpdateStatus());
+    }
     if (this.checkInFlight) {
-      return this.checkInFlight;
+      return this.checkInFlight.then(() => this.getAvailableUpdateStatus());
     }
 
-    this.checkInFlight = this.runUpdateCycle()
-      .catch((error) => {
-        this.nextAutomaticCheckAt = Date.now() + FAILED_CHECK_RETRY_MS;
-        logger.warn('Registry update cycle failed; keeping current data', error as Error);
-      })
-      .finally(() => {
-        this.checkInFlight = undefined;
-      });
-    return this.checkInFlight;
+    this.checkInFlight = this.findAvailableUpdate().finally(() => {
+      this.checkInFlight = undefined;
+    });
+    return this.checkInFlight.then(() => this.getAvailableUpdateStatus());
+  }
+
+  /** Download and activate the available registry snapshot after user confirmation. */
+  public applyUpdate(): Promise<ProviderRegistryUpdateResult> {
+    if (this.applyInFlight) {
+      return this.applyInFlight;
+    }
+
+    this.applyInFlight = this.runApplyUpdate().finally(() => {
+      this.applyInFlight = undefined;
+    });
+    return this.applyInFlight;
   }
 
   protected async onStop(): Promise<void> {
@@ -106,15 +114,15 @@ export class ProviderRegistryUpdaterService extends BaseService {
     for (const controller of this.requestControllers) {
       controller.abort();
     }
-    await this.checkInFlight;
+    await Promise.allSettled(
+      [this.applyInFlight, this.checkInFlight].filter(
+        (operation): operation is Promise<unknown> => operation !== undefined,
+      ),
+    );
+    this.activeManifest = undefined;
+    this.availableUpdate = undefined;
     providerRegistryService.clearRemoteSnapshot();
     providerRegistryUpdates.clear();
-  }
-
-  private checkIfDue(): Promise<void> | void {
-    if (Date.now() >= this.nextAutomaticCheckAt) {
-      return this.check();
-    }
   }
 
   private async activateCachedSnapshot(): Promise<void> {
@@ -148,8 +156,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
     }
   }
 
-  private async runUpdateCycle(): Promise<void> {
-    let reachedCurrentSource = false;
+  private async findAvailableUpdate(): Promise<void> {
+    let reachedSource = false;
+    let lastError: Error | undefined;
 
     for (const source of this.getSourceOrder()) {
       if (this.stopped) {
@@ -157,25 +166,73 @@ export class ProviderRegistryUpdaterService extends BaseService {
       }
 
       try {
-        const staged = await this.fetchAndValidate(source);
-        if (!staged) {
-          reachedCurrentSource = true;
-          continue;
+        const manifest = await this.fetchManifest(source);
+        reachedSource = true;
+        if (this.isUpdateAvailable(manifest)) {
+          this.availableUpdate = { manifest, source };
+          return;
         }
-
-        await this.applySnapshot(staged, source);
-        reachedCurrentSource = true;
       } catch (error) {
+        lastError = toError(error);
         if (!this.stopped) {
-          logger.warn('Registry source failed; trying the fallback source', error as Error, {
+          logger.warn('Registry update check failed; trying the fallback source', lastError, {
             source,
           });
         }
       }
     }
 
-    this.nextAutomaticCheckAt =
-      Date.now() + (reachedCurrentSource ? CHECK_INTERVAL_MS : FAILED_CHECK_RETRY_MS);
+    this.availableUpdate = undefined;
+    if (!reachedSource && !this.stopped) {
+      throw lastError ?? new Error('No provider registry source is available');
+    }
+  }
+
+  private async runApplyUpdate(): Promise<ProviderRegistryUpdateResult> {
+    if (this.checkInFlight) {
+      await this.checkInFlight;
+    }
+    if (!this.availableUpdate) {
+      await this.findAvailableUpdate();
+    }
+    if (!this.availableUpdate) {
+      return this.getCurrentUpdateStatus();
+    }
+
+    const preferredSource = this.availableUpdate.source;
+    const sources = [
+      preferredSource,
+      ...this.getSourceOrder().filter((source) => source !== preferredSource),
+    ];
+    let lastError: Error | undefined;
+
+    for (const source of sources) {
+      if (this.stopped) {
+        return this.getCurrentUpdateStatus();
+      }
+
+      try {
+        const staged = await this.fetchAndValidate(source);
+        if (!staged) {
+          continue;
+        }
+
+        await this.applySnapshot(staged, source);
+        this.availableUpdate = undefined;
+        return { revision: staged.manifest.revision, status: 'updated' };
+      } catch (error) {
+        lastError = toError(error);
+        if (!this.stopped) {
+          logger.warn('Registry update failed; trying the fallback source', lastError, { source });
+        }
+      }
+    }
+
+    if (lastError && !this.stopped) {
+      throw lastError;
+    }
+    this.availableUpdate = undefined;
+    return this.getCurrentUpdateStatus();
   }
 
   private async applySnapshot(
@@ -203,11 +260,8 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private async fetchAndValidate(source: RegistryNetworkSource): Promise<StagedSnapshot | null> {
-    const manifestBody = await this.fetchText(source, 'manifest.json', MAX_MANIFEST_BYTES);
-    const manifest = CatalogManifestSchema.parse(JSON.parse(manifestBody));
-    this.assertCompatibleManifest(manifest);
-
-    if (this.activeManifest && manifest.revision <= this.activeManifest.revision) {
+    const manifest = await this.fetchManifest(source);
+    if (!this.isUpdateAvailable(manifest)) {
       return null;
     }
 
@@ -225,6 +279,35 @@ export class ProviderRegistryUpdaterService extends BaseService {
       manifest,
       parsed: this.parseAndValidateFiles(files, manifest),
     };
+  }
+
+  private async fetchManifest(source: RegistryNetworkSource): Promise<CatalogManifest> {
+    const manifestBody = await this.fetchText(source, 'manifest.json', MAX_MANIFEST_BYTES);
+    const manifest = CatalogManifestSchema.parse(JSON.parse(manifestBody));
+    this.assertCompatibleManifest(manifest);
+    return manifest;
+  }
+
+  private isUpdateAvailable(manifest: CatalogManifest): boolean {
+    if (this.activeManifest && manifest.revision <= this.activeManifest.revision) {
+      return false;
+    }
+
+    return REMOTE_REGISTRY_FILES.some(
+      (file) => providerRegistryService.getCatalogVersion(file) !== manifest.files[file],
+    );
+  }
+
+  private getAvailableUpdateStatus(): ProviderRegistryUpdateCheck {
+    return this.availableUpdate
+      ? { revision: this.availableUpdate.manifest.revision, status: 'available' }
+      : this.getCurrentUpdateStatus();
+  }
+
+  private getCurrentUpdateStatus(): { revision?: number; status: 'current' } {
+    return this.activeManifest
+      ? { revision: this.activeManifest.revision, status: 'current' }
+      : { status: 'current' };
   }
 
   private assertCompatibleManifest(manifest: CatalogManifest): void {
@@ -305,4 +388,8 @@ export class ProviderRegistryUpdaterService extends BaseService {
       regionCode === 'CN' || timeZone === 'Asia/Shanghai' || timeZone === 'Asia/Urumqi';
     return isChina ? ['gitcode', 'github'] : ['github', 'gitcode'];
   }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }

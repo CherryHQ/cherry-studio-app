@@ -168,13 +168,15 @@ bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do no
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
-`ProviderRegistryUpdaterService` refreshes only `models.json` and `provider-models.json` after first
-paint. China locale/zone signals prefer GitCode and other devices prefer GitHub; either source falls
-back to the other. A schema-validated snapshot is committed to the lossy cache with its activation marker
-written last, and mounted model projections are invalidated when it becomes active. `providers.json`
-never comes from this unsigned channel, so API destinations, authentication modes, and the importable
-Provider catalog remain bundle-owned. Offline, malformed, interrupted, or incompatible updates keep
-using the last valid matching cache, or the bundled registry when no such cache exists.
+`ProviderRegistryUpdaterService` checks only `models.json` and `provider-models.json` when the user
+opens the Provider catalog. The screen reports an available revision, but downloads and activates
+the complete snapshot only after the user presses Update. China locale/zone signals prefer GitCode
+and other devices prefer GitHub; either source falls back to the other. A schema-validated,
+user-approved snapshot is committed to the lossy cache with its activation marker written last, and
+mounted model projections are invalidated when it becomes active. `providers.json` never comes from
+this unsigned channel, so API destinations, authentication modes, and the importable Provider catalog
+remain bundle-owned. Offline, malformed, interrupted, or incompatible checks and updates keep using
+the last valid matching approved cache, or the bundled registry when no such cache exists.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may

@@ -13,6 +13,7 @@ const mockDb = { kind: 'db' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
+const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
 const mockServices = {
@@ -76,6 +77,7 @@ const createRuntime = () =>
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
     PreferenceService: mockPreference,
+    ProviderRegistryUpdaterService: mockProviderRegistryUpdater,
     WebSearchService: mockWebSearch,
   });
 
@@ -113,6 +115,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       languageServing: mockAgentRuntime,
+      providerRegistryUpdater: mockProviderRegistryUpdater,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);

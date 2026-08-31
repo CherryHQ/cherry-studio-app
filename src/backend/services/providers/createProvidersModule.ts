@@ -4,7 +4,12 @@ import {
   createPresetProviderInput,
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
-import type { ProviderRegistryUpdateEvent, ProvidersModule } from '@/shared/contracts';
+import type {
+  ProviderRegistryUpdateCheck,
+  ProviderRegistryUpdateEvent,
+  ProviderRegistryUpdateResult,
+  ProvidersModule,
+} from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
 type ProviderAvatarStorage = {
@@ -25,6 +30,8 @@ export type ProvidersModuleDependencies = {
     list(): Promise<Provider[]>;
   };
   registryUpdates: {
+    apply(): Promise<ProviderRegistryUpdateResult>;
+    check(): Promise<ProviderRegistryUpdateCheck>;
     subscribe(listener: (event: ProviderRegistryUpdateEvent) => void): () => void;
   };
 };
@@ -36,6 +43,8 @@ export function createProvidersModule({
   registryUpdates,
 }: ProvidersModuleDependencies): ProvidersModule {
   return {
+    applyRegistryUpdate: registryUpdates.apply,
+    checkRegistryUpdate: registryUpdates.check,
     importPreset: async (providerId) => {
       const preset = catalog
         .list()

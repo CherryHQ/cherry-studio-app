@@ -25,8 +25,9 @@ an explicit row action in the backend `ProvidersModule`; tapping an uninstalled 
 it. Installed presets can be removed like custom providers and remain available here to add again.
 Provider routing and credential destinations stay bundle-owned; the screen never accepts remote
 endpoint configuration. Its header action opens `NewProviderScreen` for a fully custom provider.
-The background registry updater may refresh model metadata separately, but it cannot add or alter
-entries in this Provider catalog.
+Opening the screen checks the remote model-registry manifest and shows an update notice when a newer
+revision exists. The complete model metadata snapshot is downloaded and activated only after the
+user presses Update. This flow cannot add or alter entries in the Provider catalog.
 
 ## Provider Form
 

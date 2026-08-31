@@ -32,6 +32,7 @@ import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
+import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
@@ -48,7 +49,11 @@ export type BackendComposition = {
 
 export function createBackend(
   services: BackendServices,
-  infrastructure: { dbService: DbService; languageServing: LanguageServingSupport },
+  infrastructure: {
+    dbService: DbService;
+    languageServing: LanguageServingSupport;
+    providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
+  },
 ): BackendComposition {
   const { dbService } = infrastructure;
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
@@ -116,7 +121,11 @@ export function createBackend(
       },
       list: () => services.provider.list(),
     },
-    registryUpdates: providerRegistryUpdates,
+    registryUpdates: {
+      apply: () => infrastructure.providerRegistryUpdater.applyUpdate(),
+      check: () => infrastructure.providerRegistryUpdater.checkForUpdate(),
+      subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
+    },
   });
   const permissions = createPermissionsModule({
     device: {
