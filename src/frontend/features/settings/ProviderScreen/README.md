@@ -21,10 +21,12 @@ This module owns provider detail settings, API service settings, and provider mo
 
 `ProviderCatalogScreen` is the add-provider entry point. It searches the complete bundled provider
 catalog, shows whether each preset is already installed, and imports an uninstalled preset through
-the backend `ProvidersModule`. Provider routing and credential destinations stay bundle-owned; the
-screen never accepts remote endpoint configuration. Its header action opens `NewProviderScreen` for
-a fully custom provider. The background registry updater may refresh model metadata separately, but
-it cannot add or alter entries in this Provider catalog.
+an explicit row action in the backend `ProvidersModule`; tapping an uninstalled row does not import
+it. Installed presets can be removed like custom providers and remain available here to add again.
+Provider routing and credential destinations stay bundle-owned; the screen never accepts remote
+endpoint configuration. Its header action opens `NewProviderScreen` for a fully custom provider.
+The background registry updater may refresh model metadata separately, but it cannot add or alter
+entries in this Provider catalog.
 
 ## Provider Form
 

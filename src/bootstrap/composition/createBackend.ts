@@ -10,7 +10,6 @@ import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/model
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
 import {
   type AgentAvatars,
@@ -109,7 +108,6 @@ export function createBackend(
       isExcluded: (providerId) => providerRegistryService.isProviderExcluded(providerId),
       list: () => providerRegistryService.loadProviders(),
     },
-    canRemove: canDeleteProvider,
     providers: {
       create: (input) => services.provider.create(input),
       find: async (providerId) => {

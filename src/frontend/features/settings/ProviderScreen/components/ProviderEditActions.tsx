@@ -17,14 +17,12 @@ export function ProviderEditActions({
   isSaving,
   onDelete,
   onSave,
-  showDelete,
 }: {
   isDeleteDisabled: boolean;
   isSaveDisabled: boolean;
   isSaving: boolean;
   onDelete: () => void;
   onSave: () => void;
-  showDelete: boolean;
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -35,17 +33,15 @@ export function ProviderEditActions({
       pointerEvents="box-none"
       style={{ paddingBottom: Math.max(insets.bottom, actionBarMinBottomInset) }}
     >
-      {showDelete ? (
-        <Button
-          className="h-12 flex-1 rounded-full"
-          disabled={isDeleteDisabled}
-          icon={<Trash2Icon />}
-          onPress={onDelete}
-          variant="destructive"
-        >
-          {t('settings.provider.deleteProvider')}
-        </Button>
-      ) : null}
+      <Button
+        className="h-12 flex-1 rounded-full"
+        disabled={isDeleteDisabled}
+        icon={<Trash2Icon />}
+        onPress={onDelete}
+        variant="destructive"
+      >
+        {t('settings.provider.deleteProvider')}
+      </Button>
       <Button
         className="h-12 flex-1 rounded-full"
         disabled={isSaveDisabled}

@@ -19,7 +19,6 @@ export type ProvidersModuleDependencies = {
     isExcluded(providerId: string): boolean;
     list(): ProtoProviderConfig[];
   };
-  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
   providers: {
     create(input: ReturnType<typeof createPresetProviderInput>): Promise<Provider>;
     find(providerId: string): Promise<Provider | null>;
@@ -33,12 +32,10 @@ export type ProvidersModuleDependencies = {
 export function createProvidersModule({
   avatars,
   catalog,
-  canRemove,
   providers,
   registryUpdates,
 }: ProvidersModuleDependencies): ProvidersModule {
   return {
-    canRemove,
     importPreset: async (providerId) => {
       const preset = catalog
         .list()

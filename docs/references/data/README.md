@@ -162,10 +162,11 @@ code reaches this graph only through `Backend`, `ApiClient`, and `PreferenceClie
 
 Seeders apply default preferences, a small recommended provider set on fresh installs, and the
 managed CherryAI default model. Later catalog versions refresh only preset providers already present
-in `user_provider`; they do not install the entire catalog into an existing database. The complete
-trusted provider catalog remains bundle-owned and is imported explicitly through `ProvidersModule`.
-Seeders do not create Agents, Sessions, or chat messages; first-run Agent creation remains
-user-driven. Seeder versions are journaled under `app_state` keys prefixed with `seed:`.
+in `user_provider`; they do not install the entire catalog into an existing database, including one
+whose providers were all removed by the user. The complete trusted provider catalog remains
+bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do not create Agents,
+Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
+journaled under `app_state` keys prefixed with `seed:`.
 
 `ProviderRegistryUpdaterService` refreshes only `models.json` and `provider-models.json` after first
 paint. China locale/zone signals prefer GitCode and other devices prefer GitHub; either source falls

@@ -14,7 +14,6 @@ export type ProviderRegistryUpdateEvent = {
 };
 
 export interface ProvidersModule {
-  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
   importPreset(providerId: string): Promise<Provider>;
   listCatalog(): Promise<ProviderCatalogEntry[]>;
   persistAvatar(id: string, sourceUri: string): Promise<string>;

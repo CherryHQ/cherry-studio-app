@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule, useMutation } from '@/frontend/data';
+import { queryKeys, useMutation } from '@/frontend/data';
 import {
   dataApiCollectionFilters,
   removeItemsFromInfiniteData,
@@ -18,18 +18,23 @@ import { refreshProviderModelQueries } from '../models/utils/refreshProviderMode
 
 type ProviderListData = InfiniteData<CursorPaginationResponse<Provider>, string | undefined>;
 
+type UseProviderDeletionOptions = {
+  dismissOnDeleteRequest?: boolean;
+};
+
 /**
- * Deleting the provider, from wherever the action is offered — currently the
- * provider settings screen, which is two pushes deep, hence `dismissTo` rather
- * than `back`: the detail page under it is about a record that no longer exists.
+ * Deleting a provider from either the list or its edit screen. The edit screen
+ * dismisses both record-bound routes immediately because neither remains valid;
+ * the list stays mounted and lets the optimistic cache update remove its row.
  */
-export function useProviderDeletion() {
+export function useProviderDeletion({
+  dismissOnDeleteRequest = true,
+}: UseProviderDeletionOptions = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const providers = useBackendModule('providers');
   const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
     onMutate: async (variables) => {
       const providerIdToDelete = variables?.params.id;
@@ -57,7 +62,10 @@ export function useProviderDeletion() {
     onSuccess: async (_result, variables) => {
       if (variables) {
         queryClient.removeQueries({ queryKey: [`/providers/${variables.params.id}`] });
-        await refreshProviderModelQueries(queryClient, variables.params.id);
+        await Promise.all([
+          refreshProviderModelQueries(queryClient, variables.params.id),
+          queryClient.invalidateQueries({ queryKey: queryKeys.providers.catalog() }),
+        ]);
       }
     },
     refresh: ['/providers', '/providers/page'],
@@ -65,10 +73,6 @@ export function useProviderDeletion() {
   const deleteProvider = deleteProviderMutation.trigger;
   const requestDelete = useCallback(
     (provider: Provider) => {
-      if (!providers.canRemove(provider)) {
-        return;
-      }
-
       alert.confirm({
         confirmLabel: t('common.delete'),
         description: t('settings.provider.delete.message', { name: provider.name }),
@@ -76,7 +80,9 @@ export function useProviderDeletion() {
           // Left before the request resolves: the list has already dropped the
           // row optimistically, so staying would be sitting on a dead record.
           const deletion = deleteProvider({ params: { id: provider.id } });
-          router.dismissTo('/settings/provider');
+          if (dismissOnDeleteRequest) {
+            router.dismissTo('/settings/provider');
+          }
           void deletion
             .then(() => {
               toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
@@ -89,14 +95,10 @@ export function useProviderDeletion() {
         title: t('settings.provider.delete.title'),
       });
     },
-    [alert, deleteProvider, providers, router, t, toast],
+    [alert, deleteProvider, dismissOnDeleteRequest, router, t, toast],
   );
 
   return {
-    canDelete: useCallback(
-      (provider: Provider | undefined) => Boolean(provider && providers.canRemove(provider)),
-      [providers],
-    ),
     isDeleting: deleteProviderMutation.isLoading,
     requestDelete,
   };

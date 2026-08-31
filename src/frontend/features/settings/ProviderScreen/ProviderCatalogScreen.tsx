@@ -1,5 +1,5 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { ContentState, useAlert } from '@cherrystudio/ui/components';
+import { Button, ContentState, useAlert } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -26,7 +26,8 @@ type ProviderCatalogRowProps = {
   entry: ProviderCatalogEntry;
   importPending: boolean;
   isPendingEntry: boolean;
-  onPress: (entry: ProviderCatalogEntry) => void;
+  onImport: (entry: ProviderCatalogEntry) => void;
+  onOpen: (entry: ProviderCatalogEntry) => void;
 };
 
 const keyExtractor = (item: ProviderCatalogEntry) => item.id;
@@ -41,14 +42,10 @@ function ProviderCatalogRow({
   entry,
   importPending,
   isPendingEntry,
-  onPress,
+  onImport,
+  onOpen,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
-  const statusLabel = entry.isInstalled
-    ? t('settings.provider.catalog.installed')
-    : isPendingEntry
-      ? t('settings.provider.catalog.importing')
-      : t('settings.provider.catalog.import');
 
   return (
     <SettingsServiceRow
@@ -59,13 +56,30 @@ function ProviderCatalogRow({
           providerName={entry.name}
         />
       }
-      disabled={importPending}
+      disabled={entry.isInstalled && importPending}
       id={entry.id}
       name={entry.name}
-      onPress={() => onPress(entry)}
-      statusLabel={statusLabel}
-      statusTone={entry.isInstalled ? 'success' : 'default'}
+      onPress={entry.isInstalled ? () => onOpen(entry) : undefined}
+      statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
+      statusTone="success"
       subtitle={entry.id}
+      trailingAction={
+        entry.isInstalled ? undefined : (
+          <Button
+            disabled={importPending}
+            loading={isPendingEntry}
+            onPress={() => onImport(entry)}
+            size="xs"
+            variant="secondary"
+          >
+            {t(
+              isPendingEntry
+                ? 'settings.provider.catalog.importing'
+                : 'settings.provider.catalog.import',
+            )}
+          </Button>
+        )
+      }
     />
   );
 }
@@ -118,20 +132,15 @@ export default function ProviderCatalogScreen() {
   const importProvider = importMutation.mutate;
   const importPending = importMutation.isPending;
   const pendingProviderId = importPending ? importMutation.variables : undefined;
-  const handleProviderPress = useCallback(
+  const handleImportProvider = useCallback(
     (entry: ProviderCatalogEntry) => {
-      if (importPending) {
-        return;
-      }
-
-      if (entry.isInstalled) {
-        openProvider(entry);
+      if (importPending || entry.isInstalled) {
         return;
       }
 
       importProvider(entry.id);
     },
-    [importPending, importProvider, openProvider],
+    [importPending, importProvider],
   );
   const sections = useMemo<ProviderCatalogSection[]>(() => {
     const recommended = listedEntries.filter((entry) => entry.isRecommended);
@@ -151,10 +160,11 @@ export default function ProviderCatalogScreen() {
         entry={item}
         importPending={importPending}
         isPendingEntry={pendingProviderId === item.id}
-        onPress={handleProviderPress}
+        onImport={handleImportProvider}
+        onOpen={openProvider}
       />
     ),
-    [handleProviderPress, importPending, pendingProviderId],
+    [handleImportProvider, importPending, openProvider, pendingProviderId],
   );
   const openCustomProvider = useCallback(() => {
     router.push('/settings/provider/new');
