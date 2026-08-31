@@ -1,5 +1,7 @@
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { FileEntryProvenance } from '@/shared/data/types/file';
+
 import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 
 /**
@@ -16,7 +18,8 @@ import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHe
  * Every row is an immutable blob stored at `Data/Files/{id}.{ext}` (path
  * derived at runtime, never persisted); content never changes after creation —
  * "edits" create new entries. Rows are removed only by explicit user action;
- * business-object deletion never removes files.
+ * business-object deletion never removes files. `provenance` is stable source identity
+ * for the library UI, not a mutable owner association.
  *
  * - `updatedAt` equals `createdAt` until a future metadata update (file-library
  *   rename) writes it; nothing writes it today.
@@ -37,6 +40,9 @@ export const fileEntryTable = sqliteTable(
     size: integer().notNull(),
 
     ...createUpdateDeleteTimestamps,
+    // Added after the timestamp columns to match SQLite's physical ADD COLUMN order.
+    // Existing rows default to user-owned unless the migration can prove they are artifacts.
+    provenance: text().$type<FileEntryProvenance>().notNull().default('user'),
   },
   (t) => [index('fe_created_at_idx').on(t.createdAt)],
 );

@@ -116,7 +116,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
           mediaType: part.mediaType,
           url: fileEntryUrl(part.fileEntryId as FileEntryId),
         } as Extract<CherryMessagePart, { type: 'file' }>,
-        { fileEntryId: part.fileEntryId },
+        { fileEntryId: part.fileEntryId, purpose: part.purpose },
       );
     case 'tool':
       return toToolPart(part);

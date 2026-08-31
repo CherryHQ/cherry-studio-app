@@ -277,7 +277,9 @@ describe('agentMessageProjection', () => {
       expect.objectContaining({
         filename: 'managed.png',
         mediaType: 'image/png',
-        providerMetadata: { cherry: { fileEntryId } },
+        providerMetadata: {
+          cherry: { fileEntryId, purpose: 'input-attachment' },
+        },
         type: 'file',
         url: `cherry://file/${fileEntryId}`,
       }),

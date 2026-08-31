@@ -53,6 +53,7 @@ describe('FileEntryService integration', () => {
       filename: 'report.pdf',
       id: id(1),
       media_type: 'application/pdf',
+      provenance: 'user',
       size: 12,
       updated_at: now,
     });

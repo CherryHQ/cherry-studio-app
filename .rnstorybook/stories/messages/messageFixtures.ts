@@ -101,6 +101,15 @@ const writeFileParts: CherryMessagePart[] = [
     type: 'dynamic-tool',
   },
   {
+    filename: 'release-notes.md',
+    mediaType: 'text/markdown',
+    providerMetadata: {
+      cherry: { fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID, purpose: 'artifact' },
+    },
+    type: 'file',
+    url: `cherry://file/${STORY_WRITTEN_FILE_ENTRY_ID}`,
+  },
+  {
     input: { content: '# Release Notes\n', filename: 'release-notes.md' },
     output: {
       fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID,

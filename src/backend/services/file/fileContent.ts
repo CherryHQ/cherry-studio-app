@@ -47,6 +47,7 @@ export const fileContent = {
     const entry = await createInternalEntryWithPreview(fileEntryService, {
       mediaType: validated.mediaType,
       name: validated.name,
+      provenance: 'user',
       source: 'uri',
       uri: validated.uri,
     });
@@ -64,7 +65,11 @@ export const fileContent = {
    */
   createTextEntry: async (input: { data: string; mediaType: string; name: string }) => {
     const validated = createTextEntryInputSchema.parse(input);
-    return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
+    return createInternalEntry(fileEntryService, {
+      ...validated,
+      provenance: 'artifact',
+      source: 'text',
+    });
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   generatePreviewUri: generateFilePreviewUri,

@@ -214,6 +214,7 @@ describe('fileStorage', () => {
 
     const entry = await createInternalEntry(entries, {
       name: 'report.final version',
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///picker/report',
     });
@@ -230,6 +231,7 @@ describe('fileStorage', () => {
     const entries = createEntryStore();
 
     const fromSource = await createInternalEntry(entries, {
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///camera/IMG_0001.jpg',
     });
@@ -237,12 +239,14 @@ describe('fileStorage', () => {
 
     const fromInput = await createInternalEntry(entries, {
       mediaType: 'image/heic',
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///camera/IMG_0001.jpg',
     });
     expect(fromInput.mediaType).toBe('image/heic');
 
     const fallback = await createInternalEntry(entries, {
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///picker/unknown.bin',
     });
@@ -316,6 +320,7 @@ describe('fileStorage', () => {
     const entry = await createInternalEntry(entries, {
       data: 'data:image/png;base64,AAAA',
       mediaType: 'image/png',
+      provenance: 'artifact',
       source: 'base64',
     });
 
@@ -323,6 +328,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         filename: 'painting-00000000-0000-7000-8000-000000000001.png',
         mediaType: 'image/png',
+        provenance: 'artifact',
         size: 4,
       }),
     );
@@ -338,6 +344,7 @@ describe('fileStorage', () => {
       data: '# Report\n',
       mediaType: 'text/markdown',
       name: 'report.md',
+      provenance: 'artifact',
       source: 'text',
     });
 
@@ -345,6 +352,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         filename: 'report.md',
         mediaType: 'text/markdown',
+        provenance: 'artifact',
         size: 9,
       }),
     );
@@ -364,6 +372,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: '../escape.txt',
+        provenance: 'artifact',
         source: 'text',
       }),
     ).rejects.toThrow();
@@ -380,6 +389,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: 'notes.txt',
+        provenance: 'artifact',
         source: 'text',
       }),
     ).rejects.toThrow('write failed');
@@ -395,6 +405,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: 'notes.txt',
+        provenance: 'artifact',
         source: 'text',
       }),
     ).rejects.toThrow('database failed');
@@ -412,6 +423,7 @@ describe('fileStorage', () => {
       createInternalEntry(createEntryStore(), {
         data: 'AAAA',
         mediaType: 'image/png',
+        provenance: 'artifact',
         source: 'base64',
       }),
     ).rejects.toThrow('write failed');
@@ -426,6 +438,7 @@ describe('fileStorage', () => {
     await expect(
       createInternalEntry(entries, {
         name: 'brief.txt',
+        provenance: 'user',
         source: 'uri',
         uri: 'file:///picker/brief.txt',
       }),
@@ -441,6 +454,7 @@ describe('fileStorage', () => {
     const entries = createEntryStore();
     const entry = await createInternalEntry(entries, {
       name: 'brief.txt',
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///picker/brief.txt',
     });

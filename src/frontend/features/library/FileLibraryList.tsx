@@ -1,3 +1,5 @@
+import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
+import UploadIcon from '@cherrystudio/app-icons/icons/upload';
 import { ContentState, Tabs } from '@cherrystudio/ui/components';
 import {
   LegendList,
@@ -6,7 +8,7 @@ import {
 } from '@legendapp/list/react-native';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FileEntrySkeleton, LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
@@ -52,7 +54,8 @@ export function FileLibraryList({
   const tileSize =
     (windowWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap) /
     fileLibraryGrid.columns;
-  const estimatedItemSize = tileSize + fileLibraryGrid.tileGap;
+  const estimatedItemSize =
+    tileSize + fileLibraryGrid.tileMetadataEstimatedHeight + fileLibraryGrid.tileGap;
 
   const contentContainerStyle = useMemo(
     () => ({
@@ -141,8 +144,13 @@ function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibra
 // URI pages retain prior item identities when a new page appends, so mounted
 // tiles stay on the memoized path while the next page resolves.
 const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
+  const { t } = useTranslation();
+  const isArtifact = item.entry.provenance === 'artifact';
+  const ProvenanceIcon = isArtifact ? SparklesIcon : UploadIcon;
+
   return (
     <View
+      className="gap-2"
       style={{
         paddingBottom: fileLibraryGrid.tileGap,
         paddingHorizontal: fileLibraryGrid.tileGap / 2,
@@ -158,6 +166,17 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
           uri={item.uri}
         />
       )}
+      <View className="min-w-0 gap-0.5 px-0.5">
+        <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
+          {item.entry.filename}
+        </Text>
+        <View className="flex-row items-center gap-1">
+          <ProvenanceIcon className="size-3.5 text-muted-foreground" />
+          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+            {t(isArtifact ? 'library.provenance.artifact' : 'library.provenance.user')}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 });

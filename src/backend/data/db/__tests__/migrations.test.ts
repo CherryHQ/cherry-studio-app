@@ -83,6 +83,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'deleted_at',
+        'provenance',
       ]);
       expect(columnNames(database, 'painting')).toEqual([
         'id',
@@ -383,6 +384,68 @@ describe('bundled SQLite migrations', () => {
       expect(
         database.prepare("SELECT disabled_tools FROM mcp_server WHERE id = 'legacy'").get(),
       ).toEqual({ disabled_tools: '[]' });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('backfills provable historical artifacts without relabeling user files', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const provenanceMigrationIndex = entries.findIndex(
+        ({ tag }) => tag === '0011_motionless_tony_stark',
+      );
+      expect(provenanceMigrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, provenanceMigrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session-1', 'agent-1', 1, 1, 1);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+        VALUES
+          ('user-file', 'brief.pdf', 'application/pdf', 1, 1, 1),
+          ('message-artifact', 'report.md', 'text/markdown', 1, 1, 1),
+          ('tool-artifact', 'legacy.txt', 'text/plain', 1, 1, 1),
+          ('painting-artifact', 'painting.png', 'image/png', 1, 1, 1);
+        INSERT INTO agent_session_message (
+          id, session_id, role, data, status, created_at, updated_at
+        ) VALUES (
+          'message-1',
+          'session-1',
+          'assistant',
+          '{"version":1,"parts":[{"id":"artifact-1","type":"file","fileEntryId":"message-artifact","mediaType":"text/markdown","name":"report.md","purpose":"artifact"},{"id":"tool-1","type":"tool","toolCallId":"call-1","toolRef":{"source":"builtin","capabilityId":"write_file"},"providerName":"write_file","displayName":"Write file","state":"output-available","output":{"value":{"status":"created","fileEntryId":"tool-artifact"},"artifacts":[]}}]}',
+          'success',
+          1,
+          1
+        );
+        INSERT INTO painting (
+          id, provider_id, prompt, order_key, created_at, updated_at, files
+        ) VALUES (
+          'painting-1',
+          'provider-1',
+          'prompt',
+          'a0',
+          1,
+          1,
+          '{"input":[],"output":["painting-artifact"]}'
+        );
+      `);
+
+      applyMigrationSql(database, entries[provenanceMigrationIndex]?.sql ?? '');
+
+      expect(database.prepare('SELECT id, provenance FROM file_entry ORDER BY id').all()).toEqual([
+        { id: 'message-artifact', provenance: 'artifact' },
+        { id: 'painting-artifact', provenance: 'artifact' },
+        { id: 'tool-artifact', provenance: 'artifact' },
+        { id: 'user-file', provenance: 'user' },
+      ]);
     } finally {
       database.close();
     }

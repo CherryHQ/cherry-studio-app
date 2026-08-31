@@ -30,8 +30,9 @@ Part renderers, animation providers, and platform controls remain private implem
 Callers import only from `@/frontend/components/messages`.
 
 A tool that returns managed artifacts already has them in the message: the Host persists each one
-as a `purpose: 'artifact'` file part that draws its own card. A per-tool renderer therefore renders
-the *call*, never the artifact, or the same file appears twice.
+as a `purpose: 'artifact'` file part. `MessageParts` removes those files from the ordinary ordered
+part stream and collects them in one labelled artifact area after the message body. A per-tool
+renderer therefore renders the *call*, never the artifact, or the same file appears twice.
 
 ## Message Disclosure Contract
 

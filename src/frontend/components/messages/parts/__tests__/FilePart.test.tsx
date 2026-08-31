@@ -20,11 +20,12 @@ describe('FilePart', () => {
         cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
       },
     };
-    const renderer = render(<FilePart part={part} />);
+    const renderer = render(<FilePart part={part} size={96} />);
 
     expect(renderer.root.findByType('FileEntryPreview').props.entryId).toBe(
       '00000000-0000-7000-8000-000000000001',
     );
+    expect(renderer.root.findByType('FileEntryPreview').props.size).toBe(96);
   });
 
   test('does not render unmanaged attachments', () => {

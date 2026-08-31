@@ -10,6 +10,7 @@ import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import {
   FileEntryIdSchema,
+  FileEntryProvenanceSchema,
   FileEntrySchema,
   MediaTypeSchema,
   SafeNameSchema,
@@ -21,6 +22,7 @@ const CreateFileEntrySchema = z.strictObject({
   filename: SafeNameSchema,
   id: FileEntryIdSchema,
   mediaType: MediaTypeSchema,
+  provenance: FileEntryProvenanceSchema.default('user'),
   size: z.int().nonnegative(),
 });
 
@@ -145,6 +147,7 @@ function rowToFileEntry(row: FileEntryRow): FileEntry {
     filename: row.filename,
     id: row.id,
     mediaType: row.mediaType,
+    provenance: row.provenance,
     size: row.size,
     updatedAt: row.updatedAt,
   });

@@ -22,6 +22,14 @@ jest.mock('../SourceGroup', () => {
   };
 });
 
+jest.mock('../ArtifactGroup', () => {
+  const { createElement } = jest.requireActual('react');
+
+  return {
+    ArtifactGroup: (props: object) => createElement('ArtifactGroup', props),
+  };
+});
+
 describe('MessageParts', () => {
   test.each([
     ['pending', true],
@@ -36,7 +44,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('MessagePartRenderer').props.resolvedText).toBeUndefined();
   });
 
-  test('keeps source parts out of the ordered renderers and groups them once', () => {
+  test('keeps source and artifact parts out of ordered renderers and groups each once', () => {
     const source = {
       sourceId: 'source-1',
       title: 'Cherry Studio',
@@ -45,13 +53,30 @@ describe('MessageParts', () => {
     };
     const message: MessageListItem = {
       ...makeMessage('success'),
-      data: { parts: [{ text: 'Hello', type: 'text' }, source] },
+      data: {
+        parts: [
+          { text: 'Hello', type: 'text' },
+          {
+            filename: 'report.md',
+            mediaType: 'text/markdown',
+            providerMetadata: {
+              cherry: { fileEntryId: 'file-1', purpose: 'artifact' },
+            },
+            type: 'file',
+            url: 'cherry://file/file-1',
+          },
+          source,
+        ],
+      },
     };
     const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
 
     const renderedPart = renderer.root.findByType('MessagePartRenderer');
     expect(renderedPart.props.part).toEqual({ text: 'Hello', type: 'text' });
     expect(renderedPart.props.isTextSelectionEnabled).toBe(false);
+    expect(renderer.root.findByType('ArtifactGroup').props.parts).toEqual([
+      expect.objectContaining({ filename: 'report.md', type: 'file' }),
+    ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
   });
 });

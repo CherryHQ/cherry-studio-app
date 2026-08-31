@@ -1,6 +1,10 @@
 import { View } from 'react-native';
 
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
+
 import type { MessageListItem } from '../types';
+import { ArtifactGroup } from './ArtifactGroup';
 import { resolveMessageCitationText } from './citations';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { SourceGroup } from './SourceGroup';
@@ -12,6 +16,12 @@ type MessagePartsProps = {
 };
 
 export type MessagePartRenderMode = 'markdown' | 'plainText';
+
+type FilePart = Extract<CherryMessagePart, { type: 'file' }>;
+
+function isArtifactFilePart(part: CherryMessagePart): part is FilePart {
+  return part.type === 'file' && readCherryMeta(part)?.purpose === 'artifact';
+}
 
 function getMessagePartKey(
   message: MessageListItem,
@@ -33,12 +43,13 @@ export function MessageParts({
   }
 
   const citationText = resolveMessageCitationText(parts);
+  const artifactParts = parts.filter(isArtifactFilePart);
   const sourceParts = parts.filter((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
       {parts.map((part, index) => {
-        if (part.type === 'source-url') {
+        if (part.type === 'source-url' || isArtifactFilePart(part)) {
           return null;
         }
 
@@ -54,6 +65,7 @@ export function MessageParts({
           />
         );
       })}
+      {artifactParts.length > 0 ? <ArtifactGroup parts={artifactParts} /> : null}
       {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
     </View>
   );

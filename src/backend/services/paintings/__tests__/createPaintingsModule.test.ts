@@ -103,6 +103,7 @@ describe('createPaintingsModule', () => {
     expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith({
       mediaType: 'image/png',
       name: 'input.png',
+      provenance: 'user',
       source: 'uri',
       uri: 'file:///picked.png',
     });

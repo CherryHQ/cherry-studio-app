@@ -35,6 +35,10 @@ export type MediaType = z.infer<typeof MediaTypeSchema>;
 
 export const FALLBACK_MEDIA_TYPE = 'application/octet-stream';
 
+/** Stable provenance retained after a file leaves its originating message or workflow. */
+export const FileEntryProvenanceSchema = z.enum(['user', 'artifact']);
+export type FileEntryProvenance = z.infer<typeof FileEntryProvenanceSchema>;
+
 export const FileEntryIdSchema = z.uuid();
 export type FileEntryId = z.infer<typeof FileEntryIdSchema>;
 
@@ -45,6 +49,8 @@ export const FileEntrySchema = z
     filename: SafeNameSchema,
     id: FileEntryIdSchema,
     mediaType: MediaTypeSchema,
+    /** Whether the bytes came from the user or were produced for them by Cherry. */
+    provenance: FileEntryProvenanceSchema.default('user'),
     /** File size in bytes. */
     size: z.int().nonnegative(),
     updatedAt: TimestampSchema,
