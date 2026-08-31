@@ -1,6 +1,10 @@
 import type { HttpError, HttpErrorDetails } from './HttpError';
 
-export type HttpMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
+export type HttpBodylessMethod = 'DELETE' | 'GET';
+
+export type HttpBodyMethod = 'PATCH' | 'POST' | 'PUT';
+
+export type HttpMethod = HttpBodylessMethod | HttpBodyMethod;
 
 export type HttpHeaders = Readonly<Record<string, string>>;
 
@@ -8,6 +12,7 @@ type HttpQueryPrimitive = boolean | number | string;
 
 export type HttpQueryValue = HttpQueryPrimitive | null | undefined | readonly HttpQueryPrimitive[];
 
+/** Arrays serialize as repeated keys (`tag=a&tag=b`); `null` and `undefined` values are omitted. */
 export type HttpQuery = Readonly<Record<string, HttpQueryValue>>;
 
 export interface HttpErrorResponse {
@@ -26,17 +31,21 @@ export interface DecodedHttpError {
 
 export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError | undefined;
 
-export interface HttpRequest<TBody = unknown> {
-  readonly body?: TBody;
+interface HttpRequestBase {
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers?: HttpHeaders;
-  readonly method: HttpMethod;
   /** Relative API path beginning with `/`. Absolute URLs are rejected. */
   readonly path: string;
   readonly query?: HttpQuery;
   readonly signal?: AbortSignal;
+  /** Positive request timeout in milliseconds. Omit to use the client default. */
   readonly timeoutMs?: number;
 }
+
+/** `GET` and `DELETE` requests carry no body, matching REST semantics and the fetch transport. */
+export type HttpRequest<TBody = unknown> =
+  | (HttpRequestBase & { readonly body?: never; readonly method: HttpBodylessMethod })
+  | (HttpRequestBase & { readonly body?: TBody; readonly method: HttpBodyMethod });
 
 export interface HttpResponse<TData = unknown> {
   readonly data: TData;

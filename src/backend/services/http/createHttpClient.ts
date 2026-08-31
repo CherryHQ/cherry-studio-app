@@ -21,6 +21,7 @@ import type {
 } from './HttpClient';
 import { HttpError, isHttpError } from './HttpError';
 import { mapAxiosError } from './mapAxiosError';
+import { serializeHttpQuery } from './serializeHttpQuery';
 import { toHttpHeaders } from './toHttpHeaders';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -79,6 +80,10 @@ function assertValidBaseUrl(baseUrl: string): void {
   }
 }
 
+function isValidTimeoutMs(timeoutMs: number): boolean {
+  return Number.isFinite(timeoutMs) && timeoutMs > 0;
+}
+
 function assertValidRequest(request: HttpRequest<unknown>): void {
   if (!request || typeof request !== 'object' || !HTTP_METHODS.has(request.method)) {
     throw new HttpError('HTTP request method is invalid.', {
@@ -94,6 +99,20 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
   ) {
     throw new HttpError('HTTP request path must be a relative API path beginning with `/`.', {
       code: 'INVALID_REQUEST_PATH',
+      kind: 'internal',
+    });
+  }
+
+  if ((request.method === 'DELETE' || request.method === 'GET') && request.body !== undefined) {
+    throw new HttpError('HTTP GET and DELETE requests must not include a body.', {
+      code: 'INVALID_REQUEST_BODY',
+      kind: 'internal',
+    });
+  }
+
+  if (request.timeoutMs !== undefined && !isValidTimeoutMs(request.timeoutMs)) {
+    throw new HttpError('HTTP request timeout must be a positive number of milliseconds.', {
+      code: 'INVALID_REQUEST_TIMEOUT',
       kind: 'internal',
     });
   }
@@ -149,7 +168,10 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
       const interceptedError = await interceptor.onError(mappedError, context.request);
       mappedError = isHttpError(interceptedError)
         ? interceptedError
-        : mapAxiosError(new Error('HTTP error interceptor returned an invalid value.'));
+        : new HttpError('HTTP error interceptor returned an invalid value.', {
+            code: 'INVALID_INTERCEPTOR_ERROR',
+            kind: 'internal',
+          });
     } catch (interceptorError) {
       mappedError = mapAxiosError(interceptorError);
     }
@@ -245,6 +267,7 @@ function createAxiosTransport(adapter?: AxiosAdapter): AxiosInstance {
     env: {
       fetch: expoFetch as unknown as AxiosFetch,
     },
+    paramsSerializer: { serialize: serializeHttpQuery },
     timeout: DEFAULT_TIMEOUT_MS,
   });
 
@@ -260,6 +283,13 @@ function createHttpClientWithTransport(
   transport: AxiosInstance,
 ): HttpClient {
   assertValidBaseUrl(options.baseUrl);
+
+  if (options.timeoutMs !== undefined && !isValidTimeoutMs(options.timeoutMs)) {
+    throw new HttpError('HTTP client timeout must be a positive number of milliseconds.', {
+      code: 'INVALID_CLIENT_TIMEOUT',
+      kind: 'internal',
+    });
+  }
 
   const route: HttpRoute = Object.freeze({
     baseUrl: options.baseUrl,
