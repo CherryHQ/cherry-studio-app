@@ -2,7 +2,9 @@ import { View } from 'react-native';
 
 import type { MessageListItem } from '../types';
 import { resolveMessageCitationText } from './citations';
+import { MessageFileStrip } from './MessageFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
+import { partitionMessageParts } from './partitionMessageParts';
 import { SourceGroup } from './SourceGroup';
 
 type MessagePartsProps = {
@@ -33,28 +35,25 @@ export function MessageParts({
   }
 
   const citationText = resolveMessageCitationText(parts);
+  const { body, files } = partitionMessageParts(parts);
   const sourceParts = parts.filter((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
-      {parts.map((part, index) => {
-        if (part.type === 'source-url') {
-          return null;
-        }
-
-        const resolvedText = citationText.get(index);
-        return (
-          <MessagePartRenderer
-            isStreaming={message.status === 'pending'}
-            isTextSelectionEnabled={isTextSelectionEnabled}
-            key={getMessagePartKey(message, part, index)}
-            part={part}
-            renderMode={renderMode}
-            resolvedText={resolvedText}
-          />
-        );
-      })}
+      {body.map(({ index, part }) => (
+        <MessagePartRenderer
+          isStreaming={message.status === 'pending'}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          key={getMessagePartKey(message, part, index)}
+          part={part}
+          renderMode={renderMode}
+          resolvedText={citationText.get(index)}
+        />
+      ))}
       {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
+      {/* Last, so the files a turn produced are the closest thing to the end of
+          the message and stay put as the answer above them streams in. */}
+      {files.length > 0 ? <MessageFileStrip parts={files} /> : null}
     </View>
   );
 }

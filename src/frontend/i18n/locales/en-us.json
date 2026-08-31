@@ -219,6 +219,7 @@
   "library.filter.all": "All",
   "library.filter.images": "Images",
   "library.filter.documents": "Documents",
+  "library.provenance.generated": "Generated",
   "navigation.agents": "Agents",
   "navigation.search": "Search",
   "navigation.settings": "Settings",

@@ -18,12 +18,14 @@ describe('File contract', () => {
       filename: 'report.pdf',
       id: entryId,
       mediaType: 'application/pdf',
+      provenance: 'generated',
       size: 4,
       updatedAt: 2,
     };
     expect(FileEntrySchema.parse(entry)).toEqual(entry);
     expect(FileEntrySchema.safeParse({ ...entry, ext: 'pdf' }).success).toBe(false);
     expect(FileEntrySchema.safeParse({ ...entry, filename: 'a/b.pdf' }).success).toBe(false);
+    expect(FileEntrySchema.safeParse({ ...entry, provenance: 'remote' }).success).toBe(false);
   });
 
   it('accepts only type/subtype media types', () => {

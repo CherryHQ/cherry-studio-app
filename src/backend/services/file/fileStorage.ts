@@ -8,6 +8,7 @@ import {
   FALLBACK_MEDIA_TYPE,
   type FileEntry,
   type FileEntryId,
+  type FileEntryProvenance,
   FileEntryIdSchema,
   fileEntryUrl,
   filenameExtension,
@@ -23,7 +24,7 @@ const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 
-export type CreateInternalEntryInput =
+export type CreateInternalEntryInput = { provenance: FileEntryProvenance } & (
   | {
       /** Authoritative media type from the picker; extension inference is the fallback. */
       mediaType?: string;
@@ -45,12 +46,14 @@ export type CreateInternalEntryInput =
       /** Display name; the caller owns extension inference, so it is required. */
       name: string;
       source: 'text';
-    };
+    }
+);
 
 type WrittenInternalFile = {
   filename: string;
   id: FileEntryId;
   mediaType: string;
+  provenance: FileEntryProvenance;
   size: number;
 };
 
@@ -147,7 +150,7 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
       throw new Error(`Internal file has an invalid size: ${destination.uri}`);
     }
 
-    return { filename, id, mediaType, size };
+    return { filename, id, mediaType, provenance: input.provenance, size };
   } catch (error) {
     try {
       if (destination.exists) {
@@ -205,6 +208,7 @@ export async function createMessageParts(
       const entry = await createInternalEntry(entries, {
         mediaType: part.mediaType,
         name: part.filename,
+        provenance: 'imported',
         source: 'uri',
         uri: part.url,
       });

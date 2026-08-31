@@ -11,6 +11,10 @@ describe('FileEntryService integration', () => {
   const now = 10 * HOUR;
   let testDatabase: ReturnType<typeof createServiceTestDatabase>;
   let service: FileEntryService;
+  // Cases below are about identity, paging, and deletion. They still have to
+  // state an origin, so this keeps the one they do not care about out of view.
+  const createImported = (input: Omit<Parameters<FileEntryService['create']>[0], 'provenance'>) =>
+    service.create({ ...input, provenance: 'imported' });
 
   beforeEach(async () => {
     jest.spyOn(Date, 'now').mockReturnValue(now);
@@ -26,7 +30,7 @@ describe('FileEntryService integration', () => {
   });
 
   it('creates a validated entry and reads it back through every lookup', async () => {
-    const entry = await service.create({
+    const entry = await createImported({
       filename: 'report.pdf',
       id: id(1),
       mediaType: 'application/pdf',
@@ -39,6 +43,7 @@ describe('FileEntryService integration', () => {
         filename: 'report.pdf',
         id: id(1),
         mediaType: 'application/pdf',
+        provenance: 'imported',
         size: 12,
         updatedAt: now,
       }),
@@ -53,6 +58,7 @@ describe('FileEntryService integration', () => {
       filename: 'report.pdf',
       id: id(1),
       media_type: 'application/pdf',
+      provenance: 'imported',
       size: 12,
       updated_at: now,
     });
@@ -60,7 +66,7 @@ describe('FileEntryService integration', () => {
 
   it('rejects an unsafe filename without writing a row', async () => {
     await expect(
-      service.create({
+      createImported({
         filename: 'nested/escape.pdf',
         id: id(2),
         mediaType: 'application/pdf',
@@ -79,13 +85,13 @@ describe('FileEntryService integration', () => {
   });
 
   it('batch-resolves only live file entries for submission-time validation', async () => {
-    const available = await service.create({
+    const available = await createImported({
       filename: 'available.png',
       id: id(1),
       mediaType: 'image/png',
       size: 12,
     });
-    await service.create({
+    await createImported({
       filename: 'deleted.png',
       id: id(2),
       mediaType: 'image/png',
@@ -104,7 +110,7 @@ describe('FileEntryService integration', () => {
   });
 
   it('deletes an entry idempotently', async () => {
-    await service.create({ filename: 'note.txt', id: id(3), mediaType: 'text/plain', size: 1 });
+    await createImported({ filename: 'note.txt', id: id(3), mediaType: 'text/plain', size: 1 });
 
     await service.delete(id(3));
     await expect(service.findById(id(3))).resolves.toBeNull();
@@ -123,7 +129,7 @@ describe('FileEntryService integration', () => {
       ];
       for (const [index, entry] of entries.entries()) {
         jest.spyOn(Date, 'now').mockReturnValue(now + index * HOUR);
-        await service.create({ ...entry, id: id(index + 1), size: index + 1 });
+        await createImported({ ...entry, id: id(index + 1), size: index + 1 });
       }
     };
     const filenamesOf = (page: { items: { filename: string }[] }) =>
@@ -142,8 +148,8 @@ describe('FileEntryService integration', () => {
     });
 
     it('breaks a createdAt tie by id so a page boundary neither skips nor repeats', async () => {
-      await service.create({ filename: 'a.png', id: id(1), mediaType: 'image/png', size: 1 });
-      await service.create({ filename: 'b.png', id: id(2), mediaType: 'image/png', size: 1 });
+      await createImported({ filename: 'a.png', id: id(1), mediaType: 'image/png', size: 1 });
+      await createImported({ filename: 'b.png', id: id(2), mediaType: 'image/png', size: 1 });
 
       const first = await service.listByCursor({ limit: 1 });
       const second = await service.listByCursor({ cursor: first.nextCursor, limit: 1 });

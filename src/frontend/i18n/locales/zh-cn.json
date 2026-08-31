@@ -217,6 +217,7 @@
   "library.filter.all": "全部",
   "library.filter.images": "图片",
   "library.filter.documents": "文档",
+  "library.provenance.generated": "已生成",
   "navigation.agents": "智能体",
   "navigation.search": "搜索",
   "navigation.settings": "设置",

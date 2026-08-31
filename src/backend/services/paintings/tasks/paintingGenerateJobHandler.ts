@@ -150,6 +150,7 @@ export function createPaintingGenerateJobHandler(
               await storage.createInternalEntry({
                 data: image.base64,
                 mediaType: image.mediaType,
+                provenance: 'generated',
                 source: 'base64',
               }),
             );

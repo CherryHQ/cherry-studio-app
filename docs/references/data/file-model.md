@@ -10,7 +10,7 @@ here. Terms follow [Domain Language](../domain-language.md).
 ## Invariants
 
 1. **Files are first-class.** A file is a peer of the Agent message or painting that uses it, not a
-   dependent of it. Every entry belongs in the future file library.
+   dependent of it. Every entry belongs in the file library.
 2. **Content is immutable.** Bytes never change after creation. Any "edit" creates a new entry
    (copy-on-write); nothing in the app rewrites a managed blob in place.
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
@@ -37,7 +37,7 @@ here. Terms follow [Domain Language](../domain-language.md).
 ## Schema
 
 `file_entry`: `id`, `filename` (including extension), `mediaType`, `size`, `createdAt`,
-`updatedAt`, `deletedAt`.
+`updatedAt`, `deletedAt`, `provenance`.
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
   extension-derived `File.type` second, `application/octet-stream` last. It is authoritative for
@@ -46,6 +46,17 @@ here. Terms follow [Domain Language](../domain-language.md).
   separately.
 - `updatedAt` equals `createdAt` on insert and has no writer today. A future metadata update
   (library rename) is its first one; immutable content means it never tracks a content write.
+- `provenance` is stable source identity: `imported` for a file brought in from a picker, camera,
+  paste, or painting input; `generated` for a file written or produced for the user by Cherry;
+  `unknown` when nothing proves either. Reattaching a generated file as an input does not change its
+  origin. It is written exactly once, by whoever creates the bytes, and never derived from an owner
+  at read time — owners are deleted, and the library still has to answer.
+
+  `unknown` is a real state, not a gap waiting to be filled. Rows that predate the column, and rows
+  that will arrive from a peer with no provenance concept of its own, have no proven origin;
+  recording them as `imported` would state something the data does not support. The library shows a
+  badge only for `generated` and stays silent otherwise, so the three states cost one label rather
+  than three.
 - `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
   attachment admission and direct preview reads already treat a marked row as unavailable, while
   cleanup still must not infer ownership from it.
@@ -59,9 +70,16 @@ An owner stores the entry ids it points at, inside its own row:
 | Painting | `painting.files` — `{ input: string[], output: string[] }` |
 | Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
-A `write_file` tool result also carries the `fileEntryId` it created in its result JSON; chat resolves
-the id back to a card at read time. As with every owner here, the reference outlives the bytes and
+A `write_file` tool result also carries the `fileEntryId` it created in its result JSON. The Runtime
+projects the same id as a `purpose: 'artifact'` file part directly after that tool part; chat lifts
+it out of the ordered stream and shows it after the answer, where a deliverable is easier to find
+than at the step that wrote it. As with every owner here, the reference outlives the bytes and
 degrades to the unavailable placeholder.
+
+`purpose` and `provenance` answer different questions and neither substitutes for the other.
+`purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
+turn preparation to decide what gets replayed to the model; presentation does not read it.
+`provenance` is a fact about the *bytes*, survives every owner, and is what the library reports.
 
 There is no association table and no foreign key from an owner to `file_entry`. That is the point:
 a foreign key would have to choose between `CASCADE` (deleting a file silently rewrites the
@@ -114,7 +132,10 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 
 ## Extension points
 
-**File library.** A library page is a query over `file_entry`; it needs no new table. Its trash uses
+**File library.** The library page is a query over `file_entry`; it needs no new table. A tile badges
+its `provenance` only when the origin is `generated`. Filtering by origin is deliberately not shipped
+yet: most historical rows are `unknown`, so the filter would sort noise until enough labelled rows
+exist. Its future trash uses
 the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
 bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
 trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no
@@ -126,10 +147,10 @@ row).
 **Agent file writes and generated artifacts.** A write tool reads an entry in the turn's controlled
 resource ledger, creates a new one, and returns the new id; it must not rewrite a managed blob.
 
-As-built, one slice of this ships: the `write_file` tool stores UTF-8 text through the `'text'`
-source of `createInternalEntry`, so it creates entries but reads none and does not consult the turn's
-resource ledger. Its id reaches the transcript inside tool-result JSON rather than as the
-`purpose: 'artifact'` file part described below.
+As-built, `write_file` stores UTF-8 text through the `'text'` source of `createInternalEntry`, while
+`generate_image` imports generated image bytes. Both persist the new entry with
+`provenance: 'generated'` and return it in the Runtime artifact envelope. As-built, `write_file`
+still reads no entry and does not consult the turn's resource ledger.
 Office inputs are imported before inspection or editing, and every edit patches a copy into a new
 entry while preserving the source. Office and image tools follow the same rule for newly generated
 output. The file library is also the Version 1 artifact library; no parallel artifact blob store or

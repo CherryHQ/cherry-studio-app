@@ -96,6 +96,7 @@ async function startGeneration(
         const entry = await dependencies.storage.createInternalEntry({
           mediaType: image.mediaType,
           name: image.name,
+          provenance: 'imported',
           source: 'uri',
           uri: image.uri,
         });
