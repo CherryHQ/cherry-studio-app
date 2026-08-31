@@ -43,38 +43,6 @@ jest.mock('react-native-keyboard-controller', () =>
 // into a spy, which is what lets mention insertion be asserted at all.
 jest.mock('react-native-enriched-markdown', () => require('react-native-enriched-markdown/jest'));
 
-// Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
-// Keep its layout context present so tab-owned screens can render normally.
-jest.mock('react-native-bottom-tabs', () => {
-  const react = require('react');
-  const { View } = require('react-native');
-  const BottomTabBarHeightContext = react.createContext(0);
-  const TabView = ({
-    navigationState,
-    renderScene,
-  }: {
-    navigationState?: { index: number; routes: unknown[] };
-    renderScene?: (props: { route: unknown }) => unknown;
-  }) => {
-    const route = navigationState?.routes[navigationState.index];
-    const scene = route && renderScene ? renderScene({ route }) : null;
-
-    return react.createElement(
-      BottomTabBarHeightContext.Provider,
-      { value: 0 },
-      react.createElement(View, null, scene),
-    );
-  };
-
-  return {
-    __esModule: true,
-    BottomTabBarHeightContext,
-    default: TabView,
-    SceneMap: (scenes: Record<string, unknown>) => scenes,
-    useBottomTabBarHeight: () => react.use(BottomTabBarHeightContext),
-  };
-});
-
 // Minimal Skia surface for components that render under test (AnimatedText):
 // declarative elements become inert nodes and matchFont hands back fixed
 // glyph geometry. The official mock lacks matchFont, so we roll our own.

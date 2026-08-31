@@ -12,14 +12,6 @@ trustPolicyExclude:
   - tinyexec@1.2.2
   - ua-parser-js@0.7.41||1.0.41
 
-packageExtensions:
-  '@bottom-tabs/react-navigation@1.4.0':
-    peerDependencies:
-      expo-router: '>=57'
-    peerDependenciesMeta:
-      '@react-navigation/native':
-        optional: true
-
 overrides:
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
@@ -61,7 +53,6 @@ patchedDependencies:
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
-  '@bottom-tabs/react-navigation@1.4.0': patches/@bottom-tabs__react-navigation@1.4.0.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
   '@ai-sdk/deepseek@2.0.30': patches/@ai-sdk__deepseek@2.0.30.patch
   '@ai-sdk/google@3.0.64': patches/@ai-sdk__google@3.0.64.patch
@@ -74,7 +65,6 @@ patchedDependencies:
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   expo-widgets@57.0.8: patches/expo-widgets@57.0.8.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
-  react-native-bottom-tabs@1.4.0: patches/react-native-bottom-tabs@1.4.0.patch
   expo-router@57.0.6: patches/expo-router@57.0.6.patch
 
 minimumReleaseAgeExclude:

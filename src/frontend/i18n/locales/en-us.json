@@ -631,8 +631,6 @@
   "endpoint_type.openai": "OpenAI",
   "endpoint_type.openai-response": "OpenAI-Response",
   "settings.websearch.advanced.title": "Advanced settings",
-  "settings.websearch.capability.fetchUrls": "API host",
-  "settings.websearch.capability.searchKeywords": "API host",
   "settings.websearch.compression.method.cutoff": "Cutoff",
   "settings.websearch.compression.method.none": "None",
   "settings.websearch.compressionCutoffLimit": "Max context (Tokens)",

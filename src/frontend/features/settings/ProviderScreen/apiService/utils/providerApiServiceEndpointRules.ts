@@ -1,12 +1,7 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
-import type {
-  AuthType,
-  EndpointConfig,
-  EndpointConfigs,
-  Provider,
-} from '@/shared/data/types/provider';
+import type { AuthType, EndpointConfigs, Provider } from '@/shared/data/types/provider';
 
 export const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
@@ -34,7 +29,6 @@ export type CustomProviderCreationPayload = {
 };
 
 const defaultChatEndpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
-const CONFIGURABLE_ENDPOINT_TYPE_SET = new Set<EndpointType>(CONFIGURABLE_ENDPOINT_TYPES);
 const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET = new Set<EndpointType>(
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
 );
@@ -46,14 +40,6 @@ export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
 
 export function getProviderPrimaryBaseUrl(provider?: Provider | null): string {
   return provider?.endpointConfigs?.[getPrimaryEndpoint(provider)]?.baseUrl ?? '';
-}
-
-export function isConfigurableEndpointType(
-  endpoint: EndpointType | null | undefined,
-): endpoint is EndpointType {
-  return (
-    endpoint !== null && endpoint !== undefined && CONFIGURABLE_ENDPOINT_TYPE_SET.has(endpoint)
-  );
 }
 
 export function isCustomProviderTextEndpointType(
@@ -68,20 +54,6 @@ export function canEditProviderEndpoint(provider?: Provider | null): boolean {
     provider !== undefined &&
     ENDPOINT_EDITABLE_AUTH_TYPES.has(provider.authType)
   );
-}
-
-export function getConfigurableEndpointTypesForProvider(
-  provider?: Provider | null,
-): EndpointType[] {
-  return canEditProviderEndpoint(provider) ? [...CONFIGURABLE_ENDPOINT_TYPES] : [];
-}
-
-export function resolveVisibleEndpointTypes(provider?: Provider | null): EndpointType[] {
-  const primaryEndpoint = getPrimaryEndpoint(provider);
-  const configured = Object.keys(provider?.endpointConfigs ?? {}) as EndpointType[];
-  const secondaryEndpoints = configured.filter((endpoint) => endpoint !== primaryEndpoint).sort();
-
-  return [primaryEndpoint, ...secondaryEndpoints];
 }
 
 export function isValidEndpointBaseUrl(value: string): boolean {
@@ -138,37 +110,4 @@ export function findInvalidCustomProviderEndpointUrl(
   }
 
   return null;
-}
-
-export function mergeEndpointConfigs(
-  endpointConfigs: EndpointConfigs | undefined,
-  baseUrlByEndpoint: Partial<Record<EndpointType, string>>,
-  visibleEndpointTypes: readonly EndpointType[],
-): EndpointConfigs {
-  const nextEndpointConfigs: EndpointConfigs = { ...endpointConfigs };
-  const endpoints = new Set<EndpointType>([
-    ...(Object.keys(endpointConfigs ?? {}) as EndpointType[]),
-    ...visibleEndpointTypes,
-  ]);
-  const visible = new Set(visibleEndpointTypes);
-
-  for (const endpoint of endpoints) {
-    const value = visible.has(endpoint) ? (baseUrlByEndpoint[endpoint] ?? '').trim() : '';
-
-    if (value) {
-      const currentConfig: EndpointConfig = nextEndpointConfigs[endpoint] ?? {};
-      nextEndpointConfigs[endpoint] = { ...currentConfig, baseUrl: value };
-      continue;
-    }
-
-    const currentConfig = { ...nextEndpointConfigs[endpoint] };
-    delete currentConfig.baseUrl;
-    if (Object.keys(currentConfig).length > 0) {
-      nextEndpointConfigs[endpoint] = currentConfig;
-    } else {
-      delete nextEndpointConfigs[endpoint];
-    }
-  }
-
-  return nextEndpointConfigs;
 }

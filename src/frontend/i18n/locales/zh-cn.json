@@ -629,8 +629,6 @@
   "endpoint_type.openai": "OpenAI",
   "endpoint_type.openai-response": "OpenAI-Response",
   "settings.websearch.advanced.title": "高级设置",
-  "settings.websearch.capability.fetchUrls": "API 地址",
-  "settings.websearch.capability.searchKeywords": "API 地址",
   "settings.websearch.compression.method.cutoff": "截断",
   "settings.websearch.compression.method.none": "不压缩",
   "settings.websearch.compressionCutoffLimit": "最大上下文(Tokens)",
