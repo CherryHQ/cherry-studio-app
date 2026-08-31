@@ -233,6 +233,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
+  private readonly creatingSessions = new Set<AdmissionState>();
+  private readonly observingSessions = new Map<string, Set<Promise<void>>>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
   private readonly runtimeSessions = new Map<
@@ -338,8 +340,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     for (const admission of this.admittingSessions.values()) {
       admission.abortController.abort(reason);
     }
+    for (const creation of this.creatingSessions) {
+      creation.abortController.abort(reason);
+    }
     await Promise.allSettled(
-      [...this.admittingSessions.values()].map(({ completion }) => completion),
+      [...this.admittingSessions.values(), ...this.creatingSessions].map(
+        ({ completion }) => completion,
+      ),
     );
     // An admission already committing its reservation may have installed a
     // turn while the first abort pass was running.
@@ -363,6 +370,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   protected override onDestroy(): void {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
+    this.creatingSessions.clear();
+    this.observingSessions.clear();
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
@@ -377,14 +386,33 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     title?: string;
   }): Promise<AgentSessionView> {
     const parsed = AgentCreateSessionInputSchema.parse(input);
-    const agent = await this.agents.getAgent(parsed.agentId);
-    if (!agent) {
-      fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
+    this.assertAcceptingSubmissions();
+    const completion = createCompletionSignal();
+    const abortController = new AbortController();
+    const creation = { abortController, completion: completion.promise };
+    const { signal } = abortController;
+    this.creatingSessions.add(creation);
+
+    try {
+      const agent = await raceAbort(this.agents.getAgent(parsed.agentId), signal);
+      if (!agent) {
+        fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
+      }
+      signal.throwIfAborted();
+      this.assertAcceptingSubmissions();
+      const session = await this.store.createSession({
+        agentId: parsed.agentId,
+        title: parsed.title,
+      });
+      if (signal.aborted || !this.acceptingSubmissions) {
+        await this.store.deleteSession(session.id);
+        fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
+      }
+      return session;
+    } finally {
+      this.creatingSessions.delete(creation);
+      completion.resolve();
     }
-    return this.store.createSession({
-      agentId: parsed.agentId,
-      title: parsed.title,
-    });
   }
 
   async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
@@ -409,6 +437,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // installing its active/running state for us to cancel and drain below.
     this.deletingSessions.add(sessionId);
     try {
+      const observations = this.observingSessions.get(sessionId);
+      if (observations) {
+        await Promise.allSettled([...observations]);
+      }
       const admission = this.admittingSessions.get(sessionId);
       if (admission) {
         await admission.completion;
@@ -572,38 +604,60 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
-    const session = await this.store.getSession(sessionId);
-    if (!session) {
-      fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+    if (this.deletingSessions.has(sessionId)) {
+      fail('SESSION_BUSY', 'The session is being deleted.');
     }
-    const agent = await this.requireAgent(session.agentId);
-    const capabilities = this.projectCapabilities(session.executionTarget);
+    const completion = createCompletionSignal();
+    const observations = this.observingSessions.get(sessionId) ?? new Set<Promise<void>>();
+    observations.add(completion.promise);
+    this.observingSessions.set(sessionId, observations);
 
-    // Snapshot capture and listener registration are one synchronous section:
-    // no event can fall into a snapshot/subscription gap (invariant 8).
-    const active = this.activeTurns.get(sessionId);
-    const snapshot = AgentSessionSnapshotSchema.parse(
-      cloneJson({
-        agent: { id: agent.id, name: agent.name },
-        session,
-        capabilities,
-        activeTurn: active?.turn ?? null,
-        streamingMessage: active?.assistantMessage ?? null,
-        pendingApprovals: active
-          ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
-          : [],
-      }),
-    );
-    const sessionListeners = this.listeners.get(sessionId) ?? new Set();
-    this.listeners.set(sessionId, sessionListeners);
-    sessionListeners.add(listener);
+    try {
+      const session = await this.store.getSession(sessionId);
+      if (!session) {
+        fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+      }
+      const agent = await this.requireAgent(session.agentId);
+      const capabilities = this.projectCapabilities(session.executionTarget);
+      if (this.deletingSessions.has(sessionId)) {
+        fail('SESSION_BUSY', 'The session is being deleted.');
+      }
 
-    return {
-      snapshot,
-      unsubscribe: () => {
-        sessionListeners.delete(listener);
-      },
-    };
+      // Snapshot capture and listener registration are one synchronous section:
+      // no event can fall into a snapshot/subscription gap (invariant 8).
+      const active = this.activeTurns.get(sessionId);
+      const snapshot = AgentSessionSnapshotSchema.parse(
+        cloneJson({
+          agent: { id: agent.id, name: agent.name },
+          session,
+          capabilities,
+          activeTurn: active?.turn ?? null,
+          streamingMessage: active?.assistantMessage ?? null,
+          pendingApprovals: active
+            ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
+            : [],
+        }),
+      );
+      const sessionListeners = this.listeners.get(sessionId) ?? new Set();
+      this.listeners.set(sessionId, sessionListeners);
+      sessionListeners.add(listener);
+
+      return {
+        snapshot,
+        unsubscribe: () => {
+          sessionListeners.delete(listener);
+          if (sessionListeners.size === 0 && this.listeners.get(sessionId) === sessionListeners) {
+            this.listeners.delete(sessionId);
+          }
+        },
+      };
+    } finally {
+      observations.delete(completion.promise);
+      if (observations.size === 0 && this.observingSessions.get(sessionId) === observations) {
+        this.observingSessions.delete(sessionId);
+      }
+      completion.resolve();
+    }
   }
 
   // ── Execution ──
@@ -920,10 +974,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
-  private assertIdle(sessionId: string): void {
+  private assertAcceptingSubmissions(): void {
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }
+  }
+
+  private assertIdle(sessionId: string): void {
+    this.assertAcceptingSubmissions();
     if (this.deletingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session is being deleted.');
     }

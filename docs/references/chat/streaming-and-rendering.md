@@ -44,8 +44,10 @@ Session id through `useSyncExternalStore`. The client:
 - releases the Host observation when the final React subscriber leaves;
 - replaces observed Session state from a fresh snapshot when the app returns to the foreground.
 
-Starting a chat with an Agent does not create an empty Session. The first send creates the Session,
-establishes its observation, updates the route, and then submits the message.
+Opening a chat with an Agent does not create a Session eagerly. The first send creates the Session,
+establishes its observation, and submits the message. The route changes only after submission is
+accepted, and the draft composer is replaced by the new Session's keyed composer; failed admission
+leaves the draft composer mounted for send recovery.
 
 ## Transcript Window And Live Projection
 

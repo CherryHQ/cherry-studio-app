@@ -12,11 +12,13 @@ behavior. Structured message rendering is shared with painting through
 
 - `ChatScreen.tsx` is header + swappable body + composer session in normal parent flow. With a
   Session the body is the conversation; selecting an Agent without one shows the empty state and
-  creates the Session on first send.
+  creates the Session on first send. The composer is keyed by draft Agent or Session id, so route
+  changes cannot carry draft text or attachments into another Session.
 - `input/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.
 - `workspace/` merges persisted transcript rows with live Agent messages, adapts protocol parts into
   the shared `MessageList`, and owns history loading, initial-render gating, and approvals.
 - `runtime/` owns the route-scoped `AgentSessionChatClient`, observes the app-owned Mobile Agent Host
-  through `Backend.agent`, and owns frontend navigation and query invalidation effects.
+  through `Backend.agent`, and owns frontend navigation and query invalidation effects. On first
+  send it changes the route only after the new Session has accepted the submission.

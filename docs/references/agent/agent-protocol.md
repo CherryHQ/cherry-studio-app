@@ -338,7 +338,9 @@ for the turn, so history does not depend on reconstructing composer state.
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
 the protocol does not need event sequence, host epoch, replay buffers, or revision counters in
-version 1.
+version 1. Session deletion waits for observations already crossing their asynchronous lookup
+boundary, and those observations fail closed instead of installing a snapshot or listener after
+deletion begins.
 
 ## Events
 

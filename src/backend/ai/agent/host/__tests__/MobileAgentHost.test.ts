@@ -26,7 +26,7 @@ import {
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
-import type { AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
@@ -1028,6 +1028,86 @@ describe('MobileAgentHost', () => {
     expect(host.isDestroyed).toBe(true);
   });
 
+  test('aborts an in-flight Session creation before stopping', async () => {
+    const lookupStarted = createDeferred();
+    let resolveAgent!: (agent: AgentDefinition | null) => void;
+    const pendingAgent = new Promise<AgentDefinition | null>((resolve) => {
+      resolveAgent = resolve;
+    });
+    const agentSource: AgentDefinitionSource = {
+      getAgent: jest.fn(async () => {
+        lookupStarted.resolve();
+        return pendingAgent;
+      }),
+    };
+    const createRow = jest.spyOn(store, 'createSession');
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      inferenceModel,
+      {
+        agents: agentSource,
+      },
+    );
+
+    const creation = host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    void creation.catch(() => undefined);
+    await lookupStarted.promise;
+
+    await host._doStop();
+
+    await expect(creation).rejects.toThrow('The Agent Host is stopping.');
+    expect(createRow).not.toHaveBeenCalled();
+    await expect(
+      host.createSession({ agentId: AGENT_ID, executionTarget: { kind: 'local' } }),
+    ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+    resolveAgent(await agents.getAgent(AGENT_ID));
+  });
+
+  test('waits for and rolls back a Session row created while stopping', async () => {
+    const createStarted = createDeferred();
+    const releaseCreate = createDeferred();
+    const createRow = store.createSession.bind(store);
+    let createdSessionId: string | undefined;
+    jest.spyOn(store, 'createSession').mockImplementationOnce(async (input) => {
+      createStarted.resolve();
+      await releaseCreate.promise;
+      const session = await createRow(input);
+      createdSessionId = session.id;
+      return session;
+    });
+    const deleteRow = jest.spyOn(store, 'deleteSession');
+    const host = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }));
+    const creation = host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    void creation.catch(() => undefined);
+    await createStarted.promise;
+
+    let didStop = false;
+    const stopping = host._doStop().then(() => {
+      didStop = true;
+    });
+    await Promise.resolve();
+    expect(didStop).toBe(false);
+
+    releaseCreate.resolve();
+    await stopping;
+
+    await expect(creation).rejects.toMatchObject({
+      view: { code: 'EXECUTION_UNAVAILABLE' },
+    });
+    if (!createdSessionId) throw new Error('Session row was not created');
+    expect(deleteRow).toHaveBeenCalledWith(createdSessionId);
+    await expect(store.getSession(createdSessionId)).resolves.toBeNull();
+  });
+
   test('aborts an in-flight submission admission before stopping', async () => {
     const admissionStarted = createDeferred();
     const releaseAdmission = createDeferred();
@@ -1260,6 +1340,43 @@ describe('MobileAgentHost', () => {
     expect(sequence).toEqual(['admission.started', 'admission.resumed', 'delete.rows']);
     expect(submissionResult.status).toBe('fulfilled');
     expect(deletionResult.status).toBe('fulfilled');
+  });
+
+  test('rejects an observation that overlaps Session deletion', async () => {
+    const lookupStarted = createDeferred();
+    let resolveAgent!: (agent: AgentDefinition | null) => void;
+    const pendingAgent = new Promise<AgentDefinition | null>((resolve) => {
+      resolveAgent = resolve;
+    });
+    const agentSource: AgentDefinitionSource = {
+      getAgent: jest.fn(async () => {
+        lookupStarted.resolve();
+        return pendingAgent;
+      }),
+    };
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      inferenceModel,
+      {
+        agents: agentSource,
+      },
+    );
+    const session = await store.createSession({ agentId: AGENT_ID });
+
+    const observation = host.observeSession(session.id, jest.fn());
+    const rejectedObservation = expect(observation).rejects.toMatchObject({
+      view: { code: 'SESSION_BUSY' },
+    });
+    await lookupStarted.promise;
+    const deletion = host.deleteSession({ sessionId: session.id });
+
+    resolveAgent(await agents.getAgent(AGENT_ID));
+    await rejectedObservation;
+    await expect(deletion).resolves.toBeUndefined();
+    await expect(store.getSession(session.id)).resolves.toBeNull();
   });
 
   test('rejects a new submission after an old turn drains while deletion is pending', async () => {

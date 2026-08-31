@@ -5,10 +5,12 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 
 ## Current Contract
 
-- A new Session is created lazily on the first send, then observed before the message is submitted.
+- A new Session is created lazily on the first send, observed before the message is submitted, and
+  installed in the route only after that submission is accepted.
 - Existing Sessions submit through the live `AgentProtocol` client owned by `ChatProvider`.
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
-  presentation.
+  presentation. Draft and existing-Session composers use separate keyed sessions, so navigation
+  cannot reuse one Session's draft in another.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.

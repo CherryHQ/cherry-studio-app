@@ -91,6 +91,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
       temporaryCapabilities,
     }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
+      let createdSessionAgentId: string | undefined;
       if (!targetSessionId) {
         if (!agentId) {
           throw new Error('Select an Agent before sending a message.');
@@ -98,13 +99,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
         const session = await client.createSession(agentId);
         targetSessionId = session.id;
+        createdSessionAgentId = agentId;
         persistSessionWebSearchSelection(
           targetSessionId,
           temporaryCapabilities?.includes('web-search') ?? false,
         );
         await client.observe(targetSessionId);
-        navigation.openSession(targetSessionId, agentId);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
       }
 
       await client.submitMessage(targetSessionId, parts, {
@@ -112,6 +112,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         ...(temporaryCapabilities !== undefined ? { temporaryCapabilities } : {}),
       });
+      if (createdSessionAgentId) {
+        navigation.openSession(targetSessionId, createdSessionAgentId);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
+      }
     },
     [client, navigation, queryClient],
   );

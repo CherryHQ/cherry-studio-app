@@ -155,6 +155,20 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000017');
   });
 
+  it('deletes a composer-owned ready attachment when its Draft unmounts', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000021', 'abandoned-ready.pdf'),
+    );
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('abandoned-ready.pdf')]));
+    await act(flushPromises);
+
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000021');
+  });
+
   it('hands attachments to the sender without deleting them when cleared', async () => {
     const ready = readyAttachment('00000000-0000-7000-8000-000000000014', 'sent.pdf');
     await renderHook([ready]);
@@ -197,6 +211,24 @@ describe('useManagedComposerAttachments', () => {
     await act(async () => snapshot?.removeAttachment(restored.id));
 
     expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000020');
+  });
+
+  it('deletes restored ownership when a failed send finishes after Draft unmount', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000022', 'abandoned-retry.pdf'),
+    );
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('abandoned-retry.pdf')]));
+    await act(flushPromises);
+    const restored = snapshot?.attachments[0];
+    if (!restored || restored.status !== 'ready') throw new Error('missing ready attachment');
+
+    await act(async () => snapshot?.clearAttachments());
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => snapshot?.setAttachments([restored]));
+
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000022');
   });
 
   it('imports transient initial attachments but mounts managed ones as ready', async () => {

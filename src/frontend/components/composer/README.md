@@ -92,7 +92,8 @@ walk to verify it.
   Chat or Painting. Existing managed entries passed into a session are borrowed;
   removing them detaches them without deleting their source file. A successful
   send transfers a newly imported entry out of temporary Composer ownership;
-  failed-send restoration restores that ownership with the draft.
+  failed-send restoration restores that ownership with the draft. Unmounting a
+  composer deletes any newly imported entries it still owns.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
