@@ -16,7 +16,11 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-import type { AgentErrorView, AgentInferenceSnapshotV1 } from '@/shared/contracts/agent';
+import type {
+  AgentErrorView,
+  AgentInferenceSnapshotV1,
+  AgentSessionView,
+} from '@/shared/contracts/agent';
 
 import type { AgentSessionStore } from '../AgentSessionStore';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
@@ -48,7 +52,9 @@ const RESERVATION_FACTS = { modelId: MODEL_ID, inferenceSnapshot: INFERENCE_SNAP
 
 type StoreHarness = {
   store: AgentSessionStore;
-  /** Returns an agent id valid for createSession under this adapter. */
+  /** Seeds an empty legacy Session without exposing that operation on the production port. */
+  createEmptySession: (input: { agentId: string; title?: string }) => Promise<AgentSessionView>;
+  /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
   /** SQLite-only escape hatch for raw assertions; undefined for in-memory. */
   raw?: DatabaseSync;
@@ -59,6 +65,7 @@ function makeInMemoryHarness(): StoreHarness {
   const store = new InMemoryAgentSessionStore();
   return {
     store,
+    createEmptySession: (input) => store.createEmptySession(input),
     makeAgentId: async () => randomUUID(),
     cleanup: () => {},
   };
@@ -111,8 +118,10 @@ function makeSqliteHarness(): StoreHarness {
       }
     },
   } as unknown as DbService;
+  const store = new SqliteAgentSessionStore(dbService);
   return {
-    store: new SqliteAgentSessionStore(dbService),
+    store,
+    createEmptySession: (input) => store.createEmptySession(input),
     makeAgentId: async () => {
       const id = randomUUID();
       sqlite
@@ -158,8 +167,8 @@ describe.each([
     harness.cleanup();
   });
 
-  test('session lifecycle: create, get, rename, delete', async () => {
-    const created = await store.createSession({ agentId });
+  test('legacy empty Session lifecycle: seed, get, rename, delete', async () => {
+    const created = await harness.createEmptySession({ agentId });
     expect(created.agentId).toBe(agentId);
     expect(created.executionTarget).toEqual({ kind: 'local' });
     expect(created.title).toBe('');
@@ -169,7 +178,7 @@ describe.each([
     expect(await store.getSession(created.id)).toEqual(created);
     expect(await store.getSession('missing')).toBeNull();
 
-    const titled = await store.createSession({ agentId, title: 'Named' });
+    const titled = await harness.createEmptySession({ agentId, title: 'Named' });
     expect(titled.title).toBe('Named');
     expect(titled.titleIsManual).toBe(true);
 
@@ -181,7 +190,7 @@ describe.each([
     const autoNamed = await store.autoRenameSession(titled.id, 'Named', 'Summary');
     expect(autoNamed).toBeNull();
 
-    const autoTitle = await store.createSession({ agentId });
+    const autoTitle = await harness.createEmptySession({ agentId });
     const firstTitle = await store.autoRenameSession(autoTitle.id, '', 'First message');
     expect(firstTitle?.title).toBe('First message');
     expect(firstTitle?.titleIsManual).toBe(false);
@@ -193,7 +202,7 @@ describe.each([
   });
 
   test('reserveSubmission writes the correlated user/assistant pair', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -245,7 +254,7 @@ describe.each([
   });
 
   test('finalizeAssistantMessage settles status, parts, usage, and turn error', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -290,7 +299,7 @@ describe.each([
   });
 
   test('transcript accumulates across settled turns in order', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     for (const text of ['one', 'two']) {
       const reserved = await store.reserveSubmission({
         ...RESERVATION_FACTS,
@@ -327,7 +336,7 @@ describe.each([
   });
 
   test('loads a checkpoint tail separately from full-transcript authorization indexes', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -389,7 +398,7 @@ describe.each([
   });
 
   test('stores a checkpoint on the assistant terminal write and reads the newest candidate', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -417,7 +426,7 @@ describe.each([
   });
 
   test('reconcileInterrupted settles unsettled assistant placeholders once', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -437,7 +446,7 @@ describe.each([
   });
 
   test('deleteSession removes the transcript with the session', async () => {
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -483,7 +492,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
   test('the invariant-1 index rejects a second reservation while one is unsettled', async () => {
     const { store } = harness;
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -526,7 +535,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -563,7 +572,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -586,7 +595,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -614,7 +623,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,
@@ -632,7 +641,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
-    const session = await store.createSession({ agentId });
+    const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...RESERVATION_FACTS,
       sessionId: session.id,

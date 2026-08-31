@@ -243,7 +243,7 @@ function assertJsonRoundTrip(events: AgentEvent[]): void {
 let store: InMemoryAgentSessionStore;
 
 function createStoredSession(): Promise<AgentSessionView> {
-  return store.createSession({ agentId: AGENT_ID });
+  return store.createEmptySession({ agentId: AGENT_ID });
 }
 
 describe('MobileAgentHost', () => {
@@ -1185,7 +1185,7 @@ describe('MobileAgentHost', () => {
   test('reconciliation marks preloaded unfinished messages interrupted', async () => {
     // Preload the reference adapter with the state a durable adapter would
     // restore after a process death.
-    const session = await store.createSession({ agentId: AGENT_ID });
+    const session = await store.createEmptySession({ agentId: AGENT_ID });
     const reserved = await store.reserveSubmission({
       modelId: 'mock-provider::mock-model',
       inferenceSnapshot: {
@@ -1294,13 +1294,8 @@ describe('MobileAgentHost', () => {
     const pendingAgent = new Promise<AgentDefinition | null>((resolve) => {
       resolveAgent = resolve;
     });
-    let lookupCount = 0;
     const agentSource: AgentDefinitionSource = {
-      getAgent: jest.fn(async (agentId) => {
-        lookupCount += 1;
-        if (lookupCount === 1) {
-          return agents.getAgent(agentId);
-        }
+      getAgent: jest.fn(async () => {
         lookupStarted.resolve();
         return pendingAgent;
       }),

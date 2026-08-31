@@ -51,7 +51,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     super();
   }
 
-  async createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
+  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
     return this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .insert(agentSessionTable)

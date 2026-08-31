@@ -120,7 +120,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     this.messages.clear();
   }
 
-  async createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
+  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
     const session = createSessionView(input);
     this.sessions.set(session.id, session);
     this.messages.set(session.id, []);

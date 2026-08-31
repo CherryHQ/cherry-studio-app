@@ -72,10 +72,10 @@ export type FinalizeAssistantMessageInput = {
  * The store persists messages only. The Turn is a Host projection: live turn
  * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
  * process-local Host state by design, and terminal turn facts live on the
- * assistant message row. Multi-record operations are atomic at this boundary.
+ * assistant message row. Multi-record operations are atomic at this boundary,
+ * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
-  createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
   /** Renames only when the current title still matches the caller's auto-title snapshot. */
