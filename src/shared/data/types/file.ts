@@ -35,8 +35,14 @@ export type MediaType = z.infer<typeof MediaTypeSchema>;
 
 export const FALLBACK_MEDIA_TYPE = 'application/octet-stream';
 
-/** Stable provenance retained after a file leaves its originating message or workflow. */
-export const FileEntryProvenanceSchema = z.enum(['user', 'artifact']);
+/**
+ * Stable provenance retained after a file leaves its originating message or
+ * workflow. `unknown` is a real state, not a placeholder: rows imported before
+ * this field existed, and rows that will arrive from a peer with no provenance
+ * concept of its own, genuinely have no proven origin. Presenting those as
+ * `imported` would state something the data does not support.
+ */
+export const FileEntryProvenanceSchema = z.enum(['generated', 'imported', 'unknown']);
 export type FileEntryProvenance = z.infer<typeof FileEntryProvenanceSchema>;
 
 export const FileEntryIdSchema = z.uuid();
@@ -49,8 +55,8 @@ export const FileEntrySchema = z
     filename: SafeNameSchema,
     id: FileEntryIdSchema,
     mediaType: MediaTypeSchema,
-    /** Whether the bytes came from the user or were produced for them by Cherry. */
-    provenance: FileEntryProvenanceSchema.default('user'),
+    /** How the bytes came to exist: imported by the user, or produced for them. */
+    provenance: FileEntryProvenanceSchema,
     /** File size in bytes. */
     size: z.int().nonnegative(),
     updatedAt: TimestampSchema,

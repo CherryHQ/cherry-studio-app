@@ -30,6 +30,7 @@ function fileEntry(id: FileEntryId): FileEntry {
     filename: 'image.png',
     id,
     mediaType: 'image/png',
+    provenance: 'imported',
     size: 1,
     updatedAt: 1,
   });
@@ -103,7 +104,7 @@ describe('createPaintingsModule', () => {
     expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith({
       mediaType: 'image/png',
       name: 'input.png',
-      provenance: 'user',
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///picked.png',
     });

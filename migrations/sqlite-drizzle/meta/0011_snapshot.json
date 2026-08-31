@@ -107,7 +107,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'user'"
+          "default": "'unknown'"
         }
       },
       "indexes": {

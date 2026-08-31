@@ -9,7 +9,7 @@ import m0007 from '../../../../migrations/sqlite-drizzle/0007_agent-tool-binding
 import m0008 from '../../../../migrations/sqlite-drizzle/0008_context-checkpoint.sql';
 import m0009 from '../../../../migrations/sqlite-drizzle/0009_agent-tool-approval-mode.sql';
 import m0010 from '../../../../migrations/sqlite-drizzle/0010_remove-agent-settings.sql';
-import m0011 from '../../../../migrations/sqlite-drizzle/0011_motionless_tony_stark.sql';
+import m0011 from '../../../../migrations/sqlite-drizzle/0011_file-provenance.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main

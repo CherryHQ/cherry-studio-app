@@ -9,7 +9,12 @@
 
 import * as z from 'zod';
 
-import { type FileEntry, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+import {
+  type FileEntry,
+  type FileEntryProvenance,
+  filenameExtension,
+  SafeNameSchema,
+} from '@/shared/data/types/file';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
@@ -55,7 +60,12 @@ export const writeFileInputSchema = z.strictObject({
 
 /** The slice of the managed-file port this tool needs. */
 export type WriteFileFiles = {
-  createTextEntry(input: { data: string; mediaType: string; name: string }): Promise<FileEntry>;
+  createTextEntry(input: {
+    data: string;
+    mediaType: string;
+    name: string;
+    provenance: FileEntryProvenance;
+  }): Promise<FileEntry>;
 };
 
 export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
@@ -95,6 +105,7 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
         data: parsed.data.content,
         mediaType: mediaTypeForFilename(filename),
         name: filename,
+        provenance: 'generated',
       });
 
       return {

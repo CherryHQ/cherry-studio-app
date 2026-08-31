@@ -22,11 +22,11 @@ jest.mock('../SourceGroup', () => {
   };
 });
 
-jest.mock('../ArtifactGroup', () => {
+jest.mock('../MessageFileStrip', () => {
   const { createElement } = jest.requireActual('react');
 
   return {
-    ArtifactGroup: (props: object) => createElement('ArtifactGroup', props),
+    MessageFileStrip: (props: object) => createElement('MessageFileStrip', props),
   };
 });
 
@@ -44,7 +44,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('MessagePartRenderer').props.resolvedText).toBeUndefined();
   });
 
-  test('keeps source and artifact parts out of ordered renderers and groups each once', () => {
+  test('collapses adjacent files into one strip and groups sources once', () => {
     const source = {
       sourceId: 'source-1',
       title: 'Cherry Studio',
@@ -56,15 +56,8 @@ describe('MessageParts', () => {
       data: {
         parts: [
           { text: 'Hello', type: 'text' },
-          {
-            filename: 'report.md',
-            mediaType: 'text/markdown',
-            providerMetadata: {
-              cherry: { fileEntryId: 'file-1', purpose: 'artifact' },
-            },
-            type: 'file',
-            url: 'cherry://file/file-1',
-          },
+          makeFilePart('file-1', 'report.md'),
+          makeFilePart('file-2', 'summary.md'),
           source,
         ],
       },
@@ -74,12 +67,40 @@ describe('MessageParts', () => {
     const renderedPart = renderer.root.findByType('MessagePartRenderer');
     expect(renderedPart.props.part).toEqual({ text: 'Hello', type: 'text' });
     expect(renderedPart.props.isTextSelectionEnabled).toBe(false);
-    expect(renderer.root.findByType('ArtifactGroup').props.parts).toEqual([
-      expect.objectContaining({ filename: 'report.md', type: 'file' }),
+    expect(renderer.root.findByType('MessageFileStrip').props.parts).toEqual([
+      expect.objectContaining({ filename: 'report.md' }),
+      expect.objectContaining({ filename: 'summary.md' }),
     ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
   });
+
+  test('renders a file run that interrupts the answer as one strip between the text', () => {
+    const message: MessageListItem = {
+      ...makeMessage('success'),
+      data: {
+        parts: [
+          { text: 'Here it is', type: 'text' },
+          makeFilePart('file-1', 'chart.png'),
+          { text: 'and a revision', type: 'text' },
+        ],
+      },
+    };
+    const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
+
+    expect(renderer.root.findAllByType('MessageFileStrip')).toHaveLength(1);
+    expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
+  });
 });
+
+function makeFilePart(fileEntryId: string, filename: string) {
+  return {
+    filename,
+    mediaType: 'text/markdown',
+    providerMetadata: { cherry: { fileEntryId } },
+    type: 'file' as const,
+    url: `cherry://file/${fileEntryId}`,
+  };
+}
 
 function render(element: ReactElement): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;

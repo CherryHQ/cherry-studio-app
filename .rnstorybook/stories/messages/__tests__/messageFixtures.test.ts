@@ -54,13 +54,11 @@ describe('messages Storybook fixtures', () => {
         (part) => part.type === 'file' && readCherryMeta(part)?.fileEntryId === STORY_FILE_ENTRY_ID,
       ),
     ).toBe(true);
-    // A written file renders in the artifact group, so its id must be one the story providers resolve.
+    // A written file renders as its own card, so its id must be one the story providers resolve.
     expect(
       parts.some(
         (part) =>
-          part.type === 'file' &&
-          readCherryMeta(part)?.fileEntryId === STORY_WRITTEN_FILE_ENTRY_ID &&
-          readCherryMeta(part)?.purpose === 'artifact',
+          part.type === 'file' && readCherryMeta(part)?.fileEntryId === STORY_WRITTEN_FILE_ENTRY_ID,
       ),
     ).toBe(true);
   });

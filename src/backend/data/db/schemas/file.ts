@@ -19,7 +19,8 @@ import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHe
  * derived at runtime, never persisted); content never changes after creation —
  * "edits" create new entries. Rows are removed only by explicit user action;
  * business-object deletion never removes files. `provenance` is stable source identity
- * for the library UI, not a mutable owner association.
+ * for the library UI, not a mutable owner association; it is written once, by whoever
+ * creates the bytes, and never derived from an owner at read time.
  *
  * - `updatedAt` equals `createdAt` until a future metadata update (file-library
  *   rename) writes it; nothing writes it today.
@@ -41,8 +42,8 @@ export const fileEntryTable = sqliteTable(
 
     ...createUpdateDeleteTimestamps,
     // Added after the timestamp columns to match SQLite's physical ADD COLUMN order.
-    // Existing rows default to user-owned unless the migration can prove they are artifacts.
-    provenance: text().$type<FileEntryProvenance>().notNull().default('user'),
+    // Unproven rows stay `unknown`; the upgrade only labels what it can prove.
+    provenance: text().$type<FileEntryProvenance>().notNull().default('unknown'),
   },
   (t) => [index('fe_created_at_idx').on(t.createdAt)],
 );

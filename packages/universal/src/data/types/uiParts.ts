@@ -119,8 +119,6 @@ export interface CherryToolMeta {
 export interface CherryFileMeta {
   /** Stable identity of an internal Cherry-managed file. */
   fileEntryId?: string;
-  /** Transcript role retained for presentation after Agent Protocol projection. */
-  purpose?: 'input-attachment' | 'artifact';
   /** Composer file token association identity. */
   fileTokenSourceId?: string;
   /** Safe composer-only source marker used to restore sent-message token previews. */
@@ -169,7 +167,6 @@ export const CherryToolMetaSchema: z.ZodType<CherryToolMeta> = z.object({
 
 export const CherryFileMetaSchema: z.ZodType<CherryFileMeta> = z.object({
   fileEntryId: z.string().optional(),
-  purpose: z.enum(['input-attachment', 'artifact']).optional(),
   fileTokenSourceId: z.string().optional(),
   composerFileKind: z.literal('pasted-text').optional(),
 });

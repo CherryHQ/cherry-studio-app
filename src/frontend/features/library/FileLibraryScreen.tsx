@@ -10,8 +10,9 @@ import type { FileLibraryFilter } from './hooks/useFileEntries';
 /**
  * The file library (`/library`), the sidebar's library destination: everything
  * Cherry has stored as a file — chat attachments, generated images, imported
- * documents — in one grid, filterable by kind and visibly marked by origin.
- * The root Stack pushes it above chat, so its leading action returns to the chat surface.
+ * documents — in one grid, filterable by kind, with a badge on the files Cherry
+ * generated. The root Stack pushes it above chat, so its leading action returns
+ * to the chat surface.
  */
 export function FileLibraryScreen() {
   const { t } = useTranslation();

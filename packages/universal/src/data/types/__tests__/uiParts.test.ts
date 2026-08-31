@@ -60,7 +60,6 @@ describe('readCherryMeta', () => {
         composerFileKind: 'pasted-text',
         fileEntryId: 'file-entry-1',
         fileTokenSourceId: 'composer-source-1',
-        purpose: 'artifact',
       },
     });
 
@@ -68,7 +67,6 @@ describe('readCherryMeta', () => {
       composerFileKind: 'pasted-text',
       fileEntryId: 'file-entry-1',
       fileTokenSourceId: 'composer-source-1',
-      purpose: 'artifact',
     });
   });
 

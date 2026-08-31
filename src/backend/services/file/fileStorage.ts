@@ -208,7 +208,7 @@ export async function createMessageParts(
       const entry = await createInternalEntry(entries, {
         mediaType: part.mediaType,
         name: part.filename,
-        provenance: 'user',
+        provenance: 'imported',
         source: 'uri',
         uri: part.url,
       });

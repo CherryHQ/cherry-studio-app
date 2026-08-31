@@ -1,5 +1,4 @@
 import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
-import UploadIcon from '@cherrystudio/app-icons/icons/upload';
 import { ContentState, Tabs } from '@cherrystudio/ui/components';
 import {
   LegendList,
@@ -145,8 +144,10 @@ function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibra
 // tiles stay on the memoized path while the next page resolves.
 const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
   const { t } = useTranslation();
-  const isArtifact = item.entry.provenance === 'artifact';
-  const ProvenanceIcon = isArtifact ? SparklesIcon : UploadIcon;
+  // Only a proven origin is worth saying. Most rows are imports, and rows that
+  // predate the field have no proven origin at all, so labelling everything
+  // would either repeat itself or claim something the data does not support.
+  const isGenerated = item.entry.provenance === 'generated';
 
   return (
     <View
@@ -170,11 +171,17 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
         <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
           {item.entry.filename}
         </Text>
-        <View className="flex-row items-center gap-1">
-          <ProvenanceIcon className="size-3.5 text-muted-foreground" />
-          <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-            {t(isArtifact ? 'library.provenance.artifact' : 'library.provenance.user')}
-          </Text>
+        {/* Held open whether or not the badge shows, so a labelled tile does not
+            make its whole grid row taller than its neighbours. */}
+        <View className="flex-row items-center gap-1" style={styles.provenance}>
+          {isGenerated ? (
+            <>
+              <SparklesIcon className="size-3.5 text-muted-foreground" />
+              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                {t('library.provenance.generated')}
+              </Text>
+            </>
+          ) : null}
         </View>
       </View>
     </View>
@@ -187,5 +194,8 @@ const styles = StyleSheet.create({
   },
   header: {
     marginHorizontal: fileLibraryGrid.tileGap / 2,
+  },
+  provenance: {
+    height: fileLibraryGrid.tileProvenanceHeight,
   },
 });

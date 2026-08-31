@@ -22,7 +22,9 @@ const CreateFileEntrySchema = z.strictObject({
   filename: SafeNameSchema,
   id: FileEntryIdSchema,
   mediaType: MediaTypeSchema,
-  provenance: FileEntryProvenanceSchema.default('user'),
+  // No default: every creation site states an origin, so a new one (a peer
+  // transfer, a future import path) cannot silently inherit a wrong answer.
+  provenance: FileEntryProvenanceSchema,
   size: z.int().nonnegative(),
 });
 

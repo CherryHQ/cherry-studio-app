@@ -1,5 +1,5 @@
 import { Skeleton } from '@cherrystudio/ui/components';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { FileEntrySkeleton } from '@/frontend/components/FileEntryPreview';
 
@@ -23,12 +23,20 @@ export function FileLibrarySkeleton({ count, tileSize }: { count: number; tileSi
           }}
         >
           <FileEntrySkeleton size={tileSize} />
-          <View className="gap-1 px-0.5">
-            <Skeleton className="h-4 w-3/4 rounded-sm" />
-            <Skeleton className="h-3 w-1/2 rounded-sm" />
+          <View className="gap-0.5 px-0.5">
+            <Skeleton className="h-5 w-3/4 rounded-sm" />
+            {/* The origin badge is absent on most tiles, so the placeholder
+                reserves its line rather than promising one. */}
+            <View style={styles.provenance} />
           </View>
         </View>
       ))}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  provenance: {
+    height: fileLibraryGrid.tileProvenanceHeight,
+  },
+});

@@ -24,9 +24,7 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
     <Animated.View className="w-full items-end" style={slideInStyle}>
       <View className="max-w-[88%]">
         <View className="items-end gap-2">
-          {attachments.length > 0 ? (
-            <UserMessageAttachments attachments={attachments} messageId={message.id} />
-          ) : null}
+          {attachments.length > 0 ? <UserMessageAttachments attachments={attachments} /> : null}
           {bodyMessage ? (
             <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
               <MessageParts

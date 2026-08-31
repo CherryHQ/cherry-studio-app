@@ -42,6 +42,7 @@ function fileEntry(id: FileEntryId): FileEntry {
     filename: 'image.png',
     id,
     mediaType: 'image/png',
+    provenance: 'generated',
     size: 1,
     updatedAt: 1,
   });

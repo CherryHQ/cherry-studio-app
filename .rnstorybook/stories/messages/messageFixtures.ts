@@ -101,15 +101,6 @@ const writeFileParts: CherryMessagePart[] = [
     type: 'dynamic-tool',
   },
   {
-    filename: 'release-notes.md',
-    mediaType: 'text/markdown',
-    providerMetadata: {
-      cherry: { fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID, purpose: 'artifact' },
-    },
-    type: 'file',
-    url: `cherry://file/${STORY_WRITTEN_FILE_ENTRY_ID}`,
-  },
-  {
     input: { content: '# Release Notes\n', filename: 'release-notes.md' },
     output: {
       fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID,
@@ -121,6 +112,15 @@ const writeFileParts: CherryMessagePart[] = [
     toolCallId: 'write-file-complete',
     toolName: 'write_file',
     type: 'dynamic-tool',
+  },
+  // The Runtime emits the written file straight after its tool result, and the
+  // message keeps it there.
+  {
+    filename: 'release-notes.md',
+    mediaType: 'text/markdown',
+    providerMetadata: { cherry: { fileEntryId: STORY_WRITTEN_FILE_ENTRY_ID } },
+    type: 'file',
+    url: `cherry://file/${STORY_WRITTEN_FILE_ENTRY_ID}`,
   },
   {
     input: { content: '...', filename: 'notes/report.md' },

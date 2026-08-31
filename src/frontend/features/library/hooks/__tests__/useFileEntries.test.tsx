@@ -23,6 +23,7 @@ const entry = FileEntrySchema.parse({
   filename: 'photo.png',
   id: '00000000-0000-4000-8000-000000000001',
   mediaType: 'image/png',
+  provenance: 'imported',
   size: 128,
   updatedAt: 1,
 });
@@ -31,6 +32,7 @@ const documentEntry = FileEntrySchema.parse({
   filename: 'notes.pdf',
   id: '00000000-0000-4000-8000-000000000002',
   mediaType: 'application/pdf',
+  provenance: 'imported',
   size: 256,
   updatedAt: 2,
 });

@@ -46,10 +46,17 @@ here. Terms follow [Domain Language](../domain-language.md).
   separately.
 - `updatedAt` equals `createdAt` on insert and has no writer today. A future metadata update
   (library rename) is its first one; immutable content means it never tracks a content write.
-- `provenance` is stable source identity: `user` for a file imported from a picker, camera, paste, or
-  painting input; `artifact` for a file written or generated for the user by Cherry. Reattaching an
-  artifact does not change its origin. The file library presents this field directly instead of
-  trying to recover provenance from owners that may already have been deleted.
+- `provenance` is stable source identity: `imported` for a file brought in from a picker, camera,
+  paste, or painting input; `generated` for a file written or produced for the user by Cherry;
+  `unknown` when nothing proves either. Reattaching a generated file as an input does not change its
+  origin. It is written exactly once, by whoever creates the bytes, and never derived from an owner
+  at read time — owners are deleted, and the library still has to answer.
+
+  `unknown` is a real state, not a gap waiting to be filled. Rows that predate the column, and rows
+  that will arrive from a peer with no provenance concept of its own, have no proven origin;
+  recording them as `imported` would state something the data does not support. The library shows a
+  badge only for `generated` and stays silent otherwise, so the three states cost one label rather
+  than three.
 - `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
   attachment admission and direct preview reads already treat a marked row as unavailable, while
   cleanup still must not infer ownership from it.
@@ -64,9 +71,14 @@ An owner stores the entry ids it points at, inside its own row:
 | Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
 A `write_file` tool result also carries the `fileEntryId` it created in its result JSON. The Runtime
-projects the same id as a `purpose: 'artifact'` file part, and chat groups those file parts in the
-message's artifact area. As with every owner here, the reference outlives the bytes and degrades to
-the unavailable placeholder.
+projects the same id as a `purpose: 'artifact'` file part directly after that tool part, and chat
+renders it there. As with every owner here, the reference outlives the bytes and degrades to the
+unavailable placeholder.
+
+`purpose` and `provenance` answer different questions and neither substitutes for the other.
+`purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
+turn preparation to decide what gets replayed to the model; presentation does not read it.
+`provenance` is a fact about the *bytes*, survives every owner, and is what the library reports.
 
 There is no association table and no foreign key from an owner to `file_entry`. That is the point:
 a foreign key would have to choose between `CASCADE` (deleting a file silently rewrites the
@@ -119,8 +131,10 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 
 ## Extension points
 
-**File library.** The library page is a query over `file_entry`; it needs no new table. Each tile
-shows the stable `provenance` as either an artifact or user file. Its future trash uses
+**File library.** The library page is a query over `file_entry`; it needs no new table. A tile badges
+its `provenance` only when the origin is `generated`. Filtering by origin is deliberately not shipped
+yet: most historical rows are `unknown`, so the filter would sort noise until enough labelled rows
+exist. Its future trash uses
 the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
 bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
 trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no
@@ -134,8 +148,8 @@ resource ledger, creates a new one, and returns the new id; it must not rewrite 
 
 As-built, `write_file` stores UTF-8 text through the `'text'` source of `createInternalEntry`, while
 `generate_image` imports generated image bytes. Both persist the new entry with
-`provenance: 'artifact'`
-and return it in the Runtime artifact envelope.
+`provenance: 'generated'` and return it in the Runtime artifact envelope. As-built, `write_file`
+still reads no entry and does not consult the turn's resource ledger.
 Office inputs are imported before inspection or editing, and every edit patches a copy into a new
 entry while preserving the source. Office and image tools follow the same rule for newly generated
 output. The file library is also the Version 1 artifact library; no parallel artifact blob store or

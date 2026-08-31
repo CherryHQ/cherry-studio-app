@@ -1,11 +1,9 @@
 import { View } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
-
 import type { MessageListItem } from '../types';
-import { ArtifactGroup } from './ArtifactGroup';
 import { resolveMessageCitationText } from './citations';
+import { groupMessageParts } from './groupMessageParts';
+import { MessageFileStrip } from './MessageFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { SourceGroup } from './SourceGroup';
 
@@ -16,12 +14,6 @@ type MessagePartsProps = {
 };
 
 export type MessagePartRenderMode = 'markdown' | 'plainText';
-
-type FilePart = Extract<CherryMessagePart, { type: 'file' }>;
-
-function isArtifactFilePart(part: CherryMessagePart): part is FilePart {
-  return part.type === 'file' && readCherryMeta(part)?.purpose === 'artifact';
-}
 
 function getMessagePartKey(
   message: MessageListItem,
@@ -43,29 +35,25 @@ export function MessageParts({
   }
 
   const citationText = resolveMessageCitationText(parts);
-  const artifactParts = parts.filter(isArtifactFilePart);
+  const groups = groupMessageParts(parts);
   const sourceParts = parts.filter((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
-      {parts.map((part, index) => {
-        if (part.type === 'source-url' || isArtifactFilePart(part)) {
-          return null;
-        }
-
-        const resolvedText = citationText.get(index);
-        return (
+      {groups.map((group) =>
+        group.kind === 'files' ? (
+          <MessageFileStrip key={`${message.id}-files-${group.index}`} parts={group.parts} />
+        ) : (
           <MessagePartRenderer
             isStreaming={message.status === 'pending'}
             isTextSelectionEnabled={isTextSelectionEnabled}
-            key={getMessagePartKey(message, part, index)}
-            part={part}
+            key={getMessagePartKey(message, group.part, group.index)}
+            part={group.part}
             renderMode={renderMode}
-            resolvedText={resolvedText}
+            resolvedText={citationText.get(group.index)}
           />
-        );
-      })}
-      {artifactParts.length > 0 ? <ArtifactGroup parts={artifactParts} /> : null}
+        ),
+      )}
       {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
     </View>
   );

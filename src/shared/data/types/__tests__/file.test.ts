@@ -18,7 +18,7 @@ describe('File contract', () => {
       filename: 'report.pdf',
       id: entryId,
       mediaType: 'application/pdf',
-      provenance: 'artifact',
+      provenance: 'generated',
       size: 4,
       updatedAt: 2,
     };

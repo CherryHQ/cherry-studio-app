@@ -5,11 +5,10 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 type FilePartProps = {
   part: Extract<CherryMessagePart, { type: 'file' }>;
-  size?: number;
 };
 
-export function FilePart({ part, size }: FilePartProps) {
+export function FilePart({ part }: FilePartProps) {
   const fileEntryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
 
-  return fileEntryId ? <FileEntryPreview entryId={fileEntryId} size={size} /> : null;
+  return fileEntryId ? <FileEntryPreview entryId={fileEntryId} /> : null;
 }
