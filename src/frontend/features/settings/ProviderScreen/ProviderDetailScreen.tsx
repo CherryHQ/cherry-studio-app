@@ -245,6 +245,10 @@ export default function ProviderDetailSettingsScreen() {
 
     router.push({
       params: {
+        // Land on the manual tab: sync pulls the provider's whole remote
+        // catalogue the moment it opens, and "+" is just as often one model
+        // typed by hand. Switching to the sync tab still pulls, once.
+        mode: 'manual',
         ...(provider?.name ? { providerName: provider.name } : {}),
         providerId,
       },
