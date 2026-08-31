@@ -20,7 +20,7 @@ function getMessagePartKey(
   part: NonNullable<MessageListItem['data']['parts']>[number],
   index: number,
 ) {
-  return `${message.id}-${part.type}-${index}`;
+  return message.data.partKeys?.[index] ?? `${message.id}-${part.type}-${index}`;
 }
 
 export function MessageParts({

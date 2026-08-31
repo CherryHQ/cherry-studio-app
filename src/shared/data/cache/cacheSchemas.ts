@@ -35,13 +35,18 @@ export type ProcessKey<K extends string> = IsTemplateKey<K> extends true ? Expan
 // Memory Cache Schemas
 // ============================================================================
 
+export type ChatScrollAnchor = Readonly<{
+  key: string;
+  offset: number;
+}> | null;
+
 /**
  * Frontend memory cache schema (TTL-capable, lost on app restart).
  */
 export type UseCacheSchema = {
-  // Template-key probe retained until the frontend has a product-owned memory
-  // cache consumer. It keeps useCache's template-key interface testable without
-  // borrowing a backend-owned key.
+  // Per-Session reading anchor. `null` means follow the current live edge.
+  'chat.scroll_anchor.${sessionId}': ChatScrollAnchor;
+  // Template-key probe keeps the generic string-value path covered independently.
   'internal.memory_probe.${instanceId}': string;
 };
 
@@ -49,6 +54,7 @@ export type UseCacheSchema = {
 // DefaultPreferences in the preference domain) so schema entries port with
 // zero rewrites — deliberate exception to the UPPER_SNAKE_CASE constant rule.
 export const DefaultUseCache: UseCacheSchema = {
+  'chat.scroll_anchor.${sessionId}': null,
   'internal.memory_probe.${instanceId}': '',
 };
 

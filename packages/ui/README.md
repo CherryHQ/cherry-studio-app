@@ -69,10 +69,11 @@ parses a format or calls a service is product code and registers through the pro
 while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
 logging, or translation dependency.
 
-`MarkdownText` is the shared GitHub-flavored Markdown renderer. It uses the streaming renderer
-while content is arriving and the enriched native renderer afterward; both receive the same theme
-tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the active font
-size step and decides how links open:
+`MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
+native renderer. A part that has streamed keeps the streaming renderer for its full mounted
+lifetime, including terminal state, so completion does not remount its native subtree. Both receive
+the same theme tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the
+active font size step and decides how links open:
 
 ```tsx
 <MarkdownText

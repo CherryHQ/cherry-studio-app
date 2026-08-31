@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { ResolvedCitationText } from './citations';
@@ -22,7 +24,7 @@ type MessagePartRendererProps = {
   resolvedText?: ResolvedCitationText;
 };
 
-export function MessagePartRenderer({
+export const MessagePartRenderer = memo(function MessagePartRenderer({
   isStreaming,
   isTextSelectionEnabled,
   part,
@@ -85,4 +87,4 @@ export function MessagePartRenderer({
     default:
       return <UnknownPart />;
   }
-}
+});

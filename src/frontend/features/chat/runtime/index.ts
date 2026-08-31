@@ -5,6 +5,7 @@ export {
   useAgentChatSession,
 } from './ChatProvider';
 export {
+  createAgentMessageListProjectionCache,
   mergeAgentMessageViews,
   toAgentMessageListItems,
   toAgentMessageListItem,

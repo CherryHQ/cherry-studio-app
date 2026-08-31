@@ -16,6 +16,32 @@ import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/messa
 import { withCherryMeta } from '@/shared/data/types/uiParts';
 import { classifyAgentFailureReason } from '@/shared/utils/agentFailure';
 
+type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
+
+type AgentPartProjection = Readonly<{
+  part: CherryMessagePart;
+  sourceParts: readonly SourceUrlPart[];
+}>;
+
+type AgentMessageItemProjection = Readonly<{
+  item: MessageListItem;
+  source: AgentMessageView;
+}>;
+
+export type AgentMessageListProjectionCache = {
+  items: readonly MessageListItem[];
+  itemsByMessageId: Map<string, AgentMessageItemProjection>;
+  partsBySource: WeakMap<AgentMessagePart, AgentPartProjection>;
+};
+
+export function createAgentMessageListProjectionCache(): AgentMessageListProjectionCache {
+  return {
+    items: [],
+    itemsByMessageId: new Map(),
+    partsBySource: new WeakMap(),
+  };
+}
+
 function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
   switch (status) {
     case 'pending':
@@ -125,8 +151,6 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   }
 }
 
-type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
-
 function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
   if (part.state !== 'output-available' || part.toolRef.source !== 'builtin') {
     return [];
@@ -155,13 +179,49 @@ function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): So
   }));
 }
 
-function toDisplayParts(parts: readonly AgentMessagePart[]): CherryMessagePart[] {
-  const displayParts = parts.map(toDisplayPart);
-  // Keep synthetic sources at the tail so tool-result updates cannot shift the
-  // index-based render identity of later persisted parts.
-  const sourceParts = parts.flatMap((part) => (part.type === 'tool' ? toSourceUrlParts(part) : []));
+function projectAgentPart(
+  part: AgentMessagePart,
+  cache: AgentMessageListProjectionCache | undefined,
+): AgentPartProjection {
+  const cached = cache?.partsBySource.get(part);
+  if (cached) {
+    return cached;
+  }
 
-  return [...displayParts, ...sourceParts];
+  const projection = {
+    part: toDisplayPart(part),
+    sourceParts: part.type === 'tool' ? toSourceUrlParts(part) : [],
+  } satisfies AgentPartProjection;
+  cache?.partsBySource.set(part, projection);
+  return projection;
+}
+
+function toDisplayParts(
+  parts: readonly AgentMessagePart[],
+  cache?: AgentMessageListProjectionCache,
+): Pick<NonNullable<MessageListItem['data']>, 'partKeys' | 'parts'> {
+  const displayParts: CherryMessagePart[] = [];
+  const partKeys: string[] = [];
+  const sourceParts: SourceUrlPart[] = [];
+  const sourcePartKeys: string[] = [];
+
+  for (const sourcePart of parts) {
+    const projection = projectAgentPart(sourcePart, cache);
+    displayParts.push(projection.part);
+    partKeys.push(sourcePart.id);
+
+    projection.sourceParts.forEach((source, index) => {
+      sourceParts.push(source);
+      sourcePartKeys.push(`${sourcePart.id}:source:${source.sourceId ?? source.url}:${index}`);
+    });
+  }
+
+  // Synthetic sources stay at the tail, but their identity is derived from the
+  // tool part rather than from their changing array position.
+  return {
+    partKeys: [...partKeys, ...sourcePartKeys],
+    parts: [...displayParts, ...sourceParts],
+  };
 }
 
 function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
@@ -184,21 +244,30 @@ function resolveMessageModel(message: AgentMessageView): MessageListItem['model'
   };
 }
 
-export function toAgentMessageListItem(message: AgentMessageView): MessageListItem | undefined {
+export function toAgentMessageListItem(
+  message: AgentMessageView,
+  cache?: AgentMessageListProjectionCache,
+): MessageListItem | undefined {
   if (message.role !== 'user' && message.role !== 'assistant') {
     return undefined;
   }
 
-  const model = resolveMessageModel(message);
+  const cached = cache?.itemsByMessageId.get(message.id);
+  if (cached?.source === message) {
+    return cached.item;
+  }
 
-  return {
+  const model = resolveMessageModel(message);
+  const item = {
     createdAt: message.createdAt,
-    data: { parts: toDisplayParts(message.parts) },
+    data: toDisplayParts(message.parts, cache),
     id: message.id,
     ...(model ? { model } : {}),
     role: message.role,
     status: toDisplayStatus(message.status),
-  };
+  } satisfies MessageListItem;
+  cache?.itemsByMessageId.set(message.id, { item, source: message });
+  return item;
 }
 
 export function mergeAgentMessageViews(
@@ -224,9 +293,31 @@ export function mergeAgentMessageViews(
 
 export function toAgentMessageListItems(
   messages: readonly AgentMessageView[],
+  cache?: AgentMessageListProjectionCache,
 ): readonly MessageListItem[] {
-  return messages.flatMap((message) => {
-    const item = toAgentMessageListItem(message);
+  const items = messages.flatMap((message) => {
+    const item = toAgentMessageListItem(message, cache);
     return item ? [item] : [];
   });
+
+  if (!cache) {
+    return items;
+  }
+
+  const activeMessageIds = new Set(messages.map((message) => message.id));
+  for (const messageId of cache.itemsByMessageId.keys()) {
+    if (!activeMessageIds.has(messageId)) {
+      cache.itemsByMessageId.delete(messageId);
+    }
+  }
+
+  if (
+    cache.items.length === items.length &&
+    cache.items.every((previousItem, index) => previousItem === items[index])
+  ) {
+    return cache.items;
+  }
+
+  cache.items = items;
+  return items;
 }

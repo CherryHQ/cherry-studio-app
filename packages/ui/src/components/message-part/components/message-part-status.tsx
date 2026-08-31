@@ -15,7 +15,7 @@ export function MessagePartStatus({
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        className={`${statusClassName} active:bg-secondary-active active:opacity-80`}
+        className={statusClassName}
         hitSlop={4}
         onPress={onPress}
         testID={testID}
