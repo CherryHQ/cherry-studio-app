@@ -1,7 +1,7 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import type { MenuItem } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -20,8 +20,10 @@ import type {
   SessionMessageContentSearchItem,
 } from '@/shared/data/api/schemas/search';
 
+import { AgentSessionList } from './AgentSessionList';
 import { sessionSelectionScope } from './hooks/useSessionSelectionSource';
 import { SessionList } from './SessionList';
+import { parseSessionViewMode, type SessionViewMode } from './sessionViewMode';
 
 /**
  * Full Agent Session management page (`/sessions`), backed by session-title and
@@ -30,6 +32,9 @@ import { SessionList } from './SessionList';
 function SessionListScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { view: rawView } = useLocalSearchParams<{ view?: string | string[] }>();
+  const view = parseSessionViewMode(rawView);
+  const isSessionView = view === 'sessions';
   const apiClient = useApiClient();
   const { open: openAppSearch } = useAppSearch();
   const { enterEditing, exitEditing } = useSelectionActions();
@@ -90,17 +95,42 @@ function SessionListScreenBody() {
       });
     });
   }, [apiClient, openAppSearch, router, t]);
-  const menuItems = useMemo<readonly MenuItem[]>(
-    () => [
-      {
-        disabled: isDeletionPending,
-        id: 'select-sessions',
-        label: t('session.selection.start'),
-        onPress: handleEnterEditing,
-      },
-    ],
-    [handleEnterEditing, isDeletionPending, t],
+  const setView = useCallback(
+    (nextView: SessionViewMode) => {
+      router.setParams({ view: nextView });
+    },
+    [router],
   );
+  const menuItems = useMemo<readonly MenuItem[]>(() => {
+    const viewItems: MenuItem[] = [
+      {
+        checked: view === 'sessions',
+        disabled: isDeletionPending,
+        id: 'view-recent-sessions',
+        label: t('navigation.recentSessions'),
+        onPress: () => setView('sessions'),
+      },
+      {
+        checked: view === 'agents',
+        disabled: isDeletionPending,
+        id: 'view-sessions-by-agent',
+        label: t('navigation.sessionsByAgent'),
+        onPress: () => setView('agents'),
+      },
+    ];
+
+    return isSessionView
+      ? [
+          ...viewItems,
+          {
+            disabled: isDeletionPending,
+            id: 'select-sessions',
+            label: t('session.selection.start'),
+            onPress: handleEnterEditing,
+          },
+        ]
+      : viewItems;
+  }, [handleEnterEditing, isDeletionPending, isSessionView, setView, t, view]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
@@ -139,11 +169,11 @@ function SessionListScreenBody() {
     <>
       <RouteHeader
         rightActions={isEditing ? doneActions : rightActions}
-        title={t('session.list.title')}
+        title={t(isSessionView ? 'session.list.title' : 'session.list.titleByAgent')}
       />
       <View className="flex-1 bg-background">
-        <SessionList />
-        <SelectionControls scope={sessionSelectionScope} />
+        {isSessionView ? <SessionList /> : <AgentSessionList />}
+        {isSessionView ? <SelectionControls scope={sessionSelectionScope} /> : null}
       </View>
     </>
   );

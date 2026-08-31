@@ -1,9 +1,7 @@
 import { type LegendListRef } from '@legendapp/list/react-native';
 import { type RefObject, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
-import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
-
-import { emitProgrammaticScroll, scrollLog } from './useMessageListInstrumentation';
+import { scrollLog } from './messageListLogger';
 
 // 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
 // settle 完成。用于覆盖**冷 markdown 解析**——首次进入 topic 时 streamdown/代码/数学的 tokenize
@@ -20,7 +18,6 @@ const READY_SETTLE_MS = 150;
 // 交给它，两段相加恒等于设计行程。
 export function useMessageListAnchorPin({
   contentBottomInset,
-  endSpaceRef,
   enteringMessageId,
   lastMessageId,
   listRef,
@@ -30,7 +27,6 @@ export function useMessageListAnchorPin({
   viewportHeight,
 }: {
   contentBottomInset: number;
-  endSpaceRef: RefObject<number>;
   enteringMessageId: string | undefined;
   lastMessageId: string | undefined;
   listRef: RefObject<LegendListRef | null>;
@@ -40,7 +36,6 @@ export function useMessageListAnchorPin({
   viewportHeight: number;
 }): {
   handleAnchorReady: (info: { anchorKey: string | undefined }) => void;
-  handleAnchoredEndSpaceSizeChanged: (size: number) => void;
   handleContentSizeChange: (width: number, height: number) => void;
   handleMomentumScrollBegin: () => void;
   handleMomentumScrollEnd: () => void;
@@ -101,7 +96,6 @@ export function useMessageListAnchorPin({
         const pendingScrollPx = listState
           ? Math.max(0, listState.contentLength - listState.scrollLength - listState.scroll)
           : 0;
-        emitProgrammaticScroll('anchorReady', listRef, { animated: true });
         // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
         // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
         // 还会与当时的列表补偿叠加），更差。
@@ -122,14 +116,6 @@ export function useMessageListAnchorPin({
       });
     },
     [enteringMessageId, listRef, onAnchorPinned, scrollMessageToEnd],
-  );
-
-  const handleAnchoredEndSpaceSizeChanged = useCallback(
-    (size: number) => {
-      endSpaceRef.current = size;
-      emitLayoutBenchProbe('endSpace', { size: Math.round(size) });
-    },
-    [endSpaceRef],
   );
 
   const cancelPendingInteractionEnd = useCallback(() => {
@@ -162,37 +148,31 @@ export function useMessageListAnchorPin({
 
   const handleScrollBeginDrag = useCallback(() => {
     isDraggingListRef.current = true;
-    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'begin' });
     beginUserInteraction();
   }, [beginUserInteraction]);
 
   const handleScrollEndDrag = useCallback(() => {
     isDraggingListRef.current = false;
-    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
   const handleMomentumScrollBegin = useCallback(() => {
     isMomentumScrollingRef.current = true;
-    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'begin' });
     beginUserInteraction();
   }, [beginUserInteraction]);
 
   const handleMomentumScrollEnd = useCallback(() => {
     isMomentumScrollingRef.current = false;
-    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
   const handleTouchStart = useCallback(() => {
     isTouchingListRef.current = true;
-    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'begin' });
     beginUserInteraction();
   }, [beginUserInteraction]);
 
   const handleTouchEnd = useCallback(() => {
     isTouchingListRef.current = false;
-    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
@@ -224,10 +204,6 @@ export function useMessageListAnchorPin({
         h: Math.round(height),
         ready: didReportReadyRef.current,
         t: Date.now(),
-      });
-      emitLayoutBenchProbe('content', {
-        h: Math.round(height),
-        ready: didReportReadyRef.current,
       });
       setContentBaseHeight(Math.max(0, height - contentBottomInset));
     },
@@ -301,7 +277,6 @@ export function useMessageListAnchorPin({
             viewportHeight: Math.round(viewportHeight),
             t: Date.now(),
           });
-          emitProgrammaticScroll('readyGate', listRef);
           void listRef.current?.scrollToEnd({ animated: false }).finally(reportReadyAfterSettle);
           return;
         }
@@ -332,7 +307,6 @@ export function useMessageListAnchorPin({
 
   return {
     handleAnchorReady,
-    handleAnchoredEndSpaceSizeChanged,
     handleContentSizeChange,
     handleMomentumScrollBegin,
     handleMomentumScrollEnd,

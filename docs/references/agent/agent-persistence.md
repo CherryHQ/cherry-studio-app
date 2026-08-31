@@ -13,9 +13,9 @@ record for mobile-originated Agent Sessions only.
 
 - Four Agent-owned tables: `agent`, `agent_tool_binding`, `agent_session`,
   `agent_session_message`, plus an FTS index for message search.
-- A message-centric reshape of the `AgentSessionStore` port: the protocol's Turn becomes a Host
-  projection over the assistant message plus Host-held live state. The Agent Protocol itself does
-  not change.
+- A message-centric `AgentSessionStore` port: the protocol's Turn is a Host projection over the
+  assistant message plus Host-held live state. Starting from a Draft atomically inserts the Session
+  and its first user/assistant message pair.
 - A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
   `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
 - Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an

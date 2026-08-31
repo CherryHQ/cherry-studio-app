@@ -22,17 +22,17 @@ type PendingReadyFrame = {
 };
 
 type InitialHistoryLayoutOptions = {
-  hasHistoryBeforePendingTurn: boolean | undefined;
+  hasHistoryBeforeActiveTurn: boolean | undefined;
   isLoadingInitial: boolean;
   messageCount: number;
 };
 
 export function shouldWaitForInitialHistoryLayout({
-  hasHistoryBeforePendingTurn,
+  hasHistoryBeforeActiveTurn,
   isLoadingInitial,
   messageCount,
 }: InitialHistoryLayoutOptions) {
-  return hasHistoryBeforePendingTurn !== false && (isLoadingInitial || messageCount > 0);
+  return hasHistoryBeforeActiveTurn !== false && (isLoadingInitial || messageCount > 0);
 }
 
 export function useMessageListInitialRenderGate({

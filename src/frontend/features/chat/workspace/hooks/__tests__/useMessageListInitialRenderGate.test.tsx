@@ -145,7 +145,7 @@ describe('shouldWaitForInitialHistoryLayout', () => {
   it('waits while a normal topic query is loading', () => {
     expect(
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforePendingTurn: undefined,
+        hasHistoryBeforeActiveTurn: undefined,
         isLoadingInitial: true,
         messageCount: 0,
       }),
@@ -155,7 +155,7 @@ describe('shouldWaitForInitialHistoryLayout', () => {
   it('waits for loaded history, including an existing topic that is streaming', () => {
     expect(
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforePendingTurn: true,
+        hasHistoryBeforeActiveTurn: true,
         isLoadingInitial: false,
         messageCount: 2,
       }),
@@ -165,7 +165,7 @@ describe('shouldWaitForInitialHistoryLayout', () => {
   it('does not wait for a first exchange handed over by the runtime', () => {
     expect(
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforePendingTurn: false,
+        hasHistoryBeforeActiveTurn: false,
         isLoadingInitial: true,
         messageCount: 0,
       }),
@@ -175,7 +175,7 @@ describe('shouldWaitForInitialHistoryLayout', () => {
   it('does not wait after an empty topic query settles', () => {
     expect(
       shouldWaitForInitialHistoryLayout({
-        hasHistoryBeforePendingTurn: undefined,
+        hasHistoryBeforeActiveTurn: undefined,
         isLoadingInitial: false,
         messageCount: 0,
       }),

@@ -1,5 +1,6 @@
 import type {
   AgentErrorView,
+  AgentExecutionTarget,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
@@ -41,6 +42,15 @@ export type ReserveSubmissionInput = {
   inferenceSnapshot: AgentInferenceSnapshotV1;
 };
 
+export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'sessionId'> & {
+  agentId: string;
+  executionTarget: AgentExecutionTarget;
+};
+
+export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
+  session: AgentSessionView;
+};
+
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
@@ -62,10 +72,10 @@ export type FinalizeAssistantMessageInput = {
  * The store persists messages only. The Turn is a Host projection: live turn
  * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
  * process-local Host state by design, and terminal turn facts live on the
- * assistant message row. Multi-record operations are atomic at this boundary.
+ * assistant message row. Multi-record operations are atomic at this boundary,
+ * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
-  createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
   /** Renames only when the current title still matches the caller's auto-title snapshot. */
@@ -76,6 +86,11 @@ export interface AgentSessionStore {
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
+
+  /** Atomically creates a Session and reserves its first user/assistant message pair. */
+  reserveInitialSubmission(
+    input: ReserveInitialSubmissionInput,
+  ): Promise<ReserveInitialSubmissionResult>;
 
   /**
    * Atomically reserves the user message and assistant placeholder under a

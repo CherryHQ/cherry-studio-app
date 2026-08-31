@@ -21,7 +21,9 @@ export type AgentSessionsOptions = {
 
 export type AgentSessionsViewModel = {
   error?: Error;
+  hasMore: boolean;
   isLoadingInitial: boolean;
+  isLoadingMore: boolean;
   loadMore: () => Promise<void>;
   sessions: readonly AgentSessionEntity[];
 };
@@ -40,7 +42,9 @@ export function useAgentSessions(options: AgentSessionsOptions = {}): AgentSessi
 
   return {
     error: query.error,
+    hasMore: query.hasNext,
     isLoadingInitial: query.isLoading,
+    isLoadingMore: query.isLoadingMore,
     loadMore: query.loadNext,
     sessions,
   };

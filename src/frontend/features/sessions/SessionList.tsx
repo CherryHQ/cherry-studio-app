@@ -213,7 +213,7 @@ export function SessionList() {
   );
 }
 
-const SessionRow = memo(function SessionRow({
+export const SessionRow = memo(function SessionRow({
   agentName,
   isEditing,
   isSelected,

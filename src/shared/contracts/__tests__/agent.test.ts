@@ -6,6 +6,8 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentSessionSnapshotSchema,
+  AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
@@ -32,6 +34,71 @@ describe('Agent tool and managed-file contracts', () => {
         temporaryCapabilities: ['calendar'],
       }).success,
     ).toBe(false);
+  });
+
+  test('validates a Draft submission without requiring a durable Session id', () => {
+    const input = {
+      agentId: 'agent-1',
+      executionTarget: { kind: 'local' },
+      parts: [{ text: 'Hello.', type: 'text' }],
+    } as const;
+
+    expect(AgentStartSessionInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentStartSessionInputSchema.safeParse({ ...input, sessionId: 'session-1' }).success,
+    ).toBe(false);
+  });
+
+  test('round-trips the active first exchange used for Session handoff', () => {
+    const userMessage = {
+      createdAt: '2026-08-31T00:00:00.000Z',
+      id: 'user-1',
+      inferenceSnapshot: null,
+      modelId: null,
+      parts: [{ id: 'input-0', state: 'done', text: 'Hello.', type: 'text' }],
+      role: 'user',
+      sessionId: 'session-1',
+      status: 'success',
+      turnId: 'turn-1',
+      updatedAt: '2026-08-31T00:00:00.000Z',
+      usage: null,
+    } as const;
+    const assistantMessage = {
+      ...userMessage,
+      id: 'assistant-1',
+      modelId: 'provider-1::model-1',
+      parts: [],
+      role: 'assistant',
+      status: 'pending',
+    } as const;
+    const snapshot = {
+      activeTurn: {
+        assistantMessageId: assistantMessage.id,
+        endedAt: null,
+        error: null,
+        id: 'turn-1',
+        sessionId: 'session-1',
+        startedAt: '2026-08-31T00:00:00.000Z',
+        status: 'running',
+      },
+      activeUserMessage: userMessage,
+      agent: { id: 'agent-1', name: 'Agent' },
+      capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
+      hasHistoryBeforeActiveTurn: false,
+      pendingApprovals: [],
+      session: {
+        agentId: 'agent-1',
+        createdAt: '2026-08-31T00:00:00.000Z',
+        executionTarget: { kind: 'local' },
+        id: 'session-1',
+        title: '',
+        titleIsManual: false,
+        updatedAt: '2026-08-31T00:00:00.000Z',
+      },
+      streamingMessage: assistantMessage,
+    } as const;
+
+    expect(AgentSessionSnapshotSchema.parse(roundTrip(snapshot))).toEqual(snapshot);
   });
 
   test('round-trips the versioned inference snapshot and preserves unsupported versions', () => {

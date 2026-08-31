@@ -108,7 +108,7 @@ export function ChatWorkspace({
     [alert, client, sessionId, t],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforePendingTurn: undefined,
+    hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
     isLoadingInitial,
     messageCount: messages.length,
   });

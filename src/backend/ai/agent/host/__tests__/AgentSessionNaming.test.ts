@@ -53,7 +53,7 @@ function createNaming(input: {
 describe('AgentSessionNaming', () => {
   test('uses the first user message as a temporary automatic title', async () => {
     const { generateText, naming, store } = createNaming({});
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
 
     const renamed = await naming.maybeRenameFromFirstUserMessage(session.id, [
       { type: 'text', text: '  A useful first message  ' },
@@ -69,7 +69,7 @@ describe('AgentSessionNaming', () => {
 
   test('replaces the temporary title with a first-exchange summary', async () => {
     const { generateText, naming, store } = createNaming({});
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
     const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
     await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
 
@@ -92,7 +92,7 @@ describe('AgentSessionNaming', () => {
 
   test('keeps the first-message title when no usable naming model is configured', async () => {
     const { generateText, naming, store } = createNaming({ defaultModelId: null });
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
     const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
     await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
 
@@ -116,7 +116,7 @@ describe('AgentSessionNaming', () => {
   test('propagates the Host lifecycle signal to summary generation', async () => {
     const controller = new AbortController();
     const { generateText, naming, store } = createNaming({ signal: controller.signal });
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
     const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
     await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
 
@@ -140,7 +140,7 @@ describe('AgentSessionNaming', () => {
         return generated.promise;
       },
     });
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
     const userParts = [{ type: 'text' as const, text: 'First question' }];
     await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
 
@@ -162,7 +162,7 @@ describe('AgentSessionNaming', () => {
 
   test('keeps the first-message title when summary naming is disabled', async () => {
     const { generateText, naming, store } = createNaming({ namingEnabled: false });
-    const session = await store.createSession({ agentId: 'agent-1' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
     const userParts = [{ type: 'text' as const, text: 'First question' }];
     await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
 
