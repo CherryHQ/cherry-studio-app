@@ -7,6 +7,7 @@ import type {
 
 export const permissionKinds = ['location', 'calendar', 'reminders', 'health'] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
+export type PermissionAction = 'open-settings' | 'request';
 
 export const permissionConfig: Record<
   PermissionKind,
@@ -48,4 +49,12 @@ export function getPermissionStatus(
   if (scopeStatuses.some((status) => status === 'denied')) return 'denied';
   if (scopeStatuses.some((status) => status === 'undetermined')) return 'undetermined';
   return 'unavailable';
+}
+
+export function getPermissionAction(
+  status: SystemPermissionState | undefined,
+): PermissionAction | undefined {
+  if (status === 'undetermined') return 'request';
+  if (status === 'denied' || status === 'granted') return 'open-settings';
+  return undefined;
 }

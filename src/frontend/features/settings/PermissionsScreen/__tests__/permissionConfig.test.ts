@@ -1,6 +1,6 @@
 import type { PermissionStatuses } from '@/shared/contracts';
 
-import { getPermissionStatus } from '../permissionConfig';
+import { getPermissionAction, getPermissionStatus } from '../permissionConfig';
 
 const grantedStatuses: PermissionStatuses = {
   'calendar.read': 'granted',
@@ -33,4 +33,24 @@ describe('getPermissionStatus', () => {
   it('keeps the initial state loading until every scope has been checked', () => {
     expect(getPermissionStatus('calendar', { 'calendar.read': 'granted' })).toBeUndefined();
   });
+});
+
+describe('getPermissionAction', () => {
+  it('requests an undetermined permission', () => {
+    expect(getPermissionAction('undetermined')).toBe('request');
+  });
+
+  it.each(['denied', 'granted'] as const)(
+    'opens system settings for an already determined %s permission',
+    (status) => {
+      expect(getPermissionAction(status)).toBe('open-settings');
+    },
+  );
+
+  it.each([undefined, 'unavailable'] as const)(
+    'does not offer an action for an unavailable permission state',
+    (status) => {
+      expect(getPermissionAction(status)).toBeUndefined();
+    },
+  );
 });

@@ -10,7 +10,13 @@ import { useBackendModule } from '@/frontend/data';
 import type { SystemPermissionState } from '@/shared/contracts';
 
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
-import { getPermissionStatus, type PermissionKind, permissionConfig } from './permissionConfig';
+import {
+  getPermissionAction,
+  getPermissionStatus,
+  type PermissionAction,
+  type PermissionKind,
+  permissionConfig,
+} from './permissionConfig';
 import {
   PermissionListLeading,
   visiblePermissionKinds,
@@ -23,16 +29,16 @@ export default function PermissionsSettingsScreen() {
   const [activePermissionKind, setActivePermissionKind] = useState<PermissionKind | null>(null);
   const { refresh, statuses } = usePermissionSystemStatuses();
 
-  const handlePermissionPress = async (kind: PermissionKind, status: SystemPermissionState) => {
+  const handlePermissionPress = async (kind: PermissionKind, action: PermissionAction) => {
     if (activePermissionKind) return;
 
     setActivePermissionKind(kind);
     let hasFailed = false;
     try {
       const config = permissionConfig[kind];
-      if (status === 'undetermined') {
+      if (action === 'request') {
         await permissions.request(config.requestScope);
-      } else if (status === 'denied') {
+      } else {
         await permissions.openSystemSettings(config.permission);
       }
     } catch {
@@ -52,24 +58,30 @@ export default function PermissionsSettingsScreen() {
 
   const items = visiblePermissionKinds.map((kind) => {
     const status = getPermissionStatus(kind, statuses);
+    const action = getPermissionAction(status);
     const isUpdating = activePermissionKind === kind;
-    const isActionable = status === 'denied' || status === 'undetermined';
     const accessibilityHint =
-      status === 'denied'
-        ? t('settings.permissions.openSystemSettingsHint')
-        : status === 'undetermined'
-          ? t('settings.permissions.requestHint')
+      action === 'request'
+        ? t('settings.permissions.requestHint')
+        : action === 'open-settings'
+          ? t('settings.permissions.openSystemSettingsHint')
           : undefined;
 
     return {
       accessibilityHint,
       accessibilityState: { busy: isUpdating },
-      disabled: isActionable && activePermissionKind !== null,
+      disabled: action !== undefined && activePermissionKind !== null,
       id: kind,
       label: t(`settings.permissions.type.${kind}`),
       leading: <PermissionListLeading kind={kind} />,
-      onPress: status && isActionable ? () => void handlePermissionPress(kind, status) : undefined,
-      trailing: <PermissionStatus isUpdating={isUpdating} status={status} />,
+      onPress: action ? () => void handlePermissionPress(kind, action) : undefined,
+      trailing: (
+        <PermissionStatus
+          isActionable={action !== undefined}
+          isUpdating={isUpdating}
+          status={status}
+        />
+      ),
     };
   });
 
@@ -95,9 +107,11 @@ export default function PermissionsSettingsScreen() {
 }
 
 function PermissionStatus({
+  isActionable,
   isUpdating,
   status,
 }: {
+  isActionable: boolean;
   isUpdating: boolean;
   status: SystemPermissionState | undefined;
 }) {
@@ -118,9 +132,7 @@ function PermissionStatus({
         {t(`settings.permissions.status.${status}`)}
       </Text>
       {status === 'granted' ? <CheckIcon className="size-5 text-foreground" /> : null}
-      {status === 'denied' || status === 'undetermined' ? (
-        <ChevronRightIcon className="size-5 text-muted-foreground" />
-      ) : null}
+      {isActionable ? <ChevronRightIcon className="size-5 text-muted-foreground" /> : null}
     </View>
   );
 }
