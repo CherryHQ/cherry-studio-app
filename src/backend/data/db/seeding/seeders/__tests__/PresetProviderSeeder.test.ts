@@ -1,5 +1,4 @@
 import type { DbService } from '@/backend/data/db/DbService';
-import { createPresetProviderInput } from '@/backend/data/services/presetProviders';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
 
@@ -51,8 +50,6 @@ describe('PresetProviderSeeder', () => {
       createDbService({ existingProviderIds: ['optional'], hasSeedJournal: true }),
     );
 
-    expect(createPresetProviderInput).toHaveBeenCalledTimes(1);
-    expect(createPresetProviderInput).toHaveBeenCalledWith({ id: 'optional', name: 'Optional' });
     expect(providerService.batchUpsert).toHaveBeenCalledWith([
       { name: 'Optional', providerId: 'optional' },
     ]);

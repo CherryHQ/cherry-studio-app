@@ -109,11 +109,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     for (const controller of this.requestControllers) {
       controller.abort();
     }
-    await Promise.allSettled(
-      [this.applyInFlight, this.checkInFlight].filter(
-        (operation): operation is Promise<unknown> => operation !== undefined,
-      ),
-    );
+    await Promise.allSettled([this.applyInFlight, this.checkInFlight]);
     this.activeManifest = undefined;
     this.availableUpdateSource = undefined;
     providerRegistryService.clearRemoteSnapshot();
