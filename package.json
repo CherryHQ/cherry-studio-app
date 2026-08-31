@@ -88,6 +88,7 @@
     "@swmansion/react-native-bottom-sheet": "0.15.3",
     "@tanstack/react-query": "^5.100.10",
     "ai": "^6.0.143",
+    "axios": "^1.19.0",
     "drizzle-orm": "^0.45.2",
     "expo": "~57.0.6",
     "expo-asset": "~57.0.5",

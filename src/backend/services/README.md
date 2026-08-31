@@ -41,6 +41,12 @@ suffix.
   transformations.
 - `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
   provider adaptation, and MCP connection behavior.
+- `http` owns non-streaming HTTP(S) request/response infrastructure for external services. It
+  exposes an app-owned `HttpClient` contract over one shared Axios transport. Each client carries
+  an immutable route whose base URL, defaults, and interceptors are selected only for that client's
+  requests. The module does not own device discovery, authentication protocols, retries, response
+  schemas, or frontend cache state. Local entity access remains in Data API and `src/backend/data`;
+  Pi, AI provider, MCP, and remote Agent streaming transports remain separate.
 
 Workflow module factories accept narrow dependency objects. Bootstrap configures host-scoped
 environment inputs, while the application service registry assembles lifecycle services.
