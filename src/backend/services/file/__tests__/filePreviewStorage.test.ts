@@ -77,6 +77,7 @@ const entry = FileEntrySchema.parse({
   filename: 'photo.jpg',
   id: '00000000-0000-7000-8000-000000000001',
   mediaType: 'image/jpeg',
+  provenance: 'imported',
   size: 1024,
   updatedAt: 42,
 });
@@ -153,6 +154,7 @@ describe('filePreviewStorage', () => {
       ...entry,
       filename: 'notes.txt',
       mediaType: 'text/plain',
+      provenance: 'imported',
     });
     const documentUri = `file:///documents/Data/Files/${document.id}.txt`;
     testState.files.add(documentUri);

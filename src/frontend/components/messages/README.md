@@ -30,8 +30,23 @@ Part renderers, animation providers, and platform controls remain private implem
 Callers import only from `@/frontend/components/messages`.
 
 A tool that returns managed artifacts already has them in the message: the Host persists each one
-as a `purpose: 'artifact'` file part that draws its own card. A per-tool renderer therefore renders
-the *call*, never the artifact, or the same file appears twice.
+as its own file part, right after the tool result that produced it. A per-tool renderer therefore
+renders the *call*, never the artifact, or the same file appears twice.
+
+`MessageParts` lifts every file part out of the ordered stream and renders them as one
+`MessageFileStrip` after the answer — the same strip `UserMessage` renders above its bubble. Two
+rules hold that shape:
+
+- **Files belong to the answer, not to the step.** A deliverable buried between two blocks of prose
+  is hard to find on a phone, and the position a file was emitted at tells a reader nothing. The
+  strip is the last thing in the message, so it stays put while the answer above it streams in.
+- **Layout never reads `purpose`.** A file's purpose is a Runtime fact used to decide model replay,
+  not a presentation input. A transcript that arrives from a peer without one must lay out
+  identically, so the split keys on part type alone. Only assistant messages reach `MessageParts`
+  with files, because `UserMessage` lifts its own attachments out first.
+
+The strip carries no heading: whether a file was attached or produced follows from the role of the
+message it sits in.
 
 ## Message Disclosure Contract
 

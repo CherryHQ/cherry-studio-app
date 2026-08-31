@@ -13,8 +13,13 @@ export type ProviderRegistryUpdateEvent = {
   source: 'cache' | 'gitcode' | 'github';
 };
 
+export type ProviderRegistryUpdateCheck = { status: 'available' | 'current' };
+
+export type ProviderRegistryUpdateResult = { status: 'current' | 'updated' };
+
 export interface ProvidersModule {
-  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
+  applyRegistryUpdate(): Promise<ProviderRegistryUpdateResult>;
+  checkRegistryUpdate(): Promise<ProviderRegistryUpdateCheck>;
   importPreset(providerId: string): Promise<Provider>;
   listCatalog(): Promise<ProviderCatalogEntry[]>;
   persistAvatar(id: string, sourceUri: string): Promise<string>;

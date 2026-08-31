@@ -21,7 +21,11 @@ import {
 } from '@/shared/data/preference';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { STORY_FILE_ENTRY_ID, STORY_WRITTEN_FILE_ENTRY_ID } from './messageFixtures';
+import {
+  STORY_EDITED_FILE_ENTRY_ID,
+  STORY_FILE_ENTRY_ID,
+  STORY_WRITTEN_FILE_ENTRY_ID,
+} from './messageFixtures';
 
 const storyFileEntries = new Map(
   [
@@ -30,6 +34,7 @@ const storyFileEntries = new Map(
       filename: 'cherry-studio.png',
       id: STORY_FILE_ENTRY_ID,
       mediaType: 'image/png',
+      provenance: 'imported',
       size: 1,
       updatedAt: 1,
     },
@@ -38,12 +43,22 @@ const storyFileEntries = new Map(
       filename: 'release-notes.md',
       id: STORY_WRITTEN_FILE_ENTRY_ID,
       mediaType: 'text/markdown',
+      provenance: 'generated',
       size: 128,
+      updatedAt: 1,
+    },
+    {
+      createdAt: 1,
+      filename: 'release-notes.md',
+      id: STORY_EDITED_FILE_ENTRY_ID,
+      mediaType: 'text/markdown',
+      provenance: 'generated',
+      size: 126,
       updatedAt: 1,
     },
   ].map((entry) => [entry.id, FileEntrySchema.parse(entry)]),
 );
-// Both entries resolve to the same asset: a card renders from the row, not the bytes.
+// All entries resolve to the same asset: a card renders from the row, not the bytes.
 const storyFileUri = Image.resolveAssetSource(require('../../../assets/icon.png')).uri;
 const storyQueryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: Infinity } },

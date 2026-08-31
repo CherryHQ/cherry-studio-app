@@ -1,4 +1,4 @@
-import { FileEntrySchema } from '@/shared/data/types/file';
+import { type FileEntryProvenance, FileEntrySchema } from '@/shared/data/types/file';
 
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
@@ -18,6 +18,7 @@ describe('writeFileTool', () => {
       data: '# Report\n',
       mediaType: 'text/markdown',
       name: 'report.md',
+      provenance: 'generated',
     });
     expect(output).toEqual({
       value: {
@@ -175,12 +176,18 @@ describe('writeFileTool', () => {
 
 function createFilesPort() {
   const createTextEntry = jest.fn(
-    async (input: { data: string; mediaType: string; name: string }) =>
+    async (input: {
+      data: string;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    }) =>
       FileEntrySchema.parse({
         createdAt: 1,
         filename: input.name,
         id: '00000000-0000-7000-8000-000000000001',
         mediaType: input.mediaType,
+        provenance: input.provenance,
         size: new TextEncoder().encode(input.data).length,
         updatedAt: 1,
       }),

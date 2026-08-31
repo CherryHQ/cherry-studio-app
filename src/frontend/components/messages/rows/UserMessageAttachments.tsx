@@ -1,36 +1,21 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { FilePart } from '../parts/FilePart';
+import { MessageFileStrip } from '../parts/MessageFileStrip';
 import type { UserMessageAttachmentPart } from './partitionUserMessageParts';
-
-const USER_MESSAGE_ATTACHMENT_SIZE = 112;
 
 type UserMessageAttachmentsProps = {
   attachments: readonly UserMessageAttachmentPart[];
-  messageId: string;
 };
 
-export function UserMessageAttachments({ attachments, messageId }: UserMessageAttachmentsProps) {
+/**
+ * The same file strip the assistant side renders inline, pulled above the
+ * bubble because the bubble is one visual unit that attachments cannot sit
+ * inside, and aligned right to stay with the user's column.
+ */
+export function UserMessageAttachments({ attachments }: UserMessageAttachmentsProps) {
   return (
-    <View className="max-w-full self-end" style={styles.strip}>
-      <ScrollView
-        alwaysBounceHorizontal={false}
-        className="max-w-full"
-        contentContainerClassName="gap-2"
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.strip}
-      >
-        {attachments.map(({ index, part }) => (
-          <FilePart key={`${messageId}-attachment-${index}`} part={part} />
-        ))}
-      </ScrollView>
+    <View className="max-w-full self-end">
+      <MessageFileStrip parts={attachments.map(({ part }) => part)} />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  strip: {
-    height: USER_MESSAGE_ATTACHMENT_SIZE,
-  },
-});

@@ -161,6 +161,7 @@ describe('fileStorage', () => {
         filename: 'Quarterly Brief.pdf',
         id: '00000000-0000-7000-8000-000000000001',
         mediaType: 'application/octet-stream',
+        provenance: 'imported',
         size: 42,
         updatedAt: 1,
       },
@@ -169,6 +170,7 @@ describe('fileStorage', () => {
       filename: 'Quarterly Brief.pdf',
       id: '00000000-0000-7000-8000-000000000001',
       mediaType: 'application/octet-stream',
+      provenance: 'imported',
       size: 42,
     });
     expect(
@@ -214,6 +216,7 @@ describe('fileStorage', () => {
 
     const entry = await createInternalEntry(entries, {
       name: 'report.final version',
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///picker/report',
     });
@@ -230,6 +233,7 @@ describe('fileStorage', () => {
     const entries = createEntryStore();
 
     const fromSource = await createInternalEntry(entries, {
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///camera/IMG_0001.jpg',
     });
@@ -237,12 +241,14 @@ describe('fileStorage', () => {
 
     const fromInput = await createInternalEntry(entries, {
       mediaType: 'image/heic',
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///camera/IMG_0001.jpg',
     });
     expect(fromInput.mediaType).toBe('image/heic');
 
     const fallback = await createInternalEntry(entries, {
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///picker/unknown.bin',
     });
@@ -279,6 +285,7 @@ describe('fileStorage', () => {
       filename: 'image.png',
       id: '00000000-0000-7000-8000-000000000001',
       mediaType: 'image/png',
+      provenance: 'imported',
       size: 10,
       updatedAt: 1,
     });
@@ -316,6 +323,7 @@ describe('fileStorage', () => {
     const entry = await createInternalEntry(entries, {
       data: 'data:image/png;base64,AAAA',
       mediaType: 'image/png',
+      provenance: 'generated',
       source: 'base64',
     });
 
@@ -323,6 +331,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         filename: 'painting-00000000-0000-7000-8000-000000000001.png',
         mediaType: 'image/png',
+        provenance: 'generated',
         size: 4,
       }),
     );
@@ -338,6 +347,7 @@ describe('fileStorage', () => {
       data: '# Report\n',
       mediaType: 'text/markdown',
       name: 'report.md',
+      provenance: 'generated',
       source: 'text',
     });
 
@@ -345,6 +355,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         filename: 'report.md',
         mediaType: 'text/markdown',
+        provenance: 'generated',
         size: 9,
       }),
     );
@@ -364,6 +375,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: '../escape.txt',
+        provenance: 'generated',
         source: 'text',
       }),
     ).rejects.toThrow();
@@ -380,6 +392,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: 'notes.txt',
+        provenance: 'generated',
         source: 'text',
       }),
     ).rejects.toThrow('write failed');
@@ -395,6 +408,7 @@ describe('fileStorage', () => {
         data: 'x',
         mediaType: 'text/plain',
         name: 'notes.txt',
+        provenance: 'generated',
         source: 'text',
       }),
     ).rejects.toThrow('database failed');
@@ -412,6 +426,7 @@ describe('fileStorage', () => {
       createInternalEntry(createEntryStore(), {
         data: 'AAAA',
         mediaType: 'image/png',
+        provenance: 'generated',
         source: 'base64',
       }),
     ).rejects.toThrow('write failed');
@@ -426,6 +441,7 @@ describe('fileStorage', () => {
     await expect(
       createInternalEntry(entries, {
         name: 'brief.txt',
+        provenance: 'imported',
         source: 'uri',
         uri: 'file:///picker/brief.txt',
       }),
@@ -441,6 +457,7 @@ describe('fileStorage', () => {
     const entries = createEntryStore();
     const entry = await createInternalEntry(entries, {
       name: 'brief.txt',
+      provenance: 'imported',
       source: 'uri',
       uri: 'file:///picker/brief.txt',
     });
@@ -544,6 +561,7 @@ function internalEntry(): FileEntry {
     filename: 'notes.txt',
     id: '00000000-0000-7000-8000-000000000001',
     mediaType: 'text/plain',
+    provenance: 'imported',
     size: 12,
     updatedAt: 1,
   });

@@ -83,6 +83,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'deleted_at',
+        'provenance',
       ]);
       expect(columnNames(database, 'painting')).toEqual([
         'id',
@@ -383,6 +384,84 @@ describe('bundled SQLite migrations', () => {
       expect(
         database.prepare("SELECT disabled_tools FROM mcp_server WHERE id = 'legacy'").get(),
       ).toEqual({ disabled_tools: '[]' });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('labels only provable origins and leaves the rest unknown', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const provenanceMigrationIndex = entries.findIndex(
+        ({ tag }) => tag === '0011_file-provenance',
+      );
+      expect(provenanceMigrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, provenanceMigrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session-1', 'agent-1', 1, 1, 1);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+        VALUES
+          ('orphan-file', 'brief.pdf', 'application/pdf', 1, 1, 1),
+          ('message-artifact', 'report.md', 'text/markdown', 1, 1, 1),
+          ('tool-artifact', 'legacy.txt', 'text/plain', 1, 1, 1),
+          ('painting-output', 'painting.png', 'image/png', 1, 1, 1),
+          ('painting-input', 'source.png', 'image/png', 1, 1, 1),
+          ('attachment', 'notes.txt', 'text/plain', 1, 1, 1),
+          ('reattached-artifact', 'chart.png', 'image/png', 1, 1, 1);
+        INSERT INTO agent_session_message (
+          id, session_id, role, data, status, created_at, updated_at
+        ) VALUES (
+          'message-1',
+          'session-1',
+          'assistant',
+          '{"version":1,"parts":[{"id":"artifact-1","type":"file","fileEntryId":"message-artifact","mediaType":"text/markdown","name":"report.md","purpose":"artifact"},{"id":"artifact-2","type":"file","fileEntryId":"reattached-artifact","mediaType":"image/png","name":"chart.png","purpose":"artifact"},{"id":"tool-1","type":"tool","toolCallId":"call-1","toolRef":{"source":"builtin","capabilityId":"write_file"},"providerName":"write_file","displayName":"Write file","state":"output-available","output":{"value":{"status":"created","fileEntryId":"tool-artifact"},"artifacts":[]}}]}',
+          'success',
+          1,
+          1
+        ), (
+          'message-2',
+          'session-1',
+          'user',
+          '{"version":1,"parts":[{"id":"input-0","type":"file","fileEntryId":"attachment","mediaType":"text/plain","name":"notes.txt","purpose":"input-attachment"},{"id":"input-1","type":"file","fileEntryId":"reattached-artifact","mediaType":"image/png","name":"chart.png","purpose":"input-attachment"}]}',
+          'success',
+          1,
+          1
+        );
+        INSERT INTO painting (
+          id, provider_id, prompt, order_key, created_at, updated_at, files
+        ) VALUES (
+          'painting-1',
+          'provider-1',
+          'prompt',
+          'a0',
+          1,
+          1,
+          '{"input":["painting-input"],"output":["painting-output"]}'
+        );
+      `);
+
+      applyMigrationSql(database, entries[provenanceMigrationIndex]?.sql ?? '');
+
+      expect(database.prepare('SELECT id, provenance FROM file_entry ORDER BY id').all()).toEqual([
+        { id: 'attachment', provenance: 'imported' },
+        { id: 'message-artifact', provenance: 'generated' },
+        // No owner proves anything about it, and inventing an origin would be worse.
+        { id: 'orphan-file', provenance: 'unknown' },
+        { id: 'painting-input', provenance: 'imported' },
+        { id: 'painting-output', provenance: 'generated' },
+        // Sent back as an attachment later, but it was still generated here.
+        { id: 'reattached-artifact', provenance: 'generated' },
+        { id: 'tool-artifact', provenance: 'generated' },
+      ]);
     } finally {
       database.close();
     }

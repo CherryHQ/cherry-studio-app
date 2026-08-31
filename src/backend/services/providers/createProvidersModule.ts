@@ -4,7 +4,12 @@ import {
   createPresetProviderInput,
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
-import type { ProviderRegistryUpdateEvent, ProvidersModule } from '@/shared/contracts';
+import type {
+  ProviderRegistryUpdateCheck,
+  ProviderRegistryUpdateEvent,
+  ProviderRegistryUpdateResult,
+  ProvidersModule,
+} from '@/shared/contracts';
 import type { Provider } from '@/shared/data/types/provider';
 
 type ProviderAvatarStorage = {
@@ -19,13 +24,14 @@ export type ProvidersModuleDependencies = {
     isExcluded(providerId: string): boolean;
     list(): ProtoProviderConfig[];
   };
-  canRemove(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean;
   providers: {
     create(input: ReturnType<typeof createPresetProviderInput>): Promise<Provider>;
     find(providerId: string): Promise<Provider | null>;
     list(): Promise<Provider[]>;
   };
   registryUpdates: {
+    apply(): Promise<ProviderRegistryUpdateResult>;
+    check(): Promise<ProviderRegistryUpdateCheck>;
     subscribe(listener: (event: ProviderRegistryUpdateEvent) => void): () => void;
   };
 };
@@ -33,12 +39,12 @@ export type ProvidersModuleDependencies = {
 export function createProvidersModule({
   avatars,
   catalog,
-  canRemove,
   providers,
   registryUpdates,
 }: ProvidersModuleDependencies): ProvidersModule {
   return {
-    canRemove,
+    applyRegistryUpdate: registryUpdates.apply,
+    checkRegistryUpdate: registryUpdates.check,
     importPreset: async (providerId) => {
       const preset = catalog
         .list()
@@ -69,6 +75,6 @@ export function createProvidersModule({
     persistAvatar: avatars.persist,
     removeAvatar: avatars.remove,
     resolveAvatar: avatars.resolve,
-    subscribeRegistryUpdates: registryUpdates.subscribe.bind(registryUpdates),
+    subscribeRegistryUpdates: registryUpdates.subscribe,
   };
 }

@@ -11,6 +11,7 @@ const ENTRY = FileEntrySchema.parse({
   filename: 'image.png',
   id: '00000000-0000-7000-8000-000000000001',
   mediaType: 'image/png',
+  provenance: 'generated',
   size: 12,
   updatedAt: 1_756_166_400_000,
 });

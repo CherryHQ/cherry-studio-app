@@ -3,11 +3,13 @@ import { Image, Section, Switch, type SwitchProps } from '@cherrystudio/ui/compo
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
+import type { AccessibilityProps } from 'react-native';
 import { Text, View } from 'react-native';
 
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 
 export type SettingsServiceRowProps = {
+  accessibilityActions?: AccessibilityProps['accessibilityActions'];
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
   avatar?: ReactNode;
   disabled?: boolean;
@@ -16,16 +18,19 @@ export type SettingsServiceRowProps = {
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
   name: string;
-  onPress: () => void;
+  onAccessibilityAction?: AccessibilityProps['onAccessibilityAction'];
+  onPress?: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
   /** Draws {@link SettingsGroupedSeparator} above the row. */
   showSeparator?: boolean;
   statusLabel?: string;
   statusTone?: 'danger' | 'default' | 'success';
   subtitle?: string;
+  trailingAction?: ReactNode;
 };
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
+  accessibilityActions,
   avatar,
   disabled = false,
   enabledSwitch,
@@ -33,12 +38,14 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   id,
   imageSource,
   name,
+  onAccessibilityAction,
   onPress,
   onPressedChange,
   showSeparator = false,
   statusLabel,
   statusTone = 'default',
   subtitle,
+  trailingAction,
 }: SettingsServiceRowProps) {
   const accessibilityLabel = [name, statusLabel, subtitle].filter(Boolean).join(', ');
   const [isPressed, setIsPressed] = useState(false);
@@ -47,6 +54,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
     <View>
       {showSeparator ? <SettingsGroupedSeparator hidden={hideSeparator || isPressed} /> : null}
       <Section.Item
+        accessibilityActions={accessibilityActions}
         accessibilityLabel={accessibilityLabel}
         disabled={disabled}
         description={
@@ -73,6 +81,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
             />
           ) : null)
         }
+        onAccessibilityAction={onAccessibilityAction}
         onPress={onPress}
         onPressIn={() => {
           setIsPressed(true);
@@ -106,7 +115,8 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               </Text>
             ) : null}
             {enabledSwitch ? <Switch {...enabledSwitch} /> : null}
-            <ChevronRightIcon className="size-5 text-muted-foreground" />
+            {trailingAction}
+            {onPress ? <ChevronRightIcon className="size-5 text-muted-foreground" /> : null}
           </View>
         }
       />

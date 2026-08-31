@@ -22,6 +22,14 @@ jest.mock('../SourceGroup', () => {
   };
 });
 
+jest.mock('../MessageFileStrip', () => {
+  const { createElement } = jest.requireActual('react');
+
+  return {
+    MessageFileStrip: (props: object) => createElement('MessageFileStrip', props),
+  };
+});
+
 describe('MessageParts', () => {
   test.each([
     ['pending', true],
@@ -36,7 +44,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('MessagePartRenderer').props.resolvedText).toBeUndefined();
   });
 
-  test('keeps source parts out of the ordered renderers and groups them once', () => {
+  test('collects files into one strip and groups sources once', () => {
     const source = {
       sourceId: 'source-1',
       title: 'Cherry Studio',
@@ -45,16 +53,60 @@ describe('MessageParts', () => {
     };
     const message: MessageListItem = {
       ...makeMessage('success'),
-      data: { parts: [{ text: 'Hello', type: 'text' }, source] },
+      data: {
+        parts: [
+          { text: 'Hello', type: 'text' },
+          makeFilePart('file-1', 'report.md'),
+          makeFilePart('file-2', 'summary.md'),
+          source,
+        ],
+      },
     };
     const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
 
     const renderedPart = renderer.root.findByType('MessagePartRenderer');
     expect(renderedPart.props.part).toEqual({ text: 'Hello', type: 'text' });
     expect(renderedPart.props.isTextSelectionEnabled).toBe(false);
+    expect(renderer.root.findByType('MessageFileStrip').props.parts).toEqual([
+      expect.objectContaining({ filename: 'report.md' }),
+      expect.objectContaining({ filename: 'summary.md' }),
+    ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
   });
+
+  test('shows a file produced mid-answer after the answer, not where it interrupted it', () => {
+    const message: MessageListItem = {
+      ...makeMessage('success'),
+      data: {
+        parts: [
+          { text: 'Here it is', type: 'text' },
+          makeFilePart('file-1', 'chart.png'),
+          { text: 'and a revision', type: 'text' },
+        ],
+      },
+    };
+    const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
+    const rendered = renderer.root.findAll(
+      (node) => node.type === 'MessagePartRenderer' || node.type === 'MessageFileStrip',
+    );
+
+    expect(rendered.map((node) => node.type)).toEqual([
+      'MessagePartRenderer',
+      'MessagePartRenderer',
+      'MessageFileStrip',
+    ]);
+  });
 });
+
+function makeFilePart(fileEntryId: string, filename: string) {
+  return {
+    filename,
+    mediaType: 'text/markdown',
+    providerMetadata: { cherry: { fileEntryId } },
+    type: 'file' as const,
+    url: `cherry://file/${fileEntryId}`,
+  };
+}
 
 function render(element: ReactElement): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;

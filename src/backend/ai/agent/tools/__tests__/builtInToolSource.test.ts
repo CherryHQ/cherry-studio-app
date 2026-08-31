@@ -135,6 +135,7 @@ describe('createSystemCapabilitySource', () => {
       filename: 'report.txt',
       id: '00000000-0000-7000-8000-000000000001',
       mediaType: 'text/plain',
+      provenance: 'generated',
       size: 6,
       updatedAt: 1,
     });
@@ -170,6 +171,7 @@ describe('createSystemCapabilitySource', () => {
       filename: 'notes.txt',
       id: '00000000-0000-7000-8000-000000000002',
       mediaType: 'text/plain',
+      provenance: 'generated',
       size: 3,
       updatedAt: 2,
     });

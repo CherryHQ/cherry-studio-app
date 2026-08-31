@@ -104,6 +104,7 @@ function entry(id: string, filename: string) {
     filename,
     id,
     mediaType: 'image/png',
+    provenance: 'imported',
     size: 128,
     updatedAt: 1,
   });

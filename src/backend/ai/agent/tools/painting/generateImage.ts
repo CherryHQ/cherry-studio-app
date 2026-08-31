@@ -159,6 +159,7 @@ export async function generateImageFromPrompt(
         await dependencies.files.createInternalEntry({
           data: image.base64,
           mediaType: image.mediaType,
+          provenance: 'generated',
           source: 'base64',
         }),
       );

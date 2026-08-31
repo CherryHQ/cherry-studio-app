@@ -5,7 +5,7 @@ import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
 import { providerRegistryService } from '../ProviderRegistryService';
-import { canDeleteProvider, ProviderService } from '../ProviderService';
+import { ProviderService } from '../ProviderService';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
@@ -20,7 +20,6 @@ jest.mock('../ProviderRegistryService', () => ({
     getProviderDisplayMetadata: jest.fn(() => ({})),
     getExcludedProviderIds: jest.fn(() => []),
     isProviderExcluded: jest.fn(() => false),
-    isRegistryProvider: jest.fn(() => false),
   },
 }));
 
@@ -129,15 +128,6 @@ describe('ProviderService', () => {
     expect('developerRole' in provider.apiFeatures).toBe(false);
   });
 
-  test('only exposes deletion for custom providers and user-created preset clones', () => {
-    expect(canDeleteProvider({ id: 'custom-provider' })).toBe(true);
-    expect(canDeleteProvider({ id: 'openai-work', presetProviderId: 'openai' })).toBe(true);
-    expect(canDeleteProvider({ id: 'openai', presetProviderId: 'openai' })).toBe(false);
-
-    jest.mocked(providerRegistryService.isRegistryProvider).mockReturnValueOnce(true);
-    expect(canDeleteProvider({ id: 'zai', presetProviderId: 'zhipu' })).toBe(false);
-  });
-
   test('preserves unknown stored provider settings when applying a patch', async () => {
     const storedSettings = {
       futureDesktopSetting: { enabled: true },
@@ -189,7 +179,6 @@ describe('ProviderService', () => {
 
   test('deletes a custom provider', async () => {
     const tx = createDeleteTransaction({
-      presetProviderId: null,
       providerId: 'custom-provider',
     });
     const service = await createService(tx);
@@ -205,7 +194,6 @@ describe('ProviderService', () => {
 
   test('allows deleting a user clone of a registry provider', async () => {
     const tx = createDeleteTransaction({
-      presetProviderId: 'openai',
       providerId: 'openai-clone',
     });
     const service = await createService(tx);
@@ -327,7 +315,6 @@ describe('ProviderService', () => {
 
   test('deleting a provider resets its rotation state', async () => {
     const tx = createDeleteTransaction({
-      presetProviderId: null,
       providerId: 'custom-provider',
     });
     const rotation = await createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')], tx);
@@ -338,26 +325,18 @@ describe('ProviderService', () => {
     await expect(rotation.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
   });
 
-  test('rejects deleting registry and canonical preset providers', async () => {
+  test('deletes registry and canonical preset providers', async () => {
     const registryTx = createDeleteTransaction({
-      presetProviderId: null,
       providerId: 'openai',
     });
-    jest.mocked(providerRegistryService.isRegistryProvider).mockReturnValueOnce(true);
-
-    await expect((await createService(registryTx)).delete('openai')).rejects.toThrow(
-      "Cannot delete preset provider 'openai'",
-    );
-    expect(registryTx.delete).not.toHaveBeenCalled();
+    await expect((await createService(registryTx)).delete('openai')).resolves.toBeUndefined();
+    expect(registryTx.delete).toHaveBeenCalledTimes(1);
 
     const canonicalTx = createDeleteTransaction({
-      presetProviderId: 'canonical',
       providerId: 'canonical',
     });
-    await expect((await createService(canonicalTx)).delete('canonical')).rejects.toThrow(
-      "Cannot delete preset provider 'canonical'",
-    );
-    expect(canonicalTx.delete).not.toHaveBeenCalled();
+    await expect((await createService(canonicalTx)).delete('canonical')).resolves.toBeUndefined();
+    expect(canonicalTx.delete).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -430,7 +409,7 @@ function createCacheService(): CacheService {
   return service;
 }
 
-function createDeleteTransaction(input: { presetProviderId: string | null; providerId: string }) {
+function createDeleteTransaction(input: { providerId: string }) {
   return {
     delete: jest.fn(() => ({
       where: jest.fn(() => ({
@@ -439,9 +418,7 @@ function createDeleteTransaction(input: { presetProviderId: string | null; provi
     })),
     select: jest.fn(() => ({
       from: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(async () => [{ presetProviderId: input.presetProviderId }]),
-        })),
+        where: jest.fn(() => ({})),
       })),
     })),
     update: jest.fn(() => ({

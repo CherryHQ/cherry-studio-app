@@ -1,5 +1,12 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Section, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
+import {
+  Menu,
+  type MenuItem,
+  Section,
+  Spinner,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -15,18 +22,25 @@ import type { Provider } from '@/shared/data/types/provider';
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
+import { useProviderDeletion } from './ProviderScreen/hooks/useProviderDeletion';
 
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;
 const PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT = 48;
 
-type ProviderListRow = SettingsServiceRowProps & { isEnabled: boolean };
+type ProviderListRow = SettingsServiceRowProps & {
+  isEnabled: boolean;
+  menuItems: readonly MenuItem[];
+};
 type ProviderListSection = { data: ProviderListRow[]; title: string };
 
 const keyExtractor = (item: ProviderListRow) => item.id;
 const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
-  const { isEnabled: _isEnabled, ...row } = item;
-
-  return <SettingsServiceRow {...row} />;
+  const { isEnabled: _isEnabled, menuItems, ...row } = item;
+  return (
+    <Menu items={menuItems} trigger="longPress">
+      <SettingsServiceRow {...row} />
+    </Menu>
+  );
 };
 const renderProviderSectionHeader = ({ section }: { section: ProviderListSection }) => (
   <View className="h-12 justify-end px-4 pb-2">
@@ -46,6 +60,9 @@ export default function ProviderSettingsScreen() {
   const [pendingProviderStates, setPendingProviderStates] = useState<ReadonlyMap<string, boolean>>(
     new Map(),
   );
+  const { isDeleting, requestDelete } = useProviderDeletion({
+    dismissOnDeleteRequest: false,
+  });
   const keywords = useMemo(() => toSearchKeywords(query), [query]);
   const isFiltering = keywords.length > 0;
   const hasPendingProviderUpdate = pendingProviderStates.size > 0;
@@ -162,11 +179,34 @@ export default function ProviderSettingsScreen() {
           },
           id: provider.id,
           isEnabled: provider.isEnabled,
+          menuItems: [
+            {
+              destructive: true,
+              disabled: isDeleting,
+              id: 'delete-provider',
+              label: t('common.delete'),
+              onPress: () => requestDelete(provider),
+            },
+          ],
           name: provider.name,
+          accessibilityActions: [{ label: t('common.delete'), name: 'delete' }],
+          onAccessibilityAction: (event) => {
+            if (event.nativeEvent.actionName === 'delete') {
+              requestDelete(provider);
+            }
+          },
           onPress: () => openProvider(provider),
         };
       }),
-    [listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
+    [
+      isDeleting,
+      listedProviders,
+      openProvider,
+      pendingProviderStates,
+      requestDelete,
+      t,
+      toggleProviderEnabled,
+    ],
   );
   const providerSections = useMemo<ProviderListSection[]>(() => {
     const enabledProviders = providerItems.filter(({ isEnabled }) => isEnabled);

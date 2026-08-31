@@ -2,7 +2,7 @@
 
 import * as z from 'zod';
 
-import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { ManagedFileFact } from '../resources/managedFileResolver';
@@ -29,7 +29,12 @@ export const editFileInputSchema = z.strictObject({
 });
 
 export type EditFileFiles = {
-  createTextEntry(input: { data: string; mediaType: string; name: string }): Promise<FileEntry>;
+  createTextEntry(input: {
+    data: string;
+    mediaType: string;
+    name: string;
+    provenance: FileEntryProvenance;
+  }): Promise<FileEntry>;
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
 };
@@ -109,6 +114,7 @@ export function createEditFileTool(files: EditFileFiles): RuntimeTool {
         data,
         mediaType: source.mediaType,
         name: source.name,
+        provenance: 'generated',
       });
 
       return {

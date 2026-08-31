@@ -24,6 +24,7 @@ describe('editFileTool', () => {
       data: 'Hello Cherry\n',
       mediaType: 'text/markdown',
       name: 'notes.md',
+      provenance: 'generated',
     });
     expect(output).toEqual({
       value: {
@@ -267,16 +268,16 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
   };
   const resolveAvailable = jest.fn(async () => new Map([[SOURCE_ID, source]]));
   const readAsBytes = jest.fn(async () => bytes);
-  const createTextEntry = jest.fn(
-    async (input: { data: string; mediaType: string; name: string }) =>
-      FileEntrySchema.parse({
-        createdAt: 2,
-        filename: input.name,
-        id: EDITED_ID,
-        mediaType: input.mediaType,
-        size: new TextEncoder().encode(input.data).byteLength,
-        updatedAt: 2,
-      }),
+  const createTextEntry = jest.fn(async (input: Parameters<EditFileFiles['createTextEntry']>[0]) =>
+    FileEntrySchema.parse({
+      createdAt: 2,
+      filename: input.name,
+      id: EDITED_ID,
+      mediaType: input.mediaType,
+      provenance: input.provenance,
+      size: new TextEncoder().encode(input.data).byteLength,
+      updatedAt: 2,
+    }),
   );
   return { createTextEntry, readAsBytes, resolveAvailable } satisfies EditFileFiles & {
     createTextEntry: jest.Mock;
