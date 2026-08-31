@@ -44,7 +44,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('MessagePartRenderer').props.resolvedText).toBeUndefined();
   });
 
-  test('collapses adjacent files into one strip and groups sources once', () => {
+  test('collects files into one strip and groups sources once', () => {
     const source = {
       sourceId: 'source-1',
       title: 'Cherry Studio',
@@ -74,7 +74,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
   });
 
-  test('renders a file run that interrupts the answer as one strip between the text', () => {
+  test('shows a file produced mid-answer after the answer, not where it interrupted it', () => {
     const message: MessageListItem = {
       ...makeMessage('success'),
       data: {
@@ -86,9 +86,15 @@ describe('MessageParts', () => {
       },
     };
     const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
+    const rendered = renderer.root.findAll(
+      (node) => node.type === 'MessagePartRenderer' || node.type === 'MessageFileStrip',
+    );
 
-    expect(renderer.root.findAllByType('MessageFileStrip')).toHaveLength(1);
-    expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(2);
+    expect(rendered.map((node) => node.type)).toEqual([
+      'MessagePartRenderer',
+      'MessagePartRenderer',
+      'MessageFileStrip',
+    ]);
   });
 });
 

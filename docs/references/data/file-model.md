@@ -71,9 +71,10 @@ An owner stores the entry ids it points at, inside its own row:
 | Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
 A `write_file` tool result also carries the `fileEntryId` it created in its result JSON. The Runtime
-projects the same id as a `purpose: 'artifact'` file part directly after that tool part, and chat
-renders it there. As with every owner here, the reference outlives the bytes and degrades to the
-unavailable placeholder.
+projects the same id as a `purpose: 'artifact'` file part directly after that tool part; chat lifts
+it out of the ordered stream and shows it after the answer, where a deliverable is easier to find
+than at the step that wrote it. As with every owner here, the reference outlives the bytes and
+degrades to the unavailable placeholder.
 
 `purpose` and `provenance` answer different questions and neither substitutes for the other.
 `purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
