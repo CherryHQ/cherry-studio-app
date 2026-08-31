@@ -8,10 +8,24 @@ import {
 import { z } from 'zod';
 
 import { __testing } from '../createHttpClient';
-import type { HttpInterceptor } from '../HttpClient';
+import type { HttpInterceptor, HttpRequest } from '../HttpClient';
 import { HttpError } from '../HttpError';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
+jest.mock('@logger', () => {
+  const logger = { debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() };
+  return { loggerService: { withContext: () => logger } };
+});
+
+const transportLogger = (
+  jest.requireMock('@logger') as {
+    loggerService: { withContext: (module: string) => { error: jest.Mock; warn: jest.Mock } };
+  }
+).loggerService.withContext('HttpTransport');
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 function response<T>(
   config: InternalAxiosRequestConfig,
@@ -305,6 +319,103 @@ describe('createHttpClient', () => {
     expect(error).toBeInstanceOf(HttpError);
     expect(error).toMatchObject({ code, kind });
     expect(error.cause).toBeUndefined();
+  });
+
+  it('rejects a body on GET and DELETE requests, including one added by an interceptor', async () => {
+    const adapter = mockAdapter(async (config) => response(config, 200, {}));
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+
+    const directClient = createClient({ baseUrl: 'https://api.cherry.example.com' });
+    await expect(
+      directClient.request({
+        body: { enabled: true },
+        method: 'DELETE',
+        path: '/agents/agent-1',
+      } as never),
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST_BODY', kind: 'internal' });
+
+    const interceptedClient = createClient({
+      baseUrl: 'https://api.cherry.example.com',
+      interceptors: [
+        {
+          onRequest: (request) =>
+            ({ ...request, body: { injected: true } }) as unknown as HttpRequest<unknown>,
+        },
+      ],
+    });
+    await expect(
+      interceptedClient.request({ method: 'GET', path: '/agents' }),
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST_BODY', kind: 'internal' });
+
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-positive timeouts for clients and requests', async () => {
+    const adapter = mockAdapter(async (config) => response(config, 200, {}));
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+
+    let clientError: unknown;
+    try {
+      createClient({ baseUrl: 'https://api.cherry.example.com', timeoutMs: 0 });
+    } catch (error) {
+      clientError = error;
+    }
+    expect(clientError).toMatchObject({ code: 'INVALID_CLIENT_TIMEOUT', kind: 'internal' });
+
+    const client = createClient({ baseUrl: 'https://api.cherry.example.com' });
+    await expect(
+      client.request({ method: 'GET', path: '/agents', timeoutMs: 0 }),
+    ).rejects.toMatchObject({ code: 'INVALID_REQUEST_TIMEOUT', kind: 'internal' });
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('reports an error interceptor that returns an invalid value without hiding the reason', async () => {
+    const adapter = mockAdapter(async (config) => {
+      throw responseError(config, 500, {});
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const client = createClient({
+      baseUrl: 'https://api.cherry.example.com',
+      interceptors: [{ onError: () => undefined as unknown as HttpError }],
+    });
+
+    await expect(client.request({ method: 'GET', path: '/agents' })).rejects.toMatchObject({
+      code: 'INVALID_INTERCEPTOR_ERROR',
+      kind: 'internal',
+      message: 'HTTP error interceptor returned an invalid value.',
+    });
+  });
+
+  it('logs real transport diagnostics while the public error stays stable', async () => {
+    const adapter = mockAdapter(async (config) => {
+      throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config);
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const client = createClient({ baseUrl: 'https://api.cherry.example.com' });
+
+    const error = await client
+      .request({
+        headers: { Authorization: 'Bearer access-secret' },
+        method: 'GET',
+        path: '/agents',
+        query: { token: 'query-secret' },
+      })
+      .catch((value) => value);
+
+    expect(error).toMatchObject({ code: 'NETWORK_ERROR', kind: 'network' });
+    expect(transportLogger.warn).toHaveBeenCalledWith(
+      'HTTP request failed.',
+      expect.objectContaining({
+        code: AxiosError.ERR_NETWORK,
+        url: 'https://api.cherry.example.com/agents',
+      }),
+    );
+    const logged = JSON.stringify([
+      ...transportLogger.warn.mock.calls,
+      ...transportLogger.error.mock.calls,
+    ]);
+    expect(logged).not.toContain('access-secret');
+    expect(logged).not.toContain('query-secret');
   });
 
   it('rejects absolute request URLs before transport', async () => {

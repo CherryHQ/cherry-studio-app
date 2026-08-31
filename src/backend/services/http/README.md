@@ -16,6 +16,10 @@ pairing and configuration import.
   only that route's interceptors.
 - A request cannot supply or replace its base URL. Paths must begin with one `/`, which prevents an
   absolute URL from redirecting credentials to another authority.
+- The wire format for queries is owned here, not by the Axios version: values serialize as repeated
+  keys (`tag=a&tag=b`) and `null` or `undefined` values are omitted.
+- `GET` and `DELETE` requests carry no body, and timeouts must be positive milliseconds. Both rules
+  are enforced at the type level and revalidated after interceptors run.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,
   network, HTTP status, unreadable response, and invalid input leave the module as `HttpError`.
   Raw Axios errors, configs, credentials, and unvalidated response bodies do not cross the public
@@ -110,6 +114,11 @@ async function getAccount(signal?: AbortSignal) {
 The decoder must not copy unknown response values, tokens, cookies, or other secrets into the
 public error. `HttpError` safely expresses `kind`, `status`, `code`, `requestId`, `retryAfter`,
 `message`, and app-owned `details`.
+
+The public error stays stable while the real failure stays diagnosable: the transport logs the
+underlying transport code, message, method, URL, and HTTP status through `loggerService` under the
+`HttpTransport` context. Headers, bodies, and query values are never logged, and cancellation is
+not logged.
 
 ## Boundaries
 

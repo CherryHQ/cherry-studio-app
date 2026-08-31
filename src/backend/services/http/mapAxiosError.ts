@@ -1,10 +1,28 @@
+import { loggerService } from '@logger';
 import { AxiosError, isAxiosError, isCancel } from 'axios';
 
 import type { DecodedHttpError, HttpErrorDecoder, HttpErrorResponse } from './HttpClient';
 import { HttpError, isHttpError } from './HttpError';
 import { toHttpHeaders } from './toHttpHeaders';
 
+const logger = loggerService.withContext('HttpTransport');
+
 const MAX_PUBLIC_HEADER_LENGTH = 256;
+
+/**
+ * Logs the real transport failure for diagnosis. Request and response headers,
+ * bodies, and query values stay out of the log; the public `HttpError` stays
+ * stable and desensitized.
+ */
+function logTransportFailure(error: AxiosError): void {
+  logger.warn('HTTP request failed.', {
+    code: error.code,
+    message: error.message,
+    method: error.config?.method,
+    status: error.response?.status,
+    url: `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`,
+  });
+}
 
 function readPublicHeader(headers: HttpErrorResponse['headers'], name: string): string | undefined {
   const normalized = headers[name.toLowerCase()]?.trim();
@@ -60,6 +78,10 @@ export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpEr
   }
 
   if (!isAxiosError(error)) {
+    logger.error(
+      'HTTP transport failed unexpectedly.',
+      error instanceof Error ? error : { value: String(error) },
+    );
     return new HttpError('HTTP request failed unexpectedly.', {
       code: 'HTTP_INTERNAL_ERROR',
       kind: 'internal',
@@ -72,6 +94,8 @@ export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpEr
       kind: 'cancelled',
     });
   }
+
+  logTransportFailure(error);
 
   if (error.code === AxiosError.ECONNABORTED || error.code === AxiosError.ETIMEDOUT) {
     return new HttpError('HTTP request timed out.', {
