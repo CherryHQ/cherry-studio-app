@@ -111,19 +111,16 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       },
     ],
   }));
-  const modelControlStyle = useAnimatedStyle(() => ({
-    opacity: focusProgress.value,
+  // Scale rather than opacity, and the toolbar's tools are hidden at rest by
+  // scaling to nothing. Reanimated writes a layer alpha for an animated
+  // `opacity`, which severs the backdrop sampling every `GlassView` under it
+  // depends on — and the material does not come back when the value settles at
+  // 1, so the buttons lose their fill permanently. Transforms leave the alpha
+  // alone. Both control groups reveal identically, so they share one style.
+  const toolRevealStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
-      },
-    ],
-  }));
-  const effortControlStyle = useAnimatedStyle(() => ({
-    opacity: focusProgress.value,
-    transform: [
-      {
-        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+        scale: interpolate(focusProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
       },
     ],
   }));
@@ -244,7 +241,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                   className="min-w-0 shrink flex-row items-center gap-2"
                   importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
                   pointerEvents={isInputActive ? 'auto' : 'none'}
-                  style={modelControlStyle}
+                  style={toolRevealStyle}
                 >
                   <ComposerMenu />
                   <ComposerModelPill
@@ -268,7 +265,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                       accessibilityElementsHidden={!isInputActive}
                       importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
                       pointerEvents={isInputActive ? 'auto' : 'none'}
-                      style={effortControlStyle}
+                      style={toolRevealStyle}
                     >
                       {effortGauge}
                     </Animated.View>
