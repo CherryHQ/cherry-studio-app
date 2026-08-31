@@ -28,20 +28,16 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
-import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/utils/toolMentions';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
-import { ChatInputMenuItems } from './components/ChatInputMenuItems';
 import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
-import { useChatInputWebSearchSelection } from './hooks/useChatInputWebSearchSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
-import { getChatInputTemporaryCapabilities } from './utils/chatInputCapabilities';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -63,10 +59,6 @@ const focusTransitionMotion = {
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
   const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
-  const { isWebSearchEnabled, setIsWebSearchEnabled } = useChatInputWebSearchSelection({
-    agentId,
-    sessionId,
-  });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
@@ -137,18 +129,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
-  const handleMentionPress = useCallback(
-    (mentionId: ToolMentionId) => {
-      const mention = toolMentions.find((candidate) => candidate.id === mentionId);
-      if (!mention) {
-        return;
-      }
-
-      inputRef.current?.insertLink(t(mention.titleKey), toolMentionUrl(mention.id));
-      inputRef.current?.insertText(' ');
-    },
-    [inputRef, t],
-  );
   const handleFieldLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
@@ -193,10 +173,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       const parts = toAgentInputParts({ attachments, text });
-      const temporaryCapabilities = getChatInputTemporaryCapabilities({
-        isWebSearchEnabled,
-        text,
-      });
       return sendMessage({
         parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
@@ -209,17 +185,9 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               ),
             }
           : {}),
-        ...(temporaryCapabilities.length > 0 ? { temporaryCapabilities } : {}),
       });
     },
-    [
-      isReasoningEffortSelected,
-      reasoningEffort,
-      reasoningEfforts,
-      selectedModelId,
-      sendMessage,
-      isWebSearchEnabled,
-    ],
+    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -278,13 +246,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                   pointerEvents={isInputActive ? 'auto' : 'none'}
                   style={modelControlStyle}
                 >
-                  <ComposerMenu>
-                    <ChatInputMenuItems
-                      isWebSearchEnabled={isWebSearchEnabled}
-                      onMentionPress={handleMentionPress}
-                      onWebSearchChange={setIsWebSearchEnabled}
-                    />
-                  </ComposerMenu>
+                  <ComposerMenu />
                   <ComposerModelPill
                     icon={
                       selectedModelItem ? (

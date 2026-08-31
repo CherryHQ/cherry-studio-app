@@ -1,4 +1,4 @@
-import { splitToolMentions, toolMentionUrl } from '../toolMentions';
+import { splitToolMentions } from '../toolMentions';
 
 describe('splitToolMentions', () => {
   it('returns nothing for empty text', () => {
@@ -63,11 +63,5 @@ describe('splitToolMentions', () => {
       { id: 'create-image', text: '创建图片' },
       { text: ' `code`' },
     ]);
-  });
-});
-
-describe('toolMentionUrl', () => {
-  it('names the tool in the URL', () => {
-    expect(toolMentionUrl('create-image')).toBe('tool://create-image');
   });
 });

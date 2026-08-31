@@ -28,9 +28,7 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   the current Agent composer and is snapshotted into each submission; it never updates Agent
   configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
   the selected model's default.
-- The composer menu stores web-search selection in the frontend persist cache, keyed by Session id.
-  New Sessions default to disabled, and an admitted first send transfers the Draft selection to the
-  returned Session. While enabled, every submission includes the turn-local `web-search`
-  capability. The create-image mention remains turn-local and adds `image-generation` only to the
-  draft that contains it. Neither choice mutates Agent or Agent Session persistence.
+- The composer menu offers media only. Web search and create-image were removed from it, so the
+  composer no longer requests any turn-local capability; tool availability comes from Agent
+  configuration alone.
 - Follow-up queues and steering are not part of the Version 1 Agent Session composer.
