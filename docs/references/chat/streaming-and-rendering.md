@@ -32,6 +32,12 @@ capabilities, never on Runtime identity. Attachment admission is capability-driv
 imports managed images, while the Host revalidates authoritative metadata and resolves bounded
 managed image or text input before execution.
 
+Expo's native fetch support provides streaming responses in the tested app runtime. AI SDK
+provider packages use their compatible runtime fetch and stream incrementally without a
+provider-wide shared transport adapter. This stream path remains independent of the Axios-backed
+local-network JSON/REST client under `src/backend/services/http`; neither transport is a global
+replacement for the other.
+
 ## Frontend Observation Boundary
 
 `ChatProvider` owns one `AgentSessionChatClient` for the route. React consumers subscribe by
