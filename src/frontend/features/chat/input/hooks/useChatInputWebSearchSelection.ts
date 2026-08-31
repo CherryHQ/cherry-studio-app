@@ -10,7 +10,10 @@ import {
 type DraftSelection = {
   agentId?: string;
   isEnabled: boolean;
+  sessionId?: string;
 };
+
+const DEFAULT_WEB_SEARCH_ENABLED = true;
 
 /**
  * Stores established Session selections in the frontend persist cache while
@@ -23,14 +26,16 @@ export function useChatInputWebSearchSelection(input: { agentId?: string; sessio
   );
   const [draftSelection, setDraftSelection] = useState<DraftSelection>({
     agentId,
-    isEnabled: false,
+    isEnabled: DEFAULT_WEB_SEARCH_ENABLED,
+    sessionId,
   });
   let activeDraftSelection = draftSelection;
-  if (
-    (sessionId && draftSelection.isEnabled) ||
-    (!sessionId && draftSelection.agentId !== agentId)
-  ) {
-    activeDraftSelection = { agentId, isEnabled: false };
+  if (draftSelection.agentId !== agentId || draftSelection.sessionId !== sessionId) {
+    activeDraftSelection = {
+      agentId,
+      isEnabled: DEFAULT_WEB_SEARCH_ENABLED,
+      sessionId,
+    };
     setDraftSelection(activeDraftSelection);
   }
 
@@ -46,7 +51,7 @@ export function useChatInputWebSearchSelection(input: { agentId?: string; sessio
       return;
     }
 
-    setDraftSelection({ agentId, isEnabled });
+    setDraftSelection({ agentId, isEnabled, sessionId });
   };
 
   return { isWebSearchEnabled, setIsWebSearchEnabled };

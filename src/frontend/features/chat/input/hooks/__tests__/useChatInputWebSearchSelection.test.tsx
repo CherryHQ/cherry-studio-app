@@ -52,7 +52,7 @@ describe('useChatInputWebSearchSelection', () => {
     await act(async () => renderer?.unmount());
   });
 
-  test('keeps a new Session draft local until creation assigns an id', async () => {
+  test('defaults each new Session draft to enabled and keeps its selection local', async () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;
 
@@ -66,6 +66,11 @@ describe('useChatInputWebSearchSelection', () => {
         />,
       );
     });
+    expect(snapshot?.isWebSearchEnabled).toBe(true);
+
+    await act(async () => snapshot?.setIsWebSearchEnabled(false));
+    expect(snapshot?.isWebSearchEnabled).toBe(false);
+
     await act(async () => snapshot?.setIsWebSearchEnabled(true));
 
     expect(snapshot?.isWebSearchEnabled).toBe(true);
@@ -95,7 +100,7 @@ describe('useChatInputWebSearchSelection', () => {
         />,
       );
     });
-    expect(snapshot?.isWebSearchEnabled).toBe(false);
+    expect(snapshot?.isWebSearchEnabled).toBe(true);
 
     await act(async () => renderer?.unmount());
   });
