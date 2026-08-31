@@ -71,8 +71,8 @@ export const States: Story = {
             testID="story-tool-complete"
             title="Calculator"
           >
-            <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
             <MessagePart.TextSection title="Output" value="42" />
+            <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
           </MessagePart.Tool>
           <MessagePart.Tool
             state="complete"

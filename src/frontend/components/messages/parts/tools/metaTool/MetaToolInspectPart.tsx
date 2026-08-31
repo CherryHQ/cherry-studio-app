@@ -15,7 +15,6 @@ export function MetaToolInspectPart({ part, toolName }: MetaToolInspectPartProps
 
   return (
     <MetaToolFrame part={part} toolName={toolName}>
-      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
       {toolName === 'tool_inspect' && part.state === 'output-available' ? (
         <MessagePart.TextSection
           title={t('chat.tool.jsdoc')}
@@ -29,6 +28,7 @@ export function MetaToolInspectPart({ part, toolName }: MetaToolInspectPartProps
           value={part.errorText}
         />
       ) : null}
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
     </MetaToolFrame>
   );
 }

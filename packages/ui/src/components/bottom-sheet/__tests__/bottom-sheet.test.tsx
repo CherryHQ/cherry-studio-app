@@ -207,6 +207,25 @@ describe('BottomSheet', () => {
     expect(fullHeight).toBeGreaterThan(largeHeight);
   });
 
+  test('opens at the smallest height and lets the user expand through semantic sizes', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open sizes={['compact', 'large']} title="Tool details">
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const detents = mockBottomSheetProps.detents as number[];
+    expect(detents).toHaveLength(3);
+    expect(detents[0]).toBe(0);
+    expect(detents[2]).toBeGreaterThan(detents[1]);
+    expect(mockBottomSheetProps.index).toBe(1);
+
+    act(() => (mockBottomSheetProps.onIndexChange as (index: number) => void)(2));
+    expect(mockBottomSheetProps.index).toBe(2);
+  });
+
   test('uses a caller-provided fixed height on an inset rounded card', () => {
     act(() => {
       renderer = create(

@@ -57,6 +57,13 @@ Meta tool calls. Those tool renderers remain separate while their detail semanti
 summary row is not by itself a reason to merge their business adapters. Merge adapters only when
 they have the same dispatch rules, state interpretation, and detail-content contract.
 
+Tool details open at the shared compact height and can be dragged to the shared large height. Their
+reading order is outcome first and invocation arguments second. Running tools without an outcome
+show their available arguments, while failures put the error before those arguments. Artifact files
+stay in their own message parts and are never duplicated in the tool sheet. A successful file tool
+may summarize user-facing metadata such as its filename and size, but it does not expose internal
+entry ids or repeat the file body.
+
 Reasoning and source groups retain their domain-specific compact triggers, but their expanded views
 must use `MessagePart.Detail`. New interactive message parts may introduce a distinct compact
 trigger only when their semantics cannot be expressed by `MessagePart.Summary`; they must not

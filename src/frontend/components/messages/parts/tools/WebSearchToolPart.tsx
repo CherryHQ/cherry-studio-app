@@ -11,7 +11,6 @@ type WebSearchToolPartProps = {
 };
 
 type WebSearchResult = {
-  content?: string;
   id: number | string;
   title: string;
   url: string;
@@ -50,6 +49,7 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
             key={`${result.id}-${result.url}`}
             label={result.title || result.url}
             url={result.url}
+            variant="listItem"
           />
         ))
       )}
@@ -109,7 +109,6 @@ function parseWebSearchResults(output: unknown): WebSearchResult[] {
 
     return [
       {
-        content: typeof item.content === 'string' ? item.content : undefined,
         id: typeof item.id === 'string' || typeof item.id === 'number' ? item.id : index + 1,
         title: typeof item.title === 'string' ? item.title : item.url,
         url: item.url,

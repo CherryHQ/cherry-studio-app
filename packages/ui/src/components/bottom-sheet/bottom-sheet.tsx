@@ -32,6 +32,7 @@ const HEIGHT_RATIOS = {
 } as const;
 
 export type BottomSheetSize = keyof typeof HEIGHT_RATIOS;
+export type BottomSheetSizes = readonly [BottomSheetSize, ...BottomSheetSize[]];
 
 export type BottomSheetBackAction = {
   accessibilityLabel: string;
@@ -54,10 +55,17 @@ export type BottomSheetProps = BottomSheetBaseProps &
     | {
         height: number;
         size?: never;
+        sizes?: never;
       }
     | {
         height?: never;
         size: BottomSheetSize;
+        sizes?: never;
+      }
+    | {
+        height?: never;
+        size?: never;
+        sizes: BottomSheetSizes;
       }
   );
 
@@ -88,15 +96,14 @@ export function BottomSheet(props: BottomSheetProps) {
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET - OUTER_INSET);
-  const requestedCardHeight =
-    props.height === undefined
-      ? Math.round(availableCardHeight * HEIGHT_RATIOS[props.size])
-      : props.height;
-  const cardHeight = Math.max(0, Math.min(requestedCardHeight, availableCardHeight));
+  const { height, size, sizes } = props;
+  const { cardHeight, detents } = useMemo(
+    () => resolveSheetHeights(availableCardHeight, height, size, sizes),
+    [availableCardHeight, height, size, sizes],
+  );
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
   const detentHeight = cardHeight + OUTER_INSET;
   const bottomCornerRadius = Math.max(BOTTOM_CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
-  const detents = useMemo<Detent[]>(() => [0, detentHeight], [detentHeight]);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
   const hasNotifiedCloseRef = useRef(false);
@@ -218,6 +225,30 @@ export function BottomSheet(props: BottomSheetProps) {
       </View>
     </ModalBottomSheet>
   );
+}
+
+function resolveSheetHeights(
+  availableCardHeight: number,
+  height: number | undefined,
+  size: BottomSheetSize | undefined,
+  sizes: BottomSheetSizes | undefined,
+) {
+  const requestedCardHeights =
+    height !== undefined
+      ? [height]
+      : size !== undefined
+        ? [Math.round(availableCardHeight * HEIGHT_RATIOS[size])]
+        : (sizes ?? []).map((sheetSize) =>
+            Math.round(availableCardHeight * HEIGHT_RATIOS[sheetSize]),
+          );
+  const cardHeights = requestedCardHeights
+    .map((requestedHeight) => Math.max(0, Math.min(requestedHeight, availableCardHeight)))
+    .sort((left, right) => left - right)
+    .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
+  const cardHeight = cardHeights.at(-1) ?? 0;
+  const detents: Detent[] = [0, ...cardHeights.map((height) => height + OUTER_INSET)];
+
+  return { cardHeight, detents };
 }
 
 const styles = StyleSheet.create({

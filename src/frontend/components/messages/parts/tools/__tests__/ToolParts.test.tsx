@@ -65,8 +65,8 @@ jest.mock('@cherrystudio/ui/components', () => {
     MessagePart: {
       SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
       Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
-      TextSection: ({ title, value }: { title: string; value: string }) => (
-        <MockView>
+      TextSection: ({ title, value, ...props }: { title: string; value: string }) => (
+        <MockView {...props}>
           <MockText>{title}</MockText>
           <MockText>{value}</MockText>
         </MockView>
@@ -111,6 +111,7 @@ describe('tool message detail sheets', () => {
     expect(findByTestID('tool-part-trigger').props.statusText).toBeUndefined();
     const detail = findByTestID('tool-part-detail');
     expect(detail.props.title).toBe('Calculator');
+    expect(textIndex('chat.tool.output')).toBeLessThan(textIndex('chat.tool.arguments'));
 
     await act(async () => {
       detail.props.onClose();
@@ -157,6 +158,7 @@ describe('tool message detail sheets', () => {
 
     expect(findByTestID('mcp-tool-part-trigger').props.statusText).toBeUndefined();
     expect(findByTestID('mcp-tool-part-detail').props.title).toBe('Exa: search');
+    expect(textIndex('chat.mcpTool.response')).toBeLessThan(textIndex('chat.mcpTool.arguments'));
   });
 
   it('opens web search results in the shared tool detail sheet', async () => {
@@ -341,6 +343,49 @@ describe('tool message detail sheets', () => {
     expect(findText('Registry request timed out')).toHaveLength(1);
   });
 
+  it('renders tool_search matches as separate rows', async () => {
+    await render(
+      <MetaToolPartRenderer
+        part={makeToolPart({
+          input: { namespace: 'browser', query: 'open url' },
+          output: {
+            matchedNamespaces: [
+              { namespace: 'browser', tools: [{ name: 'open_url' }, { name: 'screenshot' }] },
+            ],
+          },
+          toolName: 'tool_search',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('meta-tool-part-trigger').props.onPress();
+    });
+
+    expect(
+      renderer?.root
+        .findAllByType(View)
+        .filter((node) => node.props.testID === 'meta-tool-search-result'),
+    ).toHaveLength(2);
+  });
+
+  it('uses code typography for a structured tool_invoke response', async () => {
+    await render(
+      <MetaToolPartRenderer
+        part={makeToolPart({
+          output: { format: 'png', ok: true },
+          toolName: 'tool_invoke',
+        })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('meta-tool-part-trigger').props.onPress();
+    });
+
+    expect(renderer?.root.findByProps({ variant: 'code' })).toBeDefined();
+  });
+
   it('marks failures as dangerous and denials as warnings', async () => {
     await render(
       <GenericToolPart
@@ -450,6 +495,12 @@ describe('tool message detail sheets', () => {
 
   function findText(text: string) {
     return renderer?.root.findAllByType(Text).filter((node) => node.props.children === text) ?? [];
+  }
+
+  function textIndex(text: string) {
+    return (
+      renderer?.root.findAllByType(Text).findIndex((node) => node.props.children === text) ?? -1
+    );
   }
 });
 

@@ -16,6 +16,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     MessagePart: {
       TextSection: (props: object) => createElement('TextSection', props),
       Tool: (props: object) => createElement('Tool', props),
+      ValueSection: (props: object) => createElement('ValueSection', props),
     },
   };
 });
@@ -37,9 +38,7 @@ describe('WriteFileToolPart', () => {
     expect(isWriteFileToolPart(toolPart({ output: {}, toolName: 'read_file' }))).toBe(false);
   });
 
-  it('leaves a successful write to its artifact file part', () => {
-    // The Host already persists the created entry as a `purpose: 'artifact'`
-    // file part, which draws the card; drawing one here too showed it twice.
+  it('summarizes a successful write without exposing its internal entry id', () => {
     const renderer = render(
       toolPart({
         output: { status: 'created', fileEntryId: ENTRY_ID, filename: 'report.md', size: 9 },
@@ -47,7 +46,14 @@ describe('WriteFileToolPart', () => {
     );
 
     expect(renderer.root.findAllByType('FileEntryPreview')).toHaveLength(0);
-    expect(renderer.root.findByType('GenericToolPart')).toBeDefined();
+    expect(renderer.root.findAllByType('GenericToolPart')).toHaveLength(0);
+    expect(renderer.root.findByProps({ testID: 'write-file-tool-part' }).props.statusText).toBe(
+      'chat.builtinTool.file.created',
+    );
+    expect(renderer.root.findByType('ValueSection').props.value).toEqual({
+      'chat.builtinTool.file.filename': 'report.md',
+      'chat.builtinTool.file.size': '9 B',
+    });
   });
 
   it('surfaces a rejected write, which has no artifact to speak for it', () => {
