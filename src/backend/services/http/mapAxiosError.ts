@@ -1,44 +1,20 @@
-import { AxiosError, AxiosHeaders, isAxiosError, isCancel, type AxiosResponse } from 'axios';
+import { AxiosError, isAxiosError, isCancel } from 'axios';
 
-import { HttpError, isHttpError, type HttpErrorDetails } from './HttpError';
+import type { DecodedHttpError, HttpErrorDecoder, HttpErrorResponse } from './HttpClient';
+import { HttpError, isHttpError } from './HttpError';
+import { toHttpHeaders } from './toHttpHeaders';
 
 const MAX_PUBLIC_HEADER_LENGTH = 256;
 
-export interface AxiosErrorResponse {
-  readonly data: unknown;
-  readonly headers: AxiosResponse<unknown>['headers'];
-  readonly status: number;
-}
-
-export interface DecodedHttpError {
-  readonly code?: string;
-  readonly details?: HttpErrorDetails;
-  readonly message: string;
-  readonly requestId?: string;
-  readonly retryAfter?: string;
-}
-
-export type AxiosErrorDecoder = (response: AxiosErrorResponse) => DecodedHttpError | undefined;
-
-function readPublicHeader(
-  headers: AxiosResponse<unknown>['headers'],
-  name: string,
-): string | undefined {
-  const value = AxiosHeaders.from(headers).get(name);
-  const firstValue = Array.isArray(value) ? value[0] : value;
-
-  if (typeof firstValue !== 'string' && typeof firstValue !== 'number') {
-    return undefined;
-  }
-
-  const normalized = String(firstValue).trim();
+function readPublicHeader(headers: HttpErrorResponse['headers'], name: string): string | undefined {
+  const normalized = headers[name.toLowerCase()]?.trim();
   if (!normalized || normalized.length > MAX_PUBLIC_HEADER_LENGTH) {
     return undefined;
   }
   return normalized;
 }
 
-function mapResponseError(error: AxiosError, decode?: AxiosErrorDecoder): HttpError {
+function mapResponseError(error: AxiosError, decode?: HttpErrorDecoder): HttpError {
   const response = error.response;
   if (!response) {
     return new HttpError('HTTP response could not be read.', {
@@ -47,9 +23,10 @@ function mapResponseError(error: AxiosError, decode?: AxiosErrorDecoder): HttpEr
     });
   }
 
-  const responseView: AxiosErrorResponse = {
+  const headers = toHttpHeaders(response.headers);
+  const responseView: HttpErrorResponse = {
     data: response.data,
-    headers: response.headers,
+    headers,
     status: response.status,
   };
   let decoded: DecodedHttpError | undefined;
@@ -66,18 +43,18 @@ function mapResponseError(error: AxiosError, decode?: AxiosErrorDecoder): HttpEr
     kind: 'http',
     requestId:
       decoded?.requestId ??
-      readPublicHeader(response.headers, 'x-request-id') ??
-      readPublicHeader(response.headers, 'request-id'),
-    retryAfter: decoded?.retryAfter ?? readPublicHeader(response.headers, 'retry-after'),
+      readPublicHeader(headers, 'x-request-id') ??
+      readPublicHeader(headers, 'request-id'),
+    retryAfter: decoded?.retryAfter ?? readPublicHeader(headers, 'retry-after'),
     status: response.status,
   });
 }
 
 /**
- * Maps an Axios rejection at a domain boundary without retaining the original
+ * Maps an Axios rejection inside the transport without retaining the original
  * error, request config, credentials, or unvalidated response body.
  */
-export function mapAxiosError(error: unknown, decode?: AxiosErrorDecoder): HttpError {
+export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpError {
   if (isHttpError(error)) {
     return error;
   }

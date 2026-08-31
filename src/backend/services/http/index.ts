@@ -1,4 +1,16 @@
-export { createAxiosClient, type CreateAxiosClientOptions } from './createAxiosClient';
+export type {
+  DecodedHttpError,
+  HttpClient,
+  HttpErrorDecoder,
+  HttpErrorResponse,
+  HttpHeaders,
+  HttpInterceptor,
+  HttpMethod,
+  HttpQuery,
+  HttpQueryValue,
+  HttpRequest,
+  HttpResponse,
+} from './HttpClient';
 export {
   HttpError,
   isHttpError,
@@ -7,9 +19,4 @@ export {
   type HttpErrorKind,
   type HttpErrorOptions,
 } from './HttpError';
-export {
-  mapAxiosError,
-  type AxiosErrorDecoder,
-  type AxiosErrorResponse,
-  type DecodedHttpError,
-} from './mapAxiosError';
+export { createHttpClient, type CreateHttpClientOptions } from './createHttpClient';

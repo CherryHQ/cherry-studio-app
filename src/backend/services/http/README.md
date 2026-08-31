@@ -1,91 +1,120 @@
 # External Service HTTP Transport
 
-This directory owns the non-streaming HTTP(S) request/response infrastructure for external
-services. It is the shared Axios foundation for future cloud account and remote Agent control-plane
-clients as well as desktop LAN pairing and configuration import.
+This directory owns non-streaming HTTP(S) request/response infrastructure for external services.
+It supports future cloud account and remote Agent control-plane clients as well as desktop LAN
+pairing and configuration import.
 
 ## Contract
 
-- `createAxiosClient()` returns a new `AxiosInstance` for one backend service or security domain.
-  It never creates or reuses a global singleton.
-- The factory requires an HTTP(S) `baseURL`, rejects absolute request URLs and per-request base URL
-  overrides, applies a default timeout, and explicitly routes Axios's fetch adapter through
-  `expo/fetch`.
-- The returned instance retains native Axios request configuration, complete `AxiosResponse`
-  values, `AbortSignal` cancellation, defaults, and request/response interceptors. A domain can
-  install and eject its own interceptors with the normal Axios API.
-- Axios transport does not retry or replay requests. In particular, a `401` is not replayed unless
-  a future cloud authentication owner explicitly installs that behavior. Non-idempotent mutations
-  must not be replayed by default.
-- The Axios instance stays private to a backend domain client such as `AccountApiClient`,
-  `RemoteAgentApiClient`, or `DesktopImportClient`. UI and feature callers depend on those domain
-  interfaces, not on Axios.
+- Domain code depends on the app-owned `HttpClient`, `HttpRequest`, `HttpResponse`,
+  `HttpInterceptor`, and `HttpError` contracts. Axios types and errors are not exported from the
+  module boundary.
+- `createHttpClient()` binds one immutable route to one backend service or security domain. The
+  route owns its base URL, default headers, timeout, error decoder, and interceptor chain.
+- All clients use one module-private Axios transport configured with the fetch adapter and
+  `expo/fetch`. Every request carries its client route internally, so the global dispatcher runs
+  only that route's interceptors.
+- A request cannot supply or replace its base URL. Paths must begin with one `/`, which prevents an
+  absolute URL from redirecting credentials to another authority.
+- Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,
+  network, HTTP status, unreadable response, and invalid input leave the module as `HttpError`.
+  Raw Axios errors, configs, credentials, and unvalidated response bodies do not cross the public
+  boundary.
+- Neither the transport nor its interceptors retry or replay by default. In particular, a `401`
+  remains one failed request unless a domain explicitly owns a safe refresh-and-retry policy.
 
-Create a separate instance for each authority boundary:
+The routing model is:
+
+```text
+Cloud domain client ── cloud HttpClient route ─┐
+Desktop LAN client ─ desktop HttpClient route ─┼─ shared Axios transport ─ expo/fetch
+Other service client ─ other HttpClient route ─┘
+```
+
+The shared transport is not a shared credential store. Static and interceptor-added headers are
+materialized on each request from its own route. Cloud authentication interceptors therefore do
+not run for desktop LAN requests, and desktop device credentials do not become cloud defaults.
+
+## Interceptors
+
+Interceptors use the app-owned contract and are installed when a client is created. The global
+dispatcher executes that client's interceptors in declaration order for request, response, and
+safe mapped error handling.
 
 ```ts
-const cloudApi = createAxiosClient({
-  baseURL: CLOUD_API_BASE_URL,
+import { createHttpClient, type HttpInterceptor } from '@/backend/services/http';
+
+const cloudAuthInterceptor: HttpInterceptor = {
+  async onRequest(request) {
+    const token = await getAccessToken();
+    return {
+      ...request,
+      headers: { ...request.headers, Authorization: `Bearer ${token}` },
+    };
+  },
+};
+
+const cloudHttp = createHttpClient({
+  baseUrl: CLOUD_API_BASE_URL,
+  interceptors: [cloudAuthInterceptor],
 });
 
-const desktopLanApi = createAxiosClient({
-  baseURL: selectedDesktopBaseUrl,
+const desktopLanHttp = createHttpClient({
+  baseUrl: selectedDesktopBaseUrl,
   headers: { 'X-Device-Token': selectedDeviceToken },
 });
 ```
 
-The cloud domain owns validation that its fixed configured URL uses HTTPS and may later install
-user-token and single-flight refresh interceptors. The desktop LAN domain creates or replaces its
-own instance when the selected endpoint changes; it must not share user authentication defaults or
-refresh interceptors with the cloud instance.
+Create separate `HttpClient` values for separate authority boundaries even though the Axios
+transport underneath is shared. Domain callers never select an interceptor name or transport
+route on individual requests; using the correct client selects the route.
 
 ## Error boundary
 
-Axios errors are useful inside a trusted domain because they contain the response status, headers,
-and body, but they also retain request configuration and potentially secret-bearing headers.
-Domain clients catch Axios rejections before returning to UI or shared callers and use
-`mapAxiosError()` to produce an app-owned `HttpError`.
-
-An optional decoder receives only the error response's `status`, `headers`, and unknown `data`.
-After schema validation, it may return a safe message, code, request id, retry hint, and explicitly
-desensitized details. `mapAxiosError()` never retains the original `AxiosError`, request config, or
-unvalidated response body. If decoding fails, it falls back to generic transport information.
+An optional decoder receives only the error response's `status`, lowercase `headers`, and unknown
+`data`. After schema validation, it may return a safe message, code, request id, retry hint, and
+explicitly desensitized details. If decoding fails, the transport falls back to generic metadata.
 
 ```ts
 import { z } from 'zod';
 
-import { createAxiosClient, mapAxiosError } from '@/backend/services/http';
+import { createHttpClient } from '@/backend/services/http';
 
 const CloudErrorSchema = z.object({
   code: z.string(),
 });
 
+const cloudHttp = createHttpClient({
+  baseUrl: CLOUD_API_BASE_URL,
+});
+
 async function getAccount(signal?: AbortSignal) {
-  try {
-    const response = await cloudApi.get<unknown>('/account', { signal });
-    return AccountSchema.parse(response.data);
-  } catch (error) {
-    throw mapAxiosError(error, ({ data, headers }) => {
+  const response = await cloudHttp.request<unknown>({
+    errorDecoder: ({ data, headers }) => {
       const parsed = CloudErrorSchema.parse(data);
-      const requestId = headers.get('x-request-id');
       return {
         code: parsed.code,
         message: 'Account request failed.',
-        ...(typeof requestId === 'string' ? { requestId } : {}),
+        requestId: headers['x-request-id'],
       };
-    });
-  }
+    },
+    method: 'GET',
+    path: '/account',
+    signal,
+  });
+
+  return AccountSchema.parse(response.data);
 }
 ```
 
-The domain decoder must not copy unknown response values, tokens, cookies, or other secrets into
-the public error. `HttpError` can safely express `kind`, `status`, `code`, `requestId`, `retryAfter`,
+The decoder must not copy unknown response values, tokens, cookies, or other secrets into the
+public error. `HttpError` safely expresses `kind`, `status`, `code`, `requestId`, `retryAfter`,
 `message`, and app-owned `details`.
 
 ## Boundaries
 
 - Local SQLite Data API access remains an in-process interface under `src/backend/data`; it does
-  not use Axios.
+  not use this client.
 - TanStack Query remains the frontend owner of asynchronous state, caching, invalidation, and query
   retry. This transport does not recreate that layer or add a second retry policy.
 - AI providers, Pi, MCP, and remote Agent SSE, NDJSON, WebSocket, or `ReadableStream` data-plane
