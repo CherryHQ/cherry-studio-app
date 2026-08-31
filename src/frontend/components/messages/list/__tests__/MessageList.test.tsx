@@ -16,7 +16,6 @@ type AnchoredEndSpaceConfig = {
   anchorIndex?: number;
   anchorMaxSize?: number;
   onReady?: (info: { anchorKey: string | undefined }) => void;
-  onSizeChanged?: (size: number) => void;
 };
 
 type MockLegendListProps = {
@@ -33,12 +32,6 @@ type MockLegendListProps = {
   keyboardOffset?: number;
   maintainVisibleContentPosition?: unknown;
   onContentSizeChange?: (width: number, height: number) => void;
-  onItemSizeChanged?: (info: {
-    index: number;
-    itemKey: string;
-    previous: number;
-    size: number;
-  }) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
   onMomentumScrollBegin?: () => void;
   onMomentumScrollEnd?: () => void;
@@ -49,7 +42,7 @@ type MockLegendListProps = {
   onTouchStart?: () => void;
   ref?: Ref<LegendListRef>;
   renderItem?: (info: { index: number; item: MessageListItem }) => ReactNode;
-  sharedValues?: { isAtEnd: SharedValue<boolean>; scrollOffset: SharedValue<number> };
+  sharedValues?: { isAtEnd: SharedValue<boolean> };
   showsVerticalScrollIndicator?: boolean;
 };
 
@@ -566,15 +559,6 @@ describe('MessageList anchoring and manual scrolling', () => {
 
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
 
-    act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
-    act(() =>
-      mockLatestListProps?.onItemSizeChanged?.({
-        index: 1,
-        itemKey: 'assistant-1',
-        previous: 120,
-        size: 1_120,
-      }),
-    );
     act(() =>
       renderer?.update(
         <MessageList

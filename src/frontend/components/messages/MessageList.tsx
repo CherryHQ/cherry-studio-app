@@ -8,7 +8,6 @@ import { type LayoutChangeEvent, Platform, useWindowDimensions, View } from 'rea
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
-import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import {
   ANCHOR_TOP_GAP,
@@ -18,13 +17,9 @@ import {
   messageKeyExtractor,
   resolveUserMessageAnchorMaxSize,
 } from './list/messageListLayout';
+import { scrollLog } from './list/messageListLogger';
 import { MessageListRow } from './list/MessageListRow';
 import { useMessageListAnchorPin } from './list/useMessageListAnchorPin';
-import {
-  emitProgrammaticScroll,
-  scrollLog,
-  useMessageListInstrumentation,
-} from './list/useMessageListInstrumentation';
 import { MessageSlideInProvider } from './motion/MessageSlideInProvider';
 import { useMessageSlideInFlight } from './motion/useMessageSlideInFlight';
 import type { MessageListProps, MessageListItem } from './types';
@@ -59,17 +54,9 @@ export function MessageList({
       }
     },
   );
-  // 位移轨迹的来源。注意**不能**用 `onScroll`：本列表经 KeyboardAwareLegendList →
-  // AnimatedLegendList 渲染，滚动被 reanimated 的 `useScrollViewOffset` 接管，JS 侧的
-  // `onScroll` 回调实测一次都不触发。`sharedValues.scrollOffset` 才是这套组件栈支持的
-  // 读法，且它在 UI 线程逐帧更新，比 JS 回调更贴近真实位移。
-  const scrollOffset = useSharedValue(0);
-  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useMessageListInstrumentation）。
-  const endSpaceRef = useRef(0);
   // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
   const [viewportHeight, setViewportHeight] = useState(0);
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
     setViewportHeight(event.nativeEvent.layout.height);
   }, []);
   const [fontSizeStep] = usePreference('ui.font_size_step');
@@ -137,7 +124,6 @@ export function MessageList({
 
   const {
     handleAnchorReady,
-    handleAnchoredEndSpaceSizeChanged,
     handleContentSizeChange,
     handleMomentumScrollBegin,
     handleMomentumScrollEnd,
@@ -147,7 +133,6 @@ export function MessageList({
     handleTouchStart,
   } = useMessageListAnchorPin({
     contentBottomInset,
-    endSpaceRef,
     enteringMessageId,
     lastMessageId,
     listRef,
@@ -156,21 +141,6 @@ export function MessageList({
     scrollMessageToEnd,
     viewportHeight,
   });
-
-  useMessageListInstrumentation({ endSpaceRef, freeze, isAtBottom, scrollOffset });
-
-  const handleItemSizeChanged = useCallback(
-    (info: { index: number; itemKey: string; previous: number; size: number }) => {
-      // 同一行的高度反复变化 = 渲染抖动，是「流式期间内容上下弹」最直接的量化指标。
-      emitLayoutBenchProbe('itemSize', {
-        index: info.index,
-        key: info.itemKey,
-        prev: Math.round(info.previous),
-        size: Math.round(info.size),
-      });
-    },
-    [],
-  );
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
@@ -181,27 +151,15 @@ export function MessageList({
             anchorMaxSize,
             anchorOffset,
             onReady: handleAnchorReady,
-            onSizeChanged: handleAnchoredEndSpaceSizeChanged,
           }
         : undefined,
-    [
-      anchorIndex,
-      anchorMaxSize,
-      anchorOffset,
-      handleAnchorReady,
-      handleAnchoredEndSpaceSizeChanged,
-      hasAnchor,
-    ],
+    [anchorIndex, anchorMaxSize, anchorOffset, handleAnchorReady, hasAnchor],
   );
 
-  // 共享值供布局探针读取；按钮用同一 LegendList 状态的 React 回调，避免 shared value
-  // 跨过流式重渲染边界后显隐动画停在初始值。
-  const sharedValues = useMemo(
-    () => ({ isAtEnd: isAtBottom, scrollOffset }),
-    [isAtBottom, scrollOffset],
-  );
+  // 按钮用同一 LegendList 状态的 React 回调，避免 shared value 跨过流式重渲染边界后显隐
+  // 动画停在初始值。
+  const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
   const handleScrollToEnd = useCallback(() => {
-    emitProgrammaticScroll('button', listRef);
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
@@ -235,7 +193,6 @@ export function MessageList({
             initialScrollAtEnd
             maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
             onContentSizeChange={handleContentSizeChange}
-            onItemSizeChanged={handleItemSizeChanged}
             onLayout={handleLayout}
             onMomentumScrollBegin={handleMomentumScrollBegin}
             onMomentumScrollEnd={handleMomentumScrollEnd}

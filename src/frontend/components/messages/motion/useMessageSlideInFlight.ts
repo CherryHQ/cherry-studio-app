@@ -2,17 +2,10 @@ import { spring } from '@cherrystudio/ui/motion';
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import {
   ReduceMotion,
-  runOnJS,
   type SharedValue,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
-
-import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
-
-function emitSlideInSettled(isFinished: boolean) {
-  emitLayoutBenchProbe('slideIn', { finished: isFinished, phase: 'settle' });
-}
 
 export type MessageSlideInFlight = {
   // 当前这次飞行属于哪条消息。行在 worklet 里比对自己是不是它——同一时刻只有一条消息在飞，
@@ -97,7 +90,6 @@ export function useMessageSlideInFlight({
     followerMessageId.set(nextFollowerMessageId);
     landingProgress.set(0);
     offset.set(travel);
-    emitLayoutBenchProbe('slideIn', { phase: 'arm', travel: Math.round(travel) });
   }, [
     activeMessageId,
     enteringMessageId,
@@ -129,19 +121,8 @@ export function useMessageSlideInFlight({
       // 下一行才开始跑，所以此刻它就是这次装填的全程。
       const armedTravel = offset.get();
       const springTravel = Math.max(0, armedTravel - pendingScrollPx);
-      emitLayoutBenchProbe('slideIn', {
-        phase: 'launch',
-        scroll: Math.round(pendingScrollPx),
-        travel: Math.round(armedTravel),
-      });
       offset.set(springTravel);
-      offset.set(
-        withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }, (isFinished) => {
-          'worklet';
-
-          runOnJS(emitSlideInSettled)(isFinished === true);
-        }),
-      );
+      offset.set(withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }));
       // 同一条弹簧、同一时刻起跑，所以它与行的到达严格同步，不必再猜一个延迟常量。
       landingProgress.set(withSpring(1, { ...spring.settle, reduceMotion: ReduceMotion.System }));
     },
