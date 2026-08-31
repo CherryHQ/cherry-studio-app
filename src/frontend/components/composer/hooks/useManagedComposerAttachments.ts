@@ -63,6 +63,11 @@ export function useManagedComposerAttachments(
     },
     [file],
   );
+  const deleteEntryRef = useRef(deleteEntry);
+
+  useEffect(() => {
+    deleteEntryRef.current = deleteEntry;
+  }, [deleteEntry]);
 
   const importAttachment = useCallback(
     async (source: ComposerAttachmentSource, token: symbol): Promise<ImportResult> => {
@@ -226,6 +231,18 @@ export function useManagedComposerAttachments(
   const setAttachments = useCallback(
     (nextAttachments: ComposerAttachmentDraft[]) => {
       importTokensRef.current.clear();
+      if (!isMountedRef.current) {
+        for (const attachment of nextAttachments) {
+          if (
+            isComposerAttachmentReady(attachment) &&
+            releasedOwnedEntryIdsRef.current.delete(attachment.fileEntryId)
+          ) {
+            void deleteEntry(attachment.fileEntryId);
+          }
+        }
+        releasedOwnedEntryIdsRef.current.clear();
+        return;
+      }
       for (const attachment of nextAttachments) {
         if (
           isComposerAttachmentReady(attachment) &&
@@ -237,11 +254,23 @@ export function useManagedComposerAttachments(
       releasedOwnedEntryIdsRef.current.clear();
       commitAttachments([...nextAttachments]);
     },
-    [commitAttachments],
+    [commitAttachments, deleteEntry],
   );
 
   useEffect(() => {
     isMountedRef.current = true;
+    const ownedEntryIds = ownedEntryIdsRef.current;
+    return () => {
+      isMountedRef.current = false;
+      const abandonedEntryIds = [...ownedEntryIds];
+      ownedEntryIds.clear();
+      for (const entryId of abandonedEntryIds) {
+        void deleteEntryRef.current(entryId);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (
       initialAttachmentState.rejectedCount > 0 &&
       !didReportRejectedInitialAttachmentsRef.current
@@ -257,10 +286,6 @@ export function useManagedComposerAttachments(
       );
       if (sources.length > 0) void importAttachments(sources);
     }
-
-    return () => {
-      isMountedRef.current = false;
-    };
   }, [alert, importAttachments, initialAttachmentState, t]);
 
   return useMemo(

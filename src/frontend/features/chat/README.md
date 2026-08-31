@@ -11,8 +11,9 @@ behavior. Structured message rendering is shared with painting through
 ## Organization
 
 - `ChatScreen.tsx` is header + swappable body + composer session in normal parent flow. With a
-  Session the body is the conversation; selecting an Agent without one shows the empty state and
-  creates the Session on first send.
+  Session the body is the conversation; selecting an Agent without one shows an isolated Draft.
+  The Host creates the durable Session together with its admitted first message, and the frontend
+  switches composer identity only after that operation succeeds.
 - `input/` owns the narrow Agent Protocol wrapper around the shared composer. Agent settings are
   edited on the Agent screen; image attachment admission failures restore the managed draft and
   surface a user-facing reason.

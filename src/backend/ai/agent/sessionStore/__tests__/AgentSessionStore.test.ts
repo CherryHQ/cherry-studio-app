@@ -227,6 +227,23 @@ describe.each([
     ).rejects.toThrow();
   });
 
+  test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
+    const reserved = await store.reserveInitialSubmission({
+      ...RESERVATION_FACTS,
+      agentId,
+      executionTarget: { kind: 'local' },
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+    });
+
+    expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
+    expect(await store.listMessages(reserved.session.id)).toEqual([
+      reserved.userMessage,
+      reserved.assistantMessage,
+    ]);
+    expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
+    expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
+  });
+
   test('finalizeAssistantMessage settles status, parts, usage, and turn error', async () => {
     const session = await store.createSession({ agentId });
     const reserved = await store.reserveSubmission({
@@ -441,6 +458,26 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
   afterEach(() => {
     harness.cleanup();
+  });
+
+  test('rolls back the Session when its initial message reservation fails', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+
+    await expect(
+      store.reserveInitialSubmission({
+        ...RESERVATION_FACTS,
+        agentId,
+        executionTarget: { kind: 'local' },
+        modelId: 'missing-provider::missing-model',
+        userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+      }),
+    ).rejects.toThrow();
+
+    expect(
+      raw.prepare('SELECT COUNT(*) AS count FROM agent_session').get() as { count: number },
+    ).toEqual({ count: 0 });
   });
 
   test('the invariant-1 index rejects a second reservation while one is unsettled', async () => {

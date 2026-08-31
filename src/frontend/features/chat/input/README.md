@@ -5,7 +5,9 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 
 ## Current Contract
 
-- A new Session is created lazily on the first send, then observed before the message is submitted.
+- An Agent selection owns an isolated Draft composer. Its first send uses `startSession`, which
+  admits the message before atomically creating the Session and first message pair; observation and
+  navigation begin only after that succeeds.
 - Existing Sessions submit through the live `AgentProtocol` client owned by `ChatProvider`.
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
   presentation.
@@ -26,8 +28,8 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
   the selected model's default.
 - The composer menu stores web-search selection in the frontend persist cache, keyed by Session id.
-  New Sessions default to disabled, and the first send transfers the draft selection after lazy
-  Session creation. While enabled, every submission includes the turn-local `web-search`
+  New Sessions default to disabled, and an admitted first send transfers the Draft selection to the
+  returned Session. While enabled, every submission includes the turn-local `web-search`
   capability. The create-image mention remains turn-local and adds `image-generation` only to the
   draft that contains it. Neither choice mutates Agent or Agent Session persistence.
 - Follow-up queues and steering are not part of the Version 1 Agent Session composer.

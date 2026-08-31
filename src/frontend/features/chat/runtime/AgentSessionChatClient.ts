@@ -8,6 +8,7 @@ import type {
   AgentSessionObservation,
   AgentSessionSnapshot,
   AgentSessionView,
+  AgentStartSessionInput,
   AgentSubmitMessageInput,
   AgentTurnView,
 } from '@/shared/contracts/agent';
@@ -195,8 +196,24 @@ export class AgentSessionChatClient {
     );
   }
 
-  createSession(agentId: string): Promise<AgentSessionView> {
-    return this.protocol.createSession({ agentId, executionTarget: { kind: 'local' } });
+  async startSession(
+    agentId: string,
+    parts: AgentInputPart[],
+    overrides: Pick<
+      AgentStartSessionInput,
+      'modelId' | 'reasoningEffort' | 'temporaryCapabilities'
+    > = {},
+  ): Promise<AgentSessionView> {
+    const session = await this.protocol.startSession({
+      agentId,
+      executionTarget: { kind: 'local' },
+      parts,
+      ...overrides,
+    });
+    // The durable submission has succeeded even if observation later needs a
+    // retry. Do not restore a Draft whose files now belong to persisted input.
+    void this.observe(session.id).catch(() => undefined);
+    return session;
   }
 
   async submitMessage(

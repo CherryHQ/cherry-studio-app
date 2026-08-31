@@ -1,5 +1,6 @@
 import type {
   AgentErrorView,
+  AgentExecutionTarget,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
@@ -41,6 +42,15 @@ export type ReserveSubmissionInput = {
   inferenceSnapshot: AgentInferenceSnapshotV1;
 };
 
+export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'sessionId'> & {
+  agentId: string;
+  executionTarget: AgentExecutionTarget;
+};
+
+export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
+  session: AgentSessionView;
+};
+
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
@@ -76,6 +86,11 @@ export interface AgentSessionStore {
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
+
+  /** Atomically creates a Session and reserves its first user/assistant message pair. */
+  reserveInitialSubmission(
+    input: ReserveInitialSubmissionInput,
+  ): Promise<ReserveInitialSubmissionResult>;
 
   /**
    * Atomically reserves the user message and assistant placeholder under a

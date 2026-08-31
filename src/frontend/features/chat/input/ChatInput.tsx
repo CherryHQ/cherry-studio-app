@@ -210,10 +210,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             }
           : {}),
         ...(temporaryCapabilities.length > 0 ? { temporaryCapabilities } : {}),
-      }).then(() => {
-        if (!sessionId) {
-          setIsWebSearchEnabled(false);
-        }
       });
     },
     [
@@ -223,8 +219,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       selectedModelId,
       sendMessage,
       isWebSearchEnabled,
-      sessionId,
-      setIsWebSearchEnabled,
     ],
   );
   const getSendErrorLabel = useCallback(

@@ -6,6 +6,7 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
@@ -31,6 +32,19 @@ describe('Agent tool and managed-file contracts', () => {
         ...input,
         temporaryCapabilities: ['calendar'],
       }).success,
+    ).toBe(false);
+  });
+
+  test('validates a Draft submission without requiring a durable Session id', () => {
+    const input = {
+      agentId: 'agent-1',
+      executionTarget: { kind: 'local' },
+      parts: [{ text: 'Hello.', type: 'text' }],
+    } as const;
+
+    expect(AgentStartSessionInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentStartSessionInputSchema.safeParse({ ...input, sessionId: 'session-1' }).success,
     ).toBe(false);
   });
 

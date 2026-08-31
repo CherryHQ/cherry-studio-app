@@ -56,16 +56,49 @@ function protocolWithObservation(
 ): jest.Mocked<AgentProtocol> {
   return {
     cancelTurn: jest.fn(),
-    createSession: jest.fn(),
     deleteSession: jest.fn(),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),
+    startSession: jest.fn(),
     submitMessage: jest.fn(),
   };
 }
 
 describe('AgentSessionChatClient', () => {
+  test('starts a durable Session from a Draft submission before observing it', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    protocol.startSession.mockResolvedValue(snapshot().session);
+    const client = new AgentSessionChatClient(protocol);
+
+    await client.startSession('agent-1', [{ text: 'Hello', type: 'text' }], {
+      temporaryCapabilities: ['web-search'],
+    });
+
+    expect(protocol.startSession).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      executionTarget: { kind: 'local' },
+      parts: [{ text: 'Hello', type: 'text' }],
+      temporaryCapabilities: ['web-search'],
+    });
+    expect(protocol.observeSession).toHaveBeenCalledWith('session-1', expect.any(Function));
+  });
+
+  test('keeps an admitted Draft submission successful when observation needs a retry', async () => {
+    const protocol = protocolWithObservation(async () => {
+      throw new Error('observation unavailable');
+    });
+    protocol.startSession.mockResolvedValue(snapshot().session);
+    const client = new AgentSessionChatClient(protocol);
+
+    await expect(
+      client.startSession('agent-1', [{ text: 'Hello', type: 'text' }]),
+    ).resolves.toEqual(snapshot().session);
+  });
+
   test('forwards composer turn overrides with the submitted message', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),

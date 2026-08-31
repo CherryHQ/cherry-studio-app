@@ -8,7 +8,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { DbService } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
@@ -24,6 +24,8 @@ import {
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ReserveInitialSubmissionInput,
+  ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
@@ -117,6 +119,28 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async reserveInitialSubmission(
+    input: ReserveInitialSubmissionInput,
+  ): Promise<ReserveInitialSubmissionResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [sessionRow] = await tx
+        .insert(agentSessionTable)
+        .values({
+          agentId: input.agentId,
+          executionTarget: input.executionTarget,
+          lastActivityAt: Date.now(),
+        })
+        .returning();
+      const reserved = await insertSubmission(tx, {
+        sessionId: sessionRow.id,
+        userParts: input.userParts,
+        modelId: input.modelId,
+        inferenceSnapshot: input.inferenceSnapshot,
+      });
+      return { ...reserved, session: toAgentSessionView(sessionRow) };
+    });
+  }
+
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       const now = Date.now();
@@ -128,34 +152,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (touched.length === 0) {
         throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
       }
-      const turnId = createOrderedUuid();
-      const [userRow] = await tx
-        .insert(agentSessionMessageTable)
-        .values({
-          sessionId: input.sessionId,
-          turnId,
-          role: 'user',
-          status: 'success',
-          data: { version: 1, parts: input.userParts },
-        })
-        .returning();
-      const [assistantRow] = await tx
-        .insert(agentSessionMessageTable)
-        .values({
-          sessionId: input.sessionId,
-          turnId,
-          role: 'assistant',
-          status: 'pending',
-          data: { version: 1, parts: [] },
-          modelId: input.modelId,
-          messageSnapshot: input.inferenceSnapshot,
-        })
-        .returning();
-      return {
-        turnId,
-        userMessage: toAgentMessageView(userRow),
-        assistantMessage: toAgentMessageView(assistantRow),
-      };
+      return insertSubmission(tx, input);
     });
   }
 
@@ -328,4 +325,38 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       return assistantCount;
     });
   }
+}
+
+async function insertSubmission(
+  tx: Database,
+  input: ReserveSubmissionInput,
+): Promise<ReserveSubmissionResult> {
+  const turnId = createOrderedUuid();
+  const [userRow] = await tx
+    .insert(agentSessionMessageTable)
+    .values({
+      sessionId: input.sessionId,
+      turnId,
+      role: 'user',
+      status: 'success',
+      data: { version: 1, parts: input.userParts },
+    })
+    .returning();
+  const [assistantRow] = await tx
+    .insert(agentSessionMessageTable)
+    .values({
+      sessionId: input.sessionId,
+      turnId,
+      role: 'assistant',
+      status: 'pending',
+      data: { version: 1, parts: [] },
+      modelId: input.modelId,
+      messageSnapshot: input.inferenceSnapshot,
+    })
+    .returning();
+  return {
+    turnId,
+    userMessage: toAgentMessageView(userRow),
+    assistantMessage: toAgentMessageView(assistantRow),
+  };
 }

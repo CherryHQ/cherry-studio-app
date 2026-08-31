@@ -26,7 +26,7 @@ import {
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
-import type { AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
@@ -213,6 +213,16 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
   }
 }
 
+async function waitForAsync(predicate: () => Promise<boolean>, what: string): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (!(await predicate())) {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for ${what}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 function terminalTurnEvent(
   events: AgentEvent[],
 ): Extract<AgentEvent, { type: 'turn.updated' }> | undefined {
@@ -232,20 +242,64 @@ function assertJsonRoundTrip(events: AgentEvent[]): void {
 
 let store: InMemoryAgentSessionStore;
 
+function createStoredSession(): Promise<AgentSessionView> {
+  return store.createSession({ agentId: AGENT_ID });
+}
+
 describe('MobileAgentHost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
 
+  test('creates the durable Session together with an admitted first submission', async () => {
+    const host = hostWithText(['Hi']);
+
+    const session = await host.startSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'the initial turn to settle',
+    );
+
+    expect(await store.getSession(session.id)).toEqual(session);
+    expect((await store.listMessages(session.id)).map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
+  });
+
+  test('does not create a Session when a Draft submission fails preparation', async () => {
+    const reserveInitialSubmission = jest.spyOn(store, 'reserveInitialSubmission');
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      async () => {
+        throw new Error('model unavailable');
+      },
+    );
+
+    await expect(
+      host.startSession({
+        agentId: AGENT_ID,
+        executionTarget: { kind: 'local' },
+        parts: [{ type: 'text', text: 'Hello.' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
+
+    expect(reserveInitialSubmission).not.toHaveBeenCalled();
+  });
+
   test('runs basic chat end to end: create, observe, submit, stream, record', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['Hi', 'Ok'], requests);
 
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     expect(session.agentId).toBe(AGENT_ID);
 
     const events: AgentEvent[] = [];
@@ -388,10 +442,7 @@ describe('MobileAgentHost', () => {
         controller.emit({ type: 'completed' });
       });
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const completedCount = () =>
@@ -462,10 +513,7 @@ describe('MobileAgentHost', () => {
         controller.emit({ type: 'cancelled' });
       });
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const terminalCount = () =>
@@ -502,10 +550,7 @@ describe('MobileAgentHost', () => {
         controller.emit({ type: 'completed' });
       });
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const completedCount = () =>
@@ -528,10 +573,7 @@ describe('MobileAgentHost', () => {
   ])('falls back to complete history for a %s persisted checkpoint', async (_name, checkpoint) => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['One', 'Two'], requests);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const completedCount = () =>
@@ -561,10 +603,7 @@ describe('MobileAgentHost', () => {
       stubTool,
     ]);
     const host = hostWithText(['Saved.'], requests, { tools: { getTools } });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -620,10 +659,7 @@ describe('MobileAgentHost', () => {
         return [];
       },
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -646,10 +682,7 @@ describe('MobileAgentHost', () => {
         },
       },
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -670,10 +703,7 @@ describe('MobileAgentHost', () => {
       },
       tools: { getTools },
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -687,10 +717,7 @@ describe('MobileAgentHost', () => {
   test('applies composer model and reasoning snapshots to only the submitted turn', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['One', 'Two', 'Three'], requests);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const completedTurnCount = () =>
@@ -769,10 +796,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async () => {
       throw new Error('credential-secret from provider lookup');
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
 
     await expect(
       host.submitMessage({
@@ -807,10 +831,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
       resolveRuntimeTools: async () => configuredTools.slice(),
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -864,10 +885,7 @@ describe('MobileAgentHost', () => {
       agents: autoAgents,
       resolveRuntimeTools: async () => tools,
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -911,10 +929,7 @@ describe('MobileAgentHost', () => {
         },
       ],
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
 
     await expect(
       host.submitMessage({
@@ -943,10 +958,7 @@ describe('MobileAgentHost', () => {
       });
     });
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1009,10 +1021,7 @@ describe('MobileAgentHost', () => {
       }),
     };
     const host = createHost(runtime, naming);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Keep working.' }],
@@ -1033,10 +1042,7 @@ describe('MobileAgentHost', () => {
     const releaseAdmission = createDeferred();
     const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     const host = createHost(fake);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const getSession = store.getSession.bind(store);
     jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
       admissionStarted.resolve();
@@ -1072,10 +1078,7 @@ describe('MobileAgentHost', () => {
       });
     });
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const submitted = await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
@@ -1101,10 +1104,7 @@ describe('MobileAgentHost', () => {
       maybeRenameFromConversationSummary: () => summaryName,
       maybeRenameFromFirstUserMessage: async () => null,
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
 
     await host.submitMessage({
       sessionId: session.id,
@@ -1134,10 +1134,7 @@ describe('MobileAgentHost', () => {
       maybeRenameFromConversationSummary: () => summaryName,
       maybeRenameFromFirstUserMessage: async () => null,
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
@@ -1200,10 +1197,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(fake);
     const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
     const remove = jest.spyOn(store, 'deleteSession');
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
 
     await host.submitMessage({
       sessionId: session.id,
@@ -1226,10 +1220,7 @@ describe('MobileAgentHost', () => {
       { type: 'completed' },
     ]);
     const host = createHost(fake);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const getSession = store.getSession.bind(store);
     jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
       const result = await getSession(sessionId);
@@ -1262,6 +1253,45 @@ describe('MobileAgentHost', () => {
     expect(deletionResult.status).toBe('fulfilled');
   });
 
+  test('rejects an observation that overlaps Session deletion', async () => {
+    const lookupStarted = createDeferred();
+    let resolveAgent!: (agent: AgentDefinition | null) => void;
+    const pendingAgent = new Promise<AgentDefinition | null>((resolve) => {
+      resolveAgent = resolve;
+    });
+    let lookupCount = 0;
+    const agentSource: AgentDefinitionSource = {
+      getAgent: jest.fn(async (agentId) => {
+        lookupCount += 1;
+        if (lookupCount === 1) {
+          return agents.getAgent(agentId);
+        }
+        lookupStarted.resolve();
+        return pendingAgent;
+      }),
+    };
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      inferenceModel,
+      {
+        agents: agentSource,
+      },
+    );
+    const session = await createStoredSession();
+
+    const observation = host.observeSession(session.id, jest.fn());
+    await lookupStarted.promise;
+    const deletion = host.deleteSession({ sessionId: session.id });
+    resolveAgent(await agents.getAgent(AGENT_ID));
+
+    await expect(observation).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    await expect(deletion).resolves.toBeUndefined();
+    await expect(store.getSession(session.id)).resolves.toBeNull();
+  });
+
   test('rejects a new submission after an old turn drains while deletion is pending', async () => {
     const firstExecutionStarted = createDeferred();
     const deleteRowsStarted = createDeferred();
@@ -1280,10 +1310,7 @@ describe('MobileAgentHost', () => {
         controller.emit({ type: 'completed' });
       });
     const host = createHost(fake);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const removeSession = store.deleteSession.bind(store);
     jest.spyOn(store, 'deleteSession').mockImplementationOnce(async (sessionId) => {
       deleteRowsStarted.resolve();
@@ -1386,10 +1413,7 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(fake);
 
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const submitted = await host.submitMessage({
@@ -1473,10 +1497,7 @@ describe('MobileAgentHost', () => {
       readAsDataUrl,
       resolveAvailable,
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1558,10 +1579,7 @@ describe('MobileAgentHost', () => {
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
     const host = createHost(fake, noOpNaming, files);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1602,10 +1620,7 @@ describe('MobileAgentHost', () => {
   test('retries the same terminal outcome when persistence fails transiently', async () => {
     const events: AgentEvent[] = [];
     const host = hostWithText(['Recovered']);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     await host.observeSession(session.id, (event) => events.push(event));
     const finalize = jest
       .spyOn(store, 'finalizeAssistantMessage')
@@ -1633,10 +1648,7 @@ describe('MobileAgentHost', () => {
     jest.spyOn(runtime, 'open').mockRejectedValueOnce(new Error('runtime unavailable'));
     const reserve = jest.spyOn(store, 'reserveSubmission');
     const host = createHost(runtime);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
 
     await expect(
       host.submitMessage({
@@ -1700,10 +1712,7 @@ describe('MobileAgentHost', () => {
         new Map([...facts].filter(([fileEntryId]) => ids.includes(fileEntryId))),
     };
     const host = createHost(runtime, noOpNaming, files);
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1769,10 +1778,7 @@ describe('MobileAgentHost', () => {
       .spyOn(unsupportedEndpointRuntime, 'preflightModel')
       .mockRejectedValue(new Error('unsupported endpoint containing private configuration'));
     const endpointHost = createHost(unsupportedEndpointRuntime, noOpNaming, files);
-    const endpointSession = await endpointHost.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const endpointSession = await createStoredSession();
     await expect(
       endpointHost.submitMessage({
         sessionId: endpointSession.id,
@@ -1808,10 +1814,7 @@ describe('MobileAgentHost', () => {
       },
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1870,10 +1873,7 @@ describe('MobileAgentHost', () => {
       readAsDataUrl: async () => undefined,
       resolveAvailable,
     });
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
@@ -1963,10 +1963,7 @@ describe('MobileAgentHost', () => {
         resolveAvailable: async () => new Map([[FILE_ENTRY_ID, unsupportedFact]]),
       },
     );
-    const unsupportedSession = await unsupportedHost.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const unsupportedSession = await createStoredSession();
 
     await expect(
       unsupportedHost.submitMessage({
@@ -1992,10 +1989,7 @@ describe('MobileAgentHost', () => {
       readAsDataUrl: async () => undefined,
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, textFact]]),
     });
-    const binarySession = await binaryHost.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const binarySession = await createStoredSession();
     await expect(
       binaryHost.submitMessage({
         sessionId: binarySession.id,
@@ -2034,10 +2028,7 @@ describe('MobileAgentHost', () => {
       readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => facts,
     });
-    const availableSession = await availableHost.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const availableSession = await createStoredSession();
 
     await expect(
       availableHost.submitMessage({
@@ -2059,10 +2050,7 @@ describe('MobileAgentHost', () => {
       noOpNaming,
       noFiles,
     );
-    const unavailableSession = await unavailableHost.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const unavailableSession = await createStoredSession();
     await expect(
       unavailableHost.submitMessage({
         sessionId: unavailableSession.id,
@@ -2076,7 +2064,11 @@ describe('MobileAgentHost', () => {
     const host = hostWithText(['unused']);
 
     await expect(
-      host.createSession({ agentId: 'missing', executionTarget: { kind: 'local' } }),
+      host.startSession({
+        agentId: 'missing',
+        executionTarget: { kind: 'local' },
+        parts: [{ type: 'text', text: 'x' }],
+      }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
     await expect(
       host.submitMessage({ sessionId: 'missing', parts: [{ type: 'text', text: 'x' }] }),
@@ -2085,10 +2077,7 @@ describe('MobileAgentHost', () => {
       view: { code: 'SESSION_NOT_FOUND' },
     });
 
-    const session = await host.createSession({
-      agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
-    });
+    const session = await createStoredSession();
     // Raw or unknown ids are rejected before any reservation.
     await expect(
       host.submitMessage({

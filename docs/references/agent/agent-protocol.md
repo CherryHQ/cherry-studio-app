@@ -285,13 +285,17 @@ Runtime identity.
 
 ```ts
 interface AgentProtocol {
-  createSession(input: {
-    agentId: string
-    executionTarget: AgentExecutionTarget
-    title?: string
-  }): Promise<AgentSessionView>
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
+
+  startSession(input: {
+    agentId: string
+    executionTarget: AgentExecutionTarget
+    parts: AgentInputPart[]
+    modelId?: UniqueModelId
+    reasoningEffort?: ReasoningEffortOption
+    temporaryCapabilities?: Array<'web-search' | 'image-generation'>
+  }): Promise<AgentSessionView>
 
   submitMessage(input: {
     sessionId: string
@@ -322,6 +326,12 @@ type AgentSessionObservation = {
 }
 ```
 
+`startSession` is the Draft-to-Session boundary. It performs the same write-free turn preparation
+as `submitMessage`, opens the Runtime, and then atomically creates the durable Session together with
+the first user message and assistant placeholder. A failed Draft submission therefore leaves no
+empty Session. The client observes and navigates to the returned Session only after this operation
+succeeds. The chat Draft does not create a Session directly.
+
 `modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
 The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning
 snapshot is turn-local and is never written to Agent configuration. Omitting either field inherits
@@ -338,7 +348,9 @@ for the turn, so history does not depend on reconstructing composer state.
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
 the protocol does not need event sequence, host epoch, replay buffers, or revision counters in
-version 1.
+version 1. Observation admission is serialized with Session deletion: an observation already
+loading must finish or fail before rows are removed, and one overlapping the deletion barrier fails
+with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 
 ## Events
 
@@ -469,6 +481,7 @@ Host boundary.
 12. Every finalized tool call is terminal and reconstructs as a paired model tool call/result.
 13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable
     historical reference, and artifact parts are not implicit model attachments.
+14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
 
 ## Branching
 

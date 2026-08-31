@@ -74,9 +74,10 @@ approval preference only changes whether effective `ask` calls show an interacti
 
 `web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
 requires `image-generation` and a configured drawing model. The composer snapshots its frontend
-Session cache for web search and its draft-local image selection on `submitMessage`. Neither is
-persisted on the Agent or Agent Session tables. System device and file capabilities have no
-Agent-specific switch. The inference snapshot records the tools that entered the immutable turn.
+Session cache for web search and its draft-local image selection on either `startSession` or
+`submitMessage`. Neither is persisted on the Agent or Agent Session tables. System device and file
+capabilities have no Agent-specific switch. The inference snapshot records the tools that entered
+the immutable turn.
 
 The logical binding model is:
 

@@ -453,11 +453,6 @@ export const AgentSessionSnapshotSchema = z.strictObject({
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
-export const AgentCreateSessionInputSchema = z.strictObject({
-  agentId: z.string().min(1),
-  executionTarget: AgentExecutionTargetSchema,
-  title: z.string().optional(),
-});
 export const AgentRenameSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   title: z.string().min(1),
@@ -476,6 +471,18 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   temporaryCapabilities: z.array(AgentTemporaryCapabilitySchema).max(2).optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
+export const AgentStartSessionInputSchema = z.strictObject({
+  agentId: z.string().min(1),
+  executionTarget: AgentExecutionTargetSchema,
+  parts: z.array(AgentInputPartSchema).min(1),
+  /** Snapshots the draft composer's selected model while its Agent mutation settles. */
+  modelId: UniqueModelIdSchema.optional(),
+  /** Per-turn only; this value is never persisted back to the Agent. */
+  reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  /** Input-owned capabilities enabled for this turn; never persisted to the Agent. */
+  temporaryCapabilities: z.array(AgentTemporaryCapabilitySchema).max(2).optional(),
+});
+export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
@@ -504,13 +511,11 @@ export type AgentSessionObservation = {
 };
 
 export interface AgentProtocol {
-  createSession(input: {
-    agentId: string;
-    executionTarget: AgentExecutionTarget;
-    title?: string;
-  }): Promise<AgentSessionView>;
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
+
+  /** Creates the durable Session only when its first submission is admitted. */
+  startSession(input: AgentStartSessionInput): Promise<AgentSessionView>;
 
   submitMessage(
     input: AgentSubmitMessageInput,

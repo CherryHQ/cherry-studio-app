@@ -12,6 +12,8 @@ import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/share
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ReserveInitialSubmissionInput,
+  ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
@@ -34,6 +36,66 @@ type StoredMessage = {
   error: AgentErrorView | null;
   contextCheckpoint: unknown | null;
 };
+
+function createSessionView(input: {
+  agentId: string;
+  executionTarget?: AgentSessionView['executionTarget'];
+  title?: string;
+}): AgentSessionView {
+  const timestamp = nowIso();
+  return {
+    id: uuidv7(),
+    agentId: input.agentId,
+    executionTarget: input.executionTarget ?? { kind: 'local' },
+    title: input.title ?? '',
+    titleIsManual: input.title !== undefined,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function reserveInTranscript(
+  transcript: StoredMessage[],
+  input: ReserveSubmissionInput,
+): ReserveSubmissionResult {
+  // Synchronous section: both message writes commit together or not at all.
+  const timestamp = nowIso();
+  const turnId = uuidv7();
+  const userMessage: AgentMessageView = {
+    id: uuidv7(),
+    sessionId: input.sessionId,
+    turnId,
+    role: 'user',
+    status: 'success',
+    parts: cloneJson(input.userParts),
+    usage: null,
+    modelId: null,
+    inferenceSnapshot: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const assistantMessage: AgentMessageView = {
+    id: uuidv7(),
+    sessionId: input.sessionId,
+    turnId,
+    role: 'assistant',
+    status: 'pending',
+    parts: [],
+    usage: null,
+    modelId: input.modelId,
+    inferenceSnapshot: {
+      status: 'supported',
+      snapshot: cloneJson(input.inferenceSnapshot),
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  transcript.push(
+    { view: userMessage, error: null, contextCheckpoint: null },
+    { view: assistantMessage, error: null, contextCheckpoint: null },
+  );
+  return { turnId, userMessage, assistantMessage };
+}
 
 /**
  * Process-local reference adapter for {@link AgentSessionStore}.
@@ -59,16 +121,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
-    const timestamp = nowIso();
-    const session: AgentSessionView = {
-      id: uuidv7(),
-      agentId: input.agentId,
-      executionTarget: { kind: 'local' },
-      title: input.title ?? '',
-      titleIsManual: input.title !== undefined,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+    const session = createSessionView(input);
     this.sessions.set(session.id, session);
     this.messages.set(session.id, []);
     return cloneJson(session);
@@ -121,48 +174,31 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return true;
   }
 
+  async reserveInitialSubmission(
+    input: ReserveInitialSubmissionInput,
+  ): Promise<ReserveInitialSubmissionResult> {
+    const session = createSessionView({
+      agentId: input.agentId,
+      executionTarget: input.executionTarget,
+    });
+    const transcript: StoredMessage[] = [];
+    const reserved = reserveInTranscript(transcript, {
+      sessionId: session.id,
+      userParts: input.userParts,
+      modelId: input.modelId,
+      inferenceSnapshot: input.inferenceSnapshot,
+    });
+    this.sessions.set(session.id, session);
+    this.messages.set(session.id, transcript);
+    return cloneJson({ ...reserved, session });
+  }
+
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     const transcript = this.messages.get(input.sessionId);
     if (!transcript) {
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
     }
-    // Synchronous section: both message writes commit together or not at all.
-    const timestamp = nowIso();
-    const turnId = uuidv7();
-    const userMessage: AgentMessageView = {
-      id: uuidv7(),
-      sessionId: input.sessionId,
-      turnId,
-      role: 'user',
-      status: 'success',
-      parts: cloneJson(input.userParts),
-      usage: null,
-      modelId: null,
-      inferenceSnapshot: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    const assistantMessage: AgentMessageView = {
-      id: uuidv7(),
-      sessionId: input.sessionId,
-      turnId,
-      role: 'assistant',
-      status: 'pending',
-      parts: [],
-      usage: null,
-      modelId: input.modelId,
-      inferenceSnapshot: {
-        status: 'supported',
-        snapshot: cloneJson(input.inferenceSnapshot),
-      },
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    transcript.push(
-      { view: userMessage, error: null, contextCheckpoint: null },
-      { view: assistantMessage, error: null, contextCheckpoint: null },
-    );
-    return cloneJson({ turnId, userMessage, assistantMessage });
+    return cloneJson(reserveInTranscript(transcript, input));
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
