@@ -68,6 +68,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'disabled_tools',
+        'headers',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'key',
