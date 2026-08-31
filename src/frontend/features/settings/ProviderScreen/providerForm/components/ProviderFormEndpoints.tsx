@@ -29,7 +29,7 @@ export function ProviderFormBaseUrl() {
 ProviderFormBaseUrl.displayName = 'ProviderForm.BaseUrl';
 
 function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType; label: string }) {
-  const { actions, state } = useProviderForm('ProviderForm.BaseUrl');
+  const { actions, meta, state } = useProviderForm('ProviderForm.BaseUrl');
   const value = state.endpointUrls[endpoint] ?? '';
 
   return (
@@ -37,6 +37,7 @@ function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType
       accessibilityLabel={label}
       autoCapitalize="none"
       autoCorrect={false}
+      disabled={meta.isSubmitting}
       keyboardType="url"
       onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
       placeholder={label}

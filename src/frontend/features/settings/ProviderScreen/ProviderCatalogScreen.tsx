@@ -1,6 +1,4 @@
 import DownloadIcon from '@cherrystudio/app-icons/icons/download';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +7,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ProviderCatalogEntry } from '@/shared/contracts';
@@ -18,9 +16,14 @@ import { ProviderAvatar } from '../components/ProviderAvatar';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 68;
+const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider';
+
+type ProviderCatalogItem =
+  | { id: typeof CUSTOM_PROVIDER_ITEM_ID; type: 'custom' }
+  | (ProviderCatalogEntry & { type: 'preset' });
 
 type ProviderCatalogSection = {
-  data: ProviderCatalogEntry[];
+  data: ProviderCatalogItem[];
   title: string;
 };
 
@@ -29,10 +32,9 @@ type ProviderCatalogRowProps = {
   importPending: boolean;
   isPendingEntry: boolean;
   onImport: (entry: ProviderCatalogEntry) => void;
-  onOpen: (entry: ProviderCatalogEntry) => void;
 };
 
-const keyExtractor = (item: ProviderCatalogEntry) => item.id;
+const keyExtractor = (item: ProviderCatalogItem) => item.id;
 
 const renderProviderSectionHeader = ({ section }: { section: ProviderCatalogSection }) => (
   <View className="h-12 justify-end px-4 pb-2">
@@ -45,7 +47,6 @@ function ProviderCatalogRow({
   importPending,
   isPendingEntry,
   onImport,
-  onOpen,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
 
@@ -58,10 +59,8 @@ function ProviderCatalogRow({
           providerName={entry.name}
         />
       }
-      disabled={entry.isInstalled && importPending}
       id={entry.id}
       name={entry.name}
-      onPress={entry.isInstalled ? () => onOpen(entry) : undefined}
       statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
       statusTone="success"
       subtitle={entry.id}
@@ -81,6 +80,25 @@ function ProviderCatalogRow({
             )}
           </Button>
         )
+      }
+    />
+  );
+}
+
+function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
+  const { t } = useTranslation();
+  const name = t('settings.provider.catalog.custom');
+
+  return (
+    <SettingsServiceRow
+      avatar={<ProviderAvatar providerId={CUSTOM_PROVIDER_ITEM_ID} providerName={name} />}
+      id={CUSTOM_PROVIDER_ITEM_ID}
+      name={name}
+      subtitle={t('settings.provider.catalog.customDescription')}
+      trailingAction={
+        <Button onPress={onCreate} size="xs" variant="secondary">
+          {t('settings.provider.catalog.create')}
+        </Button>
       }
     />
   );
@@ -165,7 +183,6 @@ export default function ProviderCatalogScreen() {
   });
   const entries = catalogQuery.data ?? [];
   const {
-    isFiltering,
     query,
     results: listedEntries,
     setQuery,
@@ -174,15 +191,21 @@ export default function ProviderCatalogScreen() {
     items: entries,
   });
 
-  const openProvider = useCallback(
+  const openProviderSetup = useCallback(
     (provider: Pick<ProviderCatalogEntry, 'id' | 'name'>) => {
-      router.push({
-        pathname: '/settings/provider/[providerId]',
-        params: { providerId: provider.id, providerName: provider.name },
+      router.replace({
+        pathname: '/settings/provider/new',
+        params: {
+          providerId: provider.id,
+          providerName: provider.name,
+        },
       });
     },
     [router],
   );
+  const openCustomProvider = useCallback(() => {
+    router.replace('/settings/provider/new');
+  }, [router]);
   const importMutation = useMutation({
     mutationFn: providers.importPreset,
     onError: () => {
@@ -194,7 +217,7 @@ export default function ProviderCatalogScreen() {
         queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.providers.page() }),
       ]);
-      openProvider(provider);
+      openProviderSetup(provider);
     },
   });
   const importProvider = importMutation.mutate;
@@ -211,8 +234,15 @@ export default function ProviderCatalogScreen() {
     [importPending, importProvider],
   );
   const sections = useMemo<ProviderCatalogSection[]>(() => {
-    const recommended = listedEntries.filter((entry) => entry.isRecommended);
-    const all = listedEntries.filter((entry) => !entry.isRecommended);
+    const recommended: ProviderCatalogItem[] = [
+      { id: CUSTOM_PROVIDER_ITEM_ID, type: 'custom' },
+      ...listedEntries
+        .filter((entry) => entry.isRecommended)
+        .map((entry) => ({ ...entry, type: 'preset' as const })),
+    ];
+    const all: ProviderCatalogItem[] = listedEntries
+      .filter((entry) => !entry.isRecommended)
+      .map((entry) => ({ ...entry, type: 'preset' as const }));
 
     return [
       {
@@ -223,57 +253,18 @@ export default function ProviderCatalogScreen() {
     ].filter(({ data }) => data.length > 0);
   }, [listedEntries, t]);
   const renderProviderRow = useCallback(
-    ({ item }: { item: ProviderCatalogEntry }) => (
-      <ProviderCatalogRow
-        entry={item}
-        importPending={importPending}
-        isPendingEntry={pendingProviderId === item.id}
-        onImport={handleImportProvider}
-        onOpen={openProvider}
-      />
-    ),
-    [handleImportProvider, importPending, openProvider, pendingProviderId],
-  );
-  const openCustomProvider = useCallback(() => {
-    router.push('/settings/provider/new');
-  }, [router]);
-  const isRegistryUpdateBusy =
-    registryUpdateQuery.isFetching || applyRegistryUpdateMutation.isPending;
-  const checkRegistryUpdate = useCallback(() => {
-    if (isRegistryUpdateBusy) {
-      return;
-    }
-
-    void refetchRegistryUpdate().then((result) => {
-      if (result.isError) {
-        alert.show({ title: t('settings.provider.catalog.registryUpdate.checkFailed') });
-      } else if (result.data?.status === 'current') {
-        toast.show({
-          label: t('settings.provider.catalog.registryUpdate.current'),
-          variant: 'success',
-        });
-      }
-    });
-  }, [alert, isRegistryUpdateBusy, refetchRegistryUpdate, t, toast]);
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('settings.provider.catalog.registryUpdate.check'),
-        disabled: isRegistryUpdateBusy,
-        icon: RefreshCwIcon,
-        key: 'check-provider-registry-update',
-        onPress: checkRegistryUpdate,
-        type: 'icon',
-      },
-      {
-        accessibilityLabel: t('settings.provider.catalog.custom'),
-        icon: PlusIcon,
-        key: 'create-custom-provider',
-        onPress: openCustomProvider,
-        type: 'icon',
-      },
-    ],
-    [checkRegistryUpdate, isRegistryUpdateBusy, openCustomProvider, t],
+    ({ item }: { item: ProviderCatalogItem }) =>
+      item.type === 'custom' ? (
+        <CustomProviderCatalogRow onCreate={openCustomProvider} />
+      ) : (
+        <ProviderCatalogRow
+          entry={item}
+          importPending={importPending}
+          isPendingEntry={pendingProviderId === item.id}
+          onImport={handleImportProvider}
+        />
+      ),
+    [handleImportProvider, importPending, openCustomProvider, pendingProviderId],
   );
   const retry = useCallback(() => {
     void catalogQuery.refetch();
@@ -281,7 +272,7 @@ export default function ProviderCatalogScreen() {
 
   return (
     <>
-      <RouteHeader rightActions={rightActions} title={t('settings.provider.catalog.title')} />
+      <RouteHeader title={t('settings.provider.catalog.title')} />
       <InlineSearch onChangeText={setQuery} value={query} />
       <View className="min-h-0 flex-1 gap-3 px-4 pb-5">
         {registryUpdateQuery.data?.status === 'available' ? (
@@ -305,15 +296,6 @@ export default function ProviderCatalogScreen() {
             }
             primaryAction={{ children: t('common.retry'), onPress: retry }}
             title={t('settings.provider.catalog.loadFailed')}
-          />
-        ) : listedEntries.length === 0 ? (
-          <ContentState.Empty
-            className="px-6 py-8"
-            title={t(
-              isFiltering
-                ? 'settings.provider.catalog.searchEmpty'
-                : 'settings.provider.catalog.empty',
-            )}
           />
         ) : (
           <View className="-mx-4 min-h-0 flex-1">

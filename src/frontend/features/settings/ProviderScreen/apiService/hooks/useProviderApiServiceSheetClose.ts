@@ -18,10 +18,14 @@ export function useProviderApiServiceSheetClose({
   const { alert } = useAlert();
   const isConfirmedCloseRef = useRef(false);
 
-  const closeWithoutPrompt = useCallback(() => {
+  const allowNavigation = useCallback(() => {
     isConfirmedCloseRef.current = true;
+  }, []);
+
+  const closeWithoutPrompt = useCallback(() => {
+    allowNavigation();
     navigation.goBack();
-  }, [navigation]);
+  }, [allowNavigation, navigation]);
 
   const confirmDiscard = useCallback(
     (onConfirm: () => void) => {
@@ -75,5 +79,5 @@ export function useProviderApiServiceSheetClose({
     return unsubscribe;
   }, [confirmDiscard, hasUnsavedChanges, isSaving, navigation]);
 
-  return { closeWithoutPrompt, requestClose };
+  return { allowNavigation, closeWithoutPrompt, requestClose };
 }

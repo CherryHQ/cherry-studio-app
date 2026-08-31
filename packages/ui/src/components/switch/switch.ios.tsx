@@ -29,6 +29,7 @@ export function Switch({
   return (
     <Host
       colorScheme={theme === 'dark' ? 'dark' : 'light'}
+      ignoreSafeArea="all"
       matchContents
       style={style}
       testID={testID ? `${testID}-host` : undefined}
