@@ -2,7 +2,7 @@
  * MCP Server Service - CRUD over the stored MCP endpoints.
  *
  * MOBILE SYNC DIVERGENCE: desktop's service manages four transports and an
- * install lifecycle. Mobile stores one Streamable HTTP endpoint per row, so
+ * install lifecycle. Mobile stores one Streamable HTTP connection per row, so
  * there is no transport to branch on and no projection to normalize.
  */
 
@@ -40,6 +40,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     createdAt: timestampToISO(row.createdAt),
     disabledTools: row.disabledTools,
     endpointUrl: row.endpointUrl,
+    headers: row.headers ?? undefined,
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -115,6 +116,7 @@ export class McpServerService {
       .values({
         disabledTools: parsed.disabledTools ?? [],
         endpointUrl: parsed.endpointUrl,
+        headers: parsed.headers,
         isEnabled: parsed.isEnabled ?? false,
         name,
       })
@@ -138,6 +140,7 @@ export class McpServerService {
         disabledTools: [...new Set(parsed.disabledTools)],
       }),
       ...(parsed.endpointUrl !== undefined && { endpointUrl: parsed.endpointUrl }),
+      ...(parsed.headers !== undefined && { headers: parsed.headers }),
       ...(parsed.isEnabled !== undefined && { isEnabled: parsed.isEnabled }),
       ...(name !== undefined && { name }),
     };

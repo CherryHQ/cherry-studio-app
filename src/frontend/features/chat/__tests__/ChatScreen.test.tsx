@@ -138,4 +138,20 @@ describe('ChatScreen composer dock wiring', () => {
 
     expect(mockComposerProviderInstance).toBe(2);
   });
+
+  it('starts a fresh composer session when the route switches Sessions', () => {
+    act(() => {
+      renderer = create(<ChatScreen />);
+    });
+    expect(mockComposerProviderInstance).toBe(1);
+
+    mockRouteParams = { agentId: 'agent-1', sessionId: 'session-2' };
+    mockSessionData = { agentId: 'agent-1', id: 'session-2' };
+    act(() => {
+      renderer?.update(<ChatScreen />);
+    });
+
+    expect(mockComposerProviderInstance).toBe(2);
+    expect(mockComposerProviderMountCount).toBe(2);
+  });
 });

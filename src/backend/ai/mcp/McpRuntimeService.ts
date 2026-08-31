@@ -14,6 +14,7 @@ import type {
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { McpServer } from '@/shared/data/types/mcpServer';
+import { isSameMcpConnectionConfig, normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
 import {
   createBoundedSignal,
@@ -32,7 +33,7 @@ const logger = loggerService.withContext('McpRuntimeService');
  * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'state'> & {
-  endpointUrl: string;
+  connectionConfig: McpConnectionConfig;
 };
 
 type McpToolCallingClient = MCPClient & {
@@ -48,9 +49,9 @@ type ServerRuntimeState = {
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
   client?: MCPClient;
+  connectionConfig: McpConnectionConfig;
   connectionPromise?: Promise<MCPClient>;
   discoveredToolNames: Set<string>;
-  endpointUrl: string;
   generation: number;
   runtimeError?: string;
   serverId: string;
@@ -116,6 +117,7 @@ async function listAllTools(
 /** On failure — including an aborted initialize — the SDK closes its own
  * transport before rethrowing, so callers never inherit a half-open client. */
 function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Promise<MCPClient> {
+  const headers = normalizeMcpHeaders(config.headers);
   return createMCPClient({
     clientName: 'Cherry Studio',
     initializationOptions: { signal },
@@ -123,6 +125,7 @@ function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Pro
       type: 'http',
       url: config.endpointUrl,
       fetch: expoFetch as unknown as typeof fetch,
+      ...(Object.keys(headers).length > 0 && { headers }),
     },
   });
 }
@@ -270,18 +273,18 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   /**
-   * The endpoint URL is the whole transport config, so it doubles as the
-   * identity that retires a pooled client when the user edits it. A snapshot
-   * outlives its connection — `invalidateServer(id, { preserveSnapshot: true })`
-   * leaves a disabled server's behind — so it carries the URL it was taken
-   * against and is discarded once that no longer matches.
+   * URL and headers form the transport identity that retires a pooled client
+   * when the user edits either. A snapshot outlives its connection, so it keeps
+   * the config it was taken against and is discarded once that no longer matches.
    */
   private getRuntimeState(server: McpServer): ServerRuntimeState {
-    if (this.runtimeSnapshots.get(server.id)?.endpointUrl !== server.endpointUrl) {
+    const connectionConfig = toMcpConnectionConfig(server);
+    const snapshot = this.runtimeSnapshots.get(server.id);
+    if (snapshot && !isSameMcpConnectionConfig(snapshot.connectionConfig, connectionConfig)) {
       this.runtimeSnapshots.delete(server.id);
     }
     const current = this.runtimeStates.get(server.id);
-    if (current?.endpointUrl === server.endpointUrl) {
+    if (current && isSameMcpConnectionConfig(current.connectionConfig, connectionConfig)) {
       return current;
     }
 
@@ -291,8 +294,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
 
     const state: ServerRuntimeState = {
       abort: new AbortController(),
+      connectionConfig,
       discoveredToolNames: new Set(),
-      endpointUrl: server.endpointUrl,
       generation: this.allocateGeneration(),
       serverId: server.id,
     };
@@ -303,7 +306,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private getRuntimeSummary(server: McpServer): McpServerRuntimeSummary {
     const storedSnapshot = this.runtimeSnapshots.get(server.id);
     const snapshot =
-      storedSnapshot?.endpointUrl === server.endpointUrl
+      storedSnapshot &&
+      isSameMcpConnectionConfig(storedSnapshot.connectionConfig, toMcpConnectionConfig(server))
         ? {
             lastConnectedAt: storedSnapshot.lastConnectedAt,
             serverName: storedSnapshot.serverName,
@@ -356,7 +360,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     const generation = state.generation;
-    const initPromise: Promise<MCPClient> = createHttpClient(server, signal)
+    const initPromise: Promise<MCPClient> = createHttpClient(state.connectionConfig, signal)
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
           this.closeQuietly(client);
@@ -477,7 +481,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const state = this.runtimeStates.get(server.id);
     if (
       !state ||
-      state.endpointUrl !== server.endpointUrl ||
+      !isSameMcpConnectionConfig(state.connectionConfig, toMcpConnectionConfig(server)) ||
       state.generation !== discoveredGeneration ||
       !state.discoveredToolNames.has(ref.rawToolName)
     ) {
@@ -578,8 +582,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.runtimeError = undefined;
     state.discoveredToolNames = new Set(rawTools.map((tool) => tool.name));
     this.runtimeSnapshots.set(server.id, {
+      connectionConfig: state.connectionConfig,
       lastConnectedAt: Date.now(),
-      endpointUrl: state.endpointUrl,
       serverName: client?.serverInfo.name,
       serverTitle: client?.serverInfo.title,
       serverVersion: client?.serverInfo.version,
@@ -587,4 +591,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
     });
     return rawTools;
   }
+}
+
+function toMcpConnectionConfig(server: McpServer): McpConnectionConfig {
+  return {
+    endpointUrl: server.endpointUrl,
+    ...(server.headers && { headers: { ...server.headers } }),
+  };
 }

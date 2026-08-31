@@ -1313,11 +1313,14 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     const observation = host.observeSession(session.id, jest.fn());
+    const rejectedObservation = expect(observation).rejects.toMatchObject({
+      view: { code: 'SESSION_BUSY' },
+    });
     await lookupStarted.promise;
     const deletion = host.deleteSession({ sessionId: session.id });
-    resolveAgent(await agents.getAgent(AGENT_ID));
 
-    await expect(observation).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    resolveAgent(await agents.getAgent(AGENT_ID));
+    await rejectedObservation;
     await expect(deletion).resolves.toBeUndefined();
     await expect(store.getSession(session.id)).resolves.toBeNull();
   });

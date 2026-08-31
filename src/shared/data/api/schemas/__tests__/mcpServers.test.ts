@@ -19,12 +19,25 @@ describe('MCP server DTO schemas', () => {
     expect(() => CreateMcpServerSchema.parse({ name: 'No endpoint' })).toThrow();
   });
 
-  it.each(['type', 'headers', 'timeout', 'disabledAutoApproveTools', 'isActive'])(
+  it.each(['type', 'timeout', 'disabledAutoApproveTools', 'isActive'])(
     'rejects the removed field %s',
     (field) => {
       expect(() => UpdateMcpServerSchema.parse({ [field]: 'value' })).toThrow();
     },
   );
+
+  it('accepts string HTTP headers on create and update', () => {
+    const headers = { Authorization: 'Bearer token' };
+
+    expect(
+      CreateMcpServerSchema.parse({
+        endpointUrl: 'https://example.com/mcp',
+        headers,
+        name: 'Example',
+      }),
+    ).toEqual({ endpointUrl: 'https://example.com/mcp', headers, name: 'Example' });
+    expect(UpdateMcpServerSchema.parse({ headers })).toEqual({ headers });
+  });
 
   it('patches the tool rules as a whole list', () => {
     expect(UpdateMcpServerSchema.parse({ disabledTools: ['search'] })).toEqual({

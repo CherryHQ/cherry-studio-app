@@ -7,6 +7,7 @@ import type {
 } from '@/shared/data/api/schemas/mcpServers';
 import type { HandlersFor } from '@/shared/data/api/types';
 import type { McpServer } from '@/shared/data/types/mcpServer';
+import { isSameMcpConnectionConfig } from '@/shared/utils/mcpConnectionConfig';
 
 export type McpServerMutations = {
   createServer(input: CreateMcpServerDto): Promise<McpServer>;
@@ -23,10 +24,9 @@ type McpMutationData = Pick<McpServerService, 'create' | 'delete' | 'getById' | 
 /**
  * Server mutations with the runtime side effects a row change cannot express.
  *
- * Only connection release lives here. A changed URL needs no notification: the
- * runtime keys its pooled client on the endpoint, so the next read retires the
- * old one on its own. A deleted or disabled server never gets that next read,
- * which is why those two have to say so.
+ * Connection release lives here. A changed URL or request header retires the
+ * authenticated client immediately, so an already approved tool cannot run
+ * against credentials different from the catalog it came from.
  */
 export function createMcpServerMutations(dependencies: {
   runtime: McpMutationRuntime;
@@ -49,8 +49,10 @@ export function createMcpServerMutations(dependencies: {
       const server = await servers.update(id, input);
 
       // Reported so the client can drop its own cached tool list for this row.
-      const toolsChanged = previous ? previous.endpointUrl !== server.endpointUrl : false;
-      if (previous?.isEnabled && !server.isEnabled) {
+      const toolsChanged = previous ? !isSameMcpConnectionConfig(previous, server) : false;
+      if (toolsChanged) {
+        runtime.invalidateServer(id);
+      } else if (previous?.isEnabled && !server.isEnabled) {
         // The snapshot outlives the connection so the settings row can still
         // report what the server last offered.
         runtime.invalidateServer(id, { preserveSnapshot: true });
@@ -62,7 +64,9 @@ export function createMcpServerMutations(dependencies: {
 }
 
 function hasRuntimeRelevantPatch(input: UpdateMcpServerDto): boolean {
-  return input.endpointUrl !== undefined || input.isEnabled !== undefined;
+  return (
+    input.endpointUrl !== undefined || input.headers !== undefined || input.isEnabled !== undefined
+  );
 }
 
 export function createMcpServerHandlers(

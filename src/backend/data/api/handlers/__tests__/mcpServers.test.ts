@@ -46,17 +46,26 @@ describe('createMcpServerMutations', () => {
     expect(runtime.invalidateServer).not.toHaveBeenCalled();
   });
 
-  it('reports changed tools after a URL change without notifying the runtime', async () => {
+  it('invalidates the runtime and reports changed tools after a URL change', async () => {
     const { mutations, runtime } = createMutationsSubject();
 
     const result = await mutations.updateServer('server-1', {
       endpointUrl: 'https://example.com/new-mcp',
     });
 
-    // The runtime keys its pooled client on the endpoint, so the next read
-    // retires the old one; only the client's own cache needs telling.
     expect(result.toolsChanged).toBe(true);
-    expect(runtime.invalidateServer).not.toHaveBeenCalled();
+    expect(runtime.invalidateServer).toHaveBeenCalledWith('server-1');
+  });
+
+  it('invalidates the authenticated runtime after a header change', async () => {
+    const { mutations, runtime } = createMutationsSubject();
+
+    const result = await mutations.updateServer('server-1', {
+      headers: { Authorization: 'Bearer next-token' },
+    });
+
+    expect(result.toolsChanged).toBe(true);
+    expect(runtime.invalidateServer).toHaveBeenCalledWith('server-1');
   });
 
   it('preserves the last runtime snapshot when a server is disabled', async () => {
