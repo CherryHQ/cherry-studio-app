@@ -11,6 +11,7 @@ import {
   useAgentSession,
 } from '@/frontend/hooks/agent';
 
+import { ToolApprovalGate } from './approval/ToolApprovalGate';
 import { ChatInput } from './input';
 import { ChatEmptyState, ChatWorkspace } from './workspace';
 
@@ -62,11 +63,17 @@ export function ChatScreen() {
         {hasComposer ? (
           <ComposerSessionProvider key={composerSessionKey}>
             <ComposerDock layoutMode="flow">
-              <ChatInput
-                agentId={resolvedAgentId}
-                dismissKeyboardOnSend={false}
-                sessionId={sessionId}
-              />
+              {sessionId ? (
+                <ToolApprovalGate sessionId={sessionId}>
+                  <ChatInput
+                    agentId={resolvedAgentId}
+                    dismissKeyboardOnSend={false}
+                    sessionId={sessionId}
+                  />
+                </ToolApprovalGate>
+              ) : (
+                <ChatInput agentId={resolvedAgentId} dismissKeyboardOnSend={false} />
+              )}
             </ComposerDock>
           </ComposerSessionProvider>
         ) : null}

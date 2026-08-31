@@ -65,6 +65,10 @@ jest.mock('../input', () => ({
   },
 }));
 
+jest.mock('../approval/ToolApprovalGate', () => ({
+  ToolApprovalGate: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock('../workspace', () => ({
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {

@@ -78,7 +78,9 @@ query refreshes from creating duplicate rows.
 
 Pending approvals come from the live Session snapshot/events. The approval sheet sends an
 approve/deny decision with the protocol approval and turn identity. A terminal turn clears pending
-approvals. Stop calls `cancelTurn` only when the selected Session has a non-terminal active turn.
+approvals. Dismissing the sheet collapses it into a recovery bar over the still-mounted composer;
+only an explicit approve/deny action resolves the approval. Stop calls `cancelTurn` only when the
+selected Session has a non-terminal active turn.
 
 ## Persistence And Recovery
 

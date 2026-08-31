@@ -48,3 +48,7 @@ visible:
 
 Root sheets intentionally have no close button. Users dismiss them with a downward gesture, the
 scrim, Android back, or the accessibility escape action.
+
+Set `dismissible={false}` when a workflow must remain visible until it reaches an explicit outcome.
+The closed detent then becomes programmatic-only: drag, scrim, Android back, and accessibility
+escape cannot reach it, while changing `open` to `false` still performs the controlled close.

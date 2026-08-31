@@ -1,4 +1,4 @@
-import { ContentState, useAlert } from '@cherrystudio/ui/components';
+import { ContentState } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,13 +9,7 @@ import { resolveHeaderContentInset } from '@/frontend/components/navigation';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { type PendingToolApproval, ToolApprovalSheet } from '../approval/ToolApprovalSheet';
-import {
-  mergeAgentMessageViews,
-  toAgentMessageListItems,
-  useAgentChatActions,
-  useAgentChatSession,
-} from '../runtime';
+import { mergeAgentMessageViews, toAgentMessageListItems, useAgentChatSession } from '../runtime';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
@@ -25,7 +19,6 @@ import {
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
 
-const logger = loggerService.withContext('AgentChatWorkspace');
 const gateLog = loggerService.withContext('AgentChatGate');
 
 type ChatWorkspaceProps = {
@@ -51,10 +44,8 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
   const live = useAgentChatSession(sessionId);
-  const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
-  const { alert } = useAlert();
   const mergedMessages = useMemo(
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],
@@ -80,32 +71,6 @@ export function ChatWorkspace({
   const messageListExtraData = useMemo(
     () => ({ assistantPresentation, isAssistantToolbarEnabled }),
     [assistantPresentation, isAssistantToolbarEnabled],
-  );
-  const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
-    () =>
-      live.pendingApprovals.map((approval) => ({
-        approvalId: approval.id,
-        input: approval.input,
-        messageId: live.activeTurn?.assistantMessageId ?? '',
-        toolCallId: approval.toolCallId,
-        displayName: approval.displayName,
-      })),
-    [live.activeTurn?.assistantMessageId, live.pendingApprovals],
-  );
-  const handleApprovalRespond = useCallback(
-    async (input: { approvalId: string; approved: boolean }) => {
-      try {
-        await client.respondApproval(
-          sessionId,
-          input.approvalId,
-          input.approved ? 'approve' : 'deny',
-        );
-      } catch (approvalError) {
-        logger.error('Tool approval response failed', approvalError as Error);
-        alert.show({ title: t('chat.tool.approval.failed') });
-      }
-    },
-    [alert, client, sessionId, t],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
@@ -158,11 +123,6 @@ export function ChatWorkspace({
         />
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
-      <ToolApprovalSheet
-        approvals={pendingApprovals}
-        isOpen={pendingApprovals.length > 0}
-        onRespond={handleApprovalRespond}
-      />
     </View>
   );
 }
