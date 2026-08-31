@@ -1,8 +1,10 @@
+import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { ContentState, useAlert } from '@cherrystudio/ui/components';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
@@ -26,7 +28,8 @@ type ProviderCatalogRowProps = {
   entry: ProviderCatalogEntry;
   importPending: boolean;
   isPendingEntry: boolean;
-  onPress: (entry: ProviderCatalogEntry) => void;
+  onImport: (entry: ProviderCatalogEntry) => void;
+  onOpen: (entry: ProviderCatalogEntry) => void;
 };
 
 const keyExtractor = (item: ProviderCatalogEntry) => item.id;
@@ -41,14 +44,10 @@ function ProviderCatalogRow({
   entry,
   importPending,
   isPendingEntry,
-  onPress,
+  onImport,
+  onOpen,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
-  const statusLabel = entry.isInstalled
-    ? t('settings.provider.catalog.installed')
-    : isPendingEntry
-      ? t('settings.provider.catalog.importing')
-      : t('settings.provider.catalog.import');
 
   return (
     <SettingsServiceRow
@@ -59,14 +58,66 @@ function ProviderCatalogRow({
           providerName={entry.name}
         />
       }
-      disabled={importPending}
+      disabled={entry.isInstalled && importPending}
       id={entry.id}
       name={entry.name}
-      onPress={() => onPress(entry)}
-      statusLabel={statusLabel}
-      statusTone={entry.isInstalled ? 'success' : 'default'}
+      onPress={entry.isInstalled ? () => onOpen(entry) : undefined}
+      statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
+      statusTone="success"
       subtitle={entry.id}
+      trailingAction={
+        entry.isInstalled ? undefined : (
+          <Button
+            disabled={importPending}
+            loading={isPendingEntry}
+            onPress={() => onImport(entry)}
+            size="xs"
+            variant="secondary"
+          >
+            {t(
+              isPendingEntry
+                ? 'settings.provider.catalog.importing'
+                : 'settings.provider.catalog.import',
+            )}
+          </Button>
+        )
+      }
     />
+  );
+}
+
+function ProviderRegistryUpdateNotice({
+  isUpdating,
+  onUpdate,
+}: {
+  isUpdating: boolean;
+  onUpdate: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="gap-3 rounded-xl border border-border bg-secondary p-3">
+      <View className="gap-1">
+        <Text className="font-medium text-base text-foreground">
+          {t('settings.provider.catalog.registryUpdate.availableTitle')}
+        </Text>
+        <Text className="text-foreground-secondary text-sm">
+          {t('settings.provider.catalog.registryUpdate.availableDescription')}
+        </Text>
+      </View>
+      <Button
+        icon={<DownloadIcon className="size-4" />}
+        loading={isUpdating}
+        onPress={onUpdate}
+        size="sm"
+      >
+        {t(
+          isUpdating
+            ? 'settings.provider.catalog.registryUpdate.updating'
+            : 'settings.provider.catalog.registryUpdate.update',
+        )}
+      </Button>
+    </View>
   );
 }
 
@@ -75,11 +126,42 @@ export default function ProviderCatalogScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const providers = useBackendModule('providers');
   const catalogQuery = useQuery({
     queryFn: providers.listCatalog,
     queryKey: queryKeys.providers.catalog(),
     staleTime: 5 * 60 * 1000,
+  });
+  const registryUpdateQueryKey = queryKeys.providers.registryUpdate();
+  const registryUpdateQuery = useQuery({
+    enabled: false,
+    queryFn: providers.checkRegistryUpdate,
+    queryKey: registryUpdateQueryKey,
+    retry: false,
+  });
+  const refetchRegistryUpdate = registryUpdateQuery.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      void refetchRegistryUpdate();
+    }, [refetchRegistryUpdate]),
+  );
+  const applyRegistryUpdateMutation = useMutation({
+    mutationFn: providers.applyRegistryUpdate,
+    onError: () => {
+      alert.show({ title: t('settings.provider.catalog.registryUpdate.updateFailed') });
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(registryUpdateQueryKey, { status: 'current' });
+      toast.show({
+        label: t(
+          result.status === 'updated'
+            ? 'settings.provider.catalog.registryUpdate.updated'
+            : 'settings.provider.catalog.registryUpdate.current',
+        ),
+        variant: 'success',
+      });
+    },
   });
   const entries = catalogQuery.data ?? [];
   const {
@@ -118,20 +200,15 @@ export default function ProviderCatalogScreen() {
   const importProvider = importMutation.mutate;
   const importPending = importMutation.isPending;
   const pendingProviderId = importPending ? importMutation.variables : undefined;
-  const handleProviderPress = useCallback(
+  const handleImportProvider = useCallback(
     (entry: ProviderCatalogEntry) => {
-      if (importPending) {
-        return;
-      }
-
-      if (entry.isInstalled) {
-        openProvider(entry);
+      if (importPending || entry.isInstalled) {
         return;
       }
 
       importProvider(entry.id);
     },
-    [importPending, importProvider, openProvider],
+    [importPending, importProvider],
   );
   const sections = useMemo<ProviderCatalogSection[]>(() => {
     const recommended = listedEntries.filter((entry) => entry.isRecommended);
@@ -151,16 +228,43 @@ export default function ProviderCatalogScreen() {
         entry={item}
         importPending={importPending}
         isPendingEntry={pendingProviderId === item.id}
-        onPress={handleProviderPress}
+        onImport={handleImportProvider}
+        onOpen={openProvider}
       />
     ),
-    [handleProviderPress, importPending, pendingProviderId],
+    [handleImportProvider, importPending, openProvider, pendingProviderId],
   );
   const openCustomProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
+  const isRegistryUpdateBusy =
+    registryUpdateQuery.isFetching || applyRegistryUpdateMutation.isPending;
+  const checkRegistryUpdate = useCallback(() => {
+    if (isRegistryUpdateBusy) {
+      return;
+    }
+
+    void refetchRegistryUpdate().then((result) => {
+      if (result.isError) {
+        alert.show({ title: t('settings.provider.catalog.registryUpdate.checkFailed') });
+      } else if (result.data?.status === 'current') {
+        toast.show({
+          label: t('settings.provider.catalog.registryUpdate.current'),
+          variant: 'success',
+        });
+      }
+    });
+  }, [alert, isRegistryUpdateBusy, refetchRegistryUpdate, t, toast]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
+      {
+        accessibilityLabel: t('settings.provider.catalog.registryUpdate.check'),
+        disabled: isRegistryUpdateBusy,
+        icon: RefreshCwIcon,
+        key: 'check-provider-registry-update',
+        onPress: checkRegistryUpdate,
+        type: 'icon',
+      },
       {
         accessibilityLabel: t('settings.provider.catalog.custom'),
         icon: PlusIcon,
@@ -169,7 +273,7 @@ export default function ProviderCatalogScreen() {
         type: 'icon',
       },
     ],
-    [openCustomProvider, t],
+    [checkRegistryUpdate, isRegistryUpdateBusy, openCustomProvider, t],
   );
   const retry = useCallback(() => {
     void catalogQuery.refetch();
@@ -179,7 +283,13 @@ export default function ProviderCatalogScreen() {
     <>
       <RouteHeader rightActions={rightActions} title={t('settings.provider.catalog.title')} />
       <InlineSearch onChangeText={setQuery} value={query} />
-      <View className="min-h-0 flex-1 px-4 pb-5">
+      <View className="min-h-0 flex-1 gap-3 px-4 pb-5">
+        {registryUpdateQuery.data?.status === 'available' ? (
+          <ProviderRegistryUpdateNotice
+            isUpdating={applyRegistryUpdateMutation.isPending}
+            onUpdate={() => applyRegistryUpdateMutation.mutate()}
+          />
+        ) : null}
         {catalogQuery.isPending ? (
           <ContentState.Loading
             className="px-1 py-8"

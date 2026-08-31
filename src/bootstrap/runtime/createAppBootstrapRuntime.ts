@@ -15,6 +15,7 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -62,6 +63,9 @@ export function createAppBootstrapRuntime(
   const languageServing = host.container.get<LanguageServingSupport>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
+  const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
+    'ProviderRegistryUpdaterService',
+  );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const services = createBackendServices({
     agent,
@@ -72,7 +76,11 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, { dbService, languageServing });
+  const { backend, dataApiDependencies } = createBackend(services, {
+    dbService,
+    languageServing,
+    providerRegistryUpdater,
+  });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({

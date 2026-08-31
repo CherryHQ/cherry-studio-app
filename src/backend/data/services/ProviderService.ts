@@ -80,13 +80,6 @@ export interface ResolvedProviderApiKey {
   apiKeySelection: ProviderApiKeySelection;
 }
 
-export function canDeleteProvider(provider: Pick<Provider, 'id' | 'presetProviderId'>): boolean {
-  return (
-    provider.presetProviderId !== provider.id &&
-    !providerRegistryService.isRegistryProvider(provider.id)
-  );
-}
-
 function mergeCatalogEndpointConfigs(
   existing: EndpointConfigs | null | undefined,
   catalog: EndpointConfigs | null | undefined,
@@ -647,25 +640,6 @@ export class ProviderService {
 
   async delete(providerId: string): Promise<void> {
     await this.dbService.withWriteTx(async (tx) => {
-      const [provider] = await tx
-        .select({ presetProviderId: userProviderTable.presetProviderId })
-        .from(userProviderTable)
-        .where(eq(userProviderTable.providerId, providerId))
-        .limit(1);
-
-      if (!provider) {
-        throw DataApiErrorFactory.notFound('Provider', providerId);
-      }
-
-      if (
-        !canDeleteProvider({
-          id: providerId,
-          presetProviderId: provider.presetProviderId ?? undefined,
-        })
-      ) {
-        throw DataApiErrorFactory.invalidOperation(`Cannot delete preset provider '${providerId}'`);
-      }
-
       const providerModelIds = tx
         .select({ id: userModelTable.id })
         .from(userModelTable)

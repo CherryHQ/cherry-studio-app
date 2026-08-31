@@ -8,4 +8,5 @@ export const providerQueryKeys = {
   detail: (providerId: string) => [`/providers/${providerId}`] as const,
   list: () => ['/providers'] as const,
   page: () => ['/providers/page'] as const,
+  registryUpdate: () => ['providers', 'registry-update'] as const,
 };

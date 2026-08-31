@@ -72,7 +72,7 @@ export default function ProviderEditScreen() {
     hasUnsavedChanges: meta.isDirty,
     isSaving,
   });
-  const { canDelete, isDeleting, requestDelete } = useProviderDeletion();
+  const { isDeleting, requestDelete } = useProviderDeletion();
   const handleDelete = useCallback(() => {
     if (provider) {
       requestDelete(provider);
@@ -192,7 +192,6 @@ export default function ProviderEditScreen() {
           isSaving={isSaving}
           onDelete={handleDelete}
           onSave={handleSave}
-          showDelete={canDelete(provider)}
         />
       ) : null}
     </>

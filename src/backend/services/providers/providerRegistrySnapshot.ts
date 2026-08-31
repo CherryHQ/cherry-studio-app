@@ -16,7 +16,9 @@ type ProviderRegistrySnapshot = {
   manifest: CatalogManifest;
 };
 
-const SNAPSHOT_DIRECTORY_NAME = 'provider-registry-v1';
+// v2 is populated only by an explicit user-approved update. The directory
+// boundary prevents older automatically downloaded snapshots from activating.
+const SNAPSHOT_DIRECTORY_NAME = 'provider-registry-v2';
 const SNAPSHOT_MARKER_NAME = 'snapshot.json';
 
 const SnapshotMarkerSchema = z.object({
