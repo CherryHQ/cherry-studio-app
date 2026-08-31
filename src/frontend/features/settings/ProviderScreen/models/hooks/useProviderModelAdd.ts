@@ -51,6 +51,15 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const [endpointTypeTouched, setEndpointTypeTouched] = useState(false);
 
   const modelPurpose = inferProviderModelPurpose(formState.endpointTypes);
+  const isDirty =
+    formState.contextWindow !== '' ||
+    formState.group !== '' ||
+    formState.maxInputTokens !== '' ||
+    formState.maxOutputTokens !== '' ||
+    formState.modelId !== '' ||
+    formState.name !== '' ||
+    formState.endpointTypes.length !== 1 ||
+    formState.endpointTypes[0] !== defaultChatEndpoint;
   const isModelIdValid = splitProviderModelIds(formState.modelId).length > 0;
   const isEndpointTypesValid =
     modelAddMode !== 'endpoint-types' || formState.endpointTypes.length > 0;
@@ -225,10 +234,12 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     chatEndpointTypes,
     endpointTypeError,
     formState,
+    isDirty,
     isSubmitting,
     modelAddMode,
     modelIdError,
     modelPurpose,
+    resetForm,
     submitAddModel,
     updateChatEndpointType,
     updateContextWindow,

@@ -1,9 +1,9 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { memo, type ReactElement, useCallback, useMemo } from 'react';
+import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import {
@@ -12,55 +12,29 @@ import {
 } from '../utils/providerModelListItems';
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
 
-/**
- * Given while the list is selecting. `selectedIds` changing is what re-renders
- * the rows, which is why it travels through `extraData` rather than a closure.
- */
-export type ProviderModelListSelection = {
-  onToggleModel: (id: UniqueModelId) => void;
-  selectedIds: ReadonlySet<UniqueModelId>;
-};
-
 export type ProviderModelListContentProps = {
   groupByPurpose: boolean;
-  isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
   models: Model[];
   provider: Provider | undefined;
-  selection?: ProviderModelListSelection;
 };
 
 type ProviderModelListExtraData = {
-  isDefaultModel: (model: Model) => boolean;
   provider: Provider | undefined;
-  selection: ProviderModelListSelection | undefined;
 };
 
-/**
- * Removing is the selection's job, so a row carries no control of its own — it
- * is a label until the screen starts selecting, and a checkbox after.
- */
 export function ProviderModelListContent({
   groupByPurpose,
-  isDefaultModel,
   ListEmptyComponent,
   models,
   provider,
-  selection,
 }: ProviderModelListContentProps) {
   const { t } = useTranslation();
   const listItems = useMemo(
     () => buildProviderModelListItems(models, groupByPurpose),
     [groupByPurpose, models],
   );
-  const extraData = useMemo<ProviderModelListExtraData>(
-    () => ({
-      isDefaultModel,
-      provider,
-      selection,
-    }),
-    [isDefaultModel, provider, selection],
-  );
+  const extraData = useMemo<ProviderModelListExtraData>(() => ({ provider }), [provider]);
   const renderItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
       if (item.type === 'section') {
@@ -86,15 +60,7 @@ export function ProviderModelListContent({
         );
       }
 
-      return (
-        <ModelRow
-          canRemove={!itemExtraData.isDefaultModel(item.model)}
-          isSelected={itemExtraData.selection?.selectedIds.has(item.model.id) ?? false}
-          model={item.model}
-          provider={itemExtraData.provider}
-          onToggleSelected={itemExtraData.selection?.onToggleModel}
-        />
-      );
+      return <ProviderModelRow model={item.model} provider={itemExtraData.provider} />;
     },
     [t],
   );
@@ -120,37 +86,6 @@ export function ProviderModelListContent({
     />
   );
 }
-
-const ModelRow = memo(function ModelRow({
-  canRemove,
-  isSelected,
-  model,
-  onToggleSelected,
-  provider,
-}: {
-  canRemove: boolean;
-  isSelected: boolean;
-  model: Model;
-  /** Given only while selecting; its absence is what leaves the row a plain label. */
-  onToggleSelected?: (id: UniqueModelId) => void;
-  provider: Provider | undefined;
-}) {
-  const handleToggleSelected = useCallback(() => {
-    onToggleSelected?.(model.id);
-  }, [model.id, onToggleSelected]);
-
-  return (
-    <ProviderModelRow
-      model={model}
-      provider={provider}
-      selection={
-        onToggleSelected
-          ? { isDisabled: !canRemove, isSelected, onToggle: handleToggleSelected }
-          : undefined
-      }
-    />
-  );
-});
 
 function providerModelListKeyExtractor(item: ProviderModelListItem) {
   return item.key;

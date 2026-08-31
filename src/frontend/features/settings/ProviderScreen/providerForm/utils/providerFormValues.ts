@@ -12,8 +12,7 @@ import {
 /**
  * Everything the provider form edits. Creating and editing a provider fill the
  * same shape; what differs is where the starting values come from and which
- * slots a screen composes — an edit screen simply never renders the API key
- * field, so `apiKey` stays empty and is ignored on save.
+ * slots a screen composes.
  */
 export type ProviderFormValues = {
   apiKey: string;
@@ -50,16 +49,18 @@ export function resolveProviderFormEndpointTypes(provider: Provider): readonly E
 }
 
 export function createProviderFormValues({
+  apiKey = '',
   avatarUri,
   provider,
 }: {
+  apiKey?: string;
   avatarUri: string | null;
   provider: Provider;
 }): ProviderFormValues {
   const primaryEndpoint = getPrimaryEndpoint(provider);
 
   return {
-    apiKey: '',
+    apiKey,
     avatarUri,
     defaultChatEndpoint: primaryEndpoint,
     endpointUrls: { [primaryEndpoint]: getProviderPrimaryBaseUrl(provider) },

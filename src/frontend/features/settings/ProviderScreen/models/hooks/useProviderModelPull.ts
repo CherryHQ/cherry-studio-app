@@ -1,4 +1,4 @@
-import { useAlert, useToast } from '@cherrystudio/ui/components';
+import { useAlert } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,29 +11,28 @@ import type { ProviderModelPullPreview } from '../utils/providerModelPullPreview
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
 
 type UseProviderModelPullOptions = {
-  initialPreview?: ProviderModelPullPreview | null;
-  onPreviewReady?: (preview: ProviderModelPullPreview) => void;
   providerId: string;
 };
 
-export type ProviderModelPullLoadResult = 'empty' | 'error' | 'ready';
+/**
+ * How a pull ended. The caller renders it — the screen a pull runs on has room
+ * for a full state, and an alert or a toast on top of that would say the same
+ * thing twice. `timedOut` is split from `failed` because it is the one failure
+ * worth telling apart: the endpoint answered, just not in time.
+ */
+export type ProviderModelPullLoadResult = 'empty' | 'failed' | 'ready' | 'timedOut';
 
-export function useProviderModelPull({
-  initialPreview = null,
-  onPreviewReady,
-  providerId,
-}: UseProviderModelPullOptions) {
+export function useProviderModelPull({ providerId }: UseProviderModelPullOptions) {
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const { toast } = useToast();
   const models = useBackendModule('models');
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(initialPreview);
+  const [preview, setPreview] = useState<ProviderModelPullPreview | null>(null);
 
   const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
     if (!providerId) {
-      return 'error';
+      return 'failed';
     }
 
     setIsPreviewLoading(true);
@@ -45,37 +44,21 @@ export function useProviderModelPull({
         if (result.providerEnabled) {
           await refreshProviderQueries(queryClient, providerId);
         }
-        toast.show({
-          label: t('settings.provider.models.pullUpToDate'),
-          variant: 'success',
-        });
         return 'empty';
       }
 
       setPreview(result.preview);
-      onPreviewReady?.(result.preview);
       return 'ready';
     };
     return await load()
-      .catch((error): ProviderModelPullLoadResult => {
-        alert.show({
-          title: t(
-            isModelPullTimeoutError(error)
-              ? 'settings.provider.models.pullTimedOut'
-              : 'settings.provider.models.pullFailed',
-          ),
-        });
-        return 'error';
-      })
+      .catch(
+        (error): ProviderModelPullLoadResult =>
+          isModelPullTimeoutError(error) ? 'timedOut' : 'failed',
+      )
       .finally(() => setIsPreviewLoading(false));
-  }, [alert, onPreviewReady, models, providerId, queryClient, t, toast]);
+  }, [models, providerId, queryClient]);
 
-  /**
-   * Commits one row's worth of change immediately, the way desktop's pull dialog
-   * does. There is no submit step: the preview stays on screen and the row just
-   * flips its glyph. Success is silent, since a toast per tap would be unusable
-   * when adding models one after another.
-   */
+  /** Commits the selected additions and removals after the explicit Save action. */
   const applyModelChange = useCallback(
     async ({ toAdd = [], toRemove = [] }: { toAdd?: Model[]; toRemove?: UniqueModelId[] }) => {
       if (toAdd.length === 0 && toRemove.length === 0) {

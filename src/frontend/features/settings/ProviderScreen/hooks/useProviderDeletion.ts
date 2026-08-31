@@ -20,6 +20,7 @@ type ProviderListData = InfiniteData<CursorPaginationResponse<Provider>, string 
 
 type UseProviderDeletionOptions = {
   dismissOnDeleteRequest?: boolean;
+  onBeforeDismiss?: () => void;
 };
 
 /**
@@ -29,6 +30,7 @@ type UseProviderDeletionOptions = {
  */
 export function useProviderDeletion({
   dismissOnDeleteRequest = true,
+  onBeforeDismiss,
 }: UseProviderDeletionOptions = {}) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -81,6 +83,7 @@ export function useProviderDeletion({
           // row optimistically, so staying would be sitting on a dead record.
           const deletion = deleteProvider({ params: { id: provider.id } });
           if (dismissOnDeleteRequest) {
+            onBeforeDismiss?.();
             router.dismissTo('/settings/provider');
           }
           void deletion
@@ -95,7 +98,7 @@ export function useProviderDeletion({
         title: t('settings.provider.delete.title'),
       });
     },
-    [alert, deleteProvider, dismissOnDeleteRequest, router, t, toast],
+    [alert, deleteProvider, dismissOnDeleteRequest, onBeforeDismiss, router, t, toast],
   );
 
   return {

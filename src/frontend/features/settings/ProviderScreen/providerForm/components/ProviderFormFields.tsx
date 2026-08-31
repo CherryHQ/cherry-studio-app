@@ -11,13 +11,14 @@ import { useProviderForm } from '../context';
  */
 export function ProviderFormName() {
   const { t } = useTranslation();
-  const { actions, state } = useProviderForm('ProviderForm.Name');
+  const { actions, meta, state } = useProviderForm('ProviderForm.Name');
 
   return (
     <Input
       accessibilityLabel={t('settings.provider.add.name')}
       autoCapitalize="none"
       autoCorrect={false}
+      disabled={meta.isSubmitting}
       onChangeText={actions.setName}
       placeholder={t('settings.provider.add.name')}
       value={state.name}
@@ -27,18 +28,15 @@ export function ProviderFormName() {
 
 ProviderFormName.displayName = 'ProviderForm.Name';
 
-/**
- * A first API key, offered while creating a provider. Editing an existing one
- * never composes this slot: keys are managed on the detail page, where they are
- * a list with per-key state rather than a single string.
- */
+/** One or more comma-separated API keys edited as part of the provider draft. */
 export function ProviderFormApiKey() {
   const { t } = useTranslation();
-  const { actions, state } = useProviderForm('ProviderForm.ApiKey');
+  const { actions, meta, state } = useProviderForm('ProviderForm.ApiKey');
 
   return (
     <Input
       accessibilityLabel={t('settings.provider.apiService.apiKey')}
+      disabled={meta.isSubmitting}
       lineBreakModeIOS="clip"
       numberOfLines={1}
       onChangeText={(value) => actions.setApiKey(normalizeApiKeySingleLine(value))}

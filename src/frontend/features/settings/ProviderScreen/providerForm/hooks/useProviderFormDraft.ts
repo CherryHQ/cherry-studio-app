@@ -37,6 +37,14 @@ export function useProviderFormDraft({
   }
 
   const setName = useCallback((name: string) => setValues((current) => ({ ...current, name })), []);
+  const reset = useCallback(
+    (nextValues?: ProviderFormValues) => {
+      const nextSeed = nextValues ?? createInitialValues();
+      setSeed({ key: sourceKey, values: nextSeed });
+      setValues(nextSeed);
+    },
+    [createInitialValues, sourceKey],
+  );
   const setApiKey = useCallback(
     (apiKey: string) => setValues((current) => ({ ...current, apiKey })),
     [],
@@ -52,10 +60,9 @@ export function useProviderFormDraft({
         : { ...current, endpointUrls: { ...current.endpointUrls, [endpoint]: value } },
     );
   }, []);
-
   const actions = useMemo<ProviderFormActions>(
-    () => ({ setApiKey, setAvatarUri, setEndpointUrl, setName }),
-    [setApiKey, setAvatarUri, setEndpointUrl, setName],
+    () => ({ reset, setApiKey, setAvatarUri, setEndpointUrl, setName }),
+    [reset, setApiKey, setAvatarUri, setEndpointUrl, setName],
   );
 
   return useMemo(
