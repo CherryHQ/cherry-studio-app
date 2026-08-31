@@ -1,5 +1,4 @@
 export { default as AppSearchScreen } from './AppSearchScreen';
-export { AppSearchButton } from './AppSearchButton';
 export { APP_SEARCH_TRANSITION_DURATION_MS } from './appSearchSession';
 export type {
   AppSearchFilter,

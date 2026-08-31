@@ -51,7 +51,6 @@
     },
     "plugins": [
       "expo-router",
-      "react-native-bottom-tabs",
       "expo-dev-client",
       [
         "expo-widgets",

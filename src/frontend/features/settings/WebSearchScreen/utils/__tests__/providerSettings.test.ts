@@ -1,5 +1,4 @@
 import {
-  getWebSearchFeatureSections,
   getWebSearchProviderDetailSections,
   mergeWebSearchProviderOverride,
 } from '../providerSettings';
@@ -12,28 +11,6 @@ describe('web search provider settings', () => {
     expect(getWebSearchProviderDetailSections('searxng')).toEqual([]);
     expect(getWebSearchProviderDetailSections('exa-mcp')).toEqual([]);
     expect(getWebSearchProviderDetailSections('firecrawl')).toEqual([{ type: 'apiKeys' }]);
-  });
-
-  test('groups providers by capability', () => {
-    const sections = getWebSearchFeatureSections();
-
-    expect(sections).toHaveLength(2);
-    expect(sections[0].capability).toBe('searchKeywords');
-    expect(sections[0].entries.map((entry) => entry.key)).toEqual([
-      'searchKeywords:zhipu',
-      'searchKeywords:tavily',
-      'searchKeywords:exa',
-      'searchKeywords:exa-mcp',
-      'searchKeywords:bocha',
-      'searchKeywords:querit',
-      'searchKeywords:jina',
-      'searchKeywords:firecrawl',
-    ]);
-    expect(sections[1].capability).toBe('fetchUrls');
-    expect(sections[1].entries.map((entry) => entry.key)).toEqual([
-      'fetchUrls:jina',
-      'fetchUrls:firecrawl',
-    ]);
   });
 
   test('merges provider overrides without dropping sibling fields', () => {

@@ -8,14 +8,11 @@ export {
   normalizeApiKeyEntries,
 } from './utils/providerApiServiceApiKeys';
 export { getEffectiveAuthConfig, shouldShowApiKeys } from './utils/providerApiServiceAuth';
-export type { EndpointDraft } from './utils/providerApiServiceEndpointDraft';
 export {
   canEditProviderEndpoint,
-  getConfigurableEndpointTypesForProvider,
   getProviderPrimaryBaseUrl,
 } from './utils/providerApiServiceEndpointRules';
 export {
-  buildProviderApiServiceEndpointUpdates,
   buildProviderPrimaryBaseUrlUpdates,
   ProviderApiServiceSaveError,
 } from './utils/providerApiServiceSave';
