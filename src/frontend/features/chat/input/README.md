@@ -29,7 +29,7 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
   the selected model's default.
 - The composer menu stores web-search selection in the frontend persist cache, keyed by Session id.
-  New Sessions default to disabled, and an admitted first send transfers the Draft selection to the
+  New Sessions default to enabled, and an admitted first send transfers the Draft selection to the
   returned Session. While enabled, every submission includes the turn-local `web-search`
   capability. The create-image mention remains turn-local and adds `image-generation` only to the
   draft that contains it. Neither choice mutates Agent or Agent Session persistence.
