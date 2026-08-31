@@ -120,6 +120,56 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     expect(invokeTarget).toHaveBeenCalledWith(target, { query: 'bug' }, 'catalog-call-1', SIGNAL);
   });
 
+  test('returns an unseen tool signature before dispatch and accepts the corrected retry', async () => {
+    const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
+    const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
+    const invokeTarget = jest.fn(async () => targetResult);
+    const callTool = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool).find(
+      (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+    );
+    if (!callTool) throw new Error('Missing tool_call.');
+
+    const catalogCallInput: RuntimeJsonValue = {
+      name: target.providerName,
+      params: { query: 'bug' },
+    };
+    await expect(execute(callTool, catalogCallInput, 'uninspected-call')).rejects.toMatchObject({
+      code: 'tool_schema_not_inspected',
+      message: expect.stringContaining(`name: "${target.providerName}"`),
+      retryable: false,
+    });
+    expect(invokeTarget).not.toHaveBeenCalled();
+
+    const result = (await execute(callTool, catalogCallInput, 'corrected-call'))
+      .details as RuntimeToolResult;
+
+    expect(result).toEqual(targetResult);
+    expect(invokeTarget).toHaveBeenCalledWith(target, { query: 'bug' }, 'corrected-call', SIGNAL);
+  });
+
+  test('returns the inspected signature when params do not match the tool schema', async () => {
+    const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
+    const invokeTarget = jest.fn(async () => ({ value: { total: 1 }, artifacts: [] }));
+    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool);
+    const searchTool = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+    const callTool = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
+    if (!searchTool || !callTool) throw new Error('Missing deferred-discovery tools.');
+
+    await execute(searchTool, { query: 'repository' }, 'search-1');
+    await expect(
+      execute(
+        callTool,
+        { name: target.providerName, params: { wrongParameter: true } },
+        'invalid-call',
+      ),
+    ).rejects.toMatchObject({
+      code: 'tool_input_invalid',
+      message: expect.stringContaining('params: { query: string }'),
+      retryable: false,
+    });
+    expect(invokeTarget).not.toHaveBeenCalled();
+  });
+
   test('limits an unfiltered catalog browse to twenty tools', async () => {
     const catalog = Array.from({ length: 25 }, (_, index) =>
       mcpTool(`mcp_server_1_tool_${String(index).padStart(2, '0')}`, `Tool ${index}`),
