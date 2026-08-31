@@ -32,7 +32,6 @@ boundaries around it.
   lives in `generation/`, and the Pi language compatibility decision lives in `agent/runtime/pi/`.
 - `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
   discovery used by MCP settings.
-- `devBench/` owns development-only provider fixtures and benchmark request helpers.
 
 Pure provider implementations, request types, and parameter policies must not be duplicated here.
 

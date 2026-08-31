@@ -15,7 +15,13 @@ type SessionListData = InfiniteData<
   string | undefined
 >;
 
+type SessionListProviderProps = PropsWithChildren<{
+  agentId?: string;
+}>;
+
 type SessionListSessionsContextValue = {
+  hasMoreSessions: boolean;
+  isLoadingMoreSessions: boolean;
   isSessionListLoading: boolean;
   sessionQueryError?: Error;
   sessions: readonly AgentSessionEntity[];
@@ -31,9 +37,9 @@ type SessionListActionsContextValue = {
 const SessionListSessionsContext = createContext<SessionListSessionsContextValue | null>(null);
 const SessionListActionsContext = createContext<SessionListActionsContextValue | null>(null);
 
-export function SessionListProvider({ children }: PropsWithChildren) {
+export function SessionListProvider({ agentId, children }: SessionListProviderProps) {
   const queryClient = useQueryClient();
-  const sessionList = useAgentSessions();
+  const sessionList = useAgentSessions({ agentId });
   const { deleteAgentSession, deleteAgentSessions } = useAgentSessionMutations();
 
   const renameSessionMutation = useMutation('PATCH', '/agent-sessions/:id', {
@@ -94,11 +100,19 @@ export function SessionListProvider({ children }: PropsWithChildren) {
 
   const sessionsValue = useMemo(
     () => ({
+      hasMoreSessions: sessionList.hasMore,
+      isLoadingMoreSessions: sessionList.isLoadingMore,
       isSessionListLoading: sessionList.isLoadingInitial,
       sessionQueryError: sessionList.error,
       sessions: sessionList.sessions,
     }),
-    [sessionList.error, sessionList.isLoadingInitial, sessionList.sessions],
+    [
+      sessionList.error,
+      sessionList.hasMore,
+      sessionList.isLoadingInitial,
+      sessionList.isLoadingMore,
+      sessionList.sessions,
+    ],
   );
   const actionsValue = useMemo(
     () => ({

@@ -42,9 +42,9 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/settings');
       },
-      openSessionList: () => {
+      openSessionList: (view = 'sessions') => {
         navigation.closeDrawer();
-        router.push('/sessions');
+        router.push({ pathname: '/sessions', params: { view } });
       },
       startNewChat: () => {
         navigation.closeDrawer();

@@ -5,4 +5,6 @@ export {
   useSessionListSessions,
 } from './context/SessionListProvider';
 export { SessionList } from './SessionList';
+export { AgentSessionList } from './AgentSessionList';
 export { SessionListScreen } from './SessionListScreen';
+export { parseSessionViewMode, type SessionViewMode } from './sessionViewMode';
