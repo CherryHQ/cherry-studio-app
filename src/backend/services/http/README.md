@@ -13,7 +13,10 @@ pairing and configuration import.
   route owns its base URL, default headers, timeout, error decoder, and interceptor chain.
 - All clients use one module-private Axios transport configured with the fetch adapter and
   `expo/fetch`. Every request carries its client route internally, so the global dispatcher runs
-  only that route's interceptors.
+  only that route's interceptors. The single global transport is deliberate: the engine (adapter,
+  `expo/fetch`, and future transport-wide policy such as telemetry or network gating) is configured
+  in exactly one place. Do not split it into per-client Axios instances; add clients by adding
+  routes.
 - A request cannot supply or replace its base URL. Paths must begin with one `/`, which prevents an
   absolute URL from redirecting credentials to another authority.
 - The wire format for queries is owned here, not by the Axios version: values serialize as repeated
