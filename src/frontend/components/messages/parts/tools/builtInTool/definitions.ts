@@ -65,6 +65,10 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     iconName: 'reminders',
     titleKey: 'chat.builtinTool.reminders.update',
   },
+  edit_file: {
+    iconName: 'file',
+    titleKey: 'chat.builtinTool.file.edit',
+  },
   write_file: {
     iconName: 'file',
     titleKey: 'chat.builtinTool.file.write',

@@ -70,11 +70,11 @@ An owner stores the entry ids it points at, inside its own row:
 | Painting | `painting.files` — `{ input: string[], output: string[] }` |
 | Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
-A `write_file` tool result also carries the `fileEntryId` it created in its result JSON. The Runtime
-projects the same id as a `purpose: 'artifact'` file part directly after that tool part; chat lifts
-it out of the ordered stream and shows it after the answer, where a deliverable is easier to find
-than at the step that wrote it. As with every owner here, the reference outlives the bytes and
-degrades to the unavailable placeholder.
+`write_file` and `edit_file` tool results each carry the `fileEntryId` they created in result JSON.
+The Runtime projects the same id as a `purpose: 'artifact'` file part directly after its tool part;
+chat lifts file parts out of the ordered stream and shows them after the answer, where deliverables
+are easier to find than at the step that produced them. As with every owner here, the reference
+outlives the bytes and degrades to the unavailable placeholder.
 
 `purpose` and `provenance` answer different questions and neither substitutes for the other.
 `purpose` is a fact about a file's role *in one message*, travels in the transcript, and is read by
@@ -144,13 +144,15 @@ the user owns the consequences of their own deletion. The same iteration owns a 
 action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
 row).
 
-**Agent file writes and generated artifacts.** A write tool reads an entry in the turn's controlled
-resource ledger, creates a new one, and returns the new id; it must not rewrite a managed blob.
+**Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text through the
+`'text'` source of `createInternalEntry`. `edit_file` strictly decodes a bounded UTF-8 source
+selected by active `fileEntryId`, applies exact replacement, and creates a same-name,
+same-media-type copy through the same text boundary. Both persist the new entry with
+`provenance: 'generated'` and return it in the Runtime artifact envelope; `generate_image` likewise
+imports generated image bytes with generated provenance. `write_file` reads no entry and does not
+consult the turn resource ledger. Knowledge of a valid id is sufficient for `edit_file` even outside
+that ledger, but it exposes no file listing or search. Neither tool rewrites a managed blob.
 
-As-built, `write_file` stores UTF-8 text through the `'text'` source of `createInternalEntry`, while
-`generate_image` imports generated image bytes. Both persist the new entry with
-`provenance: 'generated'` and return it in the Runtime artifact envelope. As-built, `write_file`
-still reads no entry and does not consult the turn's resource ledger.
 Office inputs are imported before inspection or editing, and every edit patches a copy into a new
 entry while preserving the source. Office and image tools follow the same rule for newly generated
 output. The file library is also the Version 1 artifact library; no parallel artifact blob store or

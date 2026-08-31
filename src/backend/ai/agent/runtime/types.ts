@@ -107,6 +107,7 @@ export type RuntimeToolResult = {
 };
 
 export type RuntimeTextAttachmentPart = {
+  fileEntryId: string;
   type: 'text-attachment';
   mediaType: string;
   name: string;

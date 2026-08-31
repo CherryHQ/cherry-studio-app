@@ -33,6 +33,7 @@ describe('Turn Runtime input assembly', () => {
   test('projects resolved managed text as user content without persisting its body', () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const attachment = {
+      fileEntryId,
       type: 'text-attachment' as const,
       mediaType: 'text/plain',
       name: 'notes.txt',

@@ -8,6 +8,7 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { TurnToolResources } from '../../resources/managedFileResolver';
+import { managedFileResolver } from '../../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../../runtime';
 import {
   createSystemCapabilitySource,
@@ -31,8 +32,8 @@ describe('createSystemCapabilitySource', () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
     // Every device tool needs a permission and generate_image needs a drawing
-    // model, so only the unconditional writer survives.
-    expect(capabilityIds(tools)).toEqual(['write_file']);
+    // model, so only the unconditional file tools survive.
+    expect(capabilityIds(tools)).toEqual(['edit_file', 'write_file']);
   });
 
   test('adds a device tool once every scope it needs is granted', async () => {
@@ -40,6 +41,7 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(readOnly)).toEqual([
       'calendar_list_collections',
       'calendar_list_events',
+      'edit_file',
       'write_file',
     ]);
 
@@ -159,6 +161,57 @@ describe('createSystemCapabilitySource', () => {
     expect(result.artifacts[0]?.ref).toEqual({
       kind: 'managed-file',
       fileEntryId: entry.id,
+    });
+  });
+
+  test('grants an edited derivative before returning the built-in tool result', async () => {
+    const sourceId = '00000000-0000-7000-8000-000000000001';
+    const entry = FileEntrySchema.parse({
+      createdAt: 2,
+      filename: 'notes.txt',
+      id: '00000000-0000-7000-8000-000000000002',
+      mediaType: 'text/plain',
+      provenance: 'generated',
+      size: 3,
+      updatedAt: 2,
+    });
+    jest.spyOn(managedFileResolver, 'resolveAvailable').mockResolvedValueOnce(
+      new Map([
+        [
+          sourceId,
+          {
+            fileEntryId: sourceId,
+            mediaType: 'text/plain',
+            name: 'notes.txt',
+            size: 3,
+          },
+        ],
+      ]) as Awaited<ReturnType<typeof managedFileResolver.resolveAvailable>>,
+    );
+    jest
+      .spyOn(managedFileResolver, 'readAsBytes')
+      .mockResolvedValueOnce(new TextEncoder().encode('old'));
+    jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
+    const grantFile = jest.fn();
+    const source = createSystemCapabilitySource(SERVICES, dependencies({}));
+    const tools = await source.getTools({
+      model: MODEL,
+      resources: { fileEntryIds: new Set(), grantFile },
+      temporaryCapabilities: new Set(),
+    });
+    const editFile = tools.find((tool) => tool.providerName === 'edit_file');
+    if (!editFile) throw new Error('edit_file was not available.');
+
+    const result = await editFile.execute({
+      input: { file_entry_id: sourceId, old_string: 'old', new_string: 'new' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-2',
+    });
+
+    expect(grantFile).toHaveBeenCalledWith(entry.id);
+    expect(result.artifacts[0]).toMatchObject({
+      ref: { kind: 'managed-file', fileEntryId: entry.id },
+      kind: 'derived',
     });
   });
 });

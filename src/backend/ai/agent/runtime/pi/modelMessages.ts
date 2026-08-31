@@ -125,6 +125,7 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
     version: 1,
     kind: 'managed-text-attachment',
     trust: part.trust,
+    fileEntryId: part.fileEntryId,
     name: part.name,
     mediaType: part.mediaType,
     truncation: part.truncated ? '[truncated]' : '[complete]',

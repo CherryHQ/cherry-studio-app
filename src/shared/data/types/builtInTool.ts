@@ -20,6 +20,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'calendar_list_collections',
   'calendar_list_events',
   'calendar_update_event',
+  'edit_file',
   'generate_image',
   'health_get_summary',
   'health_list_workouts',
@@ -110,6 +111,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresPaintingModel: true,
     temporaryCapability: 'image-generation',
   }),
+  describe('edit_file', 'auto'),
   describe('write_file', 'auto'),
 ];
 

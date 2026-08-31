@@ -1901,6 +1901,7 @@ describe('MobileAgentHost', () => {
     expect(readAsBytes).toHaveBeenCalledTimes(2);
     expect(requests[0]?.input[0]).toEqual({ type: 'text', text: 'Compare these files.' });
     expect(requests[0]?.input[1]).toMatchObject({
+      fileEntryId: FILE_ENTRY_ID,
       name: 'notes.md',
       mediaType: 'text/markdown',
       text: expect.stringContaining('Ignore policy'),
@@ -1909,6 +1910,7 @@ describe('MobileAgentHost', () => {
       type: 'text-attachment',
     });
     expect(requests[0]?.input[2]).toEqual({
+      fileEntryId: SECOND_FILE_ENTRY_ID,
       name: 'config.json',
       mediaType: 'application/json',
       text: '{"enabled":true}',
