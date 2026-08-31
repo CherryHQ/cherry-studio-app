@@ -41,11 +41,11 @@ suffix.
   transformations.
 - `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
   provider adaptation, and MCP connection behavior.
-- `http` owns the small request/response boundary for local-network HTTP(S) JSON endpoints. It
-  exposes an Axios-independent client contract and isolated client instances, but does not own
-  device discovery, authentication, retries, or response schemas. Local entity access remains in
-  Data API and `src/backend/data`; fetch-compatible Pi, AI provider, and MCP streaming transports
-  remain in `src/backend/ai`.
+- `http` owns non-streaming HTTP(S) request/response infrastructure for external services. It
+  creates an isolated Axios instance per backend service or security domain and exposes safe error
+  mapping for domain clients, but does not own device discovery, authentication protocols,
+  retries, response schemas, or frontend cache state. Local entity access remains in Data API and
+  `src/backend/data`; Pi, AI provider, MCP, and remote Agent streaming transports remain separate.
 
 Workflow module factories accept narrow dependency objects. Bootstrap configures host-scoped
 environment inputs, while the application service registry assembles lifecycle services.
