@@ -65,12 +65,14 @@ describe('McpServerService', () => {
   it('creates a disabled server with a trimmed name', async () => {
     const server = await service.create({
       endpointUrl: 'https://example.com/mcp',
+      headers: { Authorization: 'Bearer token' },
       name: ' Example ',
     });
 
     expect(server).toMatchObject({
       disabledTools: [],
       endpointUrl: 'https://example.com/mcp',
+      headers: { Authorization: 'Bearer token' },
       isEnabled: false,
       name: 'Example',
     });
@@ -89,8 +91,19 @@ describe('McpServerService', () => {
 
     const server = await service.create({ endpointUrl: 'https://b.example/mcp', name: 'Valid' });
     await expect(
-      service.update(server.id, { headers: { Authorization: 'Bearer x' } } as never),
+      service.update(server.id, { command: 'unsupported' } as never),
     ).rejects.toBeDefined();
+  });
+
+  it('updates and clears custom HTTP headers', async () => {
+    const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Headers' });
+
+    await expect(
+      service.update(server.id, { headers: { 'X-API-Key': 'secret' } }),
+    ).resolves.toMatchObject({ headers: { 'X-API-Key': 'secret' } });
+    await expect(service.update(server.id, { headers: {} })).resolves.toMatchObject({
+      headers: {},
+    });
   });
 
   it('lists by id and enabled state, oldest first', async () => {

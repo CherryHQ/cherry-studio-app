@@ -2,6 +2,7 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   endpointUrl: string;
+  headers?: Record<string, string>;
 };
 
 export type McpToolSummary = {

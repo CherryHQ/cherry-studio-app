@@ -6,6 +6,7 @@ import { McpServerSchema } from '@/shared/data/types/mcpServer';
 const MCP_SERVER_MUTABLE_FIELDS = {
   disabledTools: true,
   endpointUrl: true,
+  headers: true,
   isEnabled: true,
   name: true,
 } as const;

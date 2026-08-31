@@ -85,6 +85,13 @@
       "when": 1788141788204,
       "tag": "0011_file-provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788156348036,
+      "tag": "0012_mcp-http-headers",
+      "breakpoints": true
     }
   ]
 }

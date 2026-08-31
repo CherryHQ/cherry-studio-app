@@ -150,6 +150,25 @@ describe('getServerInfo', () => {
     expect(client.listTools).not.toHaveBeenCalled();
   });
 
+  it('passes custom request headers to the HTTP transport', async () => {
+    const client = makeClient(makeRawTools(['a']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([]);
+
+    await service.getServerInfo({
+      endpointUrl: 'https://x.example/mcp',
+      headers: { Authorization: 'Bearer secret', 'X-API-Key': 'key' },
+    });
+
+    expect(mockCreateMCPClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transport: expect.objectContaining({
+          headers: { Authorization: 'Bearer secret', 'X-API-Key': 'key' },
+        }),
+      }),
+    );
+  });
+
   it('bounds initialization and closes a client that connects late', async () => {
     jest.useFakeTimers({ doNotFake: ['setImmediate'] });
     try {
@@ -246,6 +265,21 @@ describe('listTools', () => {
     await expect(first).resolves.toEqual([{ description: 'desc search', name: 'search' }]);
     await expect(second).resolves.toEqual([{ description: 'desc search', name: 'search' }]);
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces a pooled connection when request headers change', async () => {
+    const first = makeClient(makeRawTools(['search']));
+    const second = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValueOnce(first).mockResolvedValue(second);
+    const server = makeServer({ headers: { Authorization: 'Bearer first' } });
+    const { service } = makeService([server]);
+
+    await service.listTools(server.id);
+    server.headers = { Authorization: 'Bearer second' };
+    await service.listTools(server.id);
+
+    expect(first.close).toHaveBeenCalled();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 });
 

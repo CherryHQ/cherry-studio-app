@@ -6,17 +6,17 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
  * MCP Server table - remote Streamable HTTP endpoints this client connects to.
  *
  * Mobile is an MCP *client* only, and the only transport it accepts is
- * Streamable HTTP, so `endpointUrl` is the whole of the connection config —
- * everything else the protocol needs is negotiated per connection. There is
- * deliberately no `type` column: a single accepted transport is a constant, not
- * a stored value.
+ * Streamable HTTP, so `endpointUrl` plus optional request `headers` are the
+ * connection config. Everything else the protocol needs is negotiated per
+ * connection. There is deliberately no `type` column: a single accepted
+ * transport is a constant, not a stored value.
  *
  * Runtime facts (protocol version, server info, tool list, connection state)
  * are re-derived on every connection and belong to `McpRuntimeService`, not
  * here. Execution approval is fixed application policy — every MCP tool asks
- * before it runs — so there is no per-server approval column. Future OAuth
- * credentials get their own storage keyed by server id; they must never land
- * in this table.
+ * before it runs — so there is no per-server approval column. OAuth credentials
+ * with refresh semantics get their own storage keyed by server id; static HTTP
+ * credentials remain in `headers`, matching desktop's MCP server contract.
  */
 export const mcpServerTable = sqliteTable(
   'mcp_server',
@@ -24,6 +24,7 @@ export const mcpServerTable = sqliteTable(
     id: uuidPrimaryKey(),
     name: text().notNull(),
     endpointUrl: text().notNull(),
+    headers: text({ mode: 'json' }).$type<Record<string, string>>(),
     isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
     /**
      * Tool names this server may not offer, as the server reports them. The

@@ -24,6 +24,7 @@ import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
 import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';
 import type { McpServerTab } from './components/McpServerTabs/types';
 import { McpToolsSection } from './components/McpToolsSection';
+import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
 
 const logger = loggerService.withContext('McpServerScreen');
 
@@ -31,6 +32,7 @@ const NEW_SERVER_SENTINEL = 'new';
 
 type McpServerFormState = {
   endpointUrl: string;
+  headers: string;
   name: string;
 };
 
@@ -136,7 +138,10 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         await updateServer(serverId, dto.value);
         setIsEditing(false);
       } else {
-        const serverInfo = await mcp.getServerInfo({ endpointUrl: dto.value.endpointUrl });
+        const serverInfo = await mcp.getServerInfo({
+          endpointUrl: dto.value.endpointUrl,
+          headers: dto.value.headers,
+        });
         const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
         const createdServer = await createServer({ ...dto.value, isEnabled: true, name });
         setIsEditing(false);
@@ -321,6 +326,22 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
               <Text className="text-warning text-xs">{t('settings.mcp.fields.httpWarning')}</Text>
             ) : null}
           </FormField>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.headers')}>
+            <Input
+              accessibilityLabel={t('settings.mcp.fields.headers')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+              onChangeText={(value) => updateField('headers', value)}
+              placeholder={t('settings.mcp.fields.headersPlaceholder')}
+              spellCheck={false}
+              textAlignVertical="top"
+              value={displayedForm.headers}
+            />
+            <Text className="text-muted-foreground text-xs">
+              {t('settings.mcp.fields.headersHint')}
+            </Text>
+          </FormField>
         </KeyboardAwareScrollView>
       ) : server ? (
         <ScrollView
@@ -369,6 +390,7 @@ function FormField({
 function createFormState(server?: McpServer): McpServerFormState {
   return {
     endpointUrl: server?.endpointUrl ?? '',
+    headers: serializeMcpHeaders(server?.headers),
     name: server?.name ?? '',
   };
 }
@@ -387,10 +409,16 @@ function buildDto(
     return { errorKey: 'settings.mcp.fields.endpointUrlInvalid', ok: false };
   }
 
+  const headers = parseMcpHeaders(form.headers);
+  if (!headers.ok) {
+    return { errorKey: 'settings.mcp.fields.headersInvalid', ok: false };
+  }
+
   return {
     ok: true,
     value: {
       endpointUrl,
+      headers: headers.value,
       name: form.name.trim() || getFallbackServerName(endpointUrl, defaultName),
     },
   };
@@ -398,6 +426,7 @@ function buildDto(
 
 type McpServerConfigurationDto = {
   endpointUrl: string;
+  headers: Record<string, string>;
   name: string;
 };
 
