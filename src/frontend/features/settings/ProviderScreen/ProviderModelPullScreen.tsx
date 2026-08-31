@@ -28,16 +28,16 @@ import {
   type ProviderModelPurpose,
 } from './models/utils/providerModelPurpose';
 
-type PullTranslator = ReturnType<typeof useTranslation>['t'];
+type PullSectionMap<T> = Record<ProviderModelPullSectionKey, T>;
 
 type PullListExtraData = {
-  displayedPreview: ProviderModelPullPreview;
   isApplying: boolean;
   onToggleAll: (ids: readonly UniqueModelId[]) => void;
   onToggleModel: (id: UniqueModelId) => void;
   provider: Provider | undefined;
+  sectionIds: PullSectionMap<readonly UniqueModelId[]>;
+  sectionSelectedAll: PullSectionMap<boolean>;
   selectedIds: ReadonlySet<UniqueModelId>;
-  t: PullTranslator;
 };
 
 export default function ProviderModelPullScreen() {
@@ -109,17 +109,34 @@ export function ProviderModelPullPreviewContent({
     () => buildProviderModelPullListItems(displayedPreview, visibleSections),
     [displayedPreview, visibleSections],
   );
+  // Held here rather than rebuilt inside the section header: `extraData` turns
+  // over on every tick, so a header that mapped its whole section per render
+  // paid that walk once per tap, per section, for as long as the list was open.
+  const sectionIds = useMemo<PullSectionMap<readonly UniqueModelId[]>>(
+    () => ({
+      added: displayedPreview.added.map((model) => model.id),
+      missing: displayedPreview.missing.map((model) => model.id),
+    }),
+    [displayedPreview],
+  );
+  const sectionSelectedAll = useMemo<PullSectionMap<boolean>>(
+    () => ({
+      added: isEverySelected(sectionIds.added, selectedIds),
+      missing: isEverySelected(sectionIds.missing, selectedIds),
+    }),
+    [sectionIds, selectedIds],
+  );
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
-      displayedPreview,
       isApplying,
       onToggleAll: toggleAll,
       onToggleModel: toggleModel,
       provider,
+      sectionIds,
+      sectionSelectedAll,
       selectedIds,
-      t,
     }),
-    [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
+    [isApplying, provider, sectionIds, sectionSelectedAll, selectedIds, toggleAll, toggleModel],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
   return (
@@ -181,31 +198,13 @@ function renderPullListItem({
   const listData = extraData as PullListExtraData;
 
   if (item.type === 'section') {
-    const isAddedSection = item.section === 'added';
-    const sectionModels = isAddedSection
-      ? listData.displayedPreview.added
-      : listData.displayedPreview.missing;
-    const sectionIds = sectionModels.map((model) => model.id);
-    // The two sections pull in opposite directions — one adds models, the other
-    // drops them — so each keeps its own select-all beside the toolbar's.
-    const isSectionSelected =
-      sectionIds.length > 0 && sectionIds.every((id) => listData.selectedIds.has(id));
-
     return (
       <PullSectionHeader
-        actionLabel={listData.t(
-          isSectionSelected
-            ? 'settings.provider.models.selection.deselectAll'
-            : 'settings.provider.models.selection.selectAll',
-        )}
-        count={sectionModels.length}
+        ids={listData.sectionIds[item.section]}
         isFirstSection={item.isFirstSection}
-        title={listData.t(
-          isAddedSection
-            ? 'settings.provider.models.pullAddedSection'
-            : 'settings.provider.models.pullMissingSection',
-        )}
-        onActionPress={() => listData.onToggleAll(sectionIds)}
+        isSelected={listData.sectionSelectedAll[item.section]}
+        onToggleAll={listData.onToggleAll}
+        section={item.section}
       />
     );
   }
@@ -222,19 +221,41 @@ function renderPullListItem({
   );
 }
 
-function PullSectionHeader({
-  actionLabel,
-  count,
+function isEverySelected(
+  ids: readonly UniqueModelId[],
+  selectedIds: ReadonlySet<UniqueModelId>,
+): boolean {
+  return ids.length > 0 && ids.every((id) => selectedIds.has(id));
+}
+
+/**
+ * Memoized on the section's own state, so ticking one row leaves both headers
+ * alone unless that tick was the one that completed or broke a section.
+ *
+ * The two sections pull in opposite directions — one adds models, the other
+ * drops them — so each keeps its own select-all beside the toolbar's.
+ */
+const PullSectionHeader = memo(function PullSectionHeader({
+  ids,
   isFirstSection,
-  onActionPress,
-  title,
+  isSelected,
+  onToggleAll,
+  section,
 }: {
-  actionLabel: string;
-  count: number;
+  ids: readonly UniqueModelId[];
   isFirstSection: boolean;
-  onActionPress: () => void;
-  title: string;
+  isSelected: boolean;
+  onToggleAll: (ids: readonly UniqueModelId[]) => void;
+  section: ProviderModelPullSectionKey;
 }) {
+  const { t } = useTranslation();
+  const handleActionPress = useCallback(() => onToggleAll(ids), [ids, onToggleAll]);
+  const actionLabel = t(
+    isSelected
+      ? 'settings.provider.models.selection.deselectAll'
+      : 'settings.provider.models.selection.selectAll',
+  );
+
   return (
     <View
       className={
@@ -243,24 +264,30 @@ function PullSectionHeader({
           : 'mt-3 flex-row items-center gap-2 px-4 pb-2'
       }
     >
-      <Text className="font-medium text-foreground-tertiary text-sm">{title}</Text>
+      <Text className="font-medium text-foreground-tertiary text-sm">
+        {t(
+          section === 'added'
+            ? 'settings.provider.models.pullAddedSection'
+            : 'settings.provider.models.pullMissingSection',
+        )}
+      </Text>
       <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
-        {count}
+        {ids.length}
       </Text>
       <View className="flex-1" />
       <Pressable
         accessibilityLabel={actionLabel}
         accessibilityRole="button"
         className="shrink-0 justify-center px-1 active:opacity-60 disabled:opacity-40"
-        disabled={count === 0}
+        disabled={ids.length === 0}
         hitSlop={6}
-        onPress={onActionPress}
+        onPress={handleActionPress}
       >
         <Text className="font-medium text-foreground text-sm">{actionLabel}</Text>
       </Pressable>
     </View>
   );
-}
+});
 
 const PullModelRow = memo(function PullModelRow({
   isApplying,
