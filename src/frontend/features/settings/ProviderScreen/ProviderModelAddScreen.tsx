@@ -111,6 +111,10 @@ function ProviderModelAddForm({
   const { alert } = useAlert();
   const [activeMode, setActiveMode] = useState<ProviderModelAddMode>(initialMode);
   const [syncLoadResult, setSyncLoadResult] = useState<ProviderModelPullLoadResult>();
+  // Latched rather than derived from `syncLoadResult`, which a retry clears:
+  // once the setup flow has offered the way out it keeps offering it, instead
+  // of pulling the control back out from under the finger reaching for it.
+  const [hasSyncComeBackEmpty, setHasSyncComeBackEmpty] = useState(false);
   const syncLoadStartedRef = useRef(false);
   const {
     canSubmit,
@@ -225,7 +229,12 @@ function ProviderModelAddForm({
   const loadSyncPreview = useCallback(() => {
     syncLoadStartedRef.current = true;
     setSyncLoadResult(undefined);
-    void loadPullPreview().then(setSyncLoadResult);
+    void loadPullPreview().then((result) => {
+      setSyncLoadResult(result);
+      if (result !== 'ready') {
+        setHasSyncComeBackEmpty(true);
+      }
+    });
   }, [loadPullPreview]);
   const applySyncSelection = useCallback(() => {
     void applySelection().then((didApply) => {
@@ -274,6 +283,11 @@ function ProviderModelAddForm({
       ? isSubmitting || !canSubmit
       : !preview || isApplying || (isSetupFlow && selectedIds.size === 0);
   const isSyncDoneAction = activeMode === 'sync' && selectedIds.size === 0 && !isSetupFlow;
+  // Setup hides the switch to keep first-time configuration on a single track.
+  // A sync that came back with nothing to add leaves no track: a self-hosted
+  // endpoint that does not serve a model list still has to be given one model
+  // by hand, or the provider it just created is stranded without any.
+  const showsModeTabs = !isSetupFlow || hasSyncComeBackEmpty;
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () =>
       activeMode === 'sync' && !preview
@@ -353,7 +367,7 @@ function ProviderModelAddForm({
               : 'settings.provider.models.addTitle',
         )}
       />
-      {isSetupFlow ? null : (
+      {showsModeTabs ? (
         <View className="px-4 pb-3">
           <Tabs
             accessibilityLabel={t('settings.provider.models.addMode.label')}
@@ -362,7 +376,7 @@ function ProviderModelAddForm({
             value={activeMode}
           />
         </View>
-      )}
+      ) : null}
       <View className="flex-1">
         {activeMode === 'sync' ? (
           preview ? (
