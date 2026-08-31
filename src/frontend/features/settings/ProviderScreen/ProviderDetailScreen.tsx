@@ -49,7 +49,8 @@ import {
 } from './providerForm';
 
 export default function ProviderDetailSettingsScreen() {
-  const { providerId, providerName } = useLocalSearchParams<{
+  const { initialTab, providerId, providerName } = useLocalSearchParams<{
+    initialTab?: string;
     providerId?: string;
     providerName?: string;
   }>();
@@ -58,7 +59,9 @@ export default function ProviderDetailSettingsScreen() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const providerAvatars = useProviderAvatarActions();
-  const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
+  const [activeTab, setActiveTab] = useState<ProviderDetailTab>(
+    initialTab === 'models' ? 'models' : 'configuration',
+  );
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const [isSaving, setIsSaving] = useState(false);
   const { models, modelsQuery, provider, providerQuery } = useProviderDetailSettings(

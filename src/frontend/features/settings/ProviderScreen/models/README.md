@@ -14,6 +14,7 @@ This module owns provider model listing, connectivity checks, synchronization, a
   selection resolvers.
 
 `ProviderModelAddScreen` exposes synchronization and manual creation as modes of one page. The
-legacy pull route redirects into its synchronization mode. Provider creation marks the route to
-finish at the provider list; model management opened from provider detail returns to detail instead.
-The detail list itself is browse-only and opens model creation from the header.
+legacy pull route redirects into its synchronization mode. Provider setup hides the mode switch,
+requires an explicit model selection, and finishes on the provider detail model tab. Model management
+opened from provider detail returns to detail. The detail list itself is browse-only and opens model
+creation from the header.

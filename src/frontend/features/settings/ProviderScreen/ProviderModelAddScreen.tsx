@@ -45,11 +45,12 @@ const EMPTY_PULL_PREVIEW: ProviderModelPullPreview = { added: [], missing: [] };
 type ProviderModelAddMode = 'manual' | 'sync';
 
 export default function ProviderModelAddScreen() {
-  const { mode, providerId, returnToProviderList } = useLocalSearchParams<{
+  const { mode, providerId, returnToProviderList, setupFlow } = useLocalSearchParams<{
     mode?: string;
     providerId?: string;
     providerName?: string;
     returnToProviderList?: string;
+    setupFlow?: string;
   }>();
   const { t } = useTranslation();
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
@@ -65,9 +66,11 @@ export default function ProviderModelAddScreen() {
     return (
       <RouteHeader
         title={t(
-          mode === 'manual'
-            ? 'settings.provider.models.addTitle'
-            : 'settings.provider.models.pullPreviewTitle',
+          setupFlow === 'true'
+            ? 'settings.provider.models.setupTitle'
+            : mode === 'manual'
+              ? 'settings.provider.models.addTitle'
+              : 'settings.provider.models.pullPreviewTitle',
         )}
       />
     );
@@ -76,6 +79,7 @@ export default function ProviderModelAddScreen() {
   return (
     <ProviderModelAddForm
       initialMode={mode === 'manual' ? 'manual' : 'sync'}
+      isSetupFlow={setupFlow === 'true'}
       provider={provider}
       returnToProviderList={returnToProviderList === 'true'}
     />
@@ -84,10 +88,12 @@ export default function ProviderModelAddScreen() {
 
 function ProviderModelAddForm({
   initialMode,
+  isSetupFlow,
   provider,
   returnToProviderList,
 }: {
   initialMode: ProviderModelAddMode;
+  isSetupFlow: boolean;
   provider: Provider;
   returnToProviderList: boolean;
 }) {
@@ -137,6 +143,19 @@ function ProviderModelAddForm({
     isSaving: isSubmitting || isApplying,
   });
   const completeFlow = useCallback(() => {
+    if (isSetupFlow) {
+      allowNavigation();
+      router.replace({
+        pathname: '/settings/provider/[providerId]',
+        params: {
+          initialTab: 'models',
+          providerId: provider.id,
+          providerName: provider.name,
+        },
+      });
+      return;
+    }
+
     if (returnToProviderList) {
       allowNavigation();
       router.dismissTo('/settings/provider');
@@ -144,7 +163,7 @@ function ProviderModelAddForm({
     }
 
     closeWithoutPrompt();
-  }, [allowNavigation, closeWithoutPrompt, returnToProviderList, router]);
+  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, provider, returnToProviderList, router]);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -225,7 +244,9 @@ function ProviderModelAddForm({
   );
   const handleSyncSubmit = useCallback(() => {
     if (selectedIds.size === 0) {
-      completeFlow();
+      if (!isSetupFlow) {
+        completeFlow();
+      }
       return;
     }
 
@@ -242,26 +263,33 @@ function ProviderModelAddForm({
       onConfirm: applySyncSelection,
       title: t('settings.provider.models.syncRemoveTitle'),
     });
-  }, [alert, applySyncSelection, completeFlow, selectedIds.size, selectedMissingCount, t]);
+  }, [
+    alert,
+    applySyncSelection,
+    completeFlow,
+    isSetupFlow,
+    selectedIds.size,
+    selectedMissingCount,
+    t,
+  ]);
   const isSaving = isSubmitting || isApplying;
   const isSaveDisabled =
-    activeMode === 'manual' ? isSubmitting || !canSubmit : !preview || isApplying;
+    activeMode === 'manual'
+      ? isSubmitting || !canSubmit
+      : !preview || isApplying || (isSetupFlow && selectedIds.size === 0);
+  const isSyncDoneAction = activeMode === 'sync' && selectedIds.size === 0 && !isSetupFlow;
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () =>
       activeMode === 'sync' && !preview
         ? []
         : [
             {
-              accessibilityLabel: t(
-                activeMode === 'sync' && selectedIds.size === 0 ? 'common.done' : 'common.save',
-              ),
+              accessibilityLabel: t(isSyncDoneAction ? 'common.done' : 'common.save'),
               disabled: isSaveDisabled,
               key: 'save-model',
               label: isSaving
                 ? t('common.saving')
-                : t(
-                    activeMode === 'sync' && selectedIds.size === 0 ? 'common.done' : 'common.save',
-                  ),
+                : t(isSyncDoneAction ? 'common.done' : 'common.save'),
               onPress: activeMode === 'manual' ? () => void handleSubmit() : handleSyncSubmit,
               type: 'label',
             },
@@ -272,8 +300,8 @@ function ProviderModelAddForm({
       handleSyncSubmit,
       isSaveDisabled,
       isSaving,
+      isSyncDoneAction,
       preview,
-      selectedIds.size,
       t,
     ],
   );
@@ -322,19 +350,23 @@ function ProviderModelAddForm({
         onBack={requestClose}
         rightActions={rightActions}
         title={t(
-          activeMode === 'sync'
-            ? 'settings.provider.models.pullPreviewTitle'
-            : 'settings.provider.models.addTitle',
+          isSetupFlow
+            ? 'settings.provider.models.setupTitle'
+            : activeMode === 'sync'
+              ? 'settings.provider.models.pullPreviewTitle'
+              : 'settings.provider.models.addTitle',
         )}
       />
-      <View className="px-4 pb-3">
-        <Tabs
-          accessibilityLabel={t('settings.provider.models.addMode.label')}
-          items={modeItems}
-          onValueChange={handleModeChange}
-          value={activeMode}
-        />
-      </View>
+      {isSetupFlow ? null : (
+        <View className="px-4 pb-3">
+          <Tabs
+            accessibilityLabel={t('settings.provider.models.addMode.label')}
+            items={modeItems}
+            onValueChange={handleModeChange}
+            value={activeMode}
+          />
+        </View>
+      )}
       <View className="flex-1">
         {activeMode === 'sync' ? (
           preview ? (

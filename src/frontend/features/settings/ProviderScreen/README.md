@@ -21,14 +21,14 @@ detail, and model creation.
 
 ## Provider Catalog
 
-`ProviderCatalogScreen` owns the bundled provider catalog. Its right-header plus action opens the
-separate `ProviderCreationScreen` for custom providers; there is no in-page creation mode switch.
-Catalog rows use an explicit import action, while custom providers use the visible Save button below
-the form. After either path creates a provider, the route is replaced by the model synchronization
-page. Finishing synchronization returns directly to the provider list, without passing through
-provider detail. Opening the catalog checks the remote model-registry manifest and shows an inline
-update notice when a newer revision exists. Installed presets are marked in place instead of opening
-another action menu.
+`ProviderCatalogScreen` owns the bundled provider catalog. A fixed custom-provider row is the first
+item in the recommended section; preset rows keep their explicit Add action. Both paths continue to
+`ProviderCreationScreen`, which renders the shared provider form before model synchronization. A
+preset is imported in the disabled state so its registry defaults can seed the form, then its API key
+and editable endpoint are saved before model discovery starts. Finishing synchronization opens the
+provider detail model tab. Opening the catalog checks the remote model-registry manifest and shows an
+inline update notice when a newer revision exists. Installed presets are marked in place instead of
+opening another action menu.
 
 ## Provider Form
 
@@ -39,9 +39,10 @@ same state. Creation places that action below the form; detail keeps it in the p
 
 Screens differ by which slots they compose, not by flags:
 
-- The custom-provider creation page composes avatar, name, Base URL, and API keys, and adds its own "Base URL is
-  required" rule on top of `meta.canSubmit`. New custom providers use the product default enabled
-  state; enabled state is managed directly from the provider-list row after creation.
+- Provider creation composes avatar, name, Base URL, and API keys. Custom providers require all three
+  text fields. Presets seed their name, logo, and endpoint from the registry and require an API key
+  unless their registry metadata marks authentication optional. New providers remain disabled until
+  model synchronization writes at least one model.
 - The detail page composes the same draft for provider identity, endpoint, and API keys. It saves
   the whole draft explicitly and uses the provider's built-in logo as the avatar fallback.
 
