@@ -14,7 +14,8 @@ This module owns the model selection surface, model metadata UI, and model setti
 - `ModelSearchControls` keeps persistent workflow search native in the iOS header and inline on
   Android. Product workflows own their purpose controls rather than exposing provider capability
   taxonomies through the shared picker.
-- `useModelSettingSelections` reads and updates model selection preferences.
+- `useModelSettingSelections` reads model selection preferences and exposes an explicit batch-save
+  operation for the settings screen's draft.
 - Model setting and model type helpers are exported from `index.ts`.
 
 ## Organization

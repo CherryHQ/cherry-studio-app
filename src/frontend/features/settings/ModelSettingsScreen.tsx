@@ -1,10 +1,11 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { Section } from '@cherrystudio/ui/components';
+import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
@@ -18,7 +19,13 @@ import {
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
-  const { onSelectionChange, selections } = useModelSettingSelections();
+  const router = useRouter();
+  const { alert } = useAlert();
+  const { toast } = useToast();
+  const { saveSelections, selections: savedSelections } = useModelSettingSelections();
+  const [draft, setDraft] = useState(savedSelections);
+  const [baseline, setBaseline] = useState(savedSelections);
+  const [isSaving, setIsSaving] = useState(false);
   const imageModelPickerData = useModelPickerData({ modelType: 'image' });
   const textModelPickerData = useModelPickerData({ modelType: 'text' });
   const [activeKind, setActiveKind] = useState<ModelSettingKind>();
@@ -29,35 +36,91 @@ export default function ModelSettingsScreen() {
         return;
       }
 
-      onSelectionChange(activeKind, getNextModelSelection(selections[activeKind], item.modelId));
+      setDraft((current) => ({
+        ...current,
+        [activeKind]: getNextModelSelection(current[activeKind], item.modelId),
+      }));
       setActiveKind(undefined);
     },
-    [activeKind, onSelectionChange, selections],
+    [activeKind],
+  );
+  const isDirty = MODEL_SETTING_KINDS.some((kind) => draft[kind] !== baseline[kind]);
+  const handleSave = useCallback(() => {
+    if (!isDirty || isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    void saveSelections(draft)
+      .then(() => {
+        setBaseline(draft);
+        toast.show({ label: t('settings.model.saved'), variant: 'success' });
+      })
+      .catch(() => {
+        alert.show({ title: t('settings.model.saveFailed') });
+      })
+      .finally(() => setIsSaving(false));
+  }, [alert, draft, isDirty, isSaving, saveSelections, t, toast]);
+  const requestClose = useCallback(() => {
+    if (isSaving) {
+      return;
+    }
+
+    if (!isDirty) {
+      router.back();
+      return;
+    }
+
+    alert.confirm({
+      confirmLabel: t('common.discard'),
+      description: t('settings.model.discardMessage'),
+      onConfirm: () => router.back(),
+      role: 'destructive',
+      title: t('settings.model.discardTitle'),
+    });
+  }, [alert, isDirty, isSaving, router, t]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.save'),
+        disabled: !isDirty || isSaving,
+        key: 'save-model-settings',
+        label: isSaving ? t('common.saving') : t('common.save'),
+        onPress: handleSave,
+        type: 'label',
+      },
+    ],
+    [handleSave, isDirty, isSaving, t],
   );
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
         key: kind,
+        disabled: isSaving,
         label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         onPress: () => setActiveKind(kind),
         trailing: (
           <SelectedModelName
             item={
               kind === 'painting'
-                ? imageModelPickerData.getModelItem(selections[kind])
-                : textModelPickerData.getModelItem(selections[kind])
+                ? imageModelPickerData.getModelItem(draft[kind])
+                : textModelPickerData.getModelItem(draft[kind])
             }
             placeholder={t('settings.select.placeholder')}
           />
         ),
       })),
-    [imageModelPickerData, selections, t, textModelPickerData],
+    [draft, imageModelPickerData, isSaving, t, textModelPickerData],
   );
-  const selectedModelId = activeKind ? selections[activeKind] : null;
+  const selectedModelId = activeKind ? draft[activeKind] : null;
 
   return (
     <>
-      <RouteHeader title={t('settings.pages.model.title')} />
+      <RouteHeader
+        onBack={requestClose}
+        rightActions={rightActions}
+        title={t('settings.pages.model.title')}
+      />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

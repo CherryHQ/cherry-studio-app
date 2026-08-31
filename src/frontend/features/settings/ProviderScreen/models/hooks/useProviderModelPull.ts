@@ -70,12 +70,7 @@ export function useProviderModelPull({
       .finally(() => setIsPreviewLoading(false));
   }, [alert, onPreviewReady, models, providerId, queryClient, t, toast]);
 
-  /**
-   * Commits one row's worth of change immediately, the way desktop's pull dialog
-   * does. There is no submit step: the preview stays on screen and the row just
-   * flips its glyph. Success is silent, since a toast per tap would be unusable
-   * when adding models one after another.
-   */
+  /** Commits the selected additions and removals after the explicit Save action. */
   const applyModelChange = useCallback(
     async ({ toAdd = [], toRemove = [] }: { toAdd?: Model[]; toRemove?: UniqueModelId[] }) => {
       if (toAdd.length === 0 && toRemove.length === 0) {

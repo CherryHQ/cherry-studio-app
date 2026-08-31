@@ -17,6 +17,7 @@ import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
 
 type ProviderModelCheckSectionProps = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
+  isDisabled?: boolean;
   isLoading?: boolean;
   models: readonly Model[];
   provider: Provider | undefined;
@@ -25,6 +26,7 @@ type ProviderModelCheckSectionProps = {
 
 export function ProviderModelCheckSection({
   apiKeys,
+  isDisabled = false,
   isLoading = false,
   models,
   provider,
@@ -62,7 +64,7 @@ export function ProviderModelCheckSection({
               accessibilityLabel={
                 selectedModel?.name ?? t('settings.provider.models.checkNoModels')
               }
-              disabled={isChecking || isLoading || textModels.length === 0}
+              disabled={isDisabled || isChecking || isLoading || textModels.length === 0}
               onPress={openModelPicker}
             >
               <View className="flex-row items-center gap-2">
@@ -78,7 +80,7 @@ export function ProviderModelCheckSection({
           </Section>
           <Button
             className="self-stretch"
-            disabled={isLoading || !selectedModel}
+            disabled={isDisabled || isLoading || !selectedModel}
             loading={isChecking}
             onPress={() => void startCheck()}
           >
@@ -87,6 +89,11 @@ export function ProviderModelCheckSection({
               : t('settings.provider.models.checkStart')}
           </Button>
         </View>
+        {isDisabled ? (
+          <Text className="text-muted-foreground text-xs">
+            {t('settings.provider.models.checkSaveFirst')}
+          </Text>
+        ) : null}
       </View>
 
       {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}

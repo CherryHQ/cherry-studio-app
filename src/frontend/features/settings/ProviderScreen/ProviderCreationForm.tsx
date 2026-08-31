@@ -1,17 +1,15 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { Button, useAlert } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
-import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard } from 'react-native';
+import { Keyboard, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 import { useProviderAvatarActions } from '../components/providerAvatarStore';
+import { buildApiKeyEntriesFromInput } from './apiService/utils/providerApiServiceApiKeys';
 import {
   buildCustomProviderCreationPayload,
   findInvalidCustomProviderEndpointUrl,
@@ -20,16 +18,15 @@ import {
   createEmptyProviderFormValues,
   NEW_PROVIDER_ENDPOINT_TYPES,
   ProviderForm,
+  type ProviderFormValue,
   type ProviderFormValues,
   useProviderFormDraft,
 } from './providerForm';
 
-export default function NewProviderScreen() {
+export function useNewProviderForm() {
   const { t } = useTranslation();
-  const router = useRouter();
   const { alert } = useAlert();
   const providerAvatars = useProviderAvatarActions();
-
   const createProviderMutation = useMutation('POST', '/providers', {
     refresh: ['/providers', '/providers/page'],
   });
@@ -51,19 +48,15 @@ export default function NewProviderScreen() {
   const submitProvider = useCallback(
     async (values: ProviderFormValues) => {
       const providerId = Crypto.randomUUID();
-      const trimmedApiKey = values.apiKey.trim();
       const { defaultChatEndpoint, endpointConfigs } = buildCustomProviderCreationPayload({
         endpointUrls: values.endpointUrls,
         preferredChatEndpoint: values.defaultChatEndpoint,
       });
-
-      const apiKeys: ApiKeyEntry[] | undefined = trimmedApiKey
-        ? [{ id: Crypto.randomUUID(), isEnabled: true, key: trimmedApiKey }]
-        : undefined;
+      const apiKeys = buildApiKeyEntriesFromInput(values.apiKey, []);
 
       await createProvider({
         body: {
-          apiKeys,
+          apiKeys: apiKeys.length > 0 ? apiKeys : undefined,
           authConfig: { type: 'api-key' },
           defaultChatEndpoint,
           endpointConfigs,
@@ -76,8 +69,6 @@ export default function NewProviderScreen() {
         await providerAvatars.persist(providerId, values.avatarUri);
       }
 
-      // Providers are created disabled; the user asked for new custom providers to
-      // land already enabled, so flip it on before navigating to the detail page.
       await enableProvider({
         body: { isEnabled: true },
         params: { id: providerId },
@@ -87,14 +78,10 @@ export default function NewProviderScreen() {
     },
     [createProvider, enableProvider, providerAvatars],
   );
-
-  // A provider with no URL cannot reach anything, so creating one demands a Base
-  // URL on top of the form's own rule. Editing does not: an existing provider is
-  // allowed to have none, and blocking the button would trap a rename.
   const canSubmit = meta.canSubmit && baseUrl.trim().length > 0;
-  const handleFinish = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!canSubmit) {
-      return;
+      return undefined;
     }
 
     if (findInvalidCustomProviderEndpointUrl(state.endpointUrls)) {
@@ -102,63 +89,59 @@ export default function NewProviderScreen() {
         description: t('settings.provider.apiService.invalidBaseUrlMessage'),
         title: t('settings.provider.apiService.invalidBaseUrlTitle'),
       });
-      return;
+      return undefined;
     }
 
     Keyboard.dismiss();
+    const providerName = state.name.trim();
+    try {
+      const providerId = await submitProvider(state);
+      return { providerId, providerName };
+    } catch {
+      alert.show({ title: t('settings.provider.add.error') });
+      return undefined;
+    }
+  }, [alert, canSubmit, state, submitProvider, t]);
 
-    const trimmedName = state.name.trim();
-    void submitProvider(state)
-      .then((providerId) => {
-        router.replace({
-          params: {
-            providerId,
-            providerName: trimmedName,
-            returnToConfiguration: 'true',
-          },
-          pathname: '/settings/provider/[providerId]/model-pull',
-        });
-      })
-      .catch(() => {
-        alert.show({ title: t('settings.provider.add.error') });
-      });
-  }, [alert, canSubmit, router, state, submitProvider, t]);
+  return { canSubmit, form, handleSave, isCreating };
+}
 
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: !canSubmit,
-        key: 'finish-new-provider',
-        label: t('common.save'),
-        onPress: handleFinish,
-        type: 'label',
-      },
-    ],
-    [canSubmit, handleFinish, t],
-  );
+export function ProviderNewFormContent({
+  canSave,
+  form,
+  isSaving,
+  onSave,
+}: {
+  canSave: boolean;
+  form: ProviderFormValue;
+  isSaving: boolean;
+  onSave: () => void;
+}) {
+  const { t } = useTranslation();
 
   return (
-    <>
-      <RouteHeader rightActions={rightActions} title={t('settings.provider.add.title')} />
-      <KeyboardAwareScrollView
-        alwaysBounceVertical={false}
-        bottomOffset={keyboardBottomOffset}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
-        disableScrollOnKeyboardHide
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        mode="layout"
-        showsVerticalScrollIndicator={false}
-      >
-        <ProviderForm value={form}>
-          <ProviderForm.Avatar />
-          <ProviderForm.Name />
-          <ProviderForm.BaseUrl />
-          <ProviderForm.ApiKey />
-        </ProviderForm>
-      </KeyboardAwareScrollView>
-    </>
+    <KeyboardAwareScrollView
+      alwaysBounceVertical={false}
+      bottomOffset={keyboardBottomOffset}
+      className="flex-1"
+      contentInsetAdjustmentBehavior="automatic"
+      disableScrollOnKeyboardHide
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      mode="layout"
+      showsVerticalScrollIndicator={false}
+    >
+      <ProviderForm value={form}>
+        <ProviderForm.Avatar />
+        <ProviderForm.Name />
+        <ProviderForm.BaseUrl />
+        <ProviderForm.ApiKey />
+      </ProviderForm>
+      <View className="px-4 pb-8">
+        <Button disabled={!canSave} loading={isSaving} onPress={onSave} size="lg">
+          {isSaving ? t('common.saving') : t('common.save')}
+        </Button>
+      </View>
+    </KeyboardAwareScrollView>
   );
 }

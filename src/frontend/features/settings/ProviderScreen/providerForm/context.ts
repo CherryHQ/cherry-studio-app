@@ -5,6 +5,7 @@ import type { EndpointType } from '@/shared/data/types/model';
 import type { ProviderFormValues } from './utils/providerFormValues';
 
 export type ProviderFormActions = {
+  reset: (values?: ProviderFormValues) => void;
   setApiKey: (value: string) => void;
   setAvatarUri: (uri: string | null) => void;
   setEndpointUrl: (endpoint: EndpointType, value: string) => void;

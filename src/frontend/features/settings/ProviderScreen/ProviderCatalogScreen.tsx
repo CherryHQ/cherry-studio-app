@@ -1,6 +1,5 @@
 import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,7 +28,6 @@ type ProviderCatalogRowProps = {
   importPending: boolean;
   isPendingEntry: boolean;
   onImport: (entry: ProviderCatalogEntry) => void;
-  onOpen: (entry: ProviderCatalogEntry) => void;
 };
 
 const keyExtractor = (item: ProviderCatalogEntry) => item.id;
@@ -45,7 +43,6 @@ function ProviderCatalogRow({
   importPending,
   isPendingEntry,
   onImport,
-  onOpen,
 }: ProviderCatalogRowProps) {
   const { t } = useTranslation();
 
@@ -58,10 +55,8 @@ function ProviderCatalogRow({
           providerName={entry.name}
         />
       }
-      disabled={entry.isInstalled && importPending}
       id={entry.id}
       name={entry.name}
-      onPress={entry.isInstalled ? () => onOpen(entry) : undefined}
       statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
       statusTone="success"
       subtitle={entry.id}
@@ -174,14 +169,34 @@ export default function ProviderCatalogScreen() {
     items: entries,
   });
 
-  const openProvider = useCallback(
+  const openProviderModelPull = useCallback(
     (provider: Pick<ProviderCatalogEntry, 'id' | 'name'>) => {
-      router.push({
-        pathname: '/settings/provider/[providerId]',
-        params: { providerId: provider.id, providerName: provider.name },
+      router.replace({
+        pathname: '/settings/provider/[providerId]/model-add',
+        params: {
+          mode: 'sync',
+          providerId: provider.id,
+          providerName: provider.name,
+          returnToProviderList: 'true',
+        },
       });
     },
     [router],
+  );
+  const openCustomProvider = useCallback(() => {
+    router.push('/settings/provider/new');
+  }, [router]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('settings.provider.add.title'),
+        icon: PlusIcon,
+        key: 'open-custom-provider',
+        onPress: openCustomProvider,
+        type: 'icon',
+      },
+    ],
+    [openCustomProvider, t],
   );
   const importMutation = useMutation({
     mutationFn: providers.importPreset,
@@ -194,7 +209,7 @@ export default function ProviderCatalogScreen() {
         queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.providers.page() }),
       ]);
-      openProvider(provider);
+      openProviderModelPull(provider);
     },
   });
   const importProvider = importMutation.mutate;
@@ -229,51 +244,9 @@ export default function ProviderCatalogScreen() {
         importPending={importPending}
         isPendingEntry={pendingProviderId === item.id}
         onImport={handleImportProvider}
-        onOpen={openProvider}
       />
     ),
-    [handleImportProvider, importPending, openProvider, pendingProviderId],
-  );
-  const openCustomProvider = useCallback(() => {
-    router.push('/settings/provider/new');
-  }, [router]);
-  const isRegistryUpdateBusy =
-    registryUpdateQuery.isFetching || applyRegistryUpdateMutation.isPending;
-  const checkRegistryUpdate = useCallback(() => {
-    if (isRegistryUpdateBusy) {
-      return;
-    }
-
-    void refetchRegistryUpdate().then((result) => {
-      if (result.isError) {
-        alert.show({ title: t('settings.provider.catalog.registryUpdate.checkFailed') });
-      } else if (result.data?.status === 'current') {
-        toast.show({
-          label: t('settings.provider.catalog.registryUpdate.current'),
-          variant: 'success',
-        });
-      }
-    });
-  }, [alert, isRegistryUpdateBusy, refetchRegistryUpdate, t, toast]);
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('settings.provider.catalog.registryUpdate.check'),
-        disabled: isRegistryUpdateBusy,
-        icon: RefreshCwIcon,
-        key: 'check-provider-registry-update',
-        onPress: checkRegistryUpdate,
-        type: 'icon',
-      },
-      {
-        accessibilityLabel: t('settings.provider.catalog.custom'),
-        icon: PlusIcon,
-        key: 'create-custom-provider',
-        onPress: openCustomProvider,
-        type: 'icon',
-      },
-    ],
-    [checkRegistryUpdate, isRegistryUpdateBusy, openCustomProvider, t],
+    [handleImportProvider, importPending, pendingProviderId],
   );
   const retry = useCallback(() => {
     void catalogQuery.refetch();

@@ -14,8 +14,7 @@ type ProviderFormProps = {
 /**
  * Provider editing as a compound component: `ProviderForm.Avatar` / `.Name` /
  * `.BaseUrl` / `.ApiKey` under a root that carries the draft.
- * Screens compose the fields they want instead of switching them on and off —
- * creating a provider offers a first API key, editing one does not.
+ * Screens compose the fields they want instead of switching them on and off.
  *
  * The root deliberately renders no scroll container: the screen owns that, so
  * its header and scroll view are mounted on the first frame even while the

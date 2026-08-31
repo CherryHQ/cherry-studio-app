@@ -1,27 +1,18 @@
-import { Spinner } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Redirect, useLocalSearchParams } from 'expo-router';
+import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
 import { ModelSearchControls } from '@/frontend/components/modelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { useProviderDetailSettings } from './detail';
-import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';
 import { ProviderModelPurposeTabs } from './models/components/ProviderModelPurposeTabs';
 import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
-import { useProviderModelPull } from './models/hooks/useProviderModelPull';
-import {
-  type ProviderModelPullApplyChange,
-  useProviderModelPullSelection,
-} from './models/hooks/useProviderModelPullSelection';
 import {
   buildProviderModelPullListItems,
   filterProviderModelPullPreview,
@@ -29,7 +20,6 @@ import {
   type ProviderModelPullPreview,
   type ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
-import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 import {
   filterProviderModelsByPurpose,
   getEffectiveProviderModelPurpose,
@@ -51,98 +41,42 @@ type PullListExtraData = {
 };
 
 export default function ProviderModelPullScreen() {
-  const { providerId, providerName, returnToConfiguration } = useLocalSearchParams<{
+  const { providerId, providerName } = useLocalSearchParams<{
     providerId?: string;
     providerName?: string;
-    returnToConfiguration?: string;
   }>();
-  const { t } = useTranslation();
-  const router = useRouter();
-  const [initialPreview] = useState(() =>
-    providerId ? consumeProviderModelPullPreview(providerId) : null,
-  );
-  const loadStartedRef = useRef(Boolean(initialPreview));
-  const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
-  const { applyModelChange, isPreviewLoading, loadPullPreview, preview } = useProviderModelPull({
-    initialPreview,
-    providerId: providerId ?? '',
-  });
-  const leavePullScreen = useCallback(() => {
-    if (providerId && returnToConfiguration === 'true') {
-      router.replace({
-        params: {
-          ...(providerName ? { providerName } : {}),
-          providerId,
-        },
-        pathname: '/settings/provider/[providerId]',
-      });
-      return;
-    }
-
-    router.back();
-  }, [providerId, providerName, returnToConfiguration, router]);
-
-  useEffect(() => {
-    if (!provider || !providerId || loadStartedRef.current) {
-      return;
-    }
-
-    let isActive = true;
-    loadStartedRef.current = true;
-    void loadPullPreview().then((result) => {
-      if (!isActive) {
-        return;
-      }
-
-      if (result !== 'ready') {
-        leavePullScreen();
-      }
-    });
-
-    return () => {
-      isActive = false;
-    };
-  }, [leavePullScreen, loadPullPreview, provider, providerId]);
-
-  if (!providerId || providerQuery.isError) {
+  if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
 
   return (
-    <>
-      <RouteHeader title={t('settings.provider.models.pullPreviewTitle')} />
-      {preview ? (
-        <ProviderModelPullPreviewPage
-          applyModelChange={applyModelChange}
-          preview={preview}
-          provider={provider}
-          onApplied={leavePullScreen}
-        />
-      ) : (
-        <View className="flex-1 items-center justify-center gap-3 px-4">
-          <Spinner />
-          <Text className="text-base text-foreground">
-            {isPreviewLoading || providerQuery.isPending
-              ? t('settings.provider.models.loading')
-              : t('settings.provider.models.pull')}
-          </Text>
-        </View>
-      )}
-    </>
+    <Redirect
+      href={{
+        params: {
+          mode: 'sync',
+          ...(providerName ? { providerName } : {}),
+          providerId,
+        },
+        pathname: '/settings/provider/[providerId]/model-add',
+      }}
+    />
   );
 }
 
-function ProviderModelPullPreviewPage({
-  applyModelChange,
-  onApplied,
+export function ProviderModelPullPreviewContent({
+  isApplying,
   preview,
   provider,
+  selectedIds,
+  toggleAll,
+  toggleModel,
 }: {
-  applyModelChange: ProviderModelPullApplyChange;
-  /** The pull is over once its changes land, so the screen has nothing left to show. */
-  onApplied: () => void;
+  isApplying: boolean;
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
+  selectedIds: ReadonlySet<UniqueModelId>;
+  toggleAll: (ids: readonly UniqueModelId[]) => void;
+  toggleModel: (id: UniqueModelId) => void;
 }) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
@@ -167,11 +101,6 @@ function ProviderModelPullPreviewPage({
     }),
     [effectiveModelPurpose, searchedPreview],
   );
-  const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
-    useProviderModelPullSelection({
-      applyModelChange,
-      preview,
-    });
   const visibleSections = useMemo<ProviderModelPullSectionKey[]>(
     () => (missingCount > 0 ? ['added', 'missing'] : ['added']),
     [missingCount],
@@ -193,70 +122,45 @@ function ProviderModelPullPreviewPage({
     [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
-  // Everything the active search and purpose filter leave on screen. Selection
-  // actions stay in this persistent workflow so they can operate on the query.
-  const displayedIds = useMemo(
-    () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
-    [displayedPreview],
-  );
-  const isSelectionScoped = deferredSearchText.trim().length > 0 || effectiveModelPurpose !== 'all';
-  const handleApply = useCallback(() => {
-    void applySelection().then((didApply) => {
-      if (didApply) {
-        onApplied();
-      }
-    });
-  }, [applySelection, onApplied]);
   return (
-    <>
-      <LegendList
-        alwaysBounceVertical={false}
-        contentContainerStyle={styles.listContent}
-        contentInsetAdjustmentBehavior="automatic"
-        data={listItems}
-        drawDistance={320}
-        estimatedItemSize={providerModelRowEstimatedHeight}
-        extraData={listExtraData}
-        getItemType={getPullListItemType}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={pullListKeyExtractor}
-        ListFooterComponent={
-          isSearchEmpty ? (
-            <View className="items-center justify-center px-4 py-10">
-              <Text className="text-center text-base text-foreground">
-                {t('settings.provider.models.search.empty')}
-              </Text>
-            </View>
-          ) : null
-        }
-        ListHeaderComponent={
-          <ModelSearchControls
-            placeholder={t('modelPicker.searchPlaceholder')}
-            searchText={searchText}
-            setSearchText={setSearchText}
-          >
-            {showsModelPurposeTabs ? (
-              <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
-            ) : null}
-          </ModelSearchControls>
-        }
-        maintainVisibleContentPosition={false}
-        recycleItems
-        renderItem={renderPullListItem}
-        showsVerticalScrollIndicator={false}
-        style={styles.list}
-      />
-      <ProviderModelPullChrome
-        isAllSelected={displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id))}
-        isApplying={isApplying}
-        isSelectionScoped={isSelectionScoped}
-        isToggleAllDisabled={displayedIds.length === 0}
-        selectedCount={selectedIds.size}
-        onApply={handleApply}
-        onToggleAll={() => toggleAll(displayedIds)}
-      />
-    </>
+    <LegendList
+      alwaysBounceVertical={false}
+      contentContainerStyle={styles.listContent}
+      contentInsetAdjustmentBehavior="automatic"
+      data={listItems}
+      drawDistance={320}
+      estimatedItemSize={providerModelRowEstimatedHeight}
+      extraData={listExtraData}
+      getItemType={getPullListItemType}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      keyExtractor={pullListKeyExtractor}
+      ListFooterComponent={
+        isSearchEmpty ? (
+          <View className="items-center justify-center px-4 py-10">
+            <Text className="text-center text-base text-foreground">
+              {t('settings.provider.models.search.empty')}
+            </Text>
+          </View>
+        ) : null
+      }
+      ListHeaderComponent={
+        <ModelSearchControls
+          placeholder={t('modelPicker.searchPlaceholder')}
+          searchText={searchText}
+          setSearchText={setSearchText}
+        >
+          {showsModelPurposeTabs ? (
+            <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
+          ) : null}
+        </ModelSearchControls>
+      }
+      maintainVisibleContentPosition={false}
+      recycleItems
+      renderItem={renderPullListItem}
+      showsVerticalScrollIndicator={false}
+      style={styles.list}
+    />
   );
 }
 
@@ -396,10 +300,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // No horizontal padding: the model rows carry their own `px-4`, so an outer
-  // inset would push their content twice as far in as the navigation chrome
-  // above them. Everything else here pads itself to match. The bottom clears
-  // the select-all/apply bar, which floats over the list.
+  // inset would push their content twice as far in as the navigation chrome.
   listContent: {
-    paddingBottom: 96,
+    paddingBottom: 24,
   },
 });

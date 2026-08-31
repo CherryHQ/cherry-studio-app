@@ -18,7 +18,7 @@ const logger = loggerService.withContext('ProviderFormAvatar');
  */
 export function ProviderFormAvatar({ children }: { children?: ReactElement }) {
   const { t } = useTranslation();
-  const { actions, state } = useProviderForm('ProviderForm.Avatar');
+  const { actions, meta, state } = useProviderForm('ProviderForm.Avatar');
   const { setAvatarUri } = actions;
 
   const reportPickError = useCallback((error: unknown) => {
@@ -28,7 +28,11 @@ export function ProviderFormAvatar({ children }: { children?: ReactElement }) {
   return (
     // The block sits further from the first field than the fields do from each
     // other, so it carries that extra space rather than the form's shared gap.
-    <View className="pb-5">
+    <View
+      accessibilityState={{ disabled: meta.isSubmitting }}
+      className="pb-5"
+      pointerEvents={meta.isSubmitting ? 'none' : 'auto'}
+    >
       <AvatarPickerField
         caption={t('settings.provider.add.setAvatar')}
         onBeforeOpen={Keyboard.dismiss}

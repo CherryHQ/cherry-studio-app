@@ -16,6 +16,7 @@ function createTestProvider(overrides: Partial<Provider> = {}): Provider {
       'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
     },
     id: 'provider-1',
+    isEnabled: true,
     name: 'Example',
     ...overrides,
   } as Provider;
