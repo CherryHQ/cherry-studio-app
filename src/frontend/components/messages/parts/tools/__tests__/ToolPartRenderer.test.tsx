@@ -6,6 +6,10 @@ import { ToolPartRenderer } from '../ToolPartRenderer';
 import type { ToolMessagePart } from '../toolPartState';
 
 jest.mock('../GenericToolPart', () => mockCreateToolPart('GenericToolPart'));
+jest.mock('../EditFileToolPart', () => ({
+  ...mockCreateToolPart('EditFileToolPart'),
+  isEditFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'edit_file',
+}));
 jest.mock('../McpToolPart', () => ({
   ...mockCreateToolPart('McpToolPart'),
   isMcpToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'mcp',
@@ -31,6 +35,7 @@ describe('ToolPartRenderer', () => {
     ['web-search', 'WebSearchToolPart'],
     ['meta', 'MetaToolPartRenderer'],
     ['mcp', 'McpToolPart'],
+    ['edit_file', 'EditFileToolPart'],
     ['write_file', 'WriteFileToolPart'],
     ['other', 'GenericToolPart'],
   ])('routes %s tools to %s', (toolName, expectedType) => {

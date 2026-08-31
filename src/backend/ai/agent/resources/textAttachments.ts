@@ -2,6 +2,7 @@ import { filenameExtension } from '@/shared/data/types/file';
 
 import type { RuntimeTextAttachmentPart } from '../runtime';
 import type { ManagedFileFact } from './managedFileResolver';
+import { decodeManagedUtf8, ManagedTextError } from './managedText';
 
 export const MAX_TEXT_ATTACHMENT_BYTES = 1024 * 1024;
 export const MAX_TEXT_ATTACHMENT_CHARACTERS = 200_000;
@@ -163,8 +164,11 @@ export async function resolveManagedTextAttachments(
 
     let text: string;
     try {
-      text = decodeManagedUtf8(bytes, limits.maxBytesPerFile, fact);
+      text = decodeManagedUtf8(bytes, limits.maxBytesPerFile).text;
     } catch (error) {
+      if (error instanceof ManagedTextError) {
+        throw new TextAttachmentError(fact, error.failure);
+      }
       if (isCurrent) {
         throw error;
       }
@@ -179,25 +183,6 @@ export async function resolveManagedTextAttachments(
   return contents;
 }
 
-function decodeManagedUtf8(bytes: Uint8Array, maxBytes: number, file: ManagedFileFact): string {
-  if (bytes.byteLength > maxBytes) {
-    throw new TextAttachmentError(file, 'file-bytes');
-  }
-  if (bytes.includes(0)) {
-    throw new TextAttachmentError(file, 'nul-byte');
-  }
-
-  const offset = hasUtf8Bom(bytes) ? 3 : 0;
-  const text = decodeUtf8Strict(bytes.subarray(offset));
-  if (text === null) {
-    throw new TextAttachmentError(file, 'invalid-utf8');
-  }
-  if (/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(text)) {
-    throw new TextAttachmentError(file, 'binary-content');
-  }
-  return text;
-}
-
 function projectTextAttachment(
   file: ManagedFileFact,
   content: string,
@@ -205,6 +190,7 @@ function projectTextAttachment(
 ): ProjectedTextAttachment {
   const truncated = takeCodePoints(content, maxCharacters);
   const part: RuntimeTextAttachmentPart = {
+    fileEntryId: file.fileEntryId,
     type: 'text-attachment',
     mediaType: file.mediaType,
     name: file.name,
@@ -232,76 +218,6 @@ function takeCodePoints(
     characters += 1;
   }
   return { characters, didTruncate: end < value.length, value: value.slice(0, end) };
-}
-
-function hasUtf8Bom(bytes: Uint8Array): boolean {
-  return bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
-}
-
-/** RN-safe strict decoder: rejects overlong, surrogate, truncated, and out-of-range sequences. */
-function decodeUtf8Strict(bytes: Uint8Array): string | null {
-  const codePoints: number[] = [];
-  const chunks: string[] = [];
-  const flush = () => {
-    if (codePoints.length > 0) {
-      chunks.push(String.fromCodePoint(...codePoints));
-      codePoints.length = 0;
-    }
-  };
-
-  for (let index = 0; index < bytes.length;) {
-    const first = bytes[index];
-    if (first === undefined) {
-      return null;
-    }
-
-    let codePoint: number;
-    let width: number;
-    if (first <= 0x7f) {
-      codePoint = first;
-      width = 1;
-    } else if (first >= 0xc2 && first <= 0xdf) {
-      const second = bytes[index + 1];
-      if (!isContinuationByte(second)) return null;
-      codePoint = ((first & 0x1f) << 6) | (second & 0x3f);
-      width = 2;
-    } else if (first >= 0xe0 && first <= 0xef) {
-      const second = bytes[index + 1];
-      const third = bytes[index + 2];
-      if (!isContinuationByte(second) || !isContinuationByte(third)) return null;
-      if ((first === 0xe0 && second < 0xa0) || (first === 0xed && second >= 0xa0)) return null;
-      codePoint = ((first & 0x0f) << 12) | ((second & 0x3f) << 6) | (third & 0x3f);
-      width = 3;
-    } else if (first >= 0xf0 && first <= 0xf4) {
-      const second = bytes[index + 1];
-      const third = bytes[index + 2];
-      const fourth = bytes[index + 3];
-      if (
-        !isContinuationByte(second) ||
-        !isContinuationByte(third) ||
-        !isContinuationByte(fourth)
-      ) {
-        return null;
-      }
-      if ((first === 0xf0 && second < 0x90) || (first === 0xf4 && second >= 0x90)) return null;
-      codePoint =
-        ((first & 0x07) << 18) | ((second & 0x3f) << 12) | ((third & 0x3f) << 6) | (fourth & 0x3f);
-      width = 4;
-    } else {
-      return null;
-    }
-
-    codePoints.push(codePoint);
-    if (codePoints.length === 4_096) flush();
-    index += width;
-  }
-
-  flush();
-  return chunks.join('');
-}
-
-function isContinuationByte(value: number | undefined): value is number {
-  return value !== undefined && value >= 0x80 && value <= 0xbf;
 }
 
 function normalizeMediaType(mediaType: string): string {

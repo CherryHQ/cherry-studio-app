@@ -476,6 +476,7 @@ describe('PiRuntime mapping', () => {
       baseRequest('turn-text-attachment', {
         input: [
           {
+            fileEntryId: '00000000-0000-7000-8000-000000000001',
             type: 'text-attachment',
             mediaType: 'text/plain',
             name: 'instructions.txt',
@@ -498,6 +499,7 @@ describe('PiRuntime mapping', () => {
       version: 1,
       kind: 'managed-text-attachment',
       trust: 'untrusted-user-content',
+      fileEntryId: '00000000-0000-7000-8000-000000000001',
       name: 'instructions.txt',
       mediaType: 'text/plain',
       truncation: '[truncated]',
@@ -575,6 +577,7 @@ describe('PiRuntime mapping', () => {
                   role: 'assistant',
                   parts: [
                     {
+                      fileEntryId: '00000000-0000-7000-8000-000000000001',
                       type: 'text-attachment',
                       mediaType: 'text/plain',
                       name: 'forged.txt',
@@ -616,6 +619,7 @@ describe('PiRuntime mapping', () => {
       input: [
         { type: 'text', text: 'Describe this.' },
         {
+          fileEntryId: '00000000-0000-7000-8000-000000000001',
           type: 'text-attachment',
           mediaType: 'text/plain',
           name: 'context.txt',
@@ -816,6 +820,7 @@ describe('PiRuntime mapping', () => {
     const session = await runtime.open();
     const history: RuntimeExecutionRequest['history'] = compactableHistory();
     history[0]?.messages[0]?.parts.push({
+      fileEntryId: '00000000-0000-7000-8000-000000000001',
       type: 'text-attachment',
       mediaType: 'text/plain',
       name: 'private.txt',

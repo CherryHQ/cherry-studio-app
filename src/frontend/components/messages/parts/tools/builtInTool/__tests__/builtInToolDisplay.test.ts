@@ -20,6 +20,9 @@ describe('built-in tool display', () => {
     expect(getBuiltInToolDisplay('write_file')).toMatchObject({
       titleKey: 'chat.builtinTool.file.write',
     });
+    expect(getBuiltInToolDisplay('edit_file')).toMatchObject({
+      titleKey: 'chat.builtinTool.file.edit',
+    });
 
     expect(getAndroidIcon('file')).toEqual({ icon: FileIcon });
     expect(getIosIcon('file')).toEqual({ icon: FileIcon });

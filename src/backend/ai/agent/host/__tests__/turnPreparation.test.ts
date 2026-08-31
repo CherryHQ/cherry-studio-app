@@ -107,6 +107,7 @@ describe('turn preparation', () => {
       },
     ]);
     expect(plan.runtimeTextAttachments.get(FILE_ENTRY_ID)).toEqual({
+      fileEntryId: FILE_ENTRY_ID,
       type: 'text-attachment',
       mediaType: 'text/plain',
       name: 'notes.txt',

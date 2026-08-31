@@ -59,9 +59,10 @@ An owner stores the entry ids it points at, inside its own row:
 | Painting | `painting.files` — `{ input: string[], output: string[] }` |
 | Agent message | `agent_session_message.data.parts[].fileEntryId` |
 
-A `write_file` tool result also carries the `fileEntryId` it created in its result JSON; chat resolves
-the id back to a card at read time. As with every owner here, the reference outlives the bytes and
-degrades to the unavailable placeholder.
+`write_file` and `edit_file` tool results also carry the `fileEntryId` they created in result JSON;
+the Runtime additionally persists each output as an artifact file part. Chat resolves the id back to
+a card at read time. As with every owner here, the reference outlives the bytes and degrades to the
+unavailable placeholder.
 
 There is no association table and no foreign key from an owner to `file_entry`. That is the point:
 a foreign key would have to choose between `CASCADE` (deleting a file silently rewrites the
@@ -123,13 +124,13 @@ the user owns the consequences of their own deletion. The same iteration owns a 
 action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
 row).
 
-**Agent file writes and generated artifacts.** A write tool reads an entry in the turn's controlled
-resource ledger, creates a new one, and returns the new id; it must not rewrite a managed blob.
+**Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text through the
+`'text'` source of `createInternalEntry`; it creates entries but reads none. `edit_file` strictly
+decodes a bounded UTF-8 source selected by active `fileEntryId`, applies exact replacement, and
+creates a same-name, same-media-type copy. Knowledge of a valid id is sufficient for this tool even
+outside the current turn ledger; it does not expose file listing or search. Neither tool rewrites a
+managed blob, and both return the new id as a Host-validated artifact.
 
-As-built, one slice of this ships: the `write_file` tool stores UTF-8 text through the `'text'`
-source of `createInternalEntry`, so it creates entries but reads none and does not consult the turn's
-resource ledger. Its id reaches the transcript inside tool-result JSON rather than as the
-`purpose: 'artifact'` file part described below.
 Office inputs are imported before inspection or editing, and every edit patches a copy into a new
 entry while preserving the source. Office and image tools follow the same rule for newly generated
 output. The file library is also the Version 1 artifact library; no parallel artifact blob store or

@@ -4,6 +4,7 @@ import type { MessageListItem } from '@/frontend/components/messages';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
 export const STORY_WRITTEN_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000102';
+export const STORY_EDITED_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000103';
 
 export type MessageExample = {
   label: string;
@@ -122,6 +123,61 @@ const writeFileParts: CherryMessagePart[] = [
     state: 'output-available',
     toolCallId: 'write-file-rejected',
     toolName: 'write_file',
+    type: 'dynamic-tool',
+  },
+];
+
+const editFileParts: CherryMessagePart[] = [
+  {
+    input: {
+      file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID,
+      old_string: 'Draft',
+      new_string: 'Final',
+      replace_all: false,
+    },
+    state: 'input-available',
+    toolCallId: 'edit-file-running',
+    toolName: 'edit_file',
+    type: 'dynamic-tool',
+  },
+  {
+    input: {
+      file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID,
+      old_string: 'Draft',
+      new_string: 'Final',
+      replace_all: false,
+    },
+    output: {
+      fileEntryId: STORY_EDITED_FILE_ENTRY_ID,
+      filename: 'release-notes.md',
+      replacements: 1,
+      size: 126,
+      sourceFileEntryId: STORY_WRITTEN_FILE_ENTRY_ID,
+      status: 'edited',
+    },
+    state: 'output-available',
+    toolCallId: 'edit-file-complete',
+    toolName: 'edit_file',
+    type: 'dynamic-tool',
+  },
+  {
+    filename: 'release-notes.md',
+    mediaType: 'text/markdown',
+    providerMetadata: { cherry: { fileEntryId: STORY_EDITED_FILE_ENTRY_ID } },
+    type: 'file',
+    url: `cherry://file/${STORY_EDITED_FILE_ENTRY_ID}`,
+  },
+  {
+    input: {
+      file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID,
+      old_string: 'Missing',
+      new_string: 'Present',
+      replace_all: false,
+    },
+    output: { message: 'old_string was not found in the source file.', status: 'error' },
+    state: 'output-available',
+    toolCallId: 'edit-file-rejected',
+    toolName: 'edit_file',
     type: 'dynamic-tool',
   },
 ];
@@ -264,6 +320,10 @@ export const messageExamples: readonly MessageExample[] = [
   {
     label: 'Written file',
     message: createMessage('assistant-write-file', 'assistant', writeFileParts),
+  },
+  {
+    label: 'Edited file',
+    message: createMessage('assistant-edit-file', 'assistant', editFileParts),
   },
   {
     label: 'Meta tools',

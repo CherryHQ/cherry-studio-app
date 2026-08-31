@@ -35,6 +35,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { TurnToolResources } from '../resources/managedFileResolver';
+import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
 import {
   createCalendarTools,
@@ -43,6 +44,7 @@ import {
   createReminderTools,
   type DeviceToolDependencies,
 } from './device';
+import { createEditFileTool } from './editFileTool';
 import {
   type ConfiguredPaintingModel,
   createGenerateImageTool,
@@ -174,6 +176,11 @@ function createCatalog(
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
+    createEditFileTool({
+      createTextEntry: fileContent.createTextEntry,
+      readAsBytes: managedFileResolver.readAsBytes,
+      resolveAvailable: managedFileResolver.resolveAvailable,
+    }),
     createWriteFileTool(fileContent),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),

@@ -34,6 +34,7 @@ describe('managed text attachments', () => {
       maxTotalCharacters: 1,
     });
     expect(contents.get(FIRST_ID)).toEqual({
+      fileEntryId: FIRST_ID,
       mediaType: 'text/markdown',
       name: 'emoji.md',
       text: '🙂',
@@ -49,6 +50,7 @@ describe('managed text attachments', () => {
     const contents = await resolve([file], new Map([[FIRST_ID, utf8(body)]]));
 
     expect(contents.get(FIRST_ID)).toEqual({
+      fileEntryId: FIRST_ID,
       mediaType: 'text/plain',
       name: 'instructions.txt',
       text: body,

@@ -1,3 +1,4 @@
+import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
@@ -32,6 +33,10 @@ export function ToolPartRenderer({ part }: ToolPartRendererProps) {
 
   if (isWriteFileToolPart(part)) {
     return <WriteFileToolPart part={part} />;
+  }
+
+  if (isEditFileToolPart(part)) {
+    return <EditFileToolPart part={part} />;
   }
 
   return <GenericToolPart part={part} />;

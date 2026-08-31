@@ -3,11 +3,12 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, and `write_file`, all using the settled `ToolRef` and `{ value, artifacts }`
+image generation, `write_file`, and `edit_file`, all using the settled `ToolRef` and
+`{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and composer-selected turn capabilities, then combines it with the
-Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and `write_file`
-are available to every Agent when their system gates pass. The frontend keeps web-search selection
+Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and both file
+tools are available to every Agent when their system gates pass. The frontend keeps web-search selection
 per Session and snapshots it into each turn; image generation enters only the turn whose draft
 selected it. Neither is Agent configuration.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -187,7 +188,10 @@ The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read
 its membership view; `generate_image` rejects an `image_id` outside that view before touching the
 global managed-file service. A Host-owned catalog wrapper validates and grants every built-in
 artifact before returning the tool result to Pi, and Host event projection repeats the grant
-idempotently. `write_file` needs no read grant because it only creates entries.
+idempotently. `write_file` needs no read grant because it only creates entries. `edit_file` is the
+deliberate exception to ledger-scoped reads: knowing an active managed `fileEntryId` is sufficient
+for it to resolve that source anywhere in the application file library. It never lists or searches
+the library, accepts no path, and still creates its output through the Host artifact boundary.
 
 For Version 1, the Host derives the initial ledger grants from:
 
@@ -202,10 +206,11 @@ when an application capability successfully imports a new file and the Host-owne
 and records that id before the callback resolves. The tool catalog and approval policy remain
 immutable; only this ledger grows monotonically.
 
-An MCP payload or model-produced string never grants access merely because it looks like a
+An MCP payload or model-produced string never joins the ledger merely because it looks like a
 `cherry://file/` ref. An MCP result is ordinary remote data unless a separate Cherry importer
 validates its bytes, creates a managed entry, and records the new id. The ledger never grants access
-to the whole file library or app sandbox.
+to the whole file library or app sandbox. Independently, `edit_file` validates a supplied UUID
+against active managed storage because its explicit policy treats knowledge of an id as authority.
 
 ## Tool Results And Artifacts
 
@@ -225,8 +230,9 @@ history. If the managed entry still exists, a user may explicitly attach it agai
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 `write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
-under `artifacts`; `generate_image` returns `{ id, name }` refs under `value` and each imported image
-under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
+under `artifacts`. `edit_file` additionally returns the source id and replacement count, and marks
+its copy-on-write output as `derived`. `generate_image` returns `{ id, name }` refs under `value` and
+each imported image under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
 persists both the result envelope and the file parts. Device and web capabilities return portable
 JSON with no artifacts.
 
@@ -283,15 +289,27 @@ OS-sanctioned continuation mechanisms described in
   Its input schema is built from that model's capability block so the model is never offered a
   parameter its provider rejects.
 
-### Managed File Write
+### Managed File Write And Edit
 
-`write_file` is the only general file writer. It accepts a display name rather than a path, writes
+`write_file` accepts a display name rather than a path, writes
 bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. The
 model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
-opaque failure. It runs without approval because it has no destructive form, and the Host offers it
-only to models that support function calling. Handing tools to a model that cannot call them fails
-the whole turn. Implementation: `src/backend/ai/agent/tools/`.
+opaque failure.
+
+`edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
+It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and creates a same-name,
+same-media-type copy no larger than 1 MiB. Matching is exact and case-sensitive: a single edit
+requires exactly one non-overlapping match, while `replace_all` changes every non-overlapping match.
+It preserves a UTF-8 BOM and all untouched bytes represented by the decoded text. It never uses the
+desktop filesystem tool's fuzzy matching, empty-search overwrite, path, or in-place mutation
+semantics. The model receives
+`{ status, sourceFileEntryId, fileEntryId, filename, size, replacements }` and the new entry is a
+`derived` artifact.
+
+Both tools run without approval because they have no destructive form, and the Host offers them only
+to models that support function calling. Handing tools to a model that cannot call them fails the
+whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### Skill Boundary
 
@@ -347,7 +365,7 @@ desktop event labels or persistence shapes.
 - MCP exposes only configured Streamable HTTP tools without losing other persisted transport data.
 - Calendar access requires both OS permission and tool policy.
 - Managed-file tools accept no arbitrary paths; only validated application-created outputs can
-  extend the turn resource ledger, and `write_file` never overwrites an existing entry.
+  extend the turn resource ledger, and file writes and edits never overwrite an existing entry.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.

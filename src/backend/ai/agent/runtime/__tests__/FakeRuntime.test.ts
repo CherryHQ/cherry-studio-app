@@ -371,6 +371,7 @@ describe('FakeRuntime scripting', () => {
           baseRequest('turn-text-attachment', {
             input: [
               {
+                fileEntryId: '00000000-0000-7000-8000-000000000001',
                 type: 'text-attachment',
                 mediaType: 'text/plain',
                 name: 'notes.txt',
