@@ -143,27 +143,14 @@ function ProviderModelAddForm({
     isSaving: isSubmitting || isApplying,
   });
   const completeFlow = useCallback(() => {
-    if (isSetupFlow) {
-      allowNavigation();
-      router.replace({
-        pathname: '/settings/provider/[providerId]',
-        params: {
-          initialTab: 'models',
-          providerId: provider.id,
-          providerName: provider.name,
-        },
-      });
-      return;
-    }
-
-    if (returnToProviderList) {
+    if (isSetupFlow || returnToProviderList) {
       allowNavigation();
       router.dismissTo('/settings/provider');
       return;
     }
 
     closeWithoutPrompt();
-  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, provider, returnToProviderList, router]);
+  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, returnToProviderList, router]);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
