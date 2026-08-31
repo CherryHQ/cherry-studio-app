@@ -1,4 +1,4 @@
-import ArrowUpDownIcon from '@cherrystudio/app-icons/icons/arrow-up-down';
+import ArrowLeftRightIcon from '@cherrystudio/app-icons/icons/arrow-left-right';
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
@@ -63,7 +63,7 @@ function SidebarRecentsView() {
         >
           <View className="flex-row items-center gap-1.5">
             <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
-            <ArrowUpDownIcon className="size-3.5 text-muted-foreground" />
+            <ArrowLeftRightIcon className="size-3.5 text-muted-foreground" />
           </View>
         </Pressable>
         <Pressable
