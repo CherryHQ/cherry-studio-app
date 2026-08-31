@@ -26,7 +26,10 @@ import type { Provider } from '@/shared/data/types/provider';
 import { useProviderApiServiceSheetClose } from './apiService';
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
-import { useProviderModelPull } from './models/hooks/useProviderModelPull';
+import {
+  useProviderModelPull,
+  type ProviderModelPullLoadResult,
+} from './models/hooks/useProviderModelPull';
 import { useProviderModelPullSelection } from './models/hooks/useProviderModelPullSelection';
 import {
   getProviderModelEndpointLabelKey,
@@ -64,15 +67,21 @@ export default function ProviderModelAddScreen() {
   // "More settings" control — growing it a commit later moves a live tap target.
   if (!provider) {
     return (
-      <RouteHeader
-        title={t(
-          setupFlow === 'true'
-            ? 'settings.provider.models.setupTitle'
-            : mode === 'manual'
-              ? 'settings.provider.models.addTitle'
-              : 'settings.provider.models.pullPreviewTitle',
-        )}
-      />
+      <>
+        <RouteHeader
+          title={t(
+            setupFlow === 'true'
+              ? 'settings.provider.models.setupTitle'
+              : mode === 'manual'
+                ? 'settings.provider.models.addTitle'
+                : 'settings.provider.models.pullPreviewTitle',
+          )}
+        />
+        <ContentState.Loading
+          className="flex-1 px-6 py-10"
+          title={t('settings.provider.loading')}
+        />
+      </>
     );
   }
 
@@ -101,7 +110,7 @@ function ProviderModelAddForm({
   const router = useRouter();
   const { alert } = useAlert();
   const [activeMode, setActiveMode] = useState<ProviderModelAddMode>(initialMode);
-  const [syncLoadResult, setSyncLoadResult] = useState<'empty' | 'error' | 'ready'>();
+  const [syncLoadResult, setSyncLoadResult] = useState<ProviderModelPullLoadResult>();
   const syncLoadStartedRef = useRef(false);
   const {
     canSubmit,
@@ -370,11 +379,17 @@ function ProviderModelAddForm({
               className="px-6 py-10"
               title={t('settings.provider.models.loading')}
             />
-          ) : syncLoadResult === 'error' ? (
+          ) : syncLoadResult === 'failed' || syncLoadResult === 'timedOut' ? (
+            // The hook reports how the pull ended and says nothing itself: an
+            // alert on top of this state would carry the same sentence twice.
             <ContentState.Error
               className="px-6 py-10"
               primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
-              title={t('settings.provider.models.pullFailed')}
+              title={t(
+                syncLoadResult === 'timedOut'
+                  ? 'settings.provider.models.pullTimedOut'
+                  : 'settings.provider.models.pullFailed',
+              )}
             />
           ) : (
             <ContentState.Empty
