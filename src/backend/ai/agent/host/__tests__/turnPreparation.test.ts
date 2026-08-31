@@ -14,7 +14,11 @@ import type {
 } from '../../sessionStore/AgentSessionStore';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
-import { prepareTurn, type TurnPreparationDependencies } from '../turnPreparation';
+import {
+  prepareInitialTurn,
+  prepareTurn,
+  type TurnPreparationDependencies,
+} from '../turnPreparation';
 
 const AGENT_ID = 'agent-1';
 const SESSION_ID = 'session-1';
@@ -52,6 +56,27 @@ const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
 };
 
 describe('turn preparation', () => {
+  test('prepares a Draft first turn without reading a durable Session', async () => {
+    const harness = createHarness();
+
+    const plan = await prepareInitialTurn(
+      harness.dependencies,
+      {
+        agentId: AGENT_ID,
+        executionTarget: { kind: 'local' },
+        parts: [{ text: 'Hello.', type: 'text' }],
+      },
+      new AbortController().signal,
+    );
+
+    expect(plan.hasMessages).toBe(false);
+    expect(plan.history).toEqual([]);
+    expect(plan.sessionTurnIds).toEqual([]);
+    expect(harness.getSession).not.toHaveBeenCalled();
+    expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
+    expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
+  });
+
   test('builds a canonical turn plan from frozen model, tool, and attachment facts', async () => {
     const harness = createHarness();
     const input: AgentSubmitMessageInput = {

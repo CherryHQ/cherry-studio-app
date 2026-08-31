@@ -14,9 +14,12 @@ import { AppState } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { persistSessionWebSearchSelection } from '../sessionWebSearchSelection';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
+
+const logger = loggerService.withContext('ChatProvider');
 
 type AgentChatSendInput = {
   agentId?: string;
@@ -96,15 +99,25 @@ export function ChatProvider({ children }: PropsWithChildren) {
           throw new Error('Select an Agent before sending a message.');
         }
 
-        const session = await client.createSession(agentId);
+        const session = await client.startSession(agentId, parts, {
+          ...(modelId !== undefined ? { modelId } : {}),
+          ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+          ...(temporaryCapabilities !== undefined ? { temporaryCapabilities } : {}),
+        });
         targetSessionId = session.id;
-        persistSessionWebSearchSelection(
-          targetSessionId,
-          temporaryCapabilities?.includes('web-search') ?? false,
-        );
-        await client.observe(targetSessionId);
+        try {
+          persistSessionWebSearchSelection(
+            targetSessionId,
+            temporaryCapabilities?.includes('web-search') ?? false,
+          );
+        } catch (error) {
+          logger.warn('Failed to persist Session web-search selection', error as Error, {
+            sessionId: targetSessionId,
+          });
+        }
         navigation.openSession(targetSessionId, agentId);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
+        return;
       }
 
       await client.submitMessage(targetSessionId, parts, {

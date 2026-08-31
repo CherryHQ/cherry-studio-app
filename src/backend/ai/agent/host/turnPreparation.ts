@@ -16,6 +16,7 @@ import {
   type AgentMessagePart,
   type AgentMessageView,
   type AgentSessionView,
+  type AgentStartSessionInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -34,7 +35,10 @@ import type {
   RuntimeModelPreflight,
   RuntimeTool,
 } from '../runtime';
-import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
+import type {
+  AgentSessionStore,
+  StoredRuntimeTurnContext,
+} from '../sessionStore/AgentSessionStore';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -84,7 +88,7 @@ export type TurnPlan = {
   runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
   runtimeTextAttachments: RuntimeAttachmentContents;
-  session: AgentSessionView;
+  sessionTitle: string;
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
   /** The user message parts to reserve, projected from the canonical input. */
@@ -104,14 +108,6 @@ export async function prepareTurn(
   const configuredAgent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
   if (!configuredAgent) {
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
-  }
-  const agent = applyTurnOverrides(configuredAgent, parsed);
-  const runtime = dependencies.routeExecutionTarget(session.executionTarget);
-  if (
-    !runtime.descriptor.capabilities.attachments &&
-    parsed.parts.some((part) => part.type === 'file')
-  ) {
-    fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
   }
 
   const storedContextCandidate = await raceAbort(
@@ -139,6 +135,68 @@ export async function prepareTurn(
       checkpointMessageId: storedContextCandidate?.assistantMessageId,
       sessionId,
     });
+  }
+
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    configuredAgent,
+    storedTurnContext,
+    runtimeContextCheckpoint,
+    signal,
+  );
+}
+
+export async function prepareInitialTurn(
+  dependencies: TurnPreparationDependencies,
+  parsed: AgentStartSessionInput,
+  signal: AbortSignal,
+): Promise<TurnPlan> {
+  const configuredAgent = await raceAbort(dependencies.agents.getAgent(parsed.agentId), signal);
+  if (!configuredAgent) {
+    fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
+  }
+  const session = {
+    agentId: parsed.agentId,
+    executionTarget: parsed.executionTarget,
+    title: '',
+  };
+  const emptyContext: StoredRuntimeTurnContext = {
+    anchorFound: true,
+    hasMessages: false,
+    history: [],
+    referencedFileEntryIds: [],
+    sessionTurnIds: [],
+  };
+
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    configuredAgent,
+    emptyContext,
+    null,
+    signal,
+  );
+}
+
+async function prepareResolvedTurn(
+  dependencies: TurnPreparationDependencies,
+  parsed: AgentSubmitMessageInput | AgentStartSessionInput,
+  session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,
+  configuredAgent: AgentDefinition,
+  storedTurnContext: StoredRuntimeTurnContext,
+  runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
+  signal: AbortSignal,
+): Promise<TurnPlan> {
+  const agent = applyTurnOverrides(configuredAgent, parsed);
+  const runtime = dependencies.routeExecutionTarget(session.executionTarget);
+  if (
+    !runtime.descriptor.capabilities.attachments &&
+    parsed.parts.some((part) => part.type === 'file')
+  ) {
+    fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
   }
   const { availableFiles, inputFiles, parts } = await resolveManagedInput(
     dependencies.files,
@@ -248,7 +306,7 @@ export async function prepareTurn(
     runtime,
     runtimeContextCheckpoint,
     runtimeTextAttachments,
-    session,
+    sessionTitle: session.title,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     userParts,

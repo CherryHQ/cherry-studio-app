@@ -44,8 +44,12 @@ Session id through `useSyncExternalStore`. The client:
 - releases the Host observation when the final React subscriber leaves;
 - replaces observed Session state from a fresh snapshot when the app returns to the foreground.
 
-Starting a chat with an Agent does not create an empty Session. The first send creates the Session,
-establishes its observation, updates the route, and then submits the message.
+Selecting an Agent opens an isolated Draft composer and does not create a Session. The first send
+calls `startSession`: the Host completes write-free turn preparation, then atomically creates the
+Session and reserves its first user/assistant message pair. Only after that succeeds does the client
+install an observation snapshot and replace the Draft route with the durable Session route. The
+snapshot hands the first user/assistant pair directly to the message list, so the initial history
+query does not put a loading cover between send and streaming output.
 
 ## Transcript Window And Live Projection
 
@@ -97,7 +101,8 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 
 ## Acceptance
 
-- A new Session is observed before its first message is submitted, so initial events are not lost.
+- A Draft creates its Session and first message pair atomically; failed admission leaves no Session.
+- The first observation snapshot recovers output produced between Session start and route subscription.
 - A fresh subscriber recovers active output and approvals from the Session snapshot.
 - Persisted and live rows merge without duplicate message ids.
 - Older transcript pages appear in chronological order.

@@ -34,6 +34,9 @@ export function ChatScreen() {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
+  const composerSessionKey = sessionId
+    ? `session:${sessionId}`
+    : `draft:${resolvedAgentId ?? 'unavailable'}`;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
@@ -57,7 +60,7 @@ export function ChatScreen() {
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
         {hasComposer ? (
-          <ComposerSessionProvider>
+          <ComposerSessionProvider key={composerSessionKey}>
             <ComposerDock layoutMode="flow">
               <ChatInput
                 agentId={resolvedAgentId}

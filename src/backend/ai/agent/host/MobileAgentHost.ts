@@ -33,6 +33,8 @@
  *     published event is JSON-cloned (a non-JSON-safe value cannot survive);
  * 10. clients supply an execution target and Agent id; the local Pi binding
  *     stays private to the Host.
+ * 14. a Draft Session becomes durable in the same transaction as its first
+ *     user/assistant message reservation.
  */
 
 import type { AiService } from '@/backend/ai/AiService';
@@ -56,10 +58,10 @@ import type {
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import {
   AgentCancelTurnInputSchema,
-  AgentCreateSessionInputSchema,
   AgentDeleteSessionInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
+  AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentSessionSnapshotSchema,
   AgentProtocolError,
@@ -74,6 +76,7 @@ import {
   type AgentProtocol,
   type AgentSessionObservation,
   type AgentSessionView,
+  type AgentStartSessionInput,
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
@@ -92,7 +95,7 @@ import type {
   RuntimeUsageReport,
 } from '../runtime';
 import { raceAbort } from '../runtime';
-import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
+import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
 import {
   createSystemCapabilitySource,
@@ -118,7 +121,12 @@ import {
   toAgentUsageView,
 } from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
-import { prepareTurn, type TurnPlan, type TurnPreparationDependencies } from './turnPreparation';
+import {
+  prepareInitialTurn,
+  prepareTurn,
+  type TurnPlan,
+  type TurnPreparationDependencies,
+} from './turnPreparation';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
 
 const logger = loggerService.withContext('MobileAgentHost');
@@ -172,10 +180,12 @@ type ActiveTurnState = {
   agent: AgentDefinition;
   abortController: AbortController;
   turn: AgentTurnView;
+  activeUserMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
   autoNamePromise: Promise<AgentSessionView | null> | null;
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
+  hasHistoryBeforeActiveTurn: boolean;
   pendingApprovals: Map<string, AgentApprovalView>;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
@@ -233,6 +243,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
+  private readonly initialAdmissions = new Set<AdmissionState>();
+  private readonly observingSessions = new Map<string, Set<Promise<void>>>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
   private readonly runtimeSessions = new Map<
@@ -338,8 +350,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     for (const admission of this.admittingSessions.values()) {
       admission.abortController.abort(reason);
     }
+    for (const admission of this.initialAdmissions) {
+      admission.abortController.abort(reason);
+    }
     await Promise.allSettled(
-      [...this.admittingSessions.values()].map(({ completion }) => completion),
+      [...this.admittingSessions.values(), ...this.initialAdmissions].map(
+        ({ completion }) => completion,
+      ),
     );
     // An admission already committing its reservation may have installed a
     // turn while the first abort pass was running.
@@ -363,6 +380,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   protected override onDestroy(): void {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
+    this.observingSessions.clear();
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
@@ -371,20 +389,55 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Protocol operations ──
 
-  async createSession(input: {
-    agentId: string;
-    executionTarget: AgentExecutionTarget;
-    title?: string;
-  }): Promise<AgentSessionView> {
-    const parsed = AgentCreateSessionInputSchema.parse(input);
-    const agent = await this.agents.getAgent(parsed.agentId);
-    if (!agent) {
-      fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
+  async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
+    const parsed = AgentStartSessionInputSchema.parse(input);
+    this.assertAcceptingSubmissions();
+    const completion = createCompletionSignal();
+    const abortController = new AbortController();
+    const admission = { abortController, completion: completion.promise };
+    const { signal } = abortController;
+    this.initialAdmissions.add(admission);
+    let openedRuntimeSession: AgentRuntimeSession | undefined;
+    let isRuntimeSessionInstalled = false;
+
+    try {
+      const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
+      openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
+      signal.throwIfAborted();
+
+      const reserved = await this.store.reserveInitialSubmission({
+        agentId: parsed.agentId,
+        executionTarget: parsed.executionTarget,
+        userParts: plan.userParts,
+        modelId: plan.inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot: plan.inferenceSnapshot,
+      });
+      const { session } = reserved;
+      this.runtimeSessions.set(session.id, {
+        runtimeId: plan.runtime.descriptor.id,
+        session: openedRuntimeSession,
+      });
+      isRuntimeSessionInstalled = true;
+      this.startReservedTurn(
+        session.id,
+        session.title,
+        plan,
+        reserved,
+        openedRuntimeSession,
+        abortController,
+      );
+      return session;
+    } finally {
+      if (openedRuntimeSession && !isRuntimeSessionInstalled) {
+        await openedRuntimeSession
+          .close()
+          .catch((error) =>
+            logger.warn('Failed to close an unused Runtime session', error as Error),
+          );
+      }
+      this.initialAdmissions.delete(admission);
+      completion.resolve();
     }
-    return this.store.createSession({
-      agentId: parsed.agentId,
-      title: parsed.title,
-    });
   }
 
   async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
@@ -409,6 +462,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // installing its active/running state for us to cancel and drain below.
     this.deletingSessions.add(sessionId);
     try {
+      const observations = this.observingSessions.get(sessionId);
+      if (observations) {
+        await Promise.allSettled([...observations]);
+      }
       const admission = this.admittingSessions.get(sessionId);
       if (admission) {
         await admission.completion;
@@ -470,64 +527,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         inferenceSnapshot: plan.inferenceSnapshot,
       });
 
-      // The Turn projection starts here: reservation time is the turn start.
-      const turn: AgentTurnView = {
-        id: reserved.turnId,
+      return this.startReservedTurn(
         sessionId,
-        status: 'running',
-        assistantMessageId: reserved.assistantMessage.id,
-        error: null,
-        startedAt: reserved.assistantMessage.createdAt,
-        endedAt: null,
-      };
-      const state: ActiveTurnState = {
-        agent: plan.agent,
-        abortController,
-        turn,
-        assistantMessage: reserved.assistantMessage,
-        autoNamePromise: null,
-        autoNameUserParts: plan.hasMessages ? null : plan.inputParts,
-        backgroundReply: this.startBackgroundReply({
-          agentId: plan.agent.id,
-          agentName: plan.agent.name,
-          sessionId,
-          sessionTitle: plan.session.title,
-        }),
-        pendingApprovals: new Map(),
-        pendingContextCheckpoint: null,
-        resources: plan.resources,
-        sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
-        usage: null,
+        plan.sessionTitle,
+        plan,
+        reserved,
         runtimeSession,
-      };
-      this.activeTurns.set(sessionId, state);
-
-      this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
-      this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
-      this.publish(sessionId, { type: 'turn.updated', turn });
-      if (state.autoNameUserParts && !signal.aborted) {
-        state.autoNamePromise = this.naming.maybeRenameFromFirstUserMessage(
-          sessionId,
-          state.autoNameUserParts,
-        );
-        this.publishSessionRename(state.autoNamePromise);
-      }
-
-      const run = this.runTurn(sessionId, plan, state);
-      this.runningTurns.add(run);
-      this.runningTurnsBySession.set(sessionId, run);
-      void run.finally(() => {
-        this.runningTurns.delete(run);
-        if (this.runningTurnsBySession.get(sessionId) === run) {
-          this.runningTurnsBySession.delete(sessionId);
-        }
-      });
-
-      return {
-        turnId: reserved.turnId,
-        userMessageId: reserved.userMessage.id,
-        assistantMessageId: reserved.assistantMessage.id,
-      };
+        abortController,
+      );
     } finally {
       this.admittingSessions.delete(sessionId);
       completion.resolve();
@@ -572,37 +579,131 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
-    const session = await this.store.getSession(sessionId);
-    if (!session) {
-      fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+    if (this.deletingSessions.has(sessionId)) {
+      fail('SESSION_BUSY', 'The session is being deleted.');
     }
-    const agent = await this.requireAgent(session.agentId);
-    const capabilities = this.projectCapabilities(session.executionTarget);
+    const completion = createCompletionSignal();
+    const observations = this.observingSessions.get(sessionId) ?? new Set<Promise<void>>();
+    observations.add(completion.promise);
+    this.observingSessions.set(sessionId, observations);
 
-    // Snapshot capture and listener registration are one synchronous section:
-    // no event can fall into a snapshot/subscription gap (invariant 8).
-    const active = this.activeTurns.get(sessionId);
-    const snapshot = AgentSessionSnapshotSchema.parse(
-      cloneJson({
-        agent: { id: agent.id, name: agent.name },
-        session,
-        capabilities,
-        activeTurn: active?.turn ?? null,
-        streamingMessage: active?.assistantMessage ?? null,
-        pendingApprovals: active
-          ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
-          : [],
+    try {
+      const session = await this.store.getSession(sessionId);
+      if (!session) {
+        fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+      }
+      const agent = await this.requireAgent(session.agentId);
+      const capabilities = this.projectCapabilities(session.executionTarget);
+      if (this.deletingSessions.has(sessionId)) {
+        fail('SESSION_BUSY', 'The session is being deleted.');
+      }
+
+      // Snapshot capture and listener registration are one synchronous section:
+      // no event can fall into a snapshot/subscription gap (invariant 8).
+      const active = this.activeTurns.get(sessionId);
+      const snapshot = AgentSessionSnapshotSchema.parse(
+        cloneJson({
+          agent: { id: agent.id, name: agent.name },
+          session,
+          capabilities,
+          activeTurn: active?.turn ?? null,
+          activeUserMessage: active?.activeUserMessage ?? null,
+          hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
+          streamingMessage: active?.assistantMessage ?? null,
+          pendingApprovals: active
+            ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
+            : [],
+        }),
+      );
+      const sessionListeners = this.listeners.get(sessionId) ?? new Set();
+      this.listeners.set(sessionId, sessionListeners);
+      sessionListeners.add(listener);
+
+      return {
+        snapshot,
+        unsubscribe: () => {
+          sessionListeners.delete(listener);
+          if (sessionListeners.size === 0 && this.listeners.get(sessionId) === sessionListeners) {
+            this.listeners.delete(sessionId);
+          }
+        },
+      };
+    } finally {
+      observations.delete(completion.promise);
+      if (observations.size === 0 && this.observingSessions.get(sessionId) === observations) {
+        this.observingSessions.delete(sessionId);
+      }
+      completion.resolve();
+    }
+  }
+
+  private startReservedTurn(
+    sessionId: string,
+    sessionTitle: string,
+    plan: TurnPlan,
+    reserved: ReserveSubmissionResult,
+    runtimeSession: AgentRuntimeSession,
+    abortController: AbortController,
+  ): { turnId: string; userMessageId: string; assistantMessageId: string } {
+    // The Turn projection starts here: reservation time is the turn start.
+    const turn: AgentTurnView = {
+      id: reserved.turnId,
+      sessionId,
+      status: 'running',
+      assistantMessageId: reserved.assistantMessage.id,
+      error: null,
+      startedAt: reserved.assistantMessage.createdAt,
+      endedAt: null,
+    };
+    const state: ActiveTurnState = {
+      agent: plan.agent,
+      abortController,
+      turn,
+      activeUserMessage: reserved.userMessage,
+      assistantMessage: reserved.assistantMessage,
+      autoNamePromise: null,
+      autoNameUserParts: plan.hasMessages ? null : plan.inputParts,
+      backgroundReply: this.startBackgroundReply({
+        agentId: plan.agent.id,
+        agentName: plan.agent.name,
+        sessionId,
+        sessionTitle,
       }),
-    );
-    const sessionListeners = this.listeners.get(sessionId) ?? new Set();
-    this.listeners.set(sessionId, sessionListeners);
-    sessionListeners.add(listener);
+      hasHistoryBeforeActiveTurn: plan.hasMessages,
+      pendingApprovals: new Map(),
+      pendingContextCheckpoint: null,
+      resources: plan.resources,
+      sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
+      usage: null,
+      runtimeSession,
+    };
+    this.activeTurns.set(sessionId, state);
+
+    this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
+    this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
+    this.publish(sessionId, { type: 'turn.updated', turn });
+    if (state.autoNameUserParts && !abortController.signal.aborted) {
+      state.autoNamePromise = this.naming.maybeRenameFromFirstUserMessage(
+        sessionId,
+        state.autoNameUserParts,
+      );
+      this.publishSessionRename(state.autoNamePromise);
+    }
+
+    const run = this.runTurn(sessionId, plan, state);
+    this.runningTurns.add(run);
+    this.runningTurnsBySession.set(sessionId, run);
+    void run.finally(() => {
+      this.runningTurns.delete(run);
+      if (this.runningTurnsBySession.get(sessionId) === run) {
+        this.runningTurnsBySession.delete(sessionId);
+      }
+    });
 
     return {
-      snapshot,
-      unsubscribe: () => {
-        sessionListeners.delete(listener);
-      },
+      turnId: reserved.turnId,
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
     };
   }
 
@@ -920,10 +1021,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
-  private assertIdle(sessionId: string): void {
+  private assertAcceptingSubmissions(): void {
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }
+  }
+
+  private assertIdle(sessionId: string): void {
+    this.assertAcceptingSubmissions();
     if (this.deletingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session is being deleted.');
     }
@@ -987,11 +1092,20 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.runtimeSessions.delete(sessionId);
       await raceAbort(cached.session.close(), signal);
     }
+    const session = await this.openRuntimeSession(runtime, signal);
+    this.runtimeSessions.set(sessionId, { runtimeId: runtime.descriptor.id, session });
+    return session;
+  }
+
+  private async openRuntimeSession(
+    runtime: AgentRuntime,
+    signal: AbortSignal,
+  ): Promise<AgentRuntimeSession> {
+    signal.throwIfAborted();
     const opening = runtime.open();
     try {
       const session = await raceAbort(opening, signal);
       signal.throwIfAborted();
-      this.runtimeSessions.set(sessionId, { runtimeId: runtime.descriptor.id, session });
       return session;
     } catch (error) {
       if (signal.aborted) {
