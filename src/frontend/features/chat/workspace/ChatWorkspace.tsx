@@ -178,6 +178,7 @@ export function ChatWorkspace({
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
+        key={sessionId}
         approvals={pendingApprovals}
         isOpen={pendingApprovals.length > 0}
         onRespond={handleApprovalRespond}

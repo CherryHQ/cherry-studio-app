@@ -29,8 +29,9 @@ The two share their matching rules through `@/frontend/utils/search` and nothing
 - The caller alone decides what a selected item means. The search route never writes preferences,
   navigates to a business destination, toggles selection, or keeps itself open after a press.
 
-Sessions live in memory and route params carry only the session id; callbacks, data, and rendered
-items are never serialized into navigation state. Only one app-search session can be active.
+Sessions live in memory and the route's `searchSessionId` param carries only the search-session id;
+callbacks, data, and rendered items are never serialized into navigation state. Only one app-search
+session can be active. The explicit param name keeps it distinct from an Agent chat `sessionId`.
 
 ## Extension Boundary
 

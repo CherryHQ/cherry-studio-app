@@ -27,19 +27,23 @@ export function useProviderApiServiceQueries(providerId: string) {
     retry: false,
   });
   const saveMutation = useMutation('PATCH', '/providers/:id', {
-    refresh: [
+    refresh: ({ args }) => [
       '/models',
       '/providers',
       '/providers/page',
-      `/providers/${providerId}`,
-      `/providers/${providerId}/auth`,
+      ...(args ? [`/providers/${args.params.id}`, `/providers/${args.params.id}/auth`] : []),
     ],
   });
   const replaceMutation = useMutation('PUT', '/providers/:id/api-keys', {
     onMutate: async (variables) => {
+      const mutationProviderId = variables?.params.id;
+      if (!mutationProviderId) {
+        return {};
+      }
+
       const apiKeys = await updateQueriesOptimistically<ApiKeyEntry[]>(
         queryClient,
-        { exact: true, queryKey: [`/providers/${providerId}/api-keys`] },
+        { exact: true, queryKey: [`/providers/${mutationProviderId}/api-keys`] },
         (current) => variables?.body ?? current,
       );
 
@@ -48,11 +52,10 @@ export function useProviderApiServiceQueries(providerId: string) {
     onError: (_error, _variables, context) => {
       restoreQuerySnapshot(queryClient, context?.apiKeys);
     },
-    refresh: [
+    refresh: ({ args }) => [
       '/providers',
       '/providers/page',
-      `/providers/${providerId}`,
-      `/providers/${providerId}/api-keys`,
+      ...(args ? [`/providers/${args.params.id}`, `/providers/${args.params.id}/api-keys`] : []),
     ],
   });
   const saveProviderRequest = saveMutation.trigger;

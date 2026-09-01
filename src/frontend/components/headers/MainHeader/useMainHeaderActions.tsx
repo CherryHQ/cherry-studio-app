@@ -1,15 +1,16 @@
+import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { useTranslation } from 'react-i18next';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
-import { MainHeaderAgentButton, useMainHeaderAgent } from './MainHeaderAgentButton';
+import { useMainHeaderAgent } from './MainHeaderAgentButton';
 
 /** Resolves the platform-independent MainHeader action lists for both adapters. */
 export function useMainHeaderActions() {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
-  const { agent, openAgent, openNewSession } = useMainHeaderAgent();
+  const { agent, currentAgentId, openAgentHistory, openNewSession } = useMainHeaderAgent();
   const rightActions: HeaderToolbarAction[] = [
     {
       accessibilityLabel: t('navigation.newChat'),
@@ -20,13 +21,15 @@ export function useMainHeaderActions() {
     },
   ];
 
-  if (agent) {
+  if (currentAgentId) {
     rightActions.push({
-      element: <MainHeaderAgentButton agent={agent} onPress={openAgent} />,
-      key: 'current-agent',
-      type: 'custom',
+      accessibilityLabel: t('agent.actions.viewSessions'),
+      icon: ClockIcon,
+      key: 'agent-history',
+      onPress: openAgentHistory,
+      type: 'icon',
     });
   }
 
-  return { leadingAction, rightActions };
+  return { agent, currentAgentId, leadingAction, rightActions };
 }
