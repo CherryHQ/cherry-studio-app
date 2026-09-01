@@ -115,6 +115,9 @@ namespace margelo::nitro::cherrystudio::ui {
   }
 
   // Methods
-  
+  void JHybridCherryMenuViewSpec::showMenu() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("showMenu");
+    method(_javaPart);
+  }
 
 } // namespace margelo::nitro::cherrystudio::ui

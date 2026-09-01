@@ -15,7 +15,7 @@ public protocol HybridCherryMenuViewSpec_protocol: HybridObject, HybridView {
   var trigger: NativeMenuTrigger { get set }
 
   // Methods
-  
+  func showMenu() throws -> Void
 }
 
 public extension HybridCherryMenuViewSpec_protocol {

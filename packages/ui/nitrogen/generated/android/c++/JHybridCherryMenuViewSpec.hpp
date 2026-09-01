@@ -59,7 +59,7 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     // Methods
-    
+    void showMenu() override;
 
   private:
     jni::global_ref<JHybridCherryMenuViewSpec::JavaPart> _javaPart;

@@ -298,35 +298,46 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
-`Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
-array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:
+`ActionMenu` and `ContextMenu` are the shared native action menus. Each accepts one trigger element
+and a flat, stable `items` array; the package owns Nitro wiring, native action dispatch, and the
+menu's recognition ownership. Call sites express which interaction they mean by choosing the
+component instead of configuring a trigger:
 
 ```tsx
-import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { ActionMenu, ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
 
 const items = [
   { id: 'rename', label: 'Rename', onPress: rename },
   { destructive: true, id: 'delete', label: 'Delete', onPress: remove },
 ] satisfies readonly MenuItem[];
 
-<Menu items={items} trigger="longPress">
+// A tap-triggered dropdown: the tap is button behavior the menu owns outright.
+<ActionMenu items={items}>
+  <MoreButton />
+</ActionMenu>;
+
+// A long-press contextual menu that keeps the child's normal tap behavior.
+<ContextMenu items={items}>
   <MessageRow />
-</Menu>;
+</ContextMenu>;
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
 unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMenuInteraction`, while
-Android uses `PopupMenu`. Each keeps the system style for destructive items. `tap` is for
-button-like dropdowns, and `longPress` is for contextual
-actions without taking over the child's normal tap. Expo Router page previews remain owned by
-`Link.Preview` / `Link.Menu`, not this component.
+Android uses `PopupMenu`. Each keeps the system style for destructive items. Expo Router page
+previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
-The target priority and cancellation behavior between menu recognition and ancestor scrolling is
-documented in
-[Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
-as `Status: design`. Verify the native interaction boundary on each supported platform when a menu
-is used inside a scroll surface.
+`ContextMenu` recognition follows
+[Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
+on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
+ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
+gesture arena, so committed scrolling and pan gestures cancel it, and the native view only presents
+the already-arbitrated menu. Recognition timing and touch slop stay on the platform recognizer's
+defaults. On Android the enabled items are also exposed as accessibility custom actions on the
+trigger child, so the contextual operations do not depend on long press; iOS accessibility stays
+with the system interaction. Verify changed gesture boundaries on a device — the arbitration
+reference is `Status: design` and JavaScript tests cannot prove recognizer timing.
 
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.

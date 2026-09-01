@@ -21,11 +21,13 @@ import com.facebook.react.uimanager.ThemedReactContext
 import com.facebook.react.uimanager.events.NativeGestureUtil
 
 private class MenuFrameLayout(context: Context) : FrameLayout(context) {
-    var onLongPress: (() -> Unit)? = null
     var onTap: (() -> Unit)? = null
     private var isMenuGestureActive = false
     private var isNativeGestureActive = false
 
+    // Tap triggers are button behavior the menu may own outright. Long press competes with
+    // scrolling and pan gestures, so its recognition lives in the shared gesture arena on the
+    // JavaScript side; this view only presents through showMenu().
     private val gestureDetector = GestureDetector(
         context,
         object : GestureDetector.SimpleOnGestureListener() {
@@ -36,22 +38,20 @@ private class MenuFrameLayout(context: Context) : FrameLayout(context) {
                 activateMenu(event, handler)
                 return true
             }
-
-            override fun onLongPress(event: MotionEvent) {
-                onLongPress?.let { activateMenu(event, it) }
-            }
         },
     )
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (onTap == null) {
+            return super.dispatchTouchEvent(event)
+        }
+
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             isMenuGestureActive = false
             isNativeGestureActive = false
-            if (onTap != null) {
-                // RootView sees ACTION_UP before descendants do. Claim tap-trigger gestures on
-                // DOWN so a wrapped React Pressable cannot release before the menu takes over.
-                startNativeGesture(event)
-            }
+            // RootView sees ACTION_UP before descendants do. Claim tap-trigger gestures on
+            // DOWN so a wrapped React Pressable cannot release before the menu takes over.
+            startNativeGesture(event)
         }
 
         gestureDetector.onTouchEvent(event)
@@ -79,9 +79,6 @@ private class MenuFrameLayout(context: Context) : FrameLayout(context) {
 
     private fun activateMenu(event: MotionEvent, handler: () -> Unit) {
         isMenuGestureActive = true
-        // Long-press claims RN's root responder here; tap already claimed it on DOWN. Both still
-        // cancel the native child that received the gesture stream.
-        startNativeGesture(event)
         MotionEvent.obtain(event).also { cancelEvent ->
             cancelEvent.action = MotionEvent.ACTION_CANCEL
             super.dispatchTouchEvent(cancelEvent)
@@ -139,14 +136,19 @@ class HybridCherryMenuView(
     private fun updateTrigger() {
         when (trigger) {
             NativeMenuTrigger.TAP -> {
-                containerView.onLongPress = null
                 containerView.onTap = ::showPopupMenu
             }
+            // A long-press menu never recognizes its own trigger on Android: the shared gesture
+            // arena arbitrates the long press against scrolling and pans, then calls showMenu().
             NativeMenuTrigger.LONGPRESS -> {
                 containerView.onTap = null
-                containerView.onLongPress = ::showPopupMenu
             }
         }
+    }
+
+    override fun showMenu() {
+        // Hybrid methods arrive on the JS thread; PopupMenu must be shown from the UI thread.
+        containerView.post(::showPopupMenu)
     }
 
     private fun showPopupMenu() {

@@ -20,6 +20,7 @@ namespace margelo::nitro::cherrystudio::ui {
       prototype.registerHybridSetter("onAction", &HybridCherryMenuViewSpec::setOnAction);
       prototype.registerHybridGetter("trigger", &HybridCherryMenuViewSpec::getTrigger);
       prototype.registerHybridSetter("trigger", &HybridCherryMenuViewSpec::setTrigger);
+      prototype.registerHybridMethod("showMenu", &HybridCherryMenuViewSpec::showMenu);
     });
   }
 

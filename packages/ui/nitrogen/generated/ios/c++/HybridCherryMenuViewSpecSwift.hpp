@@ -99,7 +99,12 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     // Methods
-    
+    inline void showMenu() override {
+      auto __result = _swiftPart.showMenu();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
 
   private:
     CherryStudioUI::HybridCherryMenuViewSpec_cxx _swiftPart;

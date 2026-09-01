@@ -60,7 +60,7 @@ namespace margelo::nitro::cherrystudio::ui {
 
     public:
       // Methods
-      
+      virtual void showMenu() = 0;
 
     protected:
       // Hybrid Setup
