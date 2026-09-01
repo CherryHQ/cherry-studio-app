@@ -90,6 +90,9 @@ describe('Agent tool and managed-file contracts', () => {
         agentId: 'agent-1',
         createdAt: '2026-08-31T00:00:00.000Z',
         executionTarget: { kind: 'local' },
+        // Null rather than omitted: lineage is absent, not unknown, and a JSON
+        // round trip must keep telling the difference.
+        forkedFromSessionId: null,
         id: 'session-1',
         title: '',
         titleIsManual: false,

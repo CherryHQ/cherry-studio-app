@@ -12,6 +12,8 @@ import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/share
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ForkSessionInput,
+  ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
@@ -40,7 +42,9 @@ type StoredMessage = {
 function createSessionView(input: {
   agentId: string;
   executionTarget?: AgentSessionView['executionTarget'];
+  forkedFromSessionId?: string;
   title?: string;
+  titleIsManual?: boolean;
 }): AgentSessionView {
   const timestamp = nowIso();
   return {
@@ -48,10 +52,30 @@ function createSessionView(input: {
     agentId: input.agentId,
     executionTarget: input.executionTarget ?? { kind: 'local' },
     title: input.title ?? '',
-    titleIsManual: input.title !== undefined,
+    titleIsManual: input.titleIsManual ?? input.title !== undefined,
+    forkedFromSessionId: input.forkedFromSessionId ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+/**
+ * Reissues one source turn id per fork, keeping a submission's user/assistant
+ * pair correlated while leaving no id shared with the source Session.
+ */
+function reissueTurnId(reissued: Map<string, string>, turnId: string | null): string | null {
+  if (turnId === null) {
+    return null;
+  }
+
+  const existing = reissued.get(turnId);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const next = uuidv7();
+  reissued.set(turnId, next);
+  return next;
 }
 
 function reserveInTranscript(
@@ -172,7 +196,61 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
+    // source and only loses the lineage claim.
+    for (const [forkId, session] of this.sessions) {
+      if (session.forkedFromSessionId === sessionId) {
+        this.sessions.set(forkId, { ...session, forkedFromSessionId: null });
+      }
+    }
     return true;
+  }
+
+  async forkSession(input: ForkSessionInput): Promise<ForkSessionResult> {
+    const source = this.sessions.get(input.sessionId);
+    if (!source) {
+      return { status: 'session-not-found' };
+    }
+
+    const transcript = this.messages.get(input.sessionId) ?? [];
+    const anchorIndex = transcript.findIndex((stored) => stored.view.id === input.fromMessageId);
+    if (anchorIndex < 0) {
+      return { status: 'message-not-found' };
+    }
+    if (UNSETTLED_MESSAGE_STATUSES.has(transcript[anchorIndex].view.status)) {
+      return { status: 'fork-point-unsettled' };
+    }
+
+    // Synchronous section: the Session and its copied transcript commit
+    // together or not at all.
+    const session = createSessionView({
+      agentId: source.agentId,
+      executionTarget: source.executionTarget,
+      forkedFromSessionId: source.id,
+      title: input.title ?? source.title,
+      titleIsManual: source.titleIsManual,
+    });
+    const reissuedTurnIds = new Map<string, string>();
+    const forkedTranscript = transcript
+      .slice(0, anchorIndex + 1)
+      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))
+      .map<StoredMessage>((stored) => ({
+        // Runtime-private and anchored to a turn id this copy no longer
+        // carries, so the fork replays full history instead.
+        contextCheckpoint: null,
+        error: stored.error === null ? null : cloneJson(stored.error),
+        view: cloneJson({
+          ...stored.view,
+          id: uuidv7(),
+          sessionId: session.id,
+          turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
+          updatedAt: nowIso(),
+        }),
+      }));
+
+    this.sessions.set(session.id, session);
+    this.messages.set(session.id, forkedTranscript);
+    return { session: cloneJson(session), status: 'forked' };
   }
 
   async reserveInitialSubmission(

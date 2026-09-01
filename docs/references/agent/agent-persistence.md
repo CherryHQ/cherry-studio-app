@@ -24,7 +24,10 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Out of scope: branching columns, background turns, Mobile Skill configuration/loading, and broader
+Branching is a fork, not a message tree, so `agent_session` carries one nullable lineage column and
+no per-message parent/active-path columns ([Agent Protocol](./agent-protocol.md#branching)).
+
+Out of scope: message-tree columns, background turns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
 System capabilities are resolved independently and require no Agent persistence. No frontend surface
 selects a temporary capability, so neither web search nor image generation needs Agent or Session
@@ -203,6 +206,7 @@ specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server del
 | `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
 | `lastActivityAt` | integer | NOT NULL | Updated only when a turn reserves or finalizes |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
+| `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
 recency; no `orderKey`).
@@ -263,6 +267,19 @@ projection:
   write (invariant 5). Failed, cancelled, and interrupted terminal rows force the checkpoint to
   `NULL`. The error part and turn-level error column receive the same `AgentErrorView`; historical
   rows without a failure snapshot remain valid. `deleteSession` is one cascading delete.
+- `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
+  It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
+  or else from the source, sets
+  `forkedFromSessionId`, and stamps `lastActivityAt` to now so the fork sorts to the top of the
+  recency list. Copied rows keep `createdAt`, `role`, `data`, `status`, `usage`, `error`,
+  `modelId`, and `messageSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
+  survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
+  checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
+  "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
+  ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
+  preserves order while stamping "now" on every row would be visibly wrong in the UI.
+  `searchableText` and `ftsRowid` are left to the insert trigger, which is race-free because the
+  whole copy runs inside the serialized write transaction.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

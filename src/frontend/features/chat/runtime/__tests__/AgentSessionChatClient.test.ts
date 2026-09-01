@@ -28,6 +28,7 @@ function snapshot(): AgentSessionSnapshot {
       agentId: 'agent-1',
       createdAt: '2026-08-25T00:00:00.000Z',
       executionTarget: { kind: 'local' },
+      forkedFromSessionId: null,
       id: 'session-1',
       title: '',
       titleIsManual: false,
@@ -75,6 +76,7 @@ function protocolWithObservation(
   return {
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
+    forkSession: jest.fn(),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),

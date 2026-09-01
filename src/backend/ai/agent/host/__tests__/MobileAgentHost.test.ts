@@ -2093,6 +2093,57 @@ describe('MobileAgentHost', () => {
     expect(await store.listMessages(unavailableSession.id)).toEqual([]);
   });
 
+  test('forks a settled transcript and refuses to fork across a live turn', async () => {
+    const released = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Answer', state: 'done' },
+      });
+      await released.promise;
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+
+    const first = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    // A fork point must be a clean cut: while the turn runs, the source is
+    // refused outright rather than quietly copying a shorter transcript.
+    await expect(
+      host.forkSession({ sessionId: session.id, fromMessageId: first.userMessageId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+
+    released.resolve();
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'the turn to settle',
+    );
+
+    const forked = await host.forkSession({
+      sessionId: session.id,
+      fromMessageId: first.assistantMessageId,
+    });
+    expect(forked.forkedFromSessionId).toBe(session.id);
+    expect((await store.listMessages(forked.id)).map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
+    // The fork is idle and immediately usable, with no turn carried over.
+    const observation = await host.observeSession(forked.id, () => {});
+    expect(observation.snapshot.activeTurn).toBeNull();
+    expect(observation.snapshot.pendingApprovals).toEqual([]);
+
+    await expect(
+      host.forkSession({ sessionId: 'missing', fromMessageId: first.assistantMessageId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
+    await expect(
+      host.forkSession({ sessionId: session.id, fromMessageId: 'missing' }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+  });
+
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);
 

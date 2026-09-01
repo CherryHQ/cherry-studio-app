@@ -20,6 +20,7 @@ export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
     executionTarget: row.executionTarget,
     title: row.title,
     titleIsManual: row.titleIsManual,
+    forkedFromSessionId: row.forkedFromSessionId,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
