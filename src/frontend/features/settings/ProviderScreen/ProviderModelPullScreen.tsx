@@ -1,8 +1,9 @@
+import { Button } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { ModelSearchControls } from '@/frontend/components/modelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -275,16 +276,16 @@ const PullSectionHeader = memo(function PullSectionHeader({
         {ids.length}
       </Text>
       <View className="flex-1" />
-      <Pressable
+      <Button
         accessibilityLabel={actionLabel}
-        accessibilityRole="button"
-        className="shrink-0 justify-center px-1 active:opacity-60 disabled:opacity-40"
+        className="shrink-0"
         disabled={ids.length === 0}
-        hitSlop={6}
+        size="xs"
+        variant="ghost"
         onPress={handleActionPress}
       >
-        <Text className="font-medium text-foreground text-sm">{actionLabel}</Text>
-      </Pressable>
+        <Button.Label>{actionLabel}</Button.Label>
+      </Button>
     </View>
   );
 });

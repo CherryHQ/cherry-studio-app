@@ -4,7 +4,7 @@ import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import MailIcon from '@cherrystudio/app-icons/icons/mail';
 import RssIcon from '@cherrystudio/app-icons/icons/rss';
 import SquareArrowOutUpRightIcon from '@cherrystudio/app-icons/icons/square-arrow-out-up-right';
-import { Image, Section } from '@cherrystudio/ui/components';
+import { Chip, Image, Section } from '@cherrystudio/ui/components';
 import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';
 import { useCallback } from 'react';
@@ -59,9 +59,7 @@ export default function AboutSettingsScreen() {
           <Text className="text-foreground text-sm" numberOfLines={0}>
             {t('common.cherryStudioDescription')}
           </Text>
-          <View className="self-start rounded-full bg-secondary px-2 py-0.5">
-            <Text className="font-medium text-muted-foreground text-sm">v{APP_VERSION}</Text>
-          </View>
+          <Chip.Tag className="px-2 py-0.5">v{APP_VERSION}</Chip.Tag>
         </View>
       </View>
 
