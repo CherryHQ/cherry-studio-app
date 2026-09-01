@@ -193,11 +193,11 @@ export function AiUsageCalendar({
                 {t('aiUsage.less')}
               </Text>
               <View accessible={false} className="flex-row gap-1">
-                {levelColors.map((color, level) => (
+                {aiUsageLevelColors.map((colorName, level) => (
                   <View
                     className="size-3"
-                    key={color}
-                    style={{ backgroundColor: color }}
+                    key={colorName}
+                    style={{ backgroundColor: levelColors[level] }}
                     testID={`ai-usage-legend-level-${level}`}
                   />
                 ))}

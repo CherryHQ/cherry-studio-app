@@ -1,9 +1,6 @@
 import { fileContent } from '@/backend/services/file/fileContent';
-import type {
-  AgentTemporaryCapability,
-  DevicePermissionScope,
-  SystemPermissionState,
-} from '@/shared/contracts';
+import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -31,12 +28,13 @@ describe('createSystemCapabilitySource', () => {
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
-    // Every device tool needs a permission and generate_image needs a drawing
-    // model, so only the unconditional file tools survive.
+    // Every device tool needs a permission, web tools need a configured
+    // provider, and generate_image needs a drawing model, so only the
+    // unconditional file tools survive.
     expect(capabilityIds(tools)).toEqual(['edit_file', 'write_file']);
   });
 
-  test('adds a device tool once every scope it needs is granted', async () => {
+  test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([
       'calendar_list_collections',
@@ -52,10 +50,32 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(writable)).toContain('calendar_delete_event');
   });
 
-  test('omits a device tool whose permission is merely undetermined', async () => {
+  test('offers a never-asked device tool as ask so execution can request access', async () => {
     const tools = await resolve({ deviceAccess: { 'location.read': 'undetermined' } });
 
-    expect(capabilityIds(tools)).not.toContain('location_get_current');
+    const location = tools.find((tool) => tool.providerName === 'location_get_current');
+    expect(location?.approval).toBe('ask');
+    // The escalated ask is a consent requirement; the Agent's global auto
+    // mode must not silence the in-app card before the one-shot OS prompt.
+    expect(location?.autoApprovalEligible).toBe(false);
+  });
+
+  test('omits a device tool once any scope it needs is denied', async () => {
+    const tools = await resolve({
+      deviceAccess: { 'calendar.read': 'granted', 'calendar.write': 'denied' },
+    });
+
+    expect(capabilityIds(tools)).toContain('calendar_list_events');
+    expect(capabilityIds(tools)).not.toContain('calendar_create_event');
+  });
+
+  test('omits a device group the Agent disabled even when access is granted', async () => {
+    const tools = await resolve({
+      deviceAccess: { 'calendar.read': 'granted', 'calendar.write': 'granted' },
+      disabledCapabilities: ['calendar'],
+    });
+
+    expect(capabilityIds(tools)).toEqual(['edit_file', 'write_file']);
   });
 
   test('reads mutations as ask and lookups as auto', async () => {
@@ -67,33 +87,43 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
-  test('offers web tools only when the composer enables them for this turn', async () => {
-    const unbound = await resolve({});
-    expect(capabilityIds(unbound)).not.toContain('web_search');
+  test('offers each web tool only when its provider is configured', async () => {
+    const unconfigured = await resolve({});
+    expect(capabilityIds(unconfigured)).not.toContain('web_search');
+    expect(capabilityIds(unconfigured)).not.toContain('web_fetch');
 
-    const enabled = await resolve({
-      temporaryCapabilities: ['web-search'],
-    });
-    expect(capabilityIds(enabled)).toEqual(expect.arrayContaining(['web_search', 'web_fetch']));
-    expect(approvalOf(enabled, 'web_search')).toBe('auto');
+    const searchOnly = await resolve({ webSearchProviders: { searchKeywords: true } });
+    expect(capabilityIds(searchOnly)).toContain('web_search');
+    expect(capabilityIds(searchOnly)).not.toContain('web_fetch');
+    expect(approvalOf(searchOnly, 'web_search')).toBe('auto');
   });
 
-  test('offers generate_image only with temporary activation and a drawing model', async () => {
-    const withoutActivation = await resolve({ paintingModel: paintingModel() });
-    expect(capabilityIds(withoutActivation)).not.toContain('generate_image');
-
-    const withoutModel = await resolve({
-      paintingModel: null,
-      temporaryCapabilities: ['image-generation'],
+  test('omits web tools when the Agent disables the group', async () => {
+    const tools = await resolve({
+      disabledCapabilities: ['web'],
+      webSearchProviders: { fetchUrls: true, searchKeywords: true },
     });
+
+    expect(capabilityIds(tools)).not.toContain('web_search');
+    expect(capabilityIds(tools)).not.toContain('web_fetch');
+  });
+
+  test('offers generate_image only with a drawing model and the group enabled', async () => {
+    const withoutModel = await resolve({ paintingModel: null });
     expect(capabilityIds(withoutModel)).not.toContain('generate_image');
 
-    const withModel = await resolve({
+    const disabled = await resolve({
+      disabledCapabilities: ['image'],
       paintingModel: paintingModel(),
-      temporaryCapabilities: ['image-generation'],
     });
-    expect(capabilityIds(withModel)).toContain('generate_image');
-    expect(approvalOf(withModel, 'generate_image')).toBe('ask');
+    expect(capabilityIds(disabled)).not.toContain('generate_image');
+
+    const enabled = await resolve({ paintingModel: paintingModel() });
+    expect(capabilityIds(enabled)).toContain('generate_image');
+    expect(approvalOf(enabled, 'generate_image')).toBe('ask');
+    // Spending provider quota needs consent even under the global auto mode.
+    const tool = enabled.find((candidate) => candidate.providerName === 'generate_image');
+    expect(tool?.autoApprovalEligible).toBe(false);
   });
 
   test('omits iOS-only capabilities on Android', async () => {
@@ -115,7 +145,7 @@ describe('createSystemCapabilitySource', () => {
     const tools = await resolve({
       deviceAccess: { 'location.read': 'granted' },
       paintingModel: paintingModel(),
-      temporaryCapabilities: ['web-search', 'image-generation'],
+      webSearchProviders: { fetchUrls: true, searchKeywords: true },
     });
 
     for (const tool of tools) {
@@ -144,9 +174,9 @@ describe('createSystemCapabilitySource', () => {
     const resources: TurnToolResources = { fileEntryIds: new Set(), grantFile };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      disabledCapabilities: [],
       model: MODEL,
       resources,
-      temporaryCapabilities: new Set(),
     });
     const writeFile = tools.find((tool) => tool.providerName === 'write_file');
     if (!writeFile) throw new Error('write_file was not available.');
@@ -195,9 +225,9 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      disabledCapabilities: [],
       model: MODEL,
       resources: { fileEntryIds: new Set(), grantFile },
-      temporaryCapabilities: new Set(),
     });
     const editFile = tools.find((tool) => tool.providerName === 'edit_file');
     if (!editFile) throw new Error('edit_file was not available.');
@@ -218,9 +248,10 @@ describe('createSystemCapabilitySource', () => {
 
 type Scenario = {
   deviceAccess?: Partial<Record<DevicePermissionScope, SystemPermissionState>>;
+  disabledCapabilities?: AgentCapability[];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
-  temporaryCapabilities?: AgentTemporaryCapability[];
+  webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
 };
 
 async function resolve(
@@ -232,9 +263,9 @@ async function resolve(
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
+    disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
     resources: TURN_RESOURCES,
-    temporaryCapabilities: new Set(scenario.temporaryCapabilities ?? []),
   });
 }
 
@@ -250,6 +281,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
   return {
     devicePermissions: {
       getStatusForScope: async (scope) => scenario.deviceAccess?.[scope] ?? 'denied',
+      requestForScope: async () => 'denied',
     },
     painting: {
       ai: { generateImage: jest.fn() },
@@ -268,6 +300,17 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
         getImageGenerationSupport: () => scenario.paintingModel?.support ?? null,
       },
     } as unknown as SystemCapabilitySourceDependencies['painting'],
+    preference: {
+      get: jest.fn(async (key: string) => {
+        if (key === 'chat.web_search.default_search_keywords_provider') {
+          return scenario.webSearchProviders?.searchKeywords ? 'tavily' : null;
+        }
+        if (key === 'chat.web_search.default_fetch_urls_provider') {
+          return scenario.webSearchProviders?.fetchUrls ? 'tavily' : null;
+        }
+        return null;
+      }),
+    } as unknown as SystemCapabilitySourceDependencies['preference'],
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };

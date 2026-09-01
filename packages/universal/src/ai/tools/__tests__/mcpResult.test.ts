@@ -89,18 +89,56 @@ describe('normalizeMcpResult', () => {
       content: [
         { kind: 'text', text: 'plain text' },
         { data: 'AAAA', kind: 'image', mimeType: 'image/png' },
-        { kind: 'audio', mimeType: 'audio/mp3' },
-        { kind: 'text', text: 'resource body' },
-        { kind: 'resource', mimeType: 'application/pdf', uri: 'file://blob' },
+        { data: 'BBBB', kind: 'audio', mimeType: 'audio/mp3' },
+        {
+          kind: 'resource',
+          mimeType: 'application/octet-stream',
+          text: 'resource body',
+          uri: 'file://text',
+        },
+        { data: 'CCCC', kind: 'resource', mimeType: 'application/pdf', uri: 'file://blob' },
         { kind: 'resource-link', mimeType: 'text/html', uri: 'https://example.com' },
       ],
+      isError: false,
       isMissing: false,
     });
   });
 
   it('keeps unknown content visible as JSON', () => {
     expect(normalizeMcpResult({ content: [{ payload: { value: 1 }, type: 'future' }] })).toEqual({
-      content: [{ kind: 'text', text: '{"payload":{"value":1},"type":"future"}' }],
+      content: [{ kind: 'json', value: { payload: { value: 1 }, type: 'future' } }],
+      isError: false,
+      isMissing: false,
+    });
+  });
+
+  it('uses structured content only when unstructured content is empty', () => {
+    expect(normalizeMcpResult({ content: [], structuredContent: { count: 1 } })).toEqual({
+      content: [{ kind: 'json', value: { count: 1 } }],
+      isError: false,
+      isMissing: false,
+    });
+    expect(
+      normalizeMcpResult({
+        content: [{ text: '{"count":1}', type: 'text' }],
+        structuredContent: { count: 1 },
+      }),
+    ).toEqual({
+      content: [{ kind: 'text', text: '{"count":1}' }],
+      isError: false,
+      isMissing: false,
+    });
+  });
+
+  it('preserves a tool-reported error independently of its content', () => {
+    expect(
+      normalizeMcpResult({
+        content: [{ text: 'Invalid query', type: 'text' }],
+        isError: true,
+      }),
+    ).toEqual({
+      content: [{ kind: 'text', text: 'Invalid query' }],
+      isError: true,
       isMissing: false,
     });
   });

@@ -1,9 +1,10 @@
+import MonitorCloudIcon from '@cherrystudio/app-icons/icons/monitor-cloud';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import { Button, Switch } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
+import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
+import { Button, Section, Switch } from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -13,7 +14,6 @@ import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import {
-  type AgentMcpServerOption,
   type AgentMcpServerOptionStatus,
   type AgentMcpToolBindingStatus,
   buildAgentMcpServerOptions,
@@ -93,182 +93,144 @@ export function AgentToolsSection({
   );
 
   return (
-    <View className="gap-4">
-      <Text className="text-muted-foreground text-sm" selectable>
-        {t('agent.tools.mcpDescription')}
-      </Text>
-      {serverOptions.length === 0 ? (
-        <Text className="py-2 text-muted-foreground text-sm" selectable>
-          {t('agent.tools.empty')}
+    <View className="gap-6">
+      <View className="gap-2">
+        <Text className="px-1 font-medium text-muted-foreground text-sm">
+          {t('agent.tools.section')}
         </Text>
-      ) : (
-        <View className="gap-4">
-          {serverOptions.map((option) => (
-            <AgentMcpServerRow
-              bindings={bindings}
-              key={option.serverId}
-              onChange={onChange}
-              option={option}
-            />
-          ))}
-        </View>
-      )}
-      {perToolBindings.length > 0 ? (
-        <View className="gap-3 border-border border-t pt-4">
-          <Text className="font-medium text-foreground text-sm" selectable>
-            {t('agent.tools.existingToolRules')}
-          </Text>
-          {perToolBindings.map((binding) => {
-            const server = serversById.get(binding.serverId);
-            const status = getAgentMcpToolBindingStatus({
-              binding,
-              catalog: catalogs.get(binding.serverId),
-              server,
-            });
-            const displayName =
-              server?.name ?? binding.displayNameSnapshot ?? t('agent.tools.server');
-            const accessibilityLabel = t('agent.tools.toolAccessibilityLabel', {
-              id: binding.serverId,
+        <View className="gap-2">
+          {serverOptions.map((option) => {
+            const canEnable =
+              option.server !== undefined &&
+              option.server.isEnabled &&
+              isStreamableHttpServer(option.server);
+            const isEnabled = option.binding?.enabled === true;
+            const isStored = option.binding !== undefined;
+            const displayName = option.displayName || t('agent.tools.server');
+            const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
+              id: option.serverId,
               server: displayName,
-              status: t(`agent.tools.toolStatus.${status}`),
-              tool: binding.rawToolName,
+              status: t(`agent.tools.serverStatus.${option.status}`),
             });
 
             return (
-              <View className="min-h-12 flex-row items-center gap-3" key={toolBindingKey(binding)}>
-                <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
-                    {displayName} · {binding.rawToolName}
-                  </Text>
-                  <Text
-                    className="font-mono text-foreground-tertiary text-xs"
-                    numberOfLines={1}
-                    selectable
-                  >
-                    {binding.serverId}
-                  </Text>
-                  <StatusText status={status} translationPrefix="agent.tools.toolStatus" />
-                </View>
-                <Button
-                  accessibilityLabel={accessibilityLabel}
-                  icon={<TrashIcon />}
-                  onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
-                  size="xs"
-                  variant="ghost"
+              <Section key={option.serverId}>
+                <Section.Item
+                  className="py-2"
+                  description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
+                  label={displayName}
+                  leading={<MonitorCloudIcon className="size-5 text-foreground" />}
+                  trailing={
+                    <View className="flex-row items-center gap-1">
+                      {canEnable ? (
+                        <Switch
+                          accessibilityLabel={accessibilityLabel}
+                          onValueChange={(enabled) =>
+                            onChange(setAgentMcpServerEnabled(bindings, option, enabled))
+                          }
+                          value={isEnabled}
+                        />
+                      ) : null}
+                      {isStored && (!canEnable || !isEnabled) ? (
+                        <Button
+                          accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
+                            id: option.serverId,
+                            server: displayName,
+                          })}
+                          icon={<TrashIcon />}
+                          onPress={() =>
+                            onChange(setAgentMcpServerEnabled(bindings, option, false))
+                          }
+                          size="xs"
+                          variant="ghost"
+                        />
+                      ) : !isStored && option.originalBinding && !canEnable ? (
+                        <Button
+                          accessibilityLabel={t('agent.tools.restoreAccessibilityLabel', {
+                            id: option.serverId,
+                            server: displayName,
+                          })}
+                          icon={<RotateCcwIcon />}
+                          onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, true))}
+                          size="xs"
+                          variant="ghost"
+                        />
+                      ) : null}
+                    </View>
+                  }
                 />
-              </View>
+              </Section>
             );
           })}
         </View>
+      </View>
+      {perToolBindings.length > 0 ? (
+        <View className="gap-2">
+          <Text className="px-1 font-medium text-muted-foreground text-sm">
+            {t('agent.tools.existingToolRules')}
+          </Text>
+          <View className="gap-2">
+            {perToolBindings.map((binding) => {
+              const server = serversById.get(binding.serverId);
+              const status = getAgentMcpToolBindingStatus({
+                binding,
+                catalog: catalogs.get(binding.serverId),
+                server,
+              });
+              const displayName =
+                server?.name ?? binding.displayNameSnapshot ?? t('agent.tools.server');
+
+              return (
+                <Section key={toolBindingKey(binding)}>
+                  <Section.Item
+                    className="py-2"
+                    description={statusCaption(t, 'agent.tools.toolStatus', status)}
+                    label={`${displayName} · ${binding.rawToolName}`}
+                    leading={<WrenchIcon className="size-5 text-foreground" />}
+                    trailing={
+                      <Button
+                        accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
+                          id: binding.serverId,
+                          server: displayName,
+                          status: t(`agent.tools.toolStatus.${status}`),
+                          tool: binding.rawToolName,
+                        })}
+                        icon={<TrashIcon />}
+                        onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
+                        size="xs"
+                        variant="ghost"
+                      />
+                    }
+                  />
+                </Section>
+              );
+            })}
+          </View>
+        </View>
       ) : null}
-      <Text className="text-foreground-tertiary text-xs" selectable>
-        {t('agent.tools.nextTurn')}
-      </Text>
     </View>
   );
 }
 
-function AgentMcpServerRow({
-  bindings,
-  onChange,
-  option,
-}: {
-  bindings: readonly WriteAgentToolBinding[];
-  onChange: (bindings: WriteAgentToolBinding[]) => void;
-  option: AgentMcpServerOption;
-}) {
-  const { t } = useTranslation();
-  const canEnable =
-    option.server !== undefined && option.server.isEnabled && isStreamableHttpServer(option.server);
-  const isEnabled = option.binding?.enabled === true;
-  const isStored = option.binding !== undefined;
-  const displayName = option.displayName || t('agent.tools.server');
-  const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
-    id: option.serverId,
-    server: displayName,
-    status: t(`agent.tools.serverStatus.${option.status}`),
-  });
-  const handleRemove = useCallback(
-    () => onChange(setAgentMcpServerEnabled(bindings, option, false)),
-    [bindings, onChange, option],
-  );
-  const handleRestore = useCallback(
-    () => onChange(setAgentMcpServerEnabled(bindings, option, true)),
-    [bindings, onChange, option],
-  );
-  const handleValueChange = useCallback(
-    (enabled: boolean) => onChange(setAgentMcpServerEnabled(bindings, option, enabled)),
-    [bindings, onChange, option],
-  );
+/**
+ * The switch already expresses healthy and merely-disabled states, and a
+ * loading catalog resolves on its own; only a problem the row cannot express
+ * otherwise earns a caption.
+ */
+const QUIET_STATUSES: ReadonlySet<AgentMcpServerOptionStatus | AgentMcpToolBindingStatus> = new Set(
+  ['available', 'binding-disabled', 'catalog-loading', 'enabled'],
+);
 
+function statusCaption(
+  t: (key: string) => string,
+  translationPrefix: 'agent.tools.serverStatus' | 'agent.tools.toolStatus',
+  status: AgentMcpServerOptionStatus | AgentMcpToolBindingStatus,
+) {
+  if (QUIET_STATUSES.has(status)) {
+    return undefined;
+  }
   return (
-    <View className="min-h-12 flex-row items-center gap-3">
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="font-medium text-base text-foreground" numberOfLines={1}>
-          {displayName}
-        </Text>
-        <Text className="font-mono text-foreground-tertiary text-xs" numberOfLines={1} selectable>
-          {option.serverId}
-        </Text>
-        <StatusText status={option.status} translationPrefix="agent.tools.serverStatus" />
-      </View>
-      <View className="shrink-0 flex-row items-center gap-1">
-        {canEnable ? (
-          <Switch
-            accessibilityLabel={accessibilityLabel}
-            onValueChange={handleValueChange}
-            value={isEnabled}
-          />
-        ) : null}
-        {isStored && (!canEnable || !isEnabled) ? (
-          <Button
-            accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
-              id: option.serverId,
-              server: displayName,
-            })}
-            icon={<TrashIcon />}
-            onPress={handleRemove}
-            size="xs"
-            variant="ghost"
-          />
-        ) : !isStored && option.originalBinding && !canEnable ? (
-          <Button
-            accessibilityLabel={t('agent.tools.restoreAccessibilityLabel', {
-              id: option.serverId,
-              server: displayName,
-            })}
-            icon={<RotateCcwIcon />}
-            onPress={handleRestore}
-            size="xs"
-            variant="ghost"
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-function StatusText({
-  status,
-  translationPrefix,
-}: {
-  status: AgentMcpServerOptionStatus | AgentMcpToolBindingStatus;
-  translationPrefix: 'agent.tools.serverStatus' | 'agent.tools.toolStatus';
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Text
-      className={cn(
-        'text-xs',
-        status === 'enabled' || status === 'available'
-          ? 'text-success-subtle-foreground'
-          : status === 'binding-disabled' || status === 'catalog-loading'
-            ? 'text-muted-foreground'
-            : 'text-destructive',
-      )}
-      selectable
-    >
+    <Text className="text-destructive text-sm" selectable>
       {t(`${translationPrefix}.${status}`)}
     </Text>
   );

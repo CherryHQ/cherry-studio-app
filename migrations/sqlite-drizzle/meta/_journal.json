@@ -99,6 +99,13 @@
       "when": 1788234662321,
       "tag": "0013_agent-session-fork-lineage",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788259032494,
+      "tag": "0014_agent-disabled-capabilities",
+      "breakpoints": true
     }
   ]
 }

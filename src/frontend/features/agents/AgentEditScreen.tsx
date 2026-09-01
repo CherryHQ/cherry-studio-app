@@ -37,6 +37,7 @@ import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
+import { AgentCapabilitiesSection } from './AgentCapabilitiesSection';
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentToolsSection } from './AgentToolsSection';
@@ -369,20 +370,19 @@ function AgentEditForm({
             </Text>
           </View>
         </View>
-        {/* MCP remains the only Agent-specific tool source. The approval setting
-            above changes interaction policy, not which tools are available. */}
-        {isEditing ? (
-          <View className="gap-2">
-            <Text className="px-1 font-medium text-foreground text-sm">
-              {t('agent.tools.section')}
-            </Text>
-            <AgentToolsSection
-              bindings={toolBindings}
-              onChange={setToolBindings}
-              originalBindings={originalToolBindings}
-              servers={servers}
-            />
-          </View>
+        {/* Capability groups gate which built-in tools a turn may offer; the
+            approval setting above changes interaction policy only. */}
+        <AgentCapabilitiesSection
+          disabledCapabilities={form.disabledCapabilities}
+          onChange={(next) => updateForm('disabledCapabilities', next)}
+        />
+        {isEditing && (servers.length > 0 || toolBindings.length > 0) ? (
+          <AgentToolsSection
+            bindings={toolBindings}
+            onChange={setToolBindings}
+            originalBindings={originalToolBindings}
+            servers={servers}
+          />
         ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (

@@ -32,6 +32,7 @@ describe('agent-table definition source', () => {
     insertUserModel(sqlite, 'openai', 'gpt-4');
     const source = createAgentTableDefinitionSource();
     const agent = await agentService.create({
+      disabledCapabilities: ['health'],
       instructions: 'Be terse.',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
@@ -39,6 +40,7 @@ describe('agent-table definition source', () => {
     });
 
     await expect(source.getAgent(agent.id)).resolves.toEqual({
+      disabledCapabilities: ['health'],
       id: agent.id,
       instructions: 'Be terse.',
       model: { modelId: 'gpt-4', providerId: 'openai' },

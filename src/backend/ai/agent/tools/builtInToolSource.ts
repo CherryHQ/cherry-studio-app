@@ -3,10 +3,12 @@
  *
  * Snapshot resolution in miniature (agent-tools-and-resources.md): the Host asks
  * for the tools a turn may use, and the source projects only the capabilities
- * that this model can call, this platform implements, this device has granted,
- * this app has configured, and the composer has activated for this turn. Everything it returns
- * is executable; a capability that fails any gate is absent rather than present
- * and broken.
+ * that this model can call, this platform implements, this Agent has enabled,
+ * this device can still grant, and this app has configured. Everything it
+ * returns is executable; a capability that fails any gate is absent rather than
+ * present and broken. The one deliberate exception is an OS permission that was
+ * never asked for: the tool is offered as `ask`, and its execution triggers the
+ * one-shot system prompt after the user approves the call in-app.
  *
  * Resolution is per turn on purpose. Permissions and the drawing-model setting
  * change outside Cherry, so a catalog cached across turns would offer tools the
@@ -21,18 +23,16 @@ import { providerRegistryService } from '@/backend/data/services/ProviderRegistr
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
-import type {
-  AgentTemporaryCapability,
-  DevicePermissionScope,
-  SystemPermissionState,
-} from '@/shared/contracts';
+import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
   type BuiltInToolDescriptor,
   BUILT_IN_TOOL_DESCRIPTORS,
 } from '@/shared/data/types/builtInTool';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
+import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
@@ -65,14 +65,22 @@ const DEVICE_PERMISSION_SCOPES = [
   'reminders.write',
 ] as const satisfies readonly DevicePermissionScope[];
 
+const WEB_SEARCH_PROVIDER_PREFERENCE_KEYS = {
+  fetchUrls: 'chat.web_search.default_fetch_urls_provider',
+  searchKeywords: 'chat.web_search.default_search_keywords_provider',
+} as const;
+
 export type DeviceAccess = Readonly<Record<DevicePermissionScope, SystemPermissionState>>;
+
+type WebSearchAvailability = Readonly<Record<WebSearchCapability, boolean>>;
 
 /** Everything outside the tool definitions that decides what a turn may use. */
 export type BuiltInToolScope = {
   deviceAccess: DeviceAccess;
+  disabledCapabilities: ReadonlySet<AgentCapability>;
   paintingModel: ConfiguredPaintingModel | null;
   platform: string;
-  temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>;
+  webSearchAvailability: WebSearchAvailability;
 };
 
 export type { TurnFileScope, TurnToolResources } from '../resources/managedFileResolver';
@@ -80,9 +88,9 @@ export type { TurnFileScope, TurnToolResources } from '../resources/managedFileR
 export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
+    disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     resources: TurnToolResources;
-    temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>;
   }): Promise<readonly RuntimeTool[]>;
 };
 
@@ -90,6 +98,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     painting: PaintingToolDependencies;
     platform: string;
+    preference: PaintingToolDependencies['preference'];
     supportsToolCalling(model: RuntimeModel): Promise<boolean>;
   };
 
@@ -110,51 +119,67 @@ export function createSystemCapabilitySource(
   overrides: Partial<SystemCapabilitySourceDependencies> = {},
 ): SystemCapabilitySource {
   return {
-    async getTools({ model, resources, temporaryCapabilities }) {
+    async getTools({ disabledCapabilities, model, resources }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
         return [];
       }
 
-      const scope = await resolveScope(deps, temporaryCapabilities);
+      const scope = await resolveScope(deps, new Set(disabledCapabilities));
       const catalog = createCatalog(deps, scope, resources);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
-        const approval = resolveApproval(descriptor, scope);
+        const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
-        return approval && tool ? [bindTurnResources({ ...tool, approval }, resources)] : [];
+        return policy && tool ? [bindTurnResources({ ...tool, ...policy }, resources)] : [];
       });
     },
   };
 }
 
+export type ResolvedToolPolicy = {
+  approval: RuntimeTool['approval'];
+  autoApprovalEligible: boolean;
+};
+
 /**
- * Application policy is shared by every Agent. Temporary capabilities are the
- * only composer-owned gate; `null` means the tool is absent for this turn.
+ * Application policy is shared by every Agent; the Agent contributes only its
+ * capability-group deny-list. `null` means the tool is absent for this turn.
+ * A permission that was never asked for keeps the tool present as `ask` — the
+ * in-app approval is the consent moment before execution fires the one-shot
+ * system prompt — and stays ineligible for the global auto mode.
  */
 export function resolveApproval(
   descriptor: BuiltInToolDescriptor,
   scope: BuiltInToolScope,
-): RuntimeTool['approval'] | null {
+): ResolvedToolPolicy | null {
   if (!isPlatformSupported(descriptor, scope.platform)) {
+    return null;
+  }
+  if (descriptor.agentCapability && scope.disabledCapabilities.has(descriptor.agentCapability)) {
     return null;
   }
   if (descriptor.requiresPaintingModel && !scope.paintingModel) {
     return null;
   }
   if (
-    descriptor.permissionScopes.some((permission) => scope.deviceAccess[permission] !== 'granted')
+    descriptor.requiresWebSearchCapability &&
+    !scope.webSearchAvailability[descriptor.requiresWebSearchCapability]
   ) {
     return null;
   }
 
-  if (
-    descriptor.temporaryCapability &&
-    !scope.temporaryCapabilities.has(descriptor.temporaryCapability)
-  ) {
+  const statuses = descriptor.permissionScopes.map((permission) => scope.deviceAccess[permission]);
+  if (statuses.some((status) => status !== 'granted' && status !== 'undetermined')) {
     return null;
   }
-  return descriptor.defaultApproval;
+  if (statuses.some((status) => status === 'undetermined')) {
+    return { approval: 'ask', autoApprovalEligible: false };
+  }
+  return {
+    approval: descriptor.defaultApproval,
+    autoApprovalEligible: descriptor.autoApprovalEligible,
+  };
 }
 
 function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string): boolean {
@@ -216,24 +241,60 @@ function bindTurnResources(tool: RuntimeTool, resources: TurnToolResources): Run
 
 async function resolveScope(
   deps: SystemCapabilitySourceDependencies,
-  temporaryCapabilities: ReadonlySet<AgentTemporaryCapability>,
+  disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<BuiltInToolScope> {
-  const [deviceAccess, paintingModel] = await Promise.all([
+  const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
     resolveDeviceAccess(deps),
-    temporaryCapabilities.has('image-generation')
-      ? resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
+    disabledCapabilities.has('image')
+      ? null
+      : resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
           logger.warn('Drawing model lookup failed; omitting generate_image', error as Error);
           return null;
-        })
-      : null,
+        }),
+    resolveWebSearchAvailability(deps, !disabledCapabilities.has('web')),
   ]);
 
   return {
     deviceAccess,
+    disabledCapabilities,
     paintingModel,
     platform: deps.platform,
-    temporaryCapabilities,
+    webSearchAvailability,
   };
+}
+
+/**
+ * A web tool is available once its default provider is chosen in Settings.
+ * Deeper validity (keys, hosts) stays a call-time concern: the tool result
+ * carries the configuration error for the model to relay.
+ */
+async function resolveWebSearchAvailability(
+  deps: SystemCapabilitySourceDependencies,
+  enabled: boolean,
+): Promise<WebSearchAvailability> {
+  if (!enabled) {
+    return { fetchUrls: false, searchKeywords: false };
+  }
+  const [fetchProvider, searchProvider] = await Promise.all([
+    readWebSearchProvider(deps, 'fetchUrls'),
+    readWebSearchProvider(deps, 'searchKeywords'),
+  ]);
+  return { fetchUrls: Boolean(fetchProvider), searchKeywords: Boolean(searchProvider) };
+}
+
+async function readWebSearchProvider(
+  deps: SystemCapabilitySourceDependencies,
+  capability: WebSearchCapability,
+): Promise<unknown> {
+  try {
+    return await deps.preference.get(WEB_SEARCH_PROVIDER_PREFERENCE_KEYS[capability]);
+  } catch (error) {
+    logger.warn('Web search provider lookup failed; omitting the affected tool', {
+      capability,
+      error,
+    });
+    return null;
+  }
 }
 
 async function resolveDeviceAccess(
@@ -263,6 +324,7 @@ function resolveDependencies(
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,
+    preference: overrides.preference ?? services.preference,
     supportsToolCalling: overrides.supportsToolCalling ?? supportsToolCalling,
     webSearch: overrides.webSearch ?? services.webSearch,
   };

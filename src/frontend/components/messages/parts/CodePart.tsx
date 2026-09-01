@@ -1,3 +1,4 @@
+import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { PartMarkdown } from './PartMarkdown';
@@ -12,7 +13,7 @@ export function CodePart({ isStreaming, isTextSelectionEnabled, part }: CodePart
   return (
     <PartMarkdown
       isStreaming={isStreaming}
-      markdown={`\`\`\`${part.data.language}\n${part.data.content}\n\`\`\``}
+      markdown={createCodeBlockMarkdown(part.data.content, part.data.language)}
       selectable={isTextSelectionEnabled}
     />
   );

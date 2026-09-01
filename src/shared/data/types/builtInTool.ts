@@ -5,12 +5,13 @@
  * per-turn `RuntimeTool[]` snapshot.
  *
  * A descriptor states only what is true everywhere. Whether a tool can actually
- * run this turn depends on OS permission, application configuration, and any
- * temporary composer activation declared below.
+ * run this turn depends on the Agent's capability-group deny-list, OS
+ * permission, and application configuration.
  */
 
-import type { AgentTemporaryCapability } from '@/shared/contracts/agent';
 import type { DevicePermissionScope } from '@/shared/contracts/permissions';
+import type { AgentCapability } from '@/shared/data/types/agentCapability';
+import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
 import type { AgentToolApproval } from './agentToolBinding';
 
@@ -41,17 +42,28 @@ export type BuiltInToolDescriptor = {
   capabilityId: BuiltInToolCapabilityId;
   /** Application-owned approval policy shared by every Agent. */
   defaultApproval: AgentToolApproval;
-  /** OS permission scopes that must be granted before the tool is offered. */
+  /**
+   * The Agent-configurable capability group this tool belongs to. Omit for
+   * core tools that every Agent turn gets.
+   */
+  agentCapability?: AgentCapability;
+  /**
+   * False keeps the Agent's global `auto` approval mode from promoting this
+   * tool's `ask`: enabling a capability is not consent to spend or destroy.
+   */
+  autoApprovalEligible: boolean;
+  /** OS permission scopes that must not be denied before the tool is offered. */
   permissionScopes: readonly DevicePermissionScope[];
   /** `null` means every platform. */
   platforms: readonly ('android' | 'ios')[] | null;
   /** Needs a drawing model configured in Settings > Model. */
   requiresPaintingModel: boolean;
-  /** Omit for system capabilities injected into every Agent turn. */
-  temporaryCapability?: AgentTemporaryCapability;
+  /** Needs a default web search provider configured for this capability. */
+  requiresWebSearchCapability?: WebSearchCapability;
 };
 
 const DEFAULTS = {
+  autoApprovalEligible: true,
   permissionScopes: [],
   platforms: null,
   requiresPaintingModel: false,
@@ -68,48 +80,79 @@ function describe(
 /**
  * Reads default to `auto` and mutations to `ask`: a wrong list query wastes a
  * turn, a wrong delete loses the user's data. `generate_image` asks because it
- * spends provider quota.
+ * spends provider quota, and stays `ask` even under the Agent's global auto
+ * mode.
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('calendar_list_collections', 'auto', {
+    agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
   }),
-  describe('calendar_list_events', 'auto', { permissionScopes: ['calendar.read'] }),
-  describe('calendar_create_event', 'ask', { permissionScopes: ['calendar.write'] }),
+  describe('calendar_list_events', 'auto', {
+    agentCapability: 'calendar',
+    permissionScopes: ['calendar.read'],
+  }),
+  describe('calendar_create_event', 'ask', {
+    agentCapability: 'calendar',
+    permissionScopes: ['calendar.write'],
+  }),
   describe('calendar_update_event', 'ask', {
+    agentCapability: 'calendar',
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
   describe('calendar_delete_event', 'ask', {
+    agentCapability: 'calendar',
     permissionScopes: ['calendar.read', 'calendar.write'],
   }),
   describe('reminder_list_collections', 'auto', {
+    agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
   }),
   describe('reminder_list_items', 'auto', {
+    agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
   }),
   describe('reminder_create_item', 'ask', {
+    agentCapability: 'reminders',
     permissionScopes: ['reminders.write'],
     platforms: ['ios'],
   }),
   describe('reminder_update_item', 'ask', {
+    agentCapability: 'reminders',
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
   describe('reminder_delete_item', 'ask', {
+    agentCapability: 'reminders',
     permissionScopes: ['reminders.read', 'reminders.write'],
     platforms: ['ios'],
   }),
-  describe('health_get_summary', 'auto', { permissionScopes: ['health.read'] }),
-  describe('health_list_workouts', 'auto', { permissionScopes: ['health.read'] }),
-  describe('location_get_current', 'auto', { permissionScopes: ['location.read'] }),
-  describe('web_search', 'auto', { temporaryCapability: 'web-search' }),
-  describe('web_fetch', 'auto', { temporaryCapability: 'web-search' }),
+  describe('health_get_summary', 'auto', {
+    agentCapability: 'health',
+    permissionScopes: ['health.read'],
+  }),
+  describe('health_list_workouts', 'auto', {
+    agentCapability: 'health',
+    permissionScopes: ['health.read'],
+  }),
+  describe('location_get_current', 'auto', {
+    agentCapability: 'location',
+    permissionScopes: ['location.read'],
+  }),
+  describe('web_search', 'auto', {
+    agentCapability: 'web',
+    requiresWebSearchCapability: 'searchKeywords',
+  }),
+  describe('web_fetch', 'auto', {
+    agentCapability: 'web',
+    requiresWebSearchCapability: 'fetchUrls',
+  }),
   describe('generate_image', 'ask', {
+    agentCapability: 'image',
+    autoApprovalEligible: false,
     requiresPaintingModel: true,
-    temporaryCapability: 'image-generation',
   }),
   describe('edit_file', 'auto'),
   describe('write_file', 'auto'),
@@ -121,4 +164,31 @@ const DESCRIPTORS_BY_ID = new Map<string, BuiltInToolDescriptor>(
 
 export function getBuiltInToolDescriptor(capabilityId: string): BuiltInToolDescriptor | undefined {
   return DESCRIPTORS_BY_ID.get(capabilityId);
+}
+
+export type AgentCapabilityAvailability = {
+  /** Union of the member tools' OS permission scopes; empty when none apply. */
+  permissionScopes: readonly DevicePermissionScope[];
+  /** `null` when any member tool runs on every platform. */
+  platforms: readonly ('android' | 'ios')[] | null;
+};
+
+/**
+ * Availability facts for one capability group, derived from its member tools.
+ * The Agent editor uses this to drive permission requests and to hide groups
+ * a platform cannot serve.
+ */
+export function getAgentCapabilityAvailability(
+  capability: AgentCapability,
+): AgentCapabilityAvailability {
+  const members = BUILT_IN_TOOL_DESCRIPTORS.filter(
+    (descriptor) => descriptor.agentCapability === capability,
+  );
+  const permissionScopes = [
+    ...new Set(members.flatMap((descriptor) => descriptor.permissionScopes)),
+  ];
+  const platforms = members.some((descriptor) => descriptor.platforms === null)
+    ? null
+    : [...new Set(members.flatMap((descriptor) => descriptor.platforms ?? []))];
+  return { permissionScopes, platforms };
 }

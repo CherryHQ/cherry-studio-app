@@ -76,10 +76,33 @@ describe('AgentService persistence', () => {
 
     expect(agent).toMatchObject({
       avatar: null,
+      // Storage-neutral default: a row created without the editor has every
+      // capability enabled; the create form seeds its own deny-list.
+      disabledCapabilities: [],
       instructions: '',
       modelId: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'default',
+    });
+  });
+
+  it('persists the capability deny-list and drops unknown ids on read', async () => {
+    const agent = await agentService.create({
+      disabledCapabilities: ['calendar', 'web'],
+      name: 'Researcher',
+    });
+    expect(agent.disabledCapabilities).toEqual(['calendar', 'web']);
+
+    await expect(
+      agentService.update(agent.id, { disabledCapabilities: ['health'] }),
+    ).resolves.toMatchObject({ disabledCapabilities: ['health'] });
+
+    // A build that no longer knows an id must drop it rather than fail the row.
+    sqlite
+      .prepare('UPDATE agent SET disabled_capabilities = ? WHERE id = ?')
+      .run(JSON.stringify(['health', 'retired-group']), agent.id);
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({
+      disabledCapabilities: ['health'],
     });
   });
 

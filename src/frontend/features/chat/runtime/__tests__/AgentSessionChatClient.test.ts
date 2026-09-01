@@ -109,15 +109,12 @@ describe('AgentSessionChatClient', () => {
     protocol.startSession.mockResolvedValue(snapshot().session);
     const client = new AgentSessionChatClient(protocol);
 
-    await client.startSession('agent-1', [{ text: 'Hello', type: 'text' }], {
-      temporaryCapabilities: ['web-search'],
-    });
+    await client.startSession('agent-1', [{ text: 'Hello', type: 'text' }]);
 
     expect(protocol.startSession).toHaveBeenCalledWith({
       agentId: 'agent-1',
       executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello', type: 'text' }],
-      temporaryCapabilities: ['web-search'],
     });
     expect(protocol.observeSession).toHaveBeenCalledWith('session-1', expect.any(Function));
     expect(client.getState('session-1')).toMatchObject({
@@ -150,7 +147,6 @@ describe('AgentSessionChatClient', () => {
     await client.submitMessage('session-1', [{ text: 'Hello', type: 'text' }], {
       modelId: 'provider::model-b',
       reasoningEffort: 'high',
-      temporaryCapabilities: ['web-search'],
     });
 
     expect(protocol.submitMessage).toHaveBeenCalledWith({
@@ -158,7 +154,6 @@ describe('AgentSessionChatClient', () => {
       parts: [{ text: 'Hello', type: 'text' }],
       reasoningEffort: 'high',
       sessionId: 'session-1',
-      temporaryCapabilities: ['web-search'],
     });
   });
 

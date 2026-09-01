@@ -111,6 +111,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'deleted_at',
         'tool_approval_mode',
+        'disabled_capabilities',
       ]);
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',

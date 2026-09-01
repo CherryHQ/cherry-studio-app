@@ -5,9 +5,12 @@
  * here so no individual tool has to remember them:
  *
  * 1. OS permission is not an approval substitute. The catalog only offers a
- *    tool whose scopes were granted when the turn was admitted; this wrapper
+ *    tool whose scopes were grantable when the turn was admitted; this wrapper
  *    rechecks them again immediately before the side effect, because the user
- *    can revoke access in Settings while a turn is running.
+ *    can revoke access in Settings while a turn is running. A scope that was
+ *    never asked for triggers the one-shot system prompt here — the tool
+ *    entered the catalog as `ask`, so the user has already consented in-app
+ *    before the OS dialog appears.
  * 2. A failure the model could act on is a value, not a throw. A thrown error
  *    reaches the model as an opaque "tool execution failed", which tells it
  *    nothing about whether retrying could work.
@@ -31,6 +34,7 @@ const PERMANENT_FAILURE_PATTERN = /denied|permission|read-only|not found|unavail
 
 export type DevicePermissionReader = {
   getStatusForScope(scope: DevicePermissionScope): Promise<SystemPermissionState>;
+  requestForScope(scope: DevicePermissionScope): Promise<SystemPermissionState>;
 };
 
 export type DeviceToolDependencies = {
@@ -113,11 +117,16 @@ async function assertPermissions(
   scopes: readonly DevicePermissionScope[],
   capabilityId: string,
 ): Promise<void> {
-  const statuses = await Promise.all(
-    scopes.map((scope) => deps.devicePermissions.getStatusForScope(scope)),
-  );
-  if (statuses.some((status) => status !== 'granted')) {
-    throw new Error(`System permission for ${capabilityId} is not granted`);
+  // Sequential on purpose: one system dialog at a time, and a denial makes
+  // requesting the remaining scopes pointless.
+  for (const scope of scopes) {
+    let status = await deps.devicePermissions.getStatusForScope(scope);
+    if (status === 'undetermined') {
+      status = await deps.devicePermissions.requestForScope(scope);
+    }
+    if (status !== 'granted') {
+      throw new Error(`System permission for ${capabilityId} is not granted`);
+    }
   }
 }
 
