@@ -277,6 +277,22 @@ describe('ChatWorkspace message rendering integration', () => {
     ).toBeGreaterThan(0);
   });
 
+  test('does not reuse a child key across Session-scoped surfaces', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    try {
+      renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+
+      expect(
+        consoleError.mock.calls.some(([message]) =>
+          String(message).includes('Encountered two children with the same key'),
+        ),
+      ).toBe(false);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test('does not show copy failure feedback from the previous Session', async () => {
     const clipboardWrite = createDeferred<void>();
     const assistant = createMessage('assistant-1', 'assistant');
