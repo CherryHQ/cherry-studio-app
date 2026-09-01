@@ -226,6 +226,7 @@ function SectionRoot({
   contentClassName,
   footer,
   title,
+  variant = 'grouped',
   ...viewProps
 }: SectionProps) {
   const childNodes = Children.toArray(children);
@@ -242,7 +243,12 @@ function SectionRoot({
     <View className={cn('gap-1', className)} {...viewProps}>
       {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
-        className={cn('overflow-hidden rounded-2xl bg-grouped-surface', contentClassName)}
+        className={cn(
+          variant === 'grouped'
+            ? 'overflow-hidden rounded-2xl bg-grouped-surface'
+            : 'bg-transparent',
+          contentClassName,
+        )}
         style={{ borderCurve: 'continuous' }}
       >
         {rows.map((row, index) => {
@@ -250,7 +256,7 @@ function SectionRoot({
 
           return (
             <Fragment key={key}>
-              {index > 0 ? (
+              {variant === 'grouped' && index > 0 ? (
                 <View
                   className={cn(
                     hasLeading ? 'ml-11 mr-3' : 'mx-3',
@@ -272,7 +278,12 @@ function SectionRoot({
           );
         })}
       </View>
-      {footer ? renderTextSlot(footer, 'mt-2 px-3 text-sm text-muted-foreground') : null}
+      {footer
+        ? renderTextSlot(
+            footer,
+            cn('mt-2 text-sm text-muted-foreground', variant === 'grouped' ? 'px-3' : 'px-4'),
+          )
+        : null}
     </View>
   );
 }

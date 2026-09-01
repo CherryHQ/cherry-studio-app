@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { OptionPickerBottomSheet } from '../option-picker-bottom-sheet';
@@ -85,6 +85,8 @@ describe('OptionPickerBottomSheet', () => {
     expect(rows[0].props.accessibilityState.checked).toBe(true);
     expect(renderer!.root.findByProps({ testID: 'option-check' })).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'option-leading' })).toBeDefined();
+    expect(renderer!.root.findByType(ScrollView).props.contentContainerClassName).toBe('pt-2');
+    expect(renderer!.root.findAllByProps({ testID: 'section-separator' })).toHaveLength(0);
     expect(renderer!.root.findAllByType(Text).map((node) => node.props.children)).toEqual(
       expect.arrayContaining(['Ask before every tool call.', 'Used for future chats.']),
     );

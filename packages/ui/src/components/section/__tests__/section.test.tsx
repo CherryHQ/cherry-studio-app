@@ -92,6 +92,30 @@ describe('Section', () => {
     ).toContain('mt-2');
   });
 
+  test('renders plain rows without a grouped surface or separators', () => {
+    const tree = render(
+      <Section footer="Choose one option." variant="plain">
+        <Section.RadioItem label="Automatic" onPress={jest.fn()} selected />
+        <Section.RadioItem label="Manual" onPress={jest.fn()} selected={false} />
+      </Section>,
+    );
+
+    expect(
+      tree.root.findAll((node) => node.type === View && node.props.testID === 'section-separator'),
+    ).toHaveLength(0);
+    expect(
+      tree.root.find(
+        (node) =>
+          node.type === View &&
+          typeof node.props.className === 'string' &&
+          node.props.className.includes('bg-transparent'),
+      ).props.className,
+    ).not.toContain('bg-grouped-surface');
+    expect(tree.root.findByProps({ children: 'Choose one option.' }).props.className).toContain(
+      'px-4',
+    );
+  });
+
   // A trailing value is usually a variable-length string, so the slot that holds
   // it is the side that gives: it shrinks, and past a share of the row it stops
   // growing so the label keeps a column to itself. Callers used to cap it one by

@@ -43,8 +43,8 @@ export function OptionPickerBottomSheet<TValue extends OptionPickerValue>({
 }: OptionPickerBottomSheetProps<TValue>) {
   return (
     <BottomSheet onClose={onClose} open={open} size={size} testID={testID} title={title}>
-      <ScrollView contentContainerClassName="px-6 pt-2" showsVerticalScrollIndicator={false}>
-        <Section footer={helperText}>
+      <ScrollView contentContainerClassName="pt-2" showsVerticalScrollIndicator={false}>
+        <Section footer={helperText} variant="plain">
           {options.map((option) => {
             const selected = option.value === selectedValue;
 
