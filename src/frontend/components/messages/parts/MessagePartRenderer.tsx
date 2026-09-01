@@ -19,6 +19,7 @@ import { UnknownPart } from './UnknownPart';
 type MessagePartRendererProps = {
   isStreaming: boolean;
   isTextSelectionEnabled: boolean;
+  messageParts?: readonly CherryMessagePart[];
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
@@ -27,12 +28,13 @@ type MessagePartRendererProps = {
 export const MessagePartRenderer = memo(function MessagePartRenderer({
   isStreaming,
   isTextSelectionEnabled,
+  messageParts,
   part,
   renderMode = 'markdown',
   resolvedText,
 }: MessagePartRendererProps) {
   if (isToolMessagePart(part)) {
-    return <ToolPartRenderer part={part} />;
+    return <ToolPartRenderer messageParts={messageParts} part={part} />;
   }
 
   switch (part.type) {

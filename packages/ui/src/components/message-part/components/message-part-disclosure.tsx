@@ -25,6 +25,7 @@ import { MessagePartStatus } from './message-part-status';
 
 const runningTriggerOpacity = 0.55;
 const runningTriggerPulseDurationMs = 700;
+const SOURCE_LIST_DETAIL_SIZES = ['large'] as const;
 const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
 
 const toneClassName = {
@@ -71,6 +72,7 @@ export function MessagePartReasoning({
 export function MessagePartTool({
   children,
   detailTitle,
+  detailVariant = 'default',
   icon: Icon = WrenchIcon,
   imageSource,
   state,
@@ -96,7 +98,7 @@ export function MessagePartTool({
       {isOpen ? (
         <MessagePartDetail
           onClose={() => setIsOpen(false)}
-          sizes={TOOL_DETAIL_SIZES}
+          sizes={detailVariant === 'source-list' ? SOURCE_LIST_DETAIL_SIZES : TOOL_DETAIL_SIZES}
           testID={`${testID}-detail`}
           title={detailTitle ?? title}
         >
