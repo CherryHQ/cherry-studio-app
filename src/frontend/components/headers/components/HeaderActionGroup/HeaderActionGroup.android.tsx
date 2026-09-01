@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { HeaderAction } from '../HeaderAction';
 import type { HeaderActionTone } from '../HeaderAction';
-import type { HeaderActionGroupProps } from './HeaderActionGroup.types';
+import type { HeaderActionGroupProps } from './HeaderActionGroup';
 
 const GROUP_BASE_CLASS_NAME = 'absolute inset-1 rounded-full shadow-sm';
 const GROUP_CLASS_NAMES: Record<HeaderActionTone, string> = {

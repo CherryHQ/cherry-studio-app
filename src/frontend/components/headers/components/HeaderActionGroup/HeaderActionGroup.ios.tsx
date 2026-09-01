@@ -1,7 +1,7 @@
 import { Stack, useIsPreview } from 'expo-router';
 
 import { HeaderAction } from '../HeaderAction';
-import type { HeaderActionGroupProps } from './HeaderActionGroup.types';
+import type { HeaderActionGroupProps } from './HeaderActionGroup';
 
 /** Delegates the action surface and adjacent-item grouping to the iOS native toolbar. */
 export function HeaderActionGroup({ actions, placement, tone }: HeaderActionGroupProps) {

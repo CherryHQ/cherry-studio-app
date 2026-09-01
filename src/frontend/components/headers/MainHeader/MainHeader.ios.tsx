@@ -1,6 +1,6 @@
 import { Stack, useIsPreview } from 'expo-router';
 
-import { HeaderActionGroup } from '../components/HeaderActionGroup';
+import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
 import { headerScreenOptions } from '../headerScreenOptions';
 import { useMainHeaderActions } from './useMainHeaderActions';
 

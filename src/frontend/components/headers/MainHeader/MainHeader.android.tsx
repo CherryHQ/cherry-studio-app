@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeaderActionGroup } from '../components/HeaderActionGroup';
+import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
 import { useMainHeaderActions } from './useMainHeaderActions';
 
 export function MainHeader() {

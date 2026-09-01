@@ -2,7 +2,7 @@ import { Stack, useIsPreview } from 'expo-router';
 import { useMemo } from 'react';
 
 import { headerScreenOptions } from '../../headerScreenOptions';
-import { HeaderActionGroup } from '../HeaderActionGroup';
+import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
 
 /** Mounts the shared header contract through iOS native toolbar slots. */
