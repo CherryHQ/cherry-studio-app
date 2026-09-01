@@ -15,8 +15,10 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- The resting composer is one row. Focusing it reveals the model pill and reasoning-effort gauge on
-  the toolbar below without remounting the field, draft, or send control.
+- The composer is always two rows: the field, and the toolbar under it carrying the ＋ menu, the
+  model pill, the reasoning-effort gauge, and send. Nothing is revealed by focus and nothing morphs
+  on it, so the tools are readable and reachable before the field is ever touched. The field grows
+  with its content up to the shared composer's cap and the toolbar follows it down.
 - Native media pickers and model/settings Sheets replace the live input context: the shared
   composer pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
@@ -28,9 +30,7 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   the current Agent composer and is snapshotted into each submission; it never updates Agent
   configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
   the selected model's default.
-- The composer menu stores web-search selection in the frontend persist cache, keyed by Session id.
-  New Sessions default to enabled, and an admitted first send transfers the Draft selection to the
-  returned Session. While enabled, every submission includes the turn-local `web-search`
-  capability. The create-image mention remains turn-local and adds `image-generation` only to the
-  draft that contains it. Neither choice mutates Agent or Agent Session persistence.
+- The composer menu offers media only. Web search and create-image were removed from it, so the
+  composer no longer requests any turn-local capability; tool availability comes from Agent
+  configuration alone.
 - Follow-up queues and steering are not part of the Version 1 Agent Session composer.

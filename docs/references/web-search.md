@@ -12,11 +12,9 @@ Cherry Mobile retains two independent configurations:
   `WebSearchService`.
 
 `WebSearchService` reaches Agent turns through the application-owned `web_search` and `web_fetch`
-Runtime tools, never through an AI SDK tool set. The composer stores enabled Session ids in the
-frontend MMKV cache; this state does not enter SQLite or the Agent protocol's Session model. New
-Sessions default to enabled. While enabled, every `submitMessage` carries
-`temporaryCapabilities: ['web-search']`, keeping the turn catalog immutable. The setting is never
-persisted on the Agent.
+Runtime tools, never through an AI SDK tool set. Availability comes from the Agent's tool
+configuration alone: the composer carries no web-search control, so it requests no turn-local
+`web-search` capability and keeps no per-Session selection.
 
 The settings workflow still configures and checks external providers globally, and a lookup that
 fails because no provider is configured returns a terminal result telling the model to stop
