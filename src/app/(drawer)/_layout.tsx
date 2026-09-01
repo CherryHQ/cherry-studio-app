@@ -24,7 +24,9 @@ export default function DrawerLayout() {
         drawerContent={renderSidebar}
         screenOptions={{
           drawerStyle: { width },
-          drawerType: 'slide',
+          // The chat surface is stable context; the sidebar is a temporary
+          // surface that slides over it as the only moving plane.
+          drawerType: 'front',
           headerShown: false,
           // Dim the exposed scene while preserving the drawer's native progress
           // animation and tap-to-close interaction.
