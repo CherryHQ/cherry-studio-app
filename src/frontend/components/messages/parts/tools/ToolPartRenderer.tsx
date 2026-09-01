@@ -1,3 +1,5 @@
+import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
@@ -11,16 +13,17 @@ import {
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 
 type ToolPartRendererProps = {
+  messageParts?: readonly CherryMessagePart[];
   part: ToolMessagePart;
 };
 
-export function ToolPartRenderer({ part }: ToolPartRendererProps) {
+export function ToolPartRenderer({ messageParts, part }: ToolPartRendererProps) {
   if (isProviderWebSearchToolPart(part)) {
     return null;
   }
 
   if (isWebSearchToolPart(part)) {
-    return <WebSearchToolPart part={part} />;
+    return <WebSearchToolPart messageParts={messageParts} part={part} />;
   }
 
   if (isMetaToolPart(part)) {
