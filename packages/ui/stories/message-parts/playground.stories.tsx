@@ -118,7 +118,6 @@ export const AllStates: Story = {
           <StoryGroup title="Reasoning">
             <MessagePart>
               <MessagePart.Reasoning
-                detailTitle="Deep thinking"
                 state="running"
                 statusText="Thinking 1.2s"
                 testID="playground-reasoning-running"
@@ -131,7 +130,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Reasoning>
               <MessagePart.Reasoning
-                detailTitle="Deep thinking"
                 state="complete"
                 statusText="Thought for 4.8s"
                 testID="playground-reasoning-complete"

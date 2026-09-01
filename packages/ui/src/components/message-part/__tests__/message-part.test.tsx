@@ -8,7 +8,15 @@ import { formatMessagePartValue, hasMessagePartValue } from '../utils/message-pa
 let mockBottomSheetProps: Record<string, unknown> = {};
 
 jest.mock(
+  '@cherrystudio/app-icons/icons/chevron-down',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock(
   '@cherrystudio/app-icons/icons/chevron-right',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock(
+  '@cherrystudio/app-icons/icons/list-checks',
   () => jest.requireActual('react-native').View,
 );
 jest.mock(
@@ -57,6 +65,18 @@ jest.mock('../../loading', () => {
   const { View } = jest.requireActual('react-native');
 
   return { DotMatrixSquare20: View, PrismSweep: View };
+});
+
+jest.mock('../../shimmer-text', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+
+  return {
+    ShimmerText: ({ children, ...props }: { children: string }) => (
+      <MockText {...props} accessibilityHint="shimmer">
+        {children}
+      </MockText>
+    ),
+  };
 });
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -127,15 +147,10 @@ describe('MessagePart', () => {
     expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
   });
 
-  it('opens running reasoning details without changing the caller content', () => {
+  it('expands running reasoning inline instead of opening a sheet', () => {
     act(() => {
       renderer = create(
-        <MessagePart.Reasoning
-          detailTitle="Reasoning"
-          state="running"
-          statusText="Thinking for 1.2s"
-          testID="thinking"
-        >
+        <MessagePart.Reasoning state="running" statusText="Thinking for 1.2s" testID="thinking">
           <Text>Live reasoning</Text>
         </MessagePart.Reasoning>,
       );
@@ -144,11 +159,15 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ active: true })).toBeDefined();
     expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
-    expect(mockBottomSheetProps.size).toBe('large');
+    expect(mockBottomSheetProps).toEqual({});
+    expect(renderer!.root.findByProps({ testID: 'thinking-detail' })).toBeDefined();
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
+
+    act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
   });
 
-  it('pulses the complete running tool trigger without removing its status text', () => {
+  it('shimmers the running tool title without removing its status text', () => {
     act(() => {
       renderer = create(
         <MessagePart.Tool
@@ -162,8 +181,65 @@ describe('MessagePart', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ testID: 'searching-running-trigger' })).toBeDefined();
+    expect(renderer!.root.findByProps({ testID: 'searching-running-title' })).toBeDefined();
     expect(renderer!.root.findByProps({ children: 'Searching' })).toBeDefined();
+  });
+
+  it('keeps a running tool group expanded and folds it once complete', () => {
+    const steps = (
+      <>
+        <Text>step one</Text>
+        <Text>step two</Text>
+      </>
+    );
+    act(() => {
+      renderer = create(
+        <MessagePart.ToolGroup state="running" testID="group" title="Working with tools…">
+          {steps}
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    // Live run: steps visible without any press, title shimmering.
+    expect(renderer!.root.findByProps({ testID: 'group-steps' })).toBeDefined();
+    expect(renderer!.root.findByProps({ accessibilityHint: 'shimmer' }).props.children).toBe(
+      'Working with tools…',
+    );
+
+    act(() => {
+      renderer!.update(
+        <MessagePart.ToolGroup state="complete" testID="group" title="Used 2 tools">
+          {steps}
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    // Settled run folds to its summary until the reader asks for the steps.
+    expect(renderer!.root.findAllByProps({ testID: 'group-steps' })).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
+    expect(renderer!.root.findByProps({ testID: 'group-steps' })).toBeDefined();
+  });
+
+  it('lets a manual toggle override the running default of a tool group', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.ToolGroup
+          state="running"
+          statusText="1 failed"
+          statusTone="danger"
+          testID="group"
+          title="Working with tools…"
+        >
+          <Text>step</Text>
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
+    expect(renderer!.root.findAllByProps({ testID: 'group-steps' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
+      'text-destructive',
+    );
   });
 
   it('renders the pending response as an active, accessible status row', () => {

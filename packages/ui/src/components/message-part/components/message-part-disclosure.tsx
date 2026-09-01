@@ -1,30 +1,24 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import ListChecksIcon from '@cherrystudio/app-icons/icons/list-checks';
 import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { BottomSheet } from '../../bottom-sheet';
 import { Image } from '../../image';
 import { PrismSweep } from '../../loading';
+import { ShimmerText } from '../../shimmer-text';
 import type {
   MessagePartDetailProps,
   MessagePartReasoningProps,
   MessagePartSummaryProps,
   MessagePartTone,
+  MessagePartToolGroupProps,
   MessagePartToolProps,
 } from '../message-part.types';
 import { MessagePartStatus } from './message-part-status';
 
-const runningTriggerOpacity = 0.55;
-const runningTriggerPulseDurationMs = 700;
 const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
 
 const toneClassName = {
@@ -35,34 +29,90 @@ const toneClassName = {
 
 export function MessagePartReasoning({
   children,
-  detailTitle,
   state,
   statusText,
   testID = 'reasoning',
 }: MessagePartReasoningProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const isRunning = state === 'running';
+  const ChevronIcon = isOpen ? ChevronDownIcon : ChevronRightIcon;
 
   return (
     <View className="gap-1.5">
       <MessagePartStatus
         accessibilityLabel={statusText}
-        onPress={() => setIsOpen(true)}
+        onPress={() => setIsOpen((open) => !open)}
         testID={`${testID}-trigger`}
       >
-        {state === 'running' ? <PrismSweep active /> : null}
-        <Text className="flex-1 text-muted-foreground text-sm" numberOfLines={1}>
-          {statusText}
-        </Text>
-        <ChevronRightIcon className="size-3.5 text-muted-foreground" />
+        {isRunning ? <PrismSweep active /> : null}
+        <View className="min-w-0 flex-1">
+          {isRunning ? (
+            <ShimmerText className="text-sm" numberOfLines={1}>
+              {statusText}
+            </ShimmerText>
+          ) : (
+            <Text className="text-muted-foreground text-sm" numberOfLines={1}>
+              {statusText}
+            </Text>
+          )}
+        </View>
+        <ChevronIcon className="size-3.5 text-muted-foreground" />
       </MessagePartStatus>
       {isOpen ? (
-        <MessagePartDetail
-          onClose={() => setIsOpen(false)}
-          testID={`${testID}-detail`}
-          title={detailTitle}
-        >
+        <View className="border-border border-l-2 pl-3" testID={`${testID}-detail`}>
           {children}
-        </MessagePartDetail>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function MessagePartToolGroup({
+  children,
+  state,
+  statusText,
+  statusTone = 'default',
+  testID = 'tool-group',
+  title,
+}: MessagePartToolGroupProps) {
+  // While the run is live the steps stay visible; once it settles the group
+  // collapses to its summary. A manual toggle always wins over that default.
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
+  const isRunning = state === 'running';
+  const isOpen = manualOpen ?? isRunning;
+  const colorClassName = toneClassName[statusTone];
+  const ChevronIcon = isOpen ? ChevronDownIcon : ChevronRightIcon;
+
+  return (
+    <View className="gap-1.5">
+      <MessagePartStatus
+        accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
+        onPress={() => setManualOpen(!isOpen)}
+        testID={`${testID}-trigger`}
+      >
+        <ListChecksIcon className={`size-4 ${colorClassName}`} />
+        <View className="min-w-0 flex-1">
+          {isRunning ? (
+            <ShimmerText className="text-sm" numberOfLines={1}>
+              {title}
+            </ShimmerText>
+          ) : (
+            <Text className={`text-sm ${colorClassName}`} numberOfLines={1}>
+              {title}
+            </Text>
+          )}
+        </View>
+        {statusText ? (
+          <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
+            {statusText}
+          </Text>
+        ) : null}
+        <ChevronIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      </MessagePartStatus>
+      {isOpen ? (
+        <View className="gap-1" testID={`${testID}-steps`}>
+          {children}
+        </View>
       ) : null}
     </View>
   );
@@ -118,8 +168,9 @@ export function MessagePartSummary({
   title,
 }: MessagePartSummaryProps) {
   const colorClassName = toneClassName[statusTone];
-  const isPulsing = state === 'running';
-  const trigger = (
+  const isRunning = state === 'running';
+
+  return (
     <MessagePartStatus
       accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
       onPress={onPress}
@@ -135,9 +186,17 @@ export function MessagePartSummary({
       ) : (
         <Icon className={`size-4 ${colorClassName}`} />
       )}
-      <Text className={`min-w-0 flex-1 text-sm ${colorClassName}`} numberOfLines={1}>
-        {title}
-      </Text>
+      <View className="min-w-0 flex-1">
+        {isRunning ? (
+          <ShimmerText className="text-sm" numberOfLines={1} testID={`${testID}-running-title`}>
+            {title}
+          </ShimmerText>
+        ) : (
+          <Text className={`text-sm ${colorClassName}`} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
+      </View>
       {statusText ? (
         <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
           {statusText}
@@ -145,44 +204,6 @@ export function MessagePartSummary({
       ) : null}
       <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
     </MessagePartStatus>
-  );
-
-  return isPulsing ? (
-    <MessagePartRunningPulse testID={`${testID}-running-trigger`}>
-      {trigger}
-    </MessagePartRunningPulse>
-  ) : (
-    trigger
-  );
-}
-
-function MessagePartRunningPulse({ children, testID }: { children: ReactNode; testID: string }) {
-  const reducedMotion = useReducedMotion();
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    cancelAnimation(opacity);
-    opacity.set(1);
-
-    if (!reducedMotion) {
-      opacity.set(
-        withRepeat(
-          withTiming(runningTriggerOpacity, { duration: runningTriggerPulseDurationMs }),
-          -1,
-          true,
-        ),
-      );
-    }
-
-    return () => cancelAnimation(opacity);
-  }, [opacity, reducedMotion]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }), [opacity]);
-
-  return (
-    <Animated.View style={animatedStyle} testID={testID}>
-      {children}
-    </Animated.View>
   );
 }
 

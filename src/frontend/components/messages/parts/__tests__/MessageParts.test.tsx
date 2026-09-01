@@ -30,6 +30,14 @@ jest.mock('../MessageFileStrip', () => {
   };
 });
 
+jest.mock('../tools/ToolGroupPart', () => {
+  const { createElement } = jest.requireActual('react');
+
+  return {
+    ToolGroupPart: (props: object) => createElement('ToolGroupPart', props),
+  };
+});
+
 describe('MessageParts', () => {
   test.each([
     ['pending', true],
@@ -72,6 +80,30 @@ describe('MessageParts', () => {
       expect.objectContaining({ filename: 'summary.md' }),
     ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
+  });
+
+  test('renders a run of tool calls as one group keyed by source part identity', () => {
+    const toolPart = (id: string) =>
+      ({
+        input: {},
+        output: {},
+        state: 'output-available' as const,
+        toolCallId: `call-${id}`,
+        toolName: id,
+        type: 'dynamic-tool' as const,
+      }) as unknown as NonNullable<MessageListItem['data']['parts']>[number];
+    const message: MessageListItem = {
+      ...makeMessage('success'),
+      data: {
+        partKeys: ['key-text', 'key-a', 'key-b'],
+        parts: [{ text: 'Hello', type: 'text' }, toolPart('a'), toolPart('b')],
+      },
+    };
+    const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
+
+    const group = renderer.root.findByType('ToolGroupPart');
+    expect(group.props.items.map((item: { key: string }) => item.key)).toEqual(['key-a', 'key-b']);
+    expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
   });
 
   test('shows a file produced mid-answer after the answer, not where it interrupted it', () => {

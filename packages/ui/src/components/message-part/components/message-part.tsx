@@ -6,6 +6,7 @@ import {
   MessagePartReasoning,
   MessagePartSummary,
   MessagePartTool,
+  MessagePartToolGroup,
 } from './message-part-disclosure';
 import { MessagePartError } from './message-part-feedback';
 import { MessagePartPending } from './message-part-pending';
@@ -40,6 +41,7 @@ export const MessagePart = Object.assign(MessagePartRoot, {
   Summary: MessagePartSummary,
   TextSection: MessagePartTextSection,
   Tool: MessagePartTool,
+  ToolGroup: MessagePartToolGroup,
   Translation: MessagePartTranslation,
   Unknown: MessagePartUnknown,
   ValueSection: MessagePartValueSection,

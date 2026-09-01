@@ -9,7 +9,6 @@ const meta = {
   component: MessagePart.Reasoning,
   args: {
     children: null,
-    detailTitle: 'Reasoning',
     state: 'complete',
     statusText: 'Thought for 4.8s',
   },

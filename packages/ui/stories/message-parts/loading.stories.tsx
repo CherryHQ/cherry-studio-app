@@ -33,11 +33,7 @@ export const Thinking: Story = {
     <MessagePartStoryFrame>
       {() => (
         <MessagePart>
-          <MessagePart.Reasoning
-            detailTitle="Deep thinking"
-            state="running"
-            statusText="Thinking 1.2s"
-          >
+          <MessagePart.Reasoning state="running" statusText="Thinking 1.2s">
             <MarkdownText
               fontSizeStep={0}
               isStreaming

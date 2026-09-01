@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import { SourceLink } from '../SourceLink';
-import { getToolName, getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
+import { getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
   part: ToolMessagePart;
@@ -15,12 +15,6 @@ type WebSearchResult = {
   title: string;
   url: string;
 };
-
-const WEB_SEARCH_TOOL_NAMES = new Set([
-  'web_search',
-  'builtin_web_search',
-  'builtin_web_search_preview',
-]);
 
 export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
   const { t } = useTranslation();
@@ -55,14 +49,6 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
       )}
     </MessagePart.Tool>
   );
-}
-
-export function isWebSearchToolPart(part: ToolMessagePart) {
-  return isWebSearchToolName(getToolName(part));
-}
-
-export function isProviderWebSearchToolPart(part: ToolMessagePart) {
-  return isWebSearchToolPart(part) && getCherryToolType(part) === 'provider';
 }
 
 function getWebSearchStatusText(
@@ -120,15 +106,4 @@ function parseWebSearchResults(output: unknown): WebSearchResult[] {
 function getWebSearchQuery(input: unknown) {
   if (!isRecord(input) || typeof input.query !== 'string') return '';
   return input.query.trim();
-}
-
-function isWebSearchToolName(toolName: string) {
-  return WEB_SEARCH_TOOL_NAMES.has(toolName);
-}
-
-function getCherryToolType(part: ToolMessagePart) {
-  const metadata = part.toolMetadata;
-  const cherry = isRecord(metadata?.cherry) ? metadata.cherry : undefined;
-  const tool = isRecord(cherry?.tool) ? cherry.tool : undefined;
-  return typeof tool?.type === 'string' ? tool.type : undefined;
 }

@@ -18,10 +18,18 @@ export type MessagePartStatusProps = {
 
 export type MessagePartReasoningProps = {
   children: ReactNode;
-  detailTitle: string;
   state: 'complete' | 'running';
   statusText: string;
   testID?: string;
+};
+
+export type MessagePartToolGroupProps = {
+  children: ReactNode;
+  state: 'complete' | 'running';
+  statusText?: string;
+  statusTone?: MessagePartTone;
+  testID?: string;
+  title: string;
 };
 
 export type MessagePartDetailProps = {

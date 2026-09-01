@@ -7,6 +7,7 @@ import { MessageFileStrip } from './MessageFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { partitionMessageParts } from './partitionMessageParts';
 import { SourceGroup } from './SourceGroup';
+import { ToolGroupPart } from './tools/ToolGroupPart';
 
 type MessagePartsProps = {
   isTextSelectionEnabled: boolean;
@@ -44,16 +45,26 @@ export function MessageParts({
 
   return (
     <View className="gap-2">
-      {body.map(({ index, part }) => (
-        <MessagePartRenderer
-          isStreaming={message.status === 'pending'}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          key={getMessagePartKey(message, part, index)}
-          part={part}
-          renderMode={renderMode}
-          resolvedText={citationText.get(index)}
-        />
-      ))}
+      {body.map((item) =>
+        item.kind === 'tool-group' ? (
+          <ToolGroupPart
+            items={item.items.map(({ index, part }) => ({
+              key: getMessagePartKey(message, part, index),
+              part,
+            }))}
+            key={getMessagePartKey(message, item.items[0].part, item.index)}
+          />
+        ) : (
+          <MessagePartRenderer
+            isStreaming={message.status === 'pending'}
+            isTextSelectionEnabled={isTextSelectionEnabled}
+            key={getMessagePartKey(message, item.part, item.index)}
+            part={item.part}
+            renderMode={renderMode}
+            resolvedText={citationText.get(item.index)}
+          />
+        ),
+      )}
       {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
       {/* Last, so the files a turn produced are the closest thing to the end of
           the message and stay put as the answer above them streams in. */}

@@ -21,8 +21,12 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
 
   const statusText = useMemo(() => {
     const seconds = (Math.max(displayMs, 100) / 1000).toFixed(1);
-    return isThinking
-      ? t('chat.reasoningStatus.thinking', { seconds })
+    if (isThinking) {
+      return t('chat.reasoningStatus.thinking', { seconds });
+    }
+    // A sub-second duration is noise, not information — drop the number.
+    return displayMs < 1000
+      ? t('chat.reasoningStatus.thoughtBrief')
       : t('chat.reasoningStatus.thought', { seconds });
   }, [displayMs, isThinking, t]);
 
@@ -34,11 +38,7 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   }
 
   return (
-    <MessagePart.Reasoning
-      detailTitle={t('chat.reasoningStatus.title')}
-      state={isThinking ? 'running' : 'complete'}
-      statusText={statusText}
-    >
+    <MessagePart.Reasoning state={isThinking ? 'running' : 'complete'} statusText={statusText}>
       <PartMarkdown isStreaming={isStreaming} markdown={part.text} selectable />
     </MessagePart.Reasoning>
   );
