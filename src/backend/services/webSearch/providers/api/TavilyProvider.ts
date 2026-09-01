@@ -58,23 +58,17 @@ export class TavilyProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: TavilySearchContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers: this.buildHeaders({
+      headers: {
         Authorization: `Bearer ${context.apiKey}`,
         'Content-Type': 'application/json',
-      }),
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Tavily search failed', response);
-    }
-
-    return this.parseJsonResponse(response, TavilySearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: TavilySearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import zhipuResponseFixture from '../../__tests__/fixtures/zhipu-response.json';
 import { ZhipuProvider } from '../ZhipuProvider';
+import { createMockJsonRequester } from './_webSearchProviderTestUtils';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 2,
@@ -10,35 +11,30 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('ZhipuProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('posts a search request and maps the fixture response', async () => {
-    const fetchMock = mockJsonResponse(zhipuResponseFixture);
+    const requester = createMockJsonRequester(zhipuResponseFixture);
 
-    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://open.bigmodel.cn/api/paas/v4/web_search', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: undefined,
-    });
-    // The body is round-tripped through `ZhipuWebSearchRequestSchema.parse`, so
-    // compare the decoded object rather than the serialized key order.
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        operation: 'search',
+        providerId: 'zhipu',
+        signal: undefined,
+        url: 'https://open.bigmodel.cn/api/paas/v4/web_search',
+      }),
+    );
+    expect(requester.mock.calls[0]?.[0].body).toEqual({
       search_query: 'hello',
       search_engine: 'search_std',
       search_intent: false,
     });
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer zhipu-key');
-    expect(headers.get('Content-Type')).toBe('application/json');
-    expect(headers.get('X-App-Name')).toBe('CherryStudioMobile');
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      Authorization: 'Bearer zhipu-key',
+      'Content-Type': 'application/json',
+    });
     expect(result).toEqual({
       query: 'hello',
       providerId: 'zhipu',
@@ -56,20 +52,20 @@ describe('ZhipuProvider', () => {
   });
 
   test('tolerates a payload without search_result', async () => {
-    mockJsonResponse({ request_id: 'req-1' });
+    const requester = createMockJsonRequester({ request_id: 'req-1' });
 
-    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([]);
   });
 
   test('trims result fields and falls back to empty strings', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       search_result: [{ title: '  Padded Title  ', content: '  Padded Content  ' }],
     });
 
-    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([
@@ -78,7 +74,7 @@ describe('ZhipuProvider', () => {
   });
 
   test('caps the mapped results at maxResults', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       search_result: [
         { title: 'First', content: 'One', link: 'https://zhipu.example/1' },
         { title: 'Second', content: 'Two', link: 'https://zhipu.example/2' },
@@ -86,20 +82,12 @@ describe('ZhipuProvider', () => {
       ],
     });
 
-    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ZhipuProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results.map((item) => item.title)).toEqual(['First', 'Second']);
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
 
 function createProvider(): WebSearchProvider {
   return {

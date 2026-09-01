@@ -64,23 +64,17 @@ export class QueritProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: QueritSearchContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers: this.buildHeaders({
+      headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${context.apiKey}`,
-      }),
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Querit search failed', response);
-    }
-
-    return this.parseJsonResponse(response, QueritSearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: QueritSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

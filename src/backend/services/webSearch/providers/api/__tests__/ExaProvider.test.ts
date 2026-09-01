@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import exaResponseFixture from '../../__tests__/fixtures/exa-response.json';
 import { ExaProvider } from '../ExaProvider';
+import { createMockJsonRequester } from './_webSearchProviderTestUtils';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
@@ -10,32 +11,30 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('ExaProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('posts the fixture request and maps the fixture response', async () => {
-    const fetchMock = mockJsonResponse(exaResponseFixture);
+    const requester = createMockJsonRequester(exaResponseFixture);
 
-    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    const [requestUrl, requestInit] = fetchMock.mock.calls[0];
-    expect(requestUrl).toBe('https://api.exa.ai/search');
-    expect(requestInit.method).toBe('POST');
-    // `ExaSearchRequestSchema.parse` rebuilds the body in schema-shape order, so
-    // decode before comparing: key order on the wire is not a contract.
-    expect(JSON.parse(requestInit.body)).toEqual({
+    const request = requester.mock.calls[0]?.[0];
+    expect(request).toEqual(
+      expect.objectContaining({
+        method: 'POST',
+        operation: 'search',
+        providerId: 'exa',
+        url: 'https://api.exa.ai/search',
+      }),
+    );
+    expect(request?.body).toEqual({
       query: 'hello',
       numResults: 4,
       contents: { text: true },
     });
-
-    const headers = requestInit.headers as Headers;
-    expect(headers.get('x-api-key')).toBe('exa-key');
-    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(request?.headers).toEqual({
+      'Content-Type': 'application/json',
+      'x-api-key': 'exa-key',
+    });
 
     expect(result).toEqual({
       query: 'hello',
@@ -54,12 +53,12 @@ describe('ExaProvider', () => {
   });
 
   test('normalizes a null title to an empty string', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       autopromptString: 'refined query',
       results: [{ title: null, text: 'Exa Content', url: 'https://exa.example/result' }],
     });
 
-    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([
@@ -73,22 +72,14 @@ describe('ExaProvider', () => {
   });
 
   test('defaults a missing results array to no results', async () => {
-    mockJsonResponse({ autopromptString: 'refined query' });
+    const requester = createMockJsonRequester({ autopromptString: 'refined query' });
 
-    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new ExaProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([]);
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
 
 function createProvider(): WebSearchProvider {
   return {

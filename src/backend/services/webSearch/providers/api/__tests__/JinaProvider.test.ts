@@ -2,6 +2,10 @@ import { ApiKeyRotationState } from '@/backend/services/webSearch/utils/provider
 import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
 
 import { JinaProvider } from '../JinaProvider';
+import {
+  createMockJsonRequester,
+  type MockWebSearchJsonRequester,
+} from './_webSearchProviderTestUtils';
 
 const config: WebSearchExecutionConfig = {
   compression: { cutoffLimit: 2000, method: 'none' },
@@ -9,12 +13,6 @@ const config: WebSearchExecutionConfig = {
 };
 
 describe('JinaProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test.each([
     {
       invoke: (provider: JinaProvider) => provider.searchKeywords('Cherry Studio', config),
@@ -27,34 +25,24 @@ describe('JinaProvider', () => {
   ])(
     'allows anonymous Jina requests without an Authorization header',
     async ({ invoke, response }) => {
-      const fetchMock = jest.fn(
-        async (_input: RequestInfo | URL, _init?: RequestInit) =>
-          new Response(JSON.stringify(response), { status: 200 }),
-      );
-      global.fetch = fetchMock;
+      const requester = createMockJsonRequester(response);
 
-      await expect(invoke(createProvider([]))).resolves.toBeDefined();
+      await expect(invoke(createProvider([], requester))).resolves.toBeDefined();
 
-      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
-      expect(headers.has('Authorization')).toBe(false);
+      expect(requester.mock.calls[0]?.[0].headers).not.toHaveProperty('Authorization');
     },
   );
 
   test('uses a configured API key when available', async () => {
-    const fetchMock = jest.fn(
-      async (_input: RequestInfo | URL, _init?: RequestInit) =>
-        new Response(JSON.stringify({ data: [] }), { status: 200 }),
-    );
-    global.fetch = fetchMock;
+    const requester = createMockJsonRequester({ data: [] });
 
-    await createProvider(['jina-key']).searchKeywords('Cherry Studio', config);
+    await createProvider(['jina-key'], requester).searchKeywords('Cherry Studio', config);
 
-    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer jina-key');
+    expect(requester.mock.calls[0]?.[0].headers).toHaveProperty('Authorization', 'Bearer jina-key');
   });
 });
 
-function createProvider(apiKeys: string[]) {
+function createProvider(apiKeys: string[], requester: MockWebSearchJsonRequester) {
   const provider: WebSearchProvider = {
     apiKeys,
     basicAuthPassword: '',
@@ -69,5 +57,5 @@ function createProvider(apiKeys: string[]) {
     type: 'api',
   };
 
-  return new JinaProvider(provider, new ApiKeyRotationState());
+  return new JinaProvider(provider, new ApiKeyRotationState(), requester);
 }

@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import searxngSearchResponse from '../../__tests__/fixtures/searxng-search-response.json';
 import { SearxngProvider } from '../SearxngProvider';
+import { createMockJsonRequester } from './_webSearchProviderTestUtils';
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
@@ -16,12 +17,6 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('SearxngProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   // The fixture is shared with desktop, but the expected result below is not:
   // desktop re-fetches every result URL and replaces the engine's title/content
   // with text extracted from the page, so the same bytes normalize to
@@ -29,18 +24,20 @@ describe('SearxngProvider', () => {
   // "fix" this to match desktop's snapshot on sync -- the fixture pins the wire
   // shape, not the normalized output.
   test('issues the search request and maps the fixture response', async () => {
-    const fetchMock = mockJsonResponse(searxngSearchResponse);
+    const requester = createMockJsonRequester(searxngSearchResponse);
 
-    const provider = new SearxngProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new SearxngProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8080/search?q=hello&language=auto&format=json',
-      {
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: {},
         method: 'GET',
-        headers: expect.any(Headers),
+        operation: 'search',
+        providerId: 'searxng',
         signal: undefined,
-      },
+        url: 'http://localhost:8080/search?q=hello&language=auto&format=json',
+      }),
     );
     expect(result).toEqual({
       query: 'hello',
@@ -59,25 +56,20 @@ describe('SearxngProvider', () => {
   });
 
   test('keeps only http(s) result URLs', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          query: 'hello',
-          results: [
-            { title: 'Https', content: 'A', url: 'https://example.com/a' },
-            { title: 'Http', content: 'B', url: 'http://example.com/b' },
-            { title: 'Javascript', content: 'C', url: 'javascript:alert(1)' },
-            { title: 'File', content: 'D', url: 'file:///etc/passwd' },
-            { title: 'Relative', content: 'E', url: '/relative/path' },
-            { title: 'Blank', content: 'F', url: '   ' },
-            { title: 'Missing', content: 'G' },
-          ],
-        }),
-        { status: 200 },
-      ),
-    );
+    const requester = createMockJsonRequester({
+      query: 'hello',
+      results: [
+        { title: 'Https', content: 'A', url: 'https://example.com/a' },
+        { title: 'Http', content: 'B', url: 'http://example.com/b' },
+        { title: 'Javascript', content: 'C', url: 'javascript:alert(1)' },
+        { title: 'File', content: 'D', url: 'file:///etc/passwd' },
+        { title: 'Relative', content: 'E', url: '/relative/path' },
+        { title: 'Blank', content: 'F', url: '   ' },
+        { title: 'Missing', content: 'G' },
+      ],
+    });
 
-    const provider = new SearxngProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new SearxngProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results.map((item) => item.url)).toEqual([
@@ -86,14 +78,6 @@ describe('SearxngProvider', () => {
     ]);
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
 
 function createProvider(): WebSearchProvider {
   return {

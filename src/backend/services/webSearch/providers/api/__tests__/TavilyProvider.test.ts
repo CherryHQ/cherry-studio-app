@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import tavilyResponse from '../../__tests__/fixtures/tavily-response.json';
 import { TavilyProvider } from '../TavilyProvider';
+import { createMockJsonRequester } from './_webSearchProviderTestUtils';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
@@ -10,39 +11,31 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('TavilyProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('posts a search request and maps the fixture response', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify(tavilyResponse), { status: 200 }));
-    global.fetch = fetchMock;
+    const requester = createMockJsonRequester(tavilyResponse);
 
-    const provider = new TavilyProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new TavilyProvider(createProvider(), new ApiKeyRotationState(), requester);
     const response = await provider.searchKeywords('hello', runtimeConfig, {
       signal: AbortSignal.abort(),
     });
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: expect.any(AbortSignal),
-    });
-    // Decode before asserting: the request schema's `parse` rebuilds the object
-    // in schema-shape order, so pinning the serialized string would pin a key
-    // order the API does not care about.
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        operation: 'search',
+        providerId: 'tavily',
+        signal: expect.any(AbortSignal),
+        url: 'https://api.tavily.com/search',
+      }),
+    );
+    expect(requester.mock.calls[0]?.[0].body).toEqual({
       query: 'hello',
       max_results: 4,
     });
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer key-a');
-    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      Authorization: 'Bearer key-a',
+      'Content-Type': 'application/json',
+    });
     expect(response).toEqual({
       query: 'hello',
       providerId: 'tavily',

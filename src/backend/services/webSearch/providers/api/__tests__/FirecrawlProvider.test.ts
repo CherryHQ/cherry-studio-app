@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import firecrawlResponse from '../../__tests__/fixtures/firecrawl-response.json';
 import { FirecrawlProvider } from '../FirecrawlProvider';
+import { createMockJsonRequester } from './_webSearchProviderTestUtils';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
@@ -10,35 +11,30 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('FirecrawlProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('posts a search request and maps scraped markdown', async () => {
-    const fetchMock = mockJsonResponse(firecrawlResponse);
+    const requester = createMockJsonRequester(firecrawlResponse);
 
-    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.firecrawl.example/v2/search', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: undefined,
-    });
-    // Decode before asserting: the request schema's `parse` rebuilds the object
-    // in schema-shape order, and pinning the serialized string would pin a key
-    // order the API does not care about.
-    expect(readRequestBody(fetchMock)).toEqual({
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        operation: 'search',
+        providerId: 'firecrawl',
+        signal: undefined,
+        url: 'https://api.firecrawl.example/v2/search',
+      }),
+    );
+    expect(requester.mock.calls[0]?.[0].body).toEqual({
       query: 'hello',
       limit: 4,
       scrapeOptions: { formats: ['markdown'] },
     });
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer firecrawl-key');
-    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      Authorization: 'Bearer firecrawl-key',
+      'Content-Type': 'application/json',
+    });
     expect(result).toEqual({
       query: 'hello',
       providerId: 'firecrawl',
@@ -56,20 +52,22 @@ describe('FirecrawlProvider', () => {
   });
 
   test('omits the Authorization header so an unset key uses the free quota', async () => {
-    const fetchMock = mockJsonResponse({ success: true, data: { web: [] } });
+    const requester = createMockJsonRequester({ success: true, data: { web: [] } });
 
     const provider = new FirecrawlProvider(
       createProvider({ apiKeys: [] }),
       new ApiKeyRotationState(),
+      requester,
     );
     await provider.searchKeywords('hello', runtimeConfig);
 
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBeNull();
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      'Content-Type': 'application/json',
+    });
   });
 
   test('scrapes a URL and maps the markdown response', async () => {
-    const fetchMock = mockJsonResponse({
+    const requester = createMockJsonRequester({
       success: true,
       data: {
         markdown: 'Scraped page',
@@ -84,16 +82,21 @@ describe('FirecrawlProvider', () => {
         ],
       }),
       new ApiKeyRotationState(),
+      requester,
     );
 
     const result = await provider.fetchUrls('https://example.com', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.firecrawl.example/v2/scrape', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: JSON.stringify({ url: 'https://example.com', formats: ['markdown'] }),
-      signal: undefined,
-    });
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { url: 'https://example.com', formats: ['markdown'] },
+        method: 'POST',
+        operation: 'scrape',
+        providerId: 'firecrawl',
+        signal: undefined,
+        url: 'https://api.firecrawl.example/v2/scrape',
+      }),
+    );
     expect(result).toEqual({
       query: 'https://example.com',
       providerId: 'firecrawl',
@@ -111,9 +114,9 @@ describe('FirecrawlProvider', () => {
   });
 
   test('throws when the payload reports success: false', async () => {
-    mockJsonResponse({ success: false, error: 'Rate limit exceeded' });
+    const requester = createMockJsonRequester({ success: false, error: 'Rate limit exceeded' });
 
-    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState(), requester);
 
     await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toThrow(
       'Firecrawl search failed: Rate limit exceeded',
@@ -121,7 +124,7 @@ describe('FirecrawlProvider', () => {
   });
 
   test('falls back to description, then to an empty string', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       success: true,
       data: {
         web: [
@@ -135,33 +138,21 @@ describe('FirecrawlProvider', () => {
       },
     });
 
-    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results.map((item) => item.content)).toEqual(['Fallback Description', '']);
   });
 
   test('tolerates a payload without a data object', async () => {
-    mockJsonResponse({ success: true });
+    const requester = createMockJsonRequester({ success: true });
 
-    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new FirecrawlProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([]);
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
-
-function readRequestBody(fetchMock: jest.Mock): unknown {
-  return JSON.parse(fetchMock.mock.calls[0][1].body as string);
-}
 
 function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchProvider {
   return {

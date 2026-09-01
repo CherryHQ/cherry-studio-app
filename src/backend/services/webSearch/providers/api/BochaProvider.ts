@@ -66,23 +66,17 @@ export class BochaProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: BochaSearchContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      body: JSON.stringify(context.requestBody),
-      headers: this.buildHeaders({
+      headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${context.apiKey}`,
-      }),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Bocha search failed', response);
-    }
-
-    return this.parseJsonResponse(response, BochaSearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: BochaSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

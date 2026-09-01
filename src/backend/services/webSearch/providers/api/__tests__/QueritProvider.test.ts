@@ -1,8 +1,13 @@
+import { HttpError } from '@/backend/services/http';
 import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
 
 import { ApiKeyRotationState } from '../../../utils/provider';
 import queritResponse from '../../__tests__/fixtures/querit-response.json';
 import { QueritProvider } from '../QueritProvider';
+import {
+  createMockJsonRequester,
+  createRejectedJsonRequester,
+} from './_webSearchProviderTestUtils';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
@@ -10,29 +15,26 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('QueritProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('posts the search request and maps the fixture response', async () => {
-    const fetchMock = mockJsonResponse(queritResponse);
+    const requester = createMockJsonRequester(queritResponse);
 
-    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.querit.ai/v1/search', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: undefined,
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { query: 'hello', count: 4 },
+        method: 'POST',
+        operation: 'search',
+        providerId: 'querit',
+        signal: undefined,
+        url: 'https://api.querit.ai/v1/search',
+      }),
+    );
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      Authorization: 'Bearer querit-key',
+      'Content-Type': 'application/json',
     });
-    expect(readRequestBody(fetchMock)).toEqual({ query: 'hello', count: 4 });
-
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer querit-key');
-    expect(headers.get('Content-Type')).toBe('application/json');
 
     expect(result).toEqual({
       query: 'hello',
@@ -51,14 +53,14 @@ describe('QueritProvider', () => {
   });
 
   test('surfaces the payload error message when error_code is not 200', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       error_code: 401,
       error_msg: 'invalid api key',
       query_context: { query: 'hello' },
       results: { result: [] },
     });
 
-    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
 
     await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toThrow(
       'Querit search failed: invalid api key',
@@ -66,21 +68,21 @@ describe('QueritProvider', () => {
   });
 
   test('defaults to an empty result list when the payload omits results.result', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       error_code: 200,
       error_msg: '',
       query_context: { query: 'hello' },
       results: {},
     });
 
-    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([]);
   });
 
   test('falls back to empty content when a result has no snippet', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       error_code: 200,
       error_msg: '',
       query_context: { query: 'hello' },
@@ -89,7 +91,7 @@ describe('QueritProvider', () => {
       },
     });
 
-    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
     expect(result.results).toEqual([
@@ -103,27 +105,17 @@ describe('QueritProvider', () => {
   });
 
   test('raises an HTTP error before parsing when the response is not ok', async () => {
-    global.fetch = jest.fn().mockResolvedValue(new Response('upstream is down', { status: 503 }));
+    const requester = createRejectedJsonRequester(
+      new HttpError('HTTP request failed with status 503.', { kind: 'http', status: 503 }),
+    );
 
-    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
 
     await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toThrow(
-      'Querit search failed: HTTP 503 upstream is down',
+      'HTTP request failed with status 503.',
     );
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
-
-function readRequestBody(fetchMock: jest.Mock): unknown {
-  return JSON.parse(fetchMock.mock.calls[0][1].body as string);
-}
 
 function createProvider(): WebSearchProvider {
   return {

@@ -118,43 +118,31 @@ export class JinaProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearchKeywords(context: JinaContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
       method: 'GET',
-      headers: this.buildHeaders({
+      headers: {
         Accept: 'application/json',
         ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
-      }),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Jina search failed', response);
-    }
-
-    return this.parseJsonResponse(response, JinaSearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: JinaSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 
   private async executeFetchUrls(context: JinaContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
       method: 'GET',
-      headers: this.buildHeaders({
+      headers: {
         Accept: 'application/json',
         ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
         'X-Retain-Images': 'none',
-      }),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Jina Reader fetch failed', response);
-    }
-
-    return this.parseJsonResponse(response, JinaReaderResponseSchema, {
+      },
       operation: 'reader',
-      requestUrl: context.requestUrl,
+      responseSchema: JinaReaderResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

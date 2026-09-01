@@ -91,19 +91,13 @@ export class SearxngProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: SearxngSearchContext) {
-    const response = await fetch(context.searchUrl, {
+    return this.requestJson({
       method: 'GET',
-      headers: this.buildHeaders(this.getBasicAuthHeaders()),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Searxng search failed', response);
-    }
-
-    return this.parseJsonResponse(response, SearxngSearchResponseSchema, {
+      headers: this.getBasicAuthHeaders(),
       operation: 'search',
-      requestUrl: context.searchUrl,
+      responseSchema: SearxngSearchResponseSchema,
+      signal: context.signal,
+      url: context.searchUrl,
     });
   }
 

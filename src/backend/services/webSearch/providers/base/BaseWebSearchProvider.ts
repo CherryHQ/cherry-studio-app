@@ -1,8 +1,10 @@
 import type * as z from 'zod';
 
+import type { HttpHeaders } from '@/backend/services/http';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types/webSearch';
 
+import { requestWebSearchJson, type WebSearchJsonRequester } from '../../http/requestWebSearchJson';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
@@ -13,6 +15,7 @@ export abstract class BaseWebSearchProvider {
   constructor(
     protected readonly provider: WebSearchProvider,
     private readonly apiKeyRotationState: ApiKeyRotationState,
+    private readonly jsonRequester: WebSearchJsonRequester = requestWebSearchJson,
   ) {}
 
   protected resolveApiUrl(capability: WebSearchCapability, path: string): string {
@@ -37,39 +40,19 @@ export abstract class BaseWebSearchProvider {
     return resolvedHeaders;
   }
 
-  protected async parseJsonResponse<T>(
-    response: Response,
-    schema: z.ZodType<T>,
-    context: {
-      operation: string;
-      requestUrl: string;
-    },
-  ): Promise<T> {
-    let payload: unknown;
-
-    try {
-      payload = await response.json();
-    } catch (error) {
-      throw new Error(
-        `${this.provider.id} ${context.operation} returned invalid JSON from ${context.requestUrl}`,
-        {
-          cause: error,
-        },
-      );
-    }
-
-    const result = schema.safeParse(payload);
-
-    if (!result.success) {
-      throw new Error(
-        `${this.provider.id} ${context.operation} response validation failed for ${context.requestUrl}: ${result.error.message}`,
-        {
-          cause: result.error,
-        },
-      );
-    }
-
-    return result.data;
+  protected requestJson<TResponse, TBody = unknown>(request: {
+    body?: TBody;
+    headers?: HttpHeaders;
+    method: 'GET' | 'POST';
+    operation: string;
+    responseSchema: z.ZodType<TResponse>;
+    signal?: AbortSignal;
+    url: string;
+  }): Promise<TResponse> {
+    return this.jsonRequester<TResponse, TBody>({
+      ...request,
+      providerId: this.provider.id,
+    });
   }
 
   protected async throwHttpError(message: string, response: Response): Promise<never> {
