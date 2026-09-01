@@ -118,9 +118,7 @@ function AgentPickerRow({
       >
         <AgentAvatar name={agent.name} size={36} uri={agent.avatarUri} />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
-            {agent.name}
-          </Text>
+          <Text className="font-semibold text-base text-foreground">{agent.name}</Text>
           <Text className="text-muted-foreground text-xs" numberOfLines={1}>
             {agent.modelName ?? t('agent.model.none')}
           </Text>

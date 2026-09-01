@@ -12,6 +12,8 @@ import {
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
+const AGENT_NAME_MINIMUM_FONT_SCALE = 12 / 14;
+
 export function useMainHeaderAgent() {
   const router = useRouter();
   const params = useLocalSearchParams<ChatRouteParamsInput>();
@@ -51,12 +53,19 @@ export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPres
     <Pressable
       accessibilityLabel={agent.name}
       accessibilityRole="button"
-      className="max-w-48 flex-row items-center justify-center gap-1 rounded-full px-3 py-2 active:bg-secondary"
+      className="h-10 max-w-56 min-w-0 shrink flex-row items-center justify-center gap-1 rounded-full px-3 active:bg-secondary"
       hitSlop={8}
       onPress={onPress}
       testID="current-agent-button"
     >
-      <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
+      <Text
+        adjustsFontSizeToFit
+        className="min-w-0 shrink text-center font-semibold text-foreground text-sm"
+        ellipsizeMode="clip"
+        maxFontSizeMultiplier={1.2}
+        minimumFontScale={AGENT_NAME_MINIMUM_FONT_SCALE}
+        numberOfLines={1}
+      >
         {agent.name}
       </Text>
       <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
