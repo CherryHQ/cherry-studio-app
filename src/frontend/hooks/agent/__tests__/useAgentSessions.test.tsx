@@ -7,7 +7,11 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient, CursorPaginationResponse } from '@/shared/data/api/types';
 
-import { useAgentSessionMutations, useAgentSessions } from '../useAgentSessions';
+import {
+  useAgentSessionMutations,
+  useAgentSessions,
+  useLatestAgentSession,
+} from '../useAgentSessions';
 
 let actions: ReturnType<typeof useAgentSessionMutations> | undefined;
 let queryClient: QueryClient;
@@ -32,6 +36,9 @@ const dataApi = {
 
 function Probe() {
   useAgentSessions();
+  // Both list variants share the collection cache namespace and therefore
+  // must keep the same InfiniteData shape for optimistic rename/delete writes.
+  useLatestAgentSession();
   const mutations = useAgentSessionMutations();
 
   useEffect(() => {

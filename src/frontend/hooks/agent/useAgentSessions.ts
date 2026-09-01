@@ -62,16 +62,17 @@ export function useAgentSession(sessionId: string | undefined) {
 }
 
 export function useLatestAgentSession(options: LatestAgentSessionOptions = {}) {
-  const query = useQuery('/agent-sessions', {
+  const query = useInfiniteQuery('/agent-sessions', {
     enabled: options.enabled,
-    query: { agentId: options.agentId, limit: 1 },
+    limit: 1,
+    query: { agentId: options.agentId },
   });
 
   return {
     error: query.error,
     isLoading: query.isLoading,
-    refetch: query.refetch,
-    session: query.data?.items.at(0),
+    refetch: query.refresh,
+    session: query.pages.at(0)?.items.at(0),
   };
 }
 

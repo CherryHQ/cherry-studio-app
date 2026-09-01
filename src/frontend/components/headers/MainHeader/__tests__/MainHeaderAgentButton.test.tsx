@@ -27,14 +27,14 @@ jest.mock('@/frontend/components/navigation/chat', () => ({
     sessionId: target.kind === 'session' ? target.sessionId : undefined,
   }),
   parseChatRoute: (params: { agentId?: string; sessionId?: string }) =>
-    params.agentId
+    params.sessionId
       ? {
           status: 'ready',
-          target: params.sessionId
-            ? { agentId: params.agentId, kind: 'session', sessionId: params.sessionId }
-            : { agentId: params.agentId, kind: 'draft' },
+          target: { kind: 'session', sessionId: params.sessionId },
         }
-      : { status: 'empty' },
+      : params.agentId
+        ? { status: 'ready', target: { agentId: params.agentId, kind: 'draft' } }
+        : { status: 'empty' },
   useStartNewChat: () => mockStartNewChat,
 }));
 
@@ -113,17 +113,14 @@ describe('MainHeaderAgentButton', () => {
     ).toBe('Peanut');
   });
 
-  it('keeps the route Agent while the new Session is loading', async () => {
-    mockAgentId = 'agent-1';
+  it('waits for the Session entity to resolve its Agent', async () => {
     mockSessionAgentId = undefined;
 
     await act(async () => {
       renderer = create(<Harness />);
     });
 
-    expect(
-      renderer?.root.findByProps({ testID: 'current-agent-button' }).props.accessibilityLabel,
-    ).toBe('Peanut');
+    expect(renderer?.root.findAllByProps({ testID: 'current-agent-button' })).toHaveLength(0);
   });
 
   it('starts a new Session with the current Agent', async () => {
@@ -140,7 +137,7 @@ describe('MainHeaderAgentButton', () => {
     });
   });
 
-  it('falls back to the last available Agent when the Session Agent was deleted', async () => {
+  it('falls back to another available Agent when the Session Agent was deleted', async () => {
     mockAgent = undefined;
 
     await act(async () => {

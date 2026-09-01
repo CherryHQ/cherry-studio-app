@@ -303,6 +303,7 @@
   "session.deleteFailed": "Session was not deleted. Try again.",
   "session.deleteMessage": "The session and its messages will be permanently deleted. A running turn is cancelled first.",
   "session.deleteTitle": "Delete session?",
+  "session.detail.notFound": "Session not found",
   "session.list.deletedAgent": "Deleted agent",
   "session.list.empty": "No sessions yet",
   "session.list.emptyDescription": "Pick an agent to start chatting and sessions will show up here.",

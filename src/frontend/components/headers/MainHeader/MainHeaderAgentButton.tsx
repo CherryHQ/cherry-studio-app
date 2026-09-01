@@ -19,7 +19,7 @@ export function useMainHeaderAgent() {
   const params = useLocalSearchParams<ChatRouteParamsInput>();
   const route = parseChatRoute(params);
   const routeTarget = route.status === 'ready' ? route.target : undefined;
-  const routeAgentId = routeTarget?.agentId;
+  const routeAgentId = routeTarget?.kind === 'draft' ? routeTarget.agentId : undefined;
   const sessionId = routeTarget?.kind === 'session' ? routeTarget.sessionId : undefined;
   const session = useAgentSession(sessionId);
   const currentAgentId = session.data?.agentId ?? routeAgentId;

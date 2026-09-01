@@ -204,12 +204,10 @@ type SessionSearchResult =
   | { item: SessionMessageContentSearchItem; kind: 'message' };
 
 function getSearchResultTarget(result: SessionSearchResult): ChatTarget {
-  const identity =
-    result.kind === 'session'
-      ? result.item.target
-      : { agentId: result.item.agentId, sessionId: result.item.sessionId };
-
-  return { ...identity, kind: 'session' };
+  return {
+    kind: 'session',
+    sessionId: result.kind === 'session' ? result.item.target.sessionId : result.item.sessionId,
+  };
 }
 
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {

@@ -101,7 +101,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
           ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         });
         targetSessionId = session.id;
-        navigation.openSession(targetSessionId, agentId);
+        navigation.openSession(targetSessionId);
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
       }
@@ -116,7 +116,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const forkSession = useCallback(
     async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
       const session = await client.forkSession(sessionId, fromMessageId, title);
-      navigation.openSession(session.id, session.agentId);
+      navigation.openSession(session.id);
       void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
     },
     [client, navigation, queryClient],
@@ -133,8 +133,8 @@ function createChatNavigation(input: { pathname: string; router: ReturnType<type
   let navigation = input;
 
   return {
-    openSession: (sessionId: string, agentId: string) => {
-      const target = { agentId, kind: 'session' as const, sessionId };
+    openSession: (sessionId: string) => {
+      const target = { kind: 'session' as const, sessionId };
       if (navigation.pathname === '/') {
         navigation.router.setParams(chatRouteParams(target));
         return;

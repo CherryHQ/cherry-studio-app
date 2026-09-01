@@ -14,29 +14,23 @@ export function ChatForkOriginDivider({ sourceSessionId }: ChatForkOriginDivider
   const { t } = useTranslation();
   const router = useRouter();
   const source = useAgentSession(sourceSessionId);
-  const sourceAgentId = source.data?.agentId;
   const title = source.data?.title?.trim();
 
   const openSource = useCallback(() => {
-    if (!sourceAgentId) {
-      return;
-    }
-
     // The chat screen's pathname is always '/', so returning to the source is a
     // param swap; pushing would stack a second copy of the screen we came from.
     router.setParams(
       chatRouteParams({
-        agentId: sourceAgentId,
         kind: 'session',
         sessionId: sourceSessionId,
       }),
     );
-  }, [router, sourceAgentId, sourceSessionId]);
+  }, [router, sourceSessionId]);
 
   // Deleting the source clears the lineage column, but this fork can render in
   // the window before that invalidation lands. A divider that names nothing,
   // or that leads to a session the user can no longer open, is worse than none.
-  if (!sourceAgentId || !title) {
+  if (!title) {
     return null;
   }
 

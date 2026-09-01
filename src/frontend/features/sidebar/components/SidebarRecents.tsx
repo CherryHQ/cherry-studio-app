@@ -303,7 +303,7 @@ type SidebarSessionRowProps = {
 
 function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: SidebarSessionRowProps) {
   const { t } = useTranslation();
-  const href = chatHref({ agentId: session.agentId, kind: 'session', sessionId: session.id });
+  const href = chatHref({ kind: 'session', sessionId: session.id });
   const menuItems: readonly ContextMenuLinkItem[] = [
     {
       id: 'rename',

@@ -1,23 +1,44 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+
 import { ChatScreen } from '../ChatScreen';
 
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
 let dockProps: Record<string, unknown> | undefined;
+let mockContentStateProps: Record<string, unknown> | undefined;
 let mockComposerProviderInstance: number | undefined;
 let mockComposerProviderMountCount: number;
 let mockRouteParams: { agentId?: string; sessionId?: string };
 let mockSessionData: { agentId: string; id: string } | undefined;
+let mockSessionError: Error | undefined;
 let mockSessionIsLoading: boolean;
+const mockSessionRefetch = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
   composerContentGap: 8,
+  ContentState: {
+    Empty: (props: Record<string, unknown>) => {
+      mockContentStateProps = { kind: 'empty', ...props };
+      return null;
+    },
+    Error: (props: Record<string, unknown>) => {
+      mockContentStateProps = { kind: 'error', ...props };
+      return null;
+    },
+  },
   getComposerKeyboardStickyOffset: () => 26,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 0 }),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => (key === 'session.detail.notFound' ? 'Session not found' : key),
+  }),
 }));
 
 jest.mock('@/frontend/components/composer', () => ({
@@ -40,10 +61,6 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
 
-jest.mock('@/frontend/data/hooks', () => ({
-  usePreference: () => [null, jest.fn(async () => undefined)],
-}));
-
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
@@ -58,7 +75,9 @@ jest.mock('@/frontend/hooks/agent', () => ({
   }),
   useAgentSession: () => ({
     data: mockSessionData,
+    error: mockSessionError,
     isLoading: mockSessionIsLoading,
+    refetch: mockSessionRefetch,
   }),
 }));
 
@@ -84,10 +103,12 @@ describe('ChatScreen composer dock wiring', () => {
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
     dockProps = undefined;
+    mockContentStateProps = undefined;
     mockComposerProviderInstance = undefined;
     mockComposerProviderMountCount = 0;
     mockRouteParams = { agentId: 'agent-1', sessionId: 'session-1' };
     mockSessionData = { agentId: 'agent-1', id: 'session-1' };
+    mockSessionError = undefined;
     mockSessionIsLoading = false;
   });
 
@@ -116,7 +137,7 @@ describe('ChatScreen composer dock wiring', () => {
     });
   });
 
-  it('keeps the route Agent while a newly created Session is loading', () => {
+  it('waits for the Session entity before enabling its composer', () => {
     mockSessionData = undefined;
     mockSessionIsLoading = true;
 
@@ -124,10 +145,20 @@ describe('ChatScreen composer dock wiring', () => {
       renderer = create(<ChatScreen />);
     });
 
-    expect(chatInputProps).toMatchObject({
-      agentId: 'agent-1',
-      sessionId: 'session-1',
+    expect(chatInputProps).toBeUndefined();
+    expect(chatWorkspaceProps).toMatchObject({ sessionId: 'session-1' });
+  });
+
+  it('renders an explicit not-found state for a missing Session', () => {
+    mockSessionData = undefined;
+    mockSessionError = DataApiErrorFactory.notFound('AgentSession', 'session-1');
+
+    act(() => {
+      renderer = create(<ChatScreen />);
     });
+
+    expect(mockContentStateProps).toMatchObject({ kind: 'empty', title: 'Session not found' });
+    expect(chatInputProps).toBeUndefined();
   });
 
   it('isolates a new Draft composer from the established Session composer', () => {

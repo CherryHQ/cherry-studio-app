@@ -94,33 +94,31 @@ refreshes in the background when that product surface permits stale-while-revali
 
 The chat route has two complete identities:
 
-- A Session is `{ kind: 'session', sessionId, agentId }`.
+- A Session is `{ kind: 'session', sessionId }`.
 - A draft is `{ kind: 'draft', agentId }`.
 
 Every in-app entry constructs one of these targets through `chatHref` or `chatRouteParams`. A
-Session link must never carry only `sessionId`: Agent presentation, composer availability, pending
-approvals, message-history loading, and the transcript all need to change at the same identity
-boundary. The chat screen validates route parameters and resolves a legacy Session-only deep link
-before it renders chat content.
+Session link carries only `sessionId`; the destination reads the Session entity to derive its Agent
+for presentation and composer behavior. Drafts have no Session entity yet, so `agentId` is their
+complete route identity. If a Session no longer exists, the destination renders that explicit
+not-found state instead of restoring or redirecting to another chat.
 
-The route records its last successfully parsed target in `chat.last_active_target`. Opening `/`
-without an identity restores in this order: the recorded Session if it still exists, the globally
-most recently active Session, a draft for the recorded Agent, a draft for the first available
-Agent, then the no-Agent empty state. Restoration renders a loading state, never a previous
-identity's content or the no-Agent empty state as a loading placeholder.
+Opening `/` without an identity restores the globally most recently active Session ordered by its
+persisted `lastActivityAt`. If no Session exists, it opens a draft for the first available Agent,
+then the no-Agent empty state. Restoration renders a loading state, never a previous identity's
+content or the no-Agent empty state as a loading placeholder.
 
 | Entry | Destination |
 | --- | --- |
-| Sidebar or Session-list Session row | That complete Session identity |
-| Sidebar dock or chat-header new-chat action | Draft for the last available Agent |
-| Agent-list row | That Agent's most recently active Session, or its draft |
+| Sidebar or Session-list Session row | That Session id |
+| Sidebar dock or chat-header new-chat action | Draft for the current available Agent, otherwise the first Agent |
+| Agent-list row | That Agent's editor |
 | Chat-header Agent picker row | A new draft for the selected Agent |
 | Chat-header history action | `/sessions?agentId=<current Agent>` |
-| Assistant-message fork | The complete identity returned for the fork |
+| Assistant-message fork | The returned fork Session id |
 
-The Agent-list and header-picker behaviors are intentionally different. The Agent list resumes an
-Agent's latest workplace; the transient header picker starts a new topic. Keep that distinction
-when adding future Agent entry points.
+The Agent list manages Agent definitions; the transient header picker changes the Agent for a new
+draft. Keep those responsibilities distinct when adding future Agent entry points.
 
 Correctness belongs to the destination screen and its query/local-state identity. Press-time
 prefetching may improve latency, but navigation must not wait behind a global coordinator or route

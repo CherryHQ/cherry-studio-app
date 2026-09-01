@@ -1,23 +1,25 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
-import { usePreference } from '@/frontend/data/hooks';
-import { useAgentsApi } from '@/frontend/hooks/agent';
+import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 
-import { chatRouteParams, parseStoredChatTarget } from './chatRoute';
+import { type ChatRouteParamsInput, chatRouteParams, parseChatRoute } from './chatRoute';
 
-/** Opens a draft for the last available Agent, then falls back to the first Agent. */
+/** Opens a draft for the current available Agent, then falls back to the first Agent. */
 export function useStartNewChat() {
   const router = useRouter();
-  const [storedTargetValue] = usePreference('chat.last_active_target');
+  const params = useLocalSearchParams<ChatRouteParamsInput>();
+  const route = parseChatRoute(params);
+  const target = route.status === 'ready' ? route.target : undefined;
+  const currentSession = useAgentSession(target?.kind === 'session' ? target.sessionId : undefined);
+  const currentAgentId = target?.kind === 'draft' ? target.agentId : currentSession.data?.agentId;
   const { agents, isLoading, refetch } = useAgentsApi();
 
   return useCallback(async () => {
     const refetchResult = isLoading ? await refetch() : undefined;
     const availableAgents = refetchResult?.data?.items ?? agents;
-    const storedAgentId = parseStoredChatTarget(storedTargetValue)?.agentId;
-    const storedAgent = availableAgents.find((agent) => agent.id === storedAgentId);
-    const agentId = storedAgent?.id ?? availableAgents[0]?.id;
+    const currentAgent = availableAgents.find((agent) => agent.id === currentAgentId);
+    const agentId = currentAgent?.id ?? availableAgents[0]?.id;
 
     if (!agentId) {
       router.push('/agents');
@@ -25,5 +27,5 @@ export function useStartNewChat() {
     }
 
     router.setParams(chatRouteParams({ agentId, kind: 'draft' }));
-  }, [agents, isLoading, refetch, router, storedTargetValue]);
+  }, [agents, currentAgentId, isLoading, refetch, router]);
 }
