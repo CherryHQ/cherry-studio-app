@@ -4,12 +4,13 @@ import { ChatScreen } from '../ChatScreen';
 
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
-let dockProps: Record<string, unknown> | undefined;
+let mockAgentExists: boolean;
 let mockComposerProviderInstance: number | undefined;
 let mockComposerProviderMountCount: number;
 let mockRouteParams: { agentId?: string; sessionId?: string };
 let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionIsLoading: boolean;
+let mockToolApprovalGateProps: { hasChildren: boolean; sessionId: string } | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   composerContentGap: 8,
@@ -21,10 +22,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('@/frontend/components/composer', () => ({
-  ComposerDock: ({ children, ...props }: { children?: React.ReactNode }) => {
-    dockProps = props;
-    return children;
-  },
+  ComposerDock: ({ children }: { children?: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children }: { children?: React.ReactNode }) => {
     const { useState } = jest.requireActual<typeof import('react')>('react');
     const [instance] = useState(() => ++mockComposerProviderMountCount);
@@ -42,7 +40,7 @@ jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
-    agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
+    agent: mockAgentExists && agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
     isLoading: false,
   }),
   useAgentMessageHistoryWindow: () => ({
@@ -66,7 +64,19 @@ jest.mock('../input', () => ({
 }));
 
 jest.mock('../approval/ToolApprovalGate', () => ({
-  ToolApprovalGate: ({ children }: { children?: React.ReactNode }) => children,
+  ToolApprovalGate: ({
+    children,
+    sessionId,
+  }: {
+    children?: React.ReactNode;
+    sessionId: string;
+  }) => {
+    mockToolApprovalGateProps = {
+      hasChildren: children !== null && children !== undefined,
+      sessionId,
+    };
+    return children;
+  },
 }));
 
 jest.mock('../workspace', () => ({
@@ -83,12 +93,13 @@ describe('ChatScreen composer dock wiring', () => {
   beforeEach(() => {
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
-    dockProps = undefined;
+    mockAgentExists = true;
     mockComposerProviderInstance = undefined;
     mockComposerProviderMountCount = 0;
     mockRouteParams = { agentId: 'agent-1', sessionId: 'session-1' };
     mockSessionData = { agentId: 'agent-1', id: 'session-1' };
     mockSessionIsLoading = false;
+    mockToolApprovalGateProps = undefined;
   });
 
   afterEach(() => {
@@ -96,7 +107,7 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('keeps the composer in normal flow and shares only keyboard geometry', () => {
+  it('keeps the Session composer wired to the approval gate and shares keyboard geometry', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
@@ -105,15 +116,24 @@ describe('ChatScreen composer dock wiring', () => {
       contentBottomInset: 8,
       keyboardOffset: 26,
     });
-    expect(dockProps).toMatchObject({
-      layoutMode: 'flow',
-    });
-    expect(dockProps?.onHeightChange).toBeUndefined();
+    expect(mockToolApprovalGateProps).toEqual({ hasChildren: true, sessionId: 'session-1' });
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       dismissKeyboardOnSend: false,
       sessionId: 'session-1',
     });
+  });
+
+  it('keeps the Session approval gate after its Agent is deleted', () => {
+    mockAgentExists = false;
+
+    act(() => {
+      renderer = create(<ChatScreen />);
+    });
+
+    expect(chatWorkspaceProps?.sessionId).toBe('session-1');
+    expect(chatInputProps).toBeUndefined();
+    expect(mockToolApprovalGateProps).toEqual({ hasChildren: false, sessionId: 'session-1' });
   });
 
   it('keeps the route Agent while a newly created Session is loading', () => {

@@ -1,10 +1,10 @@
 import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
 import { useAlert } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useState } from 'react';
+import { type PropsWithChildren, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
-import { useComposerPresentationActions } from '@/frontend/components/composer';
+import { ComposerDock, useComposerPresentationActions } from '@/frontend/components/composer';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatActions, useAgentChatPendingApprovals } from '../runtime';
@@ -16,33 +16,82 @@ type ToolApprovalGateProps = PropsWithChildren<{
   sessionId: string;
 }>;
 
-/** Keeps the composer mounted while a pending approval switches between its sheet and dock states. */
+type ApprovalPresentation = {
+  approvalId: string;
+  mode: 'collapsed' | 'expanded';
+  turnId: string;
+};
+
+/** Owns the Session dock while a pending approval switches between sheet and recovery states. */
 export function ToolApprovalGate({ children, sessionId }: ToolApprovalGateProps) {
   const approvals = useAgentChatPendingApprovals(sessionId);
   const client = useAgentChatActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const { alert } = useAlert();
   const { t } = useTranslation();
-  const [collapsedApprovalId, setCollapsedApprovalId] = useState<string>();
+  const [presentation, setPresentation] = useState<ApprovalPresentation>();
   const pendingApprovals: readonly PendingToolApproval[] = approvals.map((approval) => ({
     approvalId: approval.id,
     displayName: approval.displayName,
     input: approval.input,
     toolCallId: approval.toolCallId,
+    turnId: approval.turnId,
   }));
   const currentApproval = pendingApprovals[0];
-  const isCollapsed =
-    currentApproval !== undefined && collapsedApprovalId === currentApproval.approvalId;
-  const isExpanded = currentApproval !== undefined && !isCollapsed;
+  const currentApprovalId = currentApproval?.approvalId;
+  const currentTurnId = currentApproval?.turnId;
+  const isCurrentPresentation =
+    presentation !== undefined &&
+    presentation.approvalId === currentApprovalId &&
+    presentation.turnId === currentTurnId;
+  const isCollapsed = isCurrentPresentation && presentation.mode === 'collapsed';
+  const isExpanded = isCurrentPresentation && presentation.mode === 'expanded';
+  const hasComposer = children !== undefined && children !== null;
+  const shouldRenderDock = hasComposer || currentApproval !== undefined;
+
+  useEffect(() => {
+    if (!currentApprovalId || !currentTurnId) {
+      return;
+    }
+
+    let isCurrent = true;
+    void runInputReplacement(() => {
+      if (isCurrent) {
+        setPresentation({
+          approvalId: currentApprovalId,
+          mode: 'expanded',
+          turnId: currentTurnId,
+        });
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentApprovalId, currentTurnId, runInputReplacement]);
 
   const collapse = useCallback(() => {
-    if (currentApproval) {
-      setCollapsedApprovalId(currentApproval.approvalId);
+    if (currentApprovalId && currentTurnId) {
+      setPresentation({
+        approvalId: currentApprovalId,
+        mode: 'collapsed',
+        turnId: currentTurnId,
+      });
     }
-  }, [currentApproval]);
+  }, [currentApprovalId, currentTurnId]);
   const expand = useCallback(() => {
-    void runInputReplacement(() => setCollapsedApprovalId(undefined));
-  }, [runInputReplacement]);
+    if (!currentApprovalId || !currentTurnId) {
+      return;
+    }
+
+    void runInputReplacement(() =>
+      setPresentation({
+        approvalId: currentApprovalId,
+        mode: 'expanded',
+        turnId: currentTurnId,
+      }),
+    );
+  }, [currentApprovalId, currentTurnId, runInputReplacement]);
   const respond = useCallback(
     async (input: { approvalId: string; approved: boolean }) => {
       try {
@@ -61,22 +110,29 @@ export function ToolApprovalGate({ children, sessionId }: ToolApprovalGateProps)
 
   return (
     <>
-      <View className="relative">
-        <View
-          accessibilityElementsHidden={isCollapsed}
-          importantForAccessibility={isCollapsed ? 'no-hide-descendants' : 'auto'}
-          pointerEvents={isCollapsed ? 'none' : 'auto'}
-        >
-          {children}
-        </View>
-        {isCollapsed ? (
-          <CollapsedApprovalBar
-            approval={currentApproval}
-            onPress={expand}
-            pendingCount={pendingApprovals.length}
-          />
-        ) : null}
-      </View>
+      {shouldRenderDock ? (
+        <ComposerDock layoutMode="flow">
+          <View className={hasComposer ? 'relative' : undefined}>
+            {hasComposer ? (
+              <View
+                accessibilityElementsHidden={isCollapsed}
+                importantForAccessibility={isCollapsed ? 'no-hide-descendants' : 'auto'}
+                pointerEvents={isCollapsed ? 'none' : 'auto'}
+              >
+                {children}
+              </View>
+            ) : null}
+            {isCollapsed && currentApproval ? (
+              <CollapsedApprovalBar
+                approval={currentApproval}
+                isOverlay={hasComposer}
+                onPress={expand}
+                pendingCount={pendingApprovals.length}
+              />
+            ) : null}
+          </View>
+        </ComposerDock>
+      ) : null}
       <ToolApprovalSheet
         approvals={pendingApprovals}
         isOpen={isExpanded}
@@ -89,10 +145,12 @@ export function ToolApprovalGate({ children, sessionId }: ToolApprovalGateProps)
 
 function CollapsedApprovalBar({
   approval,
+  isOverlay,
   onPress,
   pendingCount,
 }: {
   approval: PendingToolApproval;
+  isOverlay: boolean;
   onPress: () => void;
   pendingCount: number;
 }) {
@@ -106,7 +164,7 @@ function CollapsedApprovalBar({
     <Pressable
       accessibilityLabel={`${t('chat.tool.approvalRequested')}. ${detail}`}
       accessibilityRole="button"
-      className="absolute inset-0 z-10 overflow-hidden rounded-3xl bg-field active:bg-secondary"
+      className={`z-10 overflow-hidden rounded-3xl bg-field active:bg-secondary${isOverlay ? ' absolute inset-0' : ''}`}
       onPress={onPress}
       testID="tool-approval-collapsed"
     >

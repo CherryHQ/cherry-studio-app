@@ -35,6 +35,7 @@ export function ChatScreen() {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
+  const shouldMountComposerSession = hasComposer || (!isPreview && isSessionAvailable);
   const composerSessionKey = sessionId
     ? `session:${sessionId}`
     : `draft:${resolvedAgentId ?? 'unavailable'}`;
@@ -60,21 +61,23 @@ export function ChatScreen() {
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
-        {hasComposer ? (
+        {shouldMountComposerSession ? (
           <ComposerSessionProvider key={composerSessionKey}>
-            <ComposerDock layoutMode="flow">
-              {sessionId ? (
-                <ToolApprovalGate sessionId={sessionId}>
+            {sessionId ? (
+              <ToolApprovalGate sessionId={sessionId}>
+                {hasComposer ? (
                   <ChatInput
                     agentId={resolvedAgentId}
                     dismissKeyboardOnSend={false}
                     sessionId={sessionId}
                   />
-                </ToolApprovalGate>
-              ) : (
+                ) : null}
+              </ToolApprovalGate>
+            ) : (
+              <ComposerDock layoutMode="flow">
                 <ChatInput agentId={resolvedAgentId} dismissKeyboardOnSend={false} />
-              )}
-            </ComposerDock>
+              </ComposerDock>
+            )}
           </ComposerSessionProvider>
         ) : null}
       </View>

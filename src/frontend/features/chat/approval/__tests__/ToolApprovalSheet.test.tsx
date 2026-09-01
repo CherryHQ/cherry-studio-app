@@ -41,6 +41,7 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
     input: { query: 'cherry' },
     toolCallId: 'call-1',
     displayName: 'Server One: Search docs',
+    turnId: 'turn-1',
     ...overrides,
   };
 }
@@ -228,6 +229,21 @@ describe('ToolApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('Server Two: Create file');
     expect(renderer.root.findByType(BottomSheet).props.open).toBe(true);
+  });
+
+  test('updates a reused approval id from a later turn', () => {
+    const { rerender } = render();
+
+    rerender([
+      makeApproval({
+        displayName: 'Server Two: Create file',
+        input: { path: 'notes.md' },
+        turnId: 'turn-2',
+      }),
+    ]);
+
+    expect(renderedTexts()).toContain('Server Two: Create file');
+    expect(renderedTexts()).not.toContain('Server One: Search docs');
   });
 
   test('renders the snapshotted display name without exposing the provider alias', () => {

@@ -10,6 +10,7 @@ export type PendingToolApproval = {
   input: unknown;
   toolCallId: string;
   displayName: string;
+  turnId: string;
 };
 
 type ToolApprovalRespondInput = {
@@ -34,7 +35,12 @@ export function ToolApprovalSheet({
   const { t } = useTranslation();
   // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
-  if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
+  if (
+    approvals[0] &&
+    (lastApproval === undefined ||
+      approvals[0].approvalId !== lastApproval.approvalId ||
+      approvals[0].turnId !== lastApproval.turnId)
+  ) {
     setLastApproval(approvals[0]);
   }
   const approval = approvals[0] ?? lastApproval;
