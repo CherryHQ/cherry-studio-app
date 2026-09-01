@@ -1,6 +1,6 @@
 import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
 import {
@@ -9,6 +9,8 @@ import {
   getToolStatusTone,
   type ToolMessagePart,
 } from './toolPartState';
+import { textToolResultContent, type ToolResultContent } from './toolResultContent';
+import { ToolResultContentRenderer } from './ToolResultContentRenderer';
 
 type GenericToolPartProps = {
   part: ToolMessagePart;
@@ -59,7 +61,32 @@ function ToolOutputSection({ output }: { output: unknown }) {
     );
   }
 
-  return <MessagePart.ValueSection title={t('chat.tool.output')} value={output} />;
+  return (
+    <View className="gap-1">
+      <MessagePart.SectionTitle title={t('chat.tool.output')} />
+      <ToolResultContentRenderer
+        contents={[genericToolResultContent(output)]}
+        imageAccessibilityLabel={t('chat.attachments.image')}
+      />
+    </View>
+  );
+}
+
+function genericToolResultContent(output: unknown): ToolResultContent {
+  if (typeof output === 'string') {
+    return textToolResultContent(output);
+  }
+
+  if (
+    output === null ||
+    typeof output === 'boolean' ||
+    typeof output === 'number' ||
+    typeof output === 'object'
+  ) {
+    return { kind: 'json', value: output };
+  }
+
+  return { content: String(output), kind: 'text' };
 }
 
 function getToolLabel(

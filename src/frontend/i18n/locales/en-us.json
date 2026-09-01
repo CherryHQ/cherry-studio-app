@@ -116,7 +116,6 @@
   "chat.mcpTool.resourceLink": "Resource link ({{mimeType}}): {{uri}}",
   "chat.mcpTool.resourceUnavailable": "Resource ({{mimeType}}) at {{uri}} cannot be previewed in this app.",
   "chat.mcpTool.runDenied": "Run denied",
-  "chat.mcpTool.truncated": "truncated ({{count}} chars)",
   "chat.mcpTool.unfinished": "Unfinished",
   "chat.mcpTool.unfinishedDetail": "This call never finished, so its result is unknown.",
   "chat.attachments.image": "Image attachment",

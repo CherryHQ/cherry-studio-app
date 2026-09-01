@@ -116,7 +116,6 @@
   "chat.mcpTool.resourceLink": "资源链接（{{mimeType}}）：{{uri}}",
   "chat.mcpTool.resourceUnavailable": "无法在此应用中预览位于 {{uri}} 的资源（{{mimeType}}）。",
   "chat.mcpTool.runDenied": "拒绝运行",
-  "chat.mcpTool.truncated": "已截断（{{count}} 字符）",
   "chat.mcpTool.unfinished": "未完成",
   "chat.mcpTool.unfinishedDetail": "这次调用没有跑完，结果未知。",
   "chat.attachments.image": "图片附件",
