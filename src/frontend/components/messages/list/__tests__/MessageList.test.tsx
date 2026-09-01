@@ -136,7 +136,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
     mockScrollButtonProps = props;
     return null;
   },
-  ScrollShadow: ({ children }: { children: ReactNode }) => children,
 }));
 
 jest.mock('react-i18next', () => ({

@@ -1,4 +1,4 @@
-import { ScrollShadow, ScrollToBottomButton } from '@cherrystudio/ui/components';
+import { ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -175,52 +175,50 @@ export function MessageList({
   return (
     <MessageSlideInProvider flight={slideInFlight}>
       <View className="flex-1">
-        <ScrollShadow className="flex-1" visibility="bottom" size={80}>
-          <KeyboardAwareLegendList
-            ref={listRef}
-            applyWorkaroundForContentInsetHitTestBug
-            anchoredEndSpace={anchoredEndSpace}
-            contentContainerStyle={contentContainerStyle}
-            contentInsetAdjustmentBehavior="never"
-            data={messages}
-            drawDistance={80}
-            estimatedItemSize={300}
-            estimatedHeaderSize={contentTopInset}
-            extraData={extraData}
-            freeze={freeze}
-            getItemType={getMessageRowType}
-            keyExtractor={messageKeyExtractor}
-            keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
-            // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
-            // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
-            // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
-            // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
-            keyboardLiftBehavior="whenAtEnd"
-            keyboardOffset={keyboardOffset}
-            keyboardShouldPersistTaps="handled"
-            ListHeaderComponent={listHeader}
-            initialScrollAtEnd
-            maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-            onContentSizeChange={handleContentSizeChange}
-            onLayout={handleLayout}
-            onMomentumScrollBegin={handleMomentumScrollBegin}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            onScrollBeginDrag={handleScrollBeginDrag}
-            onScrollEndDrag={handleScrollEndDrag}
-            onStartReached={onLoadOlder ? handleStartReached : undefined}
-            onStartReachedThreshold={0.05}
-            onTouchCancel={handleTouchEnd}
-            onTouchEnd={handleTouchEnd}
-            onTouchStart={handleTouchStart}
-            recycleItems={false}
-            renderItem={renderMessageRow}
-            scrollEventThrottle={16}
-            scrollsToTop
-            sharedValues={sharedValues}
-            showsVerticalScrollIndicator={false}
-            className="flex-1"
-          />
-        </ScrollShadow>
+        <KeyboardAwareLegendList
+          ref={listRef}
+          applyWorkaroundForContentInsetHitTestBug
+          anchoredEndSpace={anchoredEndSpace}
+          contentContainerStyle={contentContainerStyle}
+          contentInsetAdjustmentBehavior="never"
+          data={messages}
+          drawDistance={80}
+          estimatedItemSize={300}
+          estimatedHeaderSize={contentTopInset}
+          extraData={extraData}
+          freeze={freeze}
+          getItemType={getMessageRowType}
+          keyExtractor={messageKeyExtractor}
+          keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
+          // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
+          // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
+          // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
+          // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
+          keyboardLiftBehavior="whenAtEnd"
+          keyboardOffset={keyboardOffset}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={listHeader}
+          initialScrollAtEnd
+          maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleLayout}
+          onMomentumScrollBegin={handleMomentumScrollBegin}
+          onMomentumScrollEnd={handleMomentumScrollEnd}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
+          onStartReached={onLoadOlder ? handleStartReached : undefined}
+          onStartReachedThreshold={0.05}
+          onTouchCancel={handleTouchEnd}
+          onTouchEnd={handleTouchEnd}
+          onTouchStart={handleTouchStart}
+          recycleItems={false}
+          renderItem={renderMessageRow}
+          scrollEventThrottle={16}
+          scrollsToTop
+          sharedValues={sharedValues}
+          showsVerticalScrollIndicator={false}
+          className="flex-1"
+        />
         {messages.length > 0 ? (
           <ScrollToBottomButton
             accessibilityLabel={t('chat.message.scrollToBottom')}
