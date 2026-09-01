@@ -64,3 +64,15 @@ export type SectionRadioItemProps = Omit<
   onPress: () => void;
   selected: boolean;
 };
+
+export type SectionSelectItemProps = Omit<
+  SectionItemBaseProps,
+  'accessibilityRole' | 'accessibilityState' | 'onPress'
+> & {
+  description?: ReactNode;
+  label: ReactNode;
+  leading?: ReactNode;
+  onPress: () => void;
+  value: ReactNode;
+  valueLeading?: ReactNode;
+};

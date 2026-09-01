@@ -14,12 +14,23 @@ jest.mock('heroui-native/utils', () => {
 jest.mock('@cherrystudio/app-icons/icons/check', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return (props: object) => React.createElement(View, { ...props, testID: 'section-radio-check' });
+  return function MockCheckIcon(props: object) {
+    return React.createElement(View, { ...props, testID: 'section-radio-check' });
+  };
+});
+jest.mock('@cherrystudio/app-icons/icons/chevron-down', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return function MockChevronDownIcon(props: object) {
+    return React.createElement(View, { ...props, testID: 'section-select-chevron' });
+  };
 });
 jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return (props: object) => React.createElement(View, { ...props, testID: 'section-chevron' });
+  return function MockChevronRightIcon(props: object) {
+    return React.createElement(View, { ...props, testID: 'section-chevron' });
+  };
 });
 
 describe('Section', () => {
@@ -287,6 +298,39 @@ describe('Section', () => {
     expect(tree.root.findByProps({ testID: 'section-separator' }).props.className).toContain(
       'ml-11',
     );
+  });
+
+  test('composes a current value and down indicator for selection rows', () => {
+    const onPress = jest.fn();
+    const tree = render(
+      <Section>
+        <Section.SelectItem
+          label="Language"
+          leading={<View testID="language-icon" />}
+          onPress={onPress}
+          testID="language-row"
+          value="English"
+          valueLeading={<View testID="language-value-icon" />}
+        />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) => node.props.testID === 'language-row' && node.props.accessibilityRole === 'button',
+    );
+    const value = tree.root.findByProps({ children: 'English' });
+
+    expect(row.props.accessibilityLabel).toBe('Language');
+    expect(value.props.className).toContain('text-right text-base text-foreground');
+    expect(tree.root.findByProps({ testID: 'language-value-icon' })).toBeDefined();
+    expect(
+      tree.root.findAll(
+        (node) => node.type === View && node.props.testID === 'section-select-chevron',
+      ),
+    ).toHaveLength(1);
+    expect(tree.root.findAllByProps({ testID: 'section-chevron' })).toHaveLength(0);
+
+    act(() => row.props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   test('supports custom row content while preserving item layout', () => {

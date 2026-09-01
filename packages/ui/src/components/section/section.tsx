@@ -1,4 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   Children,
@@ -17,6 +18,7 @@ import type {
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
+  SectionSelectItemProps,
 } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
@@ -24,6 +26,10 @@ type InternalSectionItemProps = SectionItemProps & {
 };
 
 type InternalSectionRadioItemProps = SectionRadioItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
+
+type InternalSectionSelectItemProps = SectionSelectItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
@@ -172,12 +178,45 @@ function SectionRadioItem({ onPressedChange, selected, ...props }: InternalSecti
   );
 }
 
+function SectionSelectItem({
+  onPressedChange,
+  value,
+  valueLeading,
+  ...props
+}: InternalSectionSelectItemProps) {
+  return (
+    <SectionItem
+      {...props}
+      onPressedChange={onPressedChange}
+      showChevron={false}
+      trailing={
+        <View className="min-w-0 flex-row items-center justify-end gap-1">
+          {valueLeading ? (
+            <View className="shrink-0 items-center justify-center">{valueLeading}</View>
+          ) : null}
+          {renderTextSlot(value, 'min-w-0 shrink text-right text-base text-foreground')}
+          <ChevronDownIcon
+            className="size-5 shrink-0 text-muted-foreground"
+            testID="section-select-chevron"
+          />
+        </View>
+      }
+    />
+  );
+}
+
 function isSectionItemElement(
   child: ReactNode,
-): child is ReactElement<InternalSectionItemProps | InternalSectionRadioItemProps> {
+): child is ReactElement<
+  InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+> {
   return (
-    isValidElement<InternalSectionItemProps | InternalSectionRadioItemProps>(child) &&
-    (child.type === SectionItem || child.type === SectionRadioItem)
+    isValidElement<
+      InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+    >(child) &&
+    (child.type === SectionItem ||
+      child.type === SectionRadioItem ||
+      child.type === SectionSelectItem)
   );
 }
 
@@ -242,9 +281,11 @@ SectionRoot.displayName = 'Section';
 SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
 SectionRadioItem.displayName = 'Section.RadioItem';
+SectionSelectItem.displayName = 'Section.SelectItem';
 
 export const Section = Object.assign(SectionRoot, {
   Header: SectionHeader,
   Item: SectionItem,
   RadioItem: SectionRadioItem,
+  SelectItem: SectionSelectItem,
 });
