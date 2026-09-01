@@ -13,16 +13,18 @@ import { actionHitSlop, composerActionSize, pillStyle } from '../utils/composer-
 export function ComposerPill({
   accessibilityLabel,
   children,
-  className = 'bg-secondary',
+  className,
   disabled = false,
   icon,
   onPress,
   style,
   testID,
 }: ComposerPillProps) {
-  // Same reason as `Composer.Action`: glass inside glass renders nothing, so the
-  // fill is resolved here and handed to both branches.
-  const fill = useResolveClassNames(className);
+  // Same reason as `Composer.Action`: preserve the shipped glass tint while the
+  // non-glass fallback uses the grouped-surface palette. Explicit fills still
+  // drive both branches.
+  const fallbackClassName = className ?? 'bg-grouped-background';
+  const fill = useResolveClassNames(className ?? 'bg-secondary');
   const tintColor = typeof fill.backgroundColor === 'string' ? fill.backgroundColor : undefined;
 
   return (
@@ -41,7 +43,7 @@ export function ComposerPill({
       testID={testID}
     >
       <Surface
-        className={className}
+        className={fallbackClassName}
         cornerRadius={composerActionSize / 2}
         interactive
         style={pillStyle}
