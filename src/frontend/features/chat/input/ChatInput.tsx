@@ -1,16 +1,7 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, View } from 'react-native';
-import Animated, {
-  Extrapolation,
-  interpolate,
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { View } from 'react-native';
 
 import {
   ComposerAttachments,
@@ -47,14 +38,6 @@ type ChatInputProps = {
 };
 
 const logger = loggerService.withContext('ChatInput');
-const restingInputHeight = 32;
-const restingSendSlotWidth = restingInputHeight + 8;
-const activeToolbarGap = 12;
-const focusTransitionMotion = {
-  duration: duration.base,
-  easing: easing.settle,
-  reduceMotion: ReduceMotion.System,
-} as const;
 
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
@@ -89,73 +72,10 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
     useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
-  const [isInputActive, setIsInputActive] = useState(false);
-  const isInputActiveRef = useRef(false);
-  const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
   useBlurComposerOnVisibleKeyboardHide(inputRef);
-  const focusProgress = useSharedValue(0);
-  const fieldFrameHeight = useSharedValue(restingInputHeight);
-  const morphFrameStyle = useAnimatedStyle(() => ({
-    height: fieldFrameHeight.value + focusProgress.value * (activeToolbarGap + restingInputHeight),
-  }));
-  const fieldFrameStyle = useAnimatedStyle(() => ({
-    height: fieldFrameHeight.value,
-    left: 0,
-    right: interpolate(focusProgress.value, [0, 1], [restingSendSlotWidth, 0], Extrapolation.CLAMP),
-  }));
-  const controlsRowStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: focusProgress.value * (fieldFrameHeight.value + activeToolbarGap),
-      },
-    ],
-  }));
-  // Scale rather than opacity, and the toolbar's tools are hidden at rest by
-  // scaling to nothing. Reanimated writes a layer alpha for an animated
-  // `opacity`, which severs the backdrop sampling every `GlassView` under it
-  // depends on — and the material does not come back when the value settles at
-  // 1, so the buttons lose their fill permanently. Transforms leave the alpha
-  // alone. Both control groups reveal identically, so they share one style.
-  const toolRevealStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        scale: interpolate(focusProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-      },
-    ],
-  }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
-  const handleFieldLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
-      if (naturalFieldHeight.current === nextHeight) {
-        return;
-      }
-
-      naturalFieldHeight.current = nextHeight;
-      if (isInputActive) {
-        fieldFrameHeight.set(nextHeight);
-      }
-    },
-    [fieldFrameHeight, isInputActive],
-  );
-  const handleInputBlur = useCallback(() => {
-    if (!isInputActiveRef.current) {
-      return;
-    }
-
-    isInputActiveRef.current = false;
-    setIsInputActive(false);
-    focusProgress.set(withTiming(0, focusTransitionMotion));
-    fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
-  }, [fieldFrameHeight, focusProgress]);
-  const handleInputFocus = useCallback(() => {
-    isInputActiveRef.current = true;
-    setIsInputActive(true);
-    focusProgress.set(withTiming(1, focusTransitionMotion));
-    fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
-  }, [fieldFrameHeight, focusProgress]);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setIsModelPickerOpen(false);
@@ -225,55 +145,32 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             streaming={isBusy}
           >
             <ComposerAttachments />
-            <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
-              <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
-                <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
-                  <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
-                </View>
-              </Animated.View>
-              <Animated.View
-                className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
-                pointerEvents="box-none"
-                style={controlsRowStyle}
-              >
-                <Animated.View
-                  accessibilityElementsHidden={!isInputActive}
-                  className="min-w-0 shrink flex-row items-center gap-2"
-                  importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-                  pointerEvents={isInputActive ? 'auto' : 'none'}
-                  style={toolRevealStyle}
-                >
-                  <ComposerMenu />
-                  <ComposerModelPill
-                    icon={
-                      selectedModelItem ? (
-                        <ModelPickerIcon
-                          model={selectedModelItem.model}
-                          provider={selectedModelItem.provider}
-                          providerIconSize={18}
-                          size={20}
-                        />
-                      ) : undefined
-                    }
-                    label={selectedModelLabel}
-                    onPress={openModelPicker}
-                  />
-                </Animated.View>
-                <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-                  {effortGauge ? (
-                    <Animated.View
-                      accessibilityElementsHidden={!isInputActive}
-                      importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-                      pointerEvents={isInputActive ? 'auto' : 'none'}
-                      style={toolRevealStyle}
-                    >
-                      {effortGauge}
-                    </Animated.View>
-                  ) : null}
-                  <Composer.Send />
-                </View>
-              </Animated.View>
-            </Animated.View>
+            <ComposerField />
+            <Composer.Toolbar>
+              <ComposerMenu />
+              <ComposerModelPill
+                icon={
+                  selectedModelItem ? (
+                    <ModelPickerIcon
+                      model={selectedModelItem.model}
+                      provider={selectedModelItem.provider}
+                      providerIconSize={18}
+                      size={20}
+                    />
+                  ) : undefined
+                }
+                label={selectedModelLabel}
+                onPress={openModelPicker}
+              />
+              {/* Grouped rather than written flat, so the gauge stays next to
+                  send instead of trailing the model pill: `Composer.Send` pins
+                  itself right, and anything after the pill would otherwise sit
+                  on the left of the gap it opens. */}
+              <View className="ml-auto flex-row items-center gap-2">
+                {effortGauge}
+                <Composer.Send />
+              </View>
+            </Composer.Toolbar>
           </ComposerSurface>
         )}
       </ChatInputEffortOverlay>
