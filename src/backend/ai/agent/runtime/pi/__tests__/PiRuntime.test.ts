@@ -1919,10 +1919,20 @@ describe('PiRuntime mapping', () => {
     };
     let errorDetails: unknown;
     arrange(runtime, async (context) => {
+      const describe = context.options.initialState?.tools?.find(
+        (tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME,
+      );
       const call = context.options.initialState?.tools?.find(
         (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
       );
-      if (!call) throw new Error('Missing tool_call.');
+      if (!describe || !call) throw new Error('Missing deferred discovery tools.');
+      // tool_call rejects an uninspected target, so the dispatch under test has
+      // to follow the same inspect-then-call order the model is held to.
+      await describe.execute(
+        'describe-error-call',
+        { name: targetTool.providerName },
+        context.signal,
+      );
       errorDetails = (
         await call.execute(
           'catalog-error-call',

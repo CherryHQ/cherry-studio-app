@@ -249,7 +249,9 @@ describe('MessageList scroll-controller ownership', () => {
     cancelAnimationFrameSpy = jest
       .spyOn(global, 'cancelAnimationFrame')
       .mockImplementation((id) => {
-        frameCallbacks.delete(id);
+        if (id != null) {
+          frameCallbacks.delete(id);
+        }
       });
   });
 

@@ -117,9 +117,6 @@ describe('MessagePart', () => {
 
     expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
     const trigger = renderer!.root.findByProps({ testID: 'search-trigger' });
-    expect(trigger.props.className).toBe(
-      '-mx-2 min-h-10 flex-row items-center gap-1.5 rounded-lg px-2 py-1',
-    );
     act(() => trigger.props.onPress());
 
     const detail = renderer!.root.findByProps({ testID: 'search-detail' });

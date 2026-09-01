@@ -85,7 +85,7 @@ describe('agentMessageProjection', () => {
 
     expect(item).toMatchObject({
       data: {
-        partKeys: ['reasoning-1', 'tool-1'],
+        partKeys: ['error-1'],
         parts: [
           {
             data: {
@@ -159,6 +159,7 @@ describe('agentMessageProjection', () => {
       role: 'assistant',
       status: 'pending',
       data: {
+        partKeys: ['reasoning-1', 'tool-1'],
         parts: [
           { state: 'streaming', text: 'Thinking', type: 'reasoning' },
           {
