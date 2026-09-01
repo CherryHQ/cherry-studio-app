@@ -51,6 +51,26 @@ export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
   session: AgentSessionView;
 };
 
+export type ForkSessionInput = {
+  sessionId: string;
+  /** Inclusive fork point, identified by message rather than by turn. */
+  fromMessageId: string;
+  /** Overrides the copied source title; the store never composes one itself. */
+  title?: string;
+};
+
+/**
+ * Distinguishes a missing Session, a fork point that is not in it, and a fork
+ * point whose own row has not settled. The last case is refused rather than
+ * skipped: silently copying up to the previous message would return a fork the
+ * caller never asked for.
+ */
+export type ForkSessionResult =
+  | { status: 'forked'; session: AgentSessionView }
+  | { status: 'session-not-found' }
+  | { status: 'message-not-found' }
+  | { status: 'fork-point-unsettled' };
+
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
@@ -97,6 +117,14 @@ export interface AgentSessionStore {
    * fresh shared turnId before execution starts (protocol invariant 2).
    */
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
+
+  /**
+   * Atomically creates a Session carrying the source's transcript up to and
+   * including the fork point (agent-protocol.md "Branching"). Unsettled rows
+   * are skipped, turn ids are reissued so the copy shares no correlation with
+   * its source, and no turn is started: the new Session is idle.
+   */
+  forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 

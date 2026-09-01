@@ -335,6 +335,139 @@ describe.each([
     expect(transcript[0]?.turnId).not.toBe(transcript[2]?.turnId);
   });
 
+  test('forkSession copies the transcript up to the fork point into an idle Session', async () => {
+    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    for (const text of ['one', 'two', 'three']) {
+      const reserved = await store.reserveSubmission({
+        ...RESERVATION_FACTS,
+        sessionId: source.id,
+        userParts: [{ id: 'input-0', type: 'text', text, state: 'done' }],
+      });
+      await store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'success',
+        parts: [{ id: 'text-1', type: 'text', text: `re: ${text}`, state: 'done' }],
+        usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+        error: null,
+        contextCheckpoint: { version: 1, anchorTurnId: reserved.turnId, payload: 'ctx' },
+      });
+    }
+    const original = await store.listMessages(source.id);
+    const forkPoint = original[3];
+
+    const result = await store.forkSession({
+      sessionId: source.id,
+      fromMessageId: forkPoint.id,
+    });
+
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') return;
+    const fork = result.session;
+    expect(fork.id).not.toBe(source.id);
+    expect(fork.agentId).toBe(source.agentId);
+    expect(fork.executionTarget).toEqual(source.executionTarget);
+    // Without an override the fork inherits the conversation's name; any
+    // derived wording is the client's to compose, not the store's.
+    expect(fork.title).toBe('Maths');
+    expect(fork.titleIsManual).toBe(true);
+    expect(fork.forkedFromSessionId).toBe(source.id);
+    expect(await store.getSession(fork.id)).toEqual(fork);
+
+    const copied = await store.listMessages(fork.id);
+    expect(copied.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(copied.map((message) => message.status)).toEqual([
+      'success',
+      'success',
+      'success',
+      'success',
+    ]);
+    // Rule 3: copied history keeps its parts verbatim, tool records included.
+    expect(copied.map((message) => message.parts)).toEqual(
+      original.slice(0, 4).map((message) => message.parts),
+    );
+    // Historical facts travel with the copy.
+    expect(copied[1]?.usage).toEqual({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
+    expect(copied[1]?.modelId).toBe(MODEL_ID);
+    expect(copied[1]?.inferenceSnapshot).toEqual({
+      status: 'supported',
+      snapshot: INFERENCE_SNAPSHOT,
+    });
+    // The copy presents the same history, so the rows keep their original time.
+    expect(copied.map((message) => message.createdAt)).toEqual(
+      original.slice(0, 4).map((message) => message.createdAt),
+    );
+
+    // Nothing is shared with the source: fresh message ids, reissued turn ids,
+    // and the pairing within each submission still holds.
+    const sourceIds = new Set(original.map((message) => message.id));
+    expect(copied.some((message) => sourceIds.has(message.id))).toBe(false);
+    expect(copied.every((message) => message.sessionId === fork.id)).toBe(true);
+    expect(copied[0]?.turnId).toBe(copied[1]?.turnId);
+    expect(copied[2]?.turnId).toBe(copied[3]?.turnId);
+    expect(copied[0]?.turnId).not.toBe(copied[2]?.turnId);
+    const sourceTurnIds = new Set(original.map((message) => message.turnId));
+    expect(copied.some((message) => sourceTurnIds.has(message.turnId))).toBe(false);
+
+    // The fork starts idle: no checkpoint anchors into a turn it never ran.
+    expect(await store.getLatestContextCheckpoint(fork.id)).toBeNull();
+    // The source is untouched.
+    expect(await store.listMessages(source.id)).toEqual(original);
+  });
+
+  test('forkSession names the copy from the caller when one is supplied', async () => {
+    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: source.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+    });
+
+    const result = await store.forkSession({
+      sessionId: source.id,
+      fromMessageId: reserved.userMessage.id,
+      title: 'Branch - Maths',
+    });
+
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') return;
+    expect(result.session.title).toBe('Branch - Maths');
+    // Renaming the copy must not touch the Session it was copied from.
+    expect((await store.getSession(source.id))?.title).toBe('Maths');
+  });
+
+  test('forkSession refuses an unknown session, a foreign anchor, and an unsettled fork point', async () => {
+    const source = await harness.createEmptySession({ agentId });
+    const other = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: source.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+    });
+
+    expect(
+      await store.forkSession({ sessionId: 'missing', fromMessageId: reserved.userMessage.id }),
+    ).toEqual({ status: 'session-not-found' });
+    expect(await store.forkSession({ sessionId: source.id, fromMessageId: 'missing' })).toEqual({
+      status: 'message-not-found',
+    });
+    // A message id is only a fork point inside the Session that owns it.
+    expect(
+      await store.forkSession({ sessionId: other.id, fromMessageId: reserved.userMessage.id }),
+    ).toEqual({ status: 'message-not-found' });
+    // Refused, not silently truncated to the message before it.
+    expect(
+      await store.forkSession({
+        sessionId: source.id,
+        fromMessageId: reserved.assistantMessage.id,
+      }),
+    ).toEqual({ status: 'fork-point-unsettled' });
+  });
+
   test('loads a checkpoint tail separately from full-transcript authorization indexes', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
@@ -566,6 +699,63 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(search('harbor').map((row) => row.id)).toEqual([reserved.assistantMessage.id]);
     // Reasoning stays out of the search index by design.
     expect(search('hidden')).toEqual([]);
+  });
+
+  test('a fork indexes its copied rows and outlives the source it cites', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const source = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: source.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'quantum sailboat', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 't-1', type: 'text', text: 'emerald harbor', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+    });
+
+    const result = await store.forkSession({
+      sessionId: source.id,
+      fromMessageId: reserved.assistantMessage.id,
+    });
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') return;
+
+    // The AFTER INSERT trigger has to run for every row the copy writes, not
+    // just the first: fts_rowid is assigned as MAX+1 per insert.
+    const matches = raw
+      .prepare(
+        `SELECT m.session_id AS sessionId FROM agent_session_message m
+         JOIN agent_session_message_fts fts ON m.fts_rowid = fts.rowid
+         WHERE agent_session_message_fts MATCH ?
+         ORDER BY m.created_at, m.id`,
+      )
+      .all('harbor') as { sessionId: string }[];
+    expect(matches.map((row) => row.sessionId).sort()).toEqual(
+      [source.id, result.session.id].sort(),
+    );
+    expect(
+      (
+        raw
+          .prepare('SELECT COUNT(DISTINCT fts_rowid) AS count FROM agent_session_message')
+          .get() as {
+          count: number;
+        }
+      ).count,
+    ).toBe(4);
+
+    // Deleting the source drops the lineage claim, never the fork itself.
+    expect(await store.deleteSession(source.id)).toBe(true);
+    expect(await store.getSession(result.session.id)).toEqual(
+      expect.objectContaining({ forkedFromSessionId: null, id: result.session.id }),
+    );
+    expect(await store.listMessages(result.session.id)).toHaveLength(2);
   });
 
   test('turn-level error and activity time persist on the rows', async () => {

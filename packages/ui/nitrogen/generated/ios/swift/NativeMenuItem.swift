@@ -18,8 +18,8 @@ public extension NativeMenuItem {
   /**
    * Create a new instance of `NativeMenuItem`.
    */
-  init(checked: NativeMenuCheckedState, destructive: Bool, disabled: Bool, id: String, label: String) {
-    self.init(checked, destructive, disabled, std.string(id), std.string(label))
+  init(checked: NativeMenuCheckedState, destructive: Bool, disabled: Bool, icon: NativeMenuIcon, id: String, label: String) {
+    self.init(checked, destructive, disabled, icon, std.string(id), std.string(label))
   }
 
   @inline(__always)
@@ -35,6 +35,11 @@ public extension NativeMenuItem {
   @inline(__always)
   var disabled: Bool {
     return self.__disabled
+  }
+  
+  @inline(__always)
+  var icon: NativeMenuIcon {
+    return self.__icon
   }
   
   @inline(__always)

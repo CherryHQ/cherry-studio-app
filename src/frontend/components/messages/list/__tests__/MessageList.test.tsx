@@ -128,7 +128,6 @@ jest.mock('@legendapp/list/keyboard', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  ScrollShadow: ({ children }: { children: ReactNode }) => children,
   ScrollToBottomButton: (props: {
     bottomAccessoryHeight?: SharedValue<number>;
     isAtBottom: boolean;

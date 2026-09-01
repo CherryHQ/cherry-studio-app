@@ -16,12 +16,15 @@ namespace CherryStudioUI { class HybridCherryMenuViewSpec_cxx; }
 namespace margelo::nitro::cherrystudio::ui { struct NativeMenuItem; }
 // Forward declaration of `NativeMenuCheckedState` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuCheckedState; }
+// Forward declaration of `NativeMenuIcon` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuIcon; }
 // Forward declaration of `NativeMenuTrigger` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 
 #include "NativeMenuItem.hpp"
 #include <vector>
 #include "NativeMenuCheckedState.hpp"
+#include "NativeMenuIcon.hpp"
 #include <string>
 #include <functional>
 #include "NativeMenuTrigger.hpp"

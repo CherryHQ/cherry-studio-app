@@ -65,6 +65,7 @@ describe('Menu', () => {
         checked: 'off',
         destructive: false,
         disabled: false,
+        icon: 'none',
         id: 'edit',
         label: 'Edit',
       },
@@ -72,6 +73,7 @@ describe('Menu', () => {
         checked: 'on',
         destructive: true,
         disabled: true,
+        icon: 'none',
         id: 'delete',
         label: 'Delete',
       },
@@ -95,9 +97,26 @@ describe('Menu', () => {
 
     const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
     expect(menu.props.items[0].checked).toBe('none');
+    expect(menu.props.items[0].icon).toBe('none');
 
     act(() => menu.props.onAction('missing'));
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('forwards a semantic icon token so the native view can resolve its artwork', () => {
+    act(() => {
+      renderer = create(
+        <Menu
+          items={[{ icon: 'branch', id: 'fork', label: 'Branch', onPress: jest.fn() }]}
+          trigger="tap"
+        >
+          <Text>Open</Text>
+        </Menu>,
+      );
+    });
+
+    const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
+    expect(menu.props.items[0].icon).toBe('branch');
   });
 
   it('renders its child directly when no items are available', () => {

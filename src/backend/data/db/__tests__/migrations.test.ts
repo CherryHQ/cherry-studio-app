@@ -121,6 +121,7 @@ describe('bundled SQLite migrations', () => {
         'last_activity_at',
         'created_at',
         'updated_at',
+        'forked_from_session_id',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -203,10 +204,19 @@ describe('bundled SQLite migrations', () => {
       expect(getForeignKeys(database, 'painting')).toEqual([]);
 
       // Agent delete semantics: agents soft-delete first (RESTRICT guards hard
-      // cleanup); sessions hard-delete and cascade their messages.
-      expect(getForeignKeys(database, 'agent_session')).toEqual([
-        expect.objectContaining({ from: 'agent_id', on_delete: 'RESTRICT', table: 'agent' }),
-      ]);
+      // cleanup); sessions hard-delete and cascade their messages. Fork lineage
+      // is SET NULL, so deleting a source drops the claim, not the fork.
+      expect(getForeignKeys(database, 'agent_session')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: 'agent_id', on_delete: 'RESTRICT', table: 'agent' }),
+          expect.objectContaining({
+            from: 'forked_from_session_id',
+            on_delete: 'SET NULL',
+            table: 'agent_session',
+          }),
+        ]),
+      );
+      expect(getForeignKeys(database, 'agent_session')).toHaveLength(2);
       expect(getForeignKeys(database, 'agent_session_message')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -301,10 +311,32 @@ describe('bundled SQLite migrations', () => {
           "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3)",
         ),
       ).toThrow(/agent_session_message_status_check/);
+      // A fork points back at its source. Deleting the source must clear the
+      // lineage claim and leave the fork itself intact — CASCADE here would
+      // delete conversations the user never asked to lose.
+      database.exec(`
+        INSERT INTO agent_session (
+          id, agent_id, last_activity_at, created_at, updated_at, forked_from_session_id
+        ) VALUES ('session-fork', 'agent-1', 2, 2, 2, 'session-1');
+      `);
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_session (
+            id, agent_id, last_activity_at, created_at, updated_at, forked_from_session_id
+          ) VALUES ('session-dangling', 'agent-1', 2, 2, 2, 'missing-session');
+        `),
+      ).toThrow(/FOREIGN KEY/);
+
       // RESTRICT: an agent with sessions refuses hard deletion...
       expect(() => database.exec("DELETE FROM agent WHERE id = 'agent-1'")).toThrow();
       // ...while deleting the session cascades its messages.
       database.exec("DELETE FROM agent_session WHERE id = 'session-1'");
+      expect(
+        database
+          .prepare("SELECT forked_from_session_id FROM agent_session WHERE id = 'session-fork'")
+          .get(),
+      ).toEqual({ forked_from_session_id: null });
+      database.exec("DELETE FROM agent_session WHERE id = 'session-fork'");
       expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
         { count: 0 },
       );
@@ -463,6 +495,58 @@ describe('bundled SQLite migrations', () => {
         { id: 'reattached-artifact', provenance: 'generated' },
         { id: 'tool-artifact', provenance: 'generated' },
       ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('leaves Sessions written before fork lineage existed readable and unforked', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const lineageMigrationIndex = entries.findIndex(
+        ({ tag }) => tag === '0013_agent-session-fork-lineage',
+      );
+      expect(lineageMigrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, lineageMigrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, title, last_activity_at, created_at, updated_at)
+        VALUES ('legacy-session', 'agent-1', 'Arithmetic drills', 1, 1, 1);
+        INSERT INTO agent_session_message (
+          id, session_id, role, data, status, created_at, updated_at
+        ) VALUES ('legacy-message', 'legacy-session', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+      `);
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(lineageMigrationIndex));
+
+      // ADD COLUMN backfills NULL, which is exactly "this Session is not a
+      // fork" — the view schema reads the column unguarded, so a value here
+      // that is neither NULL nor an existing id would fail on the first read.
+      expect(
+        database
+          .prepare(
+            "SELECT title, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
+          )
+          .get(),
+      ).toEqual({ forked_from_session_id: null, title: 'Arithmetic drills' });
+      expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
+        { count: 1 },
+      );
+
+      // And an upgraded install can still be forked from.
+      database.exec(`
+        INSERT INTO agent_session (
+          id, agent_id, last_activity_at, created_at, updated_at, forked_from_session_id
+        ) VALUES ('fork-session', 'agent-1', 2, 2, 2, 'legacy-session');
+      `);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       database.close();
     }

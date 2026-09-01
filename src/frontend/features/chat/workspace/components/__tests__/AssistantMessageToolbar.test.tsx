@@ -7,6 +7,7 @@ import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
 jest.mock('expo-clipboard', () => ({
@@ -15,14 +16,24 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
+    Menu: ({ children, ...props }: { children: unknown }) => createElement('Menu', props, children),
     useAlert: () => ({ alert: { show: jest.fn() } }),
   };
 });
+
+jest.mock('../../../runtime', () => ({
+  useAgentChatFork: () => mockForkSession,
+}));
+
+jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentSession: () => ({ data: { title: 'Arithmetic drills' } }),
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -90,17 +101,46 @@ describe('AssistantMessageToolbar', () => {
     ).toBe('chat.messageActions.copied');
   });
 
-  test('hides the copy button without copyable text', () => {
+  test('keeps the more menu reachable on a message with nothing to copy', () => {
+    // A tool-only reply has no copyable text, but branching from it is still
+    // the whole point of the menu.
     renderToolbar(createMessage('success', '   '));
 
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-toolbar' }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-more' }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('offers a branch action carrying the semantic icon and forks this message', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    const menu = renderer!.root.findByType('Menu');
+    expect(menu.props.trigger).toBe('tap');
+    expect(menu.props.items).toEqual([
+      {
+        icon: 'branch',
+        id: 'fork',
+        label: 'chat.messageActions.fork',
+        onPress: expect.any(Function),
+      },
+    ]);
+
+    act(() => menu.props.items[0].onPress());
+    expect(mockForkSession).toHaveBeenCalledWith({
+      fromMessageId: 'assistant-1',
+      sessionId: 'session-1',
+      title: 'chat.fork.sessionTitle',
+    });
   });
 
   function renderToolbar(message: MessageListItem) {
     act(() => {
       renderer = create(
-        <AssistantMessageActionsProvider isAssistantToolbarEnabled>
+        <AssistantMessageActionsProvider isAssistantToolbarEnabled sessionId="session-1">
           <AssistantMessageToolbar message={message} />
         </AssistantMessageActionsProvider>,
       );

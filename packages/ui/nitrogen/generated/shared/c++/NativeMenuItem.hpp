@@ -30,8 +30,11 @@
 
 // Forward declaration of `NativeMenuCheckedState` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuCheckedState; }
+// Forward declaration of `NativeMenuIcon` to properly resolve imports.
+namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuIcon; }
 
 #include "NativeMenuCheckedState.hpp"
+#include "NativeMenuIcon.hpp"
 #include <string>
 
 namespace margelo::nitro::cherrystudio::ui {
@@ -44,12 +47,13 @@ namespace margelo::nitro::cherrystudio::ui {
     NativeMenuCheckedState checked     SWIFT_PRIVATE;
     bool destructive     SWIFT_PRIVATE;
     bool disabled     SWIFT_PRIVATE;
+    NativeMenuIcon icon     SWIFT_PRIVATE;
     std::string id     SWIFT_PRIVATE;
     std::string label     SWIFT_PRIVATE;
 
   public:
     NativeMenuItem() = default;
-    explicit NativeMenuItem(NativeMenuCheckedState checked, bool destructive, bool disabled, std::string id, std::string label): checked(checked), destructive(destructive), disabled(disabled), id(id), label(label) {}
+    explicit NativeMenuItem(NativeMenuCheckedState checked, bool destructive, bool disabled, NativeMenuIcon icon, std::string id, std::string label): checked(checked), destructive(destructive), disabled(disabled), icon(icon), id(id), label(label) {}
 
   public:
     friend bool operator==(const NativeMenuItem& lhs, const NativeMenuItem& rhs) = default;
@@ -68,6 +72,7 @@ namespace margelo::nitro {
         JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "checked"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "destructive"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled"))),
+        JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuIcon>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "icon"))),
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id"))),
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "label")))
       );
@@ -77,6 +82,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "checked"), JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::toJSI(runtime, arg.checked));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "destructive"), JSIConverter<bool>::toJSI(runtime, arg.destructive));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "disabled"), JSIConverter<bool>::toJSI(runtime, arg.disabled));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "icon"), JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuIcon>::toJSI(runtime, arg.icon));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "id"), JSIConverter<std::string>::toJSI(runtime, arg.id));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "label"), JSIConverter<std::string>::toJSI(runtime, arg.label));
       return obj;
@@ -92,6 +98,7 @@ namespace margelo::nitro {
       if (!JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "checked")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "destructive")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled")))) return false;
+      if (!JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuIcon>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "icon")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "label")))) return false;
       return true;

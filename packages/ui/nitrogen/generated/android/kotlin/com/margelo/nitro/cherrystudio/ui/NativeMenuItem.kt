@@ -29,6 +29,9 @@ data class NativeMenuItem(
   val disabled: Boolean,
   @DoNotStrip
   @Keep
+  val icon: NativeMenuIcon,
+  @DoNotStrip
+  @Keep
   val id: String,
   @DoNotStrip
   @Keep
@@ -42,6 +45,7 @@ data class NativeMenuItem(
     return Objects.deepEquals(this.checked, other.checked)
       && Objects.deepEquals(this.destructive, other.destructive)
       && Objects.deepEquals(this.disabled, other.disabled)
+      && Objects.deepEquals(this.icon, other.icon)
       && Objects.deepEquals(this.id, other.id)
       && Objects.deepEquals(this.label, other.label)
   }
@@ -51,6 +55,7 @@ data class NativeMenuItem(
       checked,
       destructive,
       disabled,
+      icon,
       id,
       label
     ).contentDeepHashCode()
@@ -64,8 +69,8 @@ data class NativeMenuItem(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, id: String, label: String): NativeMenuItem {
-      return NativeMenuItem(checked, destructive, disabled, id, label)
+    private fun fromCpp(checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, icon: NativeMenuIcon, id: String, label: String): NativeMenuItem {
+      return NativeMenuItem(checked, destructive, disabled, icon, id, label)
     }
   }
 }

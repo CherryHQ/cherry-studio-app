@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import type { AgentExecutionTarget } from '@/shared/contracts/agent';
 
@@ -38,6 +38,13 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .$defaultFn(() => Date.now()),
     ...createUpdateTimestamps,
+    // Fork provenance (agent-protocol.md "Branching" rule 2). SET NULL, not
+    // CASCADE: deleting the source must drop the lineage claim, never the
+    // forked Session. Declared last so the column order matches the physical
+    // order produced by ALTER TABLE ADD COLUMN.
+    forkedFromSessionId: text().references((): AnySQLiteColumn => agentSessionTable.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),
