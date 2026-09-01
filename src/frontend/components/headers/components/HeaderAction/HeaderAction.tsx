@@ -10,10 +10,6 @@ import { HeaderIconButton } from './HeaderIconButton';
 export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
   const contentClassName = tone === 'inverse' ? 'text-constant-white' : 'text-foreground';
 
-  if (action.hidden) {
-    return null;
-  }
-
   switch (action.type) {
     case 'custom':
       return <View className={HEADER_ICON_ACTION_CLASS_NAME}>{action.element}</View>;

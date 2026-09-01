@@ -1,5 +1,6 @@
 export type { HeaderToolbarAction } from './components/HeaderAction';
 export { HeaderIconButton } from './components/HeaderAction';
+export { HeaderActionGroup, type HeaderActionGroupProps } from './components/HeaderActionGroup';
 export { HeaderChrome } from './components/HeaderChrome';
 export { headerScreenOptions } from './headerScreenOptions';
 export { MainHeader } from './MainHeader/MainHeader';

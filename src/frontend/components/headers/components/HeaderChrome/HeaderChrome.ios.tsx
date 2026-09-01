@@ -2,7 +2,7 @@ import { Stack, useIsPreview } from 'expo-router';
 import { useMemo } from 'react';
 
 import { headerScreenOptions } from '../../headerScreenOptions';
-import { HeaderAction } from '../HeaderAction';
+import { HeaderActionGroup } from '../HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
 
 /** Mounts the shared header contract through iOS native toolbar slots. */
@@ -32,23 +32,9 @@ export function HeaderChrome({
     <>
       <Stack.Screen options={options} />
       {titleElement ? <Stack.Title asChild>{titleElement}</Stack.Title> : null}
-      {/* Expo converts left/right toolbar children before React renders them,
-          so Stack.Toolbar.View must remain the direct child here. */}
-      <Stack.Toolbar placement="left">
-        {leftActions.map((action) => (
-          <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
-            <HeaderAction action={action} tone={actionTone} />
-          </Stack.Toolbar.View>
-        ))}
-      </Stack.Toolbar>
+      <HeaderActionGroup actions={leftActions} placement="left" tone={actionTone} />
       {rightActions && rightActions.length > 0 ? (
-        <Stack.Toolbar placement="right">
-          {rightActions.map((action) => (
-            <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
-              <HeaderAction action={action} tone={actionTone} />
-            </Stack.Toolbar.View>
-          ))}
-        </Stack.Toolbar>
+        <HeaderActionGroup actions={rightActions} placement="right" tone={actionTone} />
       ) : null}
     </>
   );

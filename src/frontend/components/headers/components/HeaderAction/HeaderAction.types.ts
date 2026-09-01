@@ -8,7 +8,6 @@ export type HeaderActionIconProps = {
 export type HeaderActionTone = 'default' | 'inverse';
 
 type HeaderActionBase = {
-  hidden?: boolean;
   key: string;
 };
 
