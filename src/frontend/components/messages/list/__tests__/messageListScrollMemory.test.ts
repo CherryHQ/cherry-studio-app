@@ -4,7 +4,6 @@ describe('messageListScrollMemory', () => {
   test('stores a semantic item key plus the offset inside that item', () => {
     expect(
       computeScrollAnchor({
-        following: false,
         getKeyAtIndex: (index) => (index === 3 ? 'message-3' : null),
         getOffsetAtIndex: () => 600,
         scrollOffset: 632,
@@ -13,11 +12,10 @@ describe('messageListScrollMemory', () => {
     ).toEqual({ key: 'message-3', offset: 32 });
   });
 
-  test('stores null while following the live edge', () => {
+  test('stores no anchor when the top row has no key to anchor to', () => {
     expect(
       computeScrollAnchor({
-        following: true,
-        getKeyAtIndex: () => 'message-3',
+        getKeyAtIndex: () => null,
         getOffsetAtIndex: () => 600,
         scrollOffset: 632,
         topIndex: 3,

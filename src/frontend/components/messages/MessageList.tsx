@@ -3,7 +3,7 @@ import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Platform, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import {
@@ -38,6 +38,7 @@ export function MessageList({
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
   const {
     handleContentSizeChange,
+    handleLayout,
     handleLoad,
     handleMomentumScrollBegin,
     handleMomentumScrollEnd,
@@ -47,7 +48,6 @@ export function MessageList({
     handleScrollToEnd,
     handleTouchStart,
     isFollowing,
-    onViewportSizeChange,
   } = useMessageListScrollController({
     dataKey,
     enteringMessageId,
@@ -91,12 +91,6 @@ export function MessageList({
     scrollLog.debug('[SCROLL] startReached', { t: Date.now() });
     void onLoadOlder();
   }, [onLoadOlder]);
-  const handleLayout = useCallback(
-    (_event: LayoutChangeEvent) => {
-      onViewportSizeChange();
-    },
-    [onViewportSizeChange],
-  );
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
 
   return (

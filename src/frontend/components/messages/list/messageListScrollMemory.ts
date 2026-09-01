@@ -7,25 +7,22 @@ export type MessageListRestoreTarget = Readonly<{
 }>;
 
 type ComputeScrollAnchorOptions = {
-  following: boolean;
   getKeyAtIndex: (index: number) => null | string;
   getOffsetAtIndex: (index: number) => number;
   scrollOffset: number;
   topIndex: number;
 };
 
-/** Derives the semantic item anchor stored while the user is reading history. */
+/**
+ * Derives the semantic item anchor stored while the user is reading history.
+ * Following the live edge stores no anchor at all, so that case never reaches here.
+ */
 export function computeScrollAnchor({
-  following,
   getKeyAtIndex,
   getOffsetAtIndex,
   scrollOffset,
   topIndex,
 }: ComputeScrollAnchorOptions): ChatScrollAnchor {
-  if (following) {
-    return null;
-  }
-
   const key = getKeyAtIndex(topIndex);
   if (!key) {
     return null;

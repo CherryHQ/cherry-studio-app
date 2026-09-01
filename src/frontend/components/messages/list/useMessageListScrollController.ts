@@ -1,7 +1,7 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { cacheService } from '@/frontend/data/CacheService';
 import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
@@ -9,7 +9,6 @@ import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
 import type { MessageListItem } from '../types';
 import { scrollLog } from './messageListLogger';
 import { computeScrollAnchor, resolveRestoreTarget } from './messageListScrollMemory';
-import { useAutoStickToBottom } from './useAutoStickToBottom';
 import { type FollowingReason, useViewportFollowState } from './useViewportFollowState';
 
 const SAVE_THROTTLE_MS = 200;
@@ -127,10 +126,12 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     [clearStoredAnchor, follow, scheduleStickToBottom],
   );
 
-  const autoStick = useAutoStickToBottom({
-    isFollowing: follow.isFollowing,
-    stickToBottom: scheduleStickToBottom,
-  });
+  /** Keeps the live edge exact whenever the viewport is in following mode. */
+  const stickToBottomIfFollowing = useCallback(() => {
+    if (follow.isFollowing()) {
+      scheduleStickToBottom();
+    }
+  }, [follow, scheduleStickToBottom]);
 
   const saveScrollAnchor = useCallback(
     (immediate = false) => {
@@ -149,7 +150,6 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         }
 
         anchor = computeScrollAnchor({
-          following: false,
           getKeyAtIndex: (index) => current.messages[index]?.id ?? null,
           getOffsetAtIndex: (index) => state.positionAtIndex(index),
           scrollOffset: state.scroll,
@@ -335,9 +335,18 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   const handleContentSizeChange = useCallback(
     (_width: number, height: number) => {
       scrollLog.debug('[SCROLL] contentSize', { h: Math.round(height), t: Date.now() });
-      autoStick.onContentSizeChange();
+      stickToBottomIfFollowing();
     },
-    [autoStick],
+    [stickToBottomIfFollowing],
+  );
+
+  // A viewport resize (keyboard, rotation) moves the live edge without changing
+  // content size, so it needs the same correction from its own native callback.
+  const handleLayout = useCallback(
+    (_event: LayoutChangeEvent) => {
+      stickToBottomIfFollowing();
+    },
+    [stickToBottomIfFollowing],
   );
 
   const enterReadingForUser = useCallback(() => {
@@ -429,6 +438,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   return {
     handleContentSizeChange,
+    handleLayout,
     handleLoad,
     handleMomentumScrollBegin,
     handleMomentumScrollEnd,
@@ -438,6 +448,5 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     handleScrollToEnd,
     handleTouchStart,
     isFollowing: isFollowingForRender,
-    onViewportSizeChange: autoStick.onContentSizeChange,
   };
 }
