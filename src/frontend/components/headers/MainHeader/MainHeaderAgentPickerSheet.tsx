@@ -1,7 +1,7 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { BottomSheet, Button, ContentState, Section } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -41,14 +41,24 @@ export function MainHeaderAgentPickerSheet({
 
   return (
     <BottomSheet
+      footer={
+        <Button
+          icon={<PlusIcon className="size-5 text-foreground" />}
+          onPress={createAgent}
+          variant="secondary"
+        >
+          <Button.Label>{t('agent.actions.create')}</Button.Label>
+        </Button>
+      }
       onClose={onClose}
       open={open}
-      size="large"
+      size="medium"
       testID="main-header-agent-picker"
       title={t('agent.list.title')}
     >
       <ScrollView
-        contentContainerClassName="gap-4 px-6 pt-2 pb-6"
+        className="min-h-0 flex-1"
+        contentContainerClassName="px-4 pt-2 pb-4"
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
@@ -67,26 +77,18 @@ export function MainHeaderAgentPickerSheet({
             title={t('agent.list.emptyTitle')}
           />
         ) : (
-          <Section>
+          <View className="gap-1">
             {agents.map((agent) => (
-              <Section.Item key={agent.id}>
-                <AgentPickerRow
-                  agent={agent}
-                  onEdit={editAgent}
-                  onSelect={selectAgent}
-                  selected={agent.id === currentAgentId}
-                />
-              </Section.Item>
+              <AgentPickerRow
+                agent={agent}
+                key={agent.id}
+                onEdit={editAgent}
+                onSelect={selectAgent}
+                selected={agent.id === currentAgentId}
+              />
             ))}
-          </Section>
+          </View>
         )}
-        <Button
-          icon={<PlusIcon className="size-5 text-foreground" />}
-          onPress={createAgent}
-          variant="secondary"
-        >
-          <Button.Label>{t('agent.actions.create')}</Button.Label>
-        </Button>
       </ScrollView>
     </BottomSheet>
   );
