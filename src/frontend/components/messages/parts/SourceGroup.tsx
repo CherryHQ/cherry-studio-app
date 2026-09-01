@@ -7,28 +7,17 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { SourceLink } from './SourceLink';
-
-type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
+import { resolveCitationWebSources } from './webSource';
+import { WebSourceCard } from './WebSourceCard';
 
 type SourceGroupProps = {
-  parts: readonly SourceUrlPart[];
+  parts: readonly CherryMessagePart[];
 };
 
 export function SourceGroup({ parts }: SourceGroupProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const sources = useMemo(() => {
-    const sourcesByUrl = new Map<string, SourceUrlPart>();
-
-    for (const part of parts) {
-      if (!sourcesByUrl.has(part.url)) {
-        sourcesByUrl.set(part.url, part);
-      }
-    }
-
-    return [...sourcesByUrl.values()];
-  }, [parts]);
+  const sources = useMemo(() => resolveCitationWebSources(parts), [parts]);
   const label = t('chat.sources.count', { count: sources.length });
 
   return (
@@ -45,15 +34,13 @@ export function SourceGroup({ parts }: SourceGroupProps) {
         <ChevronRightIcon className="size-3.5 text-muted-foreground" />
       </Pressable>
       {isOpen ? (
-        <MessagePart.Detail onClose={() => setIsOpen(false)} title={t('chat.sources.title')}>
-          <View className="gap-1">
+        <MessagePart.Detail
+          onClose={() => setIsOpen(false)}
+          title={t('chat.webSearch.detailTitle', { count: sources.length })}
+        >
+          <View className="gap-3">
             {sources.map((source) => (
-              <SourceLink
-                key={source.url}
-                label={source.title ?? source.url}
-                url={source.url}
-                variant="listItem"
-              />
+              <WebSourceCard key={source.url} source={source} />
             ))}
           </View>
         </MessagePart.Detail>

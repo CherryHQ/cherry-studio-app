@@ -56,6 +56,7 @@ export type MessagePartSummaryProps = {
 export type MessagePartToolProps = Omit<MessagePartSummaryProps, 'onPress'> & {
   children: ReactNode;
   detailTitle?: string;
+  detailVariant?: 'default' | 'source-list';
 };
 
 export type MessagePartErrorProps = {
