@@ -1,5 +1,4 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { Button, Section } from '@cherrystudio/ui/components';
+import { Button, Section, SelectField } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -56,28 +55,21 @@ export function ProviderModelCheckSection({
             sit it out of line with the API keys field label right above. */}
         <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
         <View className="flex-row items-stretch gap-2">
-          <Section
+          <SelectField
+            accessibilityLabel={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
             className="min-w-0 flex-1"
-            contentClassName="rounded-lg border border-border bg-field"
+            disabled={isDisabled || isChecking || isLoading || textModels.length === 0}
+            onPress={openModelPicker}
           >
-            <Section.Item
-              accessibilityLabel={
-                selectedModel?.name ?? t('settings.provider.models.checkNoModels')
-              }
-              disabled={isDisabled || isChecking || isLoading || textModels.length === 0}
-              onPress={openModelPicker}
-            >
-              <View className="flex-row items-center gap-2">
-                {selectedModel ? (
-                  <ModelPickerIcon model={selectedModel} provider={provider} size={24} />
-                ) : null}
-                <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
-                  {selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
-                </Text>
-                <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
-              </View>
-            </Section.Item>
-          </Section>
+            <SelectField.Value className="justify-start">
+              {selectedModel ? (
+                <ModelPickerIcon model={selectedModel} provider={provider} size={24} />
+              ) : null}
+              <SelectField.ValueText className="flex-1 text-left">
+                {selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
+              </SelectField.ValueText>
+            </SelectField.Value>
+          </SelectField>
           <Button
             className="self-stretch"
             disabled={isDisabled || isLoading || !selectedModel}
