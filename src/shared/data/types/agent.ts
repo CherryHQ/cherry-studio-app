@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+import { AgentCapabilitySchema } from '@/shared/data/types/agentCapability';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
 /** Controls only interactive tool approval; it never grants tool availability or resource access. */
@@ -20,6 +21,8 @@ export const AgentSchema = z.strictObject({
    */
   avatarUri: z.string().nullable(),
   createdAt: z.iso.datetime(),
+  /** Capability-group deny-list; a group absent from the list is enabled. */
+  disabledCapabilities: z.array(AgentCapabilitySchema),
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),

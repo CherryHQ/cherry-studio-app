@@ -6,11 +6,11 @@ The system catalog ships device calendar and reminders, health, location, web se
 image generation, `write_file`, and `edit_file`, all using the settled `ToolRef` and
 `{ value, artifacts }`
 contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and composer-selected turn capabilities, then combines it with the
-Agent's persisted executable MCP bindings. Calendar, reminders, health, location, and both file
-tools are available to every Agent when their system gates pass. The frontend keeps web-search selection
-per Session and snapshots it into each turn; image generation enters only the turn whose draft
-selected it. Neither is Agent configuration.
+permission, app configuration, and the Agent's capability-group deny-list, then combines it with
+the Agent's persisted executable MCP bindings. Capability groups (web, image, calendar, reminders,
+health, location) are enabled per Agent in the editor; both file tools belong to every turn. An
+enabled tool is offered automatically when its remaining gates pass — the model decides from the
+request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
 diverges from carry an **As-built** note.
 
@@ -68,16 +68,18 @@ historical UI remains understandable after configuration changes.
 Every system capability has a stable `ToolRef` whose `capabilityId` doubles as its provider alias,
 which is unambiguous because the catalog is Cherry-owned and collision-free.
 `src/shared/data/types/builtInTool.ts` is the single catalog consumed by the Host. Its descriptors
-own platform, permission, application-configuration, base approval, and optional
-temporary-capability gates. The Agent editor cannot change availability or those base policies; its
-approval preference only changes whether effective `ask` calls show an interactive prompt.
+own platform, permission, application-configuration, base approval, capability-group membership,
+and auto-approval eligibility. The Agent editor enables or disables capability groups
+(`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
+only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
+auto-approval eligible: enabling the image group is not consent to spend provider quota.
 
-`web_search` and `web_fetch` require the turn-local `web-search` capability. `generate_image`
-requires `image-generation` and a configured drawing model. The composer snapshots its frontend
-Session cache for web search and its draft-local image selection on either `startSession` or
-`submitMessage`. Neither is persisted on the Agent or Agent Session tables. System device and file
-capabilities have no Agent-specific switch. The inference snapshot records the tools that entered
-the immutable turn.
+`web_search` and `web_fetch` additionally require their default web search provider to be chosen in
+settings. `generate_image` additionally requires a configured drawing model. An OS permission scope
+that was never requested does not hide a device tool: it is offered as `ask`, and execution
+triggers the one-shot system permission prompt after the user approves the call in-app. A denied or
+unavailable scope removes the tool for the turn. The inference snapshot records the tools that
+entered the immutable turn.
 
 The logical binding model is:
 
@@ -126,7 +128,7 @@ tool.
 Before admitting a turn, the Host resolves tools in this order:
 
 1. Create the turn resource ledger from controlled current-input and transcript managed-file facts.
-2. Read temporary system capability selections from this submission.
+2. Read the Agent's capability-group deny-list from its definition.
 3. Project only system capabilities implemented and available on the current mobile platform.
 4. Read the current Agent's enabled MCP bindings and resolve their executable descriptors.
 5. Apply system permission state, model tool-calling support, and application policy.
@@ -292,10 +294,10 @@ OS-sanctioned continuation mechanisms described in
   provider credentials, usage accounting, download, persistence, or cleanup.
 - Successful output is imported into managed file storage before the tool reports an artifact.
 - Cost-bearing or externally submitted generation uses the application-owned base `ask` policy.
-  An Agent in automatic approval mode can skip that prompt, but `generate_image` is still absent
-  unless the composer selected image generation for the turn and a drawing model is configured.
-  Its input schema is built from that model's capability block so the model is never offered a
-  parameter its provider rejects.
+  `generate_image` is never auto-approval eligible, so even an Agent in automatic approval mode
+  confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
+  model is configured. Its input schema is built from that model's capability block so the model is
+  never offered a parameter its provider rejects.
 
 ### Managed File Write And Edit
 

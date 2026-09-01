@@ -24,13 +24,16 @@ export function clampMcpToolApproval(approval: AgentToolApproval): McpInteractiv
 
 /**
  * Applies an Agent's approval mode to one resolved tool approval. `default`
- * keeps the tool's own value; `auto` promotes only `ask`. Tool availability,
+ * keeps the tool's own value; `auto` promotes only `ask`, and only for tools
+ * eligible for promotion — a cost-bearing or permission-gated `ask` states a
+ * consent requirement, not an interaction preference. Tool availability,
  * explicit denies, OS permissions, and callback-level resource checks are
  * untouched and continue to fail closed.
  */
 export function applyToolApprovalMode(
   approval: AgentToolApproval,
   mode: AgentToolApprovalMode,
+  autoApprovalEligible = true,
 ): AgentToolApproval {
-  return mode === 'auto' && approval === 'ask' ? 'auto' : approval;
+  return mode === 'auto' && approval === 'ask' && autoApprovalEligible ? 'auto' : approval;
 }

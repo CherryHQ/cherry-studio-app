@@ -52,10 +52,6 @@ export const AgentExecutionTargetSchema = z.strictObject({
 });
 export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
 
-/** Composer-selected capabilities that apply only to one submitted turn. */
-export const AgentTemporaryCapabilitySchema = z.enum(['web-search', 'image-generation']);
-export type AgentTemporaryCapability = z.infer<typeof AgentTemporaryCapabilitySchema>;
-
 const AgentBuiltInToolRefSchema = z.strictObject({
   source: z.literal('builtin'),
   capabilityId: z.string().min(1),
@@ -476,8 +472,6 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
-  /** Input-owned capabilities enabled for this turn; never persisted to the Agent. */
-  temporaryCapabilities: z.array(AgentTemporaryCapabilitySchema).max(2).optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
@@ -488,8 +482,6 @@ export const AgentStartSessionInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
-  /** Input-owned capabilities enabled for this turn; never persisted to the Agent. */
-  temporaryCapabilities: z.array(AgentTemporaryCapabilitySchema).max(2).optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({

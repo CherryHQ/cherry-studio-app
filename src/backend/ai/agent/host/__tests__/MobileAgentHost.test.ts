@@ -61,6 +61,7 @@ const agents: AgentDefinitionSource = {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
       toolApprovalMode: 'default',
+      disabledCapabilities: ['health'],
     };
   },
 };
@@ -645,14 +646,13 @@ describe('MobileAgentHost', () => {
     await host.submitMessage({
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Save it.' }],
-      temporaryCapabilities: ['web-search'],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).toHaveBeenCalledWith({
+      disabledCapabilities: ['health'],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
-      temporaryCapabilities: new Set(['web-search']),
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);

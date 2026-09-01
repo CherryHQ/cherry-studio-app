@@ -220,9 +220,9 @@ async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
-          temporaryCapabilities: new Set(parsed.temporaryCapabilities ?? []),
         }),
         signal,
       );
@@ -348,7 +348,7 @@ function applyAgentToolApprovalMode(
   mode: AgentDefinition['toolApprovalMode'],
 ): RuntimeTool[] {
   return tools.map((tool) => {
-    const approval = applyToolApprovalMode(tool.approval, mode);
+    const approval = applyToolApprovalMode(tool.approval, mode, tool.autoApprovalEligible ?? true);
     return approval === tool.approval ? tool : { ...tool, approval };
   });
 }

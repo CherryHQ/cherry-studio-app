@@ -11,6 +11,7 @@ import { type OrderEndpoints } from './endpointHelpers';
  * value a caller may set directly.
  */
 const AGENT_MUTABLE_FIELDS = {
+  disabledCapabilities: true,
   instructions: true,
   modelId: true,
   name: true,

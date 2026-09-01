@@ -29,9 +29,9 @@ no per-message parent/active-path columns ([Agent Protocol](./agent-protocol.md#
 
 Out of scope: message-tree columns, background turns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
-System capabilities are resolved independently and require no Agent persistence. No frontend surface
-selects a temporary capability, so neither web search nor image generation needs Agent or Session
-persistence.
+System capability enablement persists on the Agent row as a capability-group deny-list
+(`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
+capability resolves per turn and needs no Session persistence.
 
 ## Current limitations
 
@@ -140,8 +140,8 @@ The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `
 
 The physical table and typed Data API retain the `builtin` variant to read existing databases
 without a destructive migration. Those rows are legacy compatibility data: the Host ignores them,
-and the Agent editor omits them when replacing bindings. Shared system capabilities and composer
-selections are never persisted here.
+and the Agent editor omits them when replacing bindings. Built-in capability enablement lives on
+the Agent row's group-level deny-list, never in this per-tool relation.
 
 Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 
