@@ -340,10 +340,10 @@ default instead of the Agent's configured effort.
 
 `temporaryCapabilities` is also turn-local and is never written to Agent configuration. The Host
 uses `web-search` to admit `web_search` and `web_fetch`, and `image-generation` to admit
-`generate_image` when its other system gates pass. The frontend may retain web-search selection per
-Session and includes `web-search` on every submission while enabled. Omitting the array admits
-neither temporary capability. The assistant's inference snapshot records the concrete tools frozen
-for the turn, so history does not depend on reconstructing composer state.
+`generate_image` when its other system gates pass. No frontend surface currently requests either,
+so submissions omit the array, which admits neither temporary capability. The assistant's inference
+snapshot records the concrete tools frozen for the turn, so history does not depend on
+reconstructing composer state.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;

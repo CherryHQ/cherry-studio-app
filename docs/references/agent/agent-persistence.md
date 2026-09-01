@@ -26,9 +26,9 @@ record for mobile-originated Agent Sessions only.
 
 Out of scope: branching columns, background turns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
-System capabilities are resolved independently and require no Agent persistence. The frontend cache
-owns the Session-scoped web-search composer selection; image generation remains selected only by
-the current submission.
+System capabilities are resolved independently and require no Agent persistence. No frontend surface
+selects a temporary capability, so neither web search nor image generation needs Agent or Session
+persistence.
 
 ## Current limitations
 
