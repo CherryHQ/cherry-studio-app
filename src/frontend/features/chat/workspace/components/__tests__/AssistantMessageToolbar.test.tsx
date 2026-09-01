@@ -21,8 +21,9 @@ jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    ActionMenu: ({ children, ...props }: { children: unknown }) =>
+      createElement('ActionMenu', props, children),
     Button: (props: object) => createElement('Button', props),
-    Menu: ({ children, ...props }: { children: unknown }) => createElement('Menu', props, children),
     useAlert: () => ({ alert: { show: jest.fn() } }),
   };
 });
@@ -118,8 +119,7 @@ describe('AssistantMessageToolbar', () => {
   test('offers a branch action carrying the semantic icon and forks this message', () => {
     renderToolbar(createMessage('success', 'Answer'));
 
-    const menu = renderer!.root.findByType('Menu');
-    expect(menu.props.trigger).toBe('tap');
+    const menu = renderer!.root.findByType('ActionMenu');
     expect(menu.props.items).toEqual([
       {
         icon: 'branch',

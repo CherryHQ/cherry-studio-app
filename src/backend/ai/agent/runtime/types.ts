@@ -177,6 +177,11 @@ export type RuntimeTool = {
   description: string;
   inputSchema: RuntimeJsonValue;
   approval: 'auto' | 'ask' | 'deny';
+  /**
+   * False keeps the Agent's global auto mode from promoting this tool's `ask`
+   * (cost-bearing or permission-gated calls). Absent means eligible.
+   */
+  autoApprovalEligible?: boolean;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

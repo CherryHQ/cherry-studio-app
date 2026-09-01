@@ -19,6 +19,10 @@ export type AgentSessionsOptions = {
   agentId?: string;
 };
 
+export type LatestAgentSessionOptions = AgentSessionsOptions & {
+  enabled?: boolean;
+};
+
 export type AgentSessionsViewModel = {
   error?: Error;
   hasMore: boolean;
@@ -55,6 +59,24 @@ export function useAgentSession(sessionId: string | undefined) {
     enabled: Boolean(sessionId),
     params: { id: sessionId ?? '' },
   });
+}
+
+export function useLatestAgentSession(options: LatestAgentSessionOptions = {}) {
+  const query = useInfiniteQuery('/agent-sessions', {
+    enabled: options.enabled,
+    gcTime: 0,
+    limit: 1,
+    query: { agentId: options.agentId },
+    refetchOnMount: 'always',
+  });
+
+  return {
+    error: query.error,
+    isLoading: query.isLoading,
+    isRefreshing: query.isRefreshing,
+    refetch: query.refresh,
+    session: query.pages.at(0)?.items.at(0),
+  };
 }
 
 export function useAgentSessionMutations() {

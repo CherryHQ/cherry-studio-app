@@ -10,7 +10,7 @@ import {
   buildProviderModelListItems,
   type ProviderModelListItem,
 } from '../utils/providerModelListItems';
-import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
+import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderModelRow';
 
 export type ProviderModelListContentProps = {
   groupByPurpose: boolean;
@@ -60,7 +60,13 @@ export function ProviderModelListContent({
         );
       }
 
-      return <ProviderModelRow model={item.model} provider={itemExtraData.provider} />;
+      return (
+        <ProviderModelRow
+          model={item.model}
+          provider={itemExtraData.provider}
+          variant="management"
+        />
+      );
     },
     [t],
   );
@@ -71,7 +77,7 @@ export function ProviderModelListContent({
       contentContainerStyle={styles.contentContainer}
       contentInsetAdjustmentBehavior="automatic"
       data={listItems}
-      estimatedItemSize={providerModelRowEstimatedHeight}
+      estimatedItemSize={providerModelRowEstimatedHeights.management}
       extraData={extraData}
       getItemType={getProviderModelListItemType}
       keyboardDismissMode="on-drag"

@@ -1,7 +1,7 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
-import { ScrollShadow } from '@cherrystudio/ui/components';
+import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
@@ -36,18 +36,23 @@ export function SidebarBody({ children }: PropsWithChildren) {
         size={appSidebar.scrollShadowSize}
         visibility="top"
       >
-        <ScrollView
-          contentContainerStyle={{
-            // Clears the whole floating dock, whose own bottom padding is
-            // concentric with the display's corners rather than a fixed inset.
-            paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
-            paddingTop: headerInset,
-          }}
-          contentInsetAdjustmentBehavior="never"
-          showsVerticalScrollIndicator={false}
-        >
-          {children ?? <SidebarBodyDefault />}
-        </ScrollView>
+        <ContextMenuScrollBoundary>
+          {(scrollHandlers) => (
+            <ScrollView
+              {...scrollHandlers}
+              contentContainerStyle={{
+                // Clears the whole floating dock, whose own bottom padding is
+                // concentric with the display's corners rather than a fixed inset.
+                paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
+                paddingTop: headerInset,
+              }}
+              contentInsetAdjustmentBehavior="never"
+              showsVerticalScrollIndicator={false}
+            >
+              {children ?? <SidebarBodyDefault />}
+            </ScrollView>
+          )}
+        </ContextMenuScrollBoundary>
       </ScrollShadow>
     </View>
   );

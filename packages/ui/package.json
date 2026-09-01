@@ -108,6 +108,7 @@
     "react": "*",
     "react-native": "*",
     "react-native-enriched-markdown": "*",
+    "react-native-gesture-handler": "*",
     "react-native-keyboard-controller": "*",
     "react-native-nitro-modules": "*",
     "react-native-reanimated": "*",

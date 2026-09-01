@@ -9,6 +9,7 @@ describe('AgentSessionUsageRecorder', () => {
 
     recorder.record({
       agent: {
+        disabledCapabilities: [],
         id: 'agent-1',
         instructions: '',
         model: { modelId: 'configured-model', providerId: 'provider-1' },

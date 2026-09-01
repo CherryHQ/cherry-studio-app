@@ -12,13 +12,27 @@ handling, gestures, Android back behavior, and accessibility behavior on iOS and
 
 The API is intentionally small: `open`, `onClose`, `title`, `children`, exactly one of `size`,
 `height`, or a non-empty `sizes` list; optional `testID`, optional `dismissible`, and an optional
-`headerAction` for one compact control beside the title. `size` accepts `compact`, `medium`, or
-`large`, resolving to 40%, 60%, or 80% of the available screen height, plus `full` for all available
-height below the top safe area. `sizes` exposes multiple semantic heights in ascending order and
-opens at the smallest one, so users can drag upward for a larger preview. `height` accepts a fixed
-React Native logical-pixel value and is clamped to the available screen height. Product components
-choose semantic tokens, or use a fixed height, but do not receive detents, geometry, close reasons,
-or types from the underlying UI library.
+`headerAction` for one compact control beside the title. An optional `footer` stays fixed below the
+flexible body and owns its divider, horizontal action inset, and bottom safe-area spacing; callers
+provide only the footer control. `size` accepts `compact`, `medium`, or `large`, resolving to 40%,
+60%, or 80% of the available screen height, plus `full` for all available height below the top safe
+area. `sizes` exposes multiple semantic heights in ascending order and opens at the smallest one, so
+users can drag upward for a larger preview. `height` accepts a fixed React Native logical-pixel value
+and is clamped to the available screen height. Product components choose semantic tokens, or use a
+fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
+library.
+
+```tsx
+<BottomSheet
+  footer={<Button onPress={createItem}>Create item</Button>}
+  onClose={close}
+  open={isOpen}
+  size="medium"
+  title="Items"
+>
+  <ItemList />
+</BottomSheet>
+```
 
 ```tsx
 <BottomSheet

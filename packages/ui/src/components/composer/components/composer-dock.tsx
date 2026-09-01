@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   composerHorizontalScreenInset,
-  composerMinBottomPadding,
+  getComposerBottomPadding,
   getComposerKeyboardStickyOffset,
 } from '../utils/composer-dock-layout';
 
@@ -44,7 +44,7 @@ export function ComposerDock({
       onLayout={onHeightChange || onLayout ? handleLayout : undefined}
       pointerEvents="box-none"
       style={{
-        paddingBottom: Math.max(bottom, composerMinBottomPadding),
+        paddingBottom: getComposerBottomPadding(bottom),
         paddingHorizontal: composerHorizontalScreenInset,
       }}
     >

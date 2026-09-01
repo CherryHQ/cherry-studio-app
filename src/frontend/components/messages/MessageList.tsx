@@ -1,4 +1,4 @@
-import { ScrollToBottomButton } from '@cherrystudio/ui/components';
+import { ContextMenuScrollBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -104,48 +104,54 @@ export function MessageList({
 
   return (
     <View className="flex-1">
-      <KeyboardAwareLegendList
-        ref={listRef}
-        applyWorkaroundForContentInsetHitTestBug
-        contentContainerStyle={contentContainerStyle}
-        contentInsetAdjustmentBehavior="never"
-        data={messages}
-        {...(dataKey ? { dataKey } : {})}
-        drawDistance={80}
-        estimatedItemSize={300}
-        estimatedHeaderSize={contentTopInset}
-        extraData={extraData}
-        freeze={freeze}
-        getItemType={getMessageRowType}
-        keyExtractor={messageKeyExtractor}
-        keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
-        keyboardLiftBehavior="whenAtEnd"
-        keyboardOffset={keyboardOffset}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={listHeader}
-        {...(!dataKey ? { initialScrollAtEnd: true } : {})}
-        maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-        onContentSizeChange={handleContentSizeChange}
-        onLayout={handleLayout}
-        onLoad={handleLoad}
+      <ContextMenuScrollBoundary
         onMomentumScrollBegin={handleMomentumScrollBegin}
         onMomentumScrollEnd={handleMomentumScrollEnd}
-        onScroll={handleScroll}
         onScrollBeginDrag={handleScrollBeginDrag}
         onScrollEndDrag={handleScrollEndDrag}
-        onStartReached={onLoadOlder ? handleStartReached : undefined}
-        onStartReachedThreshold={0.05}
         onTouchStart={handleTouchStart}
-        // Message parts own local disclosure state. Keep recycling disabled
-        // until that state is explicitly reset with LegendList recycling hooks.
-        recycleItems={false}
-        renderItem={renderMessageRow}
-        scrollEventThrottle={16}
-        scrollsToTop
-        sharedValues={sharedValues}
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-      />
+      >
+        {(scrollHandlers) => (
+          <KeyboardAwareLegendList
+            ref={listRef}
+            {...scrollHandlers}
+            applyWorkaroundForContentInsetHitTestBug
+            contentContainerStyle={contentContainerStyle}
+            contentInsetAdjustmentBehavior="never"
+            data={messages}
+            {...(dataKey ? { dataKey } : {})}
+            drawDistance={80}
+            estimatedItemSize={300}
+            estimatedHeaderSize={contentTopInset}
+            extraData={extraData}
+            freeze={freeze}
+            getItemType={getMessageRowType}
+            keyExtractor={messageKeyExtractor}
+            keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
+            keyboardLiftBehavior="whenAtEnd"
+            keyboardOffset={keyboardOffset}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={listHeader}
+            {...(!dataKey ? { initialScrollAtEnd: true } : {})}
+            maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+            onContentSizeChange={handleContentSizeChange}
+            onLayout={handleLayout}
+            onLoad={handleLoad}
+            onScroll={handleScroll}
+            onStartReached={onLoadOlder ? handleStartReached : undefined}
+            onStartReachedThreshold={0.05}
+            // Message parts own local disclosure state. Keep recycling disabled
+            // until that state is explicitly reset with LegendList recycling hooks.
+            recycleItems={false}
+            renderItem={renderMessageRow}
+            scrollEventThrottle={16}
+            scrollsToTop
+            sharedValues={sharedValues}
+            showsVerticalScrollIndicator={false}
+            className="flex-1"
+          />
+        )}
+      </ContextMenuScrollBoundary>
       {messages.length > 0 ? (
         <ScrollToBottomButton
           accessibilityLabel={t('chat.message.scrollToBottom')}

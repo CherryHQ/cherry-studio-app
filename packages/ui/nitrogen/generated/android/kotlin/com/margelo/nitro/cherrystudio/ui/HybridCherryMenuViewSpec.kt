@@ -53,7 +53,17 @@ abstract class HybridCherryMenuViewSpec: HybridView() {
   abstract var trigger: NativeMenuTrigger
 
   // Methods
+  @DoNotStrip
+  @Keep
+  abstract fun getLongPressMinDuration(): Double
   
+  @DoNotStrip
+  @Keep
+  abstract fun getLongPressMaxDistance(): Double
+  
+  @DoNotStrip
+  @Keep
+  abstract fun showMenu(): Unit
 
   // Default implementation of `HybridObject.toString()`
   override fun toString(): String {

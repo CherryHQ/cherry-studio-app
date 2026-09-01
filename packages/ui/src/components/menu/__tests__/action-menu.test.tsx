@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Menu } from '../menu';
+import { ActionMenu } from '../action-menu';
 
 type NativeMenuProps = {
   children?: ReactNode;
@@ -24,7 +24,7 @@ jest.mock('react-native-nitro-modules', () => {
   };
 });
 
-describe('Menu', () => {
+describe('ActionMenu', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -32,13 +32,13 @@ describe('Menu', () => {
     renderer = undefined;
   });
 
-  it('projects flat actions to the native view and dispatches the selected action', () => {
+  it('projects flat actions with a tap trigger and dispatches the selected action', () => {
     const onEdit = jest.fn();
     const onDelete = jest.fn();
 
     act(() => {
       renderer = create(
-        <Menu
+        <ActionMenu
           items={[
             { checked: false, id: 'edit', label: 'Edit', onPress: onEdit },
             {
@@ -50,16 +50,15 @@ describe('Menu', () => {
               onPress: onDelete,
             },
           ]}
-          trigger="longPress"
         >
           <Text>Open</Text>
-        </Menu>,
+        </ActionMenu>,
       );
     });
 
     const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
 
-    expect(menu.props.trigger).toBe('longPress');
+    expect(menu.props.trigger).toBe('tap');
     expect(menu.props.items).toEqual([
       {
         checked: 'off',
@@ -89,9 +88,9 @@ describe('Menu', () => {
 
     act(() => {
       renderer = create(
-        <Menu items={[{ id: 'known', label: 'Known', onPress }]} trigger="tap">
+        <ActionMenu items={[{ id: 'known', label: 'Known', onPress }]}>
           <Text>Open</Text>
-        </Menu>,
+        </ActionMenu>,
       );
     });
 
@@ -106,12 +105,9 @@ describe('Menu', () => {
   it('forwards a semantic icon token so the native view can resolve its artwork', () => {
     act(() => {
       renderer = create(
-        <Menu
-          items={[{ icon: 'branch', id: 'fork', label: 'Branch', onPress: jest.fn() }]}
-          trigger="tap"
-        >
+        <ActionMenu items={[{ icon: 'branch', id: 'fork', label: 'Branch', onPress: jest.fn() }]}>
           <Text>Open</Text>
-        </Menu>,
+        </ActionMenu>,
       );
     });
 
@@ -122,9 +118,9 @@ describe('Menu', () => {
   it('renders its child directly when no items are available', () => {
     act(() => {
       renderer = create(
-        <Menu items={[]} trigger="tap">
+        <ActionMenu items={[]}>
           <View testID="trigger" />
-        </Menu>,
+        </ActionMenu>,
       );
     });
 

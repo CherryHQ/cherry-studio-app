@@ -7,14 +7,11 @@ import { MainHeaderAgentButton, useMainHeaderAgent } from '../MainHeaderAgentBut
 
 const mockPush = jest.fn();
 const mockSetParams = jest.fn();
+const mockStartNewChat = jest.fn();
 let mockAgent: Agent | undefined;
 let mockAgentId: string | undefined;
 let mockSessionAgentId: string | undefined;
 let mockSessionId: string | undefined;
-
-// This suite covers which Agent the button resolves and where it routes, not
-// how the avatar draws — and the real one pulls in untransformed CherryUI.
-jest.mock('@/frontend/components/avatar', () => ({ AgentAvatar: () => null }));
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({
@@ -22,6 +19,23 @@ jest.mock('expo-router', () => ({
     sessionId: mockSessionId,
   }),
   useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
+}));
+
+jest.mock('@/frontend/components/navigation/chat', () => ({
+  chatRouteParams: (target: { agentId: string; kind: string; sessionId?: string }) => ({
+    agentId: target.agentId,
+    sessionId: target.kind === 'session' ? target.sessionId : undefined,
+  }),
+  parseChatRoute: (params: { agentId?: string; sessionId?: string }) =>
+    params.sessionId
+      ? {
+          status: 'ready',
+          target: { kind: 'session', sessionId: params.sessionId },
+        }
+      : params.agentId
+        ? { status: 'ready', target: { agentId: params.agentId, kind: 'draft' } }
+        : { status: 'empty' },
+  useStartNewChat: () => mockStartNewChat,
 }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
@@ -33,16 +47,16 @@ jest.mock('@/frontend/hooks/agent', () => ({
   }),
 }));
 
-jest.mock('../../components/HeaderAction/HeaderIconButton', () => {
-  const { Pressable: MockPressable } = jest.requireActual('react-native');
-
-  return { HeaderIconButton: MockPressable };
-});
-
 function Harness() {
-  const { agent, openAgent } = useMainHeaderAgent();
+  const { agent } = useMainHeaderAgent();
 
-  return agent ? <MainHeaderAgentButton agent={agent} onPress={openAgent} /> : null;
+  return agent ? <MainHeaderAgentButton agent={agent} onPress={jest.fn()} /> : null;
+}
+
+function HistoryHarness() {
+  const { openAgentHistory } = useMainHeaderAgent();
+
+  return <Pressable onPress={openAgentHistory} testID="history-button" />;
 }
 
 function NewSessionHarness() {
@@ -61,7 +75,7 @@ describe('MainHeaderAgentButton', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAgent = makeAgent();
-    mockAgentId = undefined;
+    mockAgentId = 'agent-1';
     mockSessionAgentId = 'agent-1';
     mockSessionId = 'session-1';
   });
@@ -71,18 +85,17 @@ describe('MainHeaderAgentButton', () => {
     renderer = undefined;
   });
 
-  it('opens the current Agent editor', async () => {
+  it('opens the current Agent history', async () => {
     await act(async () => {
-      renderer = create(<Harness />);
+      renderer = create(<HistoryHarness />);
     });
 
-    const button = renderer?.root.findByProps({ testID: 'current-agent-button' });
+    const button = renderer?.root.findByProps({ testID: 'history-button' });
     await act(async () => button?.props.onPress());
 
-    expect(button?.props.accessibilityLabel).toBe('Peanut');
     expect(mockPush).toHaveBeenCalledWith({
       params: { agentId: 'agent-1' },
-      pathname: '/agents/[agentId]/edit',
+      pathname: '/sessions',
     });
   });
 
@@ -100,17 +113,14 @@ describe('MainHeaderAgentButton', () => {
     ).toBe('Peanut');
   });
 
-  it('keeps the route Agent while the new Session is loading', async () => {
-    mockAgentId = 'agent-1';
+  it('waits for the Session entity to resolve its Agent', async () => {
     mockSessionAgentId = undefined;
 
     await act(async () => {
       renderer = create(<Harness />);
     });
 
-    expect(
-      renderer?.root.findByProps({ testID: 'current-agent-button' }).props.accessibilityLabel,
-    ).toBe('Peanut');
+    expect(renderer?.root.findAllByProps({ testID: 'current-agent-button' })).toHaveLength(0);
   });
 
   it('starts a new Session with the current Agent', async () => {
@@ -127,7 +137,7 @@ describe('MainHeaderAgentButton', () => {
     });
   });
 
-  it('opens Agent selection when the Session Agent was deleted', async () => {
+  it('falls back to another available Agent when the Session Agent was deleted', async () => {
     mockAgent = undefined;
 
     await act(async () => {
@@ -137,7 +147,7 @@ describe('MainHeaderAgentButton', () => {
     const button = renderer?.root.findByProps({ testID: 'new-session-button' });
     await act(async () => button?.props.onPress());
 
-    expect(mockPush).toHaveBeenCalledWith('/agents');
     expect(mockSetParams).not.toHaveBeenCalled();
+    expect(mockStartNewChat).toHaveBeenCalledTimes(1);
   });
 });

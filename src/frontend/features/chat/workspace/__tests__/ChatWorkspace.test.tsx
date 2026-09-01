@@ -41,11 +41,12 @@ jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    ActionMenu: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
-    Menu: ({ children }: { children: ReactNode }) => children,
+    ContextMenu: ({ children }: { children: ReactNode }) => children,
     useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });

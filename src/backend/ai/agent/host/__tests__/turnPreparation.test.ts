@@ -46,6 +46,7 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
+  disabledCapabilities: ['health'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -92,16 +93,15 @@ describe('turn preparation', () => {
       ],
       modelId: createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId),
       reasoningEffort: 'default',
-      temporaryCapabilities: ['web-search'],
     };
 
     const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
 
     expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
-      temporaryCapabilities: new Set(['web-search']),
     });
     expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID);
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
@@ -155,6 +155,18 @@ describe('turn preparation', () => {
     expect(plan.hasMessages).toBe(false);
     expect(plan.runtimeContextCheckpoint).toBeNull();
     expect(plan.sessionTurnIds).toEqual([]);
+  });
+
+  test('keeps an auto-ineligible ask unchanged under the auto approval mode', async () => {
+    const harness = createHarness();
+    harness.getSystemTools.mockResolvedValueOnce([
+      { ...harness.systemTool, autoApprovalEligible: false },
+    ]);
+
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+
+    // The Agent runs in auto mode, but a consent-bearing ask must survive it.
+    expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
 
   test('stops at session admission when the session does not exist', async () => {

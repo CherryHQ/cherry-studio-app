@@ -1,8 +1,10 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
+
 export function PaintingConversationScreen() {
   const params = useLocalSearchParams<{ paintingId?: string | string[] }>();
-  const paintingId = firstParam(params.paintingId);
+  const paintingId = getSingleRouteParam(params.paintingId);
 
   return (
     <Redirect
@@ -11,8 +13,4 @@ export function PaintingConversationScreen() {
       }
     />
   );
-}
-
-function firstParam(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }

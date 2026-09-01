@@ -79,6 +79,54 @@ Before enabling it, verify:
   the frontend observation but does not cancel the Host's active turn.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
+## Page Identity And Cached Data
+
+Every route-bound entity or semantic selection defines a complete page identity, such as a
+Provider id, Agent id, Session id, or usage date. Route parameters are parsed before content renders,
+and query keys include that complete identity even while their observers are disabled.
+
+When identity changes on a reused route instance, local forms, search text, filters, pending actions,
+and other entity-owned state reset through a keyed component boundary. Data from a different
+identity must not be used as placeholder data. Cached data for the same identity may render while it
+refreshes in the background when that product surface permits stale-while-revalidate behavior.
+
+## Chat Identity Contract
+
+The chat route has two complete identities:
+
+- A Session is `{ kind: 'session', sessionId }`.
+- A draft is `{ kind: 'draft', agentId }`.
+
+Every in-app entry constructs one of these targets through `chatHref` or `chatRouteParams`. A
+Session link carries only `sessionId`; the destination reads the Session entity to derive its Agent
+for presentation and composer behavior. Drafts have no Session entity yet, so `agentId` is their
+complete route identity. If a Session no longer exists, the destination shows a loading state while
+it requests the globally most recently active Session, then replaces the missing identity with that
+result. If no Session remains, it uses the same draft or no-Agent fallbacks as an identity-free
+launch.
+
+Opening `/` without an identity restores the globally most recently active Session ordered by its
+persisted `lastActivityAt`. If no Session exists, it opens a draft for the first available Agent,
+then the no-Agent empty state. Restoration renders a loading state, never a previous identity's
+content or the no-Agent empty state as a loading placeholder. Every restoration performs a fresh
+one-row Session request; an earlier result is never used to choose the destination.
+
+| Entry | Destination |
+| --- | --- |
+| Sidebar or Session-list Session row | That Session id |
+| Sidebar dock or chat-header new-chat action | Draft for the current available Agent, otherwise the first Agent |
+| Agent-list row | That Agent's editor |
+| Chat-header Agent picker row | A new draft for the selected Agent |
+| Chat-header history action | `/sessions?agentId=<current Agent>` |
+| Assistant-message fork | The returned fork Session id |
+
+The Agent list manages Agent definitions; the transient header picker changes the Agent for a new
+draft. Keep those responsibilities distinct when adding future Agent entry points.
+
+Correctness belongs to the destination screen and its query/local-state identity. Press-time
+prefetching may improve latency, but navigation must not wait behind a global coordinator or route
+guard.
+
 ## Picker Sheets
 
 Short, single-level local pickers use the package-owned

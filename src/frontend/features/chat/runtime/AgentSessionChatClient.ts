@@ -200,10 +200,7 @@ export class AgentSessionChatClient {
   async startSession(
     agentId: string,
     parts: AgentInputPart[],
-    overrides: Pick<
-      AgentStartSessionInput,
-      'modelId' | 'reasoningEffort' | 'temporaryCapabilities'
-    > = {},
+    overrides: Pick<AgentStartSessionInput, 'modelId' | 'reasoningEffort'> = {},
   ): Promise<AgentSessionView> {
     const session = await this.protocol.startSession({
       agentId,
@@ -236,10 +233,7 @@ export class AgentSessionChatClient {
   async submitMessage(
     sessionId: string,
     parts: AgentInputPart[],
-    overrides: Pick<
-      AgentSubmitMessageInput,
-      'modelId' | 'reasoningEffort' | 'temporaryCapabilities'
-    > = {},
+    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
   ) {
     await this.observe(sessionId);
     return this.protocol.submitMessage({ parts, sessionId, ...overrides });

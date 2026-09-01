@@ -9,6 +9,7 @@ describe('createAgentFormState', () => {
     const state = createAgentFormState({
       avatar: 'agent-avatar-file:a.b.webp',
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
+      disabledCapabilities: ['calendar'],
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
@@ -20,6 +21,7 @@ describe('createAgentFormState', () => {
     // also what the form renders.
     expect(state).toEqual({
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
+      disabledCapabilities: ['calendar'],
       instructions: 'sys',
       modelId: 'openai::gpt-5',
       name: 'Researcher',
@@ -27,11 +29,25 @@ describe('createAgentFormState', () => {
     });
   });
 
-  it('starts a new agent with no avatar draft', () => {
+  it('starts a new agent with no avatar draft and the device groups off', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
+      disabledCapabilities: ['calendar', 'health', 'location', 'reminders'],
       toolApprovalMode: 'default',
     });
+  });
+
+  it('keeps a stored empty deny-list instead of reseeding the create default', () => {
+    const state = createAgentFormState({
+      avatarUri: null,
+      disabledCapabilities: [],
+      instructions: '',
+      modelId: null,
+      name: 'Assistant',
+      toolApprovalMode: 'default',
+    } as unknown as Agent);
+
+    expect(state.disabledCapabilities).toEqual([]);
   });
 });
 
@@ -62,6 +78,7 @@ describe('buildAgentDto', () => {
       // Present in the draft but never in the DTO: the create/update schemas are
       // strict, so leaking it would make the request fail outright.
       avatarUri: 'file:///picker/avatar.jpg',
+      disabledCapabilities: ['web'],
       instructions: 'system prompt',
       modelId: 'openai::gpt-5',
       name: '  Researcher  ',
@@ -72,6 +89,7 @@ describe('buildAgentDto', () => {
     }
 
     expect(dto.value).toEqual({
+      disabledCapabilities: ['web'],
       instructions: 'system prompt',
       modelId: 'openai::gpt-5',
       name: 'Researcher',

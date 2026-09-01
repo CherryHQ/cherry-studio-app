@@ -1,7 +1,16 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { useCallback, useState } from 'react';
+import { duration, easing } from '@cherrystudio/ui/motion';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import {
   ComposerAttachments,
@@ -38,6 +47,15 @@ type ChatInputProps = {
 };
 
 const logger = loggerService.withContext('ChatInput');
+const restingInputHeight = 32;
+const restingActionSlotWidth = restingInputHeight + 8;
+const restingSecondaryControlScale = 0.92;
+const activeToolbarGap = 16;
+const focusTransitionMotion = {
+  duration: duration.base,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
 
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
@@ -72,10 +90,92 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
     useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isInputActive, setIsInputActive] = useState(false);
+  const isInputActiveRef = useRef(false);
+  const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
   useBlurComposerOnVisibleKeyboardHide(inputRef);
+  const focusProgress = useSharedValue(0);
+  const fieldFrameHeight = useSharedValue(restingInputHeight);
+  const morphFrameStyle = useAnimatedStyle(() => {
+    const progress = focusProgress.get();
+
+    return {
+      height: fieldFrameHeight.get() + progress * (activeToolbarGap + restingInputHeight),
+    };
+  });
+  const fieldFrameStyle = useAnimatedStyle(() => {
+    const progress = focusProgress.get();
+
+    return {
+      height: fieldFrameHeight.get(),
+      left: interpolate(progress, [0, 1], [restingActionSlotWidth, 0], Extrapolation.CLAMP),
+      right: interpolate(progress, [0, 1], [restingActionSlotWidth, 0], Extrapolation.CLAMP),
+    };
+  });
+  const controlsRowStyle = useAnimatedStyle(() => {
+    const progress = focusProgress.get();
+
+    return {
+      transform: [
+        {
+          translateY: progress * (fieldFrameHeight.get() + activeToolbarGap),
+        },
+      ],
+    };
+  });
+  // Keep GlassView's backdrop sampling intact: Reanimated opacity on an
+  // ancestor writes a layer alpha that permanently strips the tools' fill.
+  // The closed frame clips these controls after translation instead.
+  const secondaryControlRevealStyle = useAnimatedStyle(() => {
+    const progress = focusProgress.get();
+
+    return {
+      transform: [
+        { translateY: (1 - progress) * restingInputHeight },
+        {
+          scale: interpolate(
+            progress,
+            [0, 1],
+            [restingSecondaryControlScale, 1],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
+  const handleFieldLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
+      if (naturalFieldHeight.current === nextHeight) {
+        return;
+      }
+
+      naturalFieldHeight.current = nextHeight;
+      if (isInputActiveRef.current) {
+        fieldFrameHeight.set(nextHeight);
+      }
+    },
+    [fieldFrameHeight],
+  );
+  const handleInputBlur = useCallback(() => {
+    if (!isInputActiveRef.current) {
+      return;
+    }
+
+    isInputActiveRef.current = false;
+    setIsInputActive(false);
+    focusProgress.set(withTiming(0, focusTransitionMotion));
+    fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
+  }, [fieldFrameHeight, focusProgress]);
+  const handleInputFocus = useCallback(() => {
+    isInputActiveRef.current = true;
+    setIsInputActive(true);
+    focusProgress.set(withTiming(1, focusTransitionMotion));
+    fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
+  }, [fieldFrameHeight, focusProgress]);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setIsModelPickerOpen(false);
@@ -145,32 +245,56 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             streaming={isBusy}
           >
             <ComposerAttachments />
-            <ComposerField />
-            <Composer.Toolbar>
-              <ComposerMenu />
-              <ComposerModelPill
-                icon={
-                  selectedModelItem ? (
-                    <ModelPickerIcon
-                      model={selectedModelItem.model}
-                      provider={selectedModelItem.provider}
-                      providerIconSize={18}
-                      size={20}
-                    />
-                  ) : undefined
-                }
-                label={selectedModelLabel}
-                onPress={openModelPicker}
-              />
-              {/* Grouped rather than written flat, so the gauge stays next to
-                  send instead of trailing the model pill: `Composer.Send` pins
-                  itself right, and anything after the pill would otherwise sit
-                  on the left of the gap it opens. */}
-              <View className="ml-auto flex-row items-center gap-2">
-                {effortGauge}
-                <Composer.Send />
-              </View>
-            </Composer.Toolbar>
+            <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
+              <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
+                <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
+                  <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
+                </View>
+              </Animated.View>
+              <Animated.View
+                className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+                pointerEvents="box-none"
+                style={controlsRowStyle}
+              >
+                {/* The primary actions stay reachable before the field is focused. */}
+                <ComposerMenu />
+                <Animated.View
+                  accessibilityElementsHidden={!isInputActive}
+                  className="min-w-0 shrink"
+                  importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                  pointerEvents={isInputActive ? 'auto' : 'none'}
+                  style={secondaryControlRevealStyle}
+                >
+                  <ComposerModelPill
+                    icon={
+                      selectedModelItem ? (
+                        <ModelPickerIcon
+                          model={selectedModelItem.model}
+                          provider={selectedModelItem.provider}
+                          providerIconSize={18}
+                          size={20}
+                        />
+                      ) : undefined
+                    }
+                    label={selectedModelLabel}
+                    onPress={openModelPicker}
+                  />
+                </Animated.View>
+                <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+                  {effortGauge ? (
+                    <Animated.View
+                      accessibilityElementsHidden={!isInputActive}
+                      importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                      pointerEvents={isInputActive ? 'auto' : 'none'}
+                      style={secondaryControlRevealStyle}
+                    >
+                      {effortGauge}
+                    </Animated.View>
+                  ) : null}
+                  <Composer.Send />
+                </View>
+              </Animated.View>
+            </Animated.View>
           </ComposerSurface>
         )}
       </ChatInputEffortOverlay>

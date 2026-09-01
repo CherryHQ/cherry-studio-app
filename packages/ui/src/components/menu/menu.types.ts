@@ -13,8 +13,12 @@ export type MenuItem = Readonly<{
   onPress: () => void;
 }>;
 
-export type MenuProps = {
+export type ActionMenuProps = {
   children: ReactElement;
   items: readonly MenuItem[];
-  trigger: 'longPress' | 'tap';
+};
+
+export type ContextMenuProps = {
+  children: ReactElement;
+  items: readonly MenuItem[];
 };

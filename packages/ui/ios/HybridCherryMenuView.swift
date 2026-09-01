@@ -19,6 +19,22 @@ final class HybridCherryMenuView: HybridCherryMenuViewSpec {
     var trigger: NativeMenuTrigger = .tap {
         didSet { containerView.trigger = trigger }
     }
+
+    func getLongPressMinDuration() throws -> Double {
+        // Android is the only caller; iOS long press stays UIKit-owned.
+        0
+    }
+
+    func getLongPressMaxDistance() throws -> Double {
+        // Android is the only caller; iOS long press stays UIKit-owned.
+        0
+    }
+
+    func showMenu() throws {
+        // iOS recognition stays system-owned: tap menus present through the UIButton primary
+        // action and long-press menus through UIContextMenuInteraction, which cannot be
+        // presented programmatically. Android is the only caller of this method.
+    }
 }
 
 private final class CherryMenuContainerView: UIView, UIContextMenuInteractionDelegate {

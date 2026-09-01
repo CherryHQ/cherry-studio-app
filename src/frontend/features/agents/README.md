@@ -8,7 +8,8 @@ surfaces.
 
 - `AgentListScreen` and `AgentEditScreen` are exported from `index.ts` for route adapters; the
   editor is shared by the edit and create routes.
-- Tapping a list row opens a new chat for that Agent; the session is created on first send.
+- The list header's plus action opens the create-Agent route.
+- Tapping a list row opens that Agent's editor.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.

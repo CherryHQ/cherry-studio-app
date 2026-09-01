@@ -1,21 +1,25 @@
 import { useCallback, useMemo } from 'react';
-import { callback, getHostComponent } from 'react-native-nitro-modules';
+import { getHostComponent } from 'react-native-nitro-modules';
 
-import type { MenuIcon, MenuProps } from './menu.types';
+import type { MenuIcon, MenuItem } from './menu.types';
 import type {
+  CherryMenuView,
   CherryMenuViewMethods,
   CherryMenuViewProps,
   NativeMenuCheckedState,
   NativeMenuIcon,
+  NativeMenuItem,
 } from './specs/cherry-menu-view.nitro';
 
 const getViewConfig = () =>
   require('../../../nitrogen/generated/shared/json/CherryMenuViewConfig.json');
 
-const NativeCherryMenuView = getHostComponent<CherryMenuViewProps, CherryMenuViewMethods>(
+export const NativeCherryMenuView = getHostComponent<CherryMenuViewProps, CherryMenuViewMethods>(
   'CherryMenuView',
   getViewConfig,
 );
+
+export type NativeCherryMenuRef = CherryMenuView;
 
 function getCheckedState(checked: boolean | undefined): NativeMenuCheckedState {
   if (checked === undefined) {
@@ -29,9 +33,10 @@ function getIcon(icon: MenuIcon | undefined): NativeMenuIcon {
   return icon ?? 'none';
 }
 
-export function Menu({ children, items, trigger }: MenuProps) {
+/** Projects public menu items onto native view props and routes action ids back. */
+export function useNativeMenu(items: readonly MenuItem[]) {
   const actions = useMemo(() => new Map(items.map((item) => [item.id, item.onPress])), [items]);
-  const nativeItems = useMemo(
+  const nativeItems = useMemo<NativeMenuItem[]>(
     () =>
       items.map((item) => ({
         checked: getCheckedState(item.checked),
@@ -50,13 +55,5 @@ export function Menu({ children, items, trigger }: MenuProps) {
     [actions],
   );
 
-  if (items.length === 0) {
-    return children;
-  }
-
-  return (
-    <NativeCherryMenuView items={nativeItems} onAction={callback(onAction)} trigger={trigger}>
-      {children}
-    </NativeCherryMenuView>
-  );
+  return { nativeItems, onAction };
 }

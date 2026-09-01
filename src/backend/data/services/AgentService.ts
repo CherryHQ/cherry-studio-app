@@ -18,6 +18,7 @@ import {
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import { type Agent, DEFAULT_AGENT_TOOL_APPROVAL_MODE } from '@/shared/data/types/agent';
+import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { modelService } from './ModelService';
@@ -36,6 +37,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     avatar: row.avatar,
     avatarUri: null,
     createdAt: timestampToISO(row.createdAt),
+    disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
     id: row.id,
     instructions: row.instructions,
     modelId: row.modelId as UniqueModelId | null,

@@ -13,7 +13,7 @@ import { actionHitSlop, actionStyle, composerActionSize } from '../utils/compose
 export function ComposerAction({
   accessibilityLabel,
   children,
-  className = 'bg-secondary',
+  className,
   disabled = false,
   onPress,
   style,
@@ -21,9 +21,11 @@ export function ComposerAction({
 }: ComposerActionProps) {
   // Glass inside glass renders nothing — the material has nothing behind it to
   // refract, so an untinted button on the composer's own surface is invisible
-  // (measured: not one pixel of change across the circle's edge). Resolving the
-  // fill here and handing it to both branches means callers never have to know.
-  const fill = useResolveClassNames(className);
+  // (measured: not one pixel of change across the circle's edge). Keep the
+  // shipped glass tint while the fallback follows the grouped-surface palette;
+  // an explicit caller fill still drives both branches.
+  const fallbackClassName = className ?? 'bg-grouped-background';
+  const fill = useResolveClassNames(className ?? 'bg-secondary');
   const tintColor = typeof fill.backgroundColor === 'string' ? fill.backgroundColor : undefined;
 
   return (
@@ -38,7 +40,7 @@ export function ComposerAction({
       testID={testID}
     >
       <Surface
-        className={className}
+        className={fallbackClassName}
         cornerRadius={composerActionSize / 2}
         interactive
         style={actionStyle}

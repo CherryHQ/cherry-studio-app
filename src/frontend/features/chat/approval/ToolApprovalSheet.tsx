@@ -48,6 +48,7 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
       title={t('chat.tool.approval.title')}
     >
       <ToolApprovalSheetBody
+        key={approval.approvalId}
         approval={approval}
         onRespond={onRespond}
         pendingCount={approvals.length}
