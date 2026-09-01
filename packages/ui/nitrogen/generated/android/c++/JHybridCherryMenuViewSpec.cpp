@@ -115,6 +115,19 @@ namespace margelo::nitro::cherrystudio::ui {
   }
 
   // Methods
-  
+  double JHybridCherryMenuViewSpec::getLongPressMinDuration() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getLongPressMinDuration");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  double JHybridCherryMenuViewSpec::getLongPressMaxDistance() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<double()>("getLongPressMaxDistance");
+    auto __result = method(_javaPart);
+    return __result;
+  }
+  void JHybridCherryMenuViewSpec::showMenu() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void()>("showMenu");
+    method(_javaPart);
+  }
 
 } // namespace margelo::nitro::cherrystudio::ui

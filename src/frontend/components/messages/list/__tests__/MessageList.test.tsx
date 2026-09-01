@@ -128,6 +128,12 @@ jest.mock('@legendapp/list/keyboard', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  ContextMenuScrollBoundary: ({
+    children,
+    ...handlers
+  }: {
+    children: (handlers: Record<string, unknown>) => ReactNode;
+  }) => children(handlers),
   ScrollToBottomButton: (props: {
     bottomAccessoryHeight?: SharedValue<number>;
     isAtBottom: boolean;
