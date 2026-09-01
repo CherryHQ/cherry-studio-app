@@ -66,7 +66,6 @@ function ToolOutputSection({ output }: { output: unknown }) {
       <MessagePart.SectionTitle title={t('chat.tool.output')} />
       <ToolResultContentRenderer
         contents={[genericToolResultContent(output)]}
-        getTruncatedText={(characterCount) => t('chat.tool.truncated', { count: characterCount })}
         imageAccessibilityLabel={t('chat.attachments.image')}
       />
     </View>

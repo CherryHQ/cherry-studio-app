@@ -32,12 +32,3 @@ export function formatToolResultJson(value: unknown): string {
     return String(value);
   }
 }
-
-export function truncateToolResultText(
-  text: string,
-  maxLength: number,
-  getTruncatedText: (characterCount: number) => string,
-): string {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}\n... ${getTruncatedText(text.length)}`;
-}

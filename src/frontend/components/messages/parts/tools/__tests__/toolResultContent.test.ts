@@ -1,8 +1,4 @@
-import {
-  formatToolResultJson,
-  parseJsonToolResultText,
-  truncateToolResultText,
-} from '../toolResultContent';
+import { formatToolResultJson, parseJsonToolResultText } from '../toolResultContent';
 
 describe('tool result content helpers', () => {
   it('distinguishes JSON text from ordinary text, including JSON null', () => {
@@ -17,9 +13,5 @@ describe('tool result content helpers', () => {
     const circular: { self?: unknown } = {};
     circular.self = circular;
     expect(formatToolResultJson(circular)).toBe('[object Object]');
-  });
-
-  it('truncates one content item with its original character count', () => {
-    expect(truncateToolResultText('abcdef', 3, (count) => `cut ${count}`)).toBe('abc\n... cut 6');
   });
 });

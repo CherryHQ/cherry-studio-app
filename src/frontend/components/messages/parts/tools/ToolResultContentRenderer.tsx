@@ -5,36 +5,24 @@ import { MarkdownText } from '@/frontend/components/markdown';
 import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
 
 import { SourceLink } from '../SourceLink';
-import {
-  formatToolResultJson,
-  truncateToolResultText,
-  type ToolResultContent,
-} from './toolResultContent';
-
-const DEFAULT_MAX_TEXT_LENGTH = 4000;
+import { formatToolResultJson, type ToolResultContent } from './toolResultContent';
 
 type ToolResultContentRendererProps = {
   contents: readonly ToolResultContent[];
-  getTruncatedText: (characterCount: number) => string;
   imageAccessibilityLabel: string;
-  maxTextLength?: number;
 };
 
 export function ToolResultContentRenderer({
   contents,
-  getTruncatedText,
   imageAccessibilityLabel,
-  maxTextLength = DEFAULT_MAX_TEXT_LENGTH,
 }: ToolResultContentRendererProps) {
   return (
     <View className="gap-2">
       {contents.map((content, index) => (
         <ToolResultContentItem
           content={content}
-          getTruncatedText={getTruncatedText}
           imageAccessibilityLabel={imageAccessibilityLabel}
           key={createContentKey(content, index)}
-          maxTextLength={maxTextLength}
         />
       ))}
     </View>
@@ -43,28 +31,17 @@ export function ToolResultContentRenderer({
 
 function ToolResultContentItem({
   content,
-  getTruncatedText,
   imageAccessibilityLabel,
-  maxTextLength,
 }: {
   content: ToolResultContent;
-  getTruncatedText: (characterCount: number) => string;
   imageAccessibilityLabel: string;
-  maxTextLength: number;
 }) {
   switch (content.kind) {
     case 'audio':
     case 'resource':
       return <SelectableText value={content.fallbackText} />;
     case 'code':
-      return (
-        <CodeContent
-          content={content.content}
-          getTruncatedText={getTruncatedText}
-          language={content.language}
-          maxTextLength={maxTextLength}
-        />
-      );
+      return <CodeContent content={content.content} language={content.language} />;
     case 'image':
       return (
         <Image
@@ -75,18 +52,9 @@ function ToolResultContentItem({
         />
       );
     case 'json':
-      return (
-        <CodeContent
-          content={formatToolResultJson(content.value)}
-          getTruncatedText={getTruncatedText}
-          language="json"
-          maxTextLength={maxTextLength}
-        />
-      );
-    case 'markdown': {
-      const markdown = truncateToolResultText(content.content, maxTextLength, getTruncatedText);
-      return <MarkdownText markdown={markdown} selectable={false} />;
-    }
+      return <CodeContent content={formatToolResultJson(content.value)} language="json" />;
+    case 'markdown':
+      return <MarkdownText markdown={content.content} selectable={false} />;
     case 'resource-link':
       return isExternalResourceUri(content.uri) ? (
         <SourceLink label={content.label} url={content.uri} variant="listItem" />
@@ -94,32 +62,12 @@ function ToolResultContentItem({
         <SelectableText value={content.label} />
       );
     case 'text':
-      return (
-        <SelectableText
-          value={truncateToolResultText(content.content, maxTextLength, getTruncatedText)}
-        />
-      );
+      return <SelectableText value={content.content} />;
   }
 }
 
-function CodeContent({
-  content,
-  getTruncatedText,
-  language,
-  maxTextLength,
-}: {
-  content: string;
-  getTruncatedText: (characterCount: number) => string;
-  language?: string;
-  maxTextLength: number;
-}) {
-  const truncatedContent = truncateToolResultText(content, maxTextLength, getTruncatedText);
-  return (
-    <MarkdownText
-      markdown={createCodeBlockMarkdown(truncatedContent, language)}
-      selectable={false}
-    />
-  );
+function CodeContent({ content, language }: { content: string; language?: string }) {
+  return <MarkdownText markdown={createCodeBlockMarkdown(content, language)} selectable={false} />;
 }
 
 function SelectableText({ value }: { value: string }) {

@@ -28,7 +28,6 @@ type McpToolPartProps = {
 };
 
 const MAX_ARG_VALUE_LENGTH = 1200;
-const MAX_OUTPUT_TEXT_LENGTH = 4000;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
@@ -91,11 +90,7 @@ function McpOutputSection({ normalized }: { normalized: NormalizedMcpResult }) {
       <MessagePart.SectionTitle title={t('chat.mcpTool.response')} />
       <ToolResultContentRenderer
         contents={visibleContent}
-        getTruncatedText={(characterCount) =>
-          t('chat.mcpTool.truncated', { count: characterCount })
-        }
         imageAccessibilityLabel={t('chat.attachments.image')}
-        maxTextLength={MAX_OUTPUT_TEXT_LENGTH}
       />
     </View>
   );
