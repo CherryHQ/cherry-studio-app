@@ -26,14 +26,16 @@ export type McpCallToolResult = {
 };
 
 export type NormalizedMcpContent =
-  | { kind: 'audio'; mimeType: string }
+  | { data?: string; kind: 'audio'; mimeType: string }
   | { data: string; kind: 'image'; mimeType: string }
-  | { kind: 'resource'; mimeType: string; uri: string }
+  | { kind: 'json'; value: unknown }
+  | { data?: string; kind: 'resource'; mimeType: string; text?: string; uri: string }
   | { kind: 'resource-link'; mimeType: string; uri: string }
   | { kind: 'text'; text: string };
 
 export type NormalizedMcpResult = {
   content: NormalizedMcpContent[];
+  isError: boolean;
   isMissing: boolean;
 };
 
@@ -41,31 +43,43 @@ const MISSING_RESULT_SUMMARY = '[MCP tool returned no result]';
 
 export function normalizeMcpResult(result: unknown): NormalizedMcpResult {
   if (result === undefined || result === null) {
-    return { content: [], isMissing: true };
+    return { content: [], isError: false, isMissing: true };
   }
 
   if (typeof result === 'string') {
-    return { content: [{ kind: 'text', text: result }], isMissing: false };
+    return { content: [{ kind: 'text', text: result }], isError: false, isMissing: false };
   }
 
   if (!isRecord(result)) {
-    return { content: [{ kind: 'text', text: stringify(result) }], isMissing: false };
+    return { content: [{ kind: 'json', value: result }], isError: false, isMissing: false };
   }
 
+  const isError = result.isError === true;
+
   if (typeof result.content === 'string') {
-    return { content: [{ kind: 'text', text: result.content }], isMissing: false };
+    return { content: [{ kind: 'text', text: result.content }], isError, isMissing: false };
+  }
+
+  if (result.content === undefined && result.structuredContent !== undefined) {
+    return {
+      content: [{ kind: 'json', value: result.structuredContent }],
+      isError,
+      isMissing: false,
+    };
   }
 
   if (!Array.isArray(result.content)) {
-    return { content: [{ kind: 'text', text: stringify(result) }], isMissing: false };
+    return { content: [{ kind: 'json', value: result }], isError, isMissing: false };
   }
 
   const content = result.content.map(normalizeContentItem);
+  // MCP servers commonly mirror structured content into a text block for compatibility.
+  // Prefer the ordered content blocks and use structured content only as an empty-result fallback.
   if (content.length === 0 && result.structuredContent !== undefined) {
-    content.push({ kind: 'text', text: stringify(result.structuredContent) });
+    content.push({ kind: 'json', value: result.structuredContent });
   }
 
-  return { content, isMissing: false };
+  return { content, isError, isMissing: false };
 }
 
 export function mcpResultToTextSummary(result: McpCallToolResult | undefined): string {
@@ -79,7 +93,7 @@ export function mcpResultToTextSummary(result: McpCallToolResult | undefined): s
 
 function normalizeContentItem(value: unknown): NormalizedMcpContent {
   if (!isRecord(value) || typeof value.type !== 'string') {
-    return { kind: 'text', text: stringify(value) };
+    return { kind: 'json', value };
   }
 
   if (value.type === 'text' && typeof value.text === 'string') {
@@ -96,23 +110,27 @@ function normalizeContentItem(value: unknown): NormalizedMcpContent {
 
   if (value.type === 'audio') {
     return {
+      ...(typeof value.data === 'string' ? { data: value.data } : {}),
       kind: 'audio',
       mimeType: typeof value.mimeType === 'string' ? value.mimeType : 'audio/mpeg',
     };
   }
 
   if (value.type === 'resource' && isRecord(value.resource)) {
+    const mimeType =
+      typeof value.resource.mimeType === 'string'
+        ? value.resource.mimeType
+        : 'application/octet-stream';
+    const uri = typeof value.resource.uri === 'string' ? value.resource.uri : 'unknown';
     if (typeof value.resource.text === 'string') {
-      return { kind: 'text', text: value.resource.text };
+      return { kind: 'resource', mimeType, text: value.resource.text, uri };
     }
     if (typeof value.resource.blob === 'string') {
       return {
+        data: value.resource.blob,
         kind: 'resource',
-        mimeType:
-          typeof value.resource.mimeType === 'string'
-            ? value.resource.mimeType
-            : 'application/octet-stream',
-        uri: typeof value.resource.uri === 'string' ? value.resource.uri : 'unknown',
+        mimeType,
+        uri,
       };
     }
   }
@@ -125,19 +143,24 @@ function normalizeContentItem(value: unknown): NormalizedMcpContent {
     };
   }
 
-  return { kind: 'text', text: stringify(value) };
+  return { kind: 'json', value };
 }
 
 function contentToModelText(content: NormalizedMcpContent): string {
   switch (content.kind) {
     case 'text':
       return content.text;
+    case 'json':
+      return stringify(content.value);
     case 'image':
       return `[Image: ${content.mimeType}, delivered to user]`;
     case 'audio':
       return `[Audio: ${content.mimeType}, preview unavailable in app]`;
     case 'resource':
-      return `[Resource: ${content.mimeType}, uri=${content.uri}, preview unavailable in app]`;
+      return (
+        content.text ??
+        `[Resource: ${content.mimeType}, uri=${content.uri}, preview unavailable in app]`
+      );
     case 'resource-link':
       return `[Resource link: ${content.mimeType}, uri=${content.uri}]`;
   }

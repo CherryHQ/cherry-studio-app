@@ -98,6 +98,7 @@
   "chat.tool.result": "结果",
   "chat.tool.runDenied": "拒绝运行",
   "chat.tool.running": "运行中",
+  "chat.tool.truncated": "已截断（{{count}} 字符）",
   "chat.tool.approval.allow": "允许",
   "chat.tool.approval.deny": "拒绝",
   "chat.tool.approval.description": "助手请求运行以下工具。",

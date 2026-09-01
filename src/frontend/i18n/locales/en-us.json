@@ -98,6 +98,7 @@
   "chat.tool.result": "Result",
   "chat.tool.runDenied": "Run denied",
   "chat.tool.running": "Running",
+  "chat.tool.truncated": "truncated ({{count}} chars)",
   "chat.tool.approval.allow": "Allow",
   "chat.tool.approval.deny": "Deny",
   "chat.tool.approval.description": "The assistant wants to run this tool.",

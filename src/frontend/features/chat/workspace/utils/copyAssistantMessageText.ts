@@ -1,3 +1,4 @@
+import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 export function copyAssistantMessageText(parts: readonly CherryMessagePart[]): string {
@@ -7,7 +8,7 @@ export function copyAssistantMessageText(parts: readonly CherryMessagePart[]): s
         case 'text':
           return part.text;
         case 'data-code':
-          return `\`\`\`${part.data.language}\n${part.data.content}\n\`\`\``;
+          return createCodeBlockMarkdown(part.data.content, part.data.language);
         case 'data-compact':
         case 'data-translation':
           return part.data.content;
