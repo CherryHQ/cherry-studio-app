@@ -3,20 +3,24 @@ import { cn } from '@cherrystudio/ui/utils';
 import { Pressable, Text, View } from 'react-native';
 
 import type { HeaderActionProps } from './HeaderAction.types';
-import { HEADER_ACTION_BASE_CLASS_NAME, HEADER_ICON_ACTION_CLASS_NAME } from './headerActionStyles';
+import {
+  HEADER_ACTION_BASE_CLASS_NAME,
+  HEADER_ICON_ACTION_CLASS_NAMES,
+} from './headerActionStyles';
 import { HeaderIconButton } from './HeaderIconButton';
 
 /** Owns the visual and interaction contract for every standard top-bar action. */
-export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
+export function HeaderAction({
+  action,
+  targetSize = 'surface',
+  tone = 'default',
+}: HeaderActionProps) {
   const contentClassName = tone === 'inverse' ? 'text-constant-white' : 'text-foreground';
-
-  if (action.hidden) {
-    return null;
-  }
+  const iconActionClassName = HEADER_ICON_ACTION_CLASS_NAMES[targetSize];
 
   switch (action.type) {
     case 'custom':
-      return <View className={HEADER_ICON_ACTION_CLASS_NAME}>{action.element}</View>;
+      return <View className={iconActionClassName}>{action.element}</View>;
 
     case 'menu': {
       const Icon = action.icon;
@@ -27,7 +31,7 @@ export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
             accessibilityLabel={action.accessibilityLabel}
             accessibilityRole="button"
             accessibilityState={{ disabled: action.disabled }}
-            className={cn(HEADER_ICON_ACTION_CLASS_NAME, action.disabled && 'opacity-50')}
+            className={cn(iconActionClassName, action.disabled && 'opacity-50')}
             pointerEvents={action.disabled ? 'none' : 'auto'}
           >
             <Icon className={cn('size-6', contentClassName)} />
@@ -44,7 +48,8 @@ export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
           accessibilityState={{ disabled: action.disabled }}
           className={cn(
             HEADER_ACTION_BASE_CLASS_NAME,
-            'min-h-10 px-3 active:opacity-60',
+            targetSize === 'touch-target' ? 'min-h-12 min-w-12' : 'min-h-10',
+            'px-3 active:opacity-60',
             action.disabled && 'opacity-50',
           )}
           disabled={action.disabled}
@@ -62,6 +67,7 @@ export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
           accessibilityLabel={action.accessibilityLabel}
           disabled={action.disabled}
           onPress={action.onPress}
+          targetSize={targetSize}
         >
           <Icon className={cn('size-6', contentClassName)} />
         </HeaderIconButton>

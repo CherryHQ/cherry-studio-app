@@ -124,9 +124,9 @@ describe('RouteHeader.android', () => {
     );
 
     const headerRight = getOptions().headerRight as () => ReactElement<{
-      children: ReactElement<{ action: { items: readonly unknown[] } }>[];
+      actions: readonly { items?: readonly unknown[] }[];
     }>;
-    expect(headerRight().props.children[0]?.props.action.items).toBe(menuItems);
+    expect(headerRight().props.actions[0]?.items).toBe(menuItems);
   });
 
   async function renderRouteHeader(
@@ -146,9 +146,9 @@ describe('RouteHeader.android', () => {
 
   function getLeadingAction() {
     const headerLeft = getOptions().headerLeft as () => ReactElement<{
-      children: ReactElement<{ action: { accessibilityLabel: string } }>[];
+      actions: readonly { accessibilityLabel?: string }[];
     }>;
-    const action = headerLeft().props.children[0]?.props.action;
+    const action = headerLeft().props.actions[0];
 
     if (!action) {
       throw new Error('RouteHeader leading action was not rendered.');

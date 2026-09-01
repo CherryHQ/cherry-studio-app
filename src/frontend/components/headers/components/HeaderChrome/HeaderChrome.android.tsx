@@ -1,9 +1,8 @@
 import { Stack } from 'expo-router';
 import { useMemo } from 'react';
-import { View } from 'react-native';
 
 import { headerScreenOptions } from '../../headerScreenOptions';
-import { HeaderAction } from '../HeaderAction';
+import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
 
 /** Mounts the shared header contract through Android native-stack options. */
@@ -16,23 +15,13 @@ export function HeaderChrome({
   titleElement,
 }: HeaderChromeProps) {
   const leftContent = useMemo(
-    () => (
-      <View className="flex-row items-center gap-2">
-        {leftActions.map((action) => (
-          <HeaderAction action={action} key={action.key} tone={actionTone} />
-        ))}
-      </View>
-    ),
+    () => <HeaderActionGroup actions={leftActions} placement="left" tone={actionTone} />,
     [actionTone, leftActions],
   );
   const rightContent = useMemo(
     () =>
       rightActions && rightActions.length > 0 ? (
-        <View className="flex-row items-center gap-2">
-          {rightActions.map((action) => (
-            <HeaderAction action={action} key={action.key} tone={actionTone} />
-          ))}
-        </View>
+        <HeaderActionGroup actions={rightActions} placement="right" tone={actionTone} />
       ) : undefined,
     [actionTone, rightActions],
   );
