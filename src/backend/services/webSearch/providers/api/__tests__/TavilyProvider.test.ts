@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import tavilyResponse from '../../__tests__/fixtures/tavily-response.json';
 import { TavilyProvider } from '../TavilyProvider';
-import { createMockJsonRequester } from './_webSearchProviderTestUtils';
+import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,

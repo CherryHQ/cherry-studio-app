@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import zhipuResponseFixture from '../../__tests__/fixtures/zhipu-response.json';
 import { ZhipuProvider } from '../ZhipuProvider';
-import { createMockJsonRequester } from './_webSearchProviderTestUtils';
+import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 2,

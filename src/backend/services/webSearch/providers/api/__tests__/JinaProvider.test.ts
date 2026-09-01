@@ -5,7 +5,7 @@ import { JinaProvider } from '../JinaProvider';
 import {
   createMockJsonRequester,
   type MockWebSearchJsonRequester,
-} from './_webSearchProviderTestUtils';
+} from './webSearchJsonRequesterMocks';
 
 const config: WebSearchExecutionConfig = {
   compression: { cutoffLimit: 2000, method: 'none' },

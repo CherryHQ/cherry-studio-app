@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import exaResponseFixture from '../../__tests__/fixtures/exa-response.json';
 import { ExaProvider } from '../ExaProvider';
-import { createMockJsonRequester } from './_webSearchProviderTestUtils';
+import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
