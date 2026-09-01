@@ -76,7 +76,7 @@ describe('Composer.Dock', () => {
     const stickyView = renderer!.root.findByProps({ testID: 'keyboard-sticky-view' });
     const layoutEvent = { nativeEvent: { layout: { height: 126 } } };
 
-    expect(container.props.style).toEqual({ paddingBottom: 34, paddingHorizontal: 16 });
+    expect(container.props.style).toEqual({ paddingBottom: 38, paddingHorizontal: 16 });
     expect(stickyView.props.offset).toEqual({ opened: 26 });
 
     act(() => container.props.onLayout(layoutEvent));
@@ -91,11 +91,11 @@ describe('Composer.Dock', () => {
     });
 
     expect(dockLayout).toMatchObject({
-      contentBottomInset: 130,
-      inputHeight: 122,
+      contentBottomInset: 134,
+      inputHeight: 126,
       keyboardOffset: 26,
     });
-    expect(dockLayout?.inputHeightShared.value).toBe(122);
+    expect(dockLayout?.inputHeightShared.value).toBe(126);
 
     act(() => dockLayout?.handleInputHeightChange(140.2));
 
@@ -104,7 +104,7 @@ describe('Composer.Dock', () => {
 
     act(() => dockLayout?.handleInputHeightChange(20));
 
-    expect(dockLayout).toMatchObject({ contentBottomInset: 130, inputHeight: 122 });
+    expect(dockLayout).toMatchObject({ contentBottomInset: 134, inputHeight: 126 });
     expect(dockLayout?.inputHeightShared.value).toBe(20);
   });
 
@@ -120,7 +120,7 @@ describe('Composer.Dock', () => {
     });
 
     expect(renderer!.root.findByProps({ pointerEvents: 'box-none' }).props.style).toEqual({
-      paddingBottom: 8,
+      paddingBottom: 12,
       paddingHorizontal: 16,
     });
     expect(renderer!.root.findByProps({ testID: 'keyboard-sticky-view' }).props.offset).toEqual({

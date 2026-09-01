@@ -5,12 +5,14 @@
 const actionIconSize = 24;
 /** The toolbar buttons: a circle sized to its icon rather than to its reach. */
 export const composerActionSize = actionIconSize + 8;
-export const surfaceRadius = 24;
+// A 32pt radius keeps the 56pt resting surface on the shared radius scale and
+// gives its corners a continuous capsule silhouette without enlarging actions.
+export const surfaceRadius = 32;
 // The toolbar's buttons carry their own surface, so the padding is measured to
 // their edge rather than to their icons' ink.
 const surfacePaddingHorizontal = 12;
-const surfacePaddingTop = 8;
-const surfacePaddingBottom = 8;
+const surfacePaddingTop = 12;
+const surfacePaddingBottom = 12;
 const toolbarGap = 12;
 // Between the tools themselves. Narrower than the gap above the row: they are
 // one band, and the row is a separate thing from the field.
@@ -45,6 +47,7 @@ export const actionHitSlop = (44 - composerActionSize) / 2;
 // Geometry lives in `style`, not className: GlassView doesn't take className, so
 // this is the only way both surface branches stay pixel-identical.
 export const surfaceStyle = {
+  borderCurve: 'continuous',
   paddingBottom: surfacePaddingBottom,
   paddingHorizontal: surfacePaddingHorizontal,
   paddingTop: surfacePaddingTop,
