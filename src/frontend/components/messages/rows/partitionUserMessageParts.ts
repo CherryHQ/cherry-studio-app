@@ -23,10 +23,14 @@ export function partitionUserMessageParts(message: MessageListItem): Partitioned
 
   const attachments: UserMessageAttachmentPart[] = [];
   const bodyParts: CherryMessagePart[] = [];
+  const bodyPartKeys: string[] = [];
 
   parts.forEach((part, index) => {
     if (part.type !== 'file') {
       bodyParts.push(part);
+      if (message.data.partKeys) {
+        bodyPartKeys.push(message.data.partKeys[index] ?? `${message.id}-${part.type}-${index}`);
+      }
       return;
     }
 
@@ -46,7 +50,11 @@ export function partitionUserMessageParts(message: MessageListItem): Partitioned
         ? message
         : {
             ...message,
-            data: { ...message.data, parts: bodyParts },
+            data: {
+              ...message.data,
+              ...(message.data.partKeys ? { partKeys: bodyPartKeys } : {}),
+              parts: bodyParts,
+            },
           },
   };
 }

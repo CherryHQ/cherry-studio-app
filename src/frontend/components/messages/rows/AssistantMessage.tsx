@@ -1,9 +1,8 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import Animated from 'react-native-reanimated';
+import { View } from 'react-native';
 
-import { useAssistantMessageSlideInStyle } from '../motion/useAssistantMessageSlideInStyle';
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
 
@@ -41,13 +40,10 @@ export const AssistantMessage = memo(function AssistantMessage({
   isTextSelectionEnabled = true,
   message,
 }: AssistantMessageProps) {
-  // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
-  const slideInStyle = useAssistantMessageSlideInStyle(message.id);
-
   return (
-    <Animated.View className="w-full gap-2" style={slideInStyle}>
+    <View className="w-full gap-2">
       <AssistantMessageBody isTextSelectionEnabled={isTextSelectionEnabled} message={message} />
       {children}
-    </Animated.View>
+    </View>
   );
 });

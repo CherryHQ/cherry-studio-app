@@ -11,6 +11,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { type PendingToolApproval, ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import {
+  createAgentMessageListProjectionCache,
   mergeAgentMessageViews,
   toAgentMessageListItems,
   useAgentChatActions,
@@ -35,7 +36,6 @@ type ChatWorkspaceProps = {
   contentBottomInset: number;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
-  renderGateKey: string;
   sessionId: string;
 };
 
@@ -45,7 +45,6 @@ export function ChatWorkspace({
   contentBottomInset,
   keyboardOffset,
   messageWindow,
-  renderGateKey,
   isAssistantToolbarEnabled,
   sessionId,
 }: ChatWorkspaceProps) {
@@ -59,7 +58,12 @@ export function ChatWorkspace({
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],
   );
-  const listMessages = useMemo(() => toAgentMessageListItems(mergedMessages), [mergedMessages]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId keys the cache lifetime, not its contents
+  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [sessionId]);
+  const listMessages = useMemo(
+    () => toAgentMessageListItems(mergedMessages, projectionCache),
+    [mergedMessages, projectionCache],
+  );
   const assistantPresentation = useMemo(
     () => ({
       avatarUri: assistantAvatarUri,
@@ -112,8 +116,8 @@ export function ChatWorkspace({
     isLoadingInitial,
     messageCount: messages.length,
   });
-  const { isCoverVisible, listRenderKey, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey,
+  const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
+    renderGateKey: sessionId,
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(headerHeight);
@@ -145,11 +149,12 @@ export function ChatWorkspace({
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
       >
         <MessageList
-          key={listRenderKey}
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
+          dataKey={sessionId}
           enteringMessageId={live.enteringUserMessageId}
           extraData={messageListExtraData}
+          initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}

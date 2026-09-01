@@ -1,8 +1,6 @@
 import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 
-import { useUserMessageSlideInStyle } from '../motion/useUserMessageSlideInStyle';
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
 import { partitionUserMessageParts } from './partitionUserMessageParts';
@@ -17,11 +15,10 @@ type UserMessageProps = {
 };
 
 export const UserMessage = memo(function UserMessage({ message }: UserMessageProps) {
-  const slideInStyle = useUserMessageSlideInStyle(message.id);
   const { attachments, bodyMessage } = useMemo(() => partitionUserMessageParts(message), [message]);
 
   return (
-    <Animated.View className="w-full items-end" style={slideInStyle}>
+    <View className="w-full items-end">
       <View className="max-w-[88%]">
         <View className="items-end gap-2">
           {attachments.length > 0 ? <UserMessageAttachments attachments={attachments} /> : null}
@@ -36,7 +33,7 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
           ) : null}
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 });
 

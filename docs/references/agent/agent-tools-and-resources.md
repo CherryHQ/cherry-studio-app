@@ -153,6 +153,13 @@ catalog tools for the active model loop:
 - `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
   `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
 
+The Pi binding keeps a per-turn inspected-name ledger. Each tool whose signature was returned by
+`tool_search` or `tool_describe` joins that ledger. Calling an uninspected tool does not enter its
+approval or execution boundary: the failed meta result returns the bounded signature and records
+the name so a corrected retry can proceed. Before dispatch, `tool_call` also validates `params`
+against the frozen MCP JSON Schema; a mismatch returns the same bounded signature without invoking
+the target.
+
 These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
 and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives
 the bounded descriptions and signatures, while Runtime output and persistence keep only compact
