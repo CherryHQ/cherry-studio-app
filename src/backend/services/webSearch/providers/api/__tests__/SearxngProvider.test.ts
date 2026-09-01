@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import searxngSearchResponse from '../../__tests__/fixtures/searxng-search-response.json';
 import { SearxngProvider } from '../SearxngProvider';
-import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
+import { createMockJsonRequester } from './_webSearchJsonRequesterMocks';
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {

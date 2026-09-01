@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import firecrawlResponse from '../../__tests__/fixtures/firecrawl-response.json';
 import { FirecrawlProvider } from '../FirecrawlProvider';
-import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
+import { createMockJsonRequester } from './_webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,

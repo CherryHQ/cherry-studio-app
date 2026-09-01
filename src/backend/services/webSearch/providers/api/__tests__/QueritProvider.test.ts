@@ -7,7 +7,7 @@ import { QueritProvider } from '../QueritProvider';
 import {
   createMockJsonRequester,
   createRejectedJsonRequester,
-} from './webSearchJsonRequesterMocks';
+} from './_webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,

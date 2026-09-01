@@ -3,7 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import bochaResponse from '../../__tests__/fixtures/bocha-response.json';
 import { BochaProvider } from '../BochaProvider';
-import { createMockJsonRequester } from './webSearchJsonRequesterMocks';
+import { createMockJsonRequester } from './_webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,

@@ -2,26 +2,27 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 
-describe('WebSearchService', () => {
-  const originalFetch = global.fetch;
+import { requestWebSearchJson, type WebSearchJsonRequester } from '../http/requestWebSearchJson';
 
-  afterEach(() => {
-    global.fetch = originalFetch;
+jest.mock('../http/requestWebSearchJson', () => ({
+  requestWebSearchJson: jest.fn(),
+}));
+
+const requestWebSearchJsonMock =
+  requestWebSearchJson as jest.MockedFunction<WebSearchJsonRequester>;
+
+describe('WebSearchService', () => {
+  beforeEach(() => {
+    requestWebSearchJsonMock.mockReset();
   });
 
   test('checks provider with temporary selected api key', async () => {
-    const fetchMock = jest.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          query: 'test query',
-          request_id: 'request-1',
-          response_time: 0.1,
-          results: [{ title: 'OK', content: 'content', url: 'https://example.com' }],
-        }),
-        { status: 200 },
-      ),
-    );
-    global.fetch = fetchMock;
+    requestWebSearchJsonMock.mockResolvedValue({
+      query: 'test query',
+      request_id: 'request-1',
+      response_time: 0.1,
+      results: [{ title: 'OK', content: 'content', url: 'https://example.com' }],
+    });
 
     const service = new WebSearchService(createPreferenceService());
 
@@ -40,26 +41,25 @@ describe('WebSearchService', () => {
       }),
     ).resolves.toEqual({ valid: true });
 
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer selected-key');
+    expect(requestWebSearchJsonMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer selected-key' }),
+        method: 'POST',
+        providerId: 'tavily',
+        url: 'https://api.tavily.com/search',
+      }),
+    );
   });
 
   test('returns the results it did get when one keyword request fails', async () => {
-    const fetchMock = jest
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            query: 'first',
-            request_id: 'request-1',
-            response_time: 0.1,
-            results: [{ title: 'First', content: 'first content', url: 'https://example.com/a' }],
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response('nope', { status: 500 }));
-    global.fetch = fetchMock;
+    requestWebSearchJsonMock
+      .mockResolvedValueOnce({
+        query: 'first',
+        request_id: 'request-1',
+        response_time: 0.1,
+        results: [{ title: 'First', content: 'first content', url: 'https://example.com/a' }],
+      })
+      .mockRejectedValueOnce(new Error('nope'));
 
     const service = new WebSearchService(
       createPreferenceService({
