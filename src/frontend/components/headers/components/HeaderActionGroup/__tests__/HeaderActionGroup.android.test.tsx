@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react';
-import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { HeaderActionGroup } from '../HeaderActionGroup.android';
@@ -49,7 +48,9 @@ describe('HeaderActionGroup.android', () => {
 
     const group = renderer!.root.findByProps({ className: 'relative flex-row items-center' });
     const surface = group.findByProps({ pointerEvents: 'none' });
-    const actions = renderer!.root.findAllByType(Pressable);
+    const actions = renderer!.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
+    );
 
     expect(surface.props.className).toContain('absolute inset-1');
     expect(actions).toHaveLength(2);
