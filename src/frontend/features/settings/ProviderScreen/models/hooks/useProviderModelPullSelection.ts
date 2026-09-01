@@ -25,7 +25,7 @@ export function useProviderModelPullSelection({
   preview: ProviderModelPullPreview;
 }) {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<UniqueModelId>>(() =>
-    getDefaultSelection(preview),
+    createDefaultSelection(),
   );
   const [isApplying, setIsApplying] = useState(false);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
@@ -35,7 +35,7 @@ export function useProviderModelPullSelection({
 
   if (lastPreviewKey !== previewKey) {
     setLastPreviewKey(previewKey);
-    setSelectedIds(getDefaultSelection(preview));
+    setSelectedIds(createDefaultSelection());
   }
 
   const applySelection = useCallback(async () => {
@@ -92,16 +92,9 @@ export function useProviderModelPullSelection({
   };
 }
 
-/**
- * Every model the provider has gained, and none of the ones it has dropped.
- *
- * Taking the whole catalogue is what a pull is usually for, so ticking the new
- * models one by one is work the screen can do for the user. The other half is
- * left alone: dropping a model the user has been chatting with is not a thing
- * to arm on their behalf, and an unread confirmation would do exactly that.
- */
-function getDefaultSelection(preview: ProviderModelPullPreview): ReadonlySet<UniqueModelId> {
-  return new Set(preview.added.map((model) => model.id));
+/** A remote catalogue can contain hundreds of models; adding any of them stays explicit. */
+function createDefaultSelection(): ReadonlySet<UniqueModelId> {
+  return new Set();
 }
 
 function getPreviewKey(preview: ProviderModelPullPreview): string {

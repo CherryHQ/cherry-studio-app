@@ -62,6 +62,7 @@ and key it ran with, so picking another one stops showing it.
 ## Model Creation
 
 `ProviderModelAddScreen` owns both synchronization and manual creation as two modes on one page. The
-sync preview keeps search and multi-selection in place; the manual mode keeps the model form. Both
-modes commit through the same visible Save action. The provider detail model tab exposes creation as
-its single right-header plus action; its content starts directly with search and the model list.
+sync preview keeps search and multi-selection in place and commits through a bottom action that
+names the number of changes. The manual mode keeps the model form and its Add Model header action.
+The provider detail model tab exposes creation as its single right-header plus action; its content
+starts directly with search and the model list.

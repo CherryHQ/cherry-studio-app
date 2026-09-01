@@ -70,9 +70,7 @@ export default function ProviderModelAddScreen() {
           title={t(
             setupFlow === 'true'
               ? 'settings.provider.models.setupTitle'
-              : mode === 'manual'
-                ? 'settings.provider.models.addTitle'
-                : 'settings.provider.models.pullPreviewTitle',
+              : 'settings.provider.models.addTitle',
           )}
         />
         <ContentState.Loading
@@ -245,9 +243,6 @@ function ProviderModelAddForm({
   );
   const handleSyncSubmit = useCallback(() => {
     if (selectedIds.size === 0) {
-      if (!isSetupFlow) {
-        completeFlow();
-      }
       return;
     }
 
@@ -257,28 +252,18 @@ function ProviderModelAddForm({
     }
 
     alert.confirm({
-      confirmLabel: t('common.save'),
+      confirmLabel: t('settings.provider.models.pullApplySelected', {
+        count: selectedIds.size,
+      }),
       description: t('settings.provider.models.syncRemoveMessage', {
         count: selectedMissingCount,
       }),
       onConfirm: applySyncSelection,
       title: t('settings.provider.models.syncRemoveTitle'),
     });
-  }, [
-    alert,
-    applySyncSelection,
-    completeFlow,
-    isSetupFlow,
-    selectedIds.size,
-    selectedMissingCount,
-    t,
-  ]);
+  }, [alert, applySyncSelection, selectedIds.size, selectedMissingCount, t]);
   const isSaving = isSubmitting || isApplying;
-  const isSaveDisabled =
-    activeMode === 'manual'
-      ? isSubmitting || !canSubmit
-      : !preview || isApplying || (isSetupFlow && selectedIds.size === 0);
-  const isSyncDoneAction = activeMode === 'sync' && selectedIds.size === 0 && !isSetupFlow;
+  const isManualSubmitDisabled = isSubmitting || !canSubmit;
   // Setup hides the switch to keep first-time configuration on a single track.
   // A sync that came back with nothing to add leaves no track: a self-hosted
   // endpoint that does not serve a model list still has to be given one model
@@ -286,30 +271,19 @@ function ProviderModelAddForm({
   const showsModeTabs = !isSetupFlow || hasSyncComeBackEmpty;
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () =>
-      activeMode === 'sync' && !preview
+      activeMode === 'sync'
         ? []
         : [
             {
-              accessibilityLabel: t(isSyncDoneAction ? 'common.done' : 'common.save'),
-              disabled: isSaveDisabled,
-              key: 'save-model',
-              label: isSaving
-                ? t('common.saving')
-                : t(isSyncDoneAction ? 'common.done' : 'common.save'),
-              onPress: activeMode === 'manual' ? () => void handleSubmit() : handleSyncSubmit,
+              accessibilityLabel: t('settings.provider.models.addSubmit'),
+              disabled: isManualSubmitDisabled,
+              key: 'add-model',
+              label: isSaving ? t('common.saving') : t('settings.provider.models.add'),
+              onPress: () => void handleSubmit(),
               type: 'label',
             },
           ],
-    [
-      activeMode,
-      handleSubmit,
-      handleSyncSubmit,
-      isSaveDisabled,
-      isSaving,
-      isSyncDoneAction,
-      preview,
-      t,
-    ],
+    [activeMode, handleSubmit, isManualSubmitDisabled, isSaving, t],
   );
   const modeItems = useMemo(
     () => [
@@ -356,11 +330,7 @@ function ProviderModelAddForm({
         onBack={requestClose}
         rightActions={rightActions}
         title={t(
-          isSetupFlow
-            ? 'settings.provider.models.setupTitle'
-            : activeMode === 'sync'
-              ? 'settings.provider.models.pullPreviewTitle'
-              : 'settings.provider.models.addTitle',
+          isSetupFlow ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
         )}
       />
       {showsModeTabs ? (
@@ -378,6 +348,7 @@ function ProviderModelAddForm({
           preview ? (
             <ProviderModelPullPreviewContent
               isApplying={isApplying}
+              onApply={handleSyncSubmit}
               preview={preview}
               provider={provider}
               selectedIds={selectedIds}

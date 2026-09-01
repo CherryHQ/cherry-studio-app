@@ -62,20 +62,18 @@ describe('ProviderModelRow variants', () => {
     ).toBeDefined();
   });
 
-  it('keeps the raw model id in synchronization without management badges', () => {
+  it('keeps synchronization rows to the model name without management badges', () => {
     act(() => {
       renderer = create(
         <ProviderModelRow model={model} provider={undefined} variant="synchronization" />,
       );
     });
 
-    expect(renderer?.root.findByProps({ children: model.modelId })).toBeDefined();
+    expect(renderer?.root.findAllByProps({ children: model.modelId })).toHaveLength(0);
     expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-free' })).toHaveLength(0);
     expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-vision' })).toHaveLength(
       0,
     );
-    expect(
-      renderer?.root.findByProps({ accessibilityLabel: `Display name, ${model.modelId}` }),
-    ).toBeDefined();
+    expect(renderer?.root.findByProps({ accessibilityLabel: 'Display name' })).toBeDefined();
   });
 });
