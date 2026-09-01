@@ -28,6 +28,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const HTTP_ROUTE = Symbol('httpRoute');
 const HTTP_REQUEST = Symbol('httpRequest');
 const HTTP_METHODS = new Set<HttpMethod>(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
+const HTTP_RESPONSE_TYPES = new Set(['json', 'text']);
 
 type AxiosFetch = NonNullable<NonNullable<CreateAxiosDefaults['env']>['fetch']>;
 
@@ -113,6 +114,23 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
   if (request.timeoutMs !== undefined && !isValidTimeoutMs(request.timeoutMs)) {
     throw new HttpError('HTTP request timeout must be a positive number of milliseconds.', {
       code: 'INVALID_REQUEST_TIMEOUT',
+      kind: 'internal',
+    });
+  }
+
+  if (
+    request.maxResponseBytes !== undefined &&
+    (!Number.isSafeInteger(request.maxResponseBytes) || request.maxResponseBytes <= 0)
+  ) {
+    throw new HttpError('HTTP response size limit must be a positive integer number of bytes.', {
+      code: 'INVALID_RESPONSE_SIZE_LIMIT',
+      kind: 'internal',
+    });
+  }
+
+  if (request.responseType !== undefined && !HTTP_RESPONSE_TYPES.has(request.responseType)) {
+    throw new HttpError('HTTP response type is invalid.', {
+      code: 'INVALID_RESPONSE_TYPE',
       kind: 'internal',
     });
   }
@@ -207,7 +225,9 @@ const dispatchRequestInterceptors = async (
     config.data = request.body;
     config.headers = AxiosHeaders.from(request.headers);
     config.method = request.method;
+    config.maxContentLength = request.maxResponseBytes ?? -1;
     config.params = request.query;
+    config.responseType = request.responseType;
     config.signal = request.signal;
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
@@ -317,7 +337,9 @@ function createHttpClientWithTransport(
           data: routedRequest.body,
           headers: routedRequest.headers,
           method: routedRequest.method,
+          maxContentLength: routedRequest.maxResponseBytes ?? -1,
           params: routedRequest.query,
+          responseType: routedRequest.responseType,
           signal: routedRequest.signal,
           timeout: routedRequest.timeoutMs ?? route.timeoutMs,
           url: routedRequest.path,

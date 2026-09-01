@@ -58,23 +58,17 @@ export class ZhipuProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: ZhipuSearchContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers: this.buildHeaders({
+      headers: {
         Authorization: `Bearer ${context.apiKey}`,
         'Content-Type': 'application/json',
-      }),
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Zhipu search failed', response);
-    }
-
-    return this.parseJsonResponse(response, ZhipuWebSearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: ZhipuWebSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

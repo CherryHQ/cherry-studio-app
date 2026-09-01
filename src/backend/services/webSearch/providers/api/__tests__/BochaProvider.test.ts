@@ -3,6 +3,7 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import bochaResponse from '../../__tests__/fixtures/bocha-response.json';
 import { BochaProvider } from '../BochaProvider';
+import { createMockJsonRequester } from './_webSearchJsonRequesterMocks';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
@@ -10,35 +11,30 @@ const runtimeConfig: WebSearchExecutionConfig = {
 };
 
 describe('BochaProvider', () => {
-  const originalFetch = global.fetch;
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-  });
-
   test('accepts nullable Bocha fields and normalizes content fallbacks from fixtures', async () => {
-    const fetchMock = mockJsonResponse(bochaResponse);
+    const requester = createMockJsonRequester(bochaResponse);
 
-    const provider = new BochaProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new BochaProvider(createProvider(), new ApiKeyRotationState(), requester);
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://api.bochaai.com/v1/web-search', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: undefined,
-    });
-    // Decode before asserting: the request schema's `parse` rebuilds the object
-    // in schema-shape order, so pinning the serialized string would pin a key
-    // order the API does not care about.
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        operation: 'search',
+        providerId: 'bocha',
+        signal: undefined,
+        url: 'https://api.bochaai.com/v1/web-search',
+      }),
+    );
+    expect(requester.mock.calls[0]?.[0].body).toEqual({
       query: 'hello',
       count: 4,
       summary: true,
     });
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer bocha-key');
-    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(requester.mock.calls[0]?.[0].headers).toEqual({
+      Authorization: 'Bearer bocha-key',
+      'Content-Type': 'application/json',
+    });
     // The fixture is a verbatim Bocha payload: `msg` is null, and its four
     // results cover every branch of `summary || snippet || ''`.
     expect(result).toEqual({
@@ -80,27 +76,19 @@ describe('BochaProvider', () => {
   });
 
   test('surfaces the error message on a non-200 payload code', async () => {
-    mockJsonResponse({
+    const requester = createMockJsonRequester({
       code: 401,
       msg: 'invalid api key',
       data: { queryContext: { originalQuery: 'hello' }, webPages: { value: [] } },
     });
 
-    const provider = new BochaProvider(createProvider(), new ApiKeyRotationState());
+    const provider = new BochaProvider(createProvider(), new ApiKeyRotationState(), requester);
 
     await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toThrow(
       'Bocha search failed: invalid api key',
     );
   });
 });
-
-function mockJsonResponse(payload: unknown): jest.Mock {
-  const fetchMock = jest
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
-  global.fetch = fetchMock;
-  return fetchMock;
-}
 
 function createProvider(): WebSearchProvider {
   return {

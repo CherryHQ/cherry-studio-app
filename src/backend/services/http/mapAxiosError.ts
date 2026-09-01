@@ -109,6 +109,13 @@ export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpEr
   }
 
   if (error.code === AxiosError.ERR_BAD_RESPONSE) {
+    if (error.message.startsWith('maxContentLength size of ')) {
+      return new HttpError('HTTP response exceeded the allowed size.', {
+        code: 'RESPONSE_TOO_LARGE',
+        kind: 'invalid_response',
+      });
+    }
+
     return new HttpError('HTTP response could not be read.', {
       code: 'INVALID_HTTP_RESPONSE',
       kind: 'invalid_response',

@@ -7,7 +7,6 @@ import {
 } from '@cherrystudio/provider-registry/mobile';
 import { loggerService } from '@logger';
 import { getCalendars, getLocales } from 'expo-localization';
-import { fetch as expoFetch } from 'expo/fetch';
 import { Platform } from 'react-native';
 
 import {
@@ -18,6 +17,7 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateCheck, ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
@@ -39,6 +39,19 @@ const REGISTRY_SOURCES = {
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_REGISTRY_FILE_BYTES = 5 * 1024 * 1024;
+
+const REGISTRY_HTTP_CLIENTS = {
+  gitcode: createHttpClient({
+    baseUrl: REGISTRY_SOURCES.gitcode,
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  }),
+  github: createHttpClient({
+    baseUrl: REGISTRY_SOURCES.github,
+    headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  }),
+} as const;
 
 type RegistryNetworkSource = Exclude<keyof typeof REGISTRY_SOURCES, 'cache'>;
 
@@ -340,30 +353,26 @@ export class ProviderRegistryUpdaterService extends BaseService {
     maxBytes: number,
   ): Promise<string> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     this.requestControllers.add(controller);
 
     try {
-      const response = await expoFetch(`${REGISTRY_SOURCES[source]}/${name}`, {
-        headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      const response = await REGISTRY_HTTP_CLIENTS[source].request<string>({
+        errorDecoder: ({ status }) => ({
+          message: `${name} returned HTTP ${status}`,
+        }),
+        maxResponseBytes: maxBytes,
+        method: 'GET',
+        path: `/${name}`,
+        responseType: 'text',
         signal: controller.signal,
       });
-      if (!response.ok) {
-        throw new Error(`${name} returned HTTP ${response.status}`);
+      return response.data;
+    } catch (error) {
+      if (isHttpError(error) && error.code === 'RESPONSE_TOO_LARGE') {
+        throw new Error(`${name} exceeds the ${maxBytes}-byte limit`, { cause: error });
       }
-
-      const contentLength = Number(response.headers.get('content-length'));
-      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-        throw new Error(`${name} exceeds the ${maxBytes}-byte limit`);
-      }
-
-      const body = await response.text();
-      if (body.length > maxBytes) {
-        throw new Error(`${name} exceeds the ${maxBytes}-byte limit`);
-      }
-      return body;
+      throw error;
     } finally {
-      clearTimeout(timeout);
       this.requestControllers.delete(controller);
     }
   }
