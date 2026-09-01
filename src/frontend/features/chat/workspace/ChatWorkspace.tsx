@@ -58,10 +58,8 @@ export function ChatWorkspace({
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],
   );
-  const projectionCache = useMemo(
-    () => ({ cache: createAgentMessageListProjectionCache(), ownerKey: sessionId }),
-    [sessionId],
-  ).cache;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId keys the cache lifetime, not its contents
+  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [sessionId]);
   const listMessages = useMemo(
     () => toAgentMessageListItems(mergedMessages, projectionCache),
     [mergedMessages, projectionCache],
