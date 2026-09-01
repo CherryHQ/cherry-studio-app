@@ -8,6 +8,7 @@ import { ChatWorkspace } from '../ChatWorkspace';
 
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
+const mockRespondApproval = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 const mockTranslate = (key: string) => key;
@@ -84,6 +85,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
+jest.mock('../../approval/ToolApprovalSheet', () => ({
+  ToolApprovalSheet: () => null,
+}));
+
 jest.mock('../../runtime', () => ({
   createAgentMessageListProjectionCache: () => ({}),
   mergeAgentMessageViews: (
@@ -106,6 +111,7 @@ jest.mock('../../runtime', () => ({
         role: message.role,
         status: message.status === 'success' ? 'success' : 'pending',
       })),
+  useAgentChatActions: () => ({ respondApproval: mockRespondApproval }),
   useAgentChatSession: () => mockAgentChatSession,
 }));
 

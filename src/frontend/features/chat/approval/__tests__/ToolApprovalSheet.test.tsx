@@ -39,9 +39,9 @@ function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingTool
   return {
     approvalId: 'approval-1',
     input: { query: 'cherry' },
+    messageId: 'assistant-1',
     toolCallId: 'call-1',
     displayName: 'Server One: Search docs',
-    turnId: 'turn-1',
     ...overrides,
   };
 }
@@ -54,16 +54,11 @@ describe('ToolApprovalSheet', () => {
   });
 
   function render(
-    overrides: {
-      approvals?: readonly PendingToolApproval[];
-      onClose?: () => void;
-      onRespond?: () => Promise<void>;
-    } = {},
+    overrides: { approvals?: readonly PendingToolApproval[]; onRespond?: () => Promise<void> } = {},
   ) {
-    const onClose = jest.fn(overrides.onClose);
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <ToolApprovalSheet approvals={approvals} isOpen onClose={onClose} onRespond={onRespond} />
+      <ToolApprovalSheet approvals={approvals} isOpen onRespond={onRespond} />
     );
 
     act(() => {
@@ -71,7 +66,6 @@ describe('ToolApprovalSheet', () => {
     });
 
     return {
-      onClose,
       onRespond,
       rerender: (approvals: readonly PendingToolApproval[]) =>
         act(() => {
@@ -107,33 +101,25 @@ describe('ToolApprovalSheet', () => {
 
     await press(allowLabel);
 
-    // The gate adds the current Session identity; the sheet must return the
-    // approval it is actually showing together with the explicit verdict.
+    // These three ids are the entire payload: the runtime matches the decision
+    // back to the paused message and to the SDK's own approval by them, so a
+    // wrong one settles nothing and the turn stays stuck.
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: true,
+      messageId: 'assistant-1',
     });
   });
 
-  test('reports a sheet dismissal without deciding the approval', () => {
-    const { onClose, onRespond } = render();
+  test('cannot be dismissed while an approval is pending', () => {
+    render();
 
-    act(() => renderer.root.findByType(BottomSheet).props.onClose());
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onRespond).not.toHaveBeenCalled();
+    expect(renderer.root.findByType(BottomSheet).props.dismissible).toBe(false);
   });
 
   test('does not mount a sheet before an approval exists', () => {
     act(() => {
-      renderer = create(
-        <ToolApprovalSheet
-          approvals={[]}
-          isOpen={false}
-          onClose={jest.fn()}
-          onRespond={jest.fn()}
-        />,
-      );
+      renderer = create(<ToolApprovalSheet approvals={[]} isOpen={false} onRespond={jest.fn()} />);
     });
 
     expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
@@ -155,6 +141,7 @@ describe('ToolApprovalSheet', () => {
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: false,
+      messageId: 'assistant-1',
     });
   });
 
@@ -229,21 +216,6 @@ describe('ToolApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('Server Two: Create file');
     expect(renderer.root.findByType(BottomSheet).props.open).toBe(true);
-  });
-
-  test('updates a reused approval id from a later turn', () => {
-    const { rerender } = render();
-
-    rerender([
-      makeApproval({
-        displayName: 'Server Two: Create file',
-        input: { path: 'notes.md' },
-        turnId: 'turn-2',
-      }),
-    ]);
-
-    expect(renderedTexts()).toContain('Server Two: Create file');
-    expect(renderedTexts()).not.toContain('Server One: Search docs');
   });
 
   test('renders the snapshotted display name without exposing the provider alias', () => {

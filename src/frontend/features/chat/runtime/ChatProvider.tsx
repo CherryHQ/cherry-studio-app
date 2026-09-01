@@ -13,11 +13,7 @@ import {
 import { AppState } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type {
-  AgentApprovalView,
-  AgentInputPart,
-  AgentSubmitMessageInput,
-} from '@/shared/contracts/agent';
+import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
@@ -148,13 +144,6 @@ export function useAgentChatSession(sessionId: string | undefined): AgentSession
   return useAgentSessionSelection(client, sessionId, selectSessionState);
 }
 
-export function useAgentChatPendingApprovals(
-  sessionId: string | undefined,
-): readonly AgentApprovalView[] {
-  const { client } = useAgentChatContext();
-  return useAgentSessionSelection(client, sessionId, selectPendingApprovals);
-}
-
 export function useAgentChatControls(input: { agentId?: string; sessionId?: string }) {
   const { client, sendMessage } = useAgentChatContext();
   const { agentId, sessionId } = input;
@@ -210,8 +199,4 @@ function selectSessionState(state: AgentSessionChatState) {
 
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
-}
-
-function selectPendingApprovals(state: AgentSessionChatState) {
-  return state.pendingApprovals;
 }

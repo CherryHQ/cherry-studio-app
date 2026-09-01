@@ -11,7 +11,6 @@ import {
   useAgentSession,
 } from '@/frontend/hooks/agent';
 
-import { ToolApprovalGate } from './approval/ToolApprovalGate';
 import { ChatInput } from './input';
 import { ChatEmptyState, ChatWorkspace } from './workspace';
 
@@ -35,7 +34,6 @@ export function ChatScreen() {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
-  const shouldMountComposerSession = hasComposer || (!isPreview && isSessionAvailable);
   const composerSessionKey = sessionId
     ? `session:${sessionId}`
     : `draft:${resolvedAgentId ?? 'unavailable'}`;
@@ -60,23 +58,15 @@ export function ChatScreen() {
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
-        {shouldMountComposerSession ? (
+        {hasComposer ? (
           <ComposerSessionProvider key={composerSessionKey}>
-            {sessionId ? (
-              <ToolApprovalGate sessionId={sessionId}>
-                {hasComposer ? (
-                  <ChatInput
-                    agentId={resolvedAgentId}
-                    dismissKeyboardOnSend={false}
-                    sessionId={sessionId}
-                  />
-                ) : null}
-              </ToolApprovalGate>
-            ) : (
-              <ComposerDock layoutMode="flow">
-                <ChatInput agentId={resolvedAgentId} dismissKeyboardOnSend={false} />
-              </ComposerDock>
-            )}
+            <ComposerDock layoutMode="flow">
+              <ChatInput
+                agentId={resolvedAgentId}
+                dismissKeyboardOnSend={false}
+                sessionId={sessionId}
+              />
+            </ComposerDock>
           </ComposerSessionProvider>
         ) : null}
       </View>

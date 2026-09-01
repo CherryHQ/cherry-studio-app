@@ -4,43 +4,34 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 const TOOL_APPROVAL_SHEET_HEIGHT = 420;
+const ignoreClose = () => undefined;
 
 export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
+  messageId: string;
   toolCallId: string;
   displayName: string;
-  turnId: string;
 };
 
 type ToolApprovalRespondInput = {
   approvalId: string;
   approved: boolean;
+  messageId: string;
 };
 
 type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
-  onClose: () => void;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
 /** Shows one AI SDK tool approval at a time, regardless of the tool's source. */
-export function ToolApprovalSheet({
-  approvals,
-  isOpen,
-  onClose,
-  onRespond,
-}: ToolApprovalSheetProps) {
+export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
   // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
-  if (
-    approvals[0] &&
-    (lastApproval === undefined ||
-      approvals[0].approvalId !== lastApproval.approvalId ||
-      approvals[0].turnId !== lastApproval.turnId)
-  ) {
+  if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
     setLastApproval(approvals[0]);
   }
   const approval = approvals[0] ?? lastApproval;
@@ -51,8 +42,9 @@ export function ToolApprovalSheet({
 
   return (
     <BottomSheet
+      dismissible={false}
       height={TOOL_APPROVAL_SHEET_HEIGHT}
-      onClose={onClose}
+      onClose={ignoreClose}
       open={isOpen}
       title={t('chat.tool.approval.title')}
     >
@@ -87,6 +79,7 @@ function ToolApprovalSheetBody({
       await onRespond({
         approvalId: approval.approvalId,
         approved,
+        messageId: approval.messageId,
       });
     } finally {
       setIsSubmitting(false);
