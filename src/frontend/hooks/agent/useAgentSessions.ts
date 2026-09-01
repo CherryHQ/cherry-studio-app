@@ -64,13 +64,16 @@ export function useAgentSession(sessionId: string | undefined) {
 export function useLatestAgentSession(options: LatestAgentSessionOptions = {}) {
   const query = useInfiniteQuery('/agent-sessions', {
     enabled: options.enabled,
+    gcTime: 0,
     limit: 1,
     query: { agentId: options.agentId },
+    refetchOnMount: 'always',
   });
 
   return {
     error: query.error,
     isLoading: query.isLoading,
+    isRefreshing: query.isRefreshing,
     refetch: query.refresh,
     session: query.pages.at(0)?.items.at(0),
   };

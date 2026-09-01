@@ -15,10 +15,16 @@ export function ChatRouteResolver() {
   const { t } = useTranslation();
   const router = useRouter();
   const latestSession = useLatestAgentSession();
-  const agents = useAgentsApi();
+  const isLatestSessionLoading = latestSession.isLoading || latestSession.isRefreshing;
+  const shouldLoadAgentFallback =
+    !isLatestSessionLoading && !latestSession.error && !latestSession.session;
+  const agents = useAgentsApi({ enabled: shouldLoadAgentFallback });
   const restoreState = resolveChatRestoreState({
     agents: { error: agents.error, isLoading: agents.isLoading, items: agents.agents },
-    latestSession,
+    latestSession: {
+      ...latestSession,
+      isLoading: isLatestSessionLoading,
+    },
   });
 
   useEffect(() => {
@@ -44,7 +50,13 @@ export function ChatRouteResolver() {
           className="px-8"
           primaryAction={{
             children: t('agent.actions.retry'),
-            onPress: () => void Promise.all([latestSession.refetch(), agents.refetch()]),
+            onPress: () => {
+              const requests: Promise<unknown>[] = [latestSession.refetch()];
+              if (shouldLoadAgentFallback) {
+                requests.push(agents.refetch());
+              }
+              void Promise.all(requests);
+            },
           }}
           title={t('navigation.chatsLoadFailed')}
         />

@@ -301,7 +301,6 @@
   "session.deleteFailed": "会话未能删除，请重试。",
   "session.deleteMessage": "会话及其消息将被永久删除。正在运行的回合会先被取消。",
   "session.deleteTitle": "删除会话？",
-  "session.detail.notFound": "会话不存在",
   "session.list.deletedAgent": "已删除的智能体",
   "session.list.empty": "还没有会话",
   "session.list.emptyDescription": "选择一个智能体开始聊天，会话会出现在这里。",

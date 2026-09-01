@@ -57,11 +57,18 @@ type RefreshOption<TPath extends ApiPath, TMethod extends MutationMethod> =
 /**
  * react-query merges options as `{...clientDefaults, ...options}`, so passing an explicit
  * `staleTime: undefined` *overrides* the client default (see `createMobileQueryClient`) and
- * leaves the query permanently stale — every observer that mounts refetches. Forward these
- * two only when a caller actually set them, so unset callers inherit the client defaults.
+ * leaves the query permanently stale — every observer that mounts refetches. Forward query
+ * overrides only when a caller actually set them, so unset callers inherit the client defaults.
  */
-function callerQueryOverrides(options?: { retry?: boolean | number; staleTime?: number }) {
+function callerQueryOverrides(options?: {
+  gcTime?: number;
+  refetchOnMount?: boolean | 'always';
+  retry?: boolean | number;
+  staleTime?: number;
+}) {
   return {
+    ...(options?.gcTime === undefined ? {} : { gcTime: options.gcTime }),
+    ...(options?.refetchOnMount === undefined ? {} : { refetchOnMount: options.refetchOnMount }),
     ...(options?.retry === undefined ? {} : { retry: options.retry }),
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
   };
@@ -232,8 +239,10 @@ export function useInfiniteQuery<TPath extends ApiPath>(
   path: CursorPaginatedPath<TPath>,
   options?: ParamsOption<TPath, 'GET'> & {
     enabled?: boolean;
+    gcTime?: number;
     limit?: number;
     query?: Omit<QueryParamsForPath<TPath, 'GET'>, 'cursor' | 'limit'>;
+    refetchOnMount?: boolean | 'always';
     retry?: boolean | number;
     staleTime?: number;
   },

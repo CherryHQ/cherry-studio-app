@@ -48,13 +48,16 @@ function Probe() {
   return null;
 }
 
-describe('useAgentSessionMutations', () => {
+describe('agent Session hooks', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     actions = undefined;
     persistedSessions = sessions;
     queryClient = new QueryClient({
-      defaultOptions: { mutations: { retry: false }, queries: { gcTime: Infinity, retry: false } },
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { gcTime: Infinity, retry: false, staleTime: 30_000 },
+      },
     });
     await act(async () => {
       renderer = create(
@@ -92,6 +95,25 @@ describe('useAgentSessionMutations', () => {
 
     expect(readSessionIds()).toEqual(['b', 'c']);
     expect(dataApi.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it('requests the latest Session again on every mount', async () => {
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
+
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <DataApiProvider dataApi={dataApi}>
+            <Probe />
+          </DataApiProvider>
+        </QueryClientProvider>,
+      );
+    });
+
+    // The regular list remains fresh in cache; only the one-row latest query runs again.
+    expect(dataApi.get).toHaveBeenCalledTimes(3);
   });
 });
 

@@ -61,28 +61,24 @@ function ResolvedChatScreen({ target }: { target: ChatTarget }) {
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
+  if (sessionId && session.error && isNotFoundError(session.error)) {
+    return <ChatRouteResolver />;
+  }
+
   return (
     <>
       <MainHeader />
       <View className="flex-1 bg-background">
         {sessionId && session.error ? (
-          isNotFoundError(session.error) ? (
-            <ContentState.Empty
-              className="flex-1"
-              layout="page"
-              title={t('session.detail.notFound')}
-            />
-          ) : (
-            <ContentState.Error
-              className="flex-1"
-              layout="page"
-              primaryAction={{
-                children: t('agent.actions.retry'),
-                onPress: () => void session.refetch(),
-              }}
-              title={t('navigation.chatsLoadFailed')}
-            />
-          )
+          <ContentState.Error
+            className="flex-1"
+            layout="page"
+            primaryAction={{
+              children: t('agent.actions.retry'),
+              onPress: () => void session.refetch(),
+            }}
+            title={t('navigation.chatsLoadFailed')}
+          />
         ) : isSessionAvailable && sessionId ? (
           <ChatWorkspace
             assistantAvatarUri={agent.agent?.avatarUri}
