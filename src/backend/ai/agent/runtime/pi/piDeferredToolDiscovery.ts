@@ -300,17 +300,30 @@ function matchesToolInput(
   inputValidators: Map<string, z.ZodType | null>,
 ): boolean {
   if (!inputValidators.has(tool.providerName)) {
-    try {
-      inputValidators.set(
-        tool.providerName,
-        z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0]),
-      );
-    } catch {
-      inputValidators.set(tool.providerName, null);
-    }
+    inputValidators.set(tool.providerName, createToolInputValidator(tool));
   }
 
-  return inputValidators.get(tool.providerName)?.safeParse(input).success === true;
+  // A tool with no validator was never rendered as a contract the model could
+  // satisfy, so rejecting its params would return the same signature forever
+  // and burn the turn's tool-call budget. Let those calls through.
+  const validator = inputValidators.get(tool.providerName);
+  return validator ? validator.safeParse(input).success : true;
+}
+
+function createToolInputValidator(tool: RuntimeTool): z.ZodType | null {
+  // The catalog omits a schema this large, so the model only ever sees
+  // `params: Record<string, unknown>` for this tool.
+  if (!isJsonWithinCharacterLimit(tool.inputSchema, TOOL_SCHEMA_RENDER_CHARACTER_LIMIT)) {
+    return null;
+  }
+
+  try {
+    // Draft-07 `#/definitions` refs, `if`/`then`/`else`, `not`, `dependentSchemas`
+    // and `unevaluatedProperties` all throw here.
+    return z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0]);
+  } catch {
+    return null;
+  }
 }
 
 function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] {

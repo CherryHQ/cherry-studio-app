@@ -170,6 +170,66 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     expect(invokeTarget).not.toHaveBeenCalled();
   });
 
+  test('dispatches a tool whose schema Zod cannot convert instead of rejecting it forever', async () => {
+    // Draft-07 `#/definitions` refs are what most MCP servers publish, and
+    // z.fromJSONSchema throws on them. Without a validator the call has to go
+    // through, or the corrected retry returns the same signature until the turn
+    // runs out of tool calls.
+    const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues', {
+      type: 'object',
+      properties: { query: { $ref: '#/definitions/Query' } },
+      required: ['query'],
+      definitions: { Query: { type: 'string' } },
+    });
+    const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
+    const invokeTarget = jest.fn(async () => targetResult);
+    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool);
+    const searchTool = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+    const callTool = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
+    if (!searchTool || !callTool) throw new Error('Missing deferred-discovery tools.');
+
+    await execute(searchTool, { query: 'repository' }, 'search-1');
+    const result = (
+      await execute(callTool, { name: target.providerName, params: { query: 'bug' } }, 'call-1')
+    ).details as RuntimeToolResult;
+
+    expect(result).toEqual(targetResult);
+    expect(invokeTarget).toHaveBeenCalledWith(target, { query: 'bug' }, 'call-1', SIGNAL);
+  });
+
+  test('dispatches a tool whose schema the catalog omitted instead of validating it unseen', async () => {
+    const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues', {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        ...Object.fromEntries(
+          Array.from({ length: 2_000 }, (_, index) => [
+            `parameter_${index}`,
+            { type: 'string', description: 'A documented parameter.' },
+          ]),
+        ),
+      },
+      required: ['query'],
+    });
+    const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
+    const invokeTarget = jest.fn(async () => targetResult);
+    const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool);
+    const searchTool = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+    const callTool = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
+    if (!searchTool || !callTool) throw new Error('Missing deferred-discovery tools.');
+
+    const search = (await execute(searchTool, { query: 'repository' }, 'search-1'))
+      .details as RuntimeToolResult;
+    expect(JSON.stringify(search.value)).toContain('params: Record<string, unknown>');
+
+    const result = (
+      await execute(callTool, { name: target.providerName, params: { guessed: 'bug' } }, 'call-1')
+    ).details as RuntimeToolResult;
+
+    expect(result).toEqual(targetResult);
+    expect(invokeTarget).toHaveBeenCalledWith(target, { guessed: 'bug' }, 'call-1', SIGNAL);
+  });
+
   test('limits an unfiltered catalog browse to twenty tools', async () => {
     const catalog = Array.from({ length: 25 }, (_, index) =>
       mcpTool(`mcp_server_1_tool_${String(index).padStart(2, '0')}`, `Tool ${index}`),
