@@ -1,4 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -43,10 +44,16 @@ describe('ProviderModelRow variants', () => {
     });
 
     expect(renderer?.root.findAllByProps({ children: model.modelId })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-free' })).toHaveLength(1);
-    expect(renderer?.root.findAllByProps({ testID: 'provider-model-badge-vision' })).toHaveLength(
-      1,
-    );
+    expect(
+      renderer?.root
+        .findAllByProps({ testID: 'provider-model-badge-free' })
+        .filter((node) => node.type === View),
+    ).toHaveLength(1);
+    expect(
+      renderer?.root
+        .findAllByProps({ testID: 'provider-model-badge-vision' })
+        .filter((node) => node.type === View),
+    ).toHaveLength(1);
     expect(
       renderer?.root.findByProps({
         accessibilityLabel:
