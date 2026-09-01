@@ -382,27 +382,17 @@ function AgentEditForm({
         </View>
         {/* Capability groups gate which built-in tools a turn may offer; the
             approval setting above changes interaction policy only. */}
-        <View className="gap-2">
-          <Text className="px-1 font-medium text-foreground text-sm">
-            {t('agent.capabilities.section')}
-          </Text>
-          <AgentCapabilitiesSection
-            disabledCapabilities={form.disabledCapabilities}
-            onChange={(next) => updateForm('disabledCapabilities', next)}
-          />
-        </View>
+        <AgentCapabilitiesSection
+          disabledCapabilities={form.disabledCapabilities}
+          onChange={(next) => updateForm('disabledCapabilities', next)}
+        />
         {isEditing && (servers.length > 0 || toolBindings.length > 0) ? (
-          <View className="gap-2">
-            <Text className="px-1 font-medium text-foreground text-sm">
-              {t('agent.tools.section')}
-            </Text>
-            <AgentToolsSection
-              bindings={toolBindings}
-              onChange={setToolBindings}
-              originalBindings={originalToolBindings}
-              servers={servers}
-            />
-          </View>
+          <AgentToolsSection
+            bindings={toolBindings}
+            onChange={setToolBindings}
+            originalBindings={originalToolBindings}
+            servers={servers}
+          />
         ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (

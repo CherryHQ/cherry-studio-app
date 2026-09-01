@@ -1,4 +1,11 @@
-import { Switch } from '@cherrystudio/ui/components';
+import type { LucideIconComponent } from '@cherrystudio/app-icons';
+import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
+import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
+import ImageIcon from '@cherrystudio/app-icons/icons/image';
+import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
+import { Section, Switch } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, Text, View } from 'react-native';
@@ -33,6 +40,15 @@ const CAPABILITY_DISPLAY_ORDER = [
   'location',
 ] as const satisfies readonly AgentCapability[];
 
+const CAPABILITY_ICONS = {
+  calendar: CalendarIcon,
+  health: HeartPulseIcon,
+  image: ImageIcon,
+  location: MapPinIcon,
+  reminders: BellIcon,
+  web: SearchIcon,
+} satisfies Record<AgentCapability, LucideIconComponent>;
+
 // Availability facts are static per build, so the visible rows and the scope
 // set the permission hook observes can be module constants — the hook requires
 // a stable scope array.
@@ -52,6 +68,7 @@ export function AgentCapabilitiesSection({
   disabledCapabilities,
   onChange,
 }: AgentCapabilitiesSectionProps) {
+  const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { refresh, statuses } = useDevicePermissionStatuses(OBSERVED_SCOPES);
 
@@ -66,10 +83,9 @@ export function AgentCapabilitiesSection({
       // never-asked scope right away. Remaining scopes stay with the in-turn
       // just-in-time request, so the user sees one dialog here, not a queue.
       if (enabled) {
-        const scope = row.permissionScopes.find((candidate) => {
-          const status = statuses[candidate];
-          return status === 'undetermined';
-        });
+        const scope = row.permissionScopes.find(
+          (candidate) => statuses[candidate] === 'undetermined',
+        );
         if (scope) {
           void permissions
             .request(scope)
@@ -81,89 +97,90 @@ export function AgentCapabilitiesSection({
     [disabledCapabilities, onChange, permissions, refresh, statuses],
   );
 
-  return (
-    <View className="gap-3">
-      {VISIBLE_ROWS.map((row) => (
-        <AgentCapabilityRow
-          enabled={!disabledCapabilities.includes(row.capability)}
-          key={row.capability}
-          onToggle={handleToggle}
-          row={row}
-          statuses={statuses}
-        />
-      ))}
-    </View>
+  const openSettings = useCallback(
+    (scopes: readonly DevicePermissionScope[]) => {
+      const permission = scopes[0]?.split('.')[0] as DevicePermission | undefined;
+      void permissions.openSystemSettings(permission).catch(() => undefined);
+    },
+    [permissions],
   );
-}
-
-function AgentCapabilityRow({
-  enabled,
-  onToggle,
-  row,
-  statuses,
-}: {
-  enabled: boolean;
-  onToggle: (row: CapabilityRow, enabled: boolean) => void;
-  row: CapabilityRow;
-  statuses: PermissionStatuses;
-}) {
-  const { t } = useTranslation();
-  const label = t(`agent.capabilities.${row.capability}.label`);
-  const permissionState = groupPermissionState(row.permissionScopes, statuses);
-  const handleValueChange = useCallback((value: boolean) => onToggle(row, value), [onToggle, row]);
 
   return (
-    <View className="min-h-10 flex-row items-center gap-3">
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="text-base text-foreground" numberOfLines={1}>
-          {label}
-        </Text>
-        {enabled ? (
-          <PermissionStateText state={permissionState} scopes={row.permissionScopes} />
-        ) : null}
+    <View className="gap-2">
+      <Text className="px-1 font-medium text-muted-foreground text-sm">
+        {t('agent.capabilities.section')}
+      </Text>
+      <View className="gap-2">
+        {VISIBLE_ROWS.map((row) => {
+          const enabled = !disabledCapabilities.includes(row.capability);
+          const label = t(`agent.capabilities.${row.capability}.label`);
+          const LeadingIcon = CAPABILITY_ICONS[row.capability];
+          return (
+            <Section key={row.capability}>
+              <Section.Item
+                accessibilityRole="switch"
+                accessibilityState={{ checked: enabled }}
+                className="py-2"
+                description={
+                  enabled
+                    ? permissionCaption(
+                        groupPermissionState(row.permissionScopes, statuses),
+                        row.permissionScopes,
+                        openSettings,
+                        t,
+                      )
+                    : undefined
+                }
+                label={label}
+                leading={<LeadingIcon className="size-5 text-foreground" />}
+                onPress={() => handleToggle(row, !enabled)}
+                trailing={
+                  <Switch
+                    accessibilityLabel={label}
+                    onValueChange={(value) => handleToggle(row, value)}
+                    value={enabled}
+                  />
+                }
+              />
+            </Section>
+          );
+        })}
       </View>
-      <Switch accessibilityLabel={label} onValueChange={handleValueChange} value={enabled} />
     </View>
   );
 }
 
 /**
- * Only problems surface: `denied` deep-links to system settings — the one
- * place it can be fixed — and `unavailable` explains a switch that cannot
- * work. Granted and never-asked scopes need no caption; the just-in-time
- * request covers the latter silently.
+ * Only problems earn a caption: `denied` deep-links to system settings — the
+ * one place it can be fixed — and `unavailable` explains a switch that cannot
+ * work. Granted and never-asked scopes stay quiet; the just-in-time request
+ * covers the latter.
  */
-function PermissionStateText({
-  scopes,
-  state,
-}: {
-  scopes: readonly DevicePermissionScope[];
-  state: SystemPermissionState | undefined;
-}) {
-  const { t } = useTranslation();
-  const permissions = useBackendModule('permissions');
-  const openSettings = useCallback(() => {
-    const permission = scopes[0]?.split('.')[0] as DevicePermission | undefined;
-    void permissions.openSystemSettings(permission).catch(() => undefined);
-  }, [permissions, scopes]);
-
+function permissionCaption(
+  state: SystemPermissionState | undefined,
+  scopes: readonly DevicePermissionScope[],
+  openSettings: (scopes: readonly DevicePermissionScope[]) => void,
+  t: (key: string) => string,
+) {
   if (state === 'denied') {
     return (
-      <Pressable accessibilityRole="button" onPress={openSettings}>
-        <Text className="text-destructive text-xs">
+      <Pressable
+        accessibilityRole="button"
+        onPress={(event) => {
+          event.stopPropagation();
+          openSettings(scopes);
+        }}
+      >
+        <Text className="text-destructive text-sm">
           {t('agent.capabilities.permission.denied')}
         </Text>
       </Pressable>
     );
   }
   if (state === 'unavailable') {
-    return (
-      <Text className="text-muted-foreground text-xs" selectable>
-        {t('agent.capabilities.permission.unavailable')}
-      </Text>
-    );
+    return t('agent.capabilities.permission.unavailable');
   }
-  return null;
+  return undefined;
 }
 
 function groupPermissionState(
