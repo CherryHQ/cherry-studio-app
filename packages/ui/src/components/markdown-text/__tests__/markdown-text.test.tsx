@@ -65,11 +65,11 @@ describe('MarkdownText', () => {
             marginBottom: 12,
             marginTop: 0,
           }),
-          h1: expect.objectContaining({ color: 'foreground', fontSize: 40, lineHeight: 48 }),
-          h2: expect.objectContaining({ color: 'foreground', fontSize: 32, lineHeight: 40 }),
+          h1: expect.objectContaining({ color: 'foreground', fontSize: 32, lineHeight: 40 }),
+          h2: expect.objectContaining({ color: 'foreground', fontSize: 24, lineHeight: 32 }),
           code: expect.objectContaining({
             backgroundColor: 'inline-code',
-            borderColor: 'border',
+            borderColor: 'inline-code',
             color: 'inline-code-foreground',
             fontFamily: 'GeistMono-Regular',
             fontSize: 18,
@@ -83,7 +83,7 @@ describe('MarkdownText', () => {
             lineHeight: 28,
           }),
           math: expect.objectContaining({
-            backgroundColor: 'code-block',
+            backgroundColor: 'transparent',
             color: 'foreground',
             fontSize: 20,
             marginBottom: 14,
