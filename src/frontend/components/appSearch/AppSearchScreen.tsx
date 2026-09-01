@@ -34,14 +34,14 @@ type AppSearchListItem =
   | { item: unknown; key: string; type: 'result' };
 
 export default function AppSearchScreen() {
-  const params = useLocalSearchParams<{ sessionId?: string | string[] }>();
-  const sessionId = getSingleRouteParam(params.sessionId);
-  const session = getAppSearchSession(sessionId);
+  const params = useLocalSearchParams<{ searchSessionId?: string | string[] }>();
+  const searchSessionId = getSingleRouteParam(params.searchSessionId);
+  const session = getAppSearchSession(searchSessionId);
   const router = useRouter();
   const navigation = useNavigation<AppSearchNavigation>();
 
   useEffect(() => {
-    if (!sessionId || !session) {
+    if (!searchSessionId || !session) {
       if (router.canGoBack()) {
         router.back();
       } else {
@@ -50,32 +50,32 @@ export default function AppSearchScreen() {
       return;
     }
 
-    cancelScheduledAppSearchFinish(sessionId);
+    cancelScheduledAppSearchFinish(searchSessionId);
     const unsubscribe = navigation.addListener('transitionEnd', (event) => {
       if (event.data.closing) {
-        finishAppSearchSession(sessionId);
+        finishAppSearchSession(searchSessionId);
       }
     });
 
     return () => {
       unsubscribe();
-      scheduleAppSearchFinish(sessionId);
+      scheduleAppSearchFinish(searchSessionId);
     };
-  }, [navigation, router, session, sessionId]);
+  }, [navigation, router, searchSessionId, session]);
 
-  if (!sessionId || !session) {
+  if (!searchSessionId || !session) {
     return null;
   }
 
-  return <AppSearchRoutePage request={session.request} sessionId={sessionId} />;
+  return <AppSearchRoutePage request={session.request} searchSessionId={searchSessionId} />;
 }
 
 function AppSearchRoutePage({
   request,
-  sessionId,
+  searchSessionId,
 }: {
   request: StoredSearchRequest;
-  sessionId: string;
+  searchSessionId: string;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -170,10 +170,10 @@ function AppSearchRoutePage({
       }
 
       isLeavingRef.current = true;
-      selectAppSearchItem(sessionId, item);
+      selectAppSearchItem(searchSessionId, item);
       router.back();
     },
-    [router, sessionId],
+    [router, searchSessionId],
   );
   const renderItem = useCallback(
     ({ item }: LegendListRenderItemProps<AppSearchListItem>) => {

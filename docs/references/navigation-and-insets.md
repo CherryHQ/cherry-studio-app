@@ -79,6 +79,17 @@ Before enabling it, verify:
   the frontend observation but does not cancel the Host's active turn.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
+## Page Identity And Cached Data
+
+Every route-bound entity or semantic selection defines a complete page identity, such as a
+Provider id, Agent id, Session id, or usage date. Route parameters are parsed before content renders,
+and query keys include that complete identity even while their observers are disabled.
+
+When identity changes on a reused route instance, local forms, search text, filters, pending actions,
+and other entity-owned state reset through a keyed component boundary. Data from a different
+identity must not be used as placeholder data. Cached data for the same identity may render while it
+refreshes in the background when that product surface permits stale-while-revalidate behavior.
+
 ## Chat Identity Contract
 
 The chat route has two complete identities:

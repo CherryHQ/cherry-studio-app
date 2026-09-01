@@ -88,9 +88,10 @@ export function useQuery<TPath extends ApiPath>(
 ) {
   const dataApi = useApiClient();
   const enabled = options?.enabled !== false;
-  const resolvedPath = enabled
-    ? resolveTemplate(path, options?.params as Record<string, string | number> | undefined)
-    : path;
+  const resolvedPath = resolveTemplate(
+    path,
+    options?.params as Record<string, string | number> | undefined,
+  );
   const query = options?.query;
   const refetchInterval = options?.refetchInterval;
   const result = useTanStackQuery<ResponseForPath<TPath, 'GET'>, Error>({
@@ -241,9 +242,10 @@ export function useInfiniteQuery<TPath extends ApiPath>(
   const queryClient = useQueryClient();
   const enabled = options?.enabled !== false;
   const limit = options?.limit ?? 10;
-  const resolvedPath = enabled
-    ? resolveTemplate(path, options?.params as Record<string, string | number> | undefined)
-    : path;
+  const resolvedPath = resolveTemplate(
+    path,
+    options?.params as Record<string, string | number> | undefined,
+  );
   const query = options?.query;
   const queryKey = buildQueryKey(resolvedPath, { ...query, limit });
   const result = useTanStackInfiniteQuery<

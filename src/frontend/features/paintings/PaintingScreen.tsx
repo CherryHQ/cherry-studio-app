@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/components/headers';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { PaintingComposer } from './components/PaintingComposer';
 import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
@@ -22,8 +23,8 @@ export function PaintingScreen() {
     handoff?: string | string[];
     paintingId?: string | string[];
   }>();
-  const handoffToken = firstParam(params.handoff);
-  const paintingId = firstParam(params.paintingId);
+  const handoffToken = getSingleRouteParam(params.handoff);
+  const paintingId = getSingleRouteParam(params.paintingId);
   // Frozen at mount: only the painting this screen opened with owns the loading
   // gate. A generation writes a new receipt id into the route; letting that id
   // re-enter the gate would tear the composer down mid-generation.
@@ -65,8 +66,4 @@ export function PaintingScreen() {
       )}
     </View>
   );
-}
-
-function firstParam(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }

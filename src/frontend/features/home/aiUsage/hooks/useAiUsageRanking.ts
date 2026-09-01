@@ -18,7 +18,6 @@ type UseAiUsageRankingOptions = {
 export function useAiUsageRanking({ enabled, groupBy, selectedDateKey }: UseAiUsageRankingOptions) {
   const query = useQuery('/ai-usage-records/stats', {
     enabled,
-    keepPreviousData: true,
     query: getAiUsageDayStatsQuery(selectedDateKey, groupBy),
     staleTime: RANKING_STALE_TIME,
   });
