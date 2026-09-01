@@ -189,6 +189,33 @@ describe('BottomSheet', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps the optional footer outside the flexible body with its own safe-area inset', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          footer={<Text testID="footer-action">Create</Text>}
+          onClose={jest.fn()}
+          open
+          size="medium"
+          title="Agents"
+        >
+          <Text testID="sheet-content">Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const footer = renderer?.root.find(
+      (node) =>
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('border-t border-border') &&
+        node.findAllByProps({ testID: 'footer-action' }).length > 0,
+    );
+
+    expect(footer?.props.className).toContain('px-4');
+    expect(StyleSheet.flatten(footer?.props.style)).toEqual({ paddingBottom: 34 });
+    expect(footer?.findAllByProps({ testID: 'sheet-content' })).toHaveLength(0);
+  });
+
   test('routes Android hardware back through the optional second-level action', () => {
     const onBack = jest.fn();
 

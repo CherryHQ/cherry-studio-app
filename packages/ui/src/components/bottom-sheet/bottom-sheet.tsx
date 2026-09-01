@@ -44,6 +44,7 @@ type BottomSheetBaseProps = {
   backAction?: BottomSheetBackAction;
   children: ReactNode;
   dismissible?: boolean;
+  footer?: ReactNode;
   headerAction?: ReactNode;
   onClose: () => void;
   open: boolean;
@@ -84,6 +85,7 @@ export function BottomSheet(props: BottomSheetProps) {
     backAction,
     children,
     dismissible = true,
+    footer,
     headerAction,
     onClose,
     open,
@@ -105,6 +107,7 @@ export function BottomSheet(props: BottomSheetProps) {
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
   const detentHeight = cardHeight + OUTER_INSET;
   const bottomCornerRadius = Math.max(BOTTOM_CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
+  const hasFooter = footer != null;
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
   const hasNotifiedCloseRef = useRef(false);
@@ -215,9 +218,20 @@ export function BottomSheet(props: BottomSheetProps) {
             </Text>
             {headerAction ? <View className="ml-2">{headerAction}</View> : null}
           </View>
-          <View className="min-h-0 flex-1" style={{ paddingBottom: insets.bottom }}>
+          <View
+            className="min-h-0 flex-1"
+            style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
+          >
             {children}
           </View>
+          {hasFooter ? (
+            <View
+              className="border-t border-border bg-background px-4 pt-3"
+              style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+            >
+              {footer}
+            </View>
+          ) : null}
         </View>
         <View style={styles.bottomGap} />
       </View>
