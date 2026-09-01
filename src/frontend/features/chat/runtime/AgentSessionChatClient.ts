@@ -217,6 +217,22 @@ export class AgentSessionChatClient {
     return session;
   }
 
+  async forkSession(
+    sessionId: string,
+    fromMessageId: string,
+    title?: string,
+  ): Promise<AgentSessionView> {
+    const session = await this.protocol.forkSession({
+      fromMessageId,
+      sessionId,
+      ...(title ? { title } : {}),
+    });
+    // The fork is durable even if observation needs a retry; the caller
+    // navigates to it either way, and the transcript is a data read.
+    await this.observe(session.id).catch(() => undefined);
+    return session;
+  }
+
   async submitMessage(
     sessionId: string,
     parts: AgentInputPart[],

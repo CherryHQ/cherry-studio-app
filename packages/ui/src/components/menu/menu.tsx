@@ -1,11 +1,12 @@
 import { useCallback, useMemo } from 'react';
 import { callback, getHostComponent } from 'react-native-nitro-modules';
 
-import type { MenuProps } from './menu.types';
+import type { MenuIcon, MenuProps } from './menu.types';
 import type {
   CherryMenuViewMethods,
   CherryMenuViewProps,
   NativeMenuCheckedState,
+  NativeMenuIcon,
 } from './specs/cherry-menu-view.nitro';
 
 const getViewConfig = () =>
@@ -24,6 +25,10 @@ function getCheckedState(checked: boolean | undefined): NativeMenuCheckedState {
   return checked ? 'on' : 'off';
 }
 
+function getIcon(icon: MenuIcon | undefined): NativeMenuIcon {
+  return icon ?? 'none';
+}
+
 export function Menu({ children, items, trigger }: MenuProps) {
   const actions = useMemo(() => new Map(items.map((item) => [item.id, item.onPress])), [items]);
   const nativeItems = useMemo(
@@ -32,6 +37,7 @@ export function Menu({ children, items, trigger }: MenuProps) {
         checked: getCheckedState(item.checked),
         destructive: item.destructive ?? false,
         disabled: item.disabled ?? false,
+        icon: getIcon(item.icon),
         id: item.id,
         label: item.label,
       })),

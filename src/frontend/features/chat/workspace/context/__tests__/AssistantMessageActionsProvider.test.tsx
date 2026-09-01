@@ -8,15 +8,30 @@ import {
 } from '../AssistantMessageActionsProvider';
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
+const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 const mockLoggerError = jest.fn();
+let mockSourceTitle: string | undefined;
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
 
+jest.mock('../../../runtime', () => ({
+  useAgentChatFork: () => mockForkSession,
+}));
+
+jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentSession: () => ({ data: { title: mockSourceTitle } }),
+}));
+
+// Interpolating stub: the fork title is composed here, so a key-only `t` would
+// hide whether the source name actually reaches it.
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, values?: Record<string, string>) =>
+      values ? `${key}:${Object.values(values).join(',')}` : key,
+  }),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -53,7 +68,7 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
 
 function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
-    <AssistantMessageActionsProvider isAssistantToolbarEnabled>
+    <AssistantMessageActionsProvider isAssistantToolbarEnabled sessionId="session-1">
       <ContextProbe ref={probeRef} />
     </AssistantMessageActionsProvider>
   );
@@ -66,6 +81,7 @@ describe('AssistantMessageActionsProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mockSourceTitle = 'Arithmetic drills';
     probeRef = createRef<ContextProbeHandle>();
   });
 
@@ -118,6 +134,43 @@ describe('AssistantMessageActionsProvider', () => {
 
     expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
     expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.copyFailed' });
+  });
+
+  test('routes fork failures to logging and user feedback', async () => {
+    const error = new Error('fork failed');
+    mockForkSession.mockRejectedValueOnce(error);
+    renderProvider();
+
+    await act(async () => {
+      probeRef.current?.actions.forkFromAssistantMessage({ messageId: 'assistant-1' });
+      await Promise.resolve();
+    });
+
+    expect(mockForkSession).toHaveBeenCalledWith({
+      fromMessageId: 'assistant-1',
+      sessionId: 'session-1',
+      title: 'chat.fork.sessionTitle:Arithmetic drills',
+    });
+    expect(mockLoggerError).toHaveBeenCalledWith('Fork assistant message failed', error);
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.forkFailed' });
+  });
+
+  test('leaves an unnamed source unnamed instead of forking it to a bare prefix', async () => {
+    // A prefix with nothing after it would also be non-empty, which permanently
+    // disqualifies the fork from auto-naming.
+    mockSourceTitle = '   ';
+    renderProvider();
+
+    await act(async () => {
+      probeRef.current?.actions.forkFromAssistantMessage({ messageId: 'assistant-1' });
+      await Promise.resolve();
+    });
+
+    expect(mockForkSession).toHaveBeenCalledWith({
+      fromMessageId: 'assistant-1',
+      sessionId: 'session-1',
+      title: undefined,
+    });
   });
 
   test('logs a stale copy failure without showing outdated user feedback', async () => {

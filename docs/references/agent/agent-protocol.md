@@ -59,6 +59,7 @@ type AgentSessionView = {
   executionTarget: AgentExecutionTarget
   title: string
   titleIsManual: boolean
+  forkedFromSessionId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -287,6 +288,11 @@ Runtime identity.
 interface AgentProtocol {
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
+  forkSession(input: {
+    sessionId: string
+    fromMessageId: string
+    title?: string
+  }): Promise<AgentSessionView>
 
   startSession(input: {
     agentId: string
@@ -344,6 +350,16 @@ uses `web-search` to admit `web_search` and `web_fetch`, and `image-generation` 
 so submissions omit the array, which admits neither temporary capability. The assistant's inference
 snapshot records the concrete tools frozen for the turn, so history does not depend on
 reconstructing composer state.
+
+`forkSession` copies the transcript up to and including `fromMessageId` into a new idle Session,
+and is the only operation that creates a Session from existing history. It is refused with
+`SESSION_BUSY` while the source Session has an active turn, so the fork point is always a clean cut
+(see [Branching](#branching)). The new Session is not observed by the operation; the client
+navigates to it and observes it like any other Session.
+
+`title` defaults to the source's. The client supplies it because a derived name is localized copy
+and the Host has no locale: it resolves the app language only to tell a naming model which language
+to write in, and never composes user-visible text itself.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
@@ -407,6 +423,7 @@ type AgentErrorView = {
   code:
     | 'AGENT_NOT_FOUND'
     | 'SESSION_NOT_FOUND'
+    | 'MESSAGE_NOT_FOUND'
     | 'SESSION_BUSY'
     | 'CAPABILITY_UNSUPPORTED'
     | 'ATTACHMENT_INVALID'
@@ -489,39 +506,42 @@ Host boundary.
 
 ## Branching
 
-Version 1 has no branching. The direction is decided (2026-08-20) so later work does not
-reintroduce a message tree:
-
 Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
 alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
 the one real world that every branch would claim to share. In-place switching therefore
 misrepresents history, and an active-path concept would touch nearly every invariant above.
 
-Branching is instead a **fork**: a Host operation (for example
-`forkSession({ sessionId, fromMessageId })`) creates a new Session and copies the transcript up
-to the fork point inside one transaction. Turns and approvals are not copied; the new Session
-starts idle. Because the Host already supplies complete normalized history for every turn, a
-forked Session executes through the unchanged flow — the Runtime never knows a fork happened.
-Regenerate and "try a different question" are forks from the relevant message boundary.
+Branching is instead a **fork**: `forkSession({ sessionId, fromMessageId })` creates a new Session
+and copies the transcript up to the fork point inside one transaction. Turns and approvals are not
+copied; the new Session starts idle. Because the Host already supplies complete normalized history
+for every turn, a forked Session executes through the unchanged flow — the Runtime never knows a
+fork happened. Regenerate and "try a different question" are forks from the relevant message
+boundary.
 
-Rules for the eventual implementation:
+Rules:
 
-1. A fork point must be a clean cut: a message boundary whose turn is terminal. Forking from a
-   streaming message or an active turn is rejected.
-2. Sessions record lineage (`forkedFromSessionId`, `forkedFromMessageId`, nullable; source
-   deletion clears them) so clients can present provenance.
+1. A fork point must be a clean cut: a message boundary whose turn is terminal. The Host rejects
+   the operation outright while the source Session has an active turn, and the store rejects an
+   anchor whose own row has not settled. Unsettled rows before the anchor are skipped rather than
+   copied, so a fork never carries a placeholder that will never resolve.
+2. Sessions record lineage so clients can present provenance. Only `forkedFromSessionId` is
+   stored — enough to name and open the source. The fork point itself is not recorded: no surface
+   asks which message a fork was cut at, and storing it would add a second column and a second
+   dangling reference to reconcile. Lineage is a self-referencing `ON DELETE SET NULL` foreign
+   key, so deleting the source clears the claim and leaves the fork intact.
 3. Copied history keeps past tool calls and results verbatim. A fork opens a new future; it does
    not claim to undo executed side effects, and results in the copied transcript reflect the
-   world at fork time.
+   world at fork time. Copied messages keep their original `createdAt` for the same reason: the
+   transcript shows when the conversation happened, not when it was copied.
 
-Message editing follows the same model. An edit-and-continue operation creates a new Session, copies
-the clean transcript before the edited user message, inserts the replacement input, and starts a new
-turn. It does not mutate an already-executed Agent history in place, copy later assistant output, or
-claim to undo tool side effects. A display-only annotation, if ever added, must be named separately
-and must not change model context.
+Message editing is not implemented, and when it is it follows the same model. An edit-and-continue
+operation creates a new Session, copies the clean transcript before the edited user message, inserts
+the replacement input, and starts a new turn. It does not mutate an already-executed Agent history
+in place, copy later assistant output, or claim to undo tool side effects. A display-only
+annotation, if ever added, must be named separately and must not change model context.
 
-This is an additive protocol extension: no existing operation, event, snapshot, or invariant
-changes.
+Fork was an additive protocol extension: no existing operation, event, snapshot, or invariant
+changed.
 
 For the record, feeding a model from a tree is not the obstacle: model context is always a
 linear message array, and linearizing an active path is a trivial parent walk (current Chat does

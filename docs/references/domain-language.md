@@ -21,6 +21,11 @@ _Avoid_: Assistant entity, bot, character
 A linear conversation owned by one Agent configuration.
 _Avoid_: Topic, room
 
+**Session Fork**:
+A new Agent Session created by copying an existing transcript up to and including a chosen Message.
+The fork records only the Session it came from, and the source is never modified.
+_Avoid_: branch, clone, duplicate
+
 **Message**:
 A persisted Agent Session transcript item with a protocol id, role, status, and structured content
 parts.

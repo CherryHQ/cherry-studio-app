@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lucide `split`, rotated a quarter turn so the stem enters from the leading
+  edge and forks toward the trailing edge. The group rotation keeps the source
+  path data verbatim, including the elbow arc, instead of hand-transforming
+  coordinates. Stroke colour is a placeholder; the menu tints it to the
+  resolved text colour at show time.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <group
+      android:pivotX="12"
+      android:pivotY="12"
+      android:rotation="90">
+    <path
+        android:pathData="M16 3h5v5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M8 3H3v5"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12 22v-8.3a4 4 0 0 0 -1.172 -2.872L3 3"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="m15 9 6 -6"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+  </group>
+</vector>

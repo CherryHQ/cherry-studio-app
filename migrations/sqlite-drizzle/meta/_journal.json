@@ -92,6 +92,13 @@
       "when": 1788156348036,
       "tag": "0012_mcp-http-headers",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788234662321,
+      "tag": "0013_agent-session-fork-lineage",
+      "breakpoints": true
     }
   ]
 }

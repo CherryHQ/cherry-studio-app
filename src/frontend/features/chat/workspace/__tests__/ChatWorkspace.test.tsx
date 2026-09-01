@@ -9,6 +9,7 @@ import { ChatWorkspace } from '../ChatWorkspace';
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
 const mockRespondApproval = jest.fn(async () => undefined);
+const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 const mockTranslate = (key: string) => key;
@@ -35,6 +36,7 @@ jest.mock('expo-router/react-navigation', () => ({
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -79,6 +81,10 @@ jest.mock('@/frontend/utils/constants', () => ({
   isIOS: false,
 }));
 
+jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentSession: () => ({ data: { agentId: 'agent-1', title: 'Session title' } }),
+}));
+
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
     withContext: () => ({ debug: jest.fn(), error: jest.fn() }),
@@ -112,6 +118,7 @@ jest.mock('../../runtime', () => ({
         status: message.status === 'success' ? 'success' : 'pending',
       })),
   useAgentChatActions: () => ({ respondApproval: mockRespondApproval }),
+  useAgentChatFork: () => mockForkSession,
   useAgentChatSession: () => mockAgentChatSession,
 }));
 
@@ -184,6 +191,7 @@ function createWorkspaceElement(
       isAssistantToolbarEnabled={!isPreview}
       keyboardOffset={isPreview ? 0 : 26}
       messageWindow={{
+        isAtHistoryStart: true,
         isLoadingInitial,
         isLoadingOlder: true,
         loadOlder: mockLoadOlder,
