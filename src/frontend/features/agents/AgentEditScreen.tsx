@@ -25,6 +25,7 @@ import {
 } from '@/frontend/hooks/agent';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -42,7 +43,7 @@ const logger = loggerService.withContext('AgentEditScreen');
 export default function AgentEditScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ agentId?: string | string[] }>();
-  const agentId = getSingleParamValue(params.agentId);
+  const agentId = getSingleRouteParam(params.agentId);
   const { agent, isLoading, refetch } = useAgentApiById(agentId);
   const {
     bindings,
@@ -92,6 +93,7 @@ export default function AgentEditScreen() {
 
   return (
     <AgentEditForm
+      key={agentId ?? 'new'}
       agent={agent}
       agentId={agentId}
       originalToolBindings={bindings}
@@ -433,10 +435,6 @@ function AgentEditForm({
       </BottomSheet>
     </>
   );
-}
-
-function getSingleParamValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value.at(0) : value;
 }
 
 const styles = StyleSheet.create({

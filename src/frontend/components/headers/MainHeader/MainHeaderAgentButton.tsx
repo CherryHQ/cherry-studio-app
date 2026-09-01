@@ -1,66 +1,65 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
+import { Pressable, Text } from 'react-native';
 
-import { AgentAvatar } from '@/frontend/components/avatar';
+import {
+  type ChatRouteParamsInput,
+  chatRouteParams,
+  parseChatRoute,
+  useStartNewChat,
+} from '@/frontend/components/navigation/chat';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
-import { HeaderIconButton } from '../components/HeaderAction/HeaderIconButton';
-
-// Smaller than the 40-point button so the avatar keeps a ring of the button's
-// own surface around it, the way the line icons beside it sit inset.
-const agentButtonAvatarSize = 28;
-
 export function useMainHeaderAgent() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    agentId?: string | string[];
-    sessionId?: string | string[];
-  }>();
-  const routeAgentId = getSingleParamValue(params.agentId);
-  const sessionId = getSingleParamValue(params.sessionId);
+  const params = useLocalSearchParams<ChatRouteParamsInput>();
+  const route = parseChatRoute(params);
+  const routeTarget = route.status === 'ready' ? route.target : undefined;
+  const routeAgentId = routeTarget?.agentId;
+  const sessionId = routeTarget?.kind === 'session' ? routeTarget.sessionId : undefined;
   const session = useAgentSession(sessionId);
   const currentAgentId = session.data?.agentId ?? routeAgentId;
   const { agent } = useAgentApiById(currentAgentId);
+  const startNewChat = useStartNewChat();
 
-  const openNewSession = useCallback(() => {
-    if (!agent) {
-      router.push('/agents');
+  const openAgentHistory = useCallback(() => {
+    if (!currentAgentId) {
       return;
     }
-    router.setParams({ agentId: agent.id, sessionId: undefined });
-  }, [agent, router]);
-  const openAgent = useCallback(() => {
-    if (!agent) {
-      return;
-    }
+
     router.push({
-      params: { agentId: agent.id },
-      pathname: '/agents/[agentId]/edit',
+      params: { agentId: currentAgentId },
+      pathname: '/sessions',
     });
-  }, [agent, router]);
+  }, [currentAgentId, router]);
+  const openNewSession = useCallback(() => {
+    if (agent) {
+      router.setParams(chatRouteParams({ agentId: agent.id, kind: 'draft' }));
+      return;
+    }
 
-  return { agent, openAgent, openNewSession };
+    void startNewChat();
+  }, [agent, router, startNewChat]);
+
+  return { agent, currentAgentId, openAgentHistory, openNewSession };
 }
 
 export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPress: () => void }) {
   return (
-    <HeaderIconButton
+    <Pressable
       accessibilityLabel={agent.name}
-      className="overflow-hidden"
+      accessibilityRole="button"
+      className="max-w-48 flex-row items-center justify-center gap-1 rounded-full px-3 py-2 active:bg-secondary"
+      hitSlop={8}
       onPress={onPress}
       testID="current-agent-button"
     >
-      <AgentAvatar
-        accessibilityLabel={agent.name}
-        name={agent.name}
-        size={agentButtonAvatarSize}
-        uri={agent.avatarUri}
-      />
-    </HeaderIconButton>
+      <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
+        {agent.name}
+      </Text>
+      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+    </Pressable>
   );
-}
-
-function getSingleParamValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value.at(0) : value;
 }

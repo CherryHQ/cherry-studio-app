@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
+import { chatRouteParams } from '@/frontend/components/navigation/chat';
 import { useAgentSession } from '@/frontend/hooks/agent';
 
 type ChatForkOriginDividerProps = {
@@ -23,7 +24,13 @@ export function ChatForkOriginDivider({ sourceSessionId }: ChatForkOriginDivider
 
     // The chat screen's pathname is always '/', so returning to the source is a
     // param swap; pushing would stack a second copy of the screen we came from.
-    router.setParams({ agentId: sourceAgentId, sessionId: sourceSessionId });
+    router.setParams(
+      chatRouteParams({
+        agentId: sourceAgentId,
+        kind: 'session',
+        sessionId: sourceSessionId,
+      }),
+    );
   }, [router, sourceAgentId, sourceSessionId]);
 
   // Deleting the source clears the lineage column, but this fork can render in

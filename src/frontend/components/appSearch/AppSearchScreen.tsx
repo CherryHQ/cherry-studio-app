@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/components/headers';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import {
   cancelScheduledAppSearchFinish,
@@ -34,7 +35,7 @@ type AppSearchListItem =
 
 export default function AppSearchScreen() {
   const params = useLocalSearchParams<{ sessionId?: string | string[] }>();
-  const sessionId = getSingleParam(params.sessionId);
+  const sessionId = getSingleRouteParam(params.sessionId);
   const session = getAppSearchSession(sessionId);
   const router = useRouter();
   const navigation = useNavigation<AppSearchNavigation>();
@@ -309,10 +310,6 @@ function AppSearchRoutePage({
       </View>
     </>
   );
-}
-
-function getSingleParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function buildListItems(

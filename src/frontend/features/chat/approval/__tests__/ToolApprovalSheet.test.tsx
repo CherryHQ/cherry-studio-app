@@ -193,6 +193,33 @@ describe('ToolApprovalSheet', () => {
     expect(renderedTexts()).toContain('Server One: Search docs');
   });
 
+  test('resets the submitting state when the sheet advances to another approval', async () => {
+    let settle!: () => void;
+    const { rerender } = render({
+      onRespond: () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    });
+
+    await act(async () => {
+      findButton(allowLabel)?.props.onPress();
+      await Promise.resolve();
+    });
+    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+
+    rerender([
+      makeApproval({
+        approvalId: 'approval-2',
+        displayName: 'Server Two: Create file',
+        toolCallId: 'call-2',
+      }),
+    ]);
+
+    expect(findButton(allowLabel)?.props.disabled).toBe(false);
+    await act(async () => settle());
+  });
+
   test('says how many approvals are still queued behind this one', () => {
     render({
       approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],

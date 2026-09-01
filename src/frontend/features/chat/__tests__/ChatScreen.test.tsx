@@ -40,6 +40,10 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
 
+jest.mock('@/frontend/data/hooks', () => ({
+  usePreference: () => [null, jest.fn(async () => undefined)],
+}));
+
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
     agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,

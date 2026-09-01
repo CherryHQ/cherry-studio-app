@@ -11,6 +11,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
+import { chatHref } from '@/frontend/components/navigation/chat';
 import {
   useListBottomInset,
   usePendingDeletionIds,
@@ -211,9 +212,9 @@ const SessionListView = memo(function SessionListView() {
 
 // The list owns its data provider so hosts (the session management screen, or
 // anything else embedding the list) never touch session state directly.
-export function SessionList() {
+export function SessionList({ agentId }: { agentId?: string }) {
   return (
-    <SessionListProvider>
+    <SessionListProvider agentId={agentId}>
       <SessionListView />
     </SessionListProvider>
   );
@@ -250,8 +251,8 @@ export const SessionRow = memo(function SessionRow({
     [onToggle, session.id],
   );
   const href = useMemo(
-    () => ({ pathname: '/' as const, params: { sessionId: session.id } }),
-    [session.id],
+    () => chatHref({ agentId: session.agentId, kind: 'session', sessionId: session.id }),
+    [session.agentId, session.id],
   );
   const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
     () => [

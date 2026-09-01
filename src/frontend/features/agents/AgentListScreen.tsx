@@ -4,6 +4,7 @@ import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import {
   ContentState,
+  ContextMenu,
   ContextMenuScrollBoundary,
   type MenuItem,
   useAlert,
@@ -18,7 +19,7 @@ import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 import { AgentAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
-import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
+import { useOpenAgentChat } from '@/frontend/components/navigation/chat';
 import {
   areAllSelected,
   SelectionToolbar,
@@ -34,6 +35,7 @@ export default function AgentListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { agents, error, isLoading, refetch } = useAgentsApi();
+  const openAgentChat = useOpenAgentChat();
   const { deleteAgent, deleteAgents } = useAgentMutations();
   const { alert } = useAlert();
   const bottomInset = useListBottomInset();
@@ -230,6 +232,7 @@ export default function AgentListScreen() {
                     isSelected={selectedIds.has(agent.id)}
                     onDelete={requestDeleteAgent}
                     onEdit={openAgentEditor}
+                    onOpen={openAgentChat}
                     onToggle={toggleAgent}
                   />
                 ))}
@@ -285,6 +288,7 @@ type AgentListRowProps = {
   isSelected: boolean;
   onDelete: (agent: Agent) => void;
   onEdit: (agentId: string) => void;
+  onOpen: (agentId: string) => Promise<void>;
   onToggle: (agentId: string) => void;
 };
 
@@ -294,6 +298,7 @@ function AgentListRow({
   isSelected,
   onDelete,
   onEdit,
+  onOpen,
   onToggle,
 }: AgentListRowProps) {
   const { t } = useTranslation();
@@ -312,14 +317,7 @@ function AgentListRow({
     },
     [agent.id, onToggle],
   );
-  const href = useMemo(
-    () => ({
-      pathname: '/' as const,
-      params: { agentId: agent.id },
-    }),
-    [agent.id],
-  );
-  const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
+  const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
         id: 'edit',
@@ -344,7 +342,7 @@ function AgentListRow({
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
       onAccessibilityAction={isEditing ? handleAccessibilityAction : undefined}
-      onPress={isEditing ? () => onToggle(agent.id) : undefined}
+      onPress={isEditing ? () => onToggle(agent.id) : () => void onOpen(agent.id)}
     >
       <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b py-2 pl-2">
         {isEditing ? (
@@ -377,11 +375,5 @@ function AgentListRow({
     </GesturePressable>
   );
 
-  return isEditing ? (
-    row
-  ) : (
-    <ContextMenuLink href={href} items={menuItems} preview={false}>
-      {row}
-    </ContextMenuLink>
-  );
+  return isEditing ? row : <ContextMenu items={menuItems}>{row}</ContextMenu>;
 }

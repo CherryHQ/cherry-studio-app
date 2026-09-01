@@ -20,8 +20,9 @@ import type { Agent } from '@/shared/data/types/agent';
 const EMPTY_AGENTS: readonly Agent[] = Object.freeze([]);
 type AgentListData = OffsetPaginationResponse<Agent>;
 
-export function useAgentsApi() {
+export function useAgentsApi(options: { enabled?: boolean } = {}) {
   const query = useQuery('/agents', {
+    enabled: options.enabled,
     query: { limit: AGENTS_MAX_LIMIT },
   });
 

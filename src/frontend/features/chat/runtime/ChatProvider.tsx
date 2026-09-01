@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
+import { chatHref, chatRouteParams } from '@/frontend/components/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
@@ -133,16 +134,13 @@ function createChatNavigation(input: { pathname: string; router: ReturnType<type
 
   return {
     openSession: (sessionId: string, agentId: string) => {
-      const params = {
-        agentId,
-        sessionId,
-      };
+      const target = { agentId, kind: 'session' as const, sessionId };
       if (navigation.pathname === '/') {
-        navigation.router.setParams(params);
+        navigation.router.setParams(chatRouteParams(target));
         return;
       }
 
-      navigation.router.replace({ params, pathname: '/' });
+      navigation.router.replace(chatHref(target));
     },
     update: (nextNavigation: typeof input) => {
       navigation = nextNavigation;

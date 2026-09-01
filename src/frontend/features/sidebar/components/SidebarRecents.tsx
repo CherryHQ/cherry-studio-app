@@ -10,6 +10,7 @@ import { Pressable } from 'react-native-gesture-handler';
 
 import { AgentAvatar } from '@/frontend/components/avatar';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
+import { chatHref } from '@/frontend/components/navigation/chat';
 import {
   SessionListProvider,
   type SessionViewMode,
@@ -302,7 +303,7 @@ type SidebarSessionRowProps = {
 
 function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: SidebarSessionRowProps) {
   const { t } = useTranslation();
-  const href = { pathname: '/' as const, params: { sessionId: session.id } };
+  const href = chatHref({ agentId: session.agentId, kind: 'session', sessionId: session.id });
   const menuItems: readonly ContextMenuLinkItem[] = [
     {
       id: 'rename',
