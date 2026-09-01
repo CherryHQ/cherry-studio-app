@@ -32,6 +32,7 @@ export function MessageList({
   contentTopInset,
   enteringMessageId,
   extraData,
+  headerAccessory,
   keyboardOffset,
   messages,
   onLoadOlder,
@@ -62,7 +63,15 @@ export function MessageList({
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
-  const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
+  const listHeader = useMemo(
+    () => (
+      <>
+        <View style={{ height: contentTopInset }} />
+        {headerAccessory}
+      </>
+    ),
+    [contentTopInset, headerAccessory],
+  );
   const renderMessageRow = useCallback(
     ({ item }: LegendListRenderItemProps<MessageListItem>) => (
       <MessageListRow message={item} renderMessage={renderMessage} />

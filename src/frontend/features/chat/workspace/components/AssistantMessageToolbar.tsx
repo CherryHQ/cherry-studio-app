@@ -1,6 +1,7 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import { Button } from '@cherrystudio/ui/components';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import { Button, Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -22,40 +23,64 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
   const { copiedMessageId, isAssistantToolbarEnabled } = useAssistantMessageActionsState();
-  const { copyAssistantMessage } = useAssistantMessageActions();
+  const { copyAssistantMessage, forkFromAssistantMessage } = useAssistantMessageActions();
+  const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
-    () =>
-      !isAssistantToolbarEnabled || message.status === 'pending'
-        ? ''
-        : copyAssistantMessageText(message.data.parts ?? []),
-    [isAssistantToolbarEnabled, message],
+    () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
+    [isSettled, message],
   );
   const isCopied = copiedMessageId === message.id;
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () =>
+      isSettled
+        ? [
+            {
+              icon: 'branch',
+              id: 'fork',
+              label: t('chat.messageActions.fork'),
+              onPress: () => forkFromAssistantMessage({ messageId: message.id }),
+            },
+          ]
+        : [],
+    [forkFromAssistantMessage, isSettled, message.id, t],
+  );
 
-  if (!isAssistantToolbarEnabled || message.status === 'pending') {
-    return null;
-  }
-
-  if (!copyText) {
+  if (!isSettled) {
     return null;
   }
 
   return (
-    <View className="min-h-7 flex-row items-center" testID="assistant-message-toolbar">
-      <Button
-        accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
-        icon={
-          isCopied ? (
-            <CheckIcon className="text-muted-foreground" />
-          ) : (
-            <CopyIcon className="text-muted-foreground" />
-          )
-        }
-        onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
-        size="xs"
-        testID="assistant-message-copy"
-        variant="ghost"
-      />
+    <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
+      {copyText ? (
+        <Button
+          accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
+          icon={
+            isCopied ? (
+              <CheckIcon className="text-muted-foreground" />
+            ) : (
+              <CopyIcon className="text-muted-foreground" />
+            )
+          }
+          onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
+          size="xs"
+          testID="assistant-message-copy"
+          variant="ghost"
+        />
+      ) : null}
+      {/*
+        The native menu installs its own hit target over this subtree, so the
+        trigger is a plain labelled View rather than a second pressable.
+      */}
+      <Menu items={menuItems} trigger="tap">
+        <View
+          accessibilityLabel={t('common.more')}
+          accessibilityRole="button"
+          className="size-7 items-center justify-center"
+          testID="assistant-message-more"
+        >
+          <EllipsisIcon className="size-4 text-muted-foreground" />
+        </View>
+      </Menu>
     </View>
   );
 });

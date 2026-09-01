@@ -12,9 +12,14 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentSession } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useAgentChatFork } from '../../runtime';
+
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
+/** Matches the Session title column, which the fork input also caps at 255. */
+const SESSION_TITLE_MAX_LENGTH = 255;
 const logger = loggerService.withContext('AssistantMessageActions');
 
 type AssistantMessageActionsState = {
@@ -24,6 +29,8 @@ type AssistantMessageActionsState = {
 
 type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
+  /** Copies the transcript up to this message into a new chat and opens it. */
+  forkFromAssistantMessage: (input: { messageId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -33,14 +40,19 @@ const AssistantMessageActionsContext = createContext<AssistantMessageActions | n
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
+  sessionId: string;
 }>;
 
 export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
+  sessionId,
 }: AssistantMessageActionsProviderProps) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const forkSession = useAgentChatFork();
+  // Already in cache: the chat screen resolves this same Session to render.
+  const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyOperationIdRef = useRef(0);
@@ -82,11 +94,36 @@ export function AssistantMessageActionsProvider({
     [alert, t],
   );
 
+  const forkFromAssistantMessage = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      // An unnamed source stays unnamed, so the fork keeps the empty title that
+      // lets auto-naming name it from its own first message. A prefix alone
+      // would block that forever.
+      const title = sourceTitle
+        ? t('chat.fork.sessionTitle', { title: sourceTitle }).slice(0, SESSION_TITLE_MAX_LENGTH)
+        : undefined;
+
+      void forkSession({ fromMessageId: messageId, sessionId, title }).catch((error) => {
+        logger.error('Fork assistant message failed', error as Error);
+
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        alert.show({ title: t('chat.messageActions.forkFailed') });
+      });
+    },
+    [alert, forkSession, sessionId, sourceTitle, t],
+  );
+
   const stateValue = useMemo(
     () => ({ copiedMessageId, isAssistantToolbarEnabled }),
     [copiedMessageId, isAssistantToolbarEnabled],
   );
-  const actionsValue = useMemo(() => ({ copyAssistantMessage }), [copyAssistantMessage]);
+  const actionsValue = useMemo(
+    () => ({ copyAssistantMessage, forkFromAssistantMessage }),
+    [copyAssistantMessage, forkFromAssistantMessage],
+  );
 
   useEffect(() => {
     isMountedRef.current = true;

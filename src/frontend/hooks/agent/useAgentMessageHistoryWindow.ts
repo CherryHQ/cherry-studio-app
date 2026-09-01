@@ -9,6 +9,11 @@ import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 export type AgentMessageHistoryWindow = {
   error?: Error;
+  /**
+   * True once the window holds the whole transcript, so a caller may render
+   * something that claims to sit above the first message.
+   */
+  isAtHistoryStart: boolean;
   isLoadingInitial: boolean;
   isLoadingOlder: boolean;
   loadOlder: () => Promise<void>;
@@ -99,6 +104,9 @@ export function useAgentMessageHistoryWindow(
 
   return {
     error,
+    // Both gates matter: an unfetched page and a withheld render page are
+    // equally "there is more above this".
+    isAtHistoryStart: !hasNext && !hasHiddenMessages && !isLoading,
     isLoadingInitial: isLoading,
     isLoadingOlder,
     loadOlder,
