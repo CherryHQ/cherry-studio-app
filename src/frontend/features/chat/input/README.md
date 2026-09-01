@@ -15,10 +15,11 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- The composer is always two rows: the field, and the toolbar under it carrying the ＋ menu, the
-  model pill, the reasoning-effort gauge, and send. Nothing is revealed by focus and nothing morphs
-  on it, so the tools are readable and reachable before the field is ever touched. The field grows
-  with its content up to the shared composer's cap and the toolbar follows it down.
+- At rest the composer is one row with the ＋ menu and send action always reachable. Focusing the
+  field morphs it into two rows: the field takes the full width, the action row moves below it, and
+  the model pill and reasoning-effort gauge slide and scale in without animating their glass
+  opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
+  it down.
 - Native media pickers and model/settings Sheets replace the live input context: the shared
   composer pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort

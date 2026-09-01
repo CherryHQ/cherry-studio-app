@@ -42,7 +42,7 @@ export function ComposerInput({
   // editor currently mixes dp and px when applying `lineHeight`, collapsing its
   // native line box and caret.
   const baseTextStyle = useResolveClassNames('text-(length:--text-base) text-foreground');
-  const placeholderStyle = useResolveClassNames('text-muted-foreground');
+  const placeholderStyle = useResolveClassNames('text-foreground-tertiary');
   const fallbackRef = useRef<ComposerInputHandle | null>(null);
   const inputRef = ref ?? fallbackRef;
   // The field is uncontrolled — it owns its own text and we mirror it out. This

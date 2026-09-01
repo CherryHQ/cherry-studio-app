@@ -52,8 +52,8 @@ export type ComposerActionProps = {
   /** The icon. Size it via className on the icon itself. */
   children: ReactNode;
   /**
-   * The circle's fill. Also drives the glass tint — an untinted `GlassView`
-   * sitting on the composer's own surface renders nothing at all.
+   * Overrides the circle's adaptive fill and its glass tint. An untinted nested
+   * `GlassView` sitting on the composer's own surface renders nothing at all.
    */
   className?: string;
   disabled?: boolean;
@@ -69,7 +69,7 @@ export type ComposerPillProps = {
    * width before the toolbar does, but only the caller can say how its text ends.
    */
   children: ReactNode;
-  /** The fill, and with it the glass tint. Same rule as `Composer.Action`. */
+  /** Overrides the adaptive fill and its glass tint. Same rule as `Composer.Action`. */
   className?: string;
   disabled?: boolean;
   /** Held at its natural size, so a long label squeezes the text and not the icon. */
