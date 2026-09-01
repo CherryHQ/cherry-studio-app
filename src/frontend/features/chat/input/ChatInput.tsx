@@ -50,7 +50,7 @@ const logger = loggerService.withContext('ChatInput');
 const restingInputHeight = 32;
 const restingActionSlotWidth = restingInputHeight + 8;
 const restingSecondaryControlScale = 0.92;
-const activeToolbarGap = 12;
+const activeToolbarGap = 16;
 const focusTransitionMotion = {
   duration: duration.base,
   easing: easing.settle,
