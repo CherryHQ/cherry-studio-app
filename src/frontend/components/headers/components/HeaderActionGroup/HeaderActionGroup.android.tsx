@@ -4,7 +4,7 @@ import { HeaderAction } from '../HeaderAction';
 import type { HeaderActionTone } from '../HeaderAction';
 import type { HeaderActionGroupProps } from './HeaderActionGroup.types';
 
-const GROUP_BASE_CLASS_NAME = 'flex-row items-center gap-1 rounded-full shadow-sm';
+const GROUP_BASE_CLASS_NAME = 'absolute inset-1 rounded-full shadow-sm';
 const GROUP_CLASS_NAMES: Record<HeaderActionTone, string> = {
   default: `${GROUP_BASE_CLASS_NAME} bg-background`,
   inverse: `${GROUP_BASE_CLASS_NAME} bg-constant-black/55`,
@@ -17,9 +17,12 @@ export function HeaderActionGroup({ actions, tone = 'default' }: HeaderActionGro
   }
 
   return (
-    <View className={GROUP_CLASS_NAMES[tone]}>
+    <View className="relative flex-row items-center">
+      {/* Actions own adjacent, non-overlapping 48dp targets. The inset surface
+          stays 40dp tall and remains a circle when the group has one action. */}
+      <View className={GROUP_CLASS_NAMES[tone]} pointerEvents="none" />
       {actions.map((action) => (
-        <HeaderAction action={action} key={action.key} tone={tone} />
+        <HeaderAction action={action} key={action.key} targetSize="touch-target" tone={tone} />
       ))}
     </View>
   );

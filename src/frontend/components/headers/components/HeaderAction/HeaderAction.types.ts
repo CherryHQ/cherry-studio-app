@@ -7,6 +7,8 @@ export type HeaderActionIconProps = {
 
 export type HeaderActionTone = 'default' | 'inverse';
 
+export type HeaderActionTargetSize = 'surface' | 'touch-target';
+
 type HeaderActionBase = {
   key: string;
 };
@@ -40,5 +42,6 @@ export type HeaderToolbarAction =
 
 export type HeaderActionProps = {
   action: HeaderToolbarAction;
+  targetSize?: HeaderActionTargetSize;
   tone?: HeaderActionTone;
 };

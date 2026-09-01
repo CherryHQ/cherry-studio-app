@@ -32,7 +32,8 @@ This module owns Expo Router header adapters used by the app screens.
   platforms, and self-drawn headers do not add bottom borders or elevation.
 - Top-bar controls share one Cherry action size and grouping contract. iOS lets the native toolbar
   draw its system background. Android supplies the matching fallback surface: one action forms a
-  circle, while adjacent actions share one capsule. Default surfaces use theme tokens; inverse
-  surfaces use constant contrast because they sit over uncontrolled media.
+  circle, while adjacent actions share one capsule. The visible surface stays 40dp inside
+  non-overlapping 48dp Android touch targets. Default surfaces use theme tokens; inverse surfaces
+  use constant contrast because they sit over uncontrolled media.
 - `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
   Agent's avatar, so the chat identifies its Agent the same way the Agent list does.
