@@ -26,6 +26,8 @@ export type MessageListProps = {
   dataKey?: string;
   enteringMessageId?: string;
   extraData?: unknown;
+  /** Scrolls above the first message; the caller decides when it applies. */
+  headerAccessory?: ReactNode;
   initialLayoutReady?: boolean;
   keyboardOffset: number;
   messages: readonly MessageListItem[];

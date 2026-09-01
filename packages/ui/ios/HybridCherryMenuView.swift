@@ -122,6 +122,16 @@ private final class CherryMenuContainerView: UIView, UIContextMenuInteractionDel
         interactionHost = nil
     }
 
+    /// Resolves the contract's semantic icon token to this platform's artwork.
+    private func makeImage(for icon: NativeMenuIcon) -> UIImage? {
+        switch icon {
+        case .none:
+            return nil
+        case .branch:
+            return UIImage(systemName: "arrow.triangle.branch")
+        }
+    }
+
     private func makeMenu() -> UIMenu {
         let actions = items.map { item in
             var attributes: UIMenuElement.Attributes = []
@@ -142,7 +152,7 @@ private final class CherryMenuContainerView: UIView, UIContextMenuInteractionDel
 
             return UIAction(
                 title: item.label,
-                image: nil,
+                image: makeImage(for: item.icon),
                 identifier: UIAction.Identifier(item.id),
                 attributes: attributes,
                 state: state

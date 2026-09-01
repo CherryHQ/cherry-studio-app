@@ -2,6 +2,8 @@ declare module 'react-test-renderer' {
   import type { ReactElement } from 'react';
 
   export type ReactTestInstance = {
+    /** Rendered children in order; text arrives as a bare string, not a node. */
+    children: (ReactTestInstance | string)[];
     /** `null` at the root, and for a node whose parents are all host-less. */
     parent: ReactTestInstance | null;
     props: Record<string, any>;

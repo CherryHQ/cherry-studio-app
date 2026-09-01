@@ -11,7 +11,9 @@
 #include "NativeMenuItem.hpp"
 
 #include "JNativeMenuCheckedState.hpp"
+#include "JNativeMenuIcon.hpp"
 #include "NativeMenuCheckedState.hpp"
+#include "NativeMenuIcon.hpp"
 #include <string>
 
 namespace margelo::nitro::cherrystudio::ui {
@@ -39,6 +41,8 @@ namespace margelo::nitro::cherrystudio::ui {
       jboolean destructive = this->getFieldValue(fieldDestructive);
       static const auto fieldDisabled = clazz->getField<jboolean>("disabled");
       jboolean disabled = this->getFieldValue(fieldDisabled);
+      static const auto fieldIcon = clazz->getField<JNativeMenuIcon>("icon");
+      jni::local_ref<JNativeMenuIcon> icon = this->getFieldValue(fieldIcon);
       static const auto fieldId = clazz->getField<jni::JString>("id");
       jni::local_ref<jni::JString> id = this->getFieldValue(fieldId);
       static const auto fieldLabel = clazz->getField<jni::JString>("label");
@@ -47,6 +51,7 @@ namespace margelo::nitro::cherrystudio::ui {
         checked->toCpp(),
         static_cast<bool>(destructive),
         static_cast<bool>(disabled),
+        icon->toCpp(),
         id->toStdString(),
         label->toStdString()
       );
@@ -58,7 +63,7 @@ namespace margelo::nitro::cherrystudio::ui {
      */
     [[maybe_unused]]
     static jni::local_ref<JNativeMenuItem::javaobject> fromCpp(const NativeMenuItem& value) {
-      using JSignature = JNativeMenuItem(jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
+      using JSignature = JNativeMenuItem(jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<JNativeMenuIcon>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -66,6 +71,7 @@ namespace margelo::nitro::cherrystudio::ui {
         JNativeMenuCheckedState::fromCpp(value.checked),
         value.destructive,
         value.disabled,
+        JNativeMenuIcon::fromCpp(value.icon),
         jni::make_jstring(value.id),
         jni::make_jstring(value.label)
       );

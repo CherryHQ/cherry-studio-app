@@ -51,6 +51,7 @@ export function ChatScreen() {
             assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview}
             contentBottomInset={contentBottomInset}
+            forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
             keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}
             sessionId={sessionId}

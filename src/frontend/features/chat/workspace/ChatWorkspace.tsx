@@ -17,6 +17,7 @@ import {
   useAgentChatActions,
   useAgentChatSession,
 } from '../runtime';
+import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
@@ -34,6 +35,8 @@ type ChatWorkspaceProps = {
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
+  /** Set when this session was forked; names the session it was copied from. */
+  forkedFromSessionId?: string;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
   sessionId: string;
@@ -43,12 +46,14 @@ export function ChatWorkspace({
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
+  forkedFromSessionId,
   keyboardOffset,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
 }: ChatWorkspaceProps) {
-  const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
+  const { error, isAtHistoryStart, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } =
+    messageWindow;
   const live = useAgentChatSession(sessionId);
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
@@ -121,6 +126,13 @@ export function ChatWorkspace({
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(headerHeight);
+  // The divider claims to sit above the first message, so it may only render
+  // once the whole transcript is in the window — otherwise it would hang above
+  // the earliest loaded page and lie about where the fork begins.
+  const forkOriginDivider =
+    forkedFromSessionId && isAtHistoryStart ? (
+      <ChatForkOriginDivider sourceSessionId={forkedFromSessionId} />
+    ) : undefined;
 
   useEffect(() => {
     gateLog.debug('[GATE] state', {
@@ -147,6 +159,7 @@ export function ChatWorkspace({
       <AssistantMessageActionsProvider
         key={sessionId}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+        sessionId={sessionId}
       >
         <MessageList
           contentBottomInset={contentBottomInset}
@@ -154,6 +167,7 @@ export function ChatWorkspace({
           dataKey={sessionId}
           enteringMessageId={live.enteringUserMessageId}
           extraData={messageListExtraData}
+          headerAccessory={forkOriginDivider}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
           keyboardOffset={keyboardOffset}
           messages={listMessages}

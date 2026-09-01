@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, isNotNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -24,6 +24,8 @@ import {
 import type {
   AgentSessionStore,
   FinalizeAssistantMessageInput,
+  ForkSessionInput,
+  ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
@@ -154,6 +156,108 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
       }
       return insertSubmission(tx, input);
+    });
+  }
+
+  async forkSession(input: ForkSessionInput): Promise<ForkSessionResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [source] = await tx
+        .select()
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!source) {
+        return { status: 'session-not-found' };
+      }
+
+      const [anchor] = await tx
+        .select({
+          createdAt: agentSessionMessageTable.createdAt,
+          id: agentSessionMessageTable.id,
+          status: agentSessionMessageTable.status,
+        })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.id, input.fromMessageId),
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+          ),
+        )
+        .limit(1);
+      if (!anchor) {
+        return { status: 'message-not-found' };
+      }
+      if ((UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(anchor.status)) {
+        return { status: 'fork-point-unsettled' };
+      }
+
+      const [forked] = await tx
+        .insert(agentSessionTable)
+        .values({
+          agentId: source.agentId,
+          executionTarget: source.executionTarget,
+          forkedFromSessionId: source.id,
+          lastActivityAt: Date.now(),
+          // Falls back to the source's name. Auto-naming will not rewrite
+          // either form later, because neither is empty nor matches the
+          // first-user-message title the naming policy expects to overwrite.
+          title: input.title ?? source.title,
+          titleIsManual: source.titleIsManual,
+        })
+        .returning();
+
+      // Transcript order is `(createdAt, id)`, so the fork point is a keyset
+      // bound, not an offset.
+      const copied = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            // An unsettled assistant row would arrive as a placeholder that
+            // nothing will ever settle: boot reconciliation only reaches rows
+            // that were unsettled when the process died.
+            notInArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            or(
+              lt(agentSessionMessageTable.createdAt, anchor.createdAt),
+              and(
+                eq(agentSessionMessageTable.createdAt, anchor.createdAt),
+                lte(agentSessionMessageTable.id, anchor.id),
+              ),
+            ),
+          ),
+        )
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+
+      const forkedTurnIds = new Map<string, string>();
+      // Serial inserts, not one multi-row statement: the copy relies on the
+      // generated UUID v7 ids staying monotonic in transcript order, and a
+      // batched insert would also risk the bound-parameter ceiling on a long
+      // transcript.
+      for (const row of copied) {
+        await tx.insert(agentSessionMessageTable).values({
+          // Deliberate exception to the "never write createdAt" rule in
+          // `_columnHelpers.ts`: the fork presents the same history, so its
+          // rows keep the moment they were originally written. Ordering still
+          // holds because createdAt is the major sort key and the reissued ids
+          // break ties in the same direction as the source.
+          createdAt: row.createdAt,
+          data: row.data,
+          error: row.error,
+          messageSnapshot: row.messageSnapshot,
+          modelId: row.modelId,
+          role: row.role,
+          sessionId: forked.id,
+          status: row.status,
+          // contextCheckpoint is deliberately dropped: it is a Runtime-private
+          // artifact anchored to a turn id that this copy no longer carries, so
+          // the fork's first execution replays full history instead.
+          turnId: reissueTurnId(forkedTurnIds, row.turnId),
+          usage: row.usage,
+        });
+      }
+
+      return { session: toAgentSessionView(forked), status: 'forked' };
     });
   }
 
@@ -326,6 +430,25 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       return assistantCount;
     });
   }
+}
+
+/**
+ * Reissues one source turn id per fork, keeping a submission's user/assistant
+ * pair correlated while leaving no id shared with the source Session.
+ */
+function reissueTurnId(reissued: Map<string, string>, turnId: string | null): string | null {
+  if (turnId === null) {
+    return null;
+  }
+
+  const existing = reissued.get(turnId);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const next = createOrderedUuid();
+  reissued.set(turnId, next);
+  return next;
 }
 
 async function insertSubmission(

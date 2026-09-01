@@ -59,6 +59,7 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
+  AgentForkSessionInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
@@ -70,6 +71,7 @@ import {
   type AgentErrorView,
   type AgentEvent,
   type AgentExecutionTarget,
+  type AgentForkSessionInput,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -437,6 +439,33 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       this.initialAdmissions.delete(admission);
       completion.resolve();
+    }
+  }
+
+  async forkSession(input: AgentForkSessionInput): Promise<AgentSessionView> {
+    const parsed = AgentForkSessionInputSchema.parse(input);
+    // A fork point must be a clean cut (agent-protocol.md "Branching" rule 1).
+    // Rejecting the whole operation while a turn is live is stricter than
+    // checking the anchor alone, and it keeps the store from silently dropping
+    // an anchor that is itself the streaming row.
+    this.assertIdle(parsed.sessionId);
+
+    const result = await this.store.forkSession(parsed);
+    switch (result.status) {
+      case 'session-not-found':
+        fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+        break;
+      case 'message-not-found':
+        fail(
+          'MESSAGE_NOT_FOUND',
+          `Message does not exist in this session: ${parsed.fromMessageId}`,
+        );
+        break;
+      case 'fork-point-unsettled':
+        fail('SESSION_BUSY', 'The fork point has not settled yet.');
+        break;
+      case 'forked':
+        return result.session;
     }
   }
 

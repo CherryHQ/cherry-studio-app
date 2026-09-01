@@ -25,8 +25,16 @@ type AgentChatSendInput = {
   sessionId?: string;
 };
 
+type AgentChatForkInput = {
+  fromMessageId: string;
+  sessionId: string;
+  /** Localized name for the copy; omitted, the fork inherits the source's. */
+  title?: string;
+};
+
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
+  forkSession: (input: AgentChatForkInput) => Promise<void>;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
@@ -104,7 +112,18 @@ export function ChatProvider({ children }: PropsWithChildren) {
     },
     [client, navigation, queryClient],
   );
-  const value = useMemo(() => ({ client, sendMessage }), [client, sendMessage]);
+  const forkSession = useCallback(
+    async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
+      const session = await client.forkSession(sessionId, fromMessageId, title);
+      navigation.openSession(session.id, session.agentId);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
+    },
+    [client, navigation, queryClient],
+  );
+  const value = useMemo(
+    () => ({ client, forkSession, sendMessage }),
+    [client, forkSession, sendMessage],
+  );
 
   return <AgentChatContext value={value}>{children}</AgentChatContext>;
 }
@@ -174,6 +193,11 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
 
 export function useAgentChatActions() {
   return useAgentChatContext().client;
+}
+
+/** Forks a Session at one message and navigates to the copy. */
+export function useAgentChatFork() {
+  return useAgentChatContext().forkSession;
 }
 
 function useAgentSessionSelection<TValue>(
