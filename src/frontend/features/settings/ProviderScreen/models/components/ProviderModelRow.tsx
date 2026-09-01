@@ -1,13 +1,26 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/avatar';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-/** Most rows are one line; a distinct API model id adds one compact metadata line. */
-export const providerModelRowEstimatedHeight = 48;
+import { getProviderModelBadges, type ProviderModelBadge } from '../utils/providerModelBadges';
+import { ProviderModelBadge as ProviderModelBadgeChip } from './ProviderModelBadge';
+
+export type ProviderModelRowVariant = 'management' | 'synchronization';
+
+export const providerModelRowEstimatedHeights = {
+  management: 42,
+  synchronization: 58,
+} as const satisfies Record<ProviderModelRowVariant, number>;
+
+const providerModelBadgeLabelKeys = {
+  free: 'models.capability.free',
+  vision: 'models.capability.imageRecognition',
+} as const satisfies Record<ProviderModelBadge, string>;
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
@@ -27,6 +40,7 @@ export function ProviderModelRow({
   provider,
   selection,
   tone = 'default',
+  variant,
 }: {
   /** The row's trailing action. */
   children?: ReactNode;
@@ -45,12 +59,24 @@ export function ProviderModelRow({
   };
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
+  /** Management prioritizes decision-useful badges; synchronization keeps the provider's raw id. */
+  variant: ProviderModelRowVariant;
 }) {
+  const { t } = useTranslation();
   const hasDistinctModelId = model.modelId.trim() !== model.name.trim();
-  const accessibilityLabel = hasDistinctModelId ? `${model.name}, ${model.modelId}` : model.name;
-  const rowClassName = className
-    ? `flex-row items-center gap-3 px-4 py-2 ${className}`
-    : 'flex-row items-center gap-3 px-4 py-2';
+  const badges = variant === 'management' ? getProviderModelBadges(model) : [];
+  const accessibilityDetails =
+    variant === 'synchronization' && hasDistinctModelId
+      ? [model.modelId]
+      : badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
+  const accessibilityLabel = [model.name, ...accessibilityDetails].join(', ');
+  const rowClassName = [
+    'flex-row items-center gap-3 px-4 py-2',
+    selection ? 'min-h-11' : '',
+    className ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const content = (
     <>
       {selection ? (
@@ -74,7 +100,7 @@ export function ProviderModelRow({
         >
           {model.name}
         </Text>
-        {hasDistinctModelId ? (
+        {variant === 'synchronization' && hasDistinctModelId ? (
           <Text
             selectable={!selection}
             className="text-foreground-tertiary text-xs"
@@ -84,6 +110,13 @@ export function ProviderModelRow({
           </Text>
         ) : null}
       </View>
+      {badges.length > 0 ? (
+        <View className="flex-row items-center gap-1">
+          {badges.map((badge) => (
+            <ProviderModelBadgeChip badge={badge} key={`${model.id}:${badge}`} />
+          ))}
+        </View>
+      ) : null}
       {children}
     </>
   );

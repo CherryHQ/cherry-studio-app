@@ -11,7 +11,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import { ProviderModelPurposeTabs } from './models/components/ProviderModelPurposeTabs';
 import {
   ProviderModelRow,
-  providerModelRowEstimatedHeight,
+  providerModelRowEstimatedHeights,
 } from './models/components/ProviderModelRow';
 import {
   buildProviderModelPullListItems,
@@ -146,7 +146,7 @@ export function ProviderModelPullPreviewContent({
       contentInsetAdjustmentBehavior="automatic"
       data={listItems}
       drawDistance={320}
-      estimatedItemSize={providerModelRowEstimatedHeight}
+      estimatedItemSize={providerModelRowEstimatedHeights.synchronization}
       extraData={listExtraData}
       getItemType={getPullListItemType}
       keyboardDismissMode="on-drag"
@@ -315,6 +315,7 @@ const PullModelRow = memo(function PullModelRow({
       selection={{ isDisabled: isApplying, isSelected, onToggle: handleToggle }}
       // The provider no longer serves it, whether or not the row is ticked.
       tone={section === 'missing' ? 'struck' : 'default'}
+      variant="synchronization"
     />
   );
 });
