@@ -84,6 +84,15 @@ namespace margelo::nitro::cherrystudio::ui::bridge::swift {
   using std__weak_ptr_HybridCherryMenuViewSpec_ = std::weak_ptr<HybridCherryMenuViewSpec>;
   inline std__weak_ptr_HybridCherryMenuViewSpec_ weakify_std__shared_ptr_HybridCherryMenuViewSpec_(const std::shared_ptr<HybridCherryMenuViewSpec>& strong) noexcept { return strong; }
   
+  // pragma MARK: Result<double>
+  using Result_double_ = Result<double>;
+  inline Result_double_ create_Result_double_(double value) noexcept {
+    return Result<double>::withValue(std::move(value));
+  }
+  inline Result_double_ create_Result_double_(const std::exception_ptr& error) noexcept {
+    return Result<double>::withError(error);
+  }
+  
   // pragma MARK: Result<void>
   using Result_void_ = Result<void>;
   inline Result_void_ create_Result_void_() noexcept {

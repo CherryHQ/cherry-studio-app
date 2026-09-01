@@ -13,6 +13,7 @@ import android.view.GestureDetector
 import android.view.Menu
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.PopupMenu
 import androidx.annotation.Keep
@@ -144,6 +145,15 @@ class HybridCherryMenuView(
                 containerView.onTap = null
             }
         }
+    }
+
+    override fun getLongPressMinDuration(): Double =
+        ViewConfiguration.getLongPressTimeout().toDouble()
+
+    override fun getLongPressMaxDistance(): Double {
+        val touchSlop = ViewConfiguration.get(containerView.context).scaledTouchSlop
+        val density = containerView.resources.displayMetrics.density
+        return (touchSlop / density).toDouble()
     }
 
     override fun showMenu() {

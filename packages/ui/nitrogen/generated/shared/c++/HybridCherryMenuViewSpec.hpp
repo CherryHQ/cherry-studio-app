@@ -60,6 +60,8 @@ namespace margelo::nitro::cherrystudio::ui {
 
     public:
       // Methods
+      virtual double getLongPressMinDuration() = 0;
+      virtual double getLongPressMaxDistance() = 0;
       virtual void showMenu() = 0;
 
     protected:

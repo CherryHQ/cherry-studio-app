@@ -1,7 +1,7 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import MessageCircleMoreIcon from '@cherrystudio/app-icons/icons/message-circle-more';
-import { ContentState } from '@cherrystudio/ui/components';
+import { ContentState, ContextMenuScrollBoundary } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useMemo } from 'react';
@@ -44,6 +44,7 @@ type SessionRowProps = {
 };
 
 const SESSION_ITEM_ESTIMATED_HEIGHT = 60;
+const EDITING_ACCESSIBILITY_ACTIONS = [{ name: 'activate' }] as const;
 
 function sessionKeyExtractor(item: AgentSessionEntity) {
   return item.id;
@@ -182,23 +183,28 @@ const SessionListView = memo(function SessionListView() {
 
   return (
     <View className="flex-1">
-      <LegendList
-        className="flex-1 bg-background"
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={contentContainerStyle}
-        data={isInitialDataSettled && !initialLoadError ? visibleSessions : []}
-        estimatedItemSize={SESSION_ITEM_ESTIMATED_HEIGHT}
-        extraData={listExtraData}
-        keyExtractor={sessionKeyExtractor}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={listEmptyComponent}
-        onEndReached={loadMoreSessions}
-        onEndReachedThreshold={0.7}
-        recycleItems
-        renderItem={renderItem}
-        showsVerticalScrollIndicator={false}
-      />
+      <ContextMenuScrollBoundary>
+        {(scrollHandlers) => (
+          <LegendList
+            {...scrollHandlers}
+            className="flex-1 bg-background"
+            contentInsetAdjustmentBehavior="automatic"
+            contentContainerStyle={contentContainerStyle}
+            data={isInitialDataSettled && !initialLoadError ? visibleSessions : []}
+            estimatedItemSize={SESSION_ITEM_ESTIMATED_HEIGHT}
+            extraData={listExtraData}
+            keyExtractor={sessionKeyExtractor}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={listEmptyComponent}
+            onEndReached={loadMoreSessions}
+            onEndReachedThreshold={0.7}
+            recycleItems
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </ContextMenuScrollBoundary>
     </View>
   );
 });
@@ -235,35 +241,13 @@ export const SessionRow = memo(function SessionRow({
   const handleDeletePress = useCallback(() => {
     onDelete(session);
   }, [onDelete, session]);
-  const accessibilityActions = useMemo(
-    () =>
-      isEditing
-        ? [{ name: 'activate' as const }]
-        : [
-            { label: t('common.rename'), name: 'rename' as const },
-            { label: t('common.delete'), name: 'delete' as const },
-          ],
-    [isEditing, t],
-  );
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
-      if (isEditing) {
+      if (event.nativeEvent.actionName === 'activate') {
         onToggle(session.id);
-        return;
-      }
-
-      switch (event.nativeEvent.actionName) {
-        case 'rename':
-          handleRenamePress();
-          break;
-        case 'delete':
-          handleDeletePress();
-          break;
-        default:
-          break;
       }
     },
-    [handleDeletePress, handleRenamePress, isEditing, onToggle, session.id],
+    [onToggle, session.id],
   );
   const href = useMemo(
     () => ({ pathname: '/' as const, params: { sessionId: session.id } }),
@@ -288,12 +272,12 @@ export const SessionRow = memo(function SessionRow({
 
   const row = (
     <Pressable
-      accessibilityActions={accessibilityActions}
+      accessibilityActions={isEditing ? EDITING_ACCESSIBILITY_ACTIONS : undefined}
       accessibilityLabel={session.title || t('session.list.untitled')}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
-      onAccessibilityAction={handleAccessibilityAction}
+      onAccessibilityAction={isEditing ? handleAccessibilityAction : undefined}
       onPress={isEditing ? () => onToggle(session.id) : undefined}
     >
       <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-transparent py-2 pl-2">

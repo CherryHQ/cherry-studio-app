@@ -105,12 +105,9 @@ describe('ActionMenu', () => {
   it('forwards a semantic icon token so the native view can resolve its artwork', () => {
     act(() => {
       renderer = create(
-        <Menu
-          items={[{ icon: 'branch', id: 'fork', label: 'Branch', onPress: jest.fn() }]}
-          trigger="tap"
-        >
+        <ActionMenu items={[{ icon: 'branch', id: 'fork', label: 'Branch', onPress: jest.fn() }]}>
           <Text>Open</Text>
-        </Menu>,
+        </ActionMenu>,
       );
     });
 

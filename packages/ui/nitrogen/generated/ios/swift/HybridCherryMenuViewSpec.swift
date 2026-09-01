@@ -15,6 +15,8 @@ public protocol HybridCherryMenuViewSpec_protocol: HybridObject, HybridView {
   var trigger: NativeMenuTrigger { get set }
 
   // Methods
+  func getLongPressMinDuration() throws -> Double
+  func getLongPressMaxDistance() throws -> Double
   func showMenu() throws -> Void
 }
 

@@ -59,6 +59,8 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     // Methods
+    double getLongPressMinDuration() override;
+    double getLongPressMaxDistance() override;
     void showMenu() override;
 
   private:

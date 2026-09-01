@@ -99,6 +99,22 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     // Methods
+    inline double getLongPressMinDuration() override {
+      auto __result = _swiftPart.getLongPressMinDuration();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline double getLongPressMaxDistance() override {
+      auto __result = _swiftPart.getLongPressMaxDistance();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
     inline void showMenu() override {
       auto __result = _swiftPart.showMenu();
       if (__result.hasError()) [[unlikely]] {

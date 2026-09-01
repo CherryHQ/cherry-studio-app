@@ -1,4 +1,9 @@
-import { ActionMenu, ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
+import {
+  ActionMenu,
+  ContextMenu,
+  ContextMenuScrollBoundary,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -21,13 +26,18 @@ const meta = {
   title: 'Components/Primitives/Menu',
   decorators: [
     (Story) => (
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="flex-grow gap-4 p-4"
-        contentInsetAdjustmentBehavior="automatic"
-      >
-        <Story />
-      </ScrollView>
+      <ContextMenuScrollBoundary>
+        {(scrollHandlers) => (
+          <ScrollView
+            {...scrollHandlers}
+            className="flex-1"
+            contentContainerClassName="flex-grow gap-4 p-4"
+            contentInsetAdjustmentBehavior="automatic"
+          >
+            <Story />
+          </ScrollView>
+        )}
+      </ContextMenuScrollBoundary>
     ),
   ],
 } satisfies Meta;

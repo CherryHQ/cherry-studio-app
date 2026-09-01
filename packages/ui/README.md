@@ -304,7 +304,12 @@ menu's recognition ownership. Call sites express which interaction they mean by 
 component instead of configuring a trigger:
 
 ```tsx
-import { ActionMenu, ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
+import {
+  ActionMenu,
+  ContextMenu,
+  ContextMenuScrollBoundary,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
 
 const items = [
   { id: 'rename', label: 'Rename', onPress: rename },
@@ -320,6 +325,11 @@ const items = [
 <ContextMenu items={items}>
   <MessageRow />
 </ContextMenu>;
+
+// The scroll owner exposes drag and momentum state to every descendant context menu.
+<ContextMenuScrollBoundary>
+  {(scrollHandlers) => <ScrollView {...scrollHandlers}>{rows}</ScrollView>}
+</ContextMenuScrollBoundary>;
 ```
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
@@ -328,16 +338,26 @@ unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMen
 Android uses `PopupMenu`. Each keeps the system style for destructive items. Expo Router page
 previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
+Wrap every scroll component containing an Android `ContextMenu` in one
+`ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
+render callback without rendering another native view. Pass an existing scroll handler to the
+boundary itself when it needs to be composed with menu arbitration. A touch that only stops
+momentum stays ineligible for a context menu until that touch ends. On iOS the supplied handlers are
+forwarded unchanged because UIKit already owns menu arbitration. On Android, a custom trigger
+component must forward `accessibilityActions` and `onAccessibilityAction` to its accessible native
+target.
+
 `ContextMenu` recognition follows
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
 on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
 ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
 gesture arena, so committed scrolling and pan gestures cancel it, and the native view only presents
-the already-arbitrated menu. Recognition timing and touch slop stay on the platform recognizer's
-defaults. On Android the enabled items are also exposed as accessibility custom actions on the
-trigger child, so the contextual operations do not depend on long press; iOS accessibility stays
-with the system interaction. Verify changed gesture boundaries on a device — the arbitration
-reference is `Status: design` and JavaScript tests cannot prove recognizer timing.
+the already-arbitrated menu. Recognition timing and touch slop come from Android
+`ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
+are also exposed as accessibility custom actions on the trigger child, so the contextual operations
+do not depend on long press; iOS accessibility stays with the system interaction. Verify changed
+gesture boundaries on a device — the arbitration reference is `Status: design` and JavaScript tests
+cannot prove recognizer timing.
 
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.
