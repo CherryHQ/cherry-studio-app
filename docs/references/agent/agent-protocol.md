@@ -300,7 +300,6 @@ interface AgentProtocol {
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
-    temporaryCapabilities?: Array<'web-search' | 'image-generation'>
   }): Promise<AgentSessionView>
 
   submitMessage(input: {
@@ -308,7 +307,6 @@ interface AgentProtocol {
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
-    temporaryCapabilities?: Array<'web-search' | 'image-generation'>
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
@@ -344,12 +342,11 @@ snapshot is turn-local and is never written to Agent configuration. Omitting eit
 the Agent definition loaded for that turn; an explicit reasoning `default` uses the selected model's
 default instead of the Agent's configured effort.
 
-`temporaryCapabilities` is also turn-local and is never written to Agent configuration. The Host
-uses `web-search` to admit `web_search` and `web_fetch`, and `image-generation` to admit
-`generate_image` when its other system gates pass. No frontend surface currently requests either,
-so submissions omit the array, which admits neither temporary capability. The assistant's inference
-snapshot records the concrete tools frozen for the turn, so history does not depend on
-reconstructing composer state.
+Capability enablement is Agent configuration, not submission state: the Agent record carries a
+capability-group deny-list (`disabledCapabilities`), and the Host resolves it together with the
+other system gates when it freezes the turn's tool snapshot. The assistant's inference snapshot
+records the concrete tools frozen for the turn, so history does not depend on reconstructing
+configuration state.
 
 `forkSession` copies the transcript up to and including `fromMessageId` into a new idle Session,
 and is the only operation that creates a Session from existing history. It is refused with

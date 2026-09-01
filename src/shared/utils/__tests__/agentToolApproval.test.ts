@@ -23,6 +23,14 @@ describe('applyToolApprovalMode', () => {
     expect(applyToolApprovalMode('auto', 'auto')).toBe('auto');
     expect(applyToolApprovalMode('deny', 'auto')).toBe('deny');
   });
+
+  test('auto mode never promotes an ineligible ask', () => {
+    // Cost-bearing (generate_image) and permission-gated asks state a consent
+    // requirement, not an interaction preference.
+    expect(applyToolApprovalMode('ask', 'auto', false)).toBe('ask');
+    expect(applyToolApprovalMode('ask', 'default', false)).toBe('ask');
+    expect(applyToolApprovalMode('deny', 'auto', false)).toBe('deny');
+  });
 });
 
 describe('composed MCP policy', () => {

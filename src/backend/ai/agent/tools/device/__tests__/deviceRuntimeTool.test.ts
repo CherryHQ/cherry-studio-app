@@ -31,6 +31,31 @@ describe('createDeviceRuntimeTool', () => {
     expect(result.value).toMatchObject({ status: 'error', retryable: false });
   });
 
+  test('requests a never-asked permission and continues once the user grants it', async () => {
+    // The tool entered the catalog as `ask`, so in-app consent already
+    // happened; execution fires the one-shot system prompt and proceeds.
+    const run = jest.fn(async () => ({ ok: true }));
+    const requestForScope = jest.fn(async (_scope: DevicePermissionScope) => 'granted' as const);
+    const tool = build({ run, status: 'undetermined', requestForScope });
+
+    await expect(execute(tool, { id: 'event-1' })).resolves.toEqual({
+      value: { ok: true },
+      artifacts: [],
+    });
+    expect(requestForScope).toHaveBeenCalledWith('calendar.write');
+  });
+
+  test('settles as a terminal failure when the user denies the system prompt', async () => {
+    const run = jest.fn();
+    const requestForScope = jest.fn(async (_scope: DevicePermissionScope) => 'denied' as const);
+    const tool = build({ run, status: 'undetermined', requestForScope });
+
+    const result = await execute(tool, { id: 'event-1' });
+
+    expect(run).not.toHaveBeenCalled();
+    expect(result.value).toMatchObject({ status: 'error', retryable: false });
+  });
+
   test('returns a malformed call as a value the model can correct', async () => {
     const run = jest.fn();
     const tool = build({ run });
@@ -97,12 +122,16 @@ describe('createDeviceRuntimeTool', () => {
 function build(input: {
   run: (parsed: { id: string }, signal: AbortSignal) => Promise<unknown>;
   status?: SystemPermissionState;
+  requestForScope?: (scope: DevicePermissionScope) => Promise<SystemPermissionState>;
 }) {
   return createDeviceRuntimeTool({
     capabilityId: 'calendar_delete_event',
     deps: {
       devicePermissions: {
         getStatusForScope: async (_scope: DevicePermissionScope) => input.status ?? 'granted',
+        requestForScope:
+          input.requestForScope ??
+          (async (_scope: DevicePermissionScope) => input.status ?? 'granted'),
       },
     },
     description: 'Delete an event.',

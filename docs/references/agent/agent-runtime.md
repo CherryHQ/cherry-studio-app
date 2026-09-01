@@ -59,8 +59,8 @@ non-standard adapter family, or authentication types fail before partial executi
 Pi receives the grouped structured transcript, an optional opaque context checkpoint, a frozen tool
 catalog, and Agent inference options on each execution. It maps text, reasoning, tool parts,
 approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
-Before reservation, the Host combines the shared system catalog and this submission's temporary
-capabilities with the Agent's persisted, currently executable MCP bindings. It also resolves bounded
+Before reservation, the Host combines the shared system catalog and the Agent's capability-group
+deny-list with the Agent's persisted, currently executable MCP bindings. It also resolves bounded
 managed images for registry-declared image-capable models supported by the selected Pi endpoint
 adapter, plus bounded UTF-8 managed text as untrusted user content.
 
@@ -329,9 +329,9 @@ model-binding tool; that encoding never changes the tool's `ref`, approval, inpu
 identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
 
-The Host supplies an immutable tool snapshot after applying the system catalog, temporary composer
-selection, current Agent MCP configuration, platform availability, system permissions, and
-application policy. Changes during execution apply to the next turn, not the active one. A Runtime
+The Host supplies an immutable tool snapshot after applying the system catalog, the Agent's
+capability-group deny-list, current Agent MCP configuration, platform availability, system
+permissions, and application policy. Changes during execution apply to the next turn, not the active one. A Runtime
 validates tool input, enforces the approval mode, and invokes `execute` only after approval when the
 mode is `ask`.
 

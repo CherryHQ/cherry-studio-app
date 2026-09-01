@@ -20,18 +20,19 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent tool and managed-file contracts', () => {
-  test('accepts only the supported turn-only capability requests', () => {
+  test('rejects the retired turn-only capability field', () => {
+    // Capability enablement moved to the Agent record; a stale caller still
+    // sending the composer-era field must fail loudly, not silently no-op.
     const input = {
       parts: [{ text: 'Draw it.', type: 'text' }],
       sessionId: 'session-1',
-      temporaryCapabilities: ['web-search', 'image-generation'],
     } as const;
 
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
     expect(
       AgentSubmitMessageInputSchema.safeParse({
         ...input,
-        temporaryCapabilities: ['calendar'],
+        temporaryCapabilities: ['web-search'],
       }).success,
     ).toBe(false);
   });
