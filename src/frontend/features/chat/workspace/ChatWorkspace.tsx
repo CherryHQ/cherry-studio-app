@@ -157,7 +157,7 @@ export function ChatWorkspace({
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
-        key={sessionId}
+        key={`assistant-actions-${sessionId}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         sessionId={sessionId}
       >
@@ -178,7 +178,7 @@ export function ChatWorkspace({
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
-        key={sessionId}
+        key={`tool-approval-${sessionId}`}
         approvals={pendingApprovals}
         isOpen={pendingApprovals.length > 0}
         onRespond={handleApprovalRespond}

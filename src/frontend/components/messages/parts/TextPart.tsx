@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
-import { splitToolMentions } from '@/frontend/utils/toolMentions';
+import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { ResolvedCitationText } from './citations';
@@ -16,6 +16,25 @@ type TextPartProps = {
   resolvedText?: ResolvedCitationText;
 };
 
+function renderMentionSegments(segments: readonly MentionSegment[]) {
+  const occurrenceById = new Map<string, number>();
+
+  return segments.map((segment) => {
+    if (!segment.id) {
+      return segment.text;
+    }
+
+    const occurrence = occurrenceById.get(segment.id) ?? 0;
+    occurrenceById.set(segment.id, occurrence + 1);
+
+    return (
+      <Text className="text-brand" key={`${segment.id}-${occurrence}`}>
+        {segment.text}
+      </Text>
+    );
+  });
+}
+
 /**
  * Plain text with its tool mentions picked out in the brand color, showing the
  * name the sender saw rather than the link syntax carrying it. Nested `Text`
@@ -26,21 +45,7 @@ type TextPartProps = {
 function PlainTextWithMentions({ text }: { text: string }) {
   const segments = useMemo(() => splitToolMentions(text), [text]);
 
-  return (
-    <Text className="text-base text-foreground">
-      {segments.map((segment, index) =>
-        segment.id ? (
-          // Segments are derived from the text in order and never reordered, so
-          // the index is a stable identity here.
-          <Text className="text-brand" key={index}>
-            {segment.text}
-          </Text>
-        ) : (
-          segment.text
-        ),
-      )}
-    </Text>
-  );
+  return <Text className="text-base text-foreground">{renderMentionSegments(segments)}</Text>;
 }
 
 export function TextPart({
