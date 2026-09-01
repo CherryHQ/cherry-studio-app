@@ -195,5 +195,5 @@
     "typescript": "~6.0.3"
   },
   "private": true,
-  "packageManager": "pnpm@11.8.0"
+  "packageManager": "pnpm@12.2.1"
 }

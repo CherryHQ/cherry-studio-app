@@ -31,7 +31,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 11.8.0
+          version: 12.2.1
 
       # Step 4: Setup Expo and EAS
       - name: Setup Expo and EAS
