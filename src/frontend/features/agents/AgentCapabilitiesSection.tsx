@@ -52,7 +52,6 @@ export function AgentCapabilitiesSection({
   disabledCapabilities,
   onChange,
 }: AgentCapabilitiesSectionProps) {
-  const { t } = useTranslation();
   const permissions = useBackendModule('permissions');
   const { refresh, statuses } = useDevicePermissionStatuses(OBSERVED_SCOPES);
 
@@ -83,21 +82,16 @@ export function AgentCapabilitiesSection({
   );
 
   return (
-    <View className="gap-4">
-      <Text className="text-muted-foreground text-sm" selectable>
-        {t('agent.capabilities.description')}
-      </Text>
-      <View className="gap-4">
-        {VISIBLE_ROWS.map((row) => (
-          <AgentCapabilityRow
-            enabled={!disabledCapabilities.includes(row.capability)}
-            key={row.capability}
-            onToggle={handleToggle}
-            row={row}
-            statuses={statuses}
-          />
-        ))}
-      </View>
+    <View className="gap-3">
+      {VISIBLE_ROWS.map((row) => (
+        <AgentCapabilityRow
+          enabled={!disabledCapabilities.includes(row.capability)}
+          key={row.capability}
+          onToggle={handleToggle}
+          row={row}
+          statuses={statuses}
+        />
+      ))}
     </View>
   );
 }
@@ -119,13 +113,10 @@ function AgentCapabilityRow({
   const handleValueChange = useCallback((value: boolean) => onToggle(row, value), [onToggle, row]);
 
   return (
-    <View className="min-h-12 flex-row items-center gap-3">
+    <View className="min-h-10 flex-row items-center gap-3">
       <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="font-medium text-base text-foreground" numberOfLines={1}>
+        <Text className="text-base text-foreground" numberOfLines={1}>
           {label}
-        </Text>
-        <Text className="text-muted-foreground text-xs" selectable>
-          {t(`agent.capabilities.${row.capability}.description`)}
         </Text>
         {enabled ? (
           <PermissionStateText state={permissionState} scopes={row.permissionScopes} />
@@ -137,10 +128,10 @@ function AgentCapabilityRow({
 }
 
 /**
- * Only states the user can act on are surfaced: a granted or still-loading
- * scope needs no caption, `undetermined` explains the upcoming one-shot system
- * prompt, and `denied` deep-links to system settings — the only place it can
- * be fixed.
+ * Only problems surface: `denied` deep-links to system settings — the one
+ * place it can be fixed — and `unavailable` explains a switch that cannot
+ * work. Granted and never-asked scopes need no caption; the just-in-time
+ * request covers the latter silently.
  */
 function PermissionStateText({
   scopes,
@@ -156,13 +147,6 @@ function PermissionStateText({
     void permissions.openSystemSettings(permission).catch(() => undefined);
   }, [permissions, scopes]);
 
-  if (state === 'undetermined') {
-    return (
-      <Text className="text-muted-foreground text-xs" selectable>
-        {t('agent.capabilities.permission.undetermined')}
-      </Text>
-    );
-  }
   if (state === 'denied') {
     return (
       <Pressable accessibilityRole="button" onPress={openSettings}>

@@ -359,31 +359,26 @@ function AgentEditForm({
               <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
             </View>
           </Pressable>
-          <View className="gap-1">
-            <Pressable
-              accessibilityHint={t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
-              accessibilityLabel={t('agent.toolApproval.title')}
-              accessibilityRole="button"
-              className="min-h-10 flex-row items-center gap-2 rounded-lg border border-border bg-field px-3 py-2 active:opacity-60"
-              onPress={openToolApprovalModePicker}
-            >
-              <Text className="shrink-0 text-base text-foreground">
-                {t('agent.toolApproval.title')}
-              </Text>
-              <View className="min-w-0 flex-1 flex-row items-center justify-end gap-1">
-                <Text
-                  className="min-w-0 shrink text-right text-base text-foreground"
-                  numberOfLines={1}
-                >
-                  {t(`agent.toolApproval.mode.${form.toolApprovalMode}.label`)}
-                </Text>
-                <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
-              </View>
-            </Pressable>
-            <Text className="px-1 text-muted-foreground text-sm" selectable>
-              {t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
+          <Pressable
+            accessibilityHint={t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
+            accessibilityLabel={t('agent.toolApproval.title')}
+            accessibilityRole="button"
+            className="min-h-10 flex-row items-center gap-2 rounded-lg border border-border bg-field px-3 py-2 active:opacity-60"
+            onPress={openToolApprovalModePicker}
+          >
+            <Text className="shrink-0 text-base text-foreground">
+              {t('agent.toolApproval.title')}
             </Text>
-          </View>
+            <View className="min-w-0 flex-1 flex-row items-center justify-end gap-1">
+              <Text
+                className="min-w-0 shrink text-right text-base text-foreground"
+                numberOfLines={1}
+              >
+                {t(`agent.toolApproval.mode.${form.toolApprovalMode}.label`)}
+              </Text>
+              <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
+            </View>
+          </Pressable>
         </View>
         {/* Capability groups gate which built-in tools a turn may offer; the
             approval setting above changes interaction policy only. */}
@@ -396,7 +391,7 @@ function AgentEditForm({
             onChange={(next) => updateForm('disabledCapabilities', next)}
           />
         </View>
-        {isEditing ? (
+        {isEditing && (servers.length > 0 || toolBindings.length > 0) ? (
           <View className="gap-2">
             <Text className="px-1 font-medium text-foreground text-sm">
               {t('agent.tools.section')}

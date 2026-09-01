@@ -1,7 +1,6 @@
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import { Button, Switch } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { useQueries } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,25 +93,16 @@ export function AgentToolsSection({
 
   return (
     <View className="gap-4">
-      <Text className="text-muted-foreground text-sm" selectable>
-        {t('agent.tools.mcpDescription')}
-      </Text>
-      {serverOptions.length === 0 ? (
-        <Text className="py-2 text-muted-foreground text-sm" selectable>
-          {t('agent.tools.empty')}
-        </Text>
-      ) : (
-        <View className="gap-4">
-          {serverOptions.map((option) => (
-            <AgentMcpServerRow
-              bindings={bindings}
-              key={option.serverId}
-              onChange={onChange}
-              option={option}
-            />
-          ))}
-        </View>
-      )}
+      <View className="gap-3">
+        {serverOptions.map((option) => (
+          <AgentMcpServerRow
+            bindings={bindings}
+            key={option.serverId}
+            onChange={onChange}
+            option={option}
+          />
+        ))}
+      </View>
       {perToolBindings.length > 0 ? (
         <View className="gap-3 border-border border-t pt-4">
           <Text className="font-medium text-foreground text-sm" selectable>
@@ -135,17 +125,10 @@ export function AgentToolsSection({
             });
 
             return (
-              <View className="min-h-12 flex-row items-center gap-3" key={toolBindingKey(binding)}>
+              <View className="min-h-10 flex-row items-center gap-3" key={toolBindingKey(binding)}>
                 <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
+                  <Text className="text-foreground text-sm" numberOfLines={1}>
                     {displayName} · {binding.rawToolName}
-                  </Text>
-                  <Text
-                    className="font-mono text-foreground-tertiary text-xs"
-                    numberOfLines={1}
-                    selectable
-                  >
-                    {binding.serverId}
                   </Text>
                   <StatusText status={status} translationPrefix="agent.tools.toolStatus" />
                 </View>
@@ -161,9 +144,6 @@ export function AgentToolsSection({
           })}
         </View>
       ) : null}
-      <Text className="text-foreground-tertiary text-xs" selectable>
-        {t('agent.tools.nextTurn')}
-      </Text>
     </View>
   );
 }
@@ -202,13 +182,10 @@ function AgentMcpServerRow({
   );
 
   return (
-    <View className="min-h-12 flex-row items-center gap-3">
+    <View className="min-h-10 flex-row items-center gap-3">
       <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="font-medium text-base text-foreground" numberOfLines={1}>
+        <Text className="text-base text-foreground" numberOfLines={1}>
           {displayName}
-        </Text>
-        <Text className="font-mono text-foreground-tertiary text-xs" numberOfLines={1} selectable>
-          {option.serverId}
         </Text>
         <StatusText status={option.status} translationPrefix="agent.tools.serverStatus" />
       </View>
@@ -248,6 +225,15 @@ function AgentMcpServerRow({
   );
 }
 
+/**
+ * The switch already expresses healthy and merely-disabled states, and a
+ * loading catalog resolves on its own; only a problem the row cannot express
+ * otherwise earns a caption.
+ */
+const QUIET_STATUSES: ReadonlySet<AgentMcpServerOptionStatus | AgentMcpToolBindingStatus> = new Set(
+  ['available', 'binding-disabled', 'catalog-loading', 'enabled'],
+);
+
 function StatusText({
   status,
   translationPrefix,
@@ -257,18 +243,12 @@ function StatusText({
 }) {
   const { t } = useTranslation();
 
+  if (QUIET_STATUSES.has(status)) {
+    return null;
+  }
+
   return (
-    <Text
-      className={cn(
-        'text-xs',
-        status === 'enabled' || status === 'available'
-          ? 'text-success-subtle-foreground'
-          : status === 'binding-disabled' || status === 'catalog-loading'
-            ? 'text-muted-foreground'
-            : 'text-destructive',
-      )}
-      selectable
-    >
+    <Text className="text-destructive text-xs" selectable>
       {t(`${translationPrefix}.${status}`)}
     </Text>
   );
