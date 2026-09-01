@@ -98,10 +98,6 @@ export function MessageList({
     [onViewportSizeChange],
   );
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
-  const handleScrollButtonPress = useCallback(() => {
-    setIsNativeAtBottomForButton(true);
-    handleScrollToEnd();
-  }, [handleScrollToEnd]);
 
   return (
     <View className="flex-1">
@@ -113,6 +109,7 @@ export function MessageList({
           contentInsetAdjustmentBehavior="never"
           data={messages}
           {...(dataKey ? { dataKey } : {})}
+          drawDistance={80}
           estimatedItemSize={300}
           estimatedHeaderSize={contentTopInset}
           extraData={extraData}
@@ -154,7 +151,10 @@ export function MessageList({
           bottomAccessoryHeight={bottomAccessoryHeight}
           gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
           isAtBottom={isNativeAtBottomForButton || isFollowing}
-          onPress={handleScrollButtonPress}
+          // The press only enters following mode, which already hides the
+          // button. Mirroring an optimistic at-end state here would stick at
+          // `true` whenever the scroll does not actually land at the end.
+          onPress={handleScrollToEnd}
         />
       ) : null}
     </View>
