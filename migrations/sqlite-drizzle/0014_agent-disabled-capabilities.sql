@@ -1,0 +1,1 @@
+ALTER TABLE `agent` ADD `disabled_capabilities` text DEFAULT '[]' NOT NULL;
