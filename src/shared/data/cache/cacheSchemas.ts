@@ -71,16 +71,12 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
-  // Frontend-owned composer state. Only enabled Session ids are retained;
-  // missing ids use the product default (web search disabled).
-  'chat.web_search.enabled_session_ids': readonly string[];
   // Persist-layer self-test key: exercises the typed persist API and round-trip
   // tests for the generic mechanism, independent of any real consumer.
   'internal.persist_probe': number;
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
-  'chat.web_search.enabled_session_ids': [],
   'internal.persist_probe': 0,
 };
 
