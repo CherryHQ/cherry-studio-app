@@ -14,7 +14,9 @@ export function MainHeader() {
       <Stack.Screen options={{ headerShown: false }} />
       <View className="bg-background">
         <View style={{ height: insets.top }} />
-        <View className="h-11 flex-row items-center justify-between px-4">
+        {/* 56dp row matches the native-stack toolbar height, so the 40dp action
+            surfaces keep the same clearance as native-header screens. */}
+        <View className="h-14 flex-row items-center justify-between px-4">
           {/* The chat route is currently a drawer root, so the route policy
               resolves this leading action to the sidebar button. */}
           <HeaderActionGroup actions={[leadingAction]} placement="left" />
