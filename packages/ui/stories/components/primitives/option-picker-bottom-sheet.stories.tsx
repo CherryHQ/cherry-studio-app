@@ -36,7 +36,7 @@ function OptionPickerPreview(args: OptionPickerBottomSheetProps<Language>) {
   );
 }
 
-const meta = {
+const meta: Meta<OptionPickerBottomSheetProps<Language>> = {
   title: 'Components/Primitives/Option Picker Bottom Sheet',
   component: OptionPickerBottomSheet,
   args: {
@@ -48,7 +48,7 @@ const meta = {
     size: 'compact',
     title: 'Language',
   },
-} satisfies Meta<OptionPickerBottomSheetProps<Language>>;
+};
 
 export default meta;
 

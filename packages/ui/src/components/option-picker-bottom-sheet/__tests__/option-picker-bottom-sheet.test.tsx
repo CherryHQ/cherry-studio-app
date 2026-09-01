@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { Section } from '../../section';
 import { OptionPickerBottomSheet } from '../option-picker-bottom-sheet';
 
 jest.mock('heroui-native/utils', () => {
@@ -76,13 +77,10 @@ describe('OptionPickerBottomSheet', () => {
       );
     });
 
-    const rows = renderer!.root.findAll(
-      (node) =>
-        node.props.accessibilityRole === 'radio' && typeof node.props.className === 'string',
-    );
+    const rows = renderer!.root.findAllByType(Section.RadioItem);
 
     expect(rows).toHaveLength(2);
-    expect(rows[0].props.accessibilityState.checked).toBe(true);
+    expect(rows[0].props.selected).toBe(true);
     expect(renderer!.root.findByProps({ testID: 'option-check' })).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'option-leading' })).toBeDefined();
     expect(renderer!.root.findByType(ScrollView).props.contentContainerClassName).toBe('pt-2');
@@ -115,10 +113,7 @@ describe('OptionPickerBottomSheet', () => {
       );
     });
 
-    const selectedRow = renderer!.root.find(
-      (node) =>
-        node.props.accessibilityRole === 'radio' && typeof node.props.className === 'string',
-    );
+    const selectedRow = renderer!.root.findByType(Section.RadioItem);
     act(() => selectedRow.props.onPress());
 
     expect(onValueChange).not.toHaveBeenCalled();
