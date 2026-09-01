@@ -5,7 +5,7 @@ import { callback } from 'react-native-nitro-modules';
 
 import type { ContextMenuProps, MenuItem } from '../menu.types';
 import { type NativeCherryMenuRef, NativeCherryMenuView, useNativeMenu } from '../use-native-menu';
-import { useContextMenuInteraction } from './context-menu-scroll-boundary';
+import { useContextMenuInteraction } from './context-menu-scroll-boundary.android';
 
 type AccessibilityInjectedProps = {
   accessibilityActions?: readonly AccessibilityActionInfo[];

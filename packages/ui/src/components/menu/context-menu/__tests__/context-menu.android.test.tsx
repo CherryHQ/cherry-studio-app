@@ -11,7 +11,7 @@ import {
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { NativeCherryMenuRef } from '../../use-native-menu';
-import { ContextMenuScrollBoundary } from '../context-menu-scroll-boundary';
+import { ContextMenuScrollBoundary } from '../context-menu-scroll-boundary.android';
 import { ContextMenu } from '../context-menu.android';
 
 type NativeMenuProps = {

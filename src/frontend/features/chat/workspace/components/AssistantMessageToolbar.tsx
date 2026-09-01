@@ -1,7 +1,7 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { Button, Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -71,7 +71,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         The native menu installs its own hit target over this subtree, so the
         trigger is a plain labelled View rather than a second pressable.
       */}
-      <Menu items={menuItems} trigger="tap">
+      <ActionMenu items={menuItems}>
         <View
           accessibilityLabel={t('common.more')}
           accessibilityRole="button"
@@ -80,7 +80,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         >
           <EllipsisIcon className="size-4 text-muted-foreground" />
         </View>
-      </Menu>
+      </ActionMenu>
     </View>
   );
 });
