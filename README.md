@@ -7,7 +7,7 @@ resource ownership.
 ## Requirements
 
 - Node.js 24, matching pull request CI
-- `pnpm@11.8.0`
+- `pnpm@12.2.1`
 - Xcode for iOS development or Android Studio for Android development
 
 ## Install

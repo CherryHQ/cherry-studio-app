@@ -45,7 +45,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
-    Menu: ({ children }: { children: ReactNode }) => children,
+    ContextMenu: ({ children }: { children: ReactNode }) => children,
     useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });

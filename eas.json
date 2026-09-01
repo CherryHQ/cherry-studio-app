@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "node": "24.19.0",
-      "pnpm": "11.8.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "development"
       },
@@ -21,7 +21,7 @@
     "preview": {
       "distribution": "internal",
       "node": "24.19.0",
-      "pnpm": "11.8.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "preview"
       },
@@ -35,7 +35,7 @@
       "autoIncrement": true,
       "channel": "production",
       "node": "24.19.0",
-      "pnpm": "11.8.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "production"
       },

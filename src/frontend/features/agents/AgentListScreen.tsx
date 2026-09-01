@@ -2,7 +2,12 @@ import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import ClockIcon from '@cherrystudio/app-icons/icons/clock';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { ContentState, type MenuItem, useAlert } from '@cherrystudio/ui/components';
+import {
+  ContentState,
+  ContextMenuScrollBoundary,
+  type MenuItem,
+  useAlert,
+} from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +27,8 @@ import {
 } from '@/frontend/components/selection';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
+
+const EDITING_ACCESSIBILITY_ACTIONS = [{ name: 'activate' }] as const;
 
 export default function AgentListScreen() {
   const { t } = useTranslation();
@@ -203,58 +210,63 @@ export default function AgentListScreen() {
           only reports it back, so leaving it mounted would keep a stale query
           filtering rows that selection mode has no way to show. */}
       {isEditing ? null : <InlineSearch onChangeText={setQuery} value={query} />}
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerStyle={scrollContentStyle}
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-      >
-        {listedAgents.length > 0 ? (
-          <View>
-            {listedAgents.map((agent) => (
-              <AgentListRow
-                key={agent.id}
-                agent={agent}
-                isEditing={isEditing}
-                isSelected={selectedIds.has(agent.id)}
-                onDelete={requestDeleteAgent}
-                onEdit={openAgentEditor}
-                onToggle={toggleAgent}
+      <ContextMenuScrollBoundary>
+        {(scrollHandlers) => (
+          <ScrollView
+            {...scrollHandlers}
+            alwaysBounceVertical={false}
+            className="flex-1"
+            contentContainerStyle={scrollContentStyle}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+          >
+            {listedAgents.length > 0 ? (
+              <View>
+                {listedAgents.map((agent) => (
+                  <AgentListRow
+                    key={agent.id}
+                    agent={agent}
+                    isEditing={isEditing}
+                    isSelected={selectedIds.has(agent.id)}
+                    onDelete={requestDeleteAgent}
+                    onEdit={openAgentEditor}
+                    onToggle={toggleAgent}
+                  />
+                ))}
+              </View>
+            ) : isFiltering ? (
+              <ContentState.Empty className="px-8 py-16" title={t('agent.list.noResults')} />
+            ) : isLoading ? (
+              <ContentState.Loading className="px-8 py-16" title={t('agent.list.loading')} />
+            ) : error ? (
+              <ContentState.Error
+                className="px-8 py-16"
+                primaryAction={{
+                  children: t('agent.actions.retry'),
+                  onPress: () => void refetch(),
+                }}
+                title={t('agent.list.loadFailed')}
               />
-            ))}
-          </View>
-        ) : isFiltering ? (
-          <ContentState.Empty className="px-8 py-16" title={t('agent.list.noResults')} />
-        ) : isLoading ? (
-          <ContentState.Loading className="px-8 py-16" title={t('agent.list.loading')} />
-        ) : error ? (
-          <ContentState.Error
-            className="px-8 py-16"
-            primaryAction={{
-              children: t('agent.actions.retry'),
-              onPress: () => void refetch(),
-            }}
-            title={t('agent.list.loadFailed')}
-          />
-        ) : (
-          <ContentState.Empty
-            description={t('agent.list.emptyDescription')}
-            icon={
-              <ContentState.Icon>
-                <BotIcon className="size-7 text-foreground" />
-              </ContentState.Icon>
-            }
-            layout="page"
-            primaryAction={{
-              accessibilityLabel: t('agent.actions.create'),
-              children: t('agent.actions.create'),
-              onPress: openCreateAgent,
-            }}
-            title={t('agent.list.emptyTitle')}
-          />
+            ) : (
+              <ContentState.Empty
+                description={t('agent.list.emptyDescription')}
+                icon={
+                  <ContentState.Icon>
+                    <BotIcon className="size-7 text-foreground" />
+                  </ContentState.Icon>
+                }
+                layout="page"
+                primaryAction={{
+                  accessibilityLabel: t('agent.actions.create'),
+                  children: t('agent.actions.create'),
+                  onPress: openCreateAgent,
+                }}
+                title={t('agent.list.emptyTitle')}
+              />
+            )}
+          </ScrollView>
         )}
-      </ScrollView>
+      </ContextMenuScrollBoundary>
       {isEditing ? (
         <SelectionToolbar
           isDeleting={isBatchDeleting}
@@ -292,35 +304,13 @@ function AgentListRow({
   const handleDeletePress = useCallback(() => {
     onDelete(agent);
   }, [agent, onDelete]);
-  const accessibilityActions = useMemo(
-    () =>
-      isEditing
-        ? [{ name: 'activate' as const }]
-        : [
-            { label: t('common.edit'), name: 'edit' as const },
-            { label: t('common.delete'), name: 'delete' as const },
-          ],
-    [isEditing, t],
-  );
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
-      if (isEditing) {
+      if (event.nativeEvent.actionName === 'activate') {
         onToggle(agent.id);
-        return;
-      }
-
-      switch (event.nativeEvent.actionName) {
-        case 'edit':
-          handleEditPress();
-          break;
-        case 'delete':
-          handleDeletePress();
-          break;
-        default:
-          break;
       }
     },
-    [agent.id, handleDeletePress, handleEditPress, isEditing, onToggle],
+    [agent.id, onToggle],
   );
   const href = useMemo(
     () => ({
@@ -348,12 +338,12 @@ function AgentListRow({
 
   const row = (
     <GesturePressable
-      accessibilityActions={accessibilityActions}
+      accessibilityActions={isEditing ? EDITING_ACCESSIBILITY_ACTIONS : undefined}
       accessibilityLabel={agent.name}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
-      onAccessibilityAction={handleAccessibilityAction}
+      onAccessibilityAction={isEditing ? handleAccessibilityAction : undefined}
       onPress={isEditing ? () => onToggle(agent.id) : undefined}
     >
       <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b py-2 pl-2">

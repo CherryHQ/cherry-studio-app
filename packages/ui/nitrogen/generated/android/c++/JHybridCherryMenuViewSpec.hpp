@@ -59,7 +59,9 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     // Methods
-    
+    double getLongPressMinDuration() override;
+    double getLongPressMaxDistance() override;
+    void showMenu() override;
 
   private:
     jni::global_ref<JHybridCherryMenuViewSpec::JavaPart> _javaPart;
