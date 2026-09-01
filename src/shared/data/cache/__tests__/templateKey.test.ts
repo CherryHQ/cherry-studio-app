@@ -102,4 +102,8 @@ describe('getUseCacheDefaultValue', () => {
   test('resolves a concrete template instance to the template default', () => {
     expect(getUseCacheDefaultValue('internal.memory_probe.frontend')).toBe('');
   });
+
+  test('resolves the chat scroll-anchor default', () => {
+    expect(getUseCacheDefaultValue('chat.scroll_anchor.session-1')).toBeNull();
+  });
 });

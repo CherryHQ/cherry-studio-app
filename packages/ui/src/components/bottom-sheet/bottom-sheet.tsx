@@ -3,6 +3,7 @@ import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
+  programmatic,
 } from '@swmansion/react-native-bottom-sheet';
 import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -98,8 +99,8 @@ export function BottomSheet(props: BottomSheetProps) {
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET - OUTER_INSET);
   const { height, size, sizes } = props;
   const { cardHeight, detents } = useMemo(
-    () => resolveSheetHeights(availableCardHeight, height, size, sizes),
-    [availableCardHeight, height, size, sizes],
+    () => resolveSheetHeights(availableCardHeight, dismissible, height, size, sizes),
+    [availableCardHeight, dismissible, height, size, sizes],
   );
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
   const detentHeight = cardHeight + OUTER_INSET;
@@ -148,12 +149,9 @@ export function BottomSheet(props: BottomSheetProps) {
     return () => subscription.remove();
   }, [handleHardwareBackPress, open]);
 
-  const handleIndexChange = useCallback(
-    (nextIndex: number) => {
-      setIndex(nextIndex === CLOSED_INDEX && !dismissible ? OPEN_INDEX : nextIndex);
-    },
-    [dismissible],
-  );
+  const handleIndexChange = useCallback((nextIndex: number) => {
+    setIndex(nextIndex);
+  }, []);
   const handleSettle = useCallback(
     (nextIndex: number) => {
       if (nextIndex !== CLOSED_INDEX || hasNotifiedCloseRef.current || !dismissible || !open) {
@@ -229,6 +227,7 @@ export function BottomSheet(props: BottomSheetProps) {
 
 function resolveSheetHeights(
   availableCardHeight: number,
+  dismissible: boolean,
   height: number | undefined,
   size: BottomSheetSize | undefined,
   sizes: BottomSheetSizes | undefined,
@@ -246,7 +245,8 @@ function resolveSheetHeights(
     .sort((left, right) => left - right)
     .filter((height, index, heights) => index === 0 || height !== heights[index - 1]);
   const cardHeight = cardHeights.at(-1) ?? 0;
-  const detents: Detent[] = [0, ...cardHeights.map((height) => height + OUTER_INSET)];
+  const closedDetent = dismissible ? 0 : programmatic(0);
+  const detents: Detent[] = [closedDetent, ...cardHeights.map((height) => height + OUTER_INSET)];
 
   return { cardHeight, detents };
 }

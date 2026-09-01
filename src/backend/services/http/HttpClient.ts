@@ -6,6 +6,8 @@ export type HttpBodyMethod = 'PATCH' | 'POST' | 'PUT';
 
 export type HttpMethod = HttpBodylessMethod | HttpBodyMethod;
 
+export type HttpResponseType = 'json' | 'text';
+
 export type HttpHeaders = Readonly<Record<string, string>>;
 
 type HttpQueryPrimitive = boolean | number | string;
@@ -34,9 +36,13 @@ export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError
 interface HttpRequestBase {
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers?: HttpHeaders;
+  /** Positive response-size limit in bytes. Omit when the domain has no explicit cap. */
+  readonly maxResponseBytes?: number;
   /** Relative API path beginning with `/`. Absolute URLs are rejected. */
   readonly path: string;
   readonly query?: HttpQuery;
+  /** Omit for the default JSON-compatible Axios response handling. */
+  readonly responseType?: HttpResponseType;
   readonly signal?: AbortSignal;
   /** Positive request timeout in milliseconds. Omit to use the client default. */
   readonly timeoutMs?: number;

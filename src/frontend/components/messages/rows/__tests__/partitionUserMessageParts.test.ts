@@ -20,7 +20,10 @@ describe('partitionUserMessageParts', () => {
       textPart('World'),
       managedFilePart('second.pdf', '00000000-0000-7000-8000-000000000002'),
     ];
-    const message = createMessage(parts);
+    const message = {
+      ...createMessage(parts),
+      data: { partKeys: ['text-1', 'file-1', 'text-2', 'file-2'], parts },
+    };
 
     const partition = partitionUserMessageParts(message);
 
@@ -29,6 +32,7 @@ describe('partitionUserMessageParts', () => {
       [3, 'second.pdf'],
     ]);
     expect(partition.bodyMessage?.data.parts).toEqual([parts[0], parts[2]]);
+    expect(partition.bodyMessage?.data.partKeys).toEqual(['text-1', 'text-2']);
     expect(message.data.parts).toBe(parts);
   });
 

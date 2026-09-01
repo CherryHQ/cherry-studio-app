@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   EnrichedMarkdownText,
   type LinkPressEvent,
@@ -126,7 +126,14 @@ export function MarkdownText({
   const inlineCode = resolveCSSString(inlineCodeValue);
   const inlineCodeForeground = resolveCSSString(inlineCodeForegroundValue);
   const monoFontFamily = resolveCSSString(monoFontFamilyValue, 'GeistMono-Regular');
-  const MarkdownRenderer = isStreaming ? StreamdownText : EnrichedMarkdownText;
+  const [hasStreamed, setHasStreamed] = useState(isStreaming);
+  if (isStreaming && !hasStreamed) {
+    setHasStreamed(true);
+  }
+  // A streamed part keeps one native renderer for its full lifetime. Switching
+  // component types at terminal status remounts the whole Markdown subtree and
+  // invalidates the list's measured height and native selection state.
+  const MarkdownRenderer = isStreaming || hasStreamed ? StreamdownText : EnrichedMarkdownText;
   const handleLinkPress = ({ url }: LinkPressEvent) => onLinkPress(url);
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(fontSizeStep, monoFontFamily);

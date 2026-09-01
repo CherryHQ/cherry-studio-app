@@ -12,6 +12,7 @@ export type {
   HttpQueryValue,
   HttpRequest,
   HttpResponse,
+  HttpResponseType,
 } from './HttpClient';
 export {
   HttpError,

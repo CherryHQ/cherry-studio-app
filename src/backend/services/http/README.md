@@ -23,6 +23,9 @@ pairing and configuration import.
   keys (`tag=a&tag=b`) and `null` or `undefined` values are omitted.
 - `GET` and `DELETE` requests carry no body, and timeouts must be positive milliseconds. Both rules
   are enforced at the type level and revalidated after interceptors run.
+- Domains that download text artifacts can request `responseType: 'text'` and impose a positive
+  `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before
+  reading and also counts streamed bytes when the server omits or misreports that header.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,
   network, HTTP status, unreadable response, and invalid input leave the module as `HttpError`.
   Raw Axios errors, configs, credentials, and unvalidated response bodies do not cross the public
@@ -41,6 +44,11 @@ Other service client ─ other HttpClient route ─┘
 The shared transport is not a shared credential store. Static and interceptor-added headers are
 materialized on each request from its own route. Cloud authentication interceptors therefore do
 not run for desktop LAN requests, and desktop device credentials do not become cloud defaults.
+
+Current production consumers include the provider-registry updater's separate GitCode and GitHub
+routes, plus the non-streaming Web Search JSON adapter. Web Search drivers continue to own provider
+request/response schemas and credentials; the adapter owns URL routing, query serialization, safe
+HTTP error decoding, and the shared transport call.
 
 ## Interceptors
 
@@ -129,7 +137,8 @@ not logged.
   not use this client.
 - TanStack Query remains the frontend owner of asynchronous state, caching, invalidation, and query
   retry. This transport does not recreate that layer or add a second retry policy.
-- AI providers, Pi, MCP, and remote Agent SSE, NDJSON, WebSocket, or `ReadableStream` data-plane
-  traffic continue to use `expo/fetch` or a specialized streaming client.
+- AI model generation, Pi, MCP, and remote Agent SSE, NDJSON, WebSocket, or `ReadableStream`
+  data-plane traffic continue to use `expo/fetch` or a specialized streaming client. Ordinary
+  non-streaming Web Search provider APIs may use this transport through their domain adapter.
 - Device discovery such as mDNS or UDP, raw TCP, platform local-network permissions, cleartext HTTP
   policy, and certificate trust remain outside this module.

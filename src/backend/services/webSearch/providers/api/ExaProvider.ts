@@ -62,23 +62,17 @@ export class ExaProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: ExaSearchContext) {
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers: this.buildHeaders({
+      headers: {
         'Content-Type': 'application/json',
         'x-api-key': context.apiKey,
-      }),
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Exa search failed', response);
-    }
-
-    return this.parseJsonResponse(response, ExaSearchResponseSchema, {
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: ExaSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

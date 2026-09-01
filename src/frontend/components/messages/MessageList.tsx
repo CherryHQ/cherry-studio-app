@@ -1,28 +1,21 @@
 import { ScrollToBottomButton } from '@cherrystudio/ui/components';
-import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Platform, useWindowDimensions, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
-import { usePreference } from '@/frontend/data/hooks';
-
 import {
-  ANCHOR_TOP_GAP,
-  getAnchoredUserMessageIndex,
   getMessageRowType,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
+  MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
-  resolveUserMessageAnchorMaxSize,
 } from './list/messageListLayout';
 import { scrollLog } from './list/messageListLogger';
 import { MessageListRow } from './list/MessageListRow';
-import { useMessageListAnchorPin } from './list/useMessageListAnchorPin';
-import { MessageSlideInProvider } from './motion/MessageSlideInProvider';
-import { useMessageSlideInFlight } from './motion/useMessageSlideInFlight';
-import type { MessageListProps, MessageListItem } from './types';
+import { useMessageListScrollController } from './list/useMessageListScrollController';
+import type { MessageListItem, MessageListProps } from './types';
 
 const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
 
@@ -30,9 +23,11 @@ export function MessageList({
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
+  dataKey,
   enteringMessageId,
   extraData,
   headerAccessory,
+  initialLayoutReady = true,
   keyboardOffset,
   messages,
   onLoadOlder,
@@ -41,10 +36,32 @@ export function MessageList({
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
+  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
+  const {
+    handleContentSizeChange,
+    handleLayout,
+    handleLoad,
+    handleMomentumScrollBegin,
+    handleMomentumScrollEnd,
+    handleScroll,
+    handleScrollBeginDrag,
+    handleScrollEndDrag,
+    handleScrollToEnd,
+    handleTouchStart,
+    isFollowing,
+  } = useMessageListScrollController({
+    dataKey,
+    enteringMessageId,
+    initialLayoutReady,
+    listRef,
+    messages,
+    onReady,
+    scrollMessageToEnd,
+  });
   const isAtBottom = useSharedValue(true);
-  const [isAtBottomForButton, setIsAtBottomForButton] = useState(true);
+  const [isNativeAtBottomForButton, setIsNativeAtBottomForButton] = useState(true);
   const syncScrollButtonVisibility = useCallback((atBottom: boolean) => {
-    setIsAtBottomForButton(atBottom);
+    setIsNativeAtBottomForButton(atBottom);
   }, []);
 
   useAnimatedReaction(
@@ -55,14 +72,7 @@ export function MessageList({
       }
     },
   );
-  // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
-  const [viewportHeight, setViewportHeight] = useState(0);
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setViewportHeight(event.nativeEvent.layout.height);
-  }, []);
-  const [fontSizeStep] = usePreference('ui.font_size_step');
-  const lastMessageId = messages[messages.length - 1]?.id;
-  const anchorIndex = getAnchoredUserMessageIndex(messages);
+
   const listHeader = useMemo(
     () => (
       <>
@@ -71,6 +81,10 @@ export function MessageList({
       </>
     ),
     [contentTopInset, headerAccessory],
+  );
+  const contentContainerStyle = useMemo(
+    () => ({ paddingBottom: contentBottomInset, paddingTop: MESSAGE_LIST_TOP_PADDING }),
+    [contentBottomInset],
   );
   const renderMessageRow = useCallback(
     ({ item }: LegendListRenderItemProps<MessageListItem>) => (
@@ -86,149 +100,64 @@ export function MessageList({
     scrollLog.debug('[SCROLL] startReached', { t: Date.now() });
     void onLoadOlder();
   }, [onLoadOlder]);
-  const hasAnchor = anchorIndex >= 0;
-  const anchorMessage = hasAnchor ? messages[anchorIndex] : undefined;
-  const anchorHasFile = anchorMessage?.data.parts?.some((part) => part.type === 'file') ?? false;
-  const anchorMaxSize = anchorHasFile
-    ? undefined
-    : resolveUserMessageAnchorMaxSize(resolveTypographyScale(fontSizeStep).base.lineHeight);
-  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
-  // 被锚定用户消息的固定落点：距内容区顶部（导航栏/安全区之下）ANCHOR_TOP_GAP。
-  // anchoredEndSpace 与钉顶滚动共用同一偏移，保证「预留空白算出的位置」和「滚动落点」一致。
-  const anchorOffset = contentTopInset + ANCHOR_TOP_GAP;
-  const contentContainerStyle = useMemo(
-    () => ({ paddingBottom: contentBottomInset, paddingTop: ANCHOR_TOP_GAP }),
-    [contentBottomInset],
-  );
-
-  // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
-  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
-  // 弹簧各分走一段（见 useMessageListAnchorPin）。
-  //
-  // 新话题的第一条消息会让列表**带着数据**挂载，而 viewportHeight 是 onLayout 回填的 state、
-  // 首帧还是 0：不兜底的话行程为 0，气泡会先在落点画一帧再跳回起飞点飞一遍。窗口高度偏大只
-  // 意味着停得更靠下（本来就在视口外，看不见），实测值到达后装填 effect 会在开火前校正。
-  // ready-gate 不用这个兜底值——它必须等真实测量（见 useMessageListAnchorPin 的早退）。
-  const { height: windowHeight } = useWindowDimensions();
-  const slideInTravel = Math.max(
-    0,
-    (viewportHeight || windowHeight) - contentBottomInset - anchorOffset,
-  );
-  // 入场那一轮的助手占位行：待发消息的下一条。它在同一次 overlay 注入里出现，所以装填时一定
-  // 已经在列表里；拿它做「等用户行落位再显形」的对象，而不是笼统的「最后一行」——流式期间
-  // 最后一行还是它，但那时飞行早已结束，不该再被 opacity 碰。
-  const enteringFollowerId = useMemo(() => {
-    if (!enteringMessageId) {
-      return undefined;
-    }
-
-    const enteringIndex = messages.findIndex((message) => message.id === enteringMessageId);
-    return enteringIndex < 0 ? undefined : messages[enteringIndex + 1]?.id;
-  }, [enteringMessageId, messages]);
-  const slideInFlight = useMessageSlideInFlight({
-    enteringMessageId,
-    followerMessageId: enteringFollowerId,
-    travel: slideInTravel,
-  });
-
-  const {
-    handleAnchorReady,
-    handleContentSizeChange,
-    handleMomentumScrollBegin,
-    handleMomentumScrollEnd,
-    handleScrollBeginDrag,
-    handleScrollEndDrag,
-    handleTouchEnd,
-    handleTouchStart,
-  } = useMessageListAnchorPin({
-    contentBottomInset,
-    enteringMessageId,
-    lastMessageId,
-    listRef,
-    onAnchorPinned: slideInFlight.launch,
-    onReady,
-    scrollMessageToEnd,
-    viewportHeight,
-  });
-
-  // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
-  const anchoredEndSpace = useMemo(
-    () =>
-      hasAnchor
-        ? {
-            anchorIndex,
-            anchorMaxSize,
-            anchorOffset,
-            onReady: handleAnchorReady,
-          }
-        : undefined,
-    [anchorIndex, anchorMaxSize, anchorOffset, handleAnchorReady, hasAnchor],
-  );
-
-  // 按钮用同一 LegendList 状态的 React 回调，避免 shared value 跨过流式重渲染边界后显隐
-  // 动画停在初始值。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
-  const handleScrollToEnd = useCallback(() => {
-    void listRef.current?.scrollToEnd({ animated: true });
-  }, []);
 
   return (
-    <MessageSlideInProvider flight={slideInFlight}>
-      <View className="flex-1">
-        <KeyboardAwareLegendList
-          ref={listRef}
-          applyWorkaroundForContentInsetHitTestBug
-          anchoredEndSpace={anchoredEndSpace}
-          contentContainerStyle={contentContainerStyle}
-          contentInsetAdjustmentBehavior="never"
-          data={messages}
-          drawDistance={80}
-          estimatedItemSize={300}
-          estimatedHeaderSize={contentTopInset}
-          extraData={extraData}
-          freeze={freeze}
-          getItemType={getMessageRowType}
-          keyExtractor={messageKeyExtractor}
-          keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
-          // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
-          // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
-          // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
-          // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
-          keyboardLiftBehavior="whenAtEnd"
-          keyboardOffset={keyboardOffset}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={listHeader}
-          initialScrollAtEnd
-          maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-          onContentSizeChange={handleContentSizeChange}
-          onLayout={handleLayout}
-          onMomentumScrollBegin={handleMomentumScrollBegin}
-          onMomentumScrollEnd={handleMomentumScrollEnd}
-          onScrollBeginDrag={handleScrollBeginDrag}
-          onScrollEndDrag={handleScrollEndDrag}
-          onStartReached={onLoadOlder ? handleStartReached : undefined}
-          onStartReachedThreshold={0.05}
-          onTouchCancel={handleTouchEnd}
-          onTouchEnd={handleTouchEnd}
-          onTouchStart={handleTouchStart}
-          recycleItems={false}
-          renderItem={renderMessageRow}
-          scrollEventThrottle={16}
-          scrollsToTop
-          sharedValues={sharedValues}
-          showsVerticalScrollIndicator={false}
-          className="flex-1"
+    <View className="flex-1">
+      <KeyboardAwareLegendList
+        ref={listRef}
+        applyWorkaroundForContentInsetHitTestBug
+        contentContainerStyle={contentContainerStyle}
+        contentInsetAdjustmentBehavior="never"
+        data={messages}
+        {...(dataKey ? { dataKey } : {})}
+        drawDistance={80}
+        estimatedItemSize={300}
+        estimatedHeaderSize={contentTopInset}
+        extraData={extraData}
+        freeze={freeze}
+        getItemType={getMessageRowType}
+        keyExtractor={messageKeyExtractor}
+        keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
+        keyboardLiftBehavior="whenAtEnd"
+        keyboardOffset={keyboardOffset}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        {...(!dataKey ? { initialScrollAtEnd: true } : {})}
+        maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+        onContentSizeChange={handleContentSizeChange}
+        onLayout={handleLayout}
+        onLoad={handleLoad}
+        onMomentumScrollBegin={handleMomentumScrollBegin}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        onScroll={handleScroll}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={handleScrollEndDrag}
+        onStartReached={onLoadOlder ? handleStartReached : undefined}
+        onStartReachedThreshold={0.05}
+        onTouchStart={handleTouchStart}
+        // Message parts own local disclosure state. Keep recycling disabled
+        // until that state is explicitly reset with LegendList recycling hooks.
+        recycleItems={false}
+        renderItem={renderMessageRow}
+        scrollEventThrottle={16}
+        scrollsToTop
+        sharedValues={sharedValues}
+        showsVerticalScrollIndicator={false}
+        className="flex-1"
+      />
+      {messages.length > 0 ? (
+        <ScrollToBottomButton
+          accessibilityLabel={t('chat.message.scrollToBottom')}
+          bottomAccessoryHeight={bottomAccessoryHeight}
+          gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
+          isAtBottom={isNativeAtBottomForButton || isFollowing}
+          // The press only enters following mode, which already hides the
+          // button. Mirroring an optimistic at-end state here would stick at
+          // `true` whenever the scroll does not actually land at the end.
+          onPress={handleScrollToEnd}
         />
-        {messages.length > 0 ? (
-          <ScrollToBottomButton
-            accessibilityLabel={t('chat.message.scrollToBottom')}
-            bottomAccessoryHeight={bottomAccessoryHeight}
-            gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-            isAtBottom={isAtBottomForButton}
-            onPress={handleScrollToEnd}
-          />
-        ) : null}
-      </View>
-    </MessageSlideInProvider>
+      ) : null}
+    </View>
   );
 }

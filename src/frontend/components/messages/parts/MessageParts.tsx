@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { View } from 'react-native';
 
 import type { MessageListItem } from '../types';
@@ -20,7 +21,7 @@ function getMessagePartKey(
   part: NonNullable<MessageListItem['data']['parts']>[number],
   index: number,
 ) {
-  return `${message.id}-${part.type}-${index}`;
+  return message.data.partKeys?.[index] ?? `${message.id}-${part.type}-${index}`;
 }
 
 export function MessageParts({
@@ -29,12 +30,15 @@ export function MessageParts({
   renderMode = 'markdown',
 }: MessagePartsProps) {
   const parts = message.data.parts;
+  // Parts keep their identity across renders (see the projection cache), so this
+  // has to be memoized: a fresh ResolvedCitationText per render would defeat the
+  // memo on MessagePartRenderer for every message that carries citations.
+  const citationText = useMemo(() => resolveMessageCitationText(parts ?? []), [parts]);
 
   if (!parts?.length) {
     return null;
   }
 
-  const citationText = resolveMessageCitationText(parts);
   const { body, files } = partitionMessageParts(parts);
   const sourceParts = parts.filter((part) => part.type === 'source-url');
 

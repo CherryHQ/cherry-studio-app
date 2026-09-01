@@ -107,26 +107,17 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
   }
 
   private async executeSearch(context: FirecrawlSearchContext) {
-    const headers = this.buildHeaders({ 'Content-Type': 'application/json' });
-
-    if (context.apiKey) {
-      headers.set('Authorization', `Bearer ${context.apiKey}`);
-    }
-
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers,
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Firecrawl search failed', response);
-    }
-
-    return this.parseJsonResponse(response, FirecrawlSearchResponseSchema, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
+      },
       operation: 'search',
-      requestUrl: context.requestUrl,
+      responseSchema: FirecrawlSearchResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 
@@ -172,26 +163,17 @@ export class FirecrawlProvider extends BaseWebSearchProvider {
   }
 
   private async executeScrape(context: FirecrawlScrapeContext) {
-    const headers = this.buildHeaders({ 'Content-Type': 'application/json' });
-
-    if (context.apiKey) {
-      headers.set('Authorization', `Bearer ${context.apiKey}`);
-    }
-
-    const response = await fetch(context.requestUrl, {
+    return this.requestJson({
+      body: context.requestBody,
       method: 'POST',
-      headers,
-      body: JSON.stringify(context.requestBody),
-      signal: context.signal,
-    });
-
-    if (!response.ok) {
-      await this.throwHttpError('Firecrawl scrape failed', response);
-    }
-
-    return this.parseJsonResponse(response, FirecrawlScrapeResponseSchema, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(context.apiKey ? { Authorization: `Bearer ${context.apiKey}` } : {}),
+      },
       operation: 'scrape',
-      requestUrl: context.requestUrl,
+      responseSchema: FirecrawlScrapeResponseSchema,
+      signal: context.signal,
+      url: context.requestUrl,
     });
   }
 

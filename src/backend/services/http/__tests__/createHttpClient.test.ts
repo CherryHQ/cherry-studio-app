@@ -120,6 +120,29 @@ describe('createHttpClient', () => {
     });
   });
 
+  it('supports bounded text responses without exposing Axios response types', async () => {
+    const adapter = mockAdapter(async (config) => {
+      expect(config.maxContentLength).toBe(65_536);
+      expect(config.responseType).toBe('text');
+      return response(config, 200, '{"revision":1}');
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const client = createClient({ baseUrl: 'https://catalog.cherry.example.com' });
+
+    await expect(
+      client.request<string>({
+        maxResponseBytes: 65_536,
+        method: 'GET',
+        path: '/manifest.json',
+        responseType: 'text',
+      }),
+    ).resolves.toEqual({
+      data: '{"revision":1}',
+      headers: {},
+      status: 200,
+    });
+  });
+
   it('routes each request through only its client interceptors on one transport', async () => {
     const adapter = mockAdapter(async (config) => {
       const source = config.baseURL?.includes('cloud') ? 'cloud' : 'desktop';
@@ -367,6 +390,44 @@ describe('createHttpClient', () => {
       client.request({ method: 'GET', path: '/agents', timeoutMs: 0 }),
     ).rejects.toMatchObject({ code: 'INVALID_REQUEST_TIMEOUT', kind: 'internal' });
     expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid response controls before transport', async () => {
+    const adapter = mockAdapter(async (config) => response(config, 200, {}));
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const client = createClient({ baseUrl: 'https://api.cherry.example.com' });
+
+    await expect(
+      client.request({ maxResponseBytes: 0, method: 'GET', path: '/manifest.json' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_SIZE_LIMIT', kind: 'internal' });
+    await expect(
+      client.request({
+        method: 'GET',
+        path: '/manifest.json',
+        responseType: 'arraybuffer',
+      } as never),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_TYPE', kind: 'internal' });
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('maps an oversized response to a stable app-owned error', async () => {
+    const adapter = mockAdapter(async (config) => {
+      throw new AxiosError(
+        'maxContentLength size of 1024 exceeded',
+        AxiosError.ERR_BAD_RESPONSE,
+        config,
+      );
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    const client = createClient({ baseUrl: 'https://api.cherry.example.com' });
+
+    await expect(
+      client.request({ maxResponseBytes: 1024, method: 'GET', path: '/manifest.json' }),
+    ).rejects.toMatchObject({
+      code: 'RESPONSE_TOO_LARGE',
+      kind: 'invalid_response',
+      message: 'HTTP response exceeded the allowed size.',
+    });
   });
 
   it('reports an error interceptor that returns an invalid value without hiding the reason', async () => {

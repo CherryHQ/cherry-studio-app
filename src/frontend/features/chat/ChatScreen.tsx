@@ -54,7 +54,6 @@ export function ChatScreen() {
             forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
             keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}
-            renderGateKey={sessionId}
             sessionId={sessionId}
           />
         ) : (

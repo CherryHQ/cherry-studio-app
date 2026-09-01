@@ -116,7 +116,8 @@ describe('MessagePart', () => {
     });
 
     expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
-    act(() => renderer!.root.findByProps({ testID: 'search-trigger' }).props.onPress());
+    const trigger = renderer!.root.findByProps({ testID: 'search-trigger' });
+    act(() => trigger.props.onPress());
 
     const detail = renderer!.root.findByProps({ testID: 'search-detail' });
     expect(mockBottomSheetProps.sizes).toEqual(['compact', 'large']);

@@ -7,11 +7,6 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import type { MessageListItem } from '../../types';
 import { UserMessage } from '../UserMessage';
 
-jest.mock('react-native-reanimated', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-  return { __esModule: true, default: { View: MockView } };
-});
-
 jest.mock('../../parts/FilePart', () => {
   const { createElement } = jest.requireActual('react');
 
@@ -27,10 +22,6 @@ jest.mock('../../parts/MessageParts', () => {
     MessageParts: (props: object) => createElement('MessageParts', props),
   };
 });
-
-jest.mock('../../motion/useUserMessageSlideInStyle', () => ({
-  useUserMessageSlideInStyle: () => undefined,
-}));
 
 describe('UserMessage', () => {
   test('keeps a text-only message in the bubble', () => {

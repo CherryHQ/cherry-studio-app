@@ -115,6 +115,27 @@ describe('MarkdownText', () => {
       }),
     );
   });
+
+  test('keeps the streaming renderer mounted when the part reaches terminal state', () => {
+    const onLinkPress = jest.fn();
+    const renderer = render(
+      <MarkdownText fontSizeStep={0} isStreaming markdown="Partial" onLinkPress={onLinkPress} />,
+    );
+
+    act(() => {
+      renderer.update(
+        <MarkdownText
+          fontSizeStep={0}
+          isStreaming={false}
+          markdown="Complete"
+          onLinkPress={onLinkPress}
+        />,
+      );
+    });
+
+    expect(renderer.root.findByType('StreamdownText').props.markdown).toBe('Complete');
+    expect(renderer.root.findAllByType('EnrichedMarkdownText')).toHaveLength(0);
+  });
 });
 
 function render(element: ReactElement): ReactTestRenderer {

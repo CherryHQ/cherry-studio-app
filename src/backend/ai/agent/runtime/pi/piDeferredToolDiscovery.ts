@@ -1,4 +1,5 @@
 import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
+import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 
@@ -7,10 +8,12 @@ export const PI_TOOL_DESCRIBE_TOOL_NAME = 'tool_describe';
 export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
 export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `MCP tools are available through a searchable catalog.
+Use tool_search only for tool discovery, not for web search or general research.
 Use tool_search to discover relevant tools and their TypeScript signatures.
 Narrow the search query when the result reports truncated: true.
 Use tool_describe when you need the bounded signature for one exact tool name.
 Use tool_call with an exact discovered name and params matching that signature.
+If tool_call returns a signature, read it and retry with corrected params.
 Do not guess tool names or parameters.`;
 
 const SEARCH_RESULT_LIMIT = 20;
@@ -20,6 +23,7 @@ const TOOL_DESCRIPTION_CHARACTER_LIMIT = 1_000;
 const MIN_TOOL_DECLARATION_CHARACTER_LIMIT = 512;
 const DISPATCH_ACTIVITY_NAME_CHARACTER_LIMIT = 256;
 const TOOL_SCHEMA_RENDER_CHARACTER_LIMIT = 32_000;
+const TOOL_CORRECTION_DECLARATION_CHARACTER_LIMIT = 3_000;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const MAX_NESTING_DEPTH = 5;
@@ -90,6 +94,8 @@ export function createPiDeferredToolDiscoveryTools(
   runMetaTool: RunMetaTool,
 ): PiAgentTool[] {
   const catalog = new Map(tools.map((tool) => [tool.providerName, tool]));
+  const inspectedNames = new Set<string>();
+  const inputValidators = new Map<string, z.ZodType | null>();
 
   const searchTool: PiAgentTool = {
     name: PI_TOOL_SEARCH_TOOL_NAME,
@@ -109,6 +115,7 @@ export function createPiDeferredToolDiscoveryTools(
             rankTools([...catalog.values()], query),
             modelOutputCharacterLimit,
           );
+          for (const match of searchResult.matches) inspectedNames.add(match.name);
 
           return {
             modelOutput: searchResult.output,
@@ -149,6 +156,7 @@ export function createPiDeferredToolDiscoveryTools(
           const name = isRecord(params) && typeof params.name === 'string' ? params.name : '';
           const tool = catalog.get(name);
           if (!tool) throw toolNotFoundError(name);
+          inspectedNames.add(name);
           return {
             modelOutput: boundedDescribeResult(tool, modelOutputCharacterLimit),
             activityOutput: {
@@ -166,27 +174,67 @@ export function createPiDeferredToolDiscoveryTools(
     name: PI_TOOL_CALL_TOOL_NAME,
     label: 'Call tool',
     description:
-      'Call one MCP tool using an exact name and params matching a signature returned by tool_search or tool_describe.',
+      'Call one MCP tool using an exact name and params matching a signature returned by tool_search or tool_describe. An unseen or invalid call returns the expected signature for a corrected retry.',
     parameters: CALL_INPUT_SCHEMA as never,
     async execute(toolCallId, params, signal) {
       const input = isRecord(params) ? params : {};
       const name = typeof input.name === 'string' ? input.name : '';
       const targetInput = (isRecord(input.params) ? input.params : {}) as RuntimeJsonValue;
       const tool = catalog.get(name);
-      const output = tool
-        ? await invokeTarget(tool, targetInput, toolCallId, signal)
-        : await runMetaTool(
-            toolCallId,
-            signal,
-            {
-              displayName: 'Call tool',
-              input: createPiDispatchActivityInput(input),
-              providerName: PI_TOOL_CALL_TOOL_NAME,
-            },
-            () => {
-              throw toolNotFoundError(name);
-            },
-          );
+      if (!tool) {
+        const output = await runMetaTool(
+          toolCallId,
+          signal,
+          {
+            displayName: 'Call tool',
+            input: createPiDispatchActivityInput(input),
+            providerName: PI_TOOL_CALL_TOOL_NAME,
+          },
+          () => {
+            throw toolNotFoundError(name);
+          },
+        );
+        return toPiToolResult(output);
+      }
+
+      if (!inspectedNames.has(name)) {
+        inspectedNames.add(name);
+        const output = await runRejectedDispatch(
+          input,
+          toolCallId,
+          signal,
+          runMetaTool,
+          (modelOutputCharacterLimit) => {
+            throw toolSignatureError(
+              tool,
+              'tool_schema_not_inspected',
+              `Tool "${name}" has not been inspected yet. Read the signature below, then call tool_call again with matching params.`,
+              modelOutputCharacterLimit,
+            );
+          },
+        );
+        return toPiToolResult(output);
+      }
+
+      if (!matchesToolInput(tool, targetInput, inputValidators)) {
+        const output = await runRejectedDispatch(
+          input,
+          toolCallId,
+          signal,
+          runMetaTool,
+          (modelOutputCharacterLimit) => {
+            throw toolSignatureError(
+              tool,
+              'tool_input_invalid',
+              `Invalid params for "${name}". Read the expected signature below, then call tool_call again with corrected params.`,
+              modelOutputCharacterLimit,
+            );
+          },
+        );
+        return toPiToolResult(output);
+      }
+
+      const output = await invokeTarget(tool, targetInput, toolCallId, signal);
       return toPiToolResult(output);
     },
   };
@@ -206,6 +254,76 @@ function toolNotFoundError(name: string) {
     code: 'tool_not_found',
     retryable: false,
   });
+}
+
+function runRejectedDispatch(
+  input: Record<string, unknown>,
+  toolCallId: string,
+  signal: AbortSignal | undefined,
+  runMetaTool: RunMetaTool,
+  reject: (modelOutputCharacterLimit: number) => never,
+) {
+  return runMetaTool(
+    toolCallId,
+    signal,
+    {
+      displayName: 'Call tool',
+      input: createPiDispatchActivityInput(input),
+      providerName: PI_TOOL_CALL_TOOL_NAME,
+    },
+    reject,
+  );
+}
+
+function toolSignatureError(
+  tool: RuntimeTool,
+  code: string,
+  message: string,
+  modelOutputCharacterLimit: number,
+) {
+  const declaration = toolToTypeScript(
+    tool,
+    Math.min(
+      TOOL_CORRECTION_DECLARATION_CHARACTER_LIMIT,
+      Math.max(1, Math.floor(modelOutputCharacterLimit / 2)),
+    ),
+  );
+  return Object.assign(new Error(`${message}\n\nExpected signature:\n${declaration}`), {
+    code,
+    retryable: false,
+  });
+}
+
+function matchesToolInput(
+  tool: RuntimeTool,
+  input: RuntimeJsonValue,
+  inputValidators: Map<string, z.ZodType | null>,
+): boolean {
+  if (!inputValidators.has(tool.providerName)) {
+    inputValidators.set(tool.providerName, createToolInputValidator(tool));
+  }
+
+  // A tool with no validator was never rendered as a contract the model could
+  // satisfy, so rejecting its params would return the same signature forever
+  // and burn the turn's tool-call budget. Let those calls through.
+  const validator = inputValidators.get(tool.providerName);
+  return validator ? validator.safeParse(input).success : true;
+}
+
+function createToolInputValidator(tool: RuntimeTool): z.ZodType | null {
+  // The catalog omits a schema this large, so the model only ever sees
+  // `params: Record<string, unknown>` for this tool.
+  if (!isJsonWithinCharacterLimit(tool.inputSchema, TOOL_SCHEMA_RENDER_CHARACTER_LIMIT)) {
+    return null;
+  }
+
+  try {
+    // Draft-07 `#/definitions` refs, `if`/`then`/`else`, `not`, `dependentSchemas`
+    // and `unevaluatedProperties` all throw here.
+    return z.fromJSONSchema(tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0]);
+  } catch {
+    return null;
+  }
 }
 
 function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] {

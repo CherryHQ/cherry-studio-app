@@ -96,6 +96,7 @@ jest.mock('../../approval/ToolApprovalSheet', () => ({
 }));
 
 jest.mock('../../runtime', () => ({
+  createAgentMessageListProjectionCache: () => ({}),
   mergeAgentMessageViews: (
     persisted: readonly AgentMessageView[],
     live: readonly AgentMessageView[],
@@ -197,7 +198,6 @@ function createWorkspaceElement(
         messages,
         retry: mockRetry,
       }}
-      renderGateKey={`${sessionId}:history`}
       sessionId={sessionId}
     />
   );
@@ -256,6 +256,8 @@ describe('ChatWorkspace message rendering integration', () => {
     ]);
     expect(mockMessageListProps?.enteringMessageId).toBe('user-pending');
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
+    expect(mockMessageListProps?.dataKey).toBe('session-1');
+    expect(mockMessageListProps?.initialLayoutReady).toBe(true);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
     expect(mockIsLoadingOlder).toBe(true);

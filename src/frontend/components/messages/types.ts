@@ -7,7 +7,11 @@ import type { Model } from '@/shared/data/types/model';
 export type MessageListItem = Readonly<{
   /** Creation time owned by this persisted message. */
   createdAt?: string;
-  data: Readonly<{ parts?: readonly CherryMessagePart[] }>;
+  data: Readonly<{
+    /** Stable render identities aligned one-to-one with `parts` when the source provides them. */
+    partKeys?: readonly string[];
+    parts?: readonly CherryMessagePart[];
+  }>;
   id: string;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
@@ -19,10 +23,12 @@ export type MessageListProps = {
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
+  dataKey?: string;
   enteringMessageId?: string;
   extraData?: unknown;
   /** Scrolls above the first message; the caller decides when it applies. */
   headerAccessory?: ReactNode;
+  initialLayoutReady?: boolean;
   keyboardOffset: number;
   messages: readonly MessageListItem[];
   onLoadOlder?: () => Promise<void>;

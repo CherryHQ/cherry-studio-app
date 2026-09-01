@@ -1,8 +1,8 @@
 # Chat Workspace
 
-This module owns Agent Session workspace orchestration: runtime message projection, older-message
-loading state, initial render gating, message actions, and composer placement. The virtualized list
-and message rendering live in `@/frontend/components/messages`.
+This module owns Agent Session workspace orchestration: structurally shared runtime message
+projection, older-message loading state, initial restore cover, message actions, and composer
+placement. The virtualized list and message rendering live in `@/frontend/components/messages`.
 
 ## Public Interface
 
@@ -19,5 +19,5 @@ and message rendering live in `@/frontend/components/messages`.
   input exists and must keep that session outside its session/empty-state branch.
 - `context/` owns assistant-message action state and actions. Dynamic copied/busy/enabled state is consumed
   only by toolbar leaves; the virtualized list and expensive message body do not subscribe.
-- `hooks/` owns initial-render coordination.
+- `hooks/` owns the cover handoff after the list controller completes initial restoration.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
