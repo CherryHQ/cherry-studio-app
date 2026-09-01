@@ -55,7 +55,6 @@ export function ChatScreen() {
             contentBottomInset={contentBottomInset}
             keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}
-            renderGateKey={sessionId}
             sessionId={sessionId}
           />
         ) : (

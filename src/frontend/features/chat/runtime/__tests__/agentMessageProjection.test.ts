@@ -1,7 +1,12 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
-import { mergeAgentMessageViews, toAgentMessageListItem } from '../agentMessageProjection';
+import {
+  createAgentMessageListProjectionCache,
+  mergeAgentMessageViews,
+  toAgentMessageListItem,
+  toAgentMessageListItems,
+} from '../agentMessageProjection';
 
 function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMessageView {
   return {
@@ -80,6 +85,7 @@ describe('agentMessageProjection', () => {
 
     expect(item).toMatchObject({
       data: {
+        partKeys: ['error-1'],
         parts: [
           {
             data: {
@@ -153,6 +159,7 @@ describe('agentMessageProjection', () => {
       role: 'assistant',
       status: 'pending',
       data: {
+        partKeys: ['reasoning-1', 'tool-1'],
         parts: [
           { state: 'streaming', text: 'Thinking', type: 'reasoning' },
           {
@@ -293,6 +300,34 @@ describe('agentMessageProjection', () => {
     expect(
       mergeAgentMessageViews([persistedUser, persistedAssistant], [finalizedAssistant, nextUser]),
     ).toEqual([persistedUser, finalizedAssistant, nextUser]);
+  });
+
+  test('structurally shares unchanged rows and parts across stream updates', () => {
+    const cache = createAgentMessageListProjectionCache();
+    const user = message('user-1', {
+      parts: [{ id: 'user-text', state: 'done', text: 'Question', type: 'text' }],
+      role: 'user',
+      status: 'success',
+    });
+    const reasoning = {
+      id: 'reasoning-1',
+      state: 'streaming' as const,
+      text: 'Thinking',
+      type: 'reasoning' as const,
+    };
+    const streaming = message('assistant-1', { parts: [reasoning] });
+    const first = toAgentMessageListItems([user, streaming], cache);
+    const updated = message('assistant-1', {
+      parts: [reasoning, { id: 'text-1', state: 'streaming', text: 'Answer', type: 'text' }],
+    });
+    const second = toAgentMessageListItems([user, updated], cache);
+
+    expect(second).not.toBe(first);
+    expect(second[0]).toBe(first[0]);
+    expect(second[1]).not.toBe(first[1]);
+    expect(second[1].data.parts?.[0]).toBe(first[1].data.parts?.[0]);
+    expect(second[1].data.partKeys).toEqual(['reasoning-1', 'text-1']);
+    expect(toAgentMessageListItems([user, updated], cache)).toBe(second);
   });
 
   test('omits system messages from the chat row projection', () => {
