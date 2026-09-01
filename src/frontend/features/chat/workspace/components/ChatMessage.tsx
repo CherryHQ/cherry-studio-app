@@ -1,4 +1,4 @@
-import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -120,7 +120,7 @@ export const ChatMessage = memo(function ChatMessage({
   }, [copyAssistantMessage, copyText, isMessageActionsEnabled, message.id, t]);
 
   return (
-    <Menu items={menuItems} trigger="longPress">
+    <ContextMenu items={menuItems}>
       <View className="w-full" collapsable={false}>
         {message.role === 'user' ? (
           <UserMessage message={message} />
@@ -128,6 +128,6 @@ export const ChatMessage = memo(function ChatMessage({
           renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
         )}
       </View>
-    </Menu>
+    </ContextMenu>
   );
 });

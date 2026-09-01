@@ -9,7 +9,7 @@ const mockCopyAssistantMessage = jest.fn();
 let mockMenuItems: readonly { disabled?: boolean; id: string }[] = [];
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  Menu: ({ children, items }: { children: ReactNode; items: typeof mockMenuItems }) => {
+  ContextMenu: ({ children, items }: { children: ReactNode; items: typeof mockMenuItems }) => {
     mockMenuItems = items;
     return children;
   },

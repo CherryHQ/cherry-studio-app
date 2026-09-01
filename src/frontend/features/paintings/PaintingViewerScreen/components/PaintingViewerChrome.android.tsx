@@ -2,7 +2,7 @@ import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import ProportionsIcon from '@cherrystudio/app-icons/icons/proportions';
-import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { ActionMenu, type MenuItem } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
@@ -92,7 +92,7 @@ export function PaintingViewerChrome({
         >
           <PencilIcon className="size-6 text-constant-white" />
         </HeaderIconButton>
-        <Menu items={resizeMenuItems} trigger="tap">
+        <ActionMenu items={resizeMenuItems}>
           <View
             accessibilityLabel={t('painting.viewer.resize')}
             accessibilityRole="button"
@@ -100,7 +100,7 @@ export function PaintingViewerChrome({
           >
             <ProportionsIcon className="size-6 text-constant-white" />
           </View>
-        </Menu>
+        </ActionMenu>
       </View>
     </>
   );

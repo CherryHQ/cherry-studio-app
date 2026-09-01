@@ -1,4 +1,4 @@
-import { Menu } from '@cherrystudio/ui/components';
+import { ActionMenu } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { Pressable, Text, View } from 'react-native';
 
@@ -26,7 +26,7 @@ export function HeaderAction({
       const Icon = action.icon;
 
       return (
-        <Menu items={action.items} trigger="tap">
+        <ActionMenu items={action.items}>
           <View
             accessibilityLabel={action.accessibilityLabel}
             accessibilityRole="button"
@@ -36,7 +36,7 @@ export function HeaderAction({
           >
             <Icon className={cn('size-6', contentClassName)} />
           </View>
-        </Menu>
+        </ActionMenu>
       );
     }
 

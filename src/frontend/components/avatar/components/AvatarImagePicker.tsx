@@ -1,4 +1,4 @@
-import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { ActionMenu, type MenuItem } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import { type ReactElement, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -95,7 +95,7 @@ export function AvatarImagePicker({
   );
 
   return (
-    <Menu items={menuItems} trigger="tap">
+    <ActionMenu items={menuItems}>
       <View
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
@@ -107,6 +107,6 @@ export function AvatarImagePicker({
       >
         {children}
       </View>
-    </Menu>
+    </ActionMenu>
   );
 }
