@@ -94,15 +94,13 @@ describe('useAiUsageRanking', () => {
     expect(latestResult?.query.hasData).toBe(true);
     expect(latestResult?.ranking).toEqual([]);
 
-    // Toggling fetches the other grouping on demand; `keepPreviousData` keeps the current
-    // ranking on screen instead of dropping back to the loading skeleton.
+    // Toggling fetches the other grouping on demand.
     await updateHook(true, 'provider');
     expect(requestedGroupings()).toEqual(['model', 'provider']);
-    expect(latestResult?.query.isLoading).toBe(false);
     expect(latestResult?.query.hasData).toBe(true);
   });
 
-  test('keeps the previous day on screen while the next one loads', async () => {
+  test('clears the previous day while the next one loads', async () => {
     const pendingRequests: (() => void)[] = [];
     dataApi.get.mockImplementationOnce(async () => modelStatsResponse);
     await renderHook(true, 'model');
@@ -117,11 +115,9 @@ describe('useAiUsageRanking', () => {
         }),
     );
     await updateHook(true, 'model', '2026-08-03');
-    expect(latestResult?.query.isLoading).toBe(false);
-    expect(latestResult?.query.hasData).toBe(true);
-    expect(latestResult?.ranking).toEqual([
-      expect.objectContaining({ groupBy: 'model', modelId: 'model-a' }),
-    ]);
+    expect(latestResult?.query.isLoading).toBe(true);
+    expect(latestResult?.query.hasData).toBe(false);
+    expect(latestResult?.ranking).toEqual([]);
 
     await act(async () => {
       for (const resolveRequest of pendingRequests) resolveRequest();

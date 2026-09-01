@@ -48,11 +48,9 @@ const EMPTY_PULL_PREVIEW: ProviderModelPullPreview = { added: [], missing: [] };
 type ProviderModelAddMode = 'manual' | 'sync';
 
 export default function ProviderModelAddScreen() {
-  const { mode, providerId, returnToProviderList, setupFlow } = useLocalSearchParams<{
+  const { mode, providerId, setupFlow } = useLocalSearchParams<{
     mode?: string;
     providerId?: string;
-    providerName?: string;
-    returnToProviderList?: string;
     setupFlow?: string;
   }>();
   const { t } = useTranslation();
@@ -87,10 +85,10 @@ export default function ProviderModelAddScreen() {
 
   return (
     <ProviderModelAddForm
+      key={provider.id}
       initialMode={mode === 'manual' ? 'manual' : 'sync'}
       isSetupFlow={setupFlow === 'true'}
       provider={provider}
-      returnToProviderList={returnToProviderList === 'true'}
     />
   );
 }
@@ -99,12 +97,10 @@ function ProviderModelAddForm({
   initialMode,
   isSetupFlow,
   provider,
-  returnToProviderList,
 }: {
   initialMode: ProviderModelAddMode;
   isSetupFlow: boolean;
   provider: Provider;
-  returnToProviderList: boolean;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -156,14 +152,14 @@ function ProviderModelAddForm({
     isSaving: isSubmitting || isApplying,
   });
   const completeFlow = useCallback(() => {
-    if (isSetupFlow || returnToProviderList) {
+    if (isSetupFlow) {
       allowNavigation();
       router.dismissTo('/settings/provider');
       return;
     }
 
     closeWithoutPrompt();
-  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, returnToProviderList, router]);
+  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, router]);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -53,7 +53,7 @@ describe('ChatForkOriginDivider', () => {
     await act(async () => row?.props.onPress());
 
     expect(mockSetParams).toHaveBeenCalledWith({
-      agentId: 'agent-1',
+      agentId: undefined,
       sessionId: 'source-1',
     });
   });

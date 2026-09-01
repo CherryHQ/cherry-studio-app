@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
+import { chatHref, chatRouteParams } from '@/frontend/components/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
@@ -100,7 +101,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
           ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         });
         targetSessionId = session.id;
-        navigation.openSession(targetSessionId, agentId);
+        navigation.openSession(targetSessionId);
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
       }
@@ -115,7 +116,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const forkSession = useCallback(
     async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
       const session = await client.forkSession(sessionId, fromMessageId, title);
-      navigation.openSession(session.id, session.agentId);
+      navigation.openSession(session.id);
       void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
     },
     [client, navigation, queryClient],
@@ -132,17 +133,14 @@ function createChatNavigation(input: { pathname: string; router: ReturnType<type
   let navigation = input;
 
   return {
-    openSession: (sessionId: string, agentId: string) => {
-      const params = {
-        agentId,
-        sessionId,
-      };
+    openSession: (sessionId: string) => {
+      const target = { kind: 'session' as const, sessionId };
       if (navigation.pathname === '/') {
-        navigation.router.setParams(params);
+        navigation.router.setParams(chatRouteParams(target));
         return;
       }
 
-      navigation.router.replace({ params, pathname: '/' });
+      navigation.router.replace(chatHref(target));
     },
     update: (nextNavigation: typeof input) => {
       navigation = nextNavigation;

@@ -7,7 +7,11 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { ApiClient, CursorPaginationResponse } from '@/shared/data/api/types';
 
-import { useAgentSessionMutations, useAgentSessions } from '../useAgentSessions';
+import {
+  useAgentSessionMutations,
+  useAgentSessions,
+  useLatestAgentSession,
+} from '../useAgentSessions';
 
 let actions: ReturnType<typeof useAgentSessionMutations> | undefined;
 let queryClient: QueryClient;
@@ -32,6 +36,9 @@ const dataApi = {
 
 function Probe() {
   useAgentSessions();
+  // Both list variants share the collection cache namespace and therefore
+  // must keep the same InfiniteData shape for optimistic rename/delete writes.
+  useLatestAgentSession();
   const mutations = useAgentSessionMutations();
 
   useEffect(() => {
@@ -41,13 +48,16 @@ function Probe() {
   return null;
 }
 
-describe('useAgentSessionMutations', () => {
+describe('agent Session hooks', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     actions = undefined;
     persistedSessions = sessions;
     queryClient = new QueryClient({
-      defaultOptions: { mutations: { retry: false }, queries: { gcTime: Infinity, retry: false } },
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { gcTime: Infinity, retry: false, staleTime: 30_000 },
+      },
     });
     await act(async () => {
       renderer = create(
@@ -85,6 +95,25 @@ describe('useAgentSessionMutations', () => {
 
     expect(readSessionIds()).toEqual(['b', 'c']);
     expect(dataApi.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it('requests the latest Session again on every mount', async () => {
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
+
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <DataApiProvider dataApi={dataApi}>
+            <Probe />
+          </DataApiProvider>
+        </QueryClientProvider>,
+      );
+    });
+
+    // The regular list remains fresh in cache; only the one-row latest query runs again.
+    expect(dataApi.get).toHaveBeenCalledTimes(3);
   });
 });
 

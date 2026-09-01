@@ -8,6 +8,7 @@ import { Text, View } from 'react-native';
 
 import { type AppSearchGroup, useAppSearch } from '@/frontend/components/appSearch';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { chatHref, type ChatTarget } from '@/frontend/components/navigation/chat';
 import {
   SelectionControls,
   SelectionProvider,
@@ -15,6 +16,8 @@ import {
   useSelectionState,
 } from '@/frontend/components/selection';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
+import { useAgentApiById } from '@/frontend/hooks/agent';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type {
   EntitySearchItem,
   SessionMessageContentSearchItem,
@@ -32,8 +35,13 @@ import { parseSessionViewMode, type SessionViewMode } from './sessionViewMode';
 function SessionListScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { view: rawView } = useLocalSearchParams<{ view?: string | string[] }>();
-  const view = parseSessionViewMode(rawView);
+  const { agentId: rawAgentId, view: rawView } = useLocalSearchParams<{
+    agentId?: string | string[];
+    view?: string | string[];
+  }>();
+  const agentId = getSingleRouteParam(rawAgentId);
+  const { agent } = useAgentApiById(agentId);
+  const view = agentId ? 'sessions' : parseSessionViewMode(rawView);
   const isSessionView = view === 'sessions';
   const apiClient = useApiClient();
   const { open: openAppSearch } = useAppSearch();
@@ -89,10 +97,7 @@ function SessionListScreenBody() {
         return;
       }
 
-      router.push({
-        params: getSearchResultTarget(outcome.item),
-        pathname: '/',
-      });
+      router.push(chatHref(getSearchResultTarget(outcome.item)));
     });
   }, [apiClient, openAppSearch, router, t]);
   const setView = useCallback(
@@ -102,6 +107,17 @@ function SessionListScreenBody() {
     [router],
   );
   const menuItems = useMemo<readonly MenuItem[]>(() => {
+    if (agentId) {
+      return [
+        {
+          disabled: isDeletionPending,
+          id: 'select-sessions',
+          label: t('session.selection.start'),
+          onPress: handleEnterEditing,
+        },
+      ];
+    }
+
     const viewItems: MenuItem[] = [
       {
         checked: view === 'sessions',
@@ -130,17 +146,21 @@ function SessionListScreenBody() {
           },
         ]
       : viewItems;
-  }, [handleEnterEditing, isDeletionPending, isSessionView, setView, t, view]);
+  }, [agentId, handleEnterEditing, isDeletionPending, isSessionView, setView, t, view]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
-      {
-        accessibilityLabel: t('navigation.search'),
-        disabled: isDeletionPending,
-        icon: SearchIcon,
-        key: 'search-sessions',
-        onPress: openSessionSearch,
-        type: 'icon',
-      },
+      ...(agentId
+        ? []
+        : [
+            {
+              accessibilityLabel: t('navigation.search'),
+              disabled: isDeletionPending,
+              icon: SearchIcon,
+              key: 'search-sessions',
+              onPress: openSessionSearch,
+              type: 'icon' as const,
+            },
+          ]),
       {
         accessibilityLabel: t('common.more'),
         icon: EllipsisIcon,
@@ -149,7 +169,7 @@ function SessionListScreenBody() {
         type: 'menu',
       },
     ],
-    [isDeletionPending, menuItems, openSessionSearch, t],
+    [agentId, isDeletionPending, menuItems, openSessionSearch, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -169,10 +189,10 @@ function SessionListScreenBody() {
     <>
       <RouteHeader
         rightActions={isEditing ? doneActions : rightActions}
-        title={t(isSessionView ? 'session.list.title' : 'session.list.titleByAgent')}
+        title={agent?.name ?? t(isSessionView ? 'session.list.title' : 'session.list.titleByAgent')}
       />
       <View className="flex-1 bg-background">
-        {isSessionView ? <SessionList /> : <AgentSessionList />}
+        {isSessionView ? <SessionList agentId={agentId} /> : <AgentSessionList />}
         {isSessionView ? <SelectionControls scope={sessionSelectionScope} /> : null}
       </View>
     </>
@@ -183,13 +203,11 @@ type SessionSearchResult =
   | { item: Extract<EntitySearchItem, { type: 'session' }>; kind: 'session' }
   | { item: SessionMessageContentSearchItem; kind: 'message' };
 
-function getSearchResultTarget(result: SessionSearchResult): {
-  agentId: string;
-  sessionId: string;
-} {
-  return result.kind === 'session'
-    ? result.item.target
-    : { agentId: result.item.agentId, sessionId: result.item.sessionId };
+function getSearchResultTarget(result: SessionSearchResult): ChatTarget {
+  return {
+    kind: 'session',
+    sessionId: result.kind === 'session' ? result.item.target.sessionId : result.item.sessionId,
+  };
 }
 
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {

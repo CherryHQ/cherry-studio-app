@@ -3,9 +3,11 @@ export { useAgentToolBindingMutations, useAgentToolBindingsApi } from './useAgen
 export {
   type AgentSessionsOptions,
   type AgentSessionsViewModel,
+  type LatestAgentSessionOptions,
   useAgentSession,
   useAgentSessionMutations,
   useAgentSessions,
+  useLatestAgentSession,
 } from './useAgentSessions';
 export {
   type AgentMessageHistoryWindow,

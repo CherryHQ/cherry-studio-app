@@ -6,16 +6,16 @@ import type { AppSearchOutcome, AppSearchRequest } from './types';
 async function open<TItem, TFilters = undefined, TFilterContext = undefined>(
   request: AppSearchRequest<TItem, TFilters, TFilterContext>,
 ): Promise<AppSearchOutcome<TItem>> {
-  const { outcome, sessionId } = createAppSearchSession(request);
+  const { outcome, sessionId: searchSessionId } = createAppSearchSession(request);
 
-  if (!sessionId) {
+  if (!searchSessionId) {
     return outcome;
   }
 
   try {
-    router.push({ params: { sessionId }, pathname: '/search' });
+    router.push({ params: { searchSessionId }, pathname: '/search' });
   } catch {
-    finishAppSearchSession(sessionId);
+    finishAppSearchSession(searchSessionId);
   }
 
   return outcome;

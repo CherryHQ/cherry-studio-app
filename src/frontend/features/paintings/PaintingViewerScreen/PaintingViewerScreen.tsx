@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {
@@ -22,8 +23,8 @@ export function PaintingViewerScreen() {
     fileEntryId?: string | string[];
     paintingId?: string | string[];
   }>();
-  const paintingId = firstParam(params.paintingId);
-  const fileEntryId = firstParam(params.fileEntryId);
+  const paintingId = getSingleRouteParam(params.paintingId);
+  const fileEntryId = getSingleRouteParam(params.fileEntryId);
   const painting = usePainting(paintingId);
   const files = useResolvedPaintingFiles(painting.data);
   const current = files.data?.outputs.find((output) => output.fileEntryId === fileEntryId);
@@ -78,8 +79,4 @@ function PaintingViewerContent({
       </View>
     </>
   );
-}
-
-function firstParam(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }

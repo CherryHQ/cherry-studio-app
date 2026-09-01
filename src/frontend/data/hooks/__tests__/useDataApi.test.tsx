@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { ApiClient } from '@/shared/data/api/types';
 
-import { __testing, useMutation, useQuery } from '../useDataApi';
+import { __testing, useInfiniteQuery, useMutation, useQuery } from '../useDataApi';
 
 const dataApi = {
   delete: jest.fn(),
@@ -96,6 +96,69 @@ describe('Data API hooks', () => {
     await mountProbe();
 
     expect(dataApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps disabled template query keys scoped to their resolved identity', async () => {
+    function Probe() {
+      useQuery('/providers/:id', {
+        enabled: false,
+        params: { id: 'provider-1' },
+      });
+      useQuery('/providers/:id', {
+        enabled: false,
+        params: { id: 'provider-2' },
+      });
+      return null;
+    }
+
+    await act(async () => {
+      renderer = create(
+        <TestProviders>
+          <Probe />
+        </TestProviders>,
+      );
+    });
+
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey),
+    ).toEqual([['/providers/provider-1'], ['/providers/provider-2']]);
+    expect(dataApi.get).not.toHaveBeenCalled();
+  });
+
+  it('keeps disabled infinite-query keys scoped to their resolved identity', async () => {
+    function Probe() {
+      useInfiniteQuery('/agent-sessions/:sessionId/messages', {
+        enabled: false,
+        params: { sessionId: 'session-1' },
+      });
+      useInfiniteQuery('/agent-sessions/:sessionId/messages', {
+        enabled: false,
+        params: { sessionId: 'session-2' },
+      });
+      return null;
+    }
+
+    await act(async () => {
+      renderer = create(
+        <TestProviders>
+          <Probe />
+        </TestProviders>,
+      );
+    });
+
+    expect(
+      queryClient
+        .getQueryCache()
+        .getAll()
+        .map((query) => query.queryKey),
+    ).toEqual([
+      ['/agent-sessions/session-1/messages', { limit: 10 }],
+      ['/agent-sessions/session-2/messages', { limit: 10 }],
+    ]);
+    expect(dataApi.get).not.toHaveBeenCalled();
   });
 
   it('holds the previous key on screen while the next one loads', async () => {

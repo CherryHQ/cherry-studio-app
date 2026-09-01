@@ -22,6 +22,7 @@ function BottomSheetPreview() {
             ? { accessibilityLabel: 'Back', onPress: () => setIsDetailOpen(false) }
             : undefined
         }
+        footer={!isDetailOpen ? <Button onPress={close}>Done</Button> : undefined}
         onClose={close}
         open={isOpen}
         size={isDetailOpen ? 'compact' : 'medium'}
