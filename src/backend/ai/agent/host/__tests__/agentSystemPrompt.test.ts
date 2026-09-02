@@ -13,11 +13,10 @@ function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   };
 }
 
-function mcpTool(approval: RuntimeTool['approval'] = 'auto'): RuntimeTool {
+function mcpTool(): RuntimeTool {
   return {
     ...tool('irrelevant', 'mcp_server_1_lookup_a1b2'),
     ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'lookup' },
-    approval,
   };
 }
 
@@ -76,20 +75,17 @@ describe('buildAgentSystemPrompt', () => {
     });
 
     expect(withFile).toContain('## Managed Files');
+    expect(withFile).toContain('only when the user explicitly asks');
+    expect(withFile).toContain('otherwise provide the requested answer');
     expect(withFile).toContain('never invent an absolute path');
     expect(withoutFile).not.toContain('## Managed Files');
   });
 
-  test('adds MCP catalog guidance only when an executable MCP tool is available', () => {
+  test('leaves MCP catalog guidance to the Runtime binding', () => {
     const withMcp = buildAgentSystemPrompt({ agentInstructions: '', tools: [mcpTool()] });
-    const withDeniedMcp = buildAgentSystemPrompt({
-      agentInstructions: '',
-      tools: [mcpTool('deny')],
-    });
 
-    expect(withMcp).toContain('## MCP Tool Discovery');
-    expect(withMcp).toContain('Use `tool_search` only for tool discovery');
-    expect(withMcp).toContain('Use `tool_call` with an exact discovered name');
-    expect(withDeniedMcp).not.toContain('## MCP Tool Discovery');
+    expect(withMcp).not.toContain('## MCP Tool Discovery');
+    expect(withMcp).not.toContain('tool_search');
+    expect(withMcp).not.toContain('tool_call');
   });
 });

@@ -27,16 +27,12 @@ export type BuildAgentSystemPromptInput = {
   tools: readonly RuntimeTool[];
 };
 
-/** Build one Host-owned system prompt from fixed mobile policy and the frozen turn tool snapshot. */
+/** Build one Host-owned application prompt from fixed policy and the frozen tool snapshot. */
 export function buildAgentSystemPrompt({
   agentInstructions,
   tools,
 }: BuildAgentSystemPromptInput): string {
   const sections = [MOBILE_RUNTIME_RULES];
-  if (hasExecutableMcpTool(tools)) {
-    sections.push(MCP_TOOL_DISCOVERY_SECTION);
-  }
-
   const citableTools = findBuiltInToolNames(tools, CITABLE_WEB_TOOL_NAMES);
   if (citableTools.length > 0) {
     sections.push(buildCitationsSection(citableTools));
@@ -60,10 +56,6 @@ ${configuredInstructions}
   return sections.join('\n\n');
 }
 
-function hasExecutableMcpTool(tools: readonly RuntimeTool[]): boolean {
-  return tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny');
-}
-
 function findBuiltInToolNames(
   tools: readonly RuntimeTool[],
   capabilityIds: ReadonlySet<string>,
@@ -84,8 +76,4 @@ Results from ${tools} carry an \`id\` for each source. When a factual statement 
 
 const MANAGED_FILES_SECTION = `## Managed Files
 
-When the user asks to save, export, download, create, or edit a text file, use an available managed-file tool. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.`;
-
-const MCP_TOOL_DISCOVERY_SECTION = `## MCP Tool Discovery
-
-MCP tools are available through a searchable catalog. Use \`tool_search\` only for tool discovery, not for web search or general research. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`tool_describe\` when you need the bounded signature for one exact tool name. Use \`tool_call\` with an exact discovered name and params matching that signature. If \`tool_call\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
+Use a managed-file tool only when the user explicitly asks to save, export, download, create, or edit a text file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.`;

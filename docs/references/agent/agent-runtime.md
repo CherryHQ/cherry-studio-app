@@ -44,12 +44,13 @@ The local Host never turns remote tools into `RuntimeTool` callbacks. See
 
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
-Runtime rules, guidance for capabilities that are actually present (including deferred MCP catalog
-use), and the user-configured Agent instructions into the prepared system prompt. Runtime adapters
-consume that application policy without appending another policy fragment. Mobile Skill
-persistence and prompt projection are not implemented; their target boundary is documented
-separately and does not change the current Runtime input. The injected Pi Runtime remains stable
-for the Host lifetime.
+Runtime rules, guidance for application capabilities that are actually present, and the
+user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
+that policy without appending another application policy fragment; Pi appends only the
+binding-specific instructions for its deferred MCP catalog when that catalog is present. Mobile
+Skill persistence and prompt projection are not implemented; their target boundary is documented
+separately and does not change the current Runtime input. The injected Pi Runtime remains stable for
+the Host lifetime.
 
 ## Production Pi binding
 
@@ -160,7 +161,7 @@ type RuntimeToolCall = {
 
 type RuntimeExecutionRequest = {
   turnId: string
-  // Host-prepared system prompt: mobile Runtime rules plus user-configured Agent instructions.
+  // Host-prepared application prompt: mobile Runtime rules plus Agent instructions.
   instructions: string
   model: RuntimeModel
   history: RuntimeHistoryTurn[]
