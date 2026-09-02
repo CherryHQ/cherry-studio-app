@@ -89,7 +89,8 @@ its process parts remain visible without a total-duration wrapper. Once the resp
 visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
 row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
-views must use `MessagePart.Detail`. New
+views must use `MessagePart.Detail`. The source group stays out of layout while the assistant is
+streaming and appears once the message reaches any terminal status. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
 
