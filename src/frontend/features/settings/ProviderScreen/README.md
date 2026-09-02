@@ -1,7 +1,7 @@
 # Provider Settings
 
-This module owns the four provider-setting experiences: provider list, provider creation, provider
-detail, and model creation.
+This module owns the five provider-setting experiences: provider list, provider creation, provider
+detail, model creation, and desktop provider synchronization.
 
 ## Public Interface
 
@@ -29,6 +29,13 @@ and editable endpoint are saved before model discovery starts. Finishing synchro
 provider detail model tab. Opening the catalog checks the remote model-registry manifest and shows an
 inline update notice when a newer revision exists. Installed presets are marked in place instead of
 opening another action menu.
+
+## Desktop Provider Synchronization
+
+The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
+PC. Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
+only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
+ones to synchronize, and refreshes provider/model queries after the import transaction succeeds.
 
 ## Provider Form
 

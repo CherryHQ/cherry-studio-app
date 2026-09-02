@@ -4,6 +4,7 @@ import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
+import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { Image, Section } from '@cherrystudio/ui/components';
@@ -71,6 +72,11 @@ export default function SettingsScreen() {
               leading={<CloudIcon className="size-5 text-foreground" />}
               onPress={openProviderSettings}
               onPressIn={prepareProviderSettings}
+            />
+            <Section.Item
+              label={t('settings.items.deviceConnections')}
+              leading={<NetworkIcon className="size-5 text-foreground" />}
+              onPress={() => router.push('/settings/device-connections')}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}

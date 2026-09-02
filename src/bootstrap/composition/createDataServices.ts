@@ -6,6 +6,7 @@ import { agentSessionService } from '@/backend/data/services/AgentSessionService
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
+import { desktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { jobService } from '@/backend/data/services/JobService';
@@ -41,6 +42,7 @@ export function createDataServices({
     aiUsageRecord: aiUsageRecordService,
     cache,
     contentSearch: contentSearchService,
+    desktopConnection: desktopConnectionService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
     job: jobService,

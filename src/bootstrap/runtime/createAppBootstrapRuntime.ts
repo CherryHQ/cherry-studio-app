@@ -92,6 +92,7 @@ export function createAppBootstrapRuntime(
       agentSessions: services.agentSession,
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
+      desktopConnections: services.desktopConnection,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
