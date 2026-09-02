@@ -3,29 +3,32 @@ import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { SourceLink } from '../SourceLink';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+
+import { enrichWebSources, parseWebSources } from '../webSource';
+import { WebSourceCard } from '../WebSourceCard';
 import { getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
+  messageParts?: readonly CherryMessagePart[];
   part: ToolMessagePart;
 };
 
-type WebSearchResult = {
-  id: number | string;
-  title: string;
-  url: string;
-};
-
-export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
+export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps) {
   const { t } = useTranslation();
   const query = getWebSearchQuery(part.input);
-  const results = part.state === 'output-available' ? parseWebSearchResults(part.output) : [];
+  const rawResults = part.state === 'output-available' ? parseWebSources(part.output) : [];
+  const results = messageParts ? enrichWebSources(rawResults, messageParts) : rawResults;
   const statusText = getWebSearchStatusText(part, results.length, t);
   const title = query || part.title?.trim() || t('chat.actions.webSearch');
+  const detailTitle =
+    results.length > 0 ? t('chat.webSearch.detailTitle', { count: results.length }) : title;
   const isSearching = part.state === 'input-streaming' || part.state === 'input-available';
 
   return (
     <MessagePart.Tool
+      detailTitle={detailTitle}
+      detailVariant="source-list"
       icon={SearchIcon}
       state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
@@ -39,12 +42,7 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
         </Text>
       ) : (
         results.map((result) => (
-          <SourceLink
-            key={`${result.id}-${result.url}`}
-            label={result.title || result.url}
-            url={result.url}
-            variant="listItem"
-          />
+          <WebSourceCard key={`${result.id}-${result.url}`} source={result} />
         ))
       )}
     </MessagePart.Tool>
@@ -79,28 +77,6 @@ function getWebSearchStatusText(
   }
 
   return t('chat.webSearch.searching');
-}
-
-function parseWebSearchResults(output: unknown): WebSearchResult[] {
-  const rawResults = Array.isArray(output)
-    ? output
-    : isRecord(output) && Array.isArray(output.results)
-      ? output.results
-      : [];
-
-  return rawResults.flatMap((item, index) => {
-    if (!isRecord(item) || typeof item.url !== 'string' || !item.url.trim()) {
-      return [];
-    }
-
-    return [
-      {
-        id: typeof item.id === 'string' || typeof item.id === 'number' ? item.id : index + 1,
-        title: typeof item.title === 'string' ? item.title : item.url,
-        url: item.url,
-      },
-    ];
-  });
 }
 
 function getWebSearchQuery(input: unknown) {

@@ -477,7 +477,7 @@ function EnumSelectionPage({
       style={styles.page}
       testID={`painting-setting-options-${field.key}`}
     >
-      <Section>
+      <Section variant="plain">
         {options.map((option) => {
           const isSelected = selectedValue === option;
 
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   },
   page: { flex: 1 },
   ratioDashedShape: { borderStyle: 'dashed' },
-  selectionContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 8 },
+  selectionContent: { paddingBottom: 24, paddingTop: 8 },
   sizeInput: {
     flex: 1,
     minWidth: 0,

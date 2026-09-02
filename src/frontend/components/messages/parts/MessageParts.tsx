@@ -41,7 +41,7 @@ export function MessageParts({
   }
 
   const { body, files } = partitionMessageParts(parts);
-  const sourceParts = parts.filter((part) => part.type === 'source-url');
+  const hasSources = parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
@@ -53,19 +53,21 @@ export function MessageParts({
               part,
             }))}
             key={getMessagePartKey(message, item.items[0].part, item.index)}
+            messageParts={parts}
           />
         ) : (
           <MessagePartRenderer
             isStreaming={message.status === 'pending'}
             isTextSelectionEnabled={isTextSelectionEnabled}
             key={getMessagePartKey(message, item.part, item.index)}
+            messageParts={parts}
             part={item.part}
             renderMode={renderMode}
             resolvedText={citationText.get(item.index)}
           />
         ),
       )}
-      {sourceParts.length > 0 ? <SourceGroup parts={sourceParts} /> : null}
+      {hasSources ? <SourceGroup parts={parts} /> : null}
       {/* Last, so the files a turn produced are the closest thing to the end of
           the message and stay put as the answer above them streams in. */}
       {files.length > 0 ? <MessageFileStrip parts={files} /> : null}

@@ -1,12 +1,9 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { Image, Section } from '@cherrystudio/ui/components';
+import { Image, OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { SettingsOptionPickerBottomSheet } from '../components/SettingsOptionPickerBottomSheet';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
@@ -55,10 +52,11 @@ export default function WebSearchSettingsScreen() {
           providerOverrides={webSearchProviders.providerOverrides.value}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
-          <Section.Item
+          <Section.SelectItem
             label={t('settings.websearch.provider.selection')}
             onPress={() => openProviderPicker('searchKeywords')}
-            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={searchProvider} />}
+            value={searchProvider.name}
+            valueLeading={<ProviderIcon iconTheme={iconTheme} provider={searchProvider} />}
           />
         </WebSearchApiManagementSection>
 
@@ -68,31 +66,27 @@ export default function WebSearchSettingsScreen() {
           providerOverrides={webSearchProviders.providerOverrides.value}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
-          <Section.Item
+          <Section.SelectItem
             label={t('settings.websearch.fetchUrlsProvider')}
             onPress={() => openProviderPicker('fetchUrls')}
-            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={fetchProvider} />}
+            value={fetchProvider.name}
+            valueLeading={<ProviderIcon iconTheme={iconTheme} provider={fetchProvider} />}
           />
         </WebSearchApiManagementSection>
       </SettingsScrollPage>
-      <SettingsOptionPickerBottomSheet
+      <OptionPickerBottomSheet
         onClose={() => setIsProviderPickerOpen(false)}
-        onSelect={providerPicker.onValueChange}
+        onValueChange={providerPicker.onValueChange}
         open={isProviderPickerOpen}
-        options={providerPicker.options}
-        renderLeading={(option) => {
-          const imageSource = resolveWebSearchProviderIcon(option.value)?.[iconTheme];
-
-          return imageSource ? (
-            <Image
-              cachePolicy="memory-disk"
-              className="size-5"
-              contentFit="contain"
-              recyclingKey={option.value}
-              source={imageSource}
+        options={providerPicker.options.map((option) => ({
+          ...option,
+          leading: (
+            <ProviderIcon
+              iconTheme={iconTheme}
+              provider={getWebSearchProviderPreset(option.value)}
             />
-          ) : null;
-        }}
+          ),
+        }))}
         selectedValue={providerPicker.value}
         size={activeProviderPicker === 'searchKeywords' ? 'medium' : 'compact'}
         testID={`web-search-${activeProviderPicker}-provider-picker`}
@@ -102,7 +96,7 @@ export default function WebSearchSettingsScreen() {
   );
 }
 
-function ProviderSelectionValue({
+function ProviderIcon({
   iconTheme,
   provider,
 }: {
@@ -111,21 +105,13 @@ function ProviderSelectionValue({
 }) {
   const providerIcon = resolveWebSearchProviderIcon(provider.id)?.[iconTheme];
 
-  return (
-    <View className="min-w-0 max-w-52 flex-row items-center justify-end gap-2">
-      {providerIcon ? (
-        <Image
-          cachePolicy="memory-disk"
-          className="size-5 shrink-0"
-          contentFit="contain"
-          recyclingKey={provider.id}
-          source={providerIcon}
-        />
-      ) : null}
-      <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
-        {provider.name}
-      </Text>
-      <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
-    </View>
-  );
+  return providerIcon ? (
+    <Image
+      cachePolicy="memory-disk"
+      className="size-5 shrink-0"
+      contentFit="contain"
+      recyclingKey={provider.id}
+      source={providerIcon}
+    />
+  ) : null;
 }

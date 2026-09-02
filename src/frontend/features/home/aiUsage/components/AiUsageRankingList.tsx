@@ -1,13 +1,14 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { resolveIcon, resolveProviderIcon } from '@cherrystudio/ui/icons';
+import { Button } from '@cherrystudio/ui/components';
+import { resolveIcon } from '@cherrystudio/ui/icons';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
+import { BrandAvatar, BrandAvatarIcon, ProviderBrandAvatar } from '@/frontend/components/avatar';
 
 import type { AiUsageRankingItem } from '../types';
 import { displayAiUsageModelId } from '../utils/aiUsageDetail';
@@ -95,16 +96,15 @@ export function AiUsageRankingList({
             className="items-center rounded-b-xl bg-grouped-surface px-4 pt-3 pb-4"
             style={styles.continuousCorners}
           >
-            <Pressable
-              accessibilityRole="button"
-              className="flex-row items-center gap-1.5 rounded-lg px-3 py-2 active:bg-secondary active:opacity-70"
-              style={styles.continuousCorners}
+            <Button
+              size="sm"
               testID="ai-usage-show-more"
+              variant="ghost"
               onPress={() => setVisibleCount((count) => count + AI_USAGE_RANKING_PAGE_SIZE)}
             >
-              <Text className="font-medium text-foreground text-sm">{t('aiUsage.showMore')}</Text>
+              <Button.Label>{t('aiUsage.showMore')}</Button.Label>
               <ChevronDownIcon className="size-4 text-foreground" />
-            </Pressable>
+            </Button>
           </View>
         ) : null
       }
@@ -216,16 +216,26 @@ function getPrimaryLabel(item: AiUsageRankingItem, t: (key: string) => string): 
 function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: string }) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const iconSource = item.isOther
-    ? undefined
-    : item.groupBy === 'provider'
-      ? resolveProviderIcon(item.providerId ?? '')
-      : resolveIcon(item.modelId ?? '', item.providerId ?? '');
   const frameProps = {
     label,
     size: AI_USAGE_RANKING_AVATAR_SIZE,
     testID: `ai-usage-ranking-icon-${item.key}`,
   };
+
+  if (!item.isOther && item.groupBy === 'provider') {
+    return (
+      <ProviderBrandAvatar
+        providerId={item.providerId ?? ''}
+        providerName={label}
+        size={AI_USAGE_RANKING_AVATAR_SIZE}
+        testID={frameProps.testID}
+      />
+    );
+  }
+
+  const iconSource = item.isOther
+    ? undefined
+    : resolveIcon(item.modelId ?? '', item.providerId ?? '');
 
   if (iconSource) {
     return (

@@ -1,7 +1,10 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import MessageCircleMoreIcon from '@cherrystudio/app-icons/icons/message-circle-more';
-import { ContentState, ContextMenuScrollBoundary } from '@cherrystudio/ui/components';
+import {
+  ContentState,
+  ContextMenuScrollBoundary,
+  SelectionIndicator,
+} from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -267,15 +270,7 @@ export const SessionRow = memo(function SessionRow({
       <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-transparent py-2 pl-2">
         {isEditing ? (
           <Animated.View entering={FadeInLeft.duration(160)} exiting={FadeOutLeft.duration(120)}>
-            <View
-              className={
-                isSelected
-                  ? 'size-6 items-center justify-center rounded-full bg-foreground'
-                  : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
-              }
-            >
-              {isSelected ? <CheckIcon className="size-4 text-background" /> : null}
-            </View>
+            <SelectionIndicator selected={isSelected} />
           </Animated.View>
         ) : null}
         <View className="ml-1 size-10 items-center justify-center rounded-full bg-secondary">

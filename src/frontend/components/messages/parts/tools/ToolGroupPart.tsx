@@ -1,6 +1,8 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import type { CherryMessagePart } from '@/shared/data/types/message';
+
 import { ToolPartRenderer } from './ToolPartRenderer';
 import { deriveToolGroupSummary, type ToolMessagePart } from './toolPartState';
 
@@ -11,6 +13,7 @@ type ToolGroupItem = {
 
 type ToolGroupPartProps = {
   items: readonly ToolGroupItem[];
+  messageParts?: readonly CherryMessagePart[];
 };
 
 /**
@@ -19,7 +22,7 @@ type ToolGroupPartProps = {
  * folds down to its summary so the answer stays the visual subject of the
  * message. Failed or denied steps surface on the summary and are never hidden.
  */
-export function ToolGroupPart({ items }: ToolGroupPartProps) {
+export function ToolGroupPart({ items, messageParts }: ToolGroupPartProps) {
   const { t } = useTranslation();
   const { dangerCount, state, tone, warningCount } = deriveToolGroupSummary(
     items.map((item) => item.part),
@@ -39,7 +42,7 @@ export function ToolGroupPart({ items }: ToolGroupPartProps) {
   return (
     <MessagePart.ToolGroup state={state} statusText={statusText} statusTone={tone} title={title}>
       {items.map(({ key, part }) => (
-        <ToolPartRenderer key={key} part={part} />
+        <ToolPartRenderer key={key} messageParts={messageParts} part={part} />
       ))}
     </MessagePart.ToolGroup>
   );

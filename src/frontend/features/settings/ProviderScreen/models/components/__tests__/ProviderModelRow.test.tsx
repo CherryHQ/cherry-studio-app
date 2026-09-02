@@ -9,6 +9,7 @@ import { ProviderModelRow } from '../ProviderModelRow';
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/eye', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/gift', () => () => null);
+jest.mock('@cherrystudio/ui/components', () => ({ SelectionIndicator: () => null }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

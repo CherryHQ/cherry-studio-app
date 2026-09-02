@@ -1,7 +1,8 @@
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '..';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto, ProviderBrandAvatar } from '..';
 
 const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
 const mockAvatarFallback = jest.fn((_props: unknown) => null);
@@ -19,6 +20,16 @@ jest.mock('@cherrystudio/ui/components', () => {
 jest.mock('@/frontend/hooks/useAvatar', () => ({
   useAvatar: () => 'profile-avatar-source',
 }));
+
+jest.mock('@cherrystudio/ui/icons', () => ({
+  resolveProviderIcon: jest.fn(),
+}));
+
+jest.mock('uniwind', () => ({
+  useUniwind: () => ({ theme: 'light' }),
+}));
+
+const mockResolveProviderIcon = jest.mocked(resolveProviderIcon);
 
 describe('BrandAvatar', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -119,6 +130,47 @@ describe('BrandAvatar', () => {
         source: { uri: 'file:///avatar.png' },
       }),
     );
+  });
+
+  it('resolves a preset provider logo through the shared provider adapter', () => {
+    mockResolveProviderIcon.mockReturnValue({
+      dark: 'openai-dark',
+      light: 'openai-light',
+    } as never);
+
+    render(
+      <ProviderBrandAvatar
+        presetProviderId="openai"
+        providerId="custom-openai"
+        providerName="Custom OpenAI"
+        size={32}
+        testID="provider-avatar"
+      />,
+    );
+
+    expect(mockResolveProviderIcon).toHaveBeenCalledWith('openai');
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessibilityLabel: 'Custom OpenAI',
+        size: 32,
+        testID: 'provider-avatar',
+      }),
+    );
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recyclingKey: 'custom-openai',
+        source: 'openai-light',
+      }),
+    );
+  });
+
+  it('keeps the generated-initial fallback when a provider has no built-in logo', () => {
+    mockResolveProviderIcon.mockReturnValue(undefined);
+
+    render(<ProviderBrandAvatar providerId="custom-provider" providerName="Custom Provider" />);
+
+    expect(mockResolveProviderIcon).toHaveBeenCalledWith('custom-provider');
+    expect(mockAvatarFallback).toHaveBeenCalledWith(expect.objectContaining({ children: 'C' }));
   });
 
   function render(element: React.ReactElement) {

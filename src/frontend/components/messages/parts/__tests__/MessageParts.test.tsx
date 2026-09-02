@@ -79,7 +79,7 @@ describe('MessageParts', () => {
       expect.objectContaining({ filename: 'report.md' }),
       expect.objectContaining({ filename: 'summary.md' }),
     ]);
-    expect(renderer.root.findByType('SourceGroup').props.parts).toEqual([source]);
+    expect(renderer.root.findByType('SourceGroup').props.parts).toEqual(message.data.parts);
   });
 
   test('renders a run of tool calls as one group keyed by source part identity', () => {

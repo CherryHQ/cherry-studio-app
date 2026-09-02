@@ -132,7 +132,14 @@ describe('ContextMenu.android', () => {
     const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
     expect(menu.props.trigger).toBe('longPress');
     expect(menu.props.items).toEqual([
-      { checked: 'none', destructive: false, disabled: false, id: 'rename', label: 'Rename' },
+      {
+        checked: 'none',
+        destructive: false,
+        disabled: false,
+        icon: 'none',
+        id: 'rename',
+        label: 'Rename',
+      },
     ]);
     expect(mockLatestLongPressGesture?.minDurationValue).toBe(625);
     expect(mockLatestLongPressGesture?.maxDistanceValue).toBe(16);
