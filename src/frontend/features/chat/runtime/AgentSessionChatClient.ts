@@ -356,6 +356,9 @@ export class AgentSessionChatClient {
           ...(event.message.role === 'user' ? { enteringUserMessageId: event.message.id } : {}),
           liveMessages: [...entry.liveMessages.values()],
         });
+        if (event.message.role === 'user') {
+          this.options.onSessionChanged?.(entry.state.sessionId);
+        }
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'message.delta': {

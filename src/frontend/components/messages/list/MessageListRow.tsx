@@ -26,5 +26,6 @@ const styles = StyleSheet.create({
 
 const messageRowStyles = {
   assistant: [styles.root, styles.assistant],
+  system: undefined,
   user: [styles.root, styles.user],
 } satisfies Record<MessageListItem['role'], StyleProp<ViewStyle>>;
