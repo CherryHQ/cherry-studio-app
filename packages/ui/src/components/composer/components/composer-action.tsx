@@ -1,7 +1,7 @@
 import { Pressable } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
-import { Surface } from '../../surface';
+import { SurfaceFrame } from '../../surface/surface-frame';
 import type { ComposerActionProps } from '../composer.types';
 import { actionHitSlop, actionStyle, composerActionSize } from '../utils/composer-layout';
 
@@ -39,7 +39,7 @@ export function ComposerAction({
       style={style}
       testID={testID}
     >
-      <Surface
+      <SurfaceFrame
         className={fallbackClassName}
         cornerRadius={composerActionSize / 2}
         interactive
@@ -47,7 +47,7 @@ export function ComposerAction({
         tintColor={tintColor}
       >
         {children}
-      </Surface>
+      </SurfaceFrame>
     </Pressable>
   );
 }

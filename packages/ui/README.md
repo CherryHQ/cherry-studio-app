@@ -120,6 +120,19 @@ page for visual debugging.
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
 
+`Surface` is the semantic material boundary for shared product chrome. Callers choose a token-backed
+`tone` and a `shape`, then size and align the content inside it. CherryUI maps that specification to
+the complete non-glass fallback and, where supported, the matching Liquid Glass tint and radius:
+
+```tsx
+<Surface interactive shape="circle" tone="sidebar-accent">
+  <Pressable className="size-11 items-center justify-center">...</Pressable>
+</Surface>
+```
+
+Raw fallback classes, numeric radii, tint colors, and styles are private implementation details for
+package components that need dynamic or animated geometry.
+
 `ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
 bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns
 the at-bottom state and the one-shot scroll action:

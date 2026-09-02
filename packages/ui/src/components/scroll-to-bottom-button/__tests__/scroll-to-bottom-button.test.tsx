@@ -8,12 +8,12 @@ jest.mock('../../../motion', () => ({
   easing: { settle: 'settle' },
 }));
 
-jest.mock('../../surface', () => {
+jest.mock('../../surface/surface-frame', () => {
   const React = jest.requireActual('react');
 
   return {
-    Surface: ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement('Surface', props, children),
+    SurfaceFrame: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('SurfaceFrame', props, children),
   };
 });
 
@@ -74,7 +74,7 @@ describe('ScrollToBottomButton', () => {
       );
     });
 
-    expect(renderer!.root.findByType('Surface').props).toMatchObject({
+    expect(renderer!.root.findByType('SurfaceFrame').props).toMatchObject({
       className: 'border border-border bg-background',
       cornerRadius: 20,
       interactive: true,
@@ -83,7 +83,7 @@ describe('ScrollToBottomButton', () => {
         { borderColor: 'rgba(160, 160, 160, 0.3)', borderWidth: 1 },
       ],
     });
-    expect(renderer!.root.findByType('Surface').props.tintColor).toBeUndefined();
+    expect(renderer!.root.findByType('SurfaceFrame').props.tintColor).toBeUndefined();
 
     const animatedViews = renderer!.root.findAllByType('AnimatedView');
     expect(animatedViews[0].props.style).toEqual([

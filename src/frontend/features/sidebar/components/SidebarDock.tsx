@@ -18,18 +18,12 @@ type SidebarDockProps = {
 // Both buttons float over the session list rather than sitting below it, so the
 // list scrolls behind them the way it does in ChatGPT. The list owns the bottom
 // padding that keeps its last row reachable.
-//
-// `Surface` ignores className on its Liquid Glass branch, so every dimension
-// lives in `style` and className only carries the non-glass fallback's color.
 export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProps) {
   const { t } = useTranslation();
-  const [primaryColor, primaryForegroundColor, accentColor, foregroundColor] = useThemeColor([
-    'sidebar-primary',
+  const [primaryForegroundColor, foregroundColor] = useThemeColor([
     'sidebar-primary-foreground',
-    'sidebar-accent',
     'sidebar-foreground',
   ]);
-  const radius = appSidebar.dockHeight / 2;
   const { bottomPadding, inset } = useDockMetrics();
 
   return (
@@ -39,13 +33,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
       className="flex-row items-center justify-between"
       style={{ paddingBottom: bottomPadding, paddingHorizontal: inset }}
     >
-      <Surface
-        className="bg-sidebar-primary"
-        cornerRadius={radius}
-        interactive
-        style={{ height: appSidebar.dockHeight }}
-        tintColor={primaryColor}
-      >
+      <Surface interactive shape="pill" tone="sidebar-primary">
         <Pressable
           accessibilityLabel={t('navigation.newChat')}
           accessibilityRole="button"
@@ -54,7 +42,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             alignItems: 'center',
             flexDirection: 'row',
             gap: 8,
-            height: '100%',
+            height: appSidebar.dockHeight,
             opacity: pressed ? 0.6 : 1,
             paddingHorizontal: 16,
           })}
@@ -66,25 +54,17 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
         </Pressable>
       </Surface>
 
-      {/* Glass draws nothing without a tint to refract, and the sidebar surface
-          is too flat to give it anything on its own. */}
-      <Surface
-        className="bg-sidebar-accent"
-        cornerRadius={radius}
-        interactive
-        style={{ height: appSidebar.dockHeight, width: appSidebar.dockHeight }}
-        tintColor={accentColor}
-      >
+      <Surface interactive shape="circle" tone="sidebar-accent">
         <Pressable
           accessibilityLabel={t('navigation.settings')}
           accessibilityRole="button"
           onPress={onSettingsPress}
           style={({ pressed }) => ({
             alignItems: 'center',
-            height: '100%',
+            height: appSidebar.dockHeight,
             justifyContent: 'center',
             opacity: pressed ? 0.6 : 1,
-            width: '100%',
+            width: appSidebar.dockHeight,
           })}
         >
           <SettingsIcon color={foregroundColor} size={24} />
