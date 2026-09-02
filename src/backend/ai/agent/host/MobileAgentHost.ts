@@ -699,7 +699,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         turnId: state.turn.id,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
-          appLanguage: this.appLanguage(),
+          appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
         }),
         model: plan.agent.model,
