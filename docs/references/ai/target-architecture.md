@@ -31,7 +31,7 @@ implementation is heading and why.
   interface or exposing `AgentRuntime`; the service remains authoritative for its Agents, Sessions,
   turns, tool execution, approvals, and persistence. The current `local`-only protocol value remains
   as-built until that product defines its routing, versioning, reconnection, and cache behavior.
-- **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent.ts`), its event
+- **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent/`), its event
   delta semantics, and the frontend projection. Below: the SQLite schema. Everything between the
   two boundaries may be redesigned.
 - The 13 protocol invariants in [Agent Protocol](../agent/agent-protocol.md#invariants) survive
@@ -52,7 +52,10 @@ src/backend/ai/
 │   │                    assembles the Runtime request, runtimeProjection.ts projects Runtime
 │   │                    output onto the protocol. Side effects (naming, usage, background
 │   │                    reply) keep explicit call sites; per-event notification is driven
-│   │                    from the run loop, not repeated in each branch.
+│   │                    from the run loop, not repeated in each branch. The Host
+│   │                    takes its collaborators as `MobileAgentHostPorts`;
+│   │                    AgentHostDependencies.ts is the one place that binds them
+│   │                    to application services, so the Host constructs nothing.
 │   ├── runtime/
 │   │   ├── types.ts     The seam contract. No imports from packages/* ports. Neutral usage
 │   │   │                shape. Model preflight lives here; the language-serving question
