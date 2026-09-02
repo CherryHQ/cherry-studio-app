@@ -86,6 +86,29 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('creates one localized initial Agent only for a never-used Agent store', async () => {
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+
+    expect(initial).toMatchObject({ name: 'Cherry Agent' });
+    await expect(agentService.createInitialAgent({ name: 'Cherry 小助手' })).resolves.toBeNull();
+    expect((await agentService.list()).items).toHaveLength(1);
+  });
+
+  it('keeps an existing user-created Agent instead of adding the initial Agent', async () => {
+    const existing = await agentService.create({ name: 'Researcher' });
+
+    await expect(agentService.createInitialAgent({ name: 'Cherry Agent' })).resolves.toBeNull();
+    expect((await agentService.list()).items).toEqual([existing]);
+  });
+
+  it('does not recreate the initial Agent after the user deletes it', async () => {
+    const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+    await agentService.delete(initial!.id);
+
+    await expect(agentService.createInitialAgent({ name: 'Cherry Agent' })).resolves.toBeNull();
+    expect((await agentService.list()).items).toEqual([]);
+  });
+
   it('persists the capability deny-list and drops unknown ids on read', async () => {
     const agent = await agentService.create({
       disabledCapabilities: ['calendar', 'web'],

@@ -122,6 +122,7 @@ const stubTool: RuntimeTool = {
 
 type HostOverrides = {
   agents?: AgentDefinitionSource;
+  appLanguage?: () => 'en-US' | 'zh-CN';
   resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
 };
 
@@ -137,6 +138,7 @@ function createHost(
     store,
     {
       agents: overrides.agents ?? agents,
+      appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
       files,
       inferenceModel: resolveInferenceModel,
       naming: () => naming,
@@ -254,7 +256,13 @@ describe('MobileAgentHost', () => {
       'the initial turn to settle',
     );
 
-    expect(await store.getSession(session.id)).toEqual(session);
+    // Settling the turn stamps conversation activity on the Session row, so
+    // the update timestamp is the one field allowed to move past the snapshot
+    // `startSession` returned.
+    expect(await store.getSession(session.id)).toEqual({
+      ...session,
+      updatedAt: expect.any(String),
+    });
     expect((await store.listMessages(session.id)).map((message) => message.role)).toEqual([
       'user',
       'assistant',
@@ -440,6 +448,9 @@ describe('MobileAgentHost', () => {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
     });
+    expect(requests[0]?.instructions).toContain(
+      'The current Cherry Studio App language is `zh-CN`.',
+    );
 
     // A second turn feeds the stored transcript back as history.
     const secondEvents: AgentEvent[] = [];

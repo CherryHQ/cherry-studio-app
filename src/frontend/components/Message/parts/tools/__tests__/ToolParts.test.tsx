@@ -44,10 +44,12 @@ jest.mock('@cherrystudio/ui/components', () => {
     typeof value === 'string' ? value : JSON.stringify(value, null, 2);
   const Tool = ({
     children,
+    detailTitle,
     testID,
     ...props
   }: {
     children: ReactNode;
+    detailTitle?: string;
     testID: string;
     title: string;
   }) => {
@@ -60,7 +62,7 @@ jest.mock('@cherrystudio/ui/components', () => {
           <MockView
             onClose={() => setIsOpen(false)}
             testID={`${testID}-detail`}
-            title={props.title}
+            title={detailTitle ?? props.title}
           >
             {children}
           </MockView>

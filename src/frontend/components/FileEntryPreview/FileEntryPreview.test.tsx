@@ -2,18 +2,20 @@ import { act, create } from 'react-test-renderer';
 
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
+import { FileEntryAttachment, FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
 
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
+const mockFileAttachmentPreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockFilePreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockLoggerWarn = jest.fn();
 const mockSkeleton = jest.fn((_props: Record<string, unknown>) => null);
 const mockUseResolvedFile = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  FileAttachmentPreview: (props: Record<string, unknown>) => mockFileAttachmentPreview(props),
   FilePreview: (props: Record<string, unknown>) => mockFilePreview(props),
   Skeleton: (props: Record<string, unknown>) => mockSkeleton(props),
-  useToast: () => ({ toast: { show: mockToastShow } }),
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -94,6 +96,24 @@ describe('FileEntryPreview', () => {
     );
   });
 
+  it('adapts assistant artifacts into the horizontal attachment preview', () => {
+    act(() => {
+      create(<FileEntryAttachment entryId={entry.id} />);
+    });
+
+    expect(mockFileAttachmentPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryLabel: 'filePreview.document',
+        file: expect.objectContaining({ id: entry.id, uri: 'file:///documents/image.png' }),
+        labels: {
+          openWith: 'filePreview.openWith',
+          unavailable: 'filePreview.unavailable',
+        },
+      }),
+    );
+    expect(mockFilePreview).not.toHaveBeenCalled();
+  });
+
   it('uses the shared file-entry skeleton while the entry resolves', () => {
     mockUseResolvedFile.mockReturnValue({ data: null, isLoading: true });
 
@@ -122,7 +142,7 @@ describe('FileEntryPreview', () => {
     );
   });
 
-  it('logs all preview errors and toasts only when opening fails', () => {
+  it('logs all preview errors and alerts only when opening fails', () => {
     act(() => {
       create(<FileEntryPreview entryId={entry.id} />);
     });
@@ -133,7 +153,7 @@ describe('FileEntryPreview', () => {
     const openError = new Error('open failed');
 
     act(() => onError?.(thumbnailError, 'thumbnail'));
-    expect(mockToastShow).not.toHaveBeenCalled();
+    expect(mockAlertShow).not.toHaveBeenCalled();
 
     act(() => onError?.(openError, 'open'));
     expect(mockLoggerWarn).toHaveBeenNthCalledWith(
@@ -146,9 +166,6 @@ describe('FileEntryPreview', () => {
       entryId: entry.id,
       operation: 'open',
     });
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'filePreview.openFailed',
-      variant: 'danger',
-    });
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'filePreview.openFailed' });
   });
 });

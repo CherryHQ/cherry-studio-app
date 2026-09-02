@@ -9,6 +9,8 @@
  * Host has drained its turns.
  */
 
+import { getLocales } from 'expo-localization';
+
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -17,6 +19,7 @@ import { agentToolBindingService } from '@/backend/data/services/AgentToolBindin
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { LanguageVarious } from '@/shared/data/preference';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
@@ -28,6 +31,7 @@ import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
+import { resolveAgentAppLanguage } from './agentSystemPrompt';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentHost';
 
@@ -76,6 +80,13 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
     }));
+  }
+
+  appLanguage(): LanguageVarious {
+    return resolveAgentAppLanguage(
+      this.preferenceService.readCached('app.language'),
+      getLocales()[0]?.languageCode,
+    );
   }
 
   naming(signal: AbortSignal): MobileAgentHostNaming {

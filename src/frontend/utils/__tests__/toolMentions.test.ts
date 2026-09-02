@@ -1,4 +1,4 @@
-import { splitToolMentions } from '../toolMentions';
+import { splitToolMentions, toolMentions } from '../toolMentions';
 
 describe('splitToolMentions', () => {
   it('returns nothing for empty text', () => {
@@ -9,34 +9,20 @@ describe('splitToolMentions', () => {
     expect(splitToolMentions('draw a cat')).toEqual([{ text: 'draw a cat' }]);
   });
 
-  it('splits a mention out of the surrounding text', () => {
-    expect(splitToolMentions('please [Create image](tool://create-image) a cat')).toEqual([
-      { text: 'please ' },
-      { id: 'create-image', text: 'Create image' },
-      { text: ' a cat' },
-    ]);
+  it('has no registered tool mentions', () => {
+    expect(toolMentions).toEqual([]);
   });
 
-  it('handles a mention at the start and at the end', () => {
-    expect(
-      splitToolMentions('[创建图片](tool://create-image) 一只猫 [创建图片](tool://create-image)'),
-    ).toEqual([
-      { id: 'create-image', text: '创建图片' },
-      { text: ' 一只猫 ' },
-      { id: 'create-image', text: '创建图片' },
-    ]);
+  it('leaves the retired image-generation mention as plain text', () => {
+    const text = 'please [Create image](tool://create-image) a cat';
+
+    expect(splitToolMentions(text)).toEqual([{ text }]);
   });
 
-  // The id is in the URL, so the language the message was written in stops
-  // mattering the moment it is read back.
-  it('reads the same tool out of any language it was written in', () => {
-    expect(
-      splitToolMentions('[创建图片](tool://create-image) and [Create image](tool://create-image)'),
-    ).toEqual([
-      { id: 'create-image', text: '创建图片' },
-      { text: ' and ' },
-      { id: 'create-image', text: 'Create image' },
-    ]);
+  it('leaves the retired web-search mention as plain text', () => {
+    const text = '[Web search](tool://web-search) Cherry Studio';
+
+    expect(splitToolMentions(text)).toEqual([{ text }]);
   });
 
   // The old form was `@name`, which meant prose containing the words lit up as
@@ -57,11 +43,9 @@ describe('splitToolMentions', () => {
     ]);
   });
 
-  it('keeps the markdown the user typed verbatim around a mention', () => {
-    expect(splitToolMentions('**bold** [创建图片](tool://create-image) `code`')).toEqual([
-      { text: '**bold** ' },
-      { id: 'create-image', text: '创建图片' },
-      { text: ' `code`' },
-    ]);
+  it('keeps surrounding markdown verbatim when no mention is registered', () => {
+    const text = '**bold** [创建图片](tool://create-image) `code`';
+
+    expect(splitToolMentions(text)).toEqual([{ text }]);
   });
 });

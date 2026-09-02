@@ -76,6 +76,7 @@ import {
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { LanguageVarious } from '@/shared/data/preference';
 
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
@@ -152,6 +153,7 @@ export type MobileAgentHostNaming = Pick<
  */
 export type MobileAgentHostPorts = {
   agents: AgentDefinitionSource;
+  appLanguage: () => LanguageVarious;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
@@ -697,6 +699,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         turnId: state.turn.id,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
+          appLanguage: this.appLanguage(),
           tools: plan.tools,
         }),
         model: plan.agent.model,

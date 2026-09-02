@@ -15,3 +15,7 @@ export function FileEntrySkeleton({ size = defaultSize }: { size?: number }) {
     />
   );
 }
+
+export function FileEntryAttachmentSkeleton() {
+  return <Skeleton className="h-16 w-full rounded-xl" />;
+}
