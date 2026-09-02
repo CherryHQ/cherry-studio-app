@@ -1,11 +1,12 @@
+export type InlineSearchLayout = 'embedded' | 'screen';
+
 export type InlineSearchProps = {
+  layout?: InlineSearchLayout;
   /**
    * Called with the current query on every edit, including clears.
    *
-   * The caller owns the query. Android binds `value` straight back into the
-   * field, while iOS hands the text to UIKit and only reports it back, so a
-   * caller that resets `value` on iOS must unmount this component to make the
-   * native field agree.
+   * The caller owns the query. Android binds `value` directly to the field;
+   * iOS synchronizes it through the native search bar command ref.
    */
   onChangeText: (value: string) => void;
   placeholder?: string;

@@ -171,9 +171,9 @@ export function ProviderModelPullPreviewContent({
         }
         ListHeaderComponent={
           <ModelSearchControls
+            onChangeText={setSearchText}
             placeholder={t('modelPicker.searchPlaceholder')}
-            searchText={searchText}
-            setSearchText={setSearchText}
+            value={searchText}
           >
             {showsModelPurposeTabs ? (
               <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />

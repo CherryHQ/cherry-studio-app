@@ -1,5 +1,5 @@
 export { InlineSearch } from './InlineSearch';
-export type { InlineSearchProps } from './InlineSearch.types';
+export type { InlineSearchLayout, InlineSearchProps } from './InlineSearch.types';
 export {
   type InlineSearchOptions,
   type InlineSearchState,

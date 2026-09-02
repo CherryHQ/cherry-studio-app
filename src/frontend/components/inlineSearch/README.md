@@ -17,9 +17,10 @@ it, and the one place that decides how each platform draws it.
 - The component is placed between the screen's `RouteHeader` and its content. iOS renders nothing
   there — the field lives in the native header — while Android draws a real row, so both platforms
   read the same at the call site.
+- The query is controlled on both platforms. Parent updates, including an initial non-empty value
+  and later clears or restores, are synchronized into the native iOS search bar.
 - A screen that hides search for a mode, such as multi-select editing, unmounts the component. There
-  is no `hidden` prop: unmounting is what removes the native header options on iOS, and it is what
-  makes iOS drop the text UIKit is holding.
+  is no `hidden` prop: unmounting removes the native header options on iOS.
 - Matching is keyword-based, not substring-based, through `@/frontend/utils/search`. `gpt 4o` finds
   `GPT-4o`, and a query may span an item's fields.
 - `isFiltering` separates "nothing matched" from "nothing exists yet". Screens need both empty
@@ -32,8 +33,8 @@ it, and the one place that decides how each platform draws it.
 - `InlineSearch.android.tsx` draws CherryUI's `SearchField` in that same position. Android's native
   search bar exists, but it is a toolbar menu item with platform styling that lands right of the
   screen's own actions; drawing the field keeps both platforms aligned.
-- `InlineSearch.types.ts` holds the shared props, including why `value` binds on Android and only
-  seeds the initial mount on iOS.
+- `InlineSearch.types.ts` holds the shared controlled props and the semantic `screen` / `embedded`
+  placement choice used by the Android frame.
 - `useInlineSearch.ts` holds the query state and the filtering, and nothing about placement.
 
 ## Extension Boundary

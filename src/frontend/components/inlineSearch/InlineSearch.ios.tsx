@@ -1,5 +1,7 @@
 import { Stack } from 'expo-router';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { SearchBarCommands } from 'react-native-screens';
 
 import type { InlineSearchProps } from './InlineSearch.types';
 
@@ -13,8 +15,21 @@ import type { InlineSearchProps } from './InlineSearch.types';
  * the glass circle every other top action wears. A row of its own sidesteps the
  * ordering entirely, and it is the placement Android's field is drawn to match.
  */
-export function InlineSearch({ onChangeText, placeholder, value: _value }: InlineSearchProps) {
+export function InlineSearch({ onChangeText, placeholder, value }: InlineSearchProps) {
   const { t } = useTranslation();
+  const searchBarRef = useRef<SearchBarCommands | null>(null);
+  const nativeValueRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const searchBar = searchBarRef.current;
+
+    if (!searchBar || nativeValueRef.current === value) {
+      return;
+    }
+
+    nativeValueRef.current = value;
+    searchBar.setText(value);
+  }, [value]);
 
   return (
     <Stack.SearchBar
@@ -23,10 +38,19 @@ export function InlineSearch({ onChangeText, placeholder, value: _value }: Inlin
       // rather than scrolling away with the list.
       hideWhenScrolling={false}
       obscureBackground={false}
-      onCancelButtonPress={() => onChangeText('')}
-      onChangeText={(event) => onChangeText(event.nativeEvent.text)}
+      onCancelButtonPress={() => {
+        nativeValueRef.current = '';
+        onChangeText('');
+      }}
+      onChangeText={(event) => {
+        const nextValue = event.nativeEvent.text;
+
+        nativeValueRef.current = nextValue;
+        onChangeText(nextValue);
+      }}
       placeholder={placeholder ?? t('navigation.search')}
       placement="stacked"
+      ref={searchBarRef}
     />
   );
 }
