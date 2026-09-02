@@ -13,7 +13,10 @@ export type SectionProps = Omit<ViewProps, 'children'> & {
   contentClassName?: string;
   footer?: ReactNode;
   title?: ReactNode;
+  variant?: SectionVariant;
 };
+
+export type SectionVariant = 'grouped' | 'plain';
 
 export type SectionHeaderProps = Omit<ViewProps, 'children'> & {
   children?: ReactNode;
@@ -63,4 +66,16 @@ export type SectionRadioItemProps = Omit<
   leading?: ReactNode;
   onPress: () => void;
   selected: boolean;
+};
+
+export type SectionSelectItemProps = Omit<
+  SectionItemBaseProps,
+  'accessibilityRole' | 'accessibilityState' | 'onPress'
+> & {
+  description?: ReactNode;
+  label: ReactNode;
+  leading?: ReactNode;
+  onPress: () => void;
+  value: ReactNode;
+  valueLeading?: ReactNode;
 };

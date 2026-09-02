@@ -1,8 +1,7 @@
 import ALargeSmallIcon from '@cherrystudio/app-icons/icons/a-large-small';
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
-import { Section } from '@cherrystudio/ui/components';
+import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -11,7 +10,6 @@ import { Text, View } from 'react-native';
 
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingsOptionPickerBottomSheet } from './components/SettingsOptionPickerBottomSheet';
 import { SettingsScrollPage } from './components/SettingsScrollPage';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
@@ -43,16 +41,11 @@ export default function AppearanceSettingsScreen() {
         </Section>
 
         <Section>
-          <Section.Item
+          <Section.SelectItem
             label={t('settings.items.appLanguage')}
             leading={<GlobeIcon className="size-5 text-foreground" />}
             onPress={() => setIsLanguagePickerOpen(true)}
-            trailing={
-              <View className="flex-row items-center gap-1">
-                <Text className="text-right text-base text-foreground">{languageLabel}</Text>
-                <ChevronDownIcon className="size-5 text-foreground" />
-              </View>
-            }
+            value={languageLabel ?? t('settings.select.placeholder')}
           />
           <Section.Item
             label={t('settings.items.fontSize')}
@@ -69,9 +62,9 @@ export default function AppearanceSettingsScreen() {
           />
         </Section>
       </SettingsScrollPage>
-      <SettingsOptionPickerBottomSheet
+      <OptionPickerBottomSheet
         onClose={() => setIsLanguagePickerOpen(false)}
-        onSelect={settingPreferences.language.onValueChange}
+        onValueChange={settingPreferences.language.onValueChange}
         open={isLanguagePickerOpen}
         options={settingPreferences.language.options}
         selectedValue={settingPreferences.language.value}

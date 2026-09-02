@@ -1,11 +1,8 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { Section } from '@cherrystudio/ui/components';
+import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
-import { SettingsOptionPickerBottomSheet } from '../components/SettingsOptionPickerBottomSheet';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 
@@ -35,20 +32,10 @@ export default function WebSearchAdvancedScreen() {
               />
             }
           />
-          <Section.Item
+          <Section.SelectItem
             label={t('settings.websearch.compressionMethod')}
             onPress={() => setIsCompressionMethodPickerOpen(true)}
-            trailing={
-              <View className="min-w-0 flex-row items-center justify-end gap-1">
-                <Text
-                  className="min-w-0 shrink text-right text-base text-foreground"
-                  numberOfLines={1}
-                >
-                  {selectedCompressionMethod?.label ?? t('settings.select.placeholder')}
-                </Text>
-                <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
-              </View>
-            }
+            value={selectedCompressionMethod?.label ?? t('settings.select.placeholder')}
           />
           {webSearchProviders.compressionMethod.value === 'cutoff' ? (
             <Section.Item
@@ -64,9 +51,9 @@ export default function WebSearchAdvancedScreen() {
           ) : null}
         </Section>
       </SettingsScrollPage>
-      <SettingsOptionPickerBottomSheet
+      <OptionPickerBottomSheet
         onClose={() => setIsCompressionMethodPickerOpen(false)}
-        onSelect={webSearchProviders.compressionMethod.onValueChange}
+        onValueChange={webSearchProviders.compressionMethod.onValueChange}
         open={isCompressionMethodPickerOpen}
         options={webSearchProviders.compressionMethod.options}
         selectedValue={webSearchProviders.compressionMethod.value}

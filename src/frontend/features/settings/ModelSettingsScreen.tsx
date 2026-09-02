@@ -1,11 +1,9 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { Section, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
 
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import type { HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
@@ -16,6 +14,8 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
+
+import { SettingsScrollPage } from './components/SettingsScrollPage';
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
@@ -94,47 +94,39 @@ export default function ModelSettingsScreen() {
   );
   const items = useMemo(
     () =>
-      MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
-        key: kind,
-        disabled: isSaving,
-        label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        onPress: () => setActiveKind(kind),
-        trailing: (
-          <SelectedModelName
-            item={
-              kind === 'painting'
-                ? imageModelPickerData.getModelItem(draft[kind])
-                : textModelPickerData.getModelItem(draft[kind])
-            }
-            placeholder={t('settings.select.placeholder')}
-          />
-        ),
-      })),
+      MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => {
+        const item =
+          kind === 'painting'
+            ? imageModelPickerData.getModelItem(draft[kind])
+            : textModelPickerData.getModelItem(draft[kind]);
+
+        return {
+          key: kind,
+          disabled: isSaving,
+          label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
+          onPress: () => setActiveKind(kind),
+          value: item?.model.name ?? t('settings.select.placeholder'),
+        };
+      }),
     [draft, imageModelPickerData, isSaving, t, textModelPickerData],
   );
   const selectedModelId = activeKind ? draft[activeKind] : null;
 
   return (
     <>
-      <RouteHeader
-        onBack={requestClose}
-        rightActions={rightActions}
-        title={t('settings.pages.model.title')}
-      />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
+      <SettingsScrollPage
+        headerProps={{
+          onBack: requestClose,
+          rightActions,
+          title: t('settings.pages.model.title'),
+        }}
       >
-        <View className="px-4 py-5">
-          <Section>
-            {items.map(({ key, ...item }) => (
-              <Section.Item key={key} {...item} />
-            ))}
-          </Section>
-        </View>
-      </ScrollView>
+        <Section>
+          {items.map(({ key, ...item }) => (
+            <Section.SelectItem key={key} {...item} />
+          ))}
+        </Section>
+      </SettingsScrollPage>
       {activeKind ? (
         <ModelPickerDrawer
           modelType={activeKind === 'painting' ? 'image' : 'text'}
@@ -146,22 +138,5 @@ export default function ModelSettingsScreen() {
         />
       ) : null}
     </>
-  );
-}
-
-function SelectedModelName({
-  item,
-  placeholder,
-}: {
-  item?: ModelPickerModelItem;
-  placeholder: string;
-}) {
-  return (
-    <View className="min-w-0 flex-row items-center justify-end gap-1">
-      <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
-        {item?.model.name ?? placeholder}
-      </Text>
-      <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
-    </View>
   );
 }

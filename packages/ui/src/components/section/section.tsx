@@ -1,4 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   Children,
@@ -17,6 +18,7 @@ import type {
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
+  SectionSelectItemProps,
 } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
@@ -24,6 +26,10 @@ type InternalSectionItemProps = SectionItemProps & {
 };
 
 type InternalSectionRadioItemProps = SectionRadioItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
+
+type InternalSectionSelectItemProps = SectionSelectItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
@@ -172,12 +178,45 @@ function SectionRadioItem({ onPressedChange, selected, ...props }: InternalSecti
   );
 }
 
+function SectionSelectItem({
+  onPressedChange,
+  value,
+  valueLeading,
+  ...props
+}: InternalSectionSelectItemProps) {
+  return (
+    <SectionItem
+      {...props}
+      onPressedChange={onPressedChange}
+      showChevron={false}
+      trailing={
+        <View className="min-w-0 flex-row items-center justify-end gap-1">
+          {valueLeading ? (
+            <View className="shrink-0 items-center justify-center">{valueLeading}</View>
+          ) : null}
+          {renderTextSlot(value, 'min-w-0 shrink text-right text-base text-foreground')}
+          <ChevronDownIcon
+            className="size-5 shrink-0 text-muted-foreground"
+            testID="section-select-chevron"
+          />
+        </View>
+      }
+    />
+  );
+}
+
 function isSectionItemElement(
   child: ReactNode,
-): child is ReactElement<InternalSectionItemProps | InternalSectionRadioItemProps> {
+): child is ReactElement<
+  InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+> {
   return (
-    isValidElement<InternalSectionItemProps | InternalSectionRadioItemProps>(child) &&
-    (child.type === SectionItem || child.type === SectionRadioItem)
+    isValidElement<
+      InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+    >(child) &&
+    (child.type === SectionItem ||
+      child.type === SectionRadioItem ||
+      child.type === SectionSelectItem)
   );
 }
 
@@ -187,6 +226,7 @@ function SectionRoot({
   contentClassName,
   footer,
   title,
+  variant = 'grouped',
   ...viewProps
 }: SectionProps) {
   const childNodes = Children.toArray(children);
@@ -203,7 +243,12 @@ function SectionRoot({
     <View className={cn('gap-1', className)} {...viewProps}>
       {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
-        className={cn('overflow-hidden rounded-2xl bg-grouped-surface', contentClassName)}
+        className={cn(
+          variant === 'grouped'
+            ? 'overflow-hidden rounded-2xl bg-grouped-surface'
+            : 'bg-transparent',
+          contentClassName,
+        )}
         style={{ borderCurve: 'continuous' }}
       >
         {rows.map((row, index) => {
@@ -211,7 +256,7 @@ function SectionRoot({
 
           return (
             <Fragment key={key}>
-              {index > 0 ? (
+              {variant === 'grouped' && index > 0 ? (
                 <View
                   className={cn(
                     hasLeading ? 'ml-11 mr-3' : 'mx-3',
@@ -233,7 +278,12 @@ function SectionRoot({
           );
         })}
       </View>
-      {footer ? renderTextSlot(footer, 'mt-2 px-3 text-sm text-muted-foreground') : null}
+      {footer
+        ? renderTextSlot(
+            footer,
+            cn('mt-2 text-sm text-muted-foreground', variant === 'grouped' ? 'px-3' : 'px-4'),
+          )
+        : null}
     </View>
   );
 }
@@ -242,9 +292,11 @@ SectionRoot.displayName = 'Section';
 SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
 SectionRadioItem.displayName = 'Section.RadioItem';
+SectionSelectItem.displayName = 'Section.SelectItem';
 
 export const Section = Object.assign(SectionRoot, {
   Header: SectionHeader,
   Item: SectionItem,
   RadioItem: SectionRadioItem,
+  SelectItem: SectionSelectItem,
 });

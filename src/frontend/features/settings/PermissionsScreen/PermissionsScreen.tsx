@@ -3,12 +3,12 @@ import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Section, Spinner, useAlert } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import type { SystemPermissionState } from '@/shared/contracts';
 
+import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import {
   getPermissionAction,
@@ -86,23 +86,13 @@ export default function PermissionsSettingsScreen() {
   });
 
   return (
-    <View className="flex-1">
-      <RouteHeader title={t('settings.permissions.title')} />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="px-4 py-5">
-          <Section>
-            {items.map(({ id, ...item }) => (
-              <Section.Item key={id} {...item} />
-            ))}
-          </Section>
-        </View>
-      </ScrollView>
-    </View>
+    <SettingsScrollPage headerProps={{ title: t('settings.permissions.title') }}>
+      <Section>
+        {items.map(({ id, ...item }) => (
+          <Section.Item key={id} {...item} />
+        ))}
+      </Section>
+    </SettingsScrollPage>
   );
 }
 

@@ -6,13 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
+import { ProviderBrandAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import type { Model } from '@/shared/data/types/model';
 
-import { ProviderBrandAvatar } from '../components/ProviderAvatar';
 import { useProviderAvatar, useProviderAvatarActions } from '../components/providerAvatarStore';
 import {
   buildApiKeyEntriesFromInput,
