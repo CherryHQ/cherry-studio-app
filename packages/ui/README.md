@@ -347,6 +347,23 @@ import { Text } from 'react-native';
 The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
 container; `textClassName` styles the phrases.
 
+`TextField` is the provider-neutral field group for labels, descriptions, validation errors, and
+shared disabled/invalid/required state. Use its compound members instead of importing loose field
+typography primitives:
+
+```tsx
+<TextField disabled={isSaving} invalid={Boolean(errorMessage)} required>
+  <TextField.Label>{label}</TextField.Label>
+  <Input accessibilityLabel={label} onChangeText={setValue} value={value} />
+  <TextField.Description>{hint}</TextField.Description>
+  <TextField.Error>{errorMessage}</TextField.Error>
+</TextField>
+```
+
+The component family owns its text presentation and maps neutral Cherry state to the private UI
+provider. Product code should pass the same neutral state directly to an `Input` only when that
+input needs to override the enclosing field.
+
 `Input` is the shared field for ordinary and sensitive text. Set `type="password"` for passwords,
 API keys, and other secrets; the password variant keeps the controlled value with the caller, owns
 whether that value is revealed and where blurred content is displayed, and renders the visibility

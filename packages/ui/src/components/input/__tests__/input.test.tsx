@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Input } from '../input';
 
 const mockNativeInputNode = { blur: jest.fn() };
+let mockTextFieldState: { disabled: boolean; invalid: boolean; required: boolean } | undefined;
 
 jest.mock('@cherrystudio/app-icons/icons/eye', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/eye-off', () => () => null);
@@ -14,7 +15,7 @@ jest.mock('heroui-native/hooks', () => ({
 }));
 
 jest.mock('heroui-native/utils', () => ({
-  cn: (...classes: Array<false | null | string | undefined>) => classes.filter(Boolean).join(' '),
+  cn: (...classes: (false | null | string | undefined)[]) => classes.filter(Boolean).join(' '),
 }));
 
 jest.mock('uniwind', () => ({
@@ -26,6 +27,7 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 
 jest.mock('heroui-native/input', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');
 
   return {
@@ -62,8 +64,8 @@ jest.mock('../../button', () => {
   };
 });
 
-jest.mock('../../text-field', () => ({
-  useTextField: () => undefined,
+jest.mock('../../text-field/text-field-context', () => ({
+  useTextFieldState: () => mockTextFieldState,
 }));
 
 describe('Input', () => {
@@ -79,6 +81,7 @@ describe('Input', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     mockNativeInputNode.blur.mockClear();
+    mockTextFieldState = undefined;
   });
 
   test('renders a HeroUI text field with adaptive defaults', () => {
@@ -238,6 +241,26 @@ describe('Input', () => {
     );
 
     expect(renderer!.root.findByProps({ mockComponent: 'hero-input' }).props.isDisabled).toBe(true);
+    expect(renderer!.root.findByType('button').props.disabled).toBe(true);
+  });
+
+  test('inherits neutral password state from the enclosing text field', () => {
+    mockTextFieldState = { disabled: true, invalid: true, required: false };
+
+    renderInput(
+      <Input
+        accessibilityLabel="API key"
+        onChangeText={jest.fn()}
+        type="password"
+        value="secret"
+        visibilityAccessibilityLabels={{ hide: 'Hide API key', show: 'Show API key' }}
+      />,
+    );
+
+    expect(renderer!.root.findByProps({ mockComponent: 'hero-input' }).props).toMatchObject({
+      isDisabled: true,
+      isInvalid: true,
+    });
     expect(renderer!.root.findByType('button').props.disabled).toBe(true);
   });
 

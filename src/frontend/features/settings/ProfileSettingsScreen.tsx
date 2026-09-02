@@ -1,4 +1,4 @@
-import { Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
+import { Input, TextField, useAlert } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -81,7 +81,7 @@ export default function ProfileSettingsScreen() {
         </AvatarImagePicker>
       </View>
       <TextField>
-        <Label>{t('settings.profile.userName')}</Label>
+        <TextField.Label>{t('settings.profile.userName')}</TextField.Label>
         <Input
           accessibilityLabel={t('settings.profile.userName')}
           autoCorrect={false}

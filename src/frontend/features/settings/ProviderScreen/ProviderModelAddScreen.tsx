@@ -4,9 +4,7 @@ import {
   Button,
   Chip,
   ContentState,
-  FieldError,
   Input,
-  Label,
   Tabs,
   TextField,
   useAlert,
@@ -585,8 +583,8 @@ function ProviderModelAddTextField({
   value: string;
 }) {
   return (
-    <TextField isDisabled={isDisabled} isInvalid={Boolean(errorMessage)}>
-      <Label className="text-foreground">{label}</Label>
+    <TextField disabled={isDisabled} invalid={Boolean(errorMessage)}>
+      <TextField.Label>{label}</TextField.Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
@@ -600,7 +598,7 @@ function ProviderModelAddTextField({
         value={value}
         {...textInputProps}
       />
-      <FieldError>{errorMessage}</FieldError>
+      <TextField.Error>{errorMessage}</TextField.Error>
     </TextField>
   );
 }

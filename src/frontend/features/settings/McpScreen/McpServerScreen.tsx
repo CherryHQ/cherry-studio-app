@@ -1,7 +1,6 @@
 import {
   ContentState,
   Input,
-  Label,
   Spinner,
   TextField,
   useAlert,
@@ -382,8 +381,8 @@ function FormField({
   label: string;
 }) {
   return (
-    <TextField isDisabled={isDisabled}>
-      <Label>{label}</Label>
+    <TextField disabled={isDisabled}>
+      <TextField.Label>{label}</TextField.Label>
       {children}
     </TextField>
   );
