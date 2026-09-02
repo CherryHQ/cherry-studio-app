@@ -87,6 +87,7 @@ jest.mock('../navigation', () => ({
 }));
 
 jest.mock('../workspace', () => ({
+  ChatDraftState: () => null,
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {
     chatWorkspaceProps = props;
