@@ -254,6 +254,7 @@
   "agent.capabilities.permission.denied": "System access is off — open system settings",
   "agent.capabilities.permission.unavailable": "Not available on this device",
   "agent.create.title": "New agent",
+  "agent.default.name": "Cherry Agent",
   "agent.delete.message": "After deleting \"{{name}}\", its sessions stay readable but can no longer run.",
   "agent.delete.title": "Delete agent?",
   "agent.edit.title": "Edit agent",
