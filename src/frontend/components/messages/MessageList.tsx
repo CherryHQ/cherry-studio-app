@@ -118,8 +118,8 @@ export function MessageList({
     [contentBottomInset],
   );
   const renderMessageRow = useCallback(
-    ({ item }: LegendListRenderItemProps<MessageListItem>) => (
-      <MessageListRow message={item} renderMessage={renderMessage} />
+    ({ extraData: rowExtraData, item }: LegendListRenderItemProps<MessageListItem>) => (
+      <MessageListRow extraData={rowExtraData} message={item} renderMessage={renderMessage} />
     ),
     [renderMessage],
   );

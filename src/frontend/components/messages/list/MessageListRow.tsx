@@ -5,6 +5,8 @@ import type { MessageListItem, MessageRenderer } from '../types';
 import { MESSAGE_ROW_HORIZONTAL_PADDING, MESSAGE_ROW_VERTICAL_PADDING } from './messageListLayout';
 
 type MessageListRowProps = {
+  /** Keeps LegendList's external invalidation token visible to the memo boundary. */
+  extraData?: unknown;
   message: MessageListItem;
   renderMessage: MessageRenderer;
 };

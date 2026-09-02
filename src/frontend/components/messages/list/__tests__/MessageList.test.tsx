@@ -41,7 +41,7 @@ type MockLegendListProps = {
   onTouchStart?: () => void;
   recycleItems?: boolean;
   ref?: Ref<LegendListRef>;
-  renderItem?: (info: { index: number; item: MessageListItem }) => ReactNode;
+  renderItem?: (info: { extraData?: unknown; index: number; item: MessageListItem }) => ReactNode;
   sharedValues?: { isAtEnd: SharedValue<boolean> };
   showsVerticalScrollIndicator?: boolean;
 };
@@ -116,7 +116,9 @@ jest.mock('@legendapp/list/keyboard', () => {
       return (
         <View testID="message-list">
           {props.data?.map((item, index) => (
-            <Fragment key={item.id}>{props.renderItem?.({ index, item })}</Fragment>
+            <Fragment key={item.id}>
+              {props.renderItem?.({ extraData: props.extraData, index, item })}
+            </Fragment>
           ))}
         </View>
       );
@@ -506,6 +508,25 @@ describe('MessageList scroll-controller ownership', () => {
 
     expect(mockRenderMessage).toHaveBeenCalledTimes(1);
     expect(mockRenderMessage).toHaveBeenCalledWith(updatedStreamingMessage);
+  });
+
+  test('rerenders every row when extra data invalidates external rendering state', () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const initialExtraData = { isToolbarEnabled: false };
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, { extraData: initialExtraData })} />);
+    });
+    mockRenderMessage.mockClear();
+
+    act(() => {
+      renderer?.update(
+        <MessageList {...listProps(messages, { extraData: { isToolbarEnabled: true } })} />,
+      );
+    });
+
+    expect(mockRenderMessage).toHaveBeenCalledTimes(2);
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(1, messages[0]);
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(2, messages[1]);
   });
 
   test('flushes the outgoing anchor and ignores its late momentum end after a data switch', async () => {
