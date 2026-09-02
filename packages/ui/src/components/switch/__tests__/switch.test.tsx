@@ -1,10 +1,10 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Switch } from '../switch.android';
+import { Switch } from '../switch';
 
 jest.mock('heroui-native', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   function Switch(props: object) {
     return React.createElement(View, { ...props, mockComponent: 'hero-switch' });
@@ -17,7 +17,7 @@ jest.mock('heroui-native', () => {
   return { Switch };
 });
 
-describe('Switch (Android)', () => {
+describe('Switch', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -25,23 +25,34 @@ describe('Switch (Android)', () => {
     renderer = undefined;
   });
 
-  test('maps the shared API to the default HeroUI Switch', () => {
+  test('maps the shared API to the Cherry visual control', () => {
     const onValueChange = jest.fn();
+    const style = { opacity: 0.8 };
 
     act(() => {
       renderer = create(
-        <Switch accessibilityLabel="Airplane mode" onValueChange={onValueChange} value />,
+        <Switch
+          accessibilityLabel="Airplane mode"
+          onValueChange={onValueChange}
+          style={style}
+          testID="airplane-mode"
+          value
+        />,
       );
     });
 
     const control = renderer!.root.findByProps({ mockComponent: 'hero-switch' });
     const thumb = renderer!.root.findByProps({ mockComponent: 'hero-switch-thumb' });
 
-    expect(control.props.accessibilityLabel).toBe('Airplane mode');
-    expect(control.props.className).toBe('h-6 w-12');
-    expect(control.props.hitSlop).toBe(8);
-    expect(control.props.isDisabled).toBe(false);
-    expect(control.props.isSelected).toBe(true);
+    expect(control.props).toMatchObject({
+      accessibilityLabel: 'Airplane mode',
+      className: 'h-6 w-12',
+      hitSlop: 8,
+      isDisabled: false,
+      isSelected: true,
+      style,
+      testID: 'airplane-mode',
+    });
     expect(thumb.props.className).toBe('h-5 w-7');
 
     act(() => control.props.onSelectedChange(false));
@@ -65,7 +76,7 @@ describe('Switch (Android)', () => {
     );
   });
 
-  test('maps disabled state to HeroUI', () => {
+  test('maps disabled state to the visual control', () => {
     act(() => {
       renderer = create(
         <Switch
