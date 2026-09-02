@@ -5,10 +5,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { useBackendModule } from '@/frontend/data';
 import type { SystemPermissionState } from '@/shared/contracts';
 
-import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import {
   getPermissionAction,

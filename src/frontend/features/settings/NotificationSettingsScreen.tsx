@@ -2,9 +2,8 @@ import RadioIcon from '@cherrystudio/app-icons/icons/radio';
 import { Section, Switch, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { usePreference } from '@/frontend/data/hooks';
-
-import { SettingsScrollPage } from './components/SettingsScrollPage';
 
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();

@@ -1,23 +1,25 @@
 # Settings
 
-This module owns settings screens' shared UI and feature-specific settings modules.
+This feature owns the settings home plus general app preferences that do not belong to a dedicated
+service domain.
 
 ## Public Interface
 
 - Route screen components are exported from `index.ts`.
-- Feature settings modules expose their own `index.ts` files under `ProviderScreen/` and
-  `WebSearchScreen/`.
 - Reusable model selection lives in `src/frontend/components/modelPicker`; settings screens consume
   that module instead of owning it.
+- The shared settings page shell, service row, and option type live in
+  `src/frontend/components/settings` because provider, MCP, web search, and general settings all
+  consume them.
 - Generic rows, selectors, pickers, chips, buttons, and selection marks come from CherryUI. Provider,
   model, profile, and Agent visual identity comes from `src/frontend/components/avatar`.
 
 ## Organization
 
-- `components/` contains settings-private adapters and layouts: the scroll-page shell, provider/MCP
-  service row, numeric preference input, theme preview, and the provider-avatar persistence adapter.
-  These remain local because they own settings navigation, storage, or high-density list behavior;
-  they compose the public controls instead of duplicating them.
+- `components/` contains settings-private controls such as the theme preview.
 - `hooks/` contains shared settings preference hooks.
 - `profileHero/` contains the static avatar and name entry shown at the top of the settings home.
-- `ProviderScreen/` and `WebSearchScreen/` contain feature-specific settings modules.
+- `PermissionsScreen/` owns system-permission presentation and status handling.
+
+Provider, MCP, and web search settings are separate feature modules under `features/providers`,
+`features/mcp`, and `features/webSearch` even though Expo Router presents them below `/settings`.

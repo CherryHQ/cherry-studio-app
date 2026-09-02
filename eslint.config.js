@@ -253,9 +253,6 @@ const frontendFeatureLayer = {
     '@/frontend/features/*/*/*/*',
     '@/frontend/features/*/*/*/*/*',
     '@/frontend/features/*/*/*/*/*/*',
-    '!@/frontend/features/settings/components',
-    '@/frontend/features/settings/components/*',
-    '!@/frontend/features/settings/components/SettingSelect',
   ],
   allowTypeImports: true,
   message:

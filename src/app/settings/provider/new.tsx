@@ -1,1 +1,1 @@
-export { ProviderCreationScreen as default } from '@/frontend/features/settings/ProviderScreen';
+export { ProviderCreationScreen as default } from '@/frontend/features/providers';

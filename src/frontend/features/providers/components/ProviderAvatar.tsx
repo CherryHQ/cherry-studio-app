@@ -1,6 +1,6 @@
 import { BrandAvatar, BrandAvatarPhoto, ProviderBrandAvatar } from '@/frontend/components/avatar';
 
-import { useProviderAvatar } from './providerAvatarStore';
+import { useProviderAvatar } from '../hooks/useProviderAvatar';
 
 type ProviderAvatarProps = {
   presetProviderId?: string;

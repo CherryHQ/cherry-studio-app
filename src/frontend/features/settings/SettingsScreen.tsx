@@ -17,9 +17,9 @@ import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/components/headers';
 import { usePreference, usePrefetchInfiniteQuery } from '@/frontend/data/hooks';
+import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from '@/frontend/features/providers';
 
 import { ProfileHero } from './profileHero';
-import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();

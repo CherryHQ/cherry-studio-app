@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { SettingOption } from '@/frontend/components/settings';
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import {
   getMobileSupportedWebSearchProvidersByCapability,
@@ -12,7 +13,6 @@ import type {
   WebSearchProviderOverride,
 } from '@/shared/data/types/webSearch';
 
-import type { SettingOption } from '../settingOptions';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 
 const preferenceMapping = {

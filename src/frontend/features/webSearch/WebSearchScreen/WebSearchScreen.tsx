@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUniwind } from 'uniwind';
 
-import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { SettingsScrollPage } from '@/frontend/components/settings';
+
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import { resolveWebSearchProviderIcon } from './utils/providerIcons';

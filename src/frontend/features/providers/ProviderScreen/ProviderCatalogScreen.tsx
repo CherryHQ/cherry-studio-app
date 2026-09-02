@@ -13,11 +13,11 @@ import {
   readProviderSetupReturnTo,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/components/navigation';
+import { SettingsServiceRow } from '@/frontend/components/settings';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ProviderCatalogEntry } from '@/shared/contracts';
 
 import { ProviderAvatar } from '../components/ProviderAvatar';
-import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 68;
 const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider';

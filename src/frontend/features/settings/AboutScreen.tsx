@@ -12,9 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-
-import { SettingsScrollPage } from './components/SettingsScrollPage';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
 const githubIcon = PROVIDER_ICONS.github;

@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/markdown';
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { usePreference } from '@/frontend/data/hooks';
 import { applyFontSizeStepPreference } from '@/frontend/utils/theme';
 
-import { SettingsScrollPage } from './components/SettingsScrollPage';
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
 export default function FontSizeSettingsScreen() {

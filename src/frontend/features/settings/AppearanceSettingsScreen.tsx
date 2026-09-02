@@ -8,9 +8,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingsScrollPage } from './components/SettingsScrollPage';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';

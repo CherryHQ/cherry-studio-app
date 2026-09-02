@@ -9,12 +9,10 @@ import { useUniwind } from 'uniwind';
 
 import type { HeaderToolbarAction } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
+import { SettingsScrollPage, SettingsServiceRow } from '@/frontend/components/settings';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
-
-import { SettingsScrollPage } from '../components/SettingsScrollPage';
-import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
 export function McpScreen() {
   const { t } = useTranslation();

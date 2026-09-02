@@ -15,8 +15,7 @@ import {
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
 import { useOpenProviderSetup } from '@/frontend/components/navigation';
-
-import { SettingsScrollPage } from './components/SettingsScrollPage';
+import { SettingsScrollPage } from '@/frontend/components/settings';
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();

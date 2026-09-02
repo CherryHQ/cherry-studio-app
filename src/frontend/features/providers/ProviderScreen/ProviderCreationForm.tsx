@@ -9,7 +9,7 @@ import { useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 
-import { useProviderAvatar, useProviderAvatarActions } from '../components/providerAvatarStore';
+import { useProviderAvatar, useProviderAvatarActions } from '../hooks/useProviderAvatar';
 import {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,

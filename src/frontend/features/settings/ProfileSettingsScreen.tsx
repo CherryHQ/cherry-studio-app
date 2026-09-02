@@ -7,10 +7,9 @@ import { Keyboard, TextInput, View } from 'react-native';
 
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/avatar';
 import type { HeaderToolbarAction } from '@/frontend/components/headers';
+import { SettingsScrollPage } from '@/frontend/components/settings';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-
-import { SettingsScrollPage } from './components/SettingsScrollPage';
 
 const profileAvatarSize = 104;
 const logger = loggerService.withContext('ProfileSettingsScreen');

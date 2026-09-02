@@ -1,1 +1,1 @@
-export { ModelSettingsScreen as default } from '@/frontend/features/settings';
+export { ModelSettingsScreen as default } from '@/frontend/features/providers';

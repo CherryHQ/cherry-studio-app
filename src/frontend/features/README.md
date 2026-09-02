@@ -31,8 +31,9 @@ featureName/
 Screen areas inside a feature can own their own modules:
 
 ```text
-settings/
+providers/
   ProviderScreen/
+webSearch/
   WebSearchScreen/
 ```
 
@@ -79,8 +80,13 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
   `workspace/` are its public areas.
 - `agents/`: Agent list and editor. Selecting a row enters a new chat; edit/delete remain row
   actions.
-- `settings/`: settings home (with the animated profile hero at the top), about/data/model/
-  provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.
+- `providers/`: provider catalog, setup and detail flows, provider model management, and
+  default-model settings.
+- `mcp/`: MCP server list, server editing, runtime status, and tool rules.
+- `webSearch/`: search/fetch provider preferences, API service configuration, and advanced search
+  settings.
+- `settings/`: settings home (with the animated profile hero at the top), appearance, font,
+  notifications, profile, about, and permissions screens.
 - `paintings/`: painting composer (image generation), the painting history screen
   (`PaintingHistoryScreen` hosting `DrawingList`), the nested full-screen viewer
   (`PaintingViewerScreen/`) and conversation (`PaintingConversationScreen/`) screens, bundled
@@ -93,6 +99,6 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 - `onboarding/`: onboarding flow and the logo draw animation.
 
 Reusable modules that remain in `src/frontend/components` include app shell modules (`headers`,
-`navigation`), shared flows such as `modelPicker`, and the neutral `selection`
-multi-select/source-registry shared by list screens. Reusable native UI adapters and shared UI
-behavior such as the alert controller belong in CherryUI.
+`navigation`), shared flows such as `modelPicker`, the neutral `settings` page/row primitives, and
+the `selection` multi-select/source-registry shared by list screens. Reusable native UI adapters
+and shared UI behavior such as the alert controller belong in CherryUI.

@@ -2,8 +2,9 @@ import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SettingsScrollPage } from '@/frontend/components/settings';
+
 import { SettingNumberInput } from '../components/SettingNumberInput';
-import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 
 export default function WebSearchAdvancedScreen() {
