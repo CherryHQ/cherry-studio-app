@@ -18,14 +18,13 @@ type GenericToolPartProps = {
 
 export function GenericToolPart({ part }: GenericToolPartProps) {
   const { t } = useTranslation();
-  const toolDisplay = getBuiltInToolDisplay(getToolName(part));
+  const toolName = getToolName(part);
+  const toolDisplay = getBuiltInToolDisplay(toolName);
   const title = getToolLabel(part, toolDisplay?.titleKey, t);
   const statusText = getToolStatusText(part, t);
 
   return (
     <MessagePart.Tool
-      icon={toolDisplay?.icon}
-      imageSource={toolDisplay?.imageSource}
       state={getToolDisplayState(part)}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}

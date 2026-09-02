@@ -58,17 +58,17 @@ instead of creating feature-owned rows or sheets:
 
 | Layer | Owner | Contract |
 | --- | --- | --- |
-| Summary | `MessagePart.Summary` | Renders the leading icon slot, title, status text, tone, running shimmer, and disclosure chevron. |
+| Summary | `MessagePart.Summary` | Renders the title, status text, tone, running shimmer, and disclosure chevron. |
 | Interaction | `MessagePart.Tool` | Owns local open/close state and connects the summary press to its detail. Business renderers do not lift this transient state. |
+| Process | `MessagePart.Process` | Renders one total-duration disclosure before the answer and expands every pre-result part inline. |
 | Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container for a run of tool calls. Expanded while the run is live, folded once it settles; a manual toggle always wins. |
 | Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool and source details share this shell. |
 | Detail content | The part renderer | Supplies the business-specific content inside the shell. This content remains intentionally unconstrained until its visual variants are designed. |
 
-`MessagePart.Summary` standardizes an icon *slot*, not one icon. The slot has one size, position,
-and alignment; the product adapter chooses its `icon` or `imageSource`. An image source takes
-precedence over the icon component, and the wrench is only the fallback when neither is supplied.
-The adapter also derives localized title and status text plus the semantic status tone. It must not
-recreate the shared row geometry.
+Tool summaries deliberately omit decorative icons and implementation-specific arguments. The
+adapter derives a localized action title and status text plus the semantic status tone; URLs,
+queries, and other invocation arguments remain available in the detail sheet instead of competing
+with the answer. It must not recreate the shared row geometry.
 
 `MessagePart.Tool` is the required outer composition for generic, MCP, web-search, write-file, and
 Meta tool calls. Those tool renderers remain separate while their detail semantics differ. A common
@@ -83,8 +83,11 @@ may summarize user-facing metadata such as its filename and size, but it does no
 entry ids or repeat the file body.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
-markdown renders into, so a reader keeps their place in the transcript. Source groups retain their
-domain-specific compact triggers, but their expanded views must use `MessagePart.Detail`. New
+markdown renders into, so a reader keeps their place in the transcript. Every visible transcript
+part except the final result text sits inside one collapsed `MessagePart.Process` row whose label is
+the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
+groups use a borderless row of overlapping favicons and their source count, while their expanded
+views must use `MessagePart.Detail`. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
 
@@ -93,13 +96,10 @@ the part adapter notifies the list scroll controller, which leaves live-edge fol
 any scheduled end correction. LegendList's size anchoring then keeps the tapped summary in place so
 the detail expands below it, even when the viewport started at the bottom.
 
-`partitionMessageParts` folds a run of two or more consecutive visible tool calls into one
-`tool-group` body item that `ToolGroupPart` renders through `MessagePart.ToolGroup`. The answer —
-not the process — is the visual subject of a settled message, so the group collapses to one summary
-row when the run completes. Failed or denied steps are never silent: their count and tone surface on
-the folded summary. A lone tool call keeps its own row, whose title already says everything a group
-summary would. Provider-executed web searches render nothing, so they neither count toward a group
-nor split one, and lifted source and file parts do not split a run they interleave with.
+`partitionMessageParts` finds the last visible text part and leaves only that part in the article
+body. Earlier prose, reasoning, and tool calls all enter the timed process disclosure. A text part
+followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
+executed web searches render nothing; source and file parts retain their dedicated result rows.
 
 ### Detail Content Status
 

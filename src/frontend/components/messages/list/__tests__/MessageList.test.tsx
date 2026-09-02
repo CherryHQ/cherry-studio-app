@@ -143,6 +143,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
     mockScrollButtonProps = props;
     return null;
   },
+  scrollToBottomButtonSize: 40,
 }));
 
 jest.mock('react-i18next', () => ({
@@ -570,7 +571,7 @@ describe('MessageList scroll-controller ownership', () => {
       expect(mockLatestListProps?.getItemType?.(messages[1])).toBe('assistant');
       expect(mockLatestListProps?.keyboardDismissMode).toBe('on-drag');
       expect(mockLatestListProps?.contentContainerStyle).toEqual({
-        paddingBottom: 80,
+        paddingBottom: 130,
         paddingTop: 12,
       });
       expect(mockLatestListProps?.showsVerticalScrollIndicator).toBe(false);

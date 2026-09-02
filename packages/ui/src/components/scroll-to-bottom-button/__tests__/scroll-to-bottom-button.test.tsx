@@ -75,15 +75,15 @@ describe('ScrollToBottomButton', () => {
     });
 
     expect(renderer!.root.findByType('Surface').props).toMatchObject({
-      className: 'border border-border bg-secondary',
+      className: 'border border-border bg-background',
       cornerRadius: 20,
       interactive: true,
       style: [
         { alignItems: 'center', height: 40, justifyContent: 'center', width: 40 },
         { borderColor: 'rgba(160, 160, 160, 0.3)', borderWidth: 1 },
       ],
-      tintColor: 'rgba(120, 120, 120, 0.24)',
     });
+    expect(renderer!.root.findByType('Surface').props.tintColor).toBeUndefined();
 
     const animatedViews = renderer!.root.findAllByType('AnimatedView');
     expect(animatedViews[0].props.style).toEqual([

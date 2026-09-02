@@ -1,7 +1,7 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
+import GitForkIcon from '@cherrystudio/app-icons/icons/git-fork';
+import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -30,20 +30,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     [isSettled, message],
   );
   const isCopied = copiedMessageId === message.id;
-  const menuItems = useMemo<readonly MenuItem[]>(
-    () =>
-      isSettled
-        ? [
-            {
-              icon: 'branch',
-              id: 'fork',
-              label: t('chat.messageActions.fork'),
-              onPress: () => forkFromAssistantMessage({ messageId: message.id }),
-            },
-          ]
-        : [],
-    [forkFromAssistantMessage, isSettled, message.id, t],
-  );
 
   if (!isSettled) {
     return null;
@@ -67,20 +53,14 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      {/*
-        The native menu installs its own hit target over this subtree, so the
-        trigger is a plain labelled View rather than a second pressable.
-      */}
-      <ActionMenu items={menuItems}>
-        <View
-          accessibilityLabel={t('common.more')}
-          accessibilityRole="button"
-          className="size-7 items-center justify-center"
-          testID="assistant-message-more"
-        >
-          <EllipsisIcon className="size-4 text-muted-foreground" />
-        </View>
-      </ActionMenu>
+      <Button
+        accessibilityLabel={t('chat.messageActions.fork')}
+        icon={<GitForkIcon className="text-muted-foreground" />}
+        onPress={() => forkFromAssistantMessage({ messageId: message.id })}
+        size="xs"
+        testID="assistant-message-fork"
+        variant="ghost"
+      />
     </View>
   );
 });

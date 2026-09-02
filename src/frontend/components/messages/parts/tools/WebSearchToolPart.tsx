@@ -1,4 +1,3 @@
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
@@ -7,7 +6,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { enrichWebSources, parseWebSources } from '../webSource';
 import { WebSourceCard } from '../WebSourceCard';
-import { getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
+import { getToolStatusTone, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
   messageParts?: readonly CherryMessagePart[];
@@ -16,25 +15,23 @@ type WebSearchToolPartProps = {
 
 export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps) {
   const { t } = useTranslation();
-  const query = getWebSearchQuery(part.input);
   const rawResults = part.state === 'output-available' ? parseWebSources(part.output) : [];
   const results = messageParts ? enrichWebSources(rawResults, messageParts) : rawResults;
   const statusText = getWebSearchStatusText(part, results.length, t);
-  const title = query || part.title?.trim() || t('chat.actions.webSearch');
+  const actionTitle = t('chat.builtinTool.web.search');
   const detailTitle =
-    results.length > 0 ? t('chat.webSearch.detailTitle', { count: results.length }) : title;
+    results.length > 0 ? t('chat.webSearch.detailTitle', { count: results.length }) : actionTitle;
   const isSearching = part.state === 'input-streaming' || part.state === 'input-available';
 
   return (
     <MessagePart.Tool
       detailTitle={detailTitle}
       detailVariant="source-list"
-      icon={SearchIcon}
       state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}
       testID="web-search-tool-part"
-      title={title}
+      title={actionTitle}
     >
       {results.length === 0 ? (
         <Text className="text-foreground text-base italic" selectable>
@@ -77,9 +74,4 @@ function getWebSearchStatusText(
   }
 
   return t('chat.webSearch.searching');
-}
-
-function getWebSearchQuery(input: unknown) {
-  if (!isRecord(input) || typeof input.query !== 'string') return '';
-  return input.query.trim();
 }

@@ -109,6 +109,10 @@ translations, file identifiers, or application navigation:
 </MessagePart.Tool>
 ```
 
+`MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
+The product adapter supplies its localized duration and every visible pre-result child; the
+primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
 `Message Parts/Playground` collects every public message-part primitive and state on one interactive
 page for visual debugging.

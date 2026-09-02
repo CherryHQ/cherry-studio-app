@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import type { MessagePartRootProps } from '../message-part.types';
 import {
   MessagePartDetail,
+  MessagePartProcess,
   MessagePartReasoning,
   MessagePartSummary,
   MessagePartTool,
@@ -34,6 +35,7 @@ export const MessagePart = Object.assign(MessagePartRoot, {
   Error: MessagePartError,
   Pending: MessagePartPending,
   Placeholder: MessagePartPlaceholder,
+  Process: MessagePartProcess,
   Reasoning: MessagePartReasoning,
   SectionTitle: MessagePartSectionTitle,
   Source: MessagePartSource,

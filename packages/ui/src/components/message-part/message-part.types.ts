@@ -26,6 +26,15 @@ export type MessagePartReasoningProps = {
   testID?: string;
 };
 
+export type MessagePartProcessProps = {
+  children: ReactNode;
+  /** Runs before a reader-initiated inline disclosure toggle. */
+  onDisclosureToggle?: () => void;
+  state: 'complete' | 'running';
+  title: string;
+  testID?: string;
+};
+
 export type MessagePartToolGroupProps = {
   children: ReactNode;
   /** Runs before a reader-initiated inline disclosure toggle. */
@@ -67,7 +76,10 @@ export type MessagePartSummaryProps = {
   title: string;
 };
 
-export type MessagePartToolProps = Omit<MessagePartSummaryProps, 'onPress'> & {
+export type MessagePartToolProps = Omit<
+  MessagePartSummaryProps,
+  'icon' | 'imageSource' | 'onPress'
+> & {
   children: ReactNode;
   detailTitle?: string;
   detailVariant?: 'default' | 'source-list';

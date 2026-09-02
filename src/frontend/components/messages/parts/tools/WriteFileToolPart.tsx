@@ -1,7 +1,6 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
 
@@ -28,8 +27,6 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
     return <GenericToolPart part={part} />;
   }
 
-  const display = getBuiltInToolDisplay(WRITE_FILE_TOOL_NAME);
-
   if (createdWrite !== null) {
     const details = {
       [t('chat.builtinTool.file.filename')]: createdWrite.filename,
@@ -40,8 +37,6 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
 
     return (
       <MessagePart.Tool
-        icon={display?.icon}
-        imageSource={display?.imageSource}
         state="complete"
         statusText={t('chat.builtinTool.file.created')}
         testID="write-file-tool-part"
@@ -58,8 +53,6 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
 
   return (
     <MessagePart.Tool
-      icon={display?.icon}
-      imageSource={display?.imageSource}
       state="complete"
       statusText={t('chat.tool.callError')}
       statusTone="danger"

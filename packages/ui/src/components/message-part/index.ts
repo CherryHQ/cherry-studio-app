@@ -4,6 +4,7 @@ export type {
   MessagePartErrorProps,
   MessagePartPendingProps,
   MessagePartPlaceholderProps,
+  MessagePartProcessProps,
   MessagePartReasoningProps,
   MessagePartRootProps,
   MessagePartSectionTitleProps,

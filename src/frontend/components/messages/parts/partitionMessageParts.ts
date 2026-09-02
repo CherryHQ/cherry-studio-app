@@ -1,29 +1,28 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import {
-  isProviderWebSearchToolPart,
-  isToolMessagePart,
-  type ToolMessagePart,
-} from './tools/toolPartState';
+import { isProviderWebSearchToolPart, isToolMessagePart } from './tools/toolPartState';
 
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
+export type MessageProcessItem = {
+  index: number;
+  part: CherryMessagePart;
+};
 
-export type MessageBodyToolItem = { index: number; part: ToolMessagePart };
-
-export type MessageBodyItem =
-  | { kind: 'part'; index: number; part: CherryMessagePart }
-  | { kind: 'tool-group'; index: number; items: readonly MessageBodyToolItem[] };
+export type MessageBodyItem = { kind: 'part'; index: number; part: CherryMessagePart };
 
 export type PartitionedMessageParts = {
-  /** Everything rendered in transcript order, carrying its original index. */
+  /** The final result text, carrying its original index for citation resolution. */
   body: readonly MessageBodyItem[];
   /** Every file in the message, shown as one row after the body. */
   files: readonly MessageFilePart[];
+  /** Every visible transcript part except the final result text. */
+  process: readonly MessageProcessItem[];
 };
 
 /**
- * Splits a message into its ordered body and the files it produced, and folds
- * runs of consecutive tool calls into one `tool-group` item.
+ * Splits a message into its timed process, final result text, and produced
+ * files. Only the last visible text part remains in the article body; earlier
+ * prose, reasoning, and tools all belong to the process disclosure.
  *
  * Files are lifted out of the stream and shown after the answer rather than at
  * the tool call that wrote them. A deliverable buried between two blocks of
@@ -38,35 +37,16 @@ export type PartitionedMessageParts = {
  *
  * Source parts drop out too; `SourceGroup` collects them separately.
  *
- * Tool grouping rules:
- * - Only runs of two or more visible tool calls group; a lone call keeps its
- *   own row, whose title already says everything a group summary would.
- * - Provider-executed web searches render nothing, so they neither count
- *   toward a group nor split one; outside a group they pass through unchanged.
- * - Source and file parts are lifted out of the stream anyway, so they do not
- *   split a run they happen to interleave with. Any other part type does.
+ * Provider-owned invisible parts do not create an empty process row. Source
+ * and file parts remain dedicated result affordances outside this split.
  */
 export function partitionMessageParts(
   parts: readonly CherryMessagePart[],
 ): PartitionedMessageParts {
   const body: MessageBodyItem[] = [];
   const files: MessageFilePart[] = [];
-  let run: MessageBodyToolItem[] = [];
-
-  const flushRun = () => {
-    if (run.length === 0) {
-      return;
-    }
-    const visible = run.filter((item) => !isProviderWebSearchToolPart(item.part));
-    if (visible.length >= 2) {
-      body.push({ index: visible[0].index, items: visible, kind: 'tool-group' });
-    } else {
-      for (const item of run) {
-        body.push({ kind: 'part', ...item });
-      }
-    }
-    run = [];
-  };
+  const process: MessageProcessItem[] = [];
+  const resultTextIndex = findResultTextIndex(parts);
 
   parts.forEach((part, index) => {
     if (part.type === 'source-url') {
@@ -78,15 +58,45 @@ export function partitionMessageParts(
       return;
     }
 
-    if (isToolMessagePart(part)) {
-      run.push({ index, part });
+    if (isInvisiblePart(part)) {
       return;
     }
 
-    flushRun();
+    if (index !== resultTextIndex) {
+      process.push({ index, part });
+      return;
+    }
+
     body.push({ index, kind: 'part', part });
   });
-  flushRun();
 
-  return { body, files };
+  return { body, files, process };
+}
+
+function findResultTextIndex(parts: readonly CherryMessagePart[]): number | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (!part) continue;
+    if (part.type === 'source-url' || part.type === 'file' || isInvisiblePart(part)) {
+      continue;
+    }
+
+    if (part.type === 'text' && part.text.trim()) {
+      return index;
+    }
+
+    return undefined;
+  }
+
+  return undefined;
+}
+
+function isInvisiblePart(part: CherryMessagePart) {
+  return (
+    (part.type === 'reasoning' && part.state !== 'streaming' && !part.text.trim()) ||
+    part.type === 'step-start' ||
+    part.type === 'source-document' ||
+    part.type === 'data-video' ||
+    (isToolMessagePart(part) && isProviderWebSearchToolPart(part))
+  );
 }

@@ -18,7 +18,7 @@ function text(value: string): CherryMessagePart {
 
 describe('partitionMessageParts', () => {
   test('lifts every file out of the body, in the order it was produced', () => {
-    const { body, files } = partitionMessageParts([
+    const { body, files, process } = partitionMessageParts([
       text('before'),
       file('a'),
       text('after'),
@@ -27,7 +27,8 @@ describe('partitionMessageParts', () => {
 
     expect(
       body.map((item) => (item.kind === 'part' ? (item.part as { text: string }).text : item.kind)),
-    ).toEqual(['before', 'after']);
+    ).toEqual(['after']);
+    expect(process.map((item) => (item.part as { text: string }).text)).toEqual(['before']);
     expect(files.map((part) => part.filename)).toEqual(['a.md', 'b.md']);
   });
 
@@ -58,31 +59,36 @@ describe('partitionMessageParts', () => {
     expect(body.map(({ index }) => index)).toEqual([1]);
   });
 
-  test('folds a run of consecutive tool calls into one group with original indices', () => {
-    const { body } = partitionMessageParts([text('intro'), tool('a'), tool('b'), text('answer')]);
+  test('folds intermediate prose and tools while keeping only the final result text', () => {
+    const { body, process } = partitionMessageParts([
+      text('intro'),
+      tool('a'),
+      tool('b'),
+      text('answer'),
+    ]);
 
-    expect(body.map((item) => item.kind)).toEqual(['part', 'tool-group', 'part']);
-    const group = body[1];
-    if (group.kind !== 'tool-group') {
-      throw new Error('expected a tool group');
-    }
-    expect(group.index).toBe(1);
-    expect(group.items.map(({ index }) => index)).toEqual([1, 2]);
+    expect(process.map(({ index }) => index)).toEqual([0, 1, 2]);
+    expect(body.map(({ index }) => index)).toEqual([3]);
   });
 
-  test('keeps a lone tool call as its own row', () => {
-    const { body } = partitionMessageParts([tool('a'), text('answer')]);
+  test('collects reasoning and tools before the answer as one process prefix', () => {
+    const { body, process } = partitionMessageParts([
+      reasoning('thinking'),
+      tool('a'),
+      text('answer'),
+    ]);
 
-    expect(body.map((item) => item.kind)).toEqual(['part', 'part']);
+    expect(process.map(({ index }) => index)).toEqual([0, 1]);
+    expect(body.map((item) => item.kind)).toEqual(['part']);
   });
 
-  test('splits runs on prose but not on lifted source and file parts', () => {
+  test('folds every visible part before the final result despite interleaved sources and files', () => {
     const source: CherryMessagePart = {
       sourceId: 'source-1',
       type: 'source-url',
       url: 'https://cherry-ai.com',
     };
-    const { body } = partitionMessageParts([
+    const partitioned = partitionMessageParts([
       tool('a'),
       source,
       file('artifact'),
@@ -90,27 +96,35 @@ describe('partitionMessageParts', () => {
       text('answer'),
       tool('c'),
       tool('d'),
+      text('final answer'),
     ]);
 
-    expect(body.map((item) => item.kind)).toEqual(['tool-group', 'part', 'tool-group']);
+    expect(partitioned.process.map(({ index }) => index)).toEqual([0, 3, 4, 5, 6]);
+    expect(partitioned.body.map(({ index }) => index)).toEqual([7]);
   });
 
-  test('provider web searches neither count toward a group nor render inside one', () => {
+  test('does not expose an earlier text part when a tool is still the last visible content', () => {
+    const partitioned = partitionMessageParts([text('intermediate'), tool('a')]);
+
+    expect(partitioned.process.map(({ index }) => index)).toEqual([0, 1]);
+    expect(partitioned.body).toHaveLength(0);
+  });
+
+  test('provider web searches stay invisible and do not create an empty process group', () => {
     const provider = providerWebSearch();
     const grouped = partitionMessageParts([tool('a'), provider, tool('b')]);
-    expect(grouped.body.map((item) => item.kind)).toEqual(['tool-group']);
-    const group = grouped.body[0];
-    if (group.kind !== 'tool-group') {
-      throw new Error('expected a tool group');
-    }
-    expect(group.items).toHaveLength(2);
+    expect(grouped.process).toHaveLength(2);
+    expect(grouped.body).toHaveLength(0);
 
-    // One visible call beside a provider search is still a lone call, and the
-    // provider part passes through for its renderer to suppress.
     const single = partitionMessageParts([provider, tool('a')]);
-    expect(single.body.map((item) => item.kind)).toEqual(['part', 'part']);
+    expect(single.process).toHaveLength(1);
+    expect(single.body).toHaveLength(0);
   });
 });
+
+function reasoning(value: string): CherryMessagePart {
+  return { state: 'done', text: value, type: 'reasoning' } as CherryMessagePart;
+}
 
 function tool(id: string): CherryMessagePart {
   return {

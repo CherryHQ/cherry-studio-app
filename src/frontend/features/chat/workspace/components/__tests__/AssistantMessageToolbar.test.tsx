@@ -16,13 +16,11 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
-jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    ActionMenu: ({ children, ...props }: { children: unknown }) =>
-      createElement('ActionMenu', props, children),
     Button: (props: object) => createElement('Button', props),
     useAlert: () => ({ alert: { show: jest.fn() } }),
   };
@@ -102,9 +100,7 @@ describe('AssistantMessageToolbar', () => {
     ).toBe('chat.messageActions.copied');
   });
 
-  test('keeps the more menu reachable on a message with nothing to copy', () => {
-    // A tool-only reply has no copyable text, but branching from it is still
-    // the whole point of the menu.
+  test('keeps the direct branch action reachable on a message with nothing to copy', () => {
     renderToolbar(createMessage('success', '   '));
 
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
@@ -112,24 +108,21 @@ describe('AssistantMessageToolbar', () => {
       renderer?.root.findAllByProps({ testID: 'assistant-message-toolbar' }).length,
     ).toBeGreaterThan(0);
     expect(
-      renderer?.root.findAllByProps({ testID: 'assistant-message-more' }).length,
+      renderer?.root.findAllByProps({ testID: 'assistant-message-fork' }).length,
     ).toBeGreaterThan(0);
   });
 
-  test('offers a branch action carrying the semantic icon and forks this message', () => {
+  test('forks this message from the direct branch button', () => {
     renderToolbar(createMessage('success', 'Answer'));
 
-    const menu = renderer!.root.findByType('ActionMenu');
-    expect(menu.props.items).toEqual([
-      {
-        icon: 'branch',
-        id: 'fork',
-        label: 'chat.messageActions.fork',
-        onPress: expect.any(Function),
-      },
-    ]);
+    const forkButton = renderer!.root.findByProps({ testID: 'assistant-message-fork' });
+    expect(forkButton.props).toMatchObject({
+      accessibilityLabel: 'chat.messageActions.fork',
+      size: 'xs',
+      variant: 'ghost',
+    });
 
-    act(() => menu.props.items[0].onPress());
+    act(() => forkButton.props.onPress());
     expect(mockForkSession).toHaveBeenCalledWith({
       fromMessageId: 'assistant-1',
       sessionId: 'session-1',

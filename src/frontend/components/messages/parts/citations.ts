@@ -1,3 +1,4 @@
+import { createCitationLinkUrl } from '@/frontend/components/markdown/citationLink';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
@@ -41,7 +42,9 @@ export function resolveMessageCitationText(
             numberBySource.set(source, number);
           }
 
-          return markdown && source.url ? `[${number}](${source.url})` : `[${number}]`;
+          return markdown && source.url
+            ? `^[${number}](${createCitationLinkUrl(source.url)})^`
+            : `[${number}]`;
         }),
       );
 
