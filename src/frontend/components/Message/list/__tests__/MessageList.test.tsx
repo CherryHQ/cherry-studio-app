@@ -41,7 +41,7 @@ type MockLegendListProps = {
   onTouchStart?: () => void;
   recycleItems?: boolean;
   ref?: Ref<LegendListRef>;
-  renderItem?: (info: { index: number; item: MessageListItem }) => ReactNode;
+  renderItem?: (info: { extraData?: unknown; index: number; item: MessageListItem }) => ReactNode;
   sharedValues?: { isAtEnd: SharedValue<boolean> };
   showsVerticalScrollIndicator?: boolean;
 };
@@ -116,7 +116,9 @@ jest.mock('@legendapp/list/keyboard', () => {
       return (
         <View testID="message-list">
           {props.data?.map((item, index) => (
-            <Fragment key={item.id}>{props.renderItem?.({ index, item })}</Fragment>
+            <Fragment key={item.id}>
+              {props.renderItem?.({ extraData: props.extraData, index, item })}
+            </Fragment>
           ))}
         </View>
       );
@@ -211,6 +213,12 @@ function listProps(
     renderMessage: mockRenderMessage,
     ...overrides,
   };
+}
+
+function layoutEvent(height: number): LayoutChangeEvent {
+  return {
+    nativeEvent: { layout: { height, width: 390, x: 0, y: 0 } },
+  } as LayoutChangeEvent;
 }
 
 describe('MessageList scroll-controller ownership', () => {
@@ -443,6 +451,10 @@ describe('MessageList scroll-controller ownership', () => {
       renderer = create(<MessageList {...listProps(messages)} />);
     });
     await loadList();
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 500);
+    });
 
     const reaction = mockAnimatedReactions[0];
     mockLatestListProps?.sharedValues?.isAtEnd.set(false);
@@ -452,6 +464,69 @@ describe('MessageList scroll-controller ownership', () => {
     act(() => mockLatestListProps?.onScrollBeginDrag?.());
 
     expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+  });
+
+  test('only exposes the scroll button when the content exceeds the viewport', async () => {
+    const messages = [createMessage('user-1', 'user')];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+    await loadList();
+
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 300);
+      mockLatestListProps?.onScrollBeginDrag?.();
+    });
+    const reaction = mockAnimatedReactions[0];
+    mockLatestListProps?.sharedValues?.isAtEnd.set(false);
+    act(() => reaction.react(reaction.prepare(), true));
+
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+
+    act(() => mockLatestListProps?.onContentSizeChange?.(390, 500));
+
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+  });
+
+  test('rerenders only the changed row during a streaming update', () => {
+    const userMessage = createMessage('user-1', 'user');
+    const streamingMessage = createMessage('assistant-1', 'assistant');
+    const messages = [userMessage, streamingMessage];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+    mockRenderMessage.mockClear();
+
+    const updatedStreamingMessage: MessageListItem = {
+      ...streamingMessage,
+      data: { parts: [{ text: 'assistant-1 updated', type: 'text' }] },
+    };
+    act(() => {
+      renderer?.update(<MessageList {...listProps([userMessage, updatedStreamingMessage])} />);
+    });
+
+    expect(mockRenderMessage).toHaveBeenCalledTimes(1);
+    expect(mockRenderMessage).toHaveBeenCalledWith(updatedStreamingMessage);
+  });
+
+  test('rerenders every row when extra data invalidates external rendering state', () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const initialExtraData = { isToolbarEnabled: false };
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages, { extraData: initialExtraData })} />);
+    });
+    mockRenderMessage.mockClear();
+
+    act(() => {
+      renderer?.update(
+        <MessageList {...listProps(messages, { extraData: { isToolbarEnabled: true } })} />,
+      );
+    });
+
+    expect(mockRenderMessage).toHaveBeenCalledTimes(2);
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(1, messages[0]);
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(2, messages[1]);
   });
 
   test('flushes the outgoing anchor and ignores its late momentum end after a data switch', async () => {
@@ -542,7 +617,11 @@ describe('MessageList scroll-controller ownership', () => {
     mockListScrollToEnd.mockClear();
     mockListState.isAtEnd = false;
 
-    act(() => mockLatestListProps?.onScrollBeginDrag?.());
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 500);
+      mockLatestListProps?.onScrollBeginDrag?.();
+    });
     const reaction = mockAnimatedReactions[0];
     mockLatestListProps?.sharedValues?.isAtEnd.set(false);
     act(() => reaction.react(reaction.prepare(), true));
@@ -571,7 +650,7 @@ describe('MessageList scroll-controller ownership', () => {
       expect(mockLatestListProps?.getItemType?.(messages[1])).toBe('assistant');
       expect(mockLatestListProps?.keyboardDismissMode).toBe('on-drag');
       expect(mockLatestListProps?.contentContainerStyle).toEqual({
-        paddingBottom: 130,
+        paddingBottom: 80,
         paddingTop: 12,
       });
       expect(mockLatestListProps?.showsVerticalScrollIndicator).toBe(false);

@@ -36,10 +36,14 @@ type SessionEntry = {
   generation: number;
   listeners: Set<() => void>;
   liveMessages: Map<string, AgentMessageView>;
+  liveMessagesFlush?: ReturnType<typeof setTimeout>;
   observation?: AgentSessionObservation;
   observationPromise?: Promise<void>;
+  pendingTextDeltas: Map<string, { chunks: string[]; messageId: string; partId: string }>;
   state: AgentSessionChatState;
 };
+
+const LIVE_MESSAGE_FLUSH_INTERVAL_MS = 16;
 
 const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
   'completed',
@@ -92,6 +96,10 @@ function applyMessageDelta(message: AgentMessageView, delta: AgentMessageDelta):
   }
 }
 
+function isTerminalMessage(message: AgentMessageView): boolean {
+  return message.status !== 'pending' && message.status !== 'streaming';
+}
+
 export class AgentSessionChatClient {
   private readonly sessions = new Map<string, SessionEntry>();
 
@@ -113,6 +121,9 @@ export class AgentSessionChatClient {
       entry.listeners.delete(listener);
       if (entry.listeners.size === 0) {
         this.stopObservation(entry);
+        if (this.sessions.get(sessionId) === entry) {
+          this.sessions.delete(sessionId);
+        }
       }
     };
   }
@@ -162,6 +173,9 @@ export class AgentSessionChatClient {
         for (const event of queuedEvents) {
           this.applyEvent(entry, event);
         }
+        if (entry.liveMessagesFlush !== undefined) {
+          this.commitLiveMessages(entry);
+        }
       })
       .catch((error: unknown) => {
         if (entry.generation !== generation) {
@@ -208,9 +222,8 @@ export class AgentSessionChatClient {
       parts,
       ...overrides,
     });
-    // The durable submission has succeeded even if observation later needs a
-    // retry. Do not restore a Draft whose files now belong to persisted input.
-    await this.observe(session.id).catch(() => undefined);
+    // The destination route observes after navigation. Its atomic Host snapshot
+    // reconstructs any live turn state without leaving an ownerless listener here.
     return session;
   }
 
@@ -224,9 +237,7 @@ export class AgentSessionChatClient {
       sessionId,
       ...(title ? { title } : {}),
     });
-    // The fork is durable even if observation needs a retry; the caller
-    // navigates to it either way, and the transcript is a data read.
-    await this.observe(session.id).catch(() => undefined);
+    // As with a new Session, the destination route owns observation.
     return session;
   }
 
@@ -235,8 +246,49 @@ export class AgentSessionChatClient {
     parts: AgentInputPart[],
     overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
   ) {
+    const entry = this.getEntry(sessionId);
     await this.observe(sessionId);
-    return this.protocol.submitMessage({ parts, sessionId, ...overrides });
+    try {
+      return await this.protocol.submitMessage({ parts, sessionId, ...overrides });
+    } finally {
+      // Non-React callers may submit without ever installing a subscriber. The
+      // Host snapshot makes a later observation lossless, so do not retain an
+      // ownerless listener or SessionEntry after admission completes.
+      if (entry.listeners.size === 0 && this.sessions.get(sessionId) === entry) {
+        this.stopObservation(entry);
+        this.sessions.delete(sessionId);
+      }
+    }
+  }
+
+  reconcilePersistedMessages(
+    sessionId: string,
+    persistedMessages: readonly AgentMessageView[],
+  ): void {
+    const entry = this.sessions.get(sessionId);
+    if (!entry || entry.liveMessages.size === 0 || persistedMessages.length === 0) {
+      return;
+    }
+
+    const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
+    let changed = false;
+    for (const [messageId, liveMessage] of entry.liveMessages) {
+      const persistedMessage = persistedById.get(messageId);
+      if (
+        persistedMessage &&
+        isTerminalMessage(liveMessage) &&
+        isTerminalMessage(persistedMessage) &&
+        persistedMessage.status === liveMessage.status &&
+        persistedMessage.updatedAt === liveMessage.updatedAt
+      ) {
+        entry.liveMessages.delete(messageId);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.commitLiveMessages(entry);
+    }
   }
 
   async cancelTurn(sessionId: string): Promise<void> {
@@ -286,6 +338,7 @@ export class AgentSessionChatClient {
       generation: 0,
       listeners: new Set(),
       liveMessages: new Map(),
+      pendingTextDeltas: new Map(),
       state: createSessionState(sessionId),
     };
     this.sessions.set(sessionId, entry);
@@ -294,6 +347,8 @@ export class AgentSessionChatClient {
 
   private stopObservation(entry: SessionEntry): void {
     entry.generation += 1;
+    this.cancelLiveMessagesFlush(entry);
+    entry.pendingTextDeltas.clear();
     entry.observation?.unsubscribe();
     entry.observation = undefined;
     entry.observationPromise = undefined;
@@ -351,10 +406,8 @@ export class AgentSessionChatClient {
         return;
       case 'message.created':
         entry.liveMessages.set(event.message.id, event.message);
-        this.updateState(entry, {
-          ...entry.state,
+        this.commitLiveMessages(entry, {
           ...(event.message.role === 'user' ? { enteringUserMessageId: event.message.id } : {}),
-          liveMessages: [...entry.liveMessages.values()],
         });
         if (event.message.role === 'user') {
           this.options.onSessionChanged?.(entry.state.sessionId);
@@ -362,6 +415,15 @@ export class AgentSessionChatClient {
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'message.delta': {
+        if (event.delta.op === 'text.append') {
+          if (!this.queueTextDelta(entry, event.messageId, event.delta)) {
+            return;
+          }
+          this.scheduleLiveMessagesFlush(entry);
+          return;
+        }
+
+        this.applyPendingTextDeltas(entry);
         const message = entry.liveMessages.get(event.messageId);
         if (!message) {
           return;
@@ -371,18 +433,13 @@ export class AgentSessionChatClient {
           return;
         }
         entry.liveMessages.set(event.messageId, nextMessage);
-        this.updateState(entry, {
-          ...entry.state,
-          liveMessages: [...entry.liveMessages.values()],
-        });
+        this.commitLiveMessages(entry);
         return;
       }
       case 'message.finalized':
+        entry.pendingTextDeltas.clear();
         entry.liveMessages.set(event.message.id, event.message);
-        this.updateState(entry, {
-          ...entry.state,
-          liveMessages: [...entry.liveMessages.values()],
-        });
+        this.commitLiveMessages(entry);
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'approval.requested':
@@ -402,6 +459,82 @@ export class AgentSessionChatClient {
           ),
         });
     }
+  }
+
+  private cancelLiveMessagesFlush(entry: SessionEntry): void {
+    if (entry.liveMessagesFlush === undefined) {
+      return;
+    }
+    clearTimeout(entry.liveMessagesFlush);
+    entry.liveMessagesFlush = undefined;
+  }
+
+  private commitLiveMessages(
+    entry: SessionEntry,
+    statePatch: Partial<AgentSessionChatState> = {},
+  ): void {
+    this.applyPendingTextDeltas(entry);
+    this.cancelLiveMessagesFlush(entry);
+    this.updateState(entry, {
+      ...entry.state,
+      ...statePatch,
+      liveMessages: [...entry.liveMessages.values()],
+    });
+  }
+
+  private scheduleLiveMessagesFlush(entry: SessionEntry): void {
+    if (entry.liveMessagesFlush !== undefined) {
+      return;
+    }
+    entry.liveMessagesFlush = setTimeout(() => {
+      entry.liveMessagesFlush = undefined;
+      this.commitLiveMessages(entry);
+    }, LIVE_MESSAGE_FLUSH_INTERVAL_MS);
+  }
+
+  private queueTextDelta(
+    entry: SessionEntry,
+    messageId: string,
+    delta: Extract<AgentMessageDelta, { op: 'text.append' }>,
+  ): boolean {
+    if (delta.text.length === 0) return false;
+
+    const message = entry.liveMessages.get(messageId);
+    const target = message?.parts.find(
+      (part) => part.id === delta.partId && (part.type === 'text' || part.type === 'reasoning'),
+    );
+    if (!target) return false;
+
+    const key = `${messageId}\u0000${delta.partId}`;
+    const pending = entry.pendingTextDeltas.get(key);
+    if (pending) {
+      pending.chunks.push(delta.text);
+    } else {
+      entry.pendingTextDeltas.set(key, {
+        chunks: [delta.text],
+        messageId,
+        partId: delta.partId,
+      });
+    }
+    return true;
+  }
+
+  private applyPendingTextDeltas(entry: SessionEntry): void {
+    if (entry.pendingTextDeltas.size === 0) return;
+
+    for (const { chunks, messageId, partId } of entry.pendingTextDeltas.values()) {
+      const message = entry.liveMessages.get(messageId);
+      if (!message) continue;
+      const nextMessage = applyMessageDelta(message, {
+        op: 'text.append',
+        partId,
+        text: chunks.join(''),
+      });
+      if (nextMessage !== message) {
+        entry.liveMessages.set(messageId, nextMessage);
+      }
+    }
+    entry.pendingTextDeltas.clear();
   }
 
   private updateState(entry: SessionEntry, state: AgentSessionChatState): void {

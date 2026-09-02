@@ -1,6 +1,6 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -60,6 +60,9 @@ export function ChatWorkspace({
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { toast } = useToast();
+  useEffect(() => {
+    client.reconcilePersistedMessages(sessionId, messages);
+  }, [client, messages, sessionId]);
   const mergedMessages = useMemo(
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],

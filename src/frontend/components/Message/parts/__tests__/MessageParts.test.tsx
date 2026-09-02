@@ -142,6 +142,49 @@ describe('MessageParts', () => {
     expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
   });
 
+  test('keeps process parts ungrouped while streaming and groups them after completion', () => {
+    const reasoningPart = {
+      state: 'streaming' as const,
+      text: 'Reasoning',
+      type: 'reasoning' as const,
+    };
+    const pendingMessage: MessageListItem = {
+      ...makeMessage('pending'),
+      data: {
+        partKeys: ['reasoning-key', 'text-key'],
+        parts: [reasoningPart, { state: 'streaming', text: 'Answer', type: 'text' }],
+      },
+    };
+    const renderer = render(<MessageParts isTextSelectionEnabled message={pendingMessage} />);
+
+    expect(renderer.root.findAllByType('ProcessGroupPart')).toHaveLength(0);
+    expect(
+      renderer.root.findAllByType('MessagePartRenderer').map((part) => part.props.part.type),
+    ).toEqual(['reasoning', 'text']);
+
+    act(() => {
+      renderer.update(
+        <MessageParts
+          isTextSelectionEnabled
+          message={{
+            ...pendingMessage,
+            data: {
+              ...pendingMessage.data,
+              parts: [
+                { ...reasoningPart, state: 'done' },
+                { state: 'done', text: 'Answer', type: 'text' },
+              ],
+            },
+            status: 'success',
+          }}
+        />,
+      );
+    });
+
+    expect(renderer.root.findAllByType('ProcessGroupPart')).toHaveLength(1);
+    expect(renderer.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
+  });
+
   test('shows a file produced mid-answer after the answer, not where it interrupted it', () => {
     const message: MessageListItem = {
       ...makeMessage('success'),

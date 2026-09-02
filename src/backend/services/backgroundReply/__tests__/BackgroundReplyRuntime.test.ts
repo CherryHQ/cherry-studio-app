@@ -231,6 +231,59 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('coalesces high-frequency reply preview updates and publishes the latest text', async () => {
+    const runtime = await createRuntime();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    const session = mockSessions[0];
+    turn.update({ parts: [textPart('hello')] });
+    session?.update.mockClear();
+
+    jest.useFakeTimers();
+    try {
+      turn.update({ parts: [textPart('hello more')] }, { deferPreview: true });
+      turn.update({ parts: [textPart('hello latest')] }, { deferPreview: true });
+
+      expect(session?.update).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(999);
+      expect(session?.update).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      expect(session?.update).toHaveBeenCalledTimes(1);
+      expect(session?.update).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'responding', preview: 'hello latest' }),
+        { keepAlive: true, urgent: false },
+      );
+    } finally {
+      jest.useRealTimers();
+      await runtime._doStop();
+    }
+  });
+
+  test('uses the latest deferred preview when the turn finishes before its timer fires', async () => {
+    const runtime = await createRuntime();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    const session = mockSessions[0];
+    turn.update({ parts: [textPart('hello')] });
+    turn.update({ parts: [textPart('latest complete reply')] }, { deferPreview: true });
+
+    turn.finish('completed');
+    await flushOperations();
+
+    expect(session?.finish).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'completed', preview: 'latest complete reply' }),
+    );
+    await runtime._doStop();
+  });
+
   test.each([
     ['cancelled', '已取消'],
     ['failed', '回复失败'],
@@ -388,15 +441,19 @@ describe('BackgroundReplyRuntime', () => {
 
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     enabled = false;
-    const disabledRuntime = await createRuntime();
+    const translate = jest.fn((key: string) => key);
+    const disabledRuntime = await createRuntime(translate);
     expect(disabledRuntime.isActivated).toBe(false);
-    disabledRuntime.startTurn({
+    const disabledTurn = disabledRuntime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-2',
       sessionTitle: 'Second session',
     });
+    disabledTurn.update({ parts: [textPart('ignored')] }, { deferPreview: true });
+    disabledTurn.finish('completed');
     expect(mockStartSession).not.toHaveBeenCalled();
+    expect(translate).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
   });
 

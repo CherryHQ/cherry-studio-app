@@ -69,5 +69,6 @@ describe('ProcessGroupPart', () => {
       state: 'complete',
       title: '用时 16秒',
     });
+    expect(renderer!.root.findByType('MessagePartRenderer').props.isStreaming).toBe(false);
   });
 });

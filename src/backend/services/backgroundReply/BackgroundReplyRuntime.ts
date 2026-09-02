@@ -24,9 +24,11 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
   BackgroundReplyLifecycle,
+  BackgroundReplyMessage,
   BackgroundReplyOutcome,
   BackgroundReplyTurn,
   BackgroundReplyTurnInput,
+  BackgroundReplyUpdateOptions,
 } from './backgroundReplyTypes';
 import {
   type BackgroundReplyTranslate,
@@ -37,6 +39,7 @@ import {
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
 const FINISH_TITLE_GRACE_MS = 5_000;
+const PREVIEW_UPDATE_INTERVAL_MS = 1_000;
 const logger = loggerService.withContext('BackgroundReply');
 
 type ChatActivitySession = BackgroundActivitySession<BackgroundReplyActivityProps>;
@@ -48,8 +51,10 @@ type TurnRecord = {
   deepLinkUrl: string;
   generation: number;
   key: string;
+  latestMessage?: BackgroundReplyMessage;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
+  updateTimer?: ReturnType<typeof setTimeout>;
 };
 
 type BackgroundActivityPort = {
@@ -112,7 +117,10 @@ export class BackgroundReplyRuntime
 
   onActivate(): void {
     try {
-      for (const record of this.turns.values()) this.ensureSession(record, true);
+      for (const record of this.turns.values()) {
+        this.refreshContent(record);
+        this.ensureSession(record, true);
+      }
     } catch (error) {
       this.cancelSessions();
       throw error;
@@ -125,16 +133,18 @@ export class BackgroundReplyRuntime
 
   private cancelSessions(): void {
     for (const record of this.turns.values()) {
+      this.clearUpdateTimer(record);
       record.session?.cancel();
       record.session = undefined;
     }
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if (Platform.OS !== 'ios' || this.disposed) return noOpTurn;
+    if (Platform.OS !== 'ios' || !this.isActivated || this.disposed) return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
+    if (existing) this.clearUpdateTimer(existing);
     const generation = ++this.generation;
     const content = deriveBackgroundReplyContent(undefined, this.environment.translate);
     const actorName =
@@ -158,7 +168,11 @@ export class BackgroundReplyRuntime
           if (!this.isCurrent(record.key, generation)) return;
           const current = this.turns.get(record.key);
           if (!current) return;
-          const latest = deriveBackgroundReplyContent(message, this.environment.translate);
+          if (message) current.latestMessage = message;
+          this.clearUpdateTimer(current);
+          const latest = current.latestMessage
+            ? deriveBackgroundReplyContent(current.latestMessage, this.environment.translate)
+            : current.content;
           current.content = {
             detail: this.environment.translate('chat.backgroundReply.awaitingApproval'),
             phase: 'awaiting-approval',
@@ -178,9 +192,9 @@ export class BackgroundReplyRuntime
           },
         );
       },
-      update: (message) =>
+      update: (message, options) =>
         this.runTurnCallback(record.key, 'update turn', () => {
-          this.updateTurn(record.key, generation, message);
+          this.updateTurn(record.key, generation, message, options);
         }),
     };
   };
@@ -206,6 +220,7 @@ export class BackgroundReplyRuntime
     if (!record) return;
 
     this.turns.delete(key);
+    this.clearUpdateTimer(record);
     record.session?.cancel();
     record.session = undefined;
   }
@@ -217,6 +232,7 @@ export class BackgroundReplyRuntime
     const records = [...this.turns.values()];
     this.turns.clear();
     for (const record of records) {
+      this.clearUpdateTimer(record);
       record.session?.cancel();
       record.session = undefined;
     }
@@ -235,19 +251,61 @@ export class BackgroundReplyRuntime
   private updateTurn(
     key: string,
     generation: number,
-    message: Parameters<BackgroundReplyTurn['update']>[0],
+    message: BackgroundReplyMessage,
+    options: BackgroundReplyUpdateOptions | undefined,
   ) {
     if (!this.isCurrent(key, generation)) return;
     const record = this.turns.get(key);
     if (!record) return;
 
-    const nextContent = deriveBackgroundReplyContent(message, this.environment.translate);
+    record.latestMessage = message;
+    if (!this.isActivated) return;
+
+    if (options?.deferPreview) {
+      if (record.content.phase === 'thinking' && !hasReplyText(message)) {
+        return;
+      }
+      if (record.content.phase === 'responding' || record.content.phase === 'using-tool') {
+        this.scheduleContentUpdate(record, generation);
+        return;
+      }
+    }
+
+    this.clearUpdateTimer(record);
+    this.refreshContent(record);
+  }
+
+  private refreshContent(record: TurnRecord): void {
+    if (!record.latestMessage) return;
+
+    const nextContent = deriveBackgroundReplyContent(
+      record.latestMessage,
+      this.environment.translate,
+    );
     const phaseChanged = nextContent.phase !== record.content.phase;
     record.content = nextContent;
     record.session?.update(this.toActivityProps(record), {
       keepAlive: isGeneratingPhase(nextContent.phase),
       urgent: phaseChanged,
     });
+  }
+
+  private scheduleContentUpdate(record: TurnRecord, generation: number): void {
+    if (record.updateTimer !== undefined) return;
+
+    record.updateTimer = setTimeout(() => {
+      record.updateTimer = undefined;
+      if (!this.isActivated || !this.isCurrent(record.key, generation)) return;
+      this.runTurnCallback(record.key, 'update deferred preview', () => {
+        this.refreshContent(record);
+      });
+    }, PREVIEW_UPDATE_INTERVAL_MS);
+  }
+
+  private clearUpdateTimer(record: TurnRecord): void {
+    if (record.updateTimer === undefined) return;
+    clearTimeout(record.updateTimer);
+    record.updateTimer = undefined;
   }
 
   private async finishTurn(
@@ -260,9 +318,15 @@ export class BackgroundReplyRuntime
     const record = this.turns.get(key);
     if (!record) return;
 
+    const hasDeferredPreview = record.updateTimer !== undefined;
+    this.clearUpdateTimer(record);
+    const preview =
+      outcome === 'completed' && hasDeferredPreview && record.latestMessage
+        ? deriveBackgroundReplyContent(record.latestMessage, this.environment.translate).preview
+        : record.content.preview;
     record.content = getTerminalBackgroundReplyContent(
       outcome,
-      record.content.preview,
+      preview,
       this.environment.translate,
     );
     record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
@@ -393,6 +457,10 @@ function isGeneratingPhase(phase: BackgroundReplyPhase): boolean {
     phase === 'using-tool' ||
     phase === 'responding'
   );
+}
+
+function hasReplyText(message: BackgroundReplyMessage): boolean {
+  return message.parts.some((part) => part.type === 'text' && part.text.length > 0);
 }
 
 function backgroundReplyIcon(phase: BackgroundReplyPhase): BackgroundActivityIcon {

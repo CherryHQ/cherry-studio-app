@@ -61,7 +61,7 @@ instead of creating feature-owned rows or sheets:
 | --- | --- | --- |
 | Summary | `MessagePart.Summary` | Renders the title, status text, tone, running shimmer, and disclosure chevron. |
 | Interaction | `MessagePart.Tool` | Owns local open/close state and connects the summary press to its detail. Business renderers do not lift this transient state. |
-| Process | `MessagePart.Process` | Renders one total-duration disclosure before the answer and expands every pre-result part inline. |
+| Process | `MessagePart.Process` | After streaming settles, renders one collapsed total-duration disclosure before the answer and expands every pre-result part inline. |
 | Grouping | `MessagePart.ToolGroup` | Owns the group summary row and inline step container for a run of tool calls. Expanded while the run is live, folded once it settles; a manual toggle always wins. |
 | Detail shell | `MessagePart.Detail` | Owns the `BottomSheet`, title, dismissal, scrolling, content insets, and spacing. Tool and source details share this shell. |
 | Detail content | The part renderer | Supplies the business-specific content inside the shell. This content remains intentionally unconstrained until its visual variants are designed. |
@@ -84,9 +84,10 @@ may summarize user-facing metadata such as its filename and size, but it does no
 entry ids or repeat the file body.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
-markdown renders into, so a reader keeps their place in the transcript. Every visible transcript
-part except the final result text sits inside one collapsed `MessagePart.Process` row whose label is
-the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
+markdown renders into, so a reader keeps their place in the transcript. While a response streams,
+its process parts remain visible without a total-duration wrapper. Once the response settles, every
+visible transcript part except the final result text moves into one collapsed `MessagePart.Process`
+row whose label is the message's total wall-clock duration. Expanding it reveals the original parts in order. Source
 groups use a borderless row of overlapping favicons and their source count, while their expanded
 views must use `MessagePart.Detail`. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
@@ -168,7 +169,9 @@ ChatScreen or PaintingComposer
   bottom insets across the list API.
 - `MessageList` owns scrolling, content insets, row gutters, role-level row spacing, anchoring, and
   the placement of every rendered message. The feature renderer supplies content; it does not
-  recreate list spacing.
+  recreate list spacing. Its trailing content inset comes only from the screen-owned layout; the
+  floating scroll button does not reserve persistent space after the final row and remains hidden
+  unless the content exceeds the viewport.
 - `UserMessage` and `AssistantMessage` own role presentation inside the row frame. They may define
   intrinsic width, internal grouping, bubbles, and surfaces, but do not add list or
   screen gutters.

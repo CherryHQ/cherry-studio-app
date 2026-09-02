@@ -712,7 +712,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
         if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
-          state.backgroundReply.update(state.assistantMessage);
+          if (event.type === 'text.delta') {
+            state.backgroundReply.update(state.assistantMessage, { deferPreview: true });
+          } else {
+            state.backgroundReply.update(state.assistantMessage);
+          }
         }
         if (isTerminal) {
           return;
