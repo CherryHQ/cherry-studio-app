@@ -8,7 +8,7 @@ type ChatInitialRenderCoverProps = {
 };
 
 export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProps) {
-  const [backgroundColor, indicatorColor] = useThemeColor(['background', 'muted-foreground']);
+  const indicatorColor = useThemeColor('muted-foreground');
 
   if (!isVisible) {
     return null;
@@ -18,10 +18,10 @@ export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProp
   // 新列表在遮罩后完成布局，进度指示器提供即时反馈，二者准备好后再一起淡出。
   return (
     <Animated.View
-      className="absolute inset-0 items-center justify-center"
+      className="absolute inset-0 items-center justify-center bg-chat-background"
       exiting={FadeOut.duration(180).easing(Easing.out(Easing.cubic))}
       pointerEvents="none"
-      style={{ backgroundColor, zIndex: 5 }}
+      style={{ zIndex: 5 }}
     >
       <ActivityIndicator color={indicatorColor} size="small" />
     </Animated.View>

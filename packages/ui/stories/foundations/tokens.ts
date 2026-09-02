@@ -109,9 +109,9 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '产品域',
-    hint: '各自只有一个消费者：代码块与行内代码在 MarkdownText，chat-user 是 user 气泡底色（bg-chat-user）。',
+    hint: '代码块与行内代码用于 MarkdownText；chat-user 是 user 气泡底色，chat-background 是聊天业务覆盖的消息区底色。',
     kind: 'surface',
-    variables: ['--code-block', '--inline-code', '--chat-user'],
+    variables: ['--code-block', '--inline-code', '--chat-user', '--chat-background'],
   },
   {
     title: '恒定黑白',
