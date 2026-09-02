@@ -154,7 +154,7 @@ export function ChatWorkspace({
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
         key={`assistant-actions-${sessionId}`}

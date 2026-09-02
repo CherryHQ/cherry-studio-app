@@ -48,7 +48,7 @@ export default function SettingsScreen() {
   const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
   return (
-    <View className="flex-1 bg-grouped-background">
+    <View className="flex-1">
       <RouteHeader />
       <ScrollView
         alwaysBounceVertical={false}

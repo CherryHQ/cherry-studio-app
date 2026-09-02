@@ -25,21 +25,13 @@ function RadiusRows() {
 }
 
 function ElevationStack() {
-  // 两套页面各配一个抬升面，和 iOS 一样。规则是「抬起来的面朝中灰走」：
-  // 白页面上抬升 = 变灰，黑页面上抬升 = 变亮，灰页面上抬升 = 变白。
+  // 页面统一使用 background，需要表达真实分组或交互层级的表面使用 card。
   return (
     <View className="gap-4">
       <View className="gap-2 rounded-xl bg-background p-4">
-        <Text className="text-xs text-muted-foreground">bg-background（普通页面）</Text>
+        <Text className="text-xs text-muted-foreground">bg-background（页面）</Text>
         <View className="rounded-lg border border-border-subtle bg-card p-4">
-          <Text className="text-xs text-muted-foreground">bg-card（抬起来的面）</Text>
-        </View>
-      </View>
-
-      <View className="gap-2 rounded-xl bg-grouped-background p-4">
-        <Text className="text-xs text-muted-foreground">bg-grouped-background（分组页面）</Text>
-        <View className="rounded-lg border border-border-subtle bg-grouped-surface p-4">
-          <Text className="text-xs text-muted-foreground">bg-grouped-surface（分组卡片）</Text>
+          <Text className="text-xs text-muted-foreground">bg-card（分组或抬升表面）</Text>
         </View>
       </View>
     </View>

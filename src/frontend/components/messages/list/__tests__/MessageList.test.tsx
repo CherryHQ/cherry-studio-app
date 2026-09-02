@@ -429,7 +429,7 @@ describe('MessageList scroll-controller ownership', () => {
     await loadList();
     mockListScrollToEnd.mockClear();
 
-    act(() => renderer!.root.findByType(Pressable).props.onPress());
+    act(() => renderer!.root.findByProps({ testID: 'disclosure-toggle-probe' }).props.onPress());
     act(() => mockLatestListProps?.onContentSizeChange?.(390, 1_100));
     act(flushAnimationFrames);
 

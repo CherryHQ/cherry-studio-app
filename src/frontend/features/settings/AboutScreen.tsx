@@ -46,7 +46,7 @@ export default function AboutSettingsScreen() {
       contentClassName="gap-6"
       headerProps={{ title: t('settings.about.header') }}
     >
-      <View className="flex-row gap-4 rounded-2xl bg-grouped-surface px-4 py-5">
+      <View className="flex-row gap-4 rounded-2xl bg-card px-4 py-5">
         <Image
           accessibilityIgnoresInvertColors
           source={require('@/assets/icon.png')}

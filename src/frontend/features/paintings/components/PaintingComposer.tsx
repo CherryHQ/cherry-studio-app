@@ -158,7 +158,7 @@ export function PaintingComposer({
   const composerInitialDraft = firstOutput ? '' : initialDraft;
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1">
       <MessageList
         bottomAccessoryHeight={inputHeightShared}
         contentBottomInset={contentBottomInset}

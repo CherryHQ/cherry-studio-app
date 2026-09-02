@@ -105,7 +105,7 @@ function AgentSessionListView() {
 
   return (
     <LegendList
-      className="flex-1 bg-background"
+      className="flex-1"
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ paddingBottom: bottomInset, paddingHorizontal: 8 }}
       data={isInitialDataSettled && !initialLoadError ? groups : []}

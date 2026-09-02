@@ -22,9 +22,9 @@ export function ComposerAction({
   // Glass inside glass renders nothing — the material has nothing behind it to
   // refract, so an untinted button on the composer's own surface is invisible
   // (measured: not one pixel of change across the circle's edge). Keep the
-  // shipped glass tint while the fallback follows the grouped-surface palette;
-  // an explicit caller fill still drives both branches.
-  const fallbackClassName = className ?? 'bg-grouped-background';
+  // shipped glass tint while the fallback uses the same semantic fill; an
+  // explicit caller fill still drives both branches.
+  const fallbackClassName = className ?? 'bg-secondary';
   const fill = useResolveClassNames(className ?? 'bg-secondary');
   const tintColor = typeof fill.backgroundColor === 'string' ? fill.backgroundColor : undefined;
 

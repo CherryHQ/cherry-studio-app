@@ -191,7 +191,7 @@ function SessionListScreenBody() {
         rightActions={isEditing ? doneActions : rightActions}
         title={agent?.name ?? t(isSessionView ? 'session.list.title' : 'session.list.titleByAgent')}
       />
-      <View className="flex-1 bg-background">
+      <View className="flex-1">
         {isSessionView ? <SessionList agentId={agentId} /> : <AgentSessionList />}
         {isSessionView ? <SelectionControls scope={sessionSelectionScope} /> : null}
       </View>

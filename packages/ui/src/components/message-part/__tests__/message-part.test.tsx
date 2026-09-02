@@ -101,6 +101,7 @@ jest.mock('react-native-reanimated', () => {
     __esModule: true,
     cancelAnimation: jest.fn(),
     default: { View },
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
     ReduceMotion: { System: 'system' },
     useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => false,

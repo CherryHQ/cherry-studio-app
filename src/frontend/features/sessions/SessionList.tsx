@@ -177,7 +177,7 @@ const SessionListView = memo(function SessionListView() {
         {(scrollHandlers) => (
           <LegendList
             {...scrollHandlers}
-            className="flex-1 bg-background"
+            className="flex-1"
             contentInsetAdjustmentBehavior="automatic"
             contentContainerStyle={contentContainerStyle}
             data={isInitialDataSettled && !initialLoadError ? visibleSessions : []}

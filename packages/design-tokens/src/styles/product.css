@@ -56,13 +56,6 @@
   --error-subtle-foreground: var(--red-1000);
   --error-border: var(--red-400);
 
-  /* Stable product domain: grouped-list screens (settings / assistants / AI usage).
-   * 这一对在明暗之间是对调的：浅色把页面压暗、卡片留白，深色把页面留黑、卡片提亮。
-   * 这正是 iOS systemGroupedBackground / secondarySystemGroupedBackground 的做法
-   * （#F2F2F7 + #FFF / #000 + #1C1C1E）。 */
-  --grouped-background: var(--gray-100);
-  --grouped-surface: var(--background-100);
-
   /* Stable product domain: rich text and code (MarkdownText) */
   --code-block: var(--gray-100);
   --inline-code: var(--gray-alpha-100);
@@ -119,10 +112,4 @@
   --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
   --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
   --usage-level-4: var(--green-700);
-}
-
-.dark {
-  /* 与浅色对调，见上。 */
-  --grouped-background: var(--background-100);
-  --grouped-surface: var(--gray-100);
 }

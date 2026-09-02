@@ -73,8 +73,7 @@ describe('Section', () => {
     expect(
       tree.root.findAll(
         (node) =>
-          typeof node.props.className === 'string' &&
-          node.props.className.includes('bg-grouped-surface'),
+          typeof node.props.className === 'string' && node.props.className.includes('bg-card'),
       ).length,
     ).toBeGreaterThan(0);
     expect(
@@ -110,7 +109,7 @@ describe('Section', () => {
           typeof node.props.className === 'string' &&
           node.props.className.includes('bg-transparent'),
       ).props.className,
-    ).not.toContain('bg-grouped-surface');
+    ).not.toContain('bg-card');
     expect(tree.root.findByProps({ children: 'Choose one option.' }).props.className).toContain(
       'px-4',
     );
@@ -175,7 +174,7 @@ describe('Section', () => {
       (node) =>
         node.type === View &&
         typeof node.props.className === 'string' &&
-        node.props.className.includes('bg-grouped-surface'),
+        node.props.className.includes('bg-card'),
     );
 
     expect(groupedCard.findAllByProps({ testID: 'section-header' })).toHaveLength(0);

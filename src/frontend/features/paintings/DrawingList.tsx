@@ -234,7 +234,7 @@ export function DrawingList() {
   const listData = paintings.isLoading || gallery.isLoading ? [] : visibleGalleryItems;
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1">
       <FlashList
         contentContainerStyle={contentContainerStyle}
         contentInsetAdjustmentBehavior="automatic"

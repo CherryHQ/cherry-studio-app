@@ -102,7 +102,7 @@ export function McpScreen() {
       ) : listedServers.length === 0 ? (
         <ContentState.Empty className="px-6 py-8" title={t('settings.mcp.list.noResults')} />
       ) : (
-        <View className="overflow-hidden rounded-2xl bg-grouped-surface">
+        <View className="overflow-hidden rounded-2xl bg-card">
           {listedServers.map((server, index) => {
             const previousServerId = listedServers[index - 1]?.id;
             const summary = summaries[server.id];

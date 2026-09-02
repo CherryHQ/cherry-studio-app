@@ -68,7 +68,7 @@ function ResolvedChatScreen({ target }: { target: ChatTarget }) {
   return (
     <>
       <MainHeader />
-      <View className="flex-1 bg-background">
+      <View className="flex-1">
         {sessionId && session.error ? (
           <ContentState.Error
             className="flex-1"

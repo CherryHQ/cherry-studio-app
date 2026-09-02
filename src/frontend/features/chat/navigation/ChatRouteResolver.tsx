@@ -75,7 +75,7 @@ function ChatRouteResolverLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <MainHeader />
-      <View className="flex-1 bg-background">{children}</View>
+      <View className="flex-1">{children}</View>
     </>
   );
 }

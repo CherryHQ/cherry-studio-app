@@ -75,7 +75,7 @@ export function AiUsageRankingList({
   return (
     <LegendList
       alwaysBounceVertical={false}
-      className="flex-1 bg-grouped-background"
+      className="flex-1"
       contentContainerClassName="px-4 py-5"
       contentInsetAdjustmentBehavior="automatic"
       data={visibleItems}
@@ -83,17 +83,14 @@ export function AiUsageRankingList({
       extraData={rowExtraData}
       keyExtractor={getRankingItemKey}
       ListEmptyComponent={
-        <View
-          className="overflow-hidden rounded-xl bg-grouped-surface"
-          style={styles.continuousCorners}
-        >
+        <View className="overflow-hidden rounded-xl bg-card" style={styles.continuousCorners}>
           {emptyState}
         </View>
       }
       ListFooterComponent={
         hasMore ? (
           <View
-            className="items-center rounded-b-xl bg-grouped-surface px-4 pt-3 pb-4"
+            className="items-center rounded-b-xl bg-card px-4 pt-3 pb-4"
             style={styles.continuousCorners}
           >
             <Button
@@ -137,7 +134,7 @@ function AiUsageRankingRow({
 
   return (
     <View
-      className={`bg-grouped-surface px-4${isFirst ? ' rounded-t-xl pt-4' : ''}${roundsBottom ? ' rounded-b-xl pb-4' : ''}`}
+      className={`bg-card px-4${isFirst ? ' rounded-t-xl pt-4' : ''}${roundsBottom ? ' rounded-b-xl pb-4' : ''}`}
       style={isFirst || roundsBottom ? styles.continuousCorners : undefined}
     >
       <View

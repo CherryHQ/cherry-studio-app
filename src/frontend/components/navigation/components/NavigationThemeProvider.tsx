@@ -22,6 +22,9 @@ export function NavigationThemeProvider({ children }: NavigationThemeProviderPro
       dark: theme === 'dark',
       colors: {
         ...DefaultTheme.colors,
+        // Native navigators own the app canvas and header surface. Route views
+        // stay transparent; content uses card, secondary, or popover only when
+        // its own semantic role earns a separate surface.
         background,
         border: separator,
         card: background,

@@ -21,9 +21,9 @@ export function ComposerPill({
   testID,
 }: ComposerPillProps) {
   // Same reason as `Composer.Action`: preserve the shipped glass tint while the
-  // non-glass fallback uses the grouped-surface palette. Explicit fills still
-  // drive both branches.
-  const fallbackClassName = className ?? 'bg-grouped-background';
+  // non-glass fallback uses the same semantic fill. Explicit fills still drive
+  // both branches.
+  const fallbackClassName = className ?? 'bg-secondary';
   const fill = useResolveClassNames(className ?? 'bg-secondary');
   const tintColor = typeof fill.backgroundColor === 'string' ? fill.backgroundColor : undefined;
 

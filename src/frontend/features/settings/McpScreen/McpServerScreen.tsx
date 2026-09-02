@@ -351,7 +351,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           showsVerticalScrollIndicator={false}
           style={styles.scroll}
         >
-          <View className="rounded-2xl bg-grouped-surface p-4">
+          <View className="rounded-2xl bg-card p-4">
             <McpToolsSection isDisabled={isBusy} onToggleTool={handleToggleTool} server={server} />
           </View>
         </ScrollView>
