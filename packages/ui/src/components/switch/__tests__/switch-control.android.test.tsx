@@ -6,11 +6,10 @@ jest.mock('react-native', () => {
   const React = jest.requireActual('react');
   const native = jest.requireActual('react-native');
 
-  return {
-    ...native,
-    Switch: (props: object) =>
+  return Object.defineProperty(Object.create(native), 'Switch', {
+    value: (props: object) =>
       React.createElement(native.View, { ...props, mockComponent: 'native-switch' }),
-  };
+  });
 });
 
 describe('SwitchControl (Android)', () => {

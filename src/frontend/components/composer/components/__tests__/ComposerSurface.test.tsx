@@ -44,8 +44,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
-    Spinner: (props: Record<string, unknown>) =>
-      React.createElement(View, { ...props, testID: 'mock-spinner' }),
+    Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
@@ -184,8 +183,8 @@ describe('ComposerSurface', () => {
       [importingAttachment],
     );
 
-    expect(renderer?.root.findAllByProps({ testID: 'mock-spinner' })).toHaveLength(1);
-    expect(renderer?.root.findByProps({ testID: 'mock-spinner' }).props).toMatchObject({
+    expect(renderer?.root.findAllByType('mock-spinner')).toHaveLength(1);
+    expect(renderer?.root.findByType('mock-spinner').props).toMatchObject({
       accessibilityElementsHidden: true,
       importantForAccessibility: 'no-hide-descendants',
       size: 'sm',
@@ -204,7 +203,7 @@ describe('ComposerSurface', () => {
       ]);
     });
 
-    expect(renderer?.root.findAllByProps({ testID: 'mock-spinner' })).toHaveLength(0);
+    expect(renderer?.root.findAllByType('mock-spinner')).toHaveLength(0);
     expect(mockComposerProps?.canSend).toBe(true);
   });
 

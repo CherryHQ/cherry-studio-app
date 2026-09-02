@@ -33,19 +33,14 @@ jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
   };
 });
 
-jest.mock('heroui-native', () => {
+jest.mock('../../switch/switch-control', () => {
   const React = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
 
-  function Switch(props: object) {
-    return React.createElement(MockView, { ...props, mockComponent: 'hero-switch' });
-  }
-
-  Switch.Thumb = function SwitchThumb(props: object) {
-    return React.createElement(MockView, { ...props, mockComponent: 'hero-switch-thumb' });
+  return {
+    SwitchControl: (props: object) =>
+      React.createElement(MockView, { ...props, mockComponent: 'switch-control' }),
   };
-
-  return { Switch };
 });
 
 describe('Section', () => {
@@ -299,7 +294,11 @@ describe('Section', () => {
       </Section>,
     );
 
-    expect(tree.root.findByProps({ testID: 'density-row' }).props.className).toContain(className);
+    const row = tree.root.find(
+      (node) => node.props.testID === 'density-row' && typeof node.props.className === 'string',
+    );
+
+    expect(row.props.className).toContain(className);
   });
 
   test('supports non-button accessibility roles and states', () => {
@@ -419,7 +418,9 @@ describe('Section', () => {
         node.props.accessibilityRole === 'switch' &&
         typeof node.props.className === 'string',
     );
-    const indicators = tree.root.findAllByProps({ mockComponent: 'hero-switch' });
+    const indicators = tree.root.findAll(
+      (node) => node.props.mockComponent === 'switch-control' && typeof node.type === 'string',
+    );
     const indicator = indicators[0];
     const disabledRow = tree.root.find(
       (node) =>
@@ -432,14 +433,14 @@ describe('Section', () => {
     expect(row.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
     expect(indicator?.props).toMatchObject({
       accessibilityElementsHidden: true,
+      disabled: false,
       importantForAccessibility: 'no-hide-descendants',
-      isDisabled: false,
-      isSelected: true,
       pointerEvents: 'none',
+      value: true,
     });
-    expect(indicator?.props.onSelectedChange).toBeUndefined();
+    expect(indicator?.props.onValueChange).toBeUndefined();
     expect(disabledRow.props.accessibilityState).toEqual({ checked: false, disabled: true });
-    expect(indicators[1]?.props.isDisabled).toBe(true);
+    expect(indicators[1]?.props.disabled).toBe(true);
     expect(tree.root.findAllByProps({ testID: 'section-chevron' })).toHaveLength(0);
     expect(tree.root.findByProps({ children: 'Allow background updates' })).toBeDefined();
     const separator = () => tree.root.findByProps({ testID: 'section-separator' });

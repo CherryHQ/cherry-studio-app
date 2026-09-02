@@ -3,6 +3,16 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Slider } from '../slider';
 
+jest.mock('../slider-control', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    SliderControl: (props: object) =>
+      React.createElement(View, { ...props, mockComponent: 'slider-control' }),
+  };
+});
+
 jest.mock('heroui-native', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
@@ -24,6 +34,10 @@ jest.mock('heroui-native', () => {
   return { Slider: Root };
 });
 
+const { SliderControl: FallbackSliderControl } = jest.requireActual('../slider-control.tsx') as {
+  SliderControl: (typeof import('../slider-control'))['SliderControl'];
+};
+
 describe('Slider', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -37,7 +51,11 @@ describe('Slider', () => {
 
     act(() => {
       renderer = create(
-        <Slider accessibilityLabel="Volume" onValueChange={onValueChange} value={40} />,
+        <FallbackSliderControl
+          accessibilityLabel="Volume"
+          onValueChange={onValueChange}
+          value={40}
+        />,
       );
     });
 
@@ -66,7 +84,7 @@ describe('Slider', () => {
 
     act(() => {
       renderer = create(
-        <Slider
+        <FallbackSliderControl
           accessibilityLabel="Opacity"
           max={1}
           min={0}
@@ -96,7 +114,7 @@ describe('Slider', () => {
 
     act(() => {
       renderer = create(
-        <Slider
+        <FallbackSliderControl
           accessibilityLabel="Opacity"
           max={1}
           min={0}
@@ -121,7 +139,7 @@ describe('Slider', () => {
 
     act(() => {
       renderer = create(
-        <Slider
+        <FallbackSliderControl
           accessibilityLabel="Opacity"
           disabled
           max={1}
@@ -163,7 +181,7 @@ describe('Slider', () => {
       );
     });
 
-    const root = renderer!.root.findByProps({ mockComponent: 'hero-slider' });
+    const root = renderer!.root.findByProps({ mockComponent: 'slider-control' });
     const labels = renderer!.root.findAllByType(Text);
 
     expect(root.props.style).toEqual({ flex: 1, minWidth: 0 });

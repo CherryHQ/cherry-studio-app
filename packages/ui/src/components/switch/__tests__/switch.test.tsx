@@ -1,7 +1,16 @@
-import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
+
+jest.mock('../switch-control', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    SwitchControl: (props: object) =>
+      React.createElement(View, { ...props, mockComponent: 'switch-control' }),
+  };
+});
 
 jest.mock('heroui-native', () => {
   const React = jest.requireActual('react');
@@ -18,6 +27,10 @@ jest.mock('heroui-native', () => {
   return { Switch };
 });
 
+const { SwitchControl: FallbackSwitchControl } = jest.requireActual('../switch-control.tsx') as {
+  SwitchControl: (typeof import('../switch-control'))['SwitchControl'];
+};
+
 describe('Switch', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -32,7 +45,7 @@ describe('Switch', () => {
 
     act(() => {
       renderer = create(
-        <Switch
+        <FallbackSwitchControl
           accessibilityLabel="Airplane mode"
           onValueChange={onValueChange}
           style={style}
@@ -67,7 +80,12 @@ describe('Switch', () => {
   ] as const)('renders the $size size', ({ root, size, thumb }) => {
     act(() => {
       renderer = create(
-        <Switch accessibilityLabel="Airplane mode" onValueChange={jest.fn()} size={size} value />,
+        <FallbackSwitchControl
+          accessibilityLabel="Airplane mode"
+          onValueChange={jest.fn()}
+          size={size}
+          value
+        />,
       );
     });
 
@@ -80,7 +98,7 @@ describe('Switch', () => {
   test('maps disabled state to the visual control', () => {
     act(() => {
       renderer = create(
-        <Switch
+        <FallbackSwitchControl
           accessibilityLabel="Airplane mode"
           disabled
           onValueChange={jest.fn()}
@@ -104,7 +122,13 @@ describe('Switch', () => {
       );
     });
 
-    const pressOwner = renderer!.root.findByType(Pressable);
+    const pressOwner = renderer!.root.find(
+      (node) =>
+        node.props.accessible === false &&
+        node.props.hitSlop === 8 &&
+        typeof node.props.onPress === 'function',
+    );
+    const control = renderer!.root.findByProps({ mockComponent: 'switch-control' });
 
     expect(pressOwner.props.accessible).toBe(false);
     expect(pressOwner.props.hitSlop).toBe(8);
@@ -114,9 +138,7 @@ describe('Switch', () => {
     expect(stopPropagation).toHaveBeenCalledTimes(1);
     expect(onValueChange).not.toHaveBeenCalled();
 
-    act(() =>
-      renderer!.root.findByProps({ mockComponent: 'hero-switch' }).props.onSelectedChange(false),
-    );
+    act(() => control.props.onValueChange(false));
     expect(onValueChange).toHaveBeenCalledWith(false);
   });
 });

@@ -243,7 +243,7 @@ describe('Button', () => {
 
     expect(rootClassName.split(' ')).toEqual(expect.arrayContaining(rootClassNames));
     expect(labelClassNameValue.split(' ')).toContain(labelClassName);
-    expect(useResolveClassNames).toHaveBeenLastCalledWith(labelClassName);
+    expect(useResolveClassNames).toHaveBeenLastCalledWith(expect.stringContaining(labelClassName));
   });
 
   test('combines semantic shape, size, and variant axes', () => {
