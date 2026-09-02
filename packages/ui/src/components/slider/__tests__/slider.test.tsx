@@ -1,11 +1,11 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Slider } from '../slider.android';
+import { Slider } from '../slider';
 
 jest.mock('heroui-native', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   function Root(props: object) {
     return React.createElement(View, { ...props, mockComponent: 'hero-slider' });
@@ -24,7 +24,7 @@ jest.mock('heroui-native', () => {
   return { Slider: Root };
 });
 
-describe('Slider (Android)', () => {
+describe('Slider', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -32,7 +32,7 @@ describe('Slider (Android)', () => {
     renderer = undefined;
   });
 
-  test('renders the default HeroUI slider anatomy and maps value changes', () => {
+  test('renders the shared anatomy and maps scalar and array value changes', () => {
     const onValueChange = jest.fn();
 
     act(() => {
@@ -50,23 +50,73 @@ describe('Slider (Android)', () => {
     expect(root.props.accessibilityLabel).toBeUndefined();
     expect(renderer!.root.findByProps({ testID: 'track' })).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'fill' })).toBeDefined();
-    const thumb = renderer!.root.findByProps({ testID: 'thumb' });
-    expect(thumb.props.accessibilityLabel).toBe('Volume');
-    expect(thumb.props.accessibilityActions).toEqual([
-      { name: 'decrement' },
-      { name: 'increment' },
-    ]);
+    expect(renderer!.root.findByProps({ testID: 'thumb' }).props).toMatchObject({
+      accessibilityActions: [{ name: 'decrement' }, { name: 'increment' }],
+      accessibilityLabel: 'Volume',
+    });
 
     act(() => root.props.onChange(45));
-    expect(onValueChange).toHaveBeenCalledWith(45);
+    act(() => root.props.onChange([48]));
+    expect(onValueChange).toHaveBeenNthCalledWith(1, 45);
+    expect(onValueChange).toHaveBeenNthCalledWith(2, 48);
+  });
+
+  test('steps through accessibility actions without floating-point drift', () => {
+    const onValueChange = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <Slider
+          accessibilityLabel="Opacity"
+          max={1}
+          min={0}
+          onValueChange={onValueChange}
+          step={0.1}
+          value={0.3}
+        />,
+      );
+    });
+
+    const thumb = renderer!.root.findByProps({ testID: 'thumb' });
 
     act(() => thumb.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }));
     act(() => thumb.props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } }));
-    expect(onValueChange).toHaveBeenNthCalledWith(2, 41);
-    expect(onValueChange).toHaveBeenNthCalledWith(3, 39);
+    act(() => thumb.props.onAccessibilityAction({ nativeEvent: { actionName: 'escape' } }));
+
+    expect(onValueChange).toHaveBeenNthCalledWith(1, 0.4);
+    expect(onValueChange).toHaveBeenNthCalledWith(2, 0.2);
+    expect(onValueChange).toHaveBeenCalledTimes(2);
   });
 
-  test('maps custom bounds and disabled state to HeroUI', () => {
+  test.each([
+    ['increment', 1],
+    ['decrement', 0],
+  ] as const)('clamps %s actions at the range boundary', (actionName, value) => {
+    const onValueChange = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <Slider
+          accessibilityLabel="Opacity"
+          max={1}
+          min={0}
+          onValueChange={onValueChange}
+          step={0.1}
+          value={value}
+        />,
+      );
+    });
+
+    act(() =>
+      renderer!.root
+        .findByProps({ testID: 'thumb' })
+        .props.onAccessibilityAction({ nativeEvent: { actionName } }),
+    );
+
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  test('maps custom bounds and disabled state to the shared control', () => {
     const onValueChange = jest.fn();
 
     act(() => {
@@ -85,11 +135,12 @@ describe('Slider (Android)', () => {
 
     const root = renderer!.root.findByProps({ mockComponent: 'hero-slider' });
 
-    expect(root.props.isDisabled).toBe(true);
-    expect(root.props.minValue).toBe(0.1);
-    expect(root.props.maxValue).toBe(1);
-    expect(root.props.step).toBe(0.1);
-
+    expect(root.props).toMatchObject({
+      isDisabled: true,
+      maxValue: 1,
+      minValue: 0.1,
+      step: 0.1,
+    });
     const thumb = renderer!.root.findByProps({ testID: 'thumb' });
     expect(thumb.props.accessibilityActions).toBeUndefined();
     expect(thumb.props.onAccessibilityAction).toBeUndefined();
