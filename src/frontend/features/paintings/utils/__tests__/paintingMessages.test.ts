@@ -1,6 +1,6 @@
+import type { ResolvedPaintingAttachment } from '@/frontend/data/paintings/usePaintings';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
-import type { ResolvedPaintingAttachment } from '../../hooks/usePaintings';
 import { createPaintingMessages } from '../paintingMessages';
 
 const input: ResolvedPaintingAttachment = {

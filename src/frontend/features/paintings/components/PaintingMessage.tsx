@@ -1,6 +1,6 @@
 import { memo, type ComponentProps } from 'react';
 
-import { type MessageListItem, UserMessage } from '@/frontend/components/messages';
+import { type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
 import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 

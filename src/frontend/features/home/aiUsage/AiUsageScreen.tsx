@@ -2,7 +2,7 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/appShell/header';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { AiUsageRankingSection } from './components/AiUsageRankingSection';

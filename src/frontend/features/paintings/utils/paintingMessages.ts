@@ -1,8 +1,8 @@
 import {
   type ComposerAttachmentDraft,
   createComposerMessageParts,
-} from '@/frontend/components/composer/utils/composerAttachments';
-import type { MessageListItem } from '@/frontend/components/messages';
+} from '@/frontend/components/Composer/utils/composerAttachments';
+import type { MessageListItem } from '@/frontend/components/Message';
 
 type PaintingMessageStatus = Extract<MessageListItem['status'], 'error' | 'pending' | 'success'>;
 

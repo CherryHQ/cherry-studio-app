@@ -4,26 +4,25 @@ This directory follows repository-wide [Code Organization](../../../docs/referen
 and [Naming Conventions](../../../docs/references/naming-conventions.md). The notes below define only
 the local import boundary and concrete module shape for `src/frontend/components`.
 
-`src/frontend/components` is for independently owned modules shared across screens or feature
-domains. Route-owned UI should live under `src/frontend/features` until a second independent owner
-actually consumes it.
+`src/frontend/components` contains component families shared by two or more independent pages.
+Page-specific UI stays under `src/frontend/features/<page>/components`; app-wide
+navigation, headers, and startup coordination live under `src/frontend/appShell`.
 
 ## Module Names
 
-- Use `camelCase` for reusable domain modules: `modelPicker`.
+- Every direct child is a `PascalCase` component family such as `ModelPicker`, `Message`, or
+  `FileEntryPreview`.
 - Use lowercase plural bucket names only for categorical containers: `components`, `context`,
   `hooks`, `utils`.
-- Use `PascalCase` only when the directory itself is a component adapter or component family:
-  `RouteHeader`, `MainHeader`.
-- Avoid vague names such as `common`, `parts`, or `messages` when a domain name is available.
-  Prefer names that say what the module owns.
+- Name the family after the UI concept it owns. Do not add generic `common`, `shared`, or `business`
+  buckets below this directory.
 
 ## Module Shape
 
 Shared component modules should usually look like this:
 
 ```text
-moduleName/
+ComponentFamily/
   README.md
   index.ts
   components/
@@ -43,29 +42,28 @@ Only add the subdirectories that the module actually needs.
 
 ## Imports
 
-- External callers should import from the module root: `@/frontend/components/modelPicker`,
-  `@/frontend/components/headers`.
+- External callers should import from the component-family root, for example
+  `@/frontend/components/ModelPicker`.
 - Module internals should use relative imports for their own `components`, `context`, `hooks`, and
   `utils`.
 - Tests may import the specific utility under test. Consumer tests should use the public module
   root.
 - Do not make callers import leaf files under `components/` unless that file is intentionally the
   module's public surface.
-- `src/frontend/components` must not import private modules from `src/frontend/features`.
+- `src/frontend/components` must not import private page modules from `src/frontend/features`.
 
-## Reusable vs Feature-Owned
+## Reusable vs Page-Owned
 
-- Count independent owners, not import statements. Reuse between `ChatScreen/input` and
-  `ChatScreen/workspace` is still owned by `ChatScreen`; structured message rendering moved to
-  `messages` only after painting became a second owner.
-- Put UI or behavior in an independent module, such as `modelPicker`, when a second screen or
-  component domain consumes it.
-- Keep feature-specific UI inside the owning module under `src/frontend/features`.
-- If a module starts being used outside its owning feature, move it to a neutral domain module
-  instead of exporting through the original feature.
-- App shell modules, design-system adapters, and platform adapters may have one direct caller when
-  their ownership is inherently app-wide. These exceptions require a stable public API and a
-  `README.md` that explains the boundary.
+- Count independent owners, not import statements. Reuse between `ChatInput` and `ChatWorkspace`
+  is still owned by the chat page; structured message rendering moved to
+  `Message` only after painting became a second owner.
+- Promote UI into an independent component family, such as `ModelPicker`, only when a second page
+  consumes it.
+- Keep page-specific UI under the owning page's `components/` directory.
+- If a module starts being used outside its owning page, move it to a neutral owner instead of
+  exporting through the original page.
+- A route workflow belongs in `src/frontend/features`; app-wide infrastructure belongs in
+  `src/frontend/appShell`; platform-neutral interaction primitives belong in CherryUI.
 
 ## Hooks, Utils, and Public API
 

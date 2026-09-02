@@ -241,12 +241,12 @@ const frontendLayer = layerPattern(
 const frontendSharedLayer = {
   group: ['@/frontend/features/*', '@/frontend/features/*/**'],
   message:
-    'Shared frontend modules must not depend on features; move the shared capability down instead.',
+    'Shared frontend modules must not depend on pages; move the shared capability down instead.',
 };
 
-const frontendFeatureLayer = {
-  // Cross-feature imports go through a feature's public surface:
-  // `@/frontend/features/<feature>` or one documented area below it.
+const frontendPageLayer = {
+  // Page modules use relative imports inside their own tree. A dependency shared by independent
+  // pages belongs in a neutral frontend module rather than behind one page's private path.
   // Gitignore-style negations must first unban each ancestor directory.
   group: [
     '@/frontend/features/*/*/*',
@@ -256,7 +256,7 @@ const frontendFeatureLayer = {
   ],
   allowTypeImports: true,
   message:
-    "Deep cross-feature import: use the feature's public surface or add a deliberate sanctioned export.",
+    'Deep page import: use relative imports within one page tree or move cross-page code to a neutral frontend owner.',
 };
 
 const sharedLayer = layerPattern(
@@ -285,6 +285,7 @@ const sharedPlatformIndependence = {
 };
 
 const sharedFrontendDirectories = [
+  'src/frontend/appShell/**/*.{ts,tsx}',
   'src/frontend/components/**/*.{ts,tsx}',
   'src/frontend/data/**/*.{ts,tsx}',
   'src/frontend/hooks/**/*.{ts,tsx}',
@@ -436,7 +437,7 @@ module.exports = defineConfig([
   restrictedImports(['src/backend/core/application/serviceRegistry.ts'], [backendLayer]),
   restrictedImports(['src/frontend/**/*.{ts,tsx}'], [frontendLayer]),
   restrictedImports(sharedFrontendDirectories, [frontendLayer, frontendSharedLayer]),
-  restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendFeatureLayer]),
+  restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendPageLayer]),
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
     ['src/shared/contracts/**/*.{ts,tsx}'],

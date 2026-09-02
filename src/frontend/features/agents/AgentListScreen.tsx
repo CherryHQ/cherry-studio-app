@@ -14,9 +14,9 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 
-import { AgentAvatar } from '@/frontend/components/avatar';
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { AgentAvatar } from '@/frontend/components/Avatar';
+import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 

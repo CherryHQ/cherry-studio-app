@@ -4,7 +4,7 @@ import {
   webSearchOutputSchema,
 } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { MessageListItem } from '@/frontend/components/messages';
+import type { MessageListItem } from '@/frontend/components/Message';
 import {
   type AgentErrorView,
   type AgentMessagePart,

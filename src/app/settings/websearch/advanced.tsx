@@ -1,1 +1,1 @@
-export { WebSearchAdvancedScreen as default } from '@/frontend/features/webSearch';
+export { WebSearchAdvancedScreen as default } from '@/frontend/features/settings/webSearch/advanced';

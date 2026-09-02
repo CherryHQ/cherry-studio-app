@@ -4,6 +4,7 @@ import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import {
   ComposerAttachments,
   ComposerField,
@@ -13,14 +14,21 @@ import {
   ComposerSurface,
   useComposerPresentationActions,
   useComposerState,
-} from '@/frontend/components/composer';
+} from '@/frontend/components/Composer';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
-} from '@/frontend/components/modelPicker';
-import { useOpenProviderSetup } from '@/frontend/components/navigation';
+} from '@/frontend/components/ModelPicker';
 import { usePreference } from '@/frontend/data/hooks';
+import {
+  getImageParamFields,
+  type ImageParamDraft,
+  isImageParamDraftValid,
+  prepareImageParamValues,
+  reconcileImageParamDraft,
+  resolveImageGenerationMode,
+} from '@/frontend/data/paintings/imageGenerationParams';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -31,14 +39,6 @@ import type {
   PaintingGenerationStatus,
 } from '../hooks/usePaintingGeneration';
 import { imageParamSummary } from '../utils/imageGenerationLabels';
-import {
-  getImageParamFields,
-  type ImageParamDraft,
-  isImageParamDraftValid,
-  prepareImageParamValues,
-  reconcileImageParamDraft,
-  resolveImageGenerationMode,
-} from '../utils/imageGenerationParams';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
 type PaintingInputProps = {

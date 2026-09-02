@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-native';
 
-import { AssistantMessage } from '@/frontend/components/messages';
+import { AssistantMessage } from '@/frontend/components/Message';
 
 import { messageExamples } from './messageFixtures';
 import { MessagesStoryFrame } from './MessagesStoryFrame';

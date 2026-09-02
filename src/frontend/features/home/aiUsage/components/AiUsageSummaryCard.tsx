@@ -5,7 +5,7 @@ import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ProviderBrandAvatar } from '@/frontend/components/avatar';
+import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import type {
   AiUsageRecordCostTotal,
   AiUsageRecordTimelineBucket,

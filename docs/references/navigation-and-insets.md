@@ -63,21 +63,21 @@ Before enabling it, verify:
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `home`, `library`,
   `agents`, `drawings`, `onboarding`, `search`, `sessions` (Agent Session management), `settings`,
   and `paintings` flows. Directories with their own nested Stack hide the root header and draw the
-  feature header inside that nested Stack.
+  page header inside that nested Stack.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
   only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
   and the full-width drawer gesture exists only on the chat surface.
-- The sidebar is the `features/sidebar` compound. Its destinations close the drawer and push
+- The sidebar is the `frontend/appShell/sidebar` compound. Its destinations close the drawer and push
   `library`, `agents`, `drawings`, `sessions`, or `settings` onto the root Stack. Their root
   headers lead with back; popping returns to the exact chat route that opened them. A cold-start
   deep link with no back history replaces to `/` when that leading action is pressed.
 - Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
-  root and child screens use back navigation like every other non-chat feature flow.
+  root and child screens use back navigation like every other non-chat page flow.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
   provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes
   the frontend observation but does not cancel the Host's active turn.
-- Route files stay thin and generally re-export feature modules from `src/frontend/features`.
+- Route files stay thin and re-export exact page boundaries from `src/frontend/features`.
 
 ## Page Identity And Cached Data
 
@@ -163,7 +163,7 @@ after the keyboard is dismissed, and clearing an unfocused search restores `larg
 The app has two search shapes, and which one a screen takes follows from where the answer lives.
 
 A screen that already holds everything it can match keeps its search in place, through
-`components/inlineSearch`. The field sits between the screen's `RouteHeader` and its content: iOS
+`components/InlineSearch`. The field sits between the screen's `RouteHeader` and its content: iOS
 mounts `Stack.SearchBar` with `placement="stacked"`, giving it a row under the title, while Android
 draws CherryUI's `SearchField` in that same spot. Android's own header search bar exists but arrives
 as a toolbar menu item, pinned right of the screen's actions and styled by the platform rather than

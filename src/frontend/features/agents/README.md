@@ -6,8 +6,8 @@ surfaces.
 
 ## Public Interface
 
-- `AgentListScreen` and `AgentEditScreen` are exported from `index.ts` for route adapters; the
-  editor is shared by the edit and create routes.
+- `AgentListScreen` is the root page. `edit/AgentEditScreen` is shared by the edit and create route
+  adapters.
 - The list header's plus action opens the create-Agent route.
 - Tapping a list row opens that Agent's editor.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
@@ -30,8 +30,10 @@ surfaces.
 
 ## Organization
 
-- `agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
-  screens.
+- `edit/components/` contains the editor's capability and MCP tool sections; they remain private to
+  the editor page.
+- `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
+  screen.
 - The editor lays its fields out bare rather than in a grouped card, so its route keeps the ordinary
   page background — the field fill needs a lighter page behind it to read as a field at all.
 - The editor's route is the one screen in this stack with an opaque header, so the native stack owns

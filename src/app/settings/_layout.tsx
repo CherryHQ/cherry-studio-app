@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 
-import { headerScreenOptions } from '@/frontend/components/headers';
+import { headerScreenOptions } from '@/frontend/appShell/header';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 export default function SettingsStackLayout() {

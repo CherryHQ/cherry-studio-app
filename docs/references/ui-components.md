@@ -85,12 +85,11 @@ interaction behavior moves into CherryUI through the workflow in
 [UI Development](../guides/ui-development.md). React Native `Button` is reserved for temporary
 examples and non-product test screens.
 
-Shared navigation and platform adapters may remain under `src/frontend/components` when their
-contract depends on app navigation rather than a general product control. Feature screens do not
-import platform UI SDKs directly. Direct `heroui-native` and `@expo/ui` usage remains limited to
-capabilities whose native or third-party behavior is itself part of the contract; a package-owned
-CherryUI wrapper becomes the public surface once the app standardizes behavior around such a
-dependency.
+Shared navigation, header, and startup adapters live under `src/frontend/appShell`, outside the
+cross-feature component-family directory. Feature screens do not import platform UI SDKs directly.
+Direct `heroui-native` and `@expo/ui` usage remains limited to capabilities whose native or
+third-party behavior is itself part of the contract; a package-owned CherryUI wrapper becomes the
+public surface once the app standardizes behavior around such a dependency.
 
 App-level singleton surfaces are owned by CherryUI, mounted once at the app root, and reached
 through one hook or component from `@cherrystudio/ui/components`. Toast, portal host, and global

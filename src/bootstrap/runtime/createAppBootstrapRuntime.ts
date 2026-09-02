@@ -20,8 +20,8 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
-import AssistantActivity from '@/frontend/features/chat/AssistantActivity/AssistantActivity';
-import PaintingActivity from '@/frontend/features/paintings/PaintingActivity/PaintingActivity';
+import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
+import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';

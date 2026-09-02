@@ -17,13 +17,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {
   ImageParamDraft,
   ImageParamField,
   ResolvedImageGenerationMode,
-} from '../utils/imageGenerationParams';
-import { getImageParamFields } from '../utils/imageGenerationParams';
+} from '@/frontend/data/paintings/imageGenerationParams';
+import { getImageParamFields } from '@/frontend/data/paintings/imageGenerationParams';
+
+import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 
 const FIELD_GAP = 8;
 // 固定 5 列等宽网格，超出自动换行；cell 恒定方形保证选中态切换时兄弟选项不挪位。

@@ -5,14 +5,15 @@ Use [Naming Conventions](./naming-conventions.md) after choosing the owner and l
 
 ## Choose The Narrowest Owner
 
-Keep code with the feature, layer, or package that owns its behavior. Promote it only when a new
+Keep code with the page, layer, or package that owns its behavior. Promote it only when a new
 independent consumer creates a broader owner.
 
 | Code | Owner |
 | --- | --- |
 | Expo Router adapter | `src/app` |
-| Route-bound UI and orchestration | `src/frontend/features/<feature>` |
-| UI module shared by independent feature domains | `src/frontend/components` or `src/frontend/hooks` |
+| Route-bound UI and orchestration | `src/frontend/features/<page>` |
+| Component family shared by independent pages | `src/frontend/components/<Family>` |
+| App-wide header, navigation, and startup integration | `src/frontend/appShell` |
 | Frontend query, preference, and cache infrastructure | `src/frontend/data` |
 | Backend AI adaptation | `src/backend/ai` |
 | Backend persistence and Data API implementation | `src/backend/data` |
@@ -27,23 +28,25 @@ The repository and `src` top-level directory sets are closed by default. The cur
 owner can contain the capability without changing its meaning, and document its non-overlapping
 scope in the PR.
 
-## Promote Domains When They Exist
+## Build The Page Tree First
 
-A single file is the default. Create a domain subtree only when the domain owns multiple concrete
-artifacts or one implementation can no longer remain coherent as a file.
+A page screen is the default owner of route-bound UI. Nest child page implementations beneath their
+parent page instead of flattening them into domain-like siblings.
 
-- Keep route-owned UI under its feature until a second independent screen or feature consumes it.
-  Multiple imports inside one screen tree still have one owner.
-- Put a large route-bound domain under `src/frontend/features/<name>` and keep its components,
-  hooks, context, and utilities together.
-- Put a large shared UI domain under `src/frontend/components/<name>`.
+- Keep route-owned UI under its page until a second independent page consumes it. Multiple imports
+  inside one page tree still have one owner.
+- Put top-level pages under `src/frontend/features/<name>` and child pages beneath the owning parent,
+  such as `src/frontend/features/settings/provider/detail`.
+- Keep page-private components, hooks, context, utilities, and tests inside that page tree.
+- Put a shared component family under `src/frontend/components/<Family>` only after a second
+  independent page owner appears.
 - Put a large backend capability under `src/backend/services/<name>`.
 - Keep one persistence service in `src/backend/data/services`; keep a small helper in the nearest
   owning `utils` directory.
-- App-shell, design-system, and platform-adapter modules may be app-wide with one direct consumer
-  when they expose a stable boundary and document that ownership.
+- App Shell modules may be app-wide with one direct consumer when they expose a stable boundary and
+  document that ownership under `src/frontend/appShell`.
 
-Feature-specific UI remains with its feature. A reusable interaction primitive belongs in CherryUI;
+Page-specific UI remains with its page. A reusable interaction primitive belongs in CherryUI;
 follow [UI Development](../guides/ui-development.md) before extracting or adding one.
 
 ## Respect Layer Ownership
@@ -70,13 +73,13 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 
 ## Expose Deliberate Public Surfaces
 
-- Add `index.ts` or `index.tsx` only at a boundary consumed by routes, parent modules, sibling
-  domains, or package users.
+- Add `index.ts` or `index.tsx` only at a boundary consumed by routes, parent pages, sibling modules,
+  or package users.
 - A barrel contains named re-exports only and exposes the smallest interface callers need.
 - External callers import the module root. Module internals import their leaf files directly and do
   not route dependencies back through their own barrel.
 - Private `components`, `hooks`, and `utils` buckets do not need barrels.
-- Route files remain thin adapters to feature module roots.
+- Route files remain thin adapters to exact page boundaries.
 
 When choosing between `Module`, `Runtime`, `Session`, `Client`, `Adapter`, or `Manager`, use
 [Runtime Ownership](./runtime-ownership.md#role-names).

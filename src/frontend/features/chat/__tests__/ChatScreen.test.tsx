@@ -32,7 +32,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/composer', () => ({
+jest.mock('@/frontend/components/Composer', () => ({
   ComposerDock: ({ children, ...props }: { children?: React.ReactNode }) => {
     dockProps = props;
     return children;
@@ -50,7 +50,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockRouteParams,
 }));
 
-jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
+jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
@@ -72,21 +72,21 @@ jest.mock('@/frontend/hooks/agent', () => ({
   }),
 }));
 
-jest.mock('../input', () => ({
+jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;
     return null;
   },
 }));
 
-jest.mock('../navigation', () => ({
+jest.mock('../components/ChatRouteResolver', () => ({
   ChatRouteResolver: () => {
     mockRouteResolverRendered = true;
     return null;
   },
 }));
 
-jest.mock('../workspace', () => ({
+jest.mock('../components/ChatWorkspace', () => ({
   ChatDraftState: () => null,
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {

@@ -1,1 +1,1 @@
-export { ProviderEditScreen as default } from '@/frontend/features/providers';
+export { ProviderEditScreen as default } from '@/frontend/features/settings/provider/detail/edit';
