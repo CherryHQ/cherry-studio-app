@@ -49,7 +49,17 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     ContentState: {
-      Empty: ({ title }: { title: ReactNode }) => <MockText testID="empty">{title}</MockText>,
+      Empty: ({
+        primaryAction,
+        title,
+      }: {
+        primaryAction?: { onPress?: () => void };
+        title: ReactNode;
+      }) => (
+        <MockText onPress={primaryAction?.onPress} testID="empty">
+          {title}
+        </MockText>
+      ),
       Error: ({
         primaryAction,
         title,

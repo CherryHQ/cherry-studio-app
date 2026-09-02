@@ -14,6 +14,10 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
+jest.mock('@cherrystudio/ui/utils', () => ({ cn: (...names: unknown[]) => names.join(' ') }));
+
+jest.mock('../ModelPickerFastScroller', () => ({ ModelPickerFastScroller: () => null }));
+
 describe('ModelPickerList empty state', () => {
   let renderer: ReactTestRenderer | undefined;
 

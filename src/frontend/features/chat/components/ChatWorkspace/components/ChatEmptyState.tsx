@@ -15,18 +15,18 @@ export function ChatEmptyState({ contentBottomInset }: ChatEmptyStateProps) {
 
   return (
     <View
-      className="flex-1 items-center justify-center px-8"
+      className="flex-1 items-center justify-center gap-5 px-8"
       style={{ paddingBottom: contentBottomInset }}
     >
-      <Text className="text-center font-semibold text-foreground text-lg">
-        {t('chat.newSession.title')}
-      </Text>
-      <Text className="mt-2 text-center text-foreground text-sm" numberOfLines={3}>
-        {t('chat.newSession.description')}
-      </Text>
-      <Button className="mt-5" onPress={openProviderSetup}>
-        {t('modelPicker.addProvider')}
-      </Button>
+      <View className="items-center gap-2">
+        <Text className="text-center font-semibold text-foreground text-lg">
+          {t('chat.newSession.title')}
+        </Text>
+        <Text className="text-center text-foreground text-sm" numberOfLines={3}>
+          {t('chat.newSession.description')}
+        </Text>
+      </View>
+      <Button onPress={openProviderSetup}>{t('modelPicker.addProvider')}</Button>
     </View>
   );
 }
