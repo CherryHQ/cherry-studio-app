@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import type { MessageListItem } from '../types';
 import { resolveMessageCitationText } from './citations';
-import { MessageFileStrip } from './MessageFileStrip';
+import { GeneratedFileStrip } from './GeneratedFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
@@ -73,7 +73,7 @@ export function MessageParts({
       {hasSources ? <SourceGroup parts={parts} /> : null}
       {/* Last, so the files a turn produced are the closest thing to the end of
           the message and stay put as the answer above them streams in. */}
-      {files.length > 0 ? <MessageFileStrip parts={files} /> : null}
+      {files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
     </View>
   );
 }

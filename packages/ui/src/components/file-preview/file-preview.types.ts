@@ -55,3 +55,7 @@ export type FilePreviewProps = {
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   size?: number;
 };
+
+export type FileAttachmentPreviewProps = Omit<FilePreviewProps, 'size'> & {
+  categoryLabel: string;
+};

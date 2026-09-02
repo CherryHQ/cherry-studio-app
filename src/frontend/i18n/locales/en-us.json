@@ -213,6 +213,7 @@
   "common.officialWebsite": "Official website",
   "filePreview.openFailed": "No app could open this file.",
   "filePreview.openWith": "Open file with",
+  "filePreview.document": "Document",
   "filePreview.unavailable": "File unavailable",
   "navigation.back": "Back",
   "navigation.home": "Home",

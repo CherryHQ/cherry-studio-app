@@ -69,6 +69,10 @@ parses a format or calls a service is product code and registers through the pro
 while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
 logging, or translation dependency.
 
+`FileAttachmentPreview` is the compact horizontal result variant. It keeps the same platform file
+opening and error contract while showing a filename and caller-supplied category label; square
+thumbnail callers continue to use `FilePreview`.
+
 `MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
 native renderer. A part that has streamed keeps the streaming renderer for its full mounted
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
