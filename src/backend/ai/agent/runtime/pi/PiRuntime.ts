@@ -44,19 +44,10 @@ import type {
 import {
   estimatePiLoopContextHeadroomTokens,
   estimatePiMessagesTokens,
-  PI_ESTIMATED_CHARACTERS_PER_TOKEN,
   planPiContext,
   type PiContextCompactionOptions,
 } from './contextCompaction';
 import { toPiConversation } from './modelMessages';
-import {
-  createPiDispatchActivityInput,
-  createPiDeferredToolDiscoveryTools,
-  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
-  PI_TOOL_CALL_TOOL_NAME,
-  type PiMetaToolActivity,
-  type PiMetaToolExecution,
-} from './piDeferredToolDiscovery';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -156,7 +147,6 @@ export const PI_TURN_SETTLE_GRACE_MS = 1_000;
 
 const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
 const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
-const MIN_USEFUL_META_TOOL_OUTPUT_CHARACTERS = 2_000;
 const REDACTED_SECRET = '[REDACTED]';
 
 const TERMINAL_ERROR_DIAGNOSTIC_TYPES = new Set([
@@ -187,11 +177,6 @@ type ToolPartBase = {
   toolRef: RuntimeMessageToolRef;
 };
 
-type PiToolBinding =
-  | { kind: 'runtime'; runtimeTool: RuntimeTool }
-  | { kind: 'meta'; displayName: string; providerName: string }
-  | { kind: 'dispatch'; displayName: string; providerName: string };
-
 /**
  * Turn lifecycle. The first transition out of `running` wins the phase — it is
  * never retargeted — and only the terminal fence in `emit()` reaches
@@ -208,7 +193,6 @@ type ActiveTurn = {
   approvalWaiters: Map<string, ApprovalWaiter>;
   channel: RuntimeEventChannel;
   currentMessageOrdinal?: number;
-  dispatchCalls: Map<string, RuntimeJsonValue>;
   failedToolCalls: Set<string>;
   hasUsage: boolean;
   limitError?: RuntimeError;
@@ -220,7 +204,7 @@ type ActiveTurn = {
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
-  toolBindingsByProviderName: Map<string, PiToolBinding>;
+  toolBindingsByProviderName: Map<string, RuntimeTool>;
   toolParts: Map<string, ToolPartBase>;
   toolStepCount: number;
   turnId: string;
@@ -602,7 +586,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       abortController: new AbortController(),
       approvalWaiters: new Map(),
       channel,
-      dispatchCalls: new Map(),
       failedToolCalls: new Set(),
       hasUsage: false,
       modelContextHeadroomTokens: 0,
@@ -676,39 +659,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
       secrets = resolution.redactionValues;
       turn.usageContext = resolution.usageContext;
       if (this.settleIfEnding(turn)) return;
-      const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
-      const mcpTools = request.tools.filter(
-        (tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny',
-      );
-      const deferredToolDiscoveryTools =
-        mcpTools.length > 0
-          ? createPiDeferredToolDiscoveryTools(
-              mcpTools,
-              async (target, input, toolCallId, signal) => {
-                const output = await this.runRuntimeTool(target, toolCallId, input, signal, turn);
-                turn.dispatchCalls.delete(toolCallId);
-                this.consumeModelToolResultBudget(turn, toolCallId, target.providerName, output);
-                return output;
-              },
-              (toolCallId, signal, activity, operation) =>
-                this.runPiMetaTool(toolCallId, signal, activity, operation, turn),
-            )
-          : [];
-      const piTools = [
-        ...directTools.map((tool) => this.toPiTool(tool, turn)),
-        ...deferredToolDiscoveryTools,
-      ];
-      for (const tool of directTools) {
-        this.bindPiTool(turn, tool.providerName, { kind: 'runtime', runtimeTool: tool });
-      }
-      for (const tool of deferredToolDiscoveryTools) {
-        this.bindPiTool(
-          turn,
-          tool.name,
-          tool.name === PI_TOOL_CALL_TOOL_NAME
-            ? { kind: 'dispatch', displayName: tool.label, providerName: tool.name }
-            : { kind: 'meta', displayName: tool.label, providerName: tool.name },
-        );
+      const piTools = request.tools.map((tool) => this.toPiTool(tool, turn));
+      for (const tool of request.tools) {
+        this.bindPiTool(turn, tool);
       }
       if (piTools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
@@ -721,14 +674,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
-      const baseConversation = toPiConversation(request, resolution.model);
-      const conversation =
-        deferredToolDiscoveryTools.length > 0
-          ? {
-              ...baseConversation,
-              systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
-            }
-          : baseConversation;
+      const conversation = toPiConversation(request, resolution.model);
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
@@ -1027,76 +973,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
     return this.piToolResult(output);
   }
 
-  private async runPiMetaTool(
-    toolCallId: string,
-    signal: AbortSignal | undefined,
-    activity: PiMetaToolActivity,
-    operation: (modelOutputCharacterLimit: number) => PiMetaToolExecution,
-    turn: ActiveTurn,
-  ): Promise<RuntimeToolResult> {
-    const part = this.ensureMetaToolPart(turn, activity, toolCallId, activity.input);
-    if (activity.providerName === PI_TOOL_CALL_TOOL_NAME) {
-      turn.dispatchCalls.delete(toolCallId);
-    }
-
-    if (turn.phase !== 'running' || signal?.aborted) {
-      return this.interruptToolCall(turn, part);
-    }
-
-    turn.toolCallCount += 1;
-    if (turn.toolCallCount > this.limits.maxToolCalls) {
-      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
-      turn.limitError = TOOL_CALL_LIMIT_ERROR;
-      this.replaceToolPart(turn, part, {
-        state: 'error',
-        error: TOOL_CALL_LIMIT_ERROR,
-        output,
-      });
-      turn.failedToolCalls.add(toolCallId);
-      turn.settledToolCalls.add(toolCallId);
-      this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
-      return output;
-    }
-
-    try {
-      const modelOutputCharacterLimit = Math.floor(
-        Math.max(0, turn.modelContextHeadroomTokens) * PI_ESTIMATED_CHARACTERS_PER_TOKEN,
-      );
-      if (modelOutputCharacterLimit < MIN_USEFUL_META_TOOL_OUTPUT_CHARACTERS) {
-        const output = createErrorToolResult(TOOL_LOOP_CONTEXT_ERROR);
-        turn.limitError = TOOL_LOOP_CONTEXT_ERROR;
-        this.replaceToolPart(turn, part, {
-          state: 'error',
-          error: TOOL_LOOP_CONTEXT_ERROR,
-          output,
-        });
-        turn.failedToolCalls.add(toolCallId);
-        turn.settledToolCalls.add(toolCallId);
-        this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
-        return output;
-      }
-      const { activityOutput, modelOutput } = operation(modelOutputCharacterLimit);
-      if (turn.phase !== 'running' || signal?.aborted) {
-        return this.interruptToolCall(turn, part);
-      }
-      this.replaceToolPart(turn, part, { state: 'output-available', output: activityOutput });
-      turn.settledToolCalls.add(toolCallId);
-      this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, modelOutput);
-      return modelOutput;
-    } catch (error) {
-      if (turn.phase !== 'running' || signal?.aborted) {
-        return this.interruptToolCall(turn, part);
-      }
-      const executionError = normalizeToolExecutionError(error);
-      const output = createErrorToolResult(executionError);
-      this.replaceToolPart(turn, part, { state: 'error', error: executionError, output });
-      turn.failedToolCalls.add(toolCallId);
-      turn.settledToolCalls.add(toolCallId);
-      this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
-      return output;
-    }
-  }
-
   private async runRuntimeTool(
     runtimeTool: RuntimeTool,
     toolCallId: string,
@@ -1288,45 +1164,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
     if (!binding) {
       return undefined;
     }
-    if (binding.kind === 'dispatch') {
-      if (!turn.dispatchCalls.has(toolCallId)) turn.dispatchCalls.set(toolCallId, input);
-      return undefined;
-    }
-    if (binding.kind === 'meta') {
-      return this.ensureMetaToolPart(turn, binding, toolCallId, input);
-    }
-    const runtimeTool = binding.runtimeTool;
     return this.ensureToolPart(turn, {
-      displayName: runtimeTool.displayName,
+      displayName: binding.displayName,
       id: `tool-${toolCallId}`,
       input,
       providerName,
       toolCallId,
-      toolRef: runtimeTool.ref,
+      toolRef: binding.ref,
     });
   }
 
-  private bindPiTool(turn: ActiveTurn, providerName: string, binding: PiToolBinding): void {
-    if (turn.toolBindingsByProviderName.has(providerName)) {
-      throw new Error(`Duplicate Pi tool name: ${providerName}`);
+  private bindPiTool(turn: ActiveTurn, tool: RuntimeTool): void {
+    if (turn.toolBindingsByProviderName.has(tool.providerName)) {
+      throw new Error(`Duplicate Pi tool name: ${tool.providerName}`);
     }
-    turn.toolBindingsByProviderName.set(providerName, binding);
-  }
-
-  private ensureMetaToolPart(
-    turn: ActiveTurn,
-    activity: Pick<PiMetaToolActivity, 'displayName' | 'providerName'>,
-    toolCallId: string,
-    input: RuntimeJsonValue,
-  ): ToolPartBase {
-    return this.ensureToolPart(turn, {
-      displayName: activity.displayName,
-      id: `tool-${toolCallId}`,
-      input,
-      providerName: activity.providerName,
-      toolCallId,
-      toolRef: { source: 'meta', name: activity.providerName },
-    });
+    turn.toolBindingsByProviderName.set(tool.providerName, tool);
   }
 
   private ensureToolPart(turn: ActiveTurn, base: ToolPartBase): ToolPartBase {
@@ -1360,16 +1212,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // native error result. During cancellation the Runtime terminalizer owns
       // the outcome, so keep the part live and normalize it as interrupted.
       if (turn.phase === 'cancelling') continue;
-      const binding = turn.toolBindingsByProviderName.get(result.toolName);
-      const base =
-        binding?.kind === 'dispatch'
-          ? this.ensureMetaToolPart(
-              turn,
-              binding,
-              result.toolCallId,
-              createPiDispatchActivityInput(turn.dispatchCalls.get(result.toolCallId)),
-            )
-          : this.ensureToolPartFromProviderCall(turn, result.toolCallId, result.toolName, null);
+      const base = this.ensureToolPartFromProviderCall(
+        turn,
+        result.toolCallId,
+        result.toolName,
+        null,
+      );
       if (!base) continue;
       const output = result.isError
         ? createErrorToolResult(TOOL_EXECUTION_ERROR)
@@ -1383,7 +1231,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       );
       if (result.isError) turn.failedToolCalls.add(result.toolCallId);
       turn.settledToolCalls.add(result.toolCallId);
-      turn.dispatchCalls.delete(result.toolCallId);
     }
   }
 

@@ -46,11 +46,9 @@ The Agent's instructions, model, and MCP bindings, plus application-owned system
 resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
 Runtime rules, guidance for application capabilities that are actually present, and the
 user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
-that policy without appending another application policy fragment; Pi appends only the
-binding-specific instructions for its deferred MCP catalog when that catalog is present. Mobile
-Skill persistence and prompt projection are not implemented; their target boundary is documented
-separately and does not change the current Runtime input. The injected Pi Runtime remains stable for
-the Host lifetime.
+that policy without appending another application-policy fragment. Mobile Skill persistence and
+prompt projection are not implemented; their target boundary is documented separately and does not
+change the current Runtime input. The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Production Pi binding
 
@@ -194,6 +192,9 @@ type RuntimeInputPart =
     }
   | { type: 'file'; mediaType: string; name?: string; uri: string }
 ```
+
+The `meta` variant remains readable for sessions created by earlier Runtime versions. Current turns
+emit only real built-in or MCP tool refs.
 
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
@@ -497,9 +498,10 @@ type RuntimeError = {
 ```
 
 `RuntimeToolRef` identifies an executable application capability and remains the only ref accepted
-by execution requests and approvals. `RuntimeMessageToolRef` additionally admits `meta` activity
-such as catalog search: it is observable and replayable model-loop history, but it is not executable
-through the Host capability catalog and never appears in an inference tool snapshot.
+by execution requests and approvals. `RuntimeMessageToolRef` additionally admits historical `meta`
+activity from earlier Runtime versions. It remains observable in persisted messages but is omitted
+from current model history, is not executable through the Host capability catalog, and never appears
+in an inference tool snapshot.
 
 Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. Before a
 terminal event, the Runtime settles every live tool part: denial includes the canonical denial

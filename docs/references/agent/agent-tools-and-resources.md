@@ -143,50 +143,25 @@ permission, deleted file, or disconnected server fails closed; the callback neve
 fallback action with broader access.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
-application function by name: every callable target must still exist in the frozen turn catalog.
-The Pi binding consumes the Host-prepared application prompt, exposes system capabilities directly,
-and translates eligible MCP tools into three catalog tools for the active model loop. When that
-catalog is present, Pi also appends its binding-specific catalog workflow guidance to the prompt:
+application function by name: every callable target must exist in the frozen turn catalog. The Pi
+binding exposes each enabled system and MCP tool directly to the model using its provider-safe name,
+description, and complete input schema. Calls enter that exact `RuntimeTool` approval, cancellation,
+call-limit, artifact, and event boundary before execution. Pi consumes the Host-prepared application
+prompt without adding a separate tool-discovery workflow.
 
-- `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
-  including bounded TypeScript call signatures. Its complete serialized model result is capped by
-  both a 32,000-character ceiling and the live model-context headroom; a result that drops matches
-  reports `truncated: true`.
-- `tool_describe` returns one description and signature bounded by the same live headroom.
-- `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
-  `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
-
-The Pi binding keeps a per-turn inspected-name ledger. Each tool whose signature was returned by
-`tool_search` or `tool_describe` joins that ledger. Calling an uninspected tool does not enter its
-approval or execution boundary: the failed meta result returns the bounded signature and records
-the name so a corrected retry can proceed. Before dispatch, `tool_call` also validates `params`
-against the frozen MCP JSON Schema; a mismatch returns the same bounded signature without invoking
-the target.
-
-These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
-and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives
-the bounded descriptions and signatures, while Runtime output and persistence keep only compact
-queries, target names, counts, truncation status, and errors. An invalid `tool_call` target or a
-dispatch rejected before execution emits failed meta activity containing only the requested target
-name; unresolved parameters are neither persisted nor displayed. Once a target resolves, the
-Runtime emits and persists only that target's stable MCP ref, catalog alias, display snapshot,
-actual parameters, approval, and result; it does not emit a duplicate `tool_call` wrapper. When
-reconstructing Pi history, the Pi message adapter replays meta activity under its own model-loop
-name and wraps a persisted MCP target call back into `tool_call({ name, params })`.
+Historical message-only `meta` refs from the removed catalog-search Runtime remain readable for
+session compatibility. Current turns do not expose or emit meta tools.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
 safety reserves, the Runtime stops with `context_window_exceeded` before contacting the provider.
 
-MCP tools with effective `deny` policy are absent from discovery. The Host still materializes and
-freezes the complete executable MCP catalog before the Runtime starts. The inference snapshot
-records that real catalog, not Pi's meta catalog tools. Deferred tool discovery reduces model
-tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
-Configuration changes therefore still affect the next turn only.
+MCP tools with effective `deny` policy are absent from the Runtime request. The Host materializes
+and freezes the complete executable MCP catalog before the Runtime starts, and the inference
+snapshot records that same catalog. Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
-extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed.
+extension, or unrestricted filesystem tool.
 
 ## Controlled File Ledger
 

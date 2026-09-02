@@ -25,12 +25,6 @@ import {
 } from '../contextCompaction';
 import { PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX, toPiConversation } from '../modelMessages';
 import {
-  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
-  PI_TOOL_CALL_TOOL_NAME,
-  PI_TOOL_DESCRIBE_TOOL_NAME,
-  PI_TOOL_SEARCH_TOOL_NAME,
-} from '../piDeferredToolDiscovery';
-import {
   DEFAULT_PI_RUNTIME_LIMITS,
   PI_TURN_SETTLE_GRACE_MS,
   PiRuntime,
@@ -444,7 +438,6 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../PiRuntime.ts'),
     path.resolve(__dirname, '../contextCompaction.ts'),
     path.resolve(__dirname, '../modelMessages.ts'),
-    path.resolve(__dirname, '../piDeferredToolDiscovery.ts'),
   ],
 };
 
@@ -507,7 +500,7 @@ describe('PiRuntime mapping', () => {
     });
   });
 
-  test('replays persisted meta activity under its model-loop tool name', () => {
+  test('omits persisted activity for removed meta tools from model history', () => {
     const runtime = createTestRuntime();
     const holder = holders.get(runtime);
     if (!holder) throw new Error('missing Runtime holder');
@@ -523,8 +516,8 @@ describe('PiRuntime mapping', () => {
                   {
                     type: 'tool-call',
                     toolCallId: 'search-call',
-                    toolRef: { source: 'meta', name: PI_TOOL_SEARCH_TOOL_NAME },
-                    providerName: PI_TOOL_SEARCH_TOOL_NAME,
+                    toolRef: { source: 'meta', name: 'tool_search' },
+                    providerName: 'tool_search',
                     input: { query: 'calendar' },
                   },
                   {
@@ -542,25 +535,8 @@ describe('PiRuntime mapping', () => {
       holder.resolution.model,
     );
 
-    expect(conversation.history).toMatchObject([
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'toolCall',
-            id: 'search-call',
-            name: PI_TOOL_SEARCH_TOOL_NAME,
-            arguments: { query: 'calendar' },
-          },
-        ],
-      },
-      {
-        role: 'toolResult',
-        toolCallId: 'search-call',
-        toolName: PI_TOOL_SEARCH_TOOL_NAME,
-        details: { value: { matchedNamespaces: [] }, artifacts: [] },
-      },
-    ]);
+    expect(conversation.history).toEqual([]);
+    expect(conversation.historyTurns).toMatchObject([{ turnId: 'turn-old', messages: [] }]);
   });
 
   test('rejects a text attachment outside user input before model execution', async () => {
@@ -760,7 +736,7 @@ describe('PiRuntime mapping', () => {
           {
             type: 'toolCall',
             id: 'large-result-call',
-            name: 'tool_search',
+            name: 'large_result_tool',
             arguments: { query: 'large result' },
           },
         ],
@@ -769,7 +745,7 @@ describe('PiRuntime mapping', () => {
       const toolResult: ToolResultMessage = {
         role: 'toolResult',
         toolCallId: 'large-result-call',
-        toolName: 'tool_search',
+        toolName: 'large_result_tool',
         content: [{ type: 'text', text: 'x'.repeat(40_000) }],
         details: { result: 'x'.repeat(40_000) },
         isError: false,
@@ -1394,18 +1370,15 @@ describe('PiRuntime mapping', () => {
             {
               type: 'toolCall',
               id: 'historic-call',
-              name: PI_TOOL_CALL_TOOL_NAME,
-              arguments: {
-                name: 'mcp_server_2_lookup_c3d4',
-                params: { query: 'Cherry Studio' },
-              },
+              name: 'mcp_server_2_lookup_c3d4',
+              arguments: { query: 'Cherry Studio' },
             },
           ],
         },
         {
           role: 'toolResult',
           toolCallId: 'historic-call',
-          toolName: PI_TOOL_CALL_TOOL_NAME,
+          toolName: 'mcp_server_2_lookup_c3d4',
           details: { value: { found: true }, artifacts: [] },
         },
       ],
@@ -1548,11 +1521,10 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('exposes MCP tools through deferred discovery and calls the target through its approval boundary', async () => {
+  test('exposes enabled MCP tools directly and calls the target through its approval boundary', async () => {
     const runtime = createTestRuntime();
     const preparedSystemPrompt = 'Host-prepared application system prompt.';
     let executedInput: unknown;
-    let searchResult: unknown;
     const builtInTool: RuntimeTool = {
       ref: { source: 'builtin', capabilityId: 'location_get_current' },
       providerName: 'location_get_current',
@@ -1578,71 +1550,21 @@ describe('PiRuntime mapping', () => {
         return { value: { total: 1 }, artifacts: [] };
       },
     };
-    const deniedTool: RuntimeTool = {
-      ...targetTool,
-      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_issue' },
-      providerName: 'mcp_server_1_delete_issue_c3d4',
-      displayName: 'Delete issue',
-      description: 'Delete one repository issue.',
-      approval: 'deny',
-    };
     const holder = arrange(runtime, async (context) => {
-      const tools = context.options.initialState?.tools ?? [];
-      const search = tools.find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
-      const describe = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME);
-      const call = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME);
-      if (!search || !describe || !call) {
-        throw new Error('Deferred-discovery tools were not exposed.');
-      }
-      const discoveryMessage = assistantMessage({
-        content: [
-          {
-            type: 'toolCall',
-            id: 'search-call',
-            name: PI_TOOL_SEARCH_TOOL_NAME,
-            arguments: { query: 'repository' },
-          },
-          {
-            type: 'toolCall',
-            id: 'describe-call',
-            name: PI_TOOL_DESCRIBE_TOOL_NAME,
-            arguments: { name: targetTool.providerName },
-          },
-        ],
-        stopReason: 'toolUse',
-      });
-      await context.emit({ type: 'message_start', message: discoveryMessage });
-      for (const [contentIndex, toolCall] of discoveryMessage.content.entries()) {
-        if (toolCall.type !== 'toolCall') continue;
-        await context.emit({
-          type: 'message_update',
-          message: discoveryMessage,
-          assistantMessageEvent: {
-            type: 'toolcall_end',
-            contentIndex,
-            toolCall,
-            partial: discoveryMessage,
-          },
-        });
-      }
-      await context.emit({ type: 'message_end', message: discoveryMessage });
-      searchResult = (await search.execute('search-call', { query: 'repository' }, context.signal))
-        .details;
-      await describe.execute('describe-call', { name: targetTool.providerName }, context.signal);
-      await call.execute(
-        'catalog-call',
-        { name: targetTool.providerName, params: { query: 'bug' } },
-        context.signal,
+      const call = context.options.initialState?.tools?.find(
+        (tool) => tool.name === targetTool.providerName,
       );
+      if (!call) throw new Error('The MCP tool was not exposed directly.');
+      await call.execute('mcp-call', { query: 'bug' }, context.signal);
       await emitText(context, 'Found one issue.');
     });
     const session = await runtime.open();
     const events: RuntimeEvent[] = [];
     const collecting = (async () => {
       for await (const event of session.execute(
-        baseRequest('turn-deferred-discovery', {
+        baseRequest('turn-direct-mcp', {
           instructions: preparedSystemPrompt,
-          tools: [builtInTool, targetTool, deniedTool],
+          tools: [builtInTool, targetTool],
         }),
       )) {
         events.push(event);
@@ -1654,76 +1576,31 @@ describe('PiRuntime mapping', () => {
     );
 
     await session.respondApproval({
-      approvalId: 'approval-catalog-call',
+      approvalId: 'approval-mcp-call',
       decision: 'approve',
-      turnId: 'turn-deferred-discovery',
+      turnId: 'turn-direct-mcp',
     });
     await collecting;
 
-    expect(holder.lastOptions?.initialState?.tools?.map((tool) => tool.name)).toEqual([
-      builtInTool.providerName,
-      PI_TOOL_SEARCH_TOOL_NAME,
-      PI_TOOL_DESCRIBE_TOOL_NAME,
-      PI_TOOL_CALL_TOOL_NAME,
+    expect(holder.lastOptions?.initialState?.tools).toMatchObject([
+      {
+        name: builtInTool.providerName,
+        label: builtInTool.displayName,
+        description: builtInTool.description,
+        parameters: builtInTool.inputSchema,
+      },
+      {
+        name: targetTool.providerName,
+        label: targetTool.displayName,
+        description: targetTool.description,
+        parameters: targetTool.inputSchema,
+      },
     ]);
-    expect(holder.lastOptions?.initialState?.systemPrompt).toBe(
-      `${preparedSystemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
-    );
-    expect(searchResult).toMatchObject({
-      value: {
-        matchedNamespaces: [
-          {
-            namespace: 'mcp',
-            tools: [expect.objectContaining({ name: targetTool.providerName })],
-          },
-        ],
-      },
-    });
-    expect(JSON.stringify(searchResult)).not.toContain(deniedTool.providerName);
-    expect(
-      events.find(
-        (event) =>
-          event.type === 'part.replace' &&
-          event.part.type === 'tool' &&
-          event.part.toolCallId === 'search-call' &&
-          event.part.state === 'output-available',
-      ),
-    ).toMatchObject({
-      part: {
-        providerName: PI_TOOL_SEARCH_TOOL_NAME,
-        toolRef: { source: 'meta', name: PI_TOOL_SEARCH_TOOL_NAME },
-        displayName: 'Search tools',
-        input: { query: 'repository' },
-        output: {
-          value: {
-            matchedNamespaces: [{ namespace: 'mcp', tools: [{ name: targetTool.providerName }] }],
-          },
-          artifacts: [],
-        },
-      },
-    });
-    expect(
-      events.find(
-        (event) =>
-          event.type === 'part.replace' &&
-          event.part.type === 'tool' &&
-          event.part.toolCallId === 'describe-call' &&
-          event.part.state === 'output-available',
-      ),
-    ).toMatchObject({
-      part: {
-        providerName: PI_TOOL_DESCRIBE_TOOL_NAME,
-        toolRef: { source: 'meta', name: PI_TOOL_DESCRIBE_TOOL_NAME },
-        displayName: 'Describe tool',
-        input: { name: targetTool.providerName },
-        output: { value: { name: targetTool.providerName }, artifacts: [] },
-      },
-    });
-    expect(JSON.stringify(events)).not.toContain('declare function tool_call');
+    expect(holder.lastOptions?.initialState?.systemPrompt).toBe(preparedSystemPrompt);
     expect(executedInput).toEqual({ query: 'bug' });
     expect(events.find((event) => event.type === 'approval.requested')).toMatchObject({
       approval: {
-        toolCallId: 'catalog-call',
+        toolCallId: 'mcp-call',
         toolRef: targetTool.ref,
         displayName: targetTool.displayName,
         input: { query: 'bug' },
@@ -1734,7 +1611,7 @@ describe('PiRuntime mapping', () => {
         (event) =>
           event.type === 'part.replace' &&
           event.part.type === 'tool' &&
-          event.part.toolCallId === 'catalog-call' &&
+          event.part.toolCallId === 'mcp-call' &&
           event.part.state === 'output-available',
       ),
     ).toMatchObject({
@@ -1750,158 +1627,7 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('shows an unknown deferred target as failed meta activity', async () => {
-    const runtime = createTestRuntime();
-    const targetTool: RuntimeTool = {
-      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
-      providerName: 'mcp_server_1_search_issues_a1b2',
-      displayName: 'Search issues',
-      description: 'Find repository issues.',
-      inputSchema: { type: 'object' },
-      approval: 'ask',
-      execute: async () => ({ value: { total: 1 }, artifacts: [] }),
-    };
-    let errorDetails: unknown;
-    arrange(runtime, async (context) => {
-      const call = context.options.initialState?.tools?.find(
-        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
-      );
-      if (!call) throw new Error('Missing tool_call.');
-      errorDetails = (
-        await call.execute(
-          'unknown-catalog-call',
-          { name: 'mcp_server_1_missing_a1b2', params: {} },
-          context.signal,
-        )
-      ).details;
-      await emitText(context, 'The requested tool is unavailable.');
-    });
-    const session = await runtime.open();
-
-    const events = await collect(
-      session.execute(baseRequest('turn-unknown-deferred-target', { tools: [targetTool] })),
-    );
-
-    expect(errorDetails).toEqual({
-      value: {
-        status: 'error',
-        error: {
-          code: 'tool_not_found',
-          message: 'Tool not found: mcp_server_1_missing_a1b2',
-          retryable: false,
-        },
-      },
-      artifacts: [],
-    });
-    expect(
-      events.find(
-        (event) =>
-          event.type === 'part.replace' &&
-          event.part.type === 'tool' &&
-          event.part.toolCallId === 'unknown-catalog-call' &&
-          event.part.state === 'error',
-      ),
-    ).toMatchObject({
-      part: {
-        providerName: PI_TOOL_CALL_TOOL_NAME,
-        toolRef: { source: 'meta', name: PI_TOOL_CALL_TOOL_NAME },
-        displayName: 'Call tool',
-        input: { name: 'mcp_server_1_missing_a1b2' },
-        error: {
-          code: 'tool_not_found',
-          message: 'Tool not found: mcp_server_1_missing_a1b2',
-          retryable: false,
-          origin: 'tool',
-        },
-        output: errorDetails,
-      },
-    });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
-    await session.close();
-  });
-
-  test('shows a deferred dispatch rejected before execution as failed meta activity', async () => {
-    const runtime = createTestRuntime();
-    const targetTool: RuntimeTool = {
-      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
-      providerName: 'mcp_server_1_search_issues_a1b2',
-      displayName: 'Search issues',
-      description: 'Find repository issues.',
-      inputSchema: { type: 'object' },
-      approval: 'auto',
-      execute: async () => ({ value: { total: 1 }, artifacts: [] }),
-    };
-    arrange(runtime, async (context) => {
-      const invalidCall = assistantMessage({
-        content: [
-          {
-            type: 'toolCall',
-            id: 'invalid-catalog-call',
-            name: PI_TOOL_CALL_TOOL_NAME,
-            arguments: { name: targetTool.providerName },
-          },
-        ],
-        stopReason: 'toolUse',
-      });
-      const toolCall = invalidCall.content[0];
-      if (toolCall.type !== 'toolCall') throw new Error('Missing invalid tool call.');
-      await context.emit({ type: 'message_start', message: invalidCall });
-      await context.emit({
-        type: 'message_update',
-        message: invalidCall,
-        assistantMessageEvent: {
-          type: 'toolcall_end',
-          contentIndex: 0,
-          toolCall,
-          partial: invalidCall,
-        },
-      });
-      await context.emit({ type: 'message_end', message: invalidCall });
-      await context.emit({
-        type: 'turn_end',
-        message: invalidCall,
-        toolResults: [
-          {
-            role: 'toolResult',
-            toolCallId: toolCall.id,
-            toolName: toolCall.name,
-            content: [{ type: 'text', text: 'Missing required property: params' }],
-            details: { error: 'Missing required property: params' },
-            isError: true,
-            timestamp: Date.now(),
-          },
-        ],
-      });
-      await emitText(context, 'The tool request was invalid.');
-    });
-    const session = await runtime.open();
-
-    const events = await collect(
-      session.execute(baseRequest('turn-invalid-deferred-dispatch', { tools: [targetTool] })),
-    );
-
-    expect(
-      events.find(
-        (event) =>
-          event.type === 'part.replace' &&
-          event.part.type === 'tool' &&
-          event.part.toolCallId === 'invalid-catalog-call' &&
-          event.part.state === 'error',
-      ),
-    ).toMatchObject({
-      part: {
-        providerName: PI_TOOL_CALL_TOOL_NAME,
-        toolRef: { source: 'meta', name: PI_TOOL_CALL_TOOL_NAME },
-        displayName: 'Call tool',
-        input: { name: targetTool.providerName },
-        error: { code: 'tool_execution_error' },
-      },
-    });
-    expect(events.at(-1)).toEqual({ type: 'completed' });
-    await session.close();
-  });
-
-  test('projects a deferred target failure onto the real MCP tool identity', async () => {
+  test('projects an MCP tool failure onto the real tool identity', async () => {
     const runtime = createTestRuntime();
     const targetTool: RuntimeTool = {
       ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_issues' },
@@ -1923,33 +1649,17 @@ describe('PiRuntime mapping', () => {
     };
     let errorDetails: unknown;
     arrange(runtime, async (context) => {
-      const describe = context.options.initialState?.tools?.find(
-        (tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME,
-      );
       const call = context.options.initialState?.tools?.find(
-        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+        (tool) => tool.name === targetTool.providerName,
       );
-      if (!describe || !call) throw new Error('Missing deferred discovery tools.');
-      // tool_call rejects an uninspected target, so the dispatch under test has
-      // to follow the same inspect-then-call order the model is held to.
-      await describe.execute(
-        'describe-error-call',
-        { name: targetTool.providerName },
-        context.signal,
-      );
-      errorDetails = (
-        await call.execute(
-          'catalog-error-call',
-          { name: targetTool.providerName, params: { query: '' } },
-          context.signal,
-        )
-      ).details;
+      if (!call) throw new Error('The MCP tool was not exposed directly.');
+      errorDetails = (await call.execute('mcp-error-call', { query: '' }, context.signal)).details;
       await emitText(context, 'The search failed.');
     });
     const session = await runtime.open();
 
     const events = await collect(
-      session.execute(baseRequest('turn-deferred-target-error', { tools: [targetTool] })),
+      session.execute(baseRequest('turn-direct-mcp-error', { tools: [targetTool] })),
     );
 
     expect(errorDetails).toEqual({
@@ -1968,7 +1678,7 @@ describe('PiRuntime mapping', () => {
         (event) =>
           event.type === 'part.replace' &&
           event.part.type === 'tool' &&
-          event.part.toolCallId === 'catalog-error-call' &&
+          event.part.toolCallId === 'mcp-error-call' &&
           event.part.state === 'error',
       ),
     ).toMatchObject({
@@ -1986,14 +1696,6 @@ describe('PiRuntime mapping', () => {
         output: errorDetails,
       },
     });
-    expect(
-      events.some(
-        (event) =>
-          (event.type === 'part.add' || event.type === 'part.replace') &&
-          event.part.type === 'tool' &&
-          event.part.providerName === PI_TOOL_CALL_TOOL_NAME,
-      ),
-    ).toBe(false);
     expect(events.at(-1)).toEqual({ type: 'completed' });
     await session.close();
   });

@@ -18,7 +18,6 @@ import type {
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
-import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
@@ -31,6 +30,8 @@ const EMPTY_PI_USAGE: PiUsage = {
   output: 0,
   totalTokens: 0,
 };
+
+const REMOVED_META_TOOL_NAMES = new Set(['tool_search', 'tool_describe', 'tool_call']);
 
 export type PiConversation = {
   history: PiMessage[];
@@ -51,7 +52,8 @@ export function toPiConversation(
 ): PiConversation {
   const historyTurns: PiHistoryTurn[] = [];
   const systemParts = request.instructions.length > 0 ? [request.instructions] : [];
-  const providerNamesByCallId = collectProviderNames(request);
+  const removedMetaToolCallIds = collectRemovedMetaToolCallIds(request);
+  const providerNamesByCallId = collectProviderNames(request, removedMetaToolCallIds);
   const mediaCapabilities = {
     image: model.input.includes('image'),
     video: false,
@@ -78,6 +80,7 @@ export function toPiConversation(
         historyTurn.messages,
         message.parts,
         providerNamesByCallId,
+        removedMetaToolCallIds,
         model,
         message.usage,
       );
@@ -145,12 +148,35 @@ function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageCo
   return { type: 'image', data: part.uri.slice(prefix.length), mimeType: part.mediaType };
 }
 
-function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
+function collectRemovedMetaToolCallIds(request: RuntimeExecutionRequest): Set<string> {
+  const result = new Set<string>();
+  for (const turn of request.history) {
+    for (const message of turn.messages) {
+      for (const part of message.parts) {
+        if (
+          part.type === 'tool-call' &&
+          part.toolRef.source === 'meta' &&
+          REMOVED_META_TOOL_NAMES.has(part.toolRef.name)
+        ) {
+          result.add(part.toolCallId);
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function collectProviderNames(
+  request: RuntimeExecutionRequest,
+  removedMetaToolCallIds: ReadonlySet<string>,
+): Map<string, string> {
   const result = new Map<string, string>();
   for (const turn of request.history) {
     for (const message of turn.messages) {
       for (const part of message.parts) {
-        if (part.type === 'tool-call') result.set(part.toolCallId, piToolName(part));
+        if (part.type === 'tool-call' && !removedMetaToolCallIds.has(part.toolCallId)) {
+          result.set(part.toolCallId, part.providerName);
+        }
       }
     }
   }
@@ -167,6 +193,7 @@ function appendAssistantHistory(
   history: PiMessage[],
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
+  removedMetaToolCallIds: ReadonlySet<string>,
   model: PiModel<PiApi>,
   usage: RuntimeExecutionRequest['history'][number]['messages'][number]['usage'],
 ): void {
@@ -198,17 +225,16 @@ function appendAssistantHistory(
         content.push({ type: 'thinking', thinking: part.text });
         break;
       case 'tool-call':
+        if (removedMetaToolCallIds.has(part.toolCallId)) break;
         content.push({
           type: 'toolCall',
           id: part.toolCallId,
-          name: piToolName(part),
-          arguments:
-            part.toolRef.source === 'mcp'
-              ? { name: part.providerName, params: part.input }
-              : (part.input as Record<string, unknown>),
+          name: part.providerName,
+          arguments: part.input as Record<string, unknown>,
         });
         break;
       case 'tool-result': {
+        if (removedMetaToolCallIds.has(part.toolCallId)) break;
         flushAssistant();
         const result: ToolResultMessage<RuntimeJsonValue> = {
           role: 'toolResult',
@@ -231,10 +257,6 @@ function appendAssistantHistory(
   flushAssistant();
 
   if (usage && lastAssistant) lastAssistant.usage = toPiUsage(usage);
-}
-
-function piToolName(part: Extract<RuntimeMessagePart, { type: 'tool-call' }>): string {
-  return part.toolRef.source === 'mcp' ? PI_TOOL_CALL_TOOL_NAME : part.providerName;
 }
 
 function toPiUsage(usage: NonNullable<RuntimeMessage['usage']>): PiUsage {

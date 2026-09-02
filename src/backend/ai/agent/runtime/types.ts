@@ -89,7 +89,7 @@ export type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string };
 
-/** User-visible model-loop activity that is not an executable application capability. */
+/** Read compatibility for historical model-loop activity; current turns do not emit meta refs. */
 export type RuntimeMetaToolRef = { source: 'meta'; name: string };
 
 export type RuntimeMessageToolRef = RuntimeToolRef | RuntimeMetaToolRef;

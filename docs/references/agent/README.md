@@ -74,9 +74,8 @@ versioned wire design. See
   lifecycle, and result reporting. The Host also injects the App's effective language and requires
   responses in that language unless the user explicitly requests another one; the user-configured
   Agent instructions remain a separate role and style section. Capability guidance is included only
-  when its supporting tool is in the frozen snapshot. Runtime adapters do not append separate
-  application policy, but may add guidance for binding-specific mechanics such as Pi's deferred MCP
-  catalog.
+  when its supporting tool is in the frozen snapshot. Runtime adapters consume this policy without
+  appending a separate application-policy fragment.
 - Pi owns the model → tool → result loop. Application adapters retain permission, credential,
   managed-file, and approval authority.
 - Managed image and bounded text input are resolved by the Host before execution. Arbitrary paths

@@ -228,7 +228,8 @@ and stable render identity.
 - `rows/` owns the intrinsic user and assistant presentation inside the list-owned row frame.
 - `parts/` owns ordered part composition and adapts Cherry message schema parts into CherryUI
   primitives. `parts/tools/` owns tool dispatch and tool-specific adapters;
-  `parts/tools/metaTool/` composes explicit search, inspect, invoke, and exec variants.
+  `parts/tools/metaTool/` renders legacy search, inspect, invoke, and exec activity from persisted
+  sessions; current Runtime turns do not emit those meta tools.
 - `parts/tools/builtInTool/` owns shared built-in tool labels. Only its `builtInToolIcon/` family is
   platform-specific.
 
