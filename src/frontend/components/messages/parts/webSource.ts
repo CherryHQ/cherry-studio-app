@@ -4,6 +4,7 @@ type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
 
 export type WebSource = {
   aliases?: string[];
+  citationNumber?: number;
   content?: string;
   faviconUrl?: string;
   id: number | string;
@@ -33,7 +34,10 @@ export function enrichWebSources(
   });
 }
 
-export function resolveCitationWebSources(messageParts: readonly CherryMessagePart[]): WebSource[] {
+export function resolveCitationWebSources(
+  messageParts: readonly CherryMessagePart[],
+  citationNumberBySourceId: ReadonlyMap<string, number> = new Map(),
+): WebSource[] {
   const metadataByUrl = collectWebSourceMetadata(messageParts);
   const citationContextById = collectCitationContext(messageParts);
   const sourceParts: SourceUrlPart[] = [];
@@ -47,7 +51,18 @@ export function resolveCitationWebSources(messageParts: readonly CherryMessagePa
   const sourcesByUrl = new Map<string, WebSource>();
 
   sourceParts.forEach((part, index) => {
-    if (sourcesByUrl.has(part.url)) return;
+    const citationNumber = citationNumberBySourceId.get(part.sourceId);
+    const existingSource = sourcesByUrl.get(part.url);
+    if (existingSource) {
+      if (
+        citationNumber !== undefined &&
+        (existingSource.citationNumber === undefined ||
+          citationNumber < existingSource.citationNumber)
+      ) {
+        sourcesByUrl.set(part.url, { ...existingSource, citationNumber });
+      }
+      return;
+    }
 
     const source = toWebSource(part, part.sourceId || index + 1);
     if (!source) return;
@@ -57,16 +72,21 @@ export function resolveCitationWebSources(messageParts: readonly CherryMessagePa
       ...source,
       title: getPageTitle(part.title, part.url) ?? source.title,
     };
+    const resolvedSource = withCitationContext(
+      metadata ? mergeWebSources(titledSource, metadata) : titledSource,
+      citationContextById,
+    );
     sourcesByUrl.set(
       part.url,
-      withCitationContext(
-        metadata ? mergeWebSources(titledSource, metadata) : titledSource,
-        citationContextById,
-      ),
+      citationNumber === undefined ? resolvedSource : { ...resolvedSource, citationNumber },
     );
   });
 
-  return [...sourcesByUrl.values()];
+  return [...sourcesByUrl.values()].sort((left, right) => {
+    if (left.citationNumber === undefined) return right.citationNumber === undefined ? 0 : 1;
+    if (right.citationNumber === undefined) return -1;
+    return left.citationNumber - right.citationNumber;
+  });
 }
 
 export function getFaviconUrls(source: WebSource): string[] {

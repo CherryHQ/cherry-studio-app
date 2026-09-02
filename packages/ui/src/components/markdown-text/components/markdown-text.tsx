@@ -15,7 +15,6 @@ const markdownThemeVariables = [
   '--color-background',
   '--color-primary',
   '--color-muted-foreground',
-  '--color-foreground-tertiary',
   '--color-link',
   '--color-border',
   '--color-secondary',
@@ -119,7 +118,6 @@ export function MarkdownText({
     backgroundValue,
     primaryValue,
     mutedForegroundValue,
-    foregroundTertiaryValue,
     linkValue,
     borderValue,
     secondaryValue,
@@ -132,7 +130,6 @@ export function MarkdownText({
   const background = resolveCSSString(backgroundValue);
   const primary = resolveCSSString(primaryValue);
   const mutedForeground = resolveCSSString(mutedForegroundValue);
-  const foregroundTertiary = resolveCSSString(foregroundTertiaryValue);
   const link = resolveCSSString(linkValue);
   const border = resolveCSSString(borderValue);
   const secondary = resolveCSSString(secondaryValue);
@@ -187,9 +184,6 @@ export function MarkdownText({
         syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
       link: { color: link, underline: false },
-      linkVariants: {
-        '^cite:': { backgroundColor: secondary, color: foregroundTertiary, underline: false },
-      },
       strong: { color: foreground },
       em: { color: foreground },
       strikethrough: { color: mutedForeground },
@@ -231,7 +225,6 @@ export function MarkdownText({
     codeBlock,
     fontSizeStep,
     foreground,
-    foregroundTertiary,
     inlineCode,
     inlineCodeForeground,
     link,

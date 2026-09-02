@@ -9,13 +9,17 @@ import { resolveCitationWebSources } from './webSource';
 import { WebSourceCard, WebSourceFavicon } from './WebSourceCard';
 
 type SourceGroupProps = {
+  citationNumberBySourceId: ReadonlyMap<string, number>;
   parts: readonly CherryMessagePart[];
 };
 
-export function SourceGroup({ parts }: SourceGroupProps) {
+export function SourceGroup({ citationNumberBySourceId, parts }: SourceGroupProps) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
-  const sources = useMemo(() => resolveCitationWebSources(parts), [parts]);
+  const sources = useMemo(
+    () => resolveCitationWebSources(parts, citationNumberBySourceId),
+    [citationNumberBySourceId, parts],
+  );
   const label = t('chat.sources.count', { count: sources.length });
 
   if (sources.length === 0) {
@@ -27,8 +31,7 @@ export function SourceGroup({ parts }: SourceGroupProps) {
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="-mx-2 min-h-10 self-start flex-row items-center gap-2 rounded-lg px-2 active:bg-secondary-active active:opacity-80"
-        hitSlop={4}
+        className="-mx-2 min-h-11 self-start flex-row items-center gap-2 rounded-lg px-2 active:bg-secondary-active active:opacity-80"
         onPress={() => setIsOpen(true)}
       >
         <View className="flex-row items-center">
