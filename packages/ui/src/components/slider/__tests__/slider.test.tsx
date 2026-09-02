@@ -166,8 +166,7 @@ describe('Slider', () => {
     const root = renderer!.root.findByProps({ mockComponent: 'hero-slider' });
     const labels = renderer!.root.findAllByType(Text);
 
-    expect(root.props.className).toBe('min-w-0 flex-1');
-    expect(root.props.style).toBeUndefined();
+    expect(root.props.style).toEqual({ flex: 1, minWidth: 0 });
     expect(labels.map((label) => label.props.children)).toEqual(['Standard', 'Extra large']);
     expect(labels.every((label) => label.props.allowFontScaling !== false)).toBe(true);
   });

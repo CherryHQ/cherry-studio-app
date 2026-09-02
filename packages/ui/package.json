@@ -91,6 +91,7 @@
     "@expo/ui": "*",
     "@legendapp/list": "*",
     "@magrinj/expo-quick-look": "*",
+    "@react-native-community/slider": "*",
     "@react-native-masked-view/masked-view": "*",
     "@shopify/react-native-skia": "*",
     "@swmansion/react-native-bottom-sheet": "*",

@@ -1,20 +1,7 @@
 import { Switch as HeroSwitch } from 'heroui-native';
-import type { AccessibilityProps, StyleProp, ViewProps, ViewStyle } from 'react-native';
 
+import type { SwitchControlProps } from './switch-control.types';
 import type { SwitchSize } from './switch.types';
-
-type SwitchVisualProps = {
-  accessibilityElementsHidden?: boolean;
-  accessibilityLabel?: string;
-  disabled?: boolean;
-  importantForAccessibility?: AccessibilityProps['importantForAccessibility'];
-  onValueChange?: (value: boolean) => void;
-  pointerEvents?: ViewProps['pointerEvents'];
-  size?: SwitchSize;
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
-  value: boolean;
-};
 
 const sizeStyles: Record<SwitchSize, { root: string; thumb: string }> = {
   default: { root: 'h-6 w-12', thumb: 'h-5 w-7' },
@@ -22,7 +9,9 @@ const sizeStyles: Record<SwitchSize, { root: string; thumb: string }> = {
   sm: { root: 'h-5 w-10', thumb: 'h-4 w-6' },
 };
 
-export function SwitchVisual({
+// Web and non-native tooling keep the Cherry control. Metro replaces this
+// private adapter with the native iOS or Android implementation on device.
+export function SwitchControl({
   accessibilityElementsHidden,
   accessibilityLabel,
   disabled = false,
@@ -33,7 +22,7 @@ export function SwitchVisual({
   style,
   testID,
   value,
-}: SwitchVisualProps) {
+}: SwitchControlProps) {
   return (
     <HeroSwitch
       accessibilityElementsHidden={accessibilityElementsHidden}

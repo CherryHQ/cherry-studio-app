@@ -1,4 +1,4 @@
-import { SwitchVisual } from './switch-visual';
+import { SwitchControl } from './switch-control';
 import type { SwitchProps } from './switch.types';
 
 export function Switch({
@@ -11,7 +11,7 @@ export function Switch({
   value,
 }: SwitchProps) {
   return (
-    <SwitchVisual
+    <SwitchControl
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       onValueChange={onValueChange}

@@ -227,6 +227,10 @@ value and persistence. The default grouped `Section` supplies its surface and se
 </Section>
 ```
 
+`Switch` and `Slider` keep one controlled CherryUI contract while private platform adapters render
+native SwiftUI controls on iOS and native Android controls on Android. Feature code never imports a
+platform UI SDK or branches on the operating system. Web keeps the CherryUI fallback controls.
+
 `Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
 press target and switch accessibility node; its trailing switch is a package-private visual
 indicator. Use a separate `Switch` when the surrounding row also contains another action:

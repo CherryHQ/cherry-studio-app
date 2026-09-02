@@ -1,6 +1,6 @@
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import { SwitchVisual } from './switch-visual';
+import { SwitchControl } from './switch-control';
 import type { SwitchSize } from './switch.types';
 
 type SwitchIndicatorProps = {
@@ -13,7 +13,7 @@ type SwitchIndicatorProps = {
 
 export function SwitchIndicator(props: SwitchIndicatorProps) {
   return (
-    <SwitchVisual
+    <SwitchControl
       {...props}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
