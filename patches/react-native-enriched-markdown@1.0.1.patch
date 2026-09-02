@@ -1,0 +1,11 @@
+diff --git a/ios/input/EnrichedMarkdownTextInput.mm b/ios/input/EnrichedMarkdownTextInput.mm
+index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40840cdfe3 100644
+--- a/ios/input/EnrichedMarkdownTextInput.mm
++++ b/ios/input/EnrichedMarkdownTextInput.mm
+@@ -1575,5 +1575,6 @@ static const NSTimeInterval kENRMAtomicSnapPollInterval = 0.1;
+ - (void)handleTextChanged
+ {
+   if (_editSession.isComposing) {
++    [self updatePlaceholderVisibility];
+     return;
+   }
