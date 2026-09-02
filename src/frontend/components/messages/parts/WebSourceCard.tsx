@@ -21,26 +21,29 @@ export function WebSourceCard({ source }: WebSourceCardProps) {
         title: source.title ?? source.siteName,
       })}
       accessibilityRole="link"
-      className="gap-3 rounded-2xl border-continuous bg-background px-4 py-4 active:bg-secondary-active active:opacity-80"
+      className="gap-2.5 rounded-2xl border-continuous bg-background-subtle px-3 py-4 active:bg-secondary-active active:opacity-80"
       onPress={() => void openExternalUrl(source.url)}
     >
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-center gap-1.5">
         <WebSourceFavicon key={source.url} source={source} />
-        <Text className="min-w-0 flex-1 font-medium text-foreground text-sm" numberOfLines={1}>
+        <Text
+          className="min-w-0 flex-1 font-medium text-muted-foreground text-xs"
+          numberOfLines={1}
+        >
           {source.siteName}
         </Text>
         {source.publishedDate ? (
-          <Text className="shrink-0 text-muted-foreground text-sm">{source.publishedDate}</Text>
+          <Text className="shrink-0 text-muted-foreground text-xs">{source.publishedDate}</Text>
         ) : null}
       </View>
-      <View className="gap-1.5">
+      <View className="gap-1">
         {source.title ? (
-          <Text className="font-semibold text-foreground text-base leading-6" numberOfLines={2}>
+          <Text className="font-medium text-foreground text-sm" numberOfLines={2}>
             {source.title}
           </Text>
         ) : null}
         {source.content ? (
-          <Text className="text-muted-foreground text-sm leading-5" numberOfLines={3}>
+          <Text className="text-muted-foreground text-xs" numberOfLines={3}>
             {source.content}
           </Text>
         ) : null}
@@ -73,7 +76,7 @@ function WebSourceFavicon({ source }: { source: WebSource }) {
   return (
     <View
       accessibilityElementsHidden
-      className="relative size-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border border-continuous bg-secondary"
+      className="relative size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border border-continuous bg-secondary"
       importantForAccessibility="no-hide-descendants"
     >
       {status !== 'loaded' ? (

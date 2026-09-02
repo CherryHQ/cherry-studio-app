@@ -38,6 +38,7 @@ export type MessagePartDetailProps = {
   sizes?: BottomSheetSizes;
   testID?: string;
   title: string;
+  variant?: 'default' | 'source-list';
 };
 
 export type MessagePartPendingProps = {

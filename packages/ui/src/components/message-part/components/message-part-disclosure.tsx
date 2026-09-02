@@ -151,6 +151,7 @@ export function MessagePartTool({
           sizes={detailVariant === 'source-list' ? SOURCE_LIST_DETAIL_SIZES : TOOL_DETAIL_SIZES}
           testID={`${testID}-detail`}
           title={detailTitle ?? title}
+          variant={detailVariant}
         >
           {children}
         </MessagePartDetail>
@@ -215,6 +216,7 @@ export function MessagePartDetail({
   sizes,
   testID,
   title,
+  variant = 'default',
 }: MessagePartDetailProps) {
   // TODO(message-part-detail): Replace arbitrary children with controlled detail layouts after the
   // visual designs for text, structured data, lists, and media are finalized.
@@ -224,7 +226,9 @@ export function MessagePartDetail({
     <BottomSheet {...heightProps} onClose={onClose} open testID={testID} title={title}>
       <ScrollView
         className="flex-1"
-        contentContainerClassName="gap-2.5 px-4 pb-4"
+        contentContainerClassName={
+          variant === 'source-list' ? 'gap-2.5 px-3 pb-4' : 'gap-2.5 px-4 pb-4'
+        }
         showsVerticalScrollIndicator={false}
       >
         {children}

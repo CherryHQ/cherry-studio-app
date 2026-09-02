@@ -37,6 +37,7 @@ export function SourceGroup({ parts }: SourceGroupProps) {
         <MessagePart.Detail
           onClose={() => setIsOpen(false)}
           title={t('chat.webSearch.detailTitle', { count: sources.length })}
+          variant="source-list"
         >
           <View className="gap-3">
             {sources.map((source) => (
