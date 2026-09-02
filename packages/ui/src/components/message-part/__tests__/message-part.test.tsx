@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MessagePart } from '..';
@@ -111,6 +111,13 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: () => void) => callback(),
+}));
+
+const findRenderedByTestId = (renderer: ReactTestRenderer, testID: string) =>
+  renderer.root.findAllByType(View).filter((node) => node.props.testID === testID);
+
 describe('MessagePart', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -165,16 +172,16 @@ describe('MessagePart', () => {
     });
 
     expect(renderer!.root.findByProps({ active: true })).toBeDefined();
-    expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     expect(mockBottomSheetProps).toEqual({});
     expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findByProps({ testID: 'thinking-detail' })).toBeDefined();
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
 
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     expect(onDisclosureToggle).toHaveBeenCalledTimes(2);
-    expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
   });
 
   it('shimmers the running tool title without removing its status text', () => {
@@ -211,7 +218,7 @@ describe('MessagePart', () => {
     });
 
     // Live run: steps visible without any press, title shimmering.
-    expect(renderer!.root.findByProps({ testID: 'group-steps' })).toBeDefined();
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
     expect(renderer!.root.findByProps({ accessibilityHint: 'shimmer' }).props.children).toBe(
       'Working with tools…',
     );
@@ -225,9 +232,9 @@ describe('MessagePart', () => {
     });
 
     // Settled run folds to its summary until the reader asks for the steps.
-    expect(renderer!.root.findAllByProps({ testID: 'group-steps' })).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
-    expect(renderer!.root.findByProps({ testID: 'group-steps' })).toBeDefined();
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
   });
 
   it('lets a manual toggle override the running default of a tool group', () => {
@@ -246,7 +253,7 @@ describe('MessagePart', () => {
     });
 
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
-    expect(renderer!.root.findAllByProps({ testID: 'group-steps' })).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
       'text-destructive',
     );
