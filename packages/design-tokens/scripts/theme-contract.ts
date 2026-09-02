@@ -121,6 +121,7 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'inline-code',
   'inline-code-foreground',
   'chat-user',
+  'chat-background',
   'tag-amber',
   'tag-amber-foreground',
   'tag-blue',

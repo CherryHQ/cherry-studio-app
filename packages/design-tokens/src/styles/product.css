@@ -71,6 +71,9 @@
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--gray-alpha-100);
 
+  /* 聊天业务的消息区表面。共享 MessageList 不认领业务颜色，由聊天工作区在消费侧覆盖。 */
+  --chat-background: #f9f9f9;
+
   /* Stable product domain: categorical badge pairs.
    * 每个色相一对：`tag-*` 是 100 号浅底，`tag-*-foreground` 是画在其上的 900 号
    * 记号，两档都随主题翻转，浅底上实测 4.8–7.7:1。这是分类用色而非状态用色 ——
@@ -112,4 +115,8 @@
   --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
   --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
   --usage-level-4: var(--green-700);
+}
+
+.dark {
+  --chat-background: var(--background);
 }
