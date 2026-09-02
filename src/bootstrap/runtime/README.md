@@ -8,7 +8,7 @@ feature UI may render.
 | File | Responsibility |
 | --- | --- |
 | `createAppBootstrapRuntime.ts` | Creates the stable `Backend`, `ApiClient`, and `PreferenceClient`; defines initialize and dispose ordering |
-| `initializeAppRuntime.ts` | Applies cached boot theme and initializes i18n after the native handoff |
+| `initializeAppRuntime.ts` | Applies cached boot preferences, initializes i18n, and seeds localized first-run data after the native handoff |
 | `startupCoverHandoff.ts` | Holds native-appearance mutations until the system-themed RN cover owns the surface |
 | `AppBootstrapProvider.tsx` | Owns one runtime, injects its interfaces, tracks startup status, and disposes it |
 | `AppBootstrapGate.tsx` | Renders nothing while loading and surfaces initialization failure |
@@ -18,11 +18,12 @@ feature UI may render.
 Required initialization runs in this order:
 
 1. initialize backend cache;
-2. initialize SQLite, including migration and seeding;
+2. initialize SQLite, including migrations;
 3. initialize cached preferences;
 4. hand the native launch surface to the system-themed React Native startup cover;
 5. apply the boot theme and initialize i18n behind that cover;
-6. set status to `ready` and open the gate.
+6. seed localized first-run data;
+7. set status to `ready` and open the gate.
 
 Only work required for a correct first render may block the gate. The runtime's
 `runPostReadyTasks()` method delegates to the host's fire-and-forget PostReady phase. Route data,

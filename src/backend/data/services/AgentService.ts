@@ -147,21 +147,21 @@ export class AgentService {
   async create(dto: CreateAgentDto): Promise<Agent> {
     this.validateName(dto.name);
 
-    const row = await this.dbService.withWriteTx(async (tx) => {
-      const modelId = await this.resolveCreateModelId(tx, dto.modelId);
-      return (await insertWithOrderKey(
-        tx,
-        agentTable,
-        {
-          ...dto,
-          modelId,
-          toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
-        },
-        { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },
-      )) as AgentRow;
-    });
+    const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
 
     return rowToAgent(row, await this.getModelName(row.modelId));
+  }
+
+  /** Seeds a fresh installation without recreating an Agent the user deleted. */
+  async createInitialAgent(dto: CreateAgentDto): Promise<Agent | null> {
+    this.validateName(dto.name);
+
+    const row = await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx.select({ id: agentTable.id }).from(agentTable).limit(1);
+      return existing ? null : this.insertTx(tx, dto);
+    });
+
+    return row ? rowToAgent(row, await this.getModelName(row.modelId)) : null;
   }
 
   async update(id: string, dto: UpdateAgentDto): Promise<Agent> {
@@ -332,6 +332,20 @@ export class AgentService {
       .limit(1);
 
     return row ? preferred : null;
+  }
+
+  private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
+    const modelId = await this.resolveCreateModelId(tx, dto.modelId);
+    return (await insertWithOrderKey(
+      tx,
+      agentTable,
+      {
+        ...dto,
+        modelId,
+        toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+      },
+      { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },
+    )) as AgentRow;
   }
 
   private async getModelName(modelId: null | string | undefined): Promise<null | string> {
