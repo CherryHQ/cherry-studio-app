@@ -1550,6 +1550,7 @@ describe('PiRuntime mapping', () => {
 
   test('exposes MCP tools through deferred discovery and calls the target through its approval boundary', async () => {
     const runtime = createTestRuntime();
+    const preparedSystemPrompt = 'Host-prepared application system prompt.';
     let executedInput: unknown;
     let searchResult: unknown;
     const builtInTool: RuntimeTool = {
@@ -1639,7 +1640,10 @@ describe('PiRuntime mapping', () => {
     const events: RuntimeEvent[] = [];
     const collecting = (async () => {
       for await (const event of session.execute(
-        baseRequest('turn-deferred-discovery', { tools: [builtInTool, targetTool, deniedTool] }),
+        baseRequest('turn-deferred-discovery', {
+          instructions: preparedSystemPrompt,
+          tools: [builtInTool, targetTool, deniedTool],
+        }),
       )) {
         events.push(event);
       }
@@ -1662,8 +1666,8 @@ describe('PiRuntime mapping', () => {
       PI_TOOL_DESCRIBE_TOOL_NAME,
       PI_TOOL_CALL_TOOL_NAME,
     ]);
-    expect(holder.lastOptions?.initialState?.systemPrompt).toContain(
-      PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
+    expect(holder.lastOptions?.initialState?.systemPrompt).toBe(
+      `${preparedSystemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
     );
     expect(searchResult).toMatchObject({
       value: {

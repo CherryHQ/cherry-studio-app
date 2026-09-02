@@ -443,7 +443,9 @@ describe('MobileAgentHost', () => {
 
     // The Runtime saw the current Agent definition and the turn input.
     expect(requests[0]).toMatchObject({
-      instructions: 'Be brief.',
+      instructions: expect.stringContaining(
+        '<agent_instructions>\nBe brief.\n</agent_instructions>',
+      ),
       history: [],
       contextCheckpoint: null,
       input: [{ type: 'text', text: 'Hello.' }],

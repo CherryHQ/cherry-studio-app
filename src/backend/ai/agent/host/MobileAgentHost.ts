@@ -114,6 +114,7 @@ import {
 } from './agentDefinitions';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
+import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import { type AgentInferenceModelResolver, resolveAgentInferenceModel } from './inferenceSnapshot';
 import {
@@ -752,7 +753,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       state.abortController.signal.throwIfAborted();
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
-        instructions: plan.agent.instructions,
+        instructions: buildAgentSystemPrompt({
+          agentInstructions: plan.agent.instructions,
+          tools: plan.tools,
+        }),
         model: plan.agent.model,
         history: toRuntimeHistory(plan.history, runtimeAttachments),
         contextCheckpoint: plan.runtimeContextCheckpoint,
