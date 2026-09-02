@@ -41,26 +41,41 @@ export function MessageParts({
 
   const { body, files, process } = partitionMessageParts(parts);
   const hasSources = parts.some((part) => part.type === 'source-url');
+  const isStreaming = message.status === 'pending';
 
   return (
     <View className="gap-2">
       {process.length > 0 ? (
-        <ProcessGroupPart
-          citationText={citations.textByPartIndex}
-          isTextSelectionEnabled={isTextSelectionEnabled}
-          items={process.map(({ index, part }) => ({
-            index,
-            key: getMessagePartKey(message, part, index),
-            part,
-          }))}
-          message={message}
-          messageParts={parts}
-          renderMode={renderMode}
-        />
+        isStreaming ? (
+          process.map(({ index, part }) => (
+            <MessagePartRenderer
+              isStreaming
+              isTextSelectionEnabled={isTextSelectionEnabled}
+              key={getMessagePartKey(message, part, index)}
+              messageParts={parts}
+              part={part}
+              renderMode={renderMode}
+              resolvedText={citations.textByPartIndex.get(index)}
+            />
+          ))
+        ) : (
+          <ProcessGroupPart
+            citationText={citations.textByPartIndex}
+            isTextSelectionEnabled={isTextSelectionEnabled}
+            items={process.map(({ index, part }) => ({
+              index,
+              key: getMessagePartKey(message, part, index),
+              part,
+            }))}
+            message={message}
+            messageParts={parts}
+            renderMode={renderMode}
+          />
+        )
       ) : null}
       {body.map((item) => (
         <MessagePartRenderer
-          isStreaming={message.status === 'pending'}
+          isStreaming={isStreaming}
           isTextSelectionEnabled={isTextSelectionEnabled}
           key={getMessagePartKey(message, item.part, item.index)}
           messageParts={parts}

@@ -1,13 +1,9 @@
-import {
-  ContextMenuScrollBoundary,
-  ScrollToBottomButton,
-  scrollToBottomButtonSize,
-} from '@cherrystudio/ui/components';
+import { ContextMenuScrollBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, View } from 'react-native';
+import { type LayoutChangeEvent, Platform, View } from 'react-native';
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { MessageListDisclosureProvider } from './list/MessageListDisclosureContext';
@@ -63,10 +59,46 @@ export function MessageList({
     scrollMessageToEnd,
   });
   const isAtBottom = useSharedValue(true);
+  const contentHeightRef = useRef({ dataKey, height: 0 });
+  const viewportHeightRef = useRef(0);
+  const [contentScrollability, setContentScrollability] = useState({
+    dataKey,
+    isScrollable: false,
+  });
+  const isContentScrollable =
+    contentScrollability.dataKey === dataKey && contentScrollability.isScrollable;
   const [isNativeAtBottomForButton, setIsNativeAtBottomForButton] = useState(true);
   const syncScrollButtonVisibility = useCallback((atBottom: boolean) => {
     setIsNativeAtBottomForButton(atBottom);
   }, []);
+  const syncContentScrollability = useCallback(() => {
+    const contentHeight =
+      contentHeightRef.current.dataKey === dataKey ? contentHeightRef.current.height : 0;
+    const nextIsScrollable =
+      viewportHeightRef.current > 0 && contentHeight > viewportHeightRef.current;
+    setContentScrollability((current) => {
+      if (current.dataKey === dataKey && current.isScrollable === nextIsScrollable) {
+        return current;
+      }
+      return { dataKey, isScrollable: nextIsScrollable };
+    });
+  }, [dataKey]);
+  const handleListContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      contentHeightRef.current = { dataKey, height };
+      syncContentScrollability();
+      handleContentSizeChange();
+    },
+    [dataKey, handleContentSizeChange, syncContentScrollability],
+  );
+  const handleListLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      viewportHeightRef.current = event.nativeEvent.layout.height;
+      syncContentScrollability();
+      handleLayout(event);
+    },
+    [handleLayout, syncContentScrollability],
+  );
 
   useAnimatedReaction(
     () => isAtBottom.get(),
@@ -80,15 +112,14 @@ export function MessageList({
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const contentContainerStyle = useMemo(
     () => ({
-      paddingBottom:
-        contentBottomInset + scrollToBottomButtonSize + SCROLL_BUTTON_GAP_ABOVE_ACCESSORY * 2,
+      paddingBottom: contentBottomInset,
       paddingTop: MESSAGE_LIST_TOP_PADDING,
     }),
     [contentBottomInset],
   );
   const renderMessageRow = useCallback(
-    ({ item }: LegendListRenderItemProps<MessageListItem>) => (
-      <MessageListRow message={item} renderMessage={renderMessage} />
+    ({ extraData: rowExtraData, item }: LegendListRenderItemProps<MessageListItem>) => (
+      <MessageListRow extraData={rowExtraData} message={item} renderMessage={renderMessage} />
     ),
     [renderMessage],
   );
@@ -134,8 +165,8 @@ export function MessageList({
               ListHeaderComponent={listHeader}
               {...(!dataKey ? { initialScrollAtEnd: true } : {})}
               maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-              onContentSizeChange={handleContentSizeChange}
-              onLayout={handleLayout}
+              onContentSizeChange={handleListContentSizeChange}
+              onLayout={handleListLayout}
               onLoad={handleLoad}
               onScroll={handleScroll}
               onStartReached={onLoadOlder ? handleStartReached : undefined}
@@ -157,7 +188,7 @@ export function MessageList({
             accessibilityLabel={t('chat.message.scrollToBottom')}
             bottomAccessoryHeight={bottomAccessoryHeight}
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-            isAtBottom={isNativeAtBottomForButton || isFollowing}
+            isAtBottom={!isContentScrollable || isNativeAtBottomForButton || isFollowing}
             // The press only enters following mode, which already hides the
             // button. Mirroring an optimistic at-end state here would stick at
             // `true` whenever the scroll does not actually land at the end.

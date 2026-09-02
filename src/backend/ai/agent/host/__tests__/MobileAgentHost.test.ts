@@ -413,6 +413,9 @@ describe('MobileAgentHost', () => {
     // One notification per message-changing event (part.add, two text.delta,
     // part.replace) — a handled event that stops notifying would show up here.
     expect(backgroundReplyTurn.update).toHaveBeenCalledTimes(4);
+    expect(
+      backgroundReplyTurn.update.mock.calls.filter(([, options]) => options?.deferPreview),
+    ).toHaveLength(2);
     expect(backgroundReplyTurn.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         id: submitted.assistantMessageId,

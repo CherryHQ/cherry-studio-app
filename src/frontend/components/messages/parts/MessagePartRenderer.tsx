@@ -12,7 +12,7 @@ import { ReasoningPart } from './ReasoningPart';
 import { SourceUrlPart } from './SourceUrlPart';
 import { TextPart } from './TextPart';
 import { ToolPartRenderer } from './tools/ToolPartRenderer';
-import { isToolMessagePart } from './tools/toolPartState';
+import { isToolMessagePart, isWebSearchToolPart } from './tools/toolPartState';
 import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
 
@@ -89,4 +89,26 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
     default:
       return <UnknownPart />;
   }
-});
+}, areMessagePartRendererPropsEqual);
+
+function areMessagePartRendererPropsEqual(
+  previous: MessagePartRendererProps,
+  next: MessagePartRendererProps,
+) {
+  if (
+    previous.isStreaming !== next.isStreaming ||
+    previous.isTextSelectionEnabled !== next.isTextSelectionEnabled ||
+    previous.part !== next.part ||
+    previous.renderMode !== next.renderMode ||
+    previous.resolvedText?.markdown !== next.resolvedText?.markdown ||
+    previous.resolvedText?.plainText !== next.resolvedText?.plainText
+  ) {
+    return false;
+  }
+
+  return (
+    !isToolMessagePart(next.part) ||
+    !isWebSearchToolPart(next.part) ||
+    previous.messageParts === next.messageParts
+  );
+}
