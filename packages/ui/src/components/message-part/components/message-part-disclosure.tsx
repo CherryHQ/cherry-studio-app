@@ -53,7 +53,7 @@ export function MessagePartProcess({
   };
 
   return (
-    <View className="gap-1.5 border-border-subtle border-b pb-2">
+    <View className={`gap-1.5 border-border-subtle border-b ${isOpen ? 'pb-2' : ''}`}>
       <MessagePartStatus
         accessibilityLabel={title}
         expanded={isOpen}
