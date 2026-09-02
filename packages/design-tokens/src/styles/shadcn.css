@@ -11,7 +11,8 @@
  * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
  * 现在只同步图标。
  *
- * 每条直接指向 `vercel.css` 的调色板档位。此前中间还隔着一层同名的 `--cs-`
+ * 角色优先指向 `vercel.css` 的调色板档位，只在需要明确的半档或透明度时从档位派生。
+ * 此前中间还隔着一层同名的 `--cs-`
  * provider（`--background: var(--cs-background)` → `--cs-background:
  * var(--cs-background-100)`），那一层每个名字只有一个消费者，等于把「这个角色用
  * 哪一档」这件事拆到两个文件里说，读的时候要跳一次才看得到答案。那个 `--cs-`
@@ -24,7 +25,9 @@
 
 :root {
   /* Core surfaces and content */
-  --background: var(--background-100);
+  /* 从纯白往 background-200 移半档，给页面一层轻微银灰，同时保留
+   * background-subtle 与 card 的层级。深色仍在下方回到纯黑。 */
+  --background: color-mix(in srgb, var(--background-100) 50%, var(--background-200));
   --foreground: var(--gray-1000);
   --card: var(--gray-100);
   --card-foreground: var(--gray-1000);
@@ -91,6 +94,7 @@
 
 .dark {
   /* 抬升：浅色下浮层与页面同为白，深色下纯黑页面上必须提一档才有可见边界。 */
+  --background: var(--background-100);
   --popover: var(--gray-100);
   --sidebar: var(--gray-100);
   --sidebar-accent: var(--gray-200);
