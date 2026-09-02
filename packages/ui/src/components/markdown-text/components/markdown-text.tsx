@@ -15,6 +15,7 @@ const markdownThemeVariables = [
   '--color-background',
   '--color-primary',
   '--color-muted-foreground',
+  '--color-foreground-tertiary',
   '--color-link',
   '--color-border',
   '--color-secondary',
@@ -43,9 +44,10 @@ function createMarkdownTypographyStyle(
   monoFontFamily: string,
 ): MarkdownStyle {
   const scale = resolveTypographyScale(fontSizeStep);
+  const prose = { ...scale.base, lineHeight: scale.base.lineHeight + 2 };
 
   return {
-    paragraph: { ...scale.base, marginBottom: 12, marginTop: 0 },
+    paragraph: { ...prose, marginBottom: 12, marginTop: 0 },
     h1: { ...scale.xl, fontWeight: '700', marginBottom: 10, marginTop: 0 },
     h2: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 0 },
     h3: { ...scale.base, fontWeight: '600', marginBottom: 8, marginTop: 0 },
@@ -53,7 +55,7 @@ function createMarkdownTypographyStyle(
     h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 0 },
     h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 0 },
     blockquote: {
-      ...scale.base,
+      ...prose,
       borderRadius: 0,
       borderWidth: 3,
       gapWidth: 12,
@@ -62,12 +64,12 @@ function createMarkdownTypographyStyle(
       padding: 2,
     },
     list: {
-      ...scale.base,
+      ...prose,
       bulletSize: 6,
       gapWidth: 10,
       itemSpacing: 6,
       marginBottom: 12,
-      marginLeft: 20,
+      marginLeft: 8,
       marginTop: 0,
       markerFontWeight: '500',
       // Floors every marker column to the width an ordered list reserves for
@@ -117,6 +119,7 @@ export function MarkdownText({
     backgroundValue,
     primaryValue,
     mutedForegroundValue,
+    foregroundTertiaryValue,
     linkValue,
     borderValue,
     secondaryValue,
@@ -129,6 +132,7 @@ export function MarkdownText({
   const background = resolveCSSString(backgroundValue);
   const primary = resolveCSSString(primaryValue);
   const mutedForeground = resolveCSSString(mutedForegroundValue);
+  const foregroundTertiary = resolveCSSString(foregroundTertiaryValue);
   const link = resolveCSSString(linkValue);
   const border = resolveCSSString(borderValue);
   const secondary = resolveCSSString(secondaryValue);
@@ -183,6 +187,9 @@ export function MarkdownText({
         syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
       link: { color: link, underline: false },
+      linkVariants: {
+        '^cite:': { backgroundColor: secondary, color: foregroundTertiary, underline: false },
+      },
       strong: { color: foreground },
       em: { color: foreground },
       strikethrough: { color: mutedForeground },
@@ -216,6 +223,7 @@ export function MarkdownText({
       inlineMath: { color: foreground },
       highlight: { backgroundColor: secondary, color: foreground },
       spoiler: { color: mutedForeground, solid: { borderRadius: 4 } },
+      superscript: { baselineOffsetScale: 0.3, fontScale: 0.75 },
     };
   }, [
     background,
@@ -223,6 +231,7 @@ export function MarkdownText({
     codeBlock,
     fontSizeStep,
     foreground,
+    foregroundTertiary,
     inlineCode,
     inlineCodeForeground,
     link,
@@ -239,7 +248,7 @@ export function MarkdownText({
       flavor="github"
       markdown={markdown}
       markdownStyle={markdownStyle}
-      md4cFlags={{ latexMath: true, underline: false }}
+      md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
       selectable={selectable}
     />

@@ -6,8 +6,8 @@ import { useResolveClassNames } from 'uniwind';
 import { duration, easing } from '../../../motion';
 import { Surface } from '../../surface';
 
-const BUTTON_SIZE = 40;
-const SURFACE_CLASS_NAME = 'border border-border bg-secondary';
+export const scrollToBottomButtonSize = 40;
+const SURFACE_CLASS_NAME = 'border border-border bg-background';
 const visibilityMotion = { duration: duration.fast, easing: easing.settle } as const;
 
 export type ScrollToBottomButtonProps = {
@@ -26,8 +26,6 @@ export function ScrollToBottomButton({
   onPress,
 }: ScrollToBottomButtonProps) {
   const surfaceTokens = useResolveClassNames(SURFACE_CLASS_NAME);
-  const tintColor =
-    typeof surfaceTokens.backgroundColor === 'string' ? surfaceTokens.backgroundColor : undefined;
   const surfaceStyle = [
     styles.surface,
     { borderColor: surfaceTokens.borderColor, borderWidth: surfaceTokens.borderWidth },
@@ -57,10 +55,9 @@ export function ScrollToBottomButton({
         >
           <Surface
             className={SURFACE_CLASS_NAME}
-            cornerRadius={BUTTON_SIZE / 2}
+            cornerRadius={scrollToBottomButtonSize / 2}
             interactive
             style={surfaceStyle}
-            tintColor={tintColor}
           >
             <ArrowDownIcon className="size-5 text-foreground" />
           </Surface>
@@ -73,9 +70,9 @@ export function ScrollToBottomButton({
 const styles = StyleSheet.create({
   surface: {
     alignItems: 'center',
-    height: BUTTON_SIZE,
+    height: scrollToBottomButtonSize,
     justifyContent: 'center',
-    width: BUTTON_SIZE,
+    width: scrollToBottomButtonSize,
   },
   wrap: {
     alignItems: 'center',

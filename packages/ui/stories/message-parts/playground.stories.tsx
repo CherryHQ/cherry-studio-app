@@ -1,5 +1,3 @@
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
-import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { FilePreview, MarkdownText, MessagePart } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import type { ReactNode } from 'react';
@@ -171,20 +169,18 @@ export const AllStates: Story = {
           <StoryGroup title="Tools">
             <MessagePart>
               <MessagePart.Tool
-                icon={SearchIcon}
                 state="running"
                 statusText="Searching"
                 testID="playground-search-running"
-                title="Cherry Studio"
+                title="Search web"
               >
                 <Text className="text-foreground text-base">Waiting for results...</Text>
               </MessagePart.Tool>
               <MessagePart.Tool
-                icon={SearchIcon}
                 state="complete"
                 statusText="3 results"
                 testID="playground-search-complete"
-                title="Cherry Studio"
+                title="Search web"
               >
                 <MessagePart.Source
                   label="Cherry Studio"
@@ -200,7 +196,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Tool>
               <MessagePart.Tool
-                icon={WrenchIcon}
                 state="running"
                 statusText="Running"
                 testID="playground-tool-running"
@@ -209,7 +204,6 @@ export const AllStates: Story = {
                 <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
               </MessagePart.Tool>
               <MessagePart.Tool
-                icon={WrenchIcon}
                 state="complete"
                 statusText="Completed"
                 testID="playground-tool-complete"

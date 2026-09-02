@@ -4,6 +4,10 @@ Application adapter over CherryUI `MarkdownText` for chat content and non-chat p
 only the global typography preference and opening external links; CherryUI owns renderer selection,
 theme tokens, syntax highlighting, GitHub flavor, LaTeX, and typography styles.
 
+Message citations use an internal `cite:` link prefix. CherryUI recognizes that prefix for its
+quiet gray superscript treatment, while this adapter decodes it back to the original HTTP URL
+before opening it. Ordinary body links keep the standard link treatment.
+
 ## Code blocks
 
 Syntax highlighting is native (tree-sitter, compiled into the binary) and math is rendered by

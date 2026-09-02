@@ -17,6 +17,8 @@ export type MessageListItem = Readonly<{
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
   role: 'assistant' | 'user';
   status: MessageStatus;
+  /** Last persisted update; terminal assistant messages use it as their completion time. */
+  updatedAt?: string;
 }>;
 
 export type MessageListProps = {

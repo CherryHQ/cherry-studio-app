@@ -56,6 +56,7 @@ describe('agentMessageProjection', () => {
         name: 'GPT-5',
         providerId: 'openai',
       },
+      updatedAt: '2026-08-25T00:00:00.000Z',
     });
   });
 

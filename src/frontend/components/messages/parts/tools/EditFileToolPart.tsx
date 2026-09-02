@@ -1,7 +1,6 @@
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
 import { GenericToolPart } from './GenericToolPart';
 import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
 
@@ -20,7 +19,6 @@ export function EditFileToolPart({ part }: EditFileToolPartProps) {
     return <GenericToolPart part={part} />;
   }
 
-  const display = getBuiltInToolDisplay(EDIT_FILE_TOOL_NAME);
   if (editedFile !== null) {
     const details = {
       [t('chat.builtinTool.file.filename')]: editedFile.filename,
@@ -32,8 +30,6 @@ export function EditFileToolPart({ part }: EditFileToolPartProps) {
 
     return (
       <MessagePart.Tool
-        icon={display?.icon}
-        imageSource={display?.imageSource}
         state="complete"
         statusText={t('chat.builtinTool.file.edited')}
         testID="edit-file-tool-part"
@@ -46,8 +42,6 @@ export function EditFileToolPart({ part }: EditFileToolPartProps) {
 
   return (
     <MessagePart.Tool
-      icon={display?.icon}
-      imageSource={display?.imageSource}
       state="complete"
       statusText={t('chat.tool.callError')}
       statusTone="danger"

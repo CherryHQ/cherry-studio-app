@@ -53,4 +53,17 @@ describe('MarkdownText adapter', () => {
       expect.objectContaining({ fontSizeStep: 2, isStreaming: true }),
     );
   });
+
+  it('opens a prefixed citation link as its original external URL', () => {
+    act(() => {
+      create(<MarkdownText markdown="Citation" />);
+    });
+
+    const onLinkPress = mockCherryMarkdownText.mock.calls[0]?.[0].onLinkPress as
+      | ((url: string) => void)
+      | undefined;
+    act(() => onLinkPress?.('cite:https%3A%2F%2Fgoldprice.org%2Fgold-price.html'));
+
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith('https://goldprice.org/gold-price.html');
+  });
 });

@@ -172,6 +172,7 @@
   "chat.model.select": "选择模型",
   "chat.newSession.description": "选择一个智能体后开始会话。",
   "chat.newSession.title": "今天想完成什么？",
+  "chat.process.duration": "用时 {{seconds}}秒",
   "chat.reasoning.auto": "自动",
   "chat.reasoning.faster": "更快",
   "chat.reasoning.default": "默认",

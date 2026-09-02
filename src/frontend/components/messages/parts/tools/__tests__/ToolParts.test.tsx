@@ -161,6 +161,19 @@ describe('tool message detail sheets', () => {
     expect(trigger.props.statusText).toBe('chat.tool.inputReady');
   });
 
+  it('keeps the web fetch action free of implementation details', async () => {
+    await render(
+      <GenericToolPart
+        part={makeToolPart({
+          input: { urls: ['https://www.goldprice.org/gold-price.html'] },
+          toolName: 'web_fetch',
+        })}
+      />,
+    );
+
+    expect(findByTestID('tool-part-trigger').props.title).toBe('chat.builtinTool.web.fetch');
+  });
+
   it('opens MCP tool details with the server and tool name', async () => {
     await render(
       <McpToolPart
@@ -200,7 +213,7 @@ describe('tool message detail sheets', () => {
     );
 
     const trigger = findByTestID('web-search-tool-part-trigger');
-    expect(trigger.props.title).toBe('Cherry Studio');
+    expect(trigger.props.title).toBe('chat.builtinTool.web.search');
     expect(trigger.props.statusText).toBe('chat.webSearch.resultCount');
     expect(findAllByTestID('web-search-tool-part-detail')).toHaveLength(0);
 
@@ -208,7 +221,9 @@ describe('tool message detail sheets', () => {
       trigger.props.onPress();
     });
 
-    expect(findByTestID('web-search-tool-part-detail').props.title).toBe('Cherry Studio');
+    expect(findByTestID('web-search-tool-part-detail').props.title).toBe(
+      'chat.webSearch.detailTitle',
+    );
     expect(findText('Cherry Studio')).not.toHaveLength(0);
   });
 

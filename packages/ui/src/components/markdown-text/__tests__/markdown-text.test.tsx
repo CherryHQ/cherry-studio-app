@@ -52,7 +52,7 @@ describe('MarkdownText', () => {
           allowTrailingMargin: false,
           flavor: 'github',
           markdown: 'Hello',
-          md4cFlags: { latexMath: true, underline: false },
+          md4cFlags: { latexMath: true, superscript: true, underline: false },
           selectable: true,
         }),
       );
@@ -61,7 +61,7 @@ describe('MarkdownText', () => {
           paragraph: expect.objectContaining({
             color: 'foreground',
             fontSize: 20,
-            lineHeight: 26,
+            lineHeight: 28,
             marginBottom: 12,
             marginTop: 0,
           }),
@@ -76,8 +76,8 @@ describe('MarkdownText', () => {
           list: expect.objectContaining({
             fontSize: 20,
             gapWidth: 10,
-            lineHeight: 26,
-            marginLeft: 20,
+            lineHeight: 28,
+            marginLeft: 8,
             marginTop: 0,
             markerMinWidth: 30,
           }),
@@ -105,6 +105,14 @@ describe('MarkdownText', () => {
             padding: 12,
             textAlign: 'center',
           }),
+          linkVariants: {
+            '^cite:': {
+              backgroundColor: 'secondary',
+              color: 'foreground-tertiary',
+              underline: false,
+            },
+          },
+          superscript: { baselineOffsetScale: 0.3, fontScale: 0.75 },
         }),
       );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);

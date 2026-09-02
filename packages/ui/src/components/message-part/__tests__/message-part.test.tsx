@@ -16,10 +16,6 @@ jest.mock(
   () => jest.requireActual('react-native').View,
 );
 jest.mock(
-  '@cherrystudio/app-icons/icons/list-checks',
-  () => jest.requireActual('react-native').View,
-);
-jest.mock(
   '@cherrystudio/app-icons/icons/circle-alert',
   () => jest.requireActual('react-native').View,
 );
@@ -42,7 +38,6 @@ jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
     return <MockView {...props} testID="unknown-warning-icon" />;
   };
 });
-jest.mock('@cherrystudio/app-icons/icons/wrench', () => jest.requireActual('react-native').View);
 
 jest.mock('../../bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
@@ -171,7 +166,6 @@ describe('MessagePart', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ active: true })).toBeDefined();
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     expect(mockBottomSheetProps).toEqual({});
@@ -182,6 +176,28 @@ describe('MessagePart', () => {
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     expect(onDisclosureToggle).toHaveBeenCalledTimes(2);
     expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
+  });
+
+  it('keeps the total process duration folded until the reader expands it', () => {
+    const onDisclosureToggle = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessagePart.Process
+          onDisclosureToggle={onDisclosureToggle}
+          state="complete"
+          testID="process"
+          title="Took 16s"
+        >
+          <Text>Reasoning and tools</Text>
+        </MessagePart.Process>,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({ testID: 'process-detail' })).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByProps({ testID: 'process-detail' })).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
   });
 
   it('shimmers the running tool title without removing its status text', () => {

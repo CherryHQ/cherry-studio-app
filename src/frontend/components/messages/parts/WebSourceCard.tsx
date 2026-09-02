@@ -54,7 +54,7 @@ export function WebSourceCard({ source }: WebSourceCardProps) {
 
 type FaviconStatus = 'failed' | 'loaded' | 'loading';
 
-function WebSourceFavicon({ source }: { source: WebSource }) {
+export function WebSourceFavicon({ source }: { source: WebSource }) {
   const faviconUrls = getFaviconUrls(source);
   const [sourceIndex, setSourceIndex] = useState(0);
   const [status, setStatus] = useState<FaviconStatus>(

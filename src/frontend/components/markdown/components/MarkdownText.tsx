@@ -5,6 +5,8 @@ import { usePreference } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { FontSizeStep } from '@/shared/data/preference';
 
+import { resolveCitationLinkUrl } from '../citationLink';
+
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
   isStreaming?: boolean;
@@ -32,5 +34,5 @@ export function MarkdownText({
 }
 
 function handleLinkPress(url: string) {
-  void openExternalUrl(url);
+  void openExternalUrl(resolveCitationLinkUrl(url) ?? url);
 }

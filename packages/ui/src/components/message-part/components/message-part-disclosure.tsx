@@ -1,6 +1,4 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import ListChecksIcon from '@cherrystudio/app-icons/icons/list-checks';
-import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Animated, {
@@ -13,10 +11,10 @@ import Animated, {
 import { duration, easing } from '../../../motion';
 import { BottomSheet } from '../../bottom-sheet';
 import { Image } from '../../image';
-import { PrismSweep } from '../../loading';
 import { ShimmerText } from '../../shimmer-text';
 import type {
   MessagePartDetailProps,
+  MessagePartProcessProps,
   MessagePartReasoningProps,
   MessagePartSummaryProps,
   MessagePartTone,
@@ -36,9 +34,53 @@ const disclosureIconMotion = {
 
 const toneClassName = {
   danger: 'text-destructive',
-  default: 'text-muted-foreground',
+  default: 'text-foreground-tertiary',
   warning: 'text-warning',
 } as const satisfies Record<MessagePartTone, string>;
+
+export function MessagePartProcess({
+  children,
+  onDisclosureToggle,
+  state,
+  testID = 'process',
+  title,
+}: MessagePartProcessProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const isRunning = state === 'running';
+  const toggle = () => {
+    onDisclosureToggle?.();
+    setIsOpen((open) => !open);
+  };
+
+  return (
+    <View className="gap-1.5 border-border-subtle border-b pb-2">
+      <MessagePartStatus
+        accessibilityLabel={title}
+        expanded={isOpen}
+        onPress={toggle}
+        testID={`${testID}-trigger`}
+      >
+        <View className="min-w-0 flex-row items-center gap-1">
+          <View className="min-w-0 shrink">
+            {isRunning ? (
+              <ShimmerText className="text-sm" numberOfLines={1}>
+                {title}
+              </ShimmerText>
+            ) : (
+              <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
+                {title}
+              </Text>
+            )}
+          </View>
+          <MessagePartDisclosureIcon isOpen={isOpen} />
+        </View>
+      </MessagePartStatus>
+      <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-detail`}>
+        {children}
+      </MessagePartCollapsible>
+    </View>
+  );
+}
 
 export function MessagePartReasoning({
   children,
@@ -62,14 +104,13 @@ export function MessagePartReasoning({
         onPress={toggle}
         testID={`${testID}-trigger`}
       >
-        {isRunning ? <PrismSweep active /> : null}
-        <View className="min-w-0 flex-1">
+        <View className="min-w-0 shrink">
           {isRunning ? (
             <ShimmerText className="text-sm" numberOfLines={1}>
               {statusText}
             </ShimmerText>
           ) : (
-            <Text className="text-muted-foreground text-sm" numberOfLines={1}>
+            <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
               {statusText}
             </Text>
           )}
@@ -115,8 +156,7 @@ export function MessagePartToolGroup({
         onPress={toggle}
         testID={`${testID}-trigger`}
       >
-        <ListChecksIcon className={`size-4 ${colorClassName}`} />
-        <View className="min-w-0 flex-1">
+        <View className="min-w-0 shrink">
           {isRunning ? (
             <ShimmerText className="text-sm" numberOfLines={1}>
               {title}
@@ -127,12 +167,13 @@ export function MessagePartToolGroup({
             </Text>
           )}
         </View>
+        <MessagePartDisclosureIcon isOpen={isOpen} />
+        <View className="flex-1" />
         {statusText ? (
           <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
             {statusText}
           </Text>
         ) : null}
-        <MessagePartDisclosureIcon isOpen={isOpen} />
       </MessagePartStatus>
       <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-steps`}>
         {children}
@@ -154,7 +195,7 @@ function MessagePartDisclosureIcon({ isOpen }: { isOpen: boolean }) {
 
   return (
     <Animated.View pointerEvents="none" style={animatedStyle}>
-      <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+      <ChevronRightIcon className="size-3 shrink-0 text-foreground-tertiary" />
     </Animated.View>
   );
 }
@@ -163,8 +204,6 @@ export function MessagePartTool({
   children,
   detailTitle,
   detailVariant = 'default',
-  icon: Icon = WrenchIcon,
-  imageSource,
   state,
   statusText,
   statusTone = 'default',
@@ -176,8 +215,6 @@ export function MessagePartTool({
   return (
     <View className="gap-1.5">
       <MessagePartSummary
-        icon={Icon}
-        imageSource={imageSource}
         onPress={() => setIsOpen(true)}
         state={state}
         statusText={statusText}
@@ -201,7 +238,7 @@ export function MessagePartTool({
 }
 
 export function MessagePartSummary({
-  icon: Icon = WrenchIcon,
+  icon: Icon,
   imageSource,
   onPress,
   state,
@@ -226,10 +263,10 @@ export function MessagePartSummary({
           contentFit="contain"
           source={imageSource}
         />
-      ) : (
+      ) : Icon ? (
         <Icon className={`size-4 ${colorClassName}`} />
-      )}
-      <View className="min-w-0 flex-1">
+      ) : null}
+      <View className="min-w-0 shrink">
         {isRunning ? (
           <ShimmerText className="text-sm" numberOfLines={1} testID={`${testID}-running-title`}>
             {title}
@@ -240,12 +277,13 @@ export function MessagePartSummary({
           </Text>
         )}
       </View>
+      <ChevronRightIcon className="size-3 shrink-0 text-foreground-tertiary" />
+      <View className="flex-1" />
       {statusText ? (
         <Text className={`max-w-[38%] shrink-0 text-xs ${colorClassName}`} numberOfLines={1}>
           {statusText}
         </Text>
       ) : null}
-      <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
     </MessagePartStatus>
   );
 }

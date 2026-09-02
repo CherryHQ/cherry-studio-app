@@ -1,4 +1,8 @@
-import { ContextMenuScrollBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
+import {
+  ContextMenuScrollBoundary,
+  ScrollToBottomButton,
+  scrollToBottomButtonSize,
+} from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -85,7 +89,11 @@ export function MessageList({
     [contentTopInset, headerAccessory],
   );
   const contentContainerStyle = useMemo(
-    () => ({ paddingBottom: contentBottomInset, paddingTop: MESSAGE_LIST_TOP_PADDING }),
+    () => ({
+      paddingBottom:
+        contentBottomInset + scrollToBottomButtonSize + SCROLL_BUTTON_GAP_ABOVE_ACCESSORY * 2,
+      paddingTop: MESSAGE_LIST_TOP_PADDING,
+    }),
     [contentBottomInset],
   );
   const renderMessageRow = useCallback(

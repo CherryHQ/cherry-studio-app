@@ -6,8 +6,8 @@ import { resolveMessageCitationText } from './citations';
 import { MessageFileStrip } from './MessageFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { partitionMessageParts } from './partitionMessageParts';
+import { ProcessGroupPart } from './ProcessGroupPart';
 import { SourceGroup } from './SourceGroup';
-import { ToolGroupPart } from './tools/ToolGroupPart';
 
 type MessagePartsProps = {
   isTextSelectionEnabled: boolean;
@@ -40,33 +40,36 @@ export function MessageParts({
     return null;
   }
 
-  const { body, files } = partitionMessageParts(parts);
+  const { body, files, process } = partitionMessageParts(parts);
   const hasSources = parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
-      {body.map((item) =>
-        item.kind === 'tool-group' ? (
-          <ToolGroupPart
-            items={item.items.map(({ index, part }) => ({
-              key: getMessagePartKey(message, part, index),
-              part,
-            }))}
-            key={getMessagePartKey(message, item.items[0].part, item.index)}
-            messageParts={parts}
-          />
-        ) : (
-          <MessagePartRenderer
-            isStreaming={message.status === 'pending'}
-            isTextSelectionEnabled={isTextSelectionEnabled}
-            key={getMessagePartKey(message, item.part, item.index)}
-            messageParts={parts}
-            part={item.part}
-            renderMode={renderMode}
-            resolvedText={citationText.get(item.index)}
-          />
-        ),
-      )}
+      {process.length > 0 ? (
+        <ProcessGroupPart
+          citationText={citationText}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          items={process.map(({ index, part }) => ({
+            index,
+            key: getMessagePartKey(message, part, index),
+            part,
+          }))}
+          message={message}
+          messageParts={parts}
+          renderMode={renderMode}
+        />
+      ) : null}
+      {body.map((item) => (
+        <MessagePartRenderer
+          isStreaming={message.status === 'pending'}
+          isTextSelectionEnabled={isTextSelectionEnabled}
+          key={getMessagePartKey(message, item.part, item.index)}
+          messageParts={parts}
+          part={item.part}
+          renderMode={renderMode}
+          resolvedText={citationText.get(item.index)}
+        />
+      ))}
       {hasSources ? <SourceGroup parts={parts} /> : null}
       {/* Last, so the files a turn produced are the closest thing to the end of
           the message and stay put as the answer above them streams in. */}

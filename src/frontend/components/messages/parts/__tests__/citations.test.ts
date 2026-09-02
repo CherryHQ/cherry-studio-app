@@ -15,7 +15,7 @@ describe('resolveMessageCitationText', () => {
     ] satisfies CherryMessagePart[];
 
     expect(resolveMessageCitationText(parts).get(1)).toEqual({
-      markdown: 'See [1](https://cherry-ai.com).',
+      markdown: 'See ^[1](cite:https%3A%2F%2Fcherry-ai.com)^.',
       plainText: 'See [1].',
     });
   });
@@ -36,7 +36,8 @@ describe('resolveMessageCitationText', () => {
     ] as CherryMessagePart[];
 
     expect(resolveMessageCitationText(parts).get(1)).toEqual({
-      markdown: 'Second [1](https://b.example), first [2](https://a.example).',
+      markdown:
+        'Second ^[1](cite:https%3A%2F%2Fb.example)^, first ^[2](cite:https%3A%2F%2Fa.example)^.',
       plainText: 'Second [1], first [2].',
     });
   });
@@ -56,7 +57,7 @@ describe('resolveMessageCitationText', () => {
     ] as CherryMessagePart[];
 
     expect(resolveMessageCitationText(parts).get(1)?.markdown).toBe(
-      '`[cite:aaaa1111-1]` [cite:missing] [1](https://a.example)',
+      '`[cite:aaaa1111-1]` [cite:missing] ^[1](cite:https%3A%2F%2Fa.example)^',
     );
   });
 

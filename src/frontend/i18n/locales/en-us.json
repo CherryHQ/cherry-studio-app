@@ -173,6 +173,7 @@
   "chat.model.select": "Select model",
   "chat.newSession.description": "Choose an agent to start a session.",
   "chat.newSession.title": "What would you like to work on?",
+  "chat.process.duration": "Took {{seconds}}s",
   "chat.reasoning.auto": "Auto",
   "chat.reasoning.faster": "Faster",
   "chat.reasoning.default": "Default",
