@@ -928,7 +928,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
     });
-    const reservationActivityAt = Date.parse(reserved.assistantMessage.createdAt);
     const beforeReconciliation = raw
       .prepare(
         `SELECT session.last_activity_at AS lastActivityAt, message.activity_at AS messageActivityAt
@@ -940,8 +939,14 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       lastActivityAt: number;
       messageActivityAt: number;
     };
+    // `createdAt` is a per-row insert default, a second clock read that can
+    // land a millisecond after the instant the reservation stamps on both
+    // rows. Read that stamp back instead of re-deriving it.
+    const reservationActivityAt = beforeReconciliation.messageActivityAt;
     expect(beforeReconciliation.lastActivityAt).toBe(reservationActivityAt);
-    expect(beforeReconciliation.messageActivityAt).toBe(reservationActivityAt);
+    expect(reservationActivityAt).toBeLessThanOrEqual(
+      Date.parse(reserved.assistantMessage.createdAt),
+    );
 
     await store.reconcileInterrupted(INTERRUPTED);
 
@@ -1033,7 +1038,11 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       sourceActivityAt: number;
     };
     expect(forkRow.lastActivityAt).toBe(forkRow.sourceActivityAt);
-    expect(forkRow.sourceActivityAt).toBe(Date.parse(reserved.assistantMessage.createdAt));
+    // Still the reservation stamp: recovery settlement would have advanced it
+    // past the row's own insert time.
+    expect(forkRow.sourceActivityAt).toBeLessThanOrEqual(
+      Date.parse(reserved.assistantMessage.createdAt),
+    );
   });
 
   test('returns a corrupt checkpoint candidate for Host-side classification', async () => {

@@ -266,7 +266,13 @@ describe('MobileAgentHost', () => {
       'the initial turn to settle',
     );
 
-    expect(await store.getSession(session.id)).toEqual(session);
+    // Settling the turn stamps conversation activity on the Session row, so
+    // the update timestamp is the one field allowed to move past the snapshot
+    // `startSession` returned.
+    expect(await store.getSession(session.id)).toEqual({
+      ...session,
+      updatedAt: expect.any(String),
+    });
     expect((await store.listMessages(session.id)).map((message) => message.role)).toEqual([
       'user',
       'assistant',
