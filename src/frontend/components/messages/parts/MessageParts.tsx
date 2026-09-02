@@ -40,7 +40,8 @@ export function MessageParts({
   }
 
   const { body, files, process } = partitionMessageParts(parts);
-  const hasSources = parts.some((part) => part.type === 'source-url');
+  const showSources =
+    message.status !== 'pending' && parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
@@ -69,7 +70,7 @@ export function MessageParts({
           resolvedText={citations.textByPartIndex.get(item.index)}
         />
       ))}
-      {hasSources ? (
+      {showSources ? (
         <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
       ) : null}
       {/* Last, so the files a turn produced are the closest thing to the end of

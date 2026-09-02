@@ -53,12 +53,7 @@ describe('MessageParts', () => {
   });
 
   test('collects files into one strip and groups sources once', () => {
-    const source = {
-      sourceId: 'source-1',
-      title: 'Cherry Studio',
-      type: 'source-url' as const,
-      url: 'https://cherry-ai.com',
-    };
+    const source = makeSourcePart();
     const message: MessageListItem = {
       ...makeMessage('success'),
       data: {
@@ -80,6 +75,21 @@ describe('MessageParts', () => {
       expect.objectContaining({ filename: 'summary.md' }),
     ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual(message.data.parts);
+  });
+
+  test.each([
+    ['pending', false],
+    ['success', true],
+    ['error', true],
+    ['paused', true],
+  ] as const)('status=%s renders settled sources=%p', (status, shouldRenderSources) => {
+    const message: MessageListItem = {
+      ...makeMessage(status),
+      data: { parts: [{ text: 'Hello', type: 'text' }, makeSourcePart()] },
+    };
+    const renderer = render(<MessageParts isTextSelectionEnabled message={message} />);
+
+    expect(renderer.root.findAllByType('SourceGroup')).toHaveLength(shouldRenderSources ? 1 : 0);
   });
 
   test('folds intermediate text and later tool calls into the timed process', () => {
@@ -176,6 +186,15 @@ function makeFilePart(fileEntryId: string, filename: string) {
     providerMetadata: { cherry: { fileEntryId } },
     type: 'file' as const,
     url: `cherry://file/${fileEntryId}`,
+  };
+}
+
+function makeSourcePart() {
+  return {
+    sourceId: 'source-1',
+    title: 'Cherry Studio',
+    type: 'source-url' as const,
+    url: 'https://cherry-ai.com',
   };
 }
 
