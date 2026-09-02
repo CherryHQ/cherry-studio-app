@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, type StyleProp, View, type ViewStyle } from 'react-native';
 
 import type { MessageListItem, MessageRenderer } from '../types';
@@ -8,9 +9,12 @@ type MessageListRowProps = {
   renderMessage: MessageRenderer;
 };
 
-export function MessageListRow({ message, renderMessage }: MessageListRowProps) {
+export const MessageListRow = memo(function MessageListRow({
+  message,
+  renderMessage,
+}: MessageListRowProps) {
   return <View style={messageRowStyles[message.role]}>{renderMessage(message)}</View>;
-}
+});
 
 const styles = StyleSheet.create({
   assistant: {

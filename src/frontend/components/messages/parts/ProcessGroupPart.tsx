@@ -10,7 +10,6 @@ import type { ResolvedCitationText } from './citations';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import type { MessagePartRenderMode } from './MessageParts';
 import type { MessageProcessItem } from './partitionMessageParts';
-import { useElapsedTimerMs } from './useElapsedTimerMs';
 
 type ProcessGroupItem = MessageProcessItem & { key: string };
 
@@ -33,22 +32,15 @@ export function ProcessGroupPart({
 }: ProcessGroupPartProps) {
   const { t } = useTranslation();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
-  const isRunning = message.status === 'pending';
-  const startedAt = parseTimestamp(message.createdAt);
   const persistedDurationMs = resolvePersistedDurationMs(message, items);
-  const elapsedMs = useElapsedTimerMs(isRunning, startedAt, persistedDurationMs);
-  const seconds = Math.max(1, Math.round(elapsedMs / 1000));
+  const seconds = Math.max(1, Math.round((persistedDurationMs ?? 0) / 1000));
   const title = t('chat.process.duration', { seconds });
 
   return (
-    <MessagePart.Process
-      onDisclosureToggle={handleDisclosureToggle}
-      state={isRunning ? 'running' : 'complete'}
-      title={title}
-    >
+    <MessagePart.Process onDisclosureToggle={handleDisclosureToggle} state="complete" title={title}>
       {items.map(({ index, key, part }) => (
         <MessagePartRenderer
-          isStreaming={isRunning}
+          isStreaming={false}
           isTextSelectionEnabled={isTextSelectionEnabled}
           key={key}
           messageParts={messageParts}

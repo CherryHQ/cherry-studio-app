@@ -8,6 +8,7 @@ import { ChatWorkspace } from '../ChatWorkspace';
 
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
+const mockReconcilePersistedMessages = jest.fn();
 const mockRespondApproval = jest.fn(async () => undefined);
 const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
@@ -124,7 +125,10 @@ jest.mock('../../runtime', () => ({
         role: message.role,
         status: message.status === 'success' ? 'success' : 'pending',
       })),
-  useAgentChatActions: () => ({ respondApproval: mockRespondApproval }),
+  useAgentChatActions: () => ({
+    reconcilePersistedMessages: mockReconcilePersistedMessages,
+    respondApproval: mockRespondApproval,
+  }),
   useAgentChatFork: () => mockForkSession,
   useAgentChatSession: () => mockAgentChatSession,
 }));
@@ -280,6 +284,7 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
     expect(mockIsLoadingOlder).toBe(true);
+    expect(mockReconcilePersistedMessages).toHaveBeenCalledWith('session-1', messages);
 
     const renderMessage = mockMessageListProps?.renderMessage;
     act(() => renderer?.update(createWorkspaceElement(false, messages)));

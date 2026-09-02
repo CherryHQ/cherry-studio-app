@@ -17,6 +17,10 @@ export type BackgroundReplyOutcome = Extract<
 
 export type BackgroundReplyMessage = Pick<AgentMessageView, 'parts'>;
 
+export type BackgroundReplyUpdateOptions = {
+  deferPreview?: boolean;
+};
+
 /**
  * Capability handle for one reply generation. Calls never throw, and handles
  * superseded by a newer generation become no-ops.
@@ -25,7 +29,7 @@ export type BackgroundReplyTurn = {
   awaitApproval: (message?: BackgroundReplyMessage) => void;
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
-  update: (message: BackgroundReplyMessage) => void;
+  update: (message: BackgroundReplyMessage, options?: BackgroundReplyUpdateOptions) => void;
 };
 
 export type BackgroundReplyTurnInput = {
