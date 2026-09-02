@@ -155,7 +155,10 @@ describe('MessageParts', () => {
     };
     const renderer = render(<MessageParts isTextSelectionEnabled={false} message={message} />);
     const rendered = renderer.root.findAll(
-      (node) => node.type === 'MessagePartRenderer' || node.type === 'MessageFileStrip',
+      (node) =>
+        node.type === 'ProcessGroupPart' ||
+        node.type === 'MessagePartRenderer' ||
+        node.type === 'MessageFileStrip',
     );
 
     expect(rendered.map((node) => node.type)).toEqual([
