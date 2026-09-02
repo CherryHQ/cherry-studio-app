@@ -14,7 +14,7 @@ export type ProviderModelRowVariant = 'management' | 'synchronization';
 
 export const providerModelRowEstimatedHeights = {
   management: 42,
-  synchronization: 58,
+  synchronization: 44,
 } as const satisfies Record<ProviderModelRowVariant, number>;
 
 const providerModelBadgeLabelKeys = {
@@ -59,16 +59,12 @@ export function ProviderModelRow({
   };
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
-  /** Management prioritizes decision-useful badges; synchronization keeps the provider's raw id. */
+  /** Management shows decision-useful badges; synchronization stays visually quiet. */
   variant: ProviderModelRowVariant;
 }) {
   const { t } = useTranslation();
-  const hasDistinctModelId = model.modelId.trim() !== model.name.trim();
   const badges = variant === 'management' ? getProviderModelBadges(model) : [];
-  const accessibilityDetails =
-    variant === 'synchronization' && hasDistinctModelId
-      ? [model.modelId]
-      : badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
+  const accessibilityDetails = badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
   const accessibilityLabel = [model.name, ...accessibilityDetails].join(', ');
   const rowClassName = [
     'flex-row items-center gap-3 px-4 py-2',
@@ -86,27 +82,16 @@ export function ProviderModelRow({
           draws, and the one the picker sheet draws beside the same single line
           of text. */}
       <ModelAvatar model={model} provider={provider} />
-      <View className="min-w-0 flex-1">
-        <Text
-          className={
-            tone === 'struck'
-              ? 'text-base text-foreground line-through'
-              : 'text-base text-foreground'
-          }
-          numberOfLines={1}
-        >
-          {model.name}
-        </Text>
-        {variant === 'synchronization' && hasDistinctModelId ? (
-          <Text
-            selectable={!selection}
-            className="text-foreground-tertiary text-xs"
-            numberOfLines={1}
-          >
-            {model.modelId}
-          </Text>
-        ) : null}
-      </View>
+      <Text
+        className={
+          tone === 'struck'
+            ? 'min-w-0 flex-1 text-base text-foreground line-through'
+            : 'min-w-0 flex-1 text-base text-foreground'
+        }
+        numberOfLines={1}
+      >
+        {model.name}
+      </Text>
       {badges.length > 0 ? (
         <View className="flex-row items-center gap-1">
           {badges.map((badge) => (

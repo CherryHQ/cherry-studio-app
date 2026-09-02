@@ -55,12 +55,10 @@ describe('useProviderModelPullSelection', () => {
     selection = undefined;
   });
 
-  // Taking the whole catalogue is the usual answer, so the additions arrive
-  // ticked. The removals do not: nothing gets deleted unless the user said so.
-  it('starts with the new models ticked and no removal armed', () => {
+  it('starts without arming additions or removals', () => {
     mount(jest.fn().mockResolvedValue(true));
 
-    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
+    expect([...current().selectedIds]).toEqual([]);
   });
 
   // Nothing is written until the pull is confirmed, so ticking a row is just
@@ -73,7 +71,7 @@ describe('useProviderModelPullSelection', () => {
     act(() => current().toggleModel(newModel.id));
 
     expect(applyModelChange).not.toHaveBeenCalled();
-    expect([...current().selectedIds]).toEqual([otherNewModel.id, goneModel.id]);
+    expect([...current().selectedIds]).toEqual([goneModel.id, newModel.id]);
   });
 
   it('unticks a model on the second tap', () => {
@@ -91,7 +89,7 @@ describe('useProviderModelPullSelection', () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
     mount(applyModelChange);
 
-    act(() => current().toggleModel(otherNewModel.id));
+    act(() => current().toggleModel(newModel.id));
     act(() => current().toggleModel(goneModel.id));
     await act(async () => {
       await current().applySelection();
@@ -106,8 +104,6 @@ describe('useProviderModelPullSelection', () => {
   it('applies nothing when nothing is ticked', async () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
     mount(applyModelChange);
-
-    act(() => current().toggleAll([newModel.id, otherNewModel.id]));
 
     let didApply: boolean | undefined;
     await act(async () => {
@@ -128,6 +124,7 @@ describe('useProviderModelPullSelection', () => {
     );
     mount(applyModelChange);
 
+    act(() => current().toggleModel(newModel.id));
     act(() => {
       void current().applySelection();
     });
@@ -146,11 +143,11 @@ describe('useProviderModelPullSelection', () => {
 
     act(() => current().toggleAll([goneModel.id]));
 
-    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id, goneModel.id]);
+    expect([...current().selectedIds]).toEqual([goneModel.id]);
 
     act(() => current().toggleAll([goneModel.id]));
 
-    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
+    expect([...current().selectedIds]).toEqual([]);
   });
 
   it('completes a partial selection rather than clearing it', () => {
@@ -159,7 +156,7 @@ describe('useProviderModelPullSelection', () => {
     act(() => current().toggleModel(otherNewModel.id));
     act(() => current().toggleAll([newModel.id, otherNewModel.id]));
 
-    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
+    expect([...current().selectedIds]).toEqual([otherNewModel.id, newModel.id]);
   });
 
   it('starts the next pull from its own default rather than the last one', () => {
@@ -174,7 +171,7 @@ describe('useProviderModelPullSelection', () => {
       );
     });
 
-    expect([...current().selectedIds]).toEqual([nextModel.id]);
+    expect([...current().selectedIds]).toEqual([]);
   });
 });
 
