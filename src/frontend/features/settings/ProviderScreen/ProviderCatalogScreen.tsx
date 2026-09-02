@@ -2,13 +2,17 @@ import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/components/headers';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/inlineSearch';
+import {
+  readProviderSetupReturnTo,
+  type ProviderSetupRouteParamsInput,
+} from '@/frontend/components/navigation';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { ProviderCatalogEntry } from '@/shared/contracts';
 
@@ -142,6 +146,8 @@ function ProviderRegistryUpdateNotice({
 export default function ProviderCatalogScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const params = useLocalSearchParams<ProviderSetupRouteParamsInput>();
+  const returnTo = readProviderSetupReturnTo(params.returnTo) ?? '/settings/provider';
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const providers = useBackendModule('providers');
@@ -200,14 +206,15 @@ export default function ProviderCatalogScreen() {
         params: {
           providerId: provider.id,
           providerName: provider.name,
+          returnTo,
         },
       });
     },
-    [router],
+    [returnTo, router],
   );
   const openCustomProvider = useCallback(() => {
-    router.replace('/settings/provider/new');
-  }, [router]);
+    router.replace({ pathname: '/settings/provider/new', params: { returnTo } });
+  }, [returnTo, router]);
   const importMutation = useMutation({
     mutationFn: providers.importPreset,
     onError: () => {

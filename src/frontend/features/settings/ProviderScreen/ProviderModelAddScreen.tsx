@@ -11,7 +11,7 @@ import {
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { type Href, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, type TextInputProps, View } from 'react-native';
@@ -21,6 +21,10 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import {
+  readProviderSetupReturnTo,
+  type ProviderSetupRouteParamsInput,
+} from '@/frontend/components/navigation';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -49,13 +53,19 @@ const EMPTY_PULL_PREVIEW: ProviderModelPullPreview = { added: [], missing: [] };
 type ProviderModelAddMode = 'manual' | 'sync';
 
 export default function ProviderModelAddScreen() {
-  const { mode, providerId, setupFlow } = useLocalSearchParams<{
-    mode?: string;
-    providerId?: string;
-    setupFlow?: string;
-  }>();
+  const {
+    mode,
+    providerId,
+    returnTo: rawReturnTo,
+  } = useLocalSearchParams<
+    ProviderSetupRouteParamsInput & {
+      mode?: string;
+      providerId?: string;
+    }
+  >();
   const { t } = useTranslation();
   const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
+  const returnTo = readProviderSetupReturnTo(rawReturnTo);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -69,9 +79,7 @@ export default function ProviderModelAddScreen() {
       <>
         <RouteHeader
           title={t(
-            setupFlow === 'true'
-              ? 'settings.provider.models.setupTitle'
-              : 'settings.provider.models.addTitle',
+            returnTo ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
           )}
         />
         <ContentState.Loading
@@ -86,20 +94,20 @@ export default function ProviderModelAddScreen() {
     <ProviderModelAddForm
       key={provider.id}
       initialMode={mode === 'manual' ? 'manual' : 'sync'}
-      isSetupFlow={setupFlow === 'true'}
       provider={provider}
+      returnTo={returnTo}
     />
   );
 }
 
 function ProviderModelAddForm({
   initialMode,
-  isSetupFlow,
   provider,
+  returnTo,
 }: {
   initialMode: ProviderModelAddMode;
-  isSetupFlow: boolean;
   provider: Provider;
+  returnTo?: string;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -151,14 +159,14 @@ function ProviderModelAddForm({
     isSaving: isSubmitting || isApplying,
   });
   const completeFlow = useCallback(() => {
-    if (isSetupFlow) {
+    if (returnTo) {
       allowNavigation();
-      router.dismissTo('/settings/provider');
+      router.dismissTo(returnTo as Href);
       return;
     }
 
     closeWithoutPrompt();
-  }, [allowNavigation, closeWithoutPrompt, isSetupFlow, router]);
+  }, [allowNavigation, closeWithoutPrompt, returnTo, router]);
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -269,7 +277,7 @@ function ProviderModelAddForm({
   // A sync that came back with nothing to add leaves no track: a self-hosted
   // endpoint that does not serve a model list still has to be given one model
   // by hand, or the provider it just created is stranded without any.
-  const showsModeTabs = !isSetupFlow || hasSyncComeBackEmpty;
+  const showsModeTabs = !returnTo || hasSyncComeBackEmpty;
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () =>
       activeMode === 'sync'
@@ -331,7 +339,7 @@ function ProviderModelAddForm({
         onBack={requestClose}
         rightActions={rightActions}
         title={t(
-          isSetupFlow ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
+          returnTo ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
         )}
       />
       {showsModeTabs ? (

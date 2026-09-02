@@ -9,6 +9,7 @@ const MODE_TABS_TEST_ID = 'model-add-mode-tabs';
 let mockSearchParams: Record<string, string> = {};
 let mockPullResult: ProviderModelPullLoadResult = 'failed';
 const mockLoadPullPreview = jest.fn(async () => mockPullResult);
+const mockDismissTo = jest.fn();
 
 jest.mock('expo-router', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -16,7 +17,7 @@ jest.mock('expo-router', () => {
   return {
     Redirect: () => <MockView testID="redirect" />,
     useLocalSearchParams: () => mockSearchParams,
-    useRouter: () => ({ dismissTo: jest.fn(), push: jest.fn(), replace: jest.fn() }),
+    useRouter: () => ({ dismissTo: mockDismissTo, push: jest.fn(), replace: jest.fn() }),
   };
 });
 
@@ -170,8 +171,9 @@ describe('provider setup flow when the sync has nothing to offer', () => {
   }
 
   beforeEach(() => {
-    mockSearchParams = { mode: 'sync', providerId: 'custom', setupFlow: 'true' };
+    mockSearchParams = { mode: 'sync', providerId: 'custom', returnTo: '/agents/new' };
     mockPullResult = 'failed';
+    mockDismissTo.mockReset();
     mockLoadPullPreview.mockReset();
     mockLoadPullPreview.mockImplementation(async () => mockPullResult);
   });
@@ -193,6 +195,15 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     await mountSetupFlow();
 
     expect(modeTabs()).not.toHaveLength(0);
+  });
+
+  it('returns to the requesting surface when setup finishes', async () => {
+    mockPullResult = 'empty';
+    await mountSetupFlow();
+
+    act(() => renderer?.root.findByProps({ testID: 'empty' }).props.onPress());
+
+    expect(mockDismissTo).toHaveBeenCalledWith('/agents/new');
   });
 
   // The switch is hidden while the sync can still succeed, so a normal setup

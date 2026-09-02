@@ -1,4 +1,4 @@
-import { chatHref, parseChatRoute } from '../chatRoute';
+import { chatHref, chatReturnToHref, parseChatRoute } from '../chatRoute';
 
 describe('shared chat route contract', () => {
   test('uses the Session id as the complete existing-chat identity', () => {
@@ -24,5 +24,12 @@ describe('shared chat route contract', () => {
       params: { agentId: undefined, sessionId: 'session-1' },
       pathname: '/',
     });
+  });
+
+  test('serializes complete chat identity for return navigation', () => {
+    expect(chatReturnToHref({ kind: 'session', sessionId: 'session / 1' })).toBe(
+      '/?sessionId=session%20%2F%201',
+    );
+    expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
   });
 });

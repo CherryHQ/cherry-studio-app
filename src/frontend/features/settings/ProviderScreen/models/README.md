@@ -18,7 +18,8 @@ legacy pull route redirects into its synchronization mode. The detail list itsel
 opens model creation from the header.
 
 Provider setup hides the mode switch, requires an explicit model selection, and finishes on the
-provider list. A synchronization that comes back with nothing to add reveals the switch and keeps it
+validated `returnTo` href supplied by its entry point. Settings uses the provider list as the
+fallback. A synchronization that comes back with nothing to add reveals the switch and keeps it
 revealed: the provider is already created by then, and a self-hosted endpoint that serves chat
 without a model list still has to be given one model by hand.
 

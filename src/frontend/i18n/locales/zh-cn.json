@@ -441,6 +441,7 @@
   "settings.model.saved": "默认模型已保存",
   "settings.model.title": "模型",
   "settings.model.translate.title": "翻译模型",
+  "modelPicker.addProvider": "添加服务商",
   "modelPicker.empty": "暂无可用模型。",
   "modelPicker.fastScroll": "服务商快速定位",
   "modelPicker.fastScrollHint": "上下滑动以定位服务商",

@@ -443,6 +443,7 @@
   "settings.model.saved": "Default models saved",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Translation model",
+  "modelPicker.addProvider": "Add provider",
   "modelPicker.empty": "No available models.",
   "modelPicker.fastScroll": "Provider quick navigation",
   "modelPicker.fastScrollHint": "Swipe up or down to locate providers",

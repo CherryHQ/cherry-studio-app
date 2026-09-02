@@ -25,10 +25,11 @@ detail, and model creation.
 item in the recommended section; preset rows keep their explicit Add action. Both paths continue to
 `ProviderCreationScreen`, which renders the shared provider form before model synchronization. A
 preset is imported in the disabled state so its registry defaults can seed the form, then its API key
-and editable endpoint are saved before model discovery starts. Finishing synchronization opens the
-provider detail model tab. Opening the catalog checks the remote model-registry manifest and shows an
-inline update notice when a newer revision exists. Installed presets are marked in place instead of
-opening another action menu.
+and editable endpoint are saved before model discovery starts. The catalog carries a validated
+`returnTo` href through creation and model selection; finishing setup returns to the requesting
+surface, or to the provider list when settings opened the flow. Opening the catalog checks the remote
+model-registry manifest and shows an inline update notice when a newer revision exists. Installed
+presets are marked in place instead of opening another action menu.
 
 ## Provider Form
 

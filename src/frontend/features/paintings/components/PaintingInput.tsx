@@ -19,6 +19,7 @@ import {
   ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
+import { useOpenProviderSetup } from '@/frontend/components/navigation';
 import { usePreference } from '@/frontend/data/hooks';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
@@ -72,6 +73,9 @@ export function PaintingInput({
         : null;
   const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(initialModelId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const openProviderSetup = useOpenProviderSetup(
+    painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings',
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paramState, setParamState] = useState<{
     mode: ImageGenerationMode;
@@ -142,6 +146,10 @@ export function PaintingInput({
     setSelectedModelId(item.modelId);
     setIsModelPickerOpen(false);
   }, []);
+  const handleAddProvider = useCallback(() => {
+    setIsModelPickerOpen(false);
+    openProviderSetup();
+  }, [openProviderSetup]);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
   const { runInputReplacement } = useComposerPresentationActions();
   const openSettings = useCallback(() => {
@@ -288,6 +296,7 @@ export function PaintingInput({
         <ModelPickerDrawer
           modelType="image"
           open
+          onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}

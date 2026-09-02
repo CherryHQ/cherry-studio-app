@@ -1,5 +1,6 @@
 export {
   chatHref,
+  chatReturnToHref,
   chatRouteParams,
   type ChatRouteParamsInput,
   type ChatTarget,

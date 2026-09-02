@@ -6,6 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { ModelSearchControls } from '@/frontend/components/modelPicker';
+import {
+  readProviderSetupReturnTo,
+  type ProviderSetupRouteParamsInput,
+} from '@/frontend/components/navigation';
 import { useListBottomInset } from '@/frontend/components/selection';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -44,10 +48,17 @@ type PullListExtraData = {
 };
 
 export default function ProviderModelPullScreen() {
-  const { providerId, providerName } = useLocalSearchParams<{
-    providerId?: string;
-    providerName?: string;
-  }>();
+  const {
+    providerId,
+    providerName,
+    returnTo: rawReturnTo,
+  } = useLocalSearchParams<
+    ProviderSetupRouteParamsInput & {
+      providerId?: string;
+      providerName?: string;
+    }
+  >();
+  const returnTo = readProviderSetupReturnTo(rawReturnTo);
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
   }
@@ -59,6 +70,7 @@ export default function ProviderModelPullScreen() {
           mode: 'sync',
           ...(providerName ? { providerName } : {}),
           providerId,
+          ...(returnTo ? { returnTo } : {}),
         },
         pathname: '/settings/provider/[providerId]/model-add',
       }}

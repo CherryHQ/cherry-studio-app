@@ -1,4 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import { Button } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   LegendList,
@@ -21,6 +22,7 @@ import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 const modelPickerEstimatedItemSize = 48;
 
 type ModelPickerListProps = {
+  emptyAction?: { label: string; onPress: () => void };
   emptyText?: string;
   isLoading?: boolean;
   /** Whether the picker is on screen; it scrolls to the selection once per showing. */
@@ -37,6 +39,7 @@ type ModelPickerListExtraData = {
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
 export function ModelPickerList({
+  emptyAction,
   emptyText,
   isLoading = false,
   isOpen = false,
@@ -166,10 +169,15 @@ export function ModelPickerList({
   );
   if (listItems.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center px-6 py-8">
+      <View className="flex-1 items-center justify-center gap-4 px-6 py-8">
         <Text className="text-center text-base text-muted-foreground">
           {isLoading ? loadingText : emptyText}
         </Text>
+        {!isLoading && emptyAction ? (
+          <Button onPress={emptyAction.onPress} size="sm" variant="secondary">
+            {emptyAction.label}
+          </Button>
+        ) : null}
       </View>
     );
   }

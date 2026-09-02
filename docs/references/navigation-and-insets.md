@@ -127,6 +127,13 @@ Correctness belongs to the destination screen and its query/local-state identity
 prefetching may improve latency, but navigation must not wait behind a global coordinator or route
 guard.
 
+Provider setup follows the same rule. Entry points pass their internal href as `returnTo`, including
+the identity parameter when the destination requires one; the catalog, credentials form, and
+model-selection step carry it forward. Completion dismisses to that href, or replaces the current
+screen with it when it is not already in the stack. The no-Agent chat empty state uses
+`/agents/new`, because configuring a provider alone cannot create the Agent required by a chat
+draft.
+
 ## Picker Sheets
 
 Short, single-level local pickers use the package-owned

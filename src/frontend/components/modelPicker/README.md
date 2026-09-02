@@ -6,7 +6,8 @@ This module owns the model selection surface, model metadata UI, and model setti
 
 - `ModelPickerDrawer` is the only model-selection view. Agent editing, painting, provider
   connectivity checks, and model settings all open this bottom sheet. Its search field filters the
-  grouped model catalog in place without leaving the sheet.
+  grouped model catalog in place without leaving the sheet. Callers may supply `onAddProvider` so
+  the unfiltered empty state can hand off to provider setup without coupling the picker to routing.
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.

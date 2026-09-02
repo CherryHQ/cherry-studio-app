@@ -6,6 +6,10 @@ import { View } from 'react-native';
 
 import { ProviderBrandAvatar } from '@/frontend/components/avatar';
 import { RouteHeader } from '@/frontend/components/headers';
+import {
+  readProviderSetupReturnTo,
+  type ProviderSetupRouteParamsInput,
+} from '@/frontend/components/navigation';
 
 import { useProviderApiServiceSheetClose } from './apiService';
 import {
@@ -16,19 +20,30 @@ import {
 import { providerFormAvatarSize } from './providerForm';
 
 export default function ProviderCreationScreen() {
-  const { providerId, providerName } = useLocalSearchParams<{
-    providerId?: string;
-    providerName?: string;
-  }>();
+  const {
+    providerId,
+    providerName,
+    returnTo: rawReturnTo,
+  } = useLocalSearchParams<
+    ProviderSetupRouteParamsInput & {
+      providerId?: string;
+      providerName?: string;
+    }
+  >();
+  const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
 
   return providerId ? (
-    <ImportedProviderCreationScreen providerId={providerId} providerName={providerName} />
+    <ImportedProviderCreationScreen
+      providerId={providerId}
+      providerName={providerName}
+      returnTo={returnTo}
+    />
   ) : (
-    <CustomProviderCreationScreen />
+    <CustomProviderCreationScreen returnTo={returnTo} />
   );
 }
 
-function CustomProviderCreationScreen() {
+function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const newProviderForm = useNewProviderForm();
@@ -50,11 +65,11 @@ function CustomProviderCreationScreen() {
           mode: 'sync',
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
-          setupFlow: 'true',
+          returnTo,
         },
       });
     });
-  }, [allowNavigation, router, saveNewProvider]);
+  }, [allowNavigation, returnTo, router, saveNewProvider]);
 
   return (
     <>
@@ -72,9 +87,11 @@ function CustomProviderCreationScreen() {
 function ImportedProviderCreationScreen({
   providerId,
   providerName,
+  returnTo,
 }: {
   providerId: string;
   providerName?: string;
+  returnTo: string;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -97,11 +114,11 @@ function ImportedProviderCreationScreen({
           mode: 'sync',
           providerId: configuredProvider.providerId,
           providerName: configuredProvider.providerName,
-          setupFlow: 'true',
+          returnTo,
         },
       });
     });
-  }, [allowNavigation, router, saveImportedProvider]);
+  }, [allowNavigation, returnTo, router, saveImportedProvider]);
   const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
 
   return (

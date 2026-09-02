@@ -27,6 +27,8 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
+import { useOpenProviderSetup } from '@/frontend/components/navigation';
+import { chatReturnToHref } from '@/frontend/components/navigation/chat';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -63,6 +65,12 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const providerSetupReturnTo = sessionId
+    ? chatReturnToHref({ kind: 'session', sessionId })
+    : agentId
+      ? chatReturnToHref({ agentId, kind: 'draft' })
+      : '/';
+  const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
       updateAgent(targetAgentId, { modelId }),
@@ -187,6 +195,10 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     },
     [agentId, selectModel, selectedModelId],
   );
+  const handleAddProvider = useCallback(() => {
+    setIsModelPickerOpen(false);
+    openProviderSetup();
+  }, [openProviderSetup]);
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       const parts = toAgentInputParts({ attachments, text });
@@ -288,6 +300,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
         <ModelPickerDrawer
           modelType="text"
           open
+          onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}

@@ -1,5 +1,8 @@
+import { Button } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
+import { useOpenProviderSetup } from '@/frontend/components/navigation';
 
 type ChatEmptyStateProps = {
   contentBottomInset: number;
@@ -8,6 +11,7 @@ type ChatEmptyStateProps = {
 /** Empty chat surface shown until the user selects an Agent or opens a Session. */
 export function ChatEmptyState({ contentBottomInset }: ChatEmptyStateProps) {
   const { t } = useTranslation();
+  const openProviderSetup = useOpenProviderSetup('/agents/new');
 
   return (
     <View
@@ -20,6 +24,9 @@ export function ChatEmptyState({ contentBottomInset }: ChatEmptyStateProps) {
       <Text className="mt-2 text-center text-foreground text-sm" numberOfLines={3}>
         {t('chat.newSession.description')}
       </Text>
+      <Button className="mt-5" onPress={openProviderSetup}>
+        {t('modelPicker.addProvider')}
+      </Button>
     </View>
   );
 }

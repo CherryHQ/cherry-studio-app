@@ -1,4 +1,5 @@
 import {
+  Button,
   ContentState,
   Input,
   OptionPickerBottomSheet,
@@ -22,6 +23,7 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
+import { useOpenProviderSetup } from '@/frontend/components/navigation';
 import { usePreference } from '@/frontend/data/hooks';
 import {
   useAgentApiById,
@@ -129,6 +131,7 @@ function AgentEditForm({
     useAgentMutations();
   const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const openProviderSetup = useOpenProviderSetup();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
@@ -168,6 +171,10 @@ function AgentEditForm({
     setIsModelPickerOpen(true);
   }, []);
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const handleAddProvider = useCallback(() => {
+    setIsModelPickerOpen(false);
+    openProviderSetup();
+  }, [openProviderSetup]);
   const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
     setHasPickedModel(true);
     setForm((current) => ({ ...current, modelId: item.modelId }));
@@ -355,6 +362,11 @@ function AgentEditForm({
               </SelectField.ValueText>
             </SelectField.Value>
           </SelectField>
+          {!modelPickerData.isLoading && modelPickerData.modelItems.length === 0 ? (
+            <Button onPress={handleAddProvider} size="sm" variant="secondary">
+              {t('modelPicker.addProvider')}
+            </Button>
+          ) : null}
           <View className="gap-1">
             <SelectField
               accessibilityHint={t(`agent.toolApproval.mode.${form.toolApprovalMode}.description`)}
@@ -392,6 +404,7 @@ function AgentEditForm({
         <ModelPickerDrawer
           modelType="text"
           open
+          onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={form.modelId}

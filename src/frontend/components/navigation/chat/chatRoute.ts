@@ -35,6 +35,13 @@ export function chatHref(target: ChatTarget) {
   };
 }
 
+/** Serializes complete chat identity for a return-to route parameter. */
+export function chatReturnToHref(target: ChatTarget) {
+  const [key, value] =
+    target.kind === 'session' ? ['sessionId', target.sessionId] : ['agentId', target.agentId];
+  return `/?${key}=${encodeURIComponent(value)}`;
+}
+
 export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
   const result = ChatRouteParamsSchema.safeParse({
     agentId: getSingleRouteParam(input.agentId),

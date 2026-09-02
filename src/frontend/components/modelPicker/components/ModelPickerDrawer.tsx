@@ -11,6 +11,7 @@ import { ModelPickerList } from './ModelPickerList';
 
 type ModelPickerDrawerProps = {
   modelType: ModelTypeFilter;
+  onAddProvider?: () => void;
   onClose: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
   open: boolean;
@@ -22,6 +23,7 @@ type ModelPickerDrawerProps = {
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
   modelType,
+  onAddProvider,
   onClose,
   onSelect,
   open,
@@ -46,6 +48,7 @@ export function ModelPickerDrawer({
       <ModelPickerDrawerContent
         deferredSearchText={deferredSearchText}
         modelType={modelType}
+        onAddProvider={onAddProvider}
         onSelect={onSelect}
         onSearchFocusChange={setIsSearchFocused}
         onSearchTextChange={setSearchText}
@@ -61,6 +64,7 @@ export function ModelPickerDrawer({
 function ModelPickerDrawerContent({
   deferredSearchText,
   modelType,
+  onAddProvider,
   onSelect,
   onSearchFocusChange,
   onSearchTextChange,
@@ -70,7 +74,7 @@ function ModelPickerDrawerContent({
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
-  'modelType' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId'
+  'modelType' | 'onAddProvider' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId'
 > & {
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
@@ -84,6 +88,11 @@ function ModelPickerDrawerContent({
     searchText: deferredSearchText,
   });
   const listItems = useMemo(() => buildModelPickerListItems(groups), [groups]);
+  const hasSearch = deferredSearchText.trim().length > 0;
+  const emptyAction =
+    !hasSearch && onAddProvider
+      ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
+      : undefined;
 
   return (
     <View className="min-h-0 flex-1">
@@ -102,7 +111,8 @@ function ModelPickerDrawerContent({
       </View>
       <View className="min-h-0 flex-1">
         <ModelPickerList
-          emptyText={t('settings.provider.models.search.empty')}
+          emptyAction={emptyAction}
+          emptyText={t(hasSearch ? 'settings.provider.models.search.empty' : 'modelPicker.empty')}
           isLoading={isLoading}
           isOpen={open}
           listItems={listItems}

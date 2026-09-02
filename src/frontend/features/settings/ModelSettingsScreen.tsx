@@ -14,6 +14,7 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
+import { useOpenProviderSetup } from '@/frontend/components/navigation';
 
 import { SettingsScrollPage } from './components/SettingsScrollPage';
 
@@ -23,6 +24,7 @@ export default function ModelSettingsScreen() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const { saveSelections, selections: savedSelections } = useModelSettingSelections();
+  const openProviderSetup = useOpenProviderSetup();
   const [draft, setDraft] = useState(savedSelections);
   const [baseline, setBaseline] = useState(savedSelections);
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +32,10 @@ export default function ModelSettingsScreen() {
   const textModelPickerData = useModelPickerData({ modelType: 'text' });
   const [activeKind, setActiveKind] = useState<ModelSettingKind>();
   const closeModelPicker = useCallback(() => setActiveKind(undefined), []);
+  const handleAddProvider = useCallback(() => {
+    setActiveKind(undefined);
+    openProviderSetup();
+  }, [openProviderSetup]);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       if (!activeKind) {
@@ -131,6 +137,7 @@ export default function ModelSettingsScreen() {
         <ModelPickerDrawer
           modelType={activeKind === 'painting' ? 'image' : 'text'}
           open
+          onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
