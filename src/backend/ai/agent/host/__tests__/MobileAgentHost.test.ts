@@ -130,6 +130,7 @@ const stubTool: RuntimeTool = {
 
 type HostOverrides = {
   agents?: AgentDefinitionSource;
+  appLanguage?: () => 'en-US' | 'zh-CN';
   resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
 };
 
@@ -151,6 +152,7 @@ function createHost(
     runtime,
     {
       agents: overrides.agents ?? agents,
+      appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
       files,
       inferenceModel: resolveInferenceModel,
       naming,
@@ -452,6 +454,9 @@ describe('MobileAgentHost', () => {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
     });
+    expect(requests[0]?.instructions).toContain(
+      'The current Cherry Studio App language is `zh-CN`.',
+    );
 
     // A second turn feeds the stored transcript back as history.
     const secondEvents: AgentEvent[] = [];

@@ -187,7 +187,7 @@ export type RuntimeTool = {
 
 export type RuntimeExecutionRequest = {
   turnId: string;
-  /** Host-prepared application prompt: mobile Runtime rules plus Agent instructions. */
+  /** Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions. */
   instructions: string;
   model: RuntimeModel;
   history: RuntimeHistoryTurn[];
