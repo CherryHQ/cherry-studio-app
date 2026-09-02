@@ -477,12 +477,18 @@ type AgentFailureSnapshot = {
 ```
 
 `EXECUTION_FAILED` remains the closed protocol envelope. New execution failures carry the
-versioned `failure` snapshot so source identity is not overwritten by that envelope; the UI derives
-localized copy from `reasonCode` and keeps the sanitized source message from the outer
-`AgentErrorView` as detail. The outer `message` and `retryable` fields are the single authoritative
-facts; the nested snapshot does not duplicate them. `failure` is optional so historical persisted
-rows remain readable. Native errors, request bodies, credentials, and stack traces stay behind the
-Host boundary.
+versioned `failure` snapshot so source identity is not overwritten by that envelope. The outer
+`message` and `retryable` fields are the single authoritative facts; the nested snapshot does not
+duplicate them. `failure` is optional so historical persisted rows remain readable. Native errors,
+request bodies, credentials, and stack traces stay behind the Host boundary.
+
+`message` is diagnostic text, not user-facing copy. The Host writes it in English for logs and
+tests, and the frontend derives every displayed string from the closed vocabulary instead: the
+composer maps a rejected submission's `code` to a translation, the transcript error part maps
+`failure.reasonCode` (or `code` for `INTERRUPTED`) to a translated title, and a tool part translates
+its status. The only `message` rendered verbatim is a `failure.source.layer === 'provider'` detail
+line, because provider text is third-party diagnostic output the user may need to act on and no
+translation of it exists.
 
 ## Invariants
 

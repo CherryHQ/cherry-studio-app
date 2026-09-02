@@ -87,24 +87,9 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
-  test('starts a durable Session from a Draft submission before observing it', async () => {
-    const initialSnapshot: AgentSessionSnapshot = {
-      ...snapshot(),
-      activeTurn: {
-        assistantMessageId: 'assistant-1',
-        endedAt: null,
-        error: null,
-        id: 'turn-1',
-        sessionId: 'session-1',
-        startedAt: '2026-08-25T00:00:00.000Z',
-        status: 'running',
-      },
-      activeUserMessage: userMessage(),
-      hasHistoryBeforeActiveTurn: false,
-      streamingMessage: assistantMessage(),
-    };
+  test('starts a durable Session without leaving an ownerless observation before navigation', async () => {
     const protocol = protocolWithObservation(async () => ({
-      snapshot: initialSnapshot,
+      snapshot: snapshot(),
       unsubscribe: jest.fn(),
     }));
     protocol.startSession.mockResolvedValue(snapshot().session);
@@ -117,16 +102,10 @@ describe('AgentSessionChatClient', () => {
       executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello', type: 'text' }],
     });
-    expect(protocol.observeSession).toHaveBeenCalledWith('session-1', expect.any(Function));
-    expect(client.getState('session-1')).toMatchObject({
-      enteringUserMessageId: 'user-1',
-      hasHistoryBeforeActiveTurn: false,
-      liveMessages: [{ id: 'user-1' }, { id: 'assistant-1' }],
-      status: 'ready',
-    });
+    expect(protocol.observeSession).not.toHaveBeenCalled();
   });
 
-  test('keeps an admitted Draft submission successful when observation needs a retry', async () => {
+  test('keeps an admitted Draft submission independent from destination observation', async () => {
     const protocol = protocolWithObservation(async () => {
       throw new Error('observation unavailable');
     });
@@ -136,6 +115,7 @@ describe('AgentSessionChatClient', () => {
     await expect(
       client.startSession('agent-1', [{ text: 'Hello', type: 'text' }]),
     ).resolves.toEqual(snapshot().session);
+    expect(protocol.observeSession).not.toHaveBeenCalled();
   });
 
   test('forwards composer turn overrides with the submitted message', async () => {
@@ -257,6 +237,111 @@ describe('AgentSessionChatClient', () => {
     release();
 
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1')).toMatchObject({ liveMessages: [], status: 'idle' });
+  });
+
+  test('coalesces consecutive text deltas into one live-message notification', async () => {
+    jest.useFakeTimers();
+    let release = () => {};
+    try {
+      let listener: ((event: AgentEvent) => void) | undefined;
+      const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+        listener = nextListener;
+        return { snapshot: snapshot(), unsubscribe: jest.fn() };
+      });
+      const client = new AgentSessionChatClient(protocol);
+      await client.observe('session-1');
+      const onChange = jest.fn();
+      release = client.subscribe('session-1', onChange);
+      listener?.({ type: 'message.created', message: assistantMessage() });
+      onChange.mockClear();
+
+      listener?.({
+        type: 'message.delta',
+        messageId: 'assistant-1',
+        delta: { op: 'text.append', partId: 'text-1', text: 'Hello' },
+      });
+      listener?.({
+        type: 'message.delta',
+        messageId: 'assistant-1',
+        delta: { op: 'text.append', partId: 'text-1', text: ' world' },
+      });
+
+      expect(onChange).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(16);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(client.getState('session-1').liveMessages[0]?.parts).toEqual([
+        { id: 'text-1', state: 'streaming', text: 'Hello world', type: 'text' },
+      ]);
+    } finally {
+      release();
+      jest.useRealTimers();
+    }
+  });
+
+  test('publishes a terminal message immediately and cancels its pending text flush', async () => {
+    jest.useFakeTimers();
+    let release = () => {};
+    try {
+      let listener: ((event: AgentEvent) => void) | undefined;
+      const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+        listener = nextListener;
+        return { snapshot: snapshot(), unsubscribe: jest.fn() };
+      });
+      const client = new AgentSessionChatClient(protocol);
+      await client.observe('session-1');
+      const onChange = jest.fn();
+      release = client.subscribe('session-1', onChange);
+      listener?.({ type: 'message.created', message: assistantMessage() });
+      onChange.mockClear();
+      listener?.({
+        type: 'message.delta',
+        messageId: 'assistant-1',
+        delta: { op: 'text.append', partId: 'text-1', text: 'Partial' },
+      });
+      listener?.({
+        type: 'message.finalized',
+        message: {
+          ...assistantMessage(),
+          parts: [{ id: 'text-1', state: 'done', text: 'Complete', type: 'text' }],
+          status: 'success',
+        },
+      });
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(client.getState('session-1').liveMessages[0]).toMatchObject({
+        parts: [{ text: 'Complete' }],
+        status: 'success',
+      });
+      jest.advanceTimersByTime(16);
+      expect(onChange).toHaveBeenCalledTimes(1);
+    } finally {
+      release();
+      jest.useRealTimers();
+    }
+  });
+
+  test('drops terminal live copies once the durable transcript contains the same versions', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const finalizedAssistant = {
+      ...assistantMessage(),
+      parts: [{ id: 'text-1', state: 'done' as const, text: 'Hello', type: 'text' as const }],
+      status: 'success' as const,
+      updatedAt: '2026-08-25T00:00:01.000Z',
+    };
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+    listener?.({ type: 'message.finalized', message: finalizedAssistant });
+
+    client.reconcilePersistedMessages('session-1', [userMessage(), finalizedAssistant]);
+
+    expect(client.getState('session-1').liveMessages).toEqual([]);
   });
 
   test('applies Session title events and invalidates Session queries', async () => {

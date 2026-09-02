@@ -1,1 +1,1 @@
-export { AppearanceSettingsScreen as default } from '@/frontend/features/settings';
+export { AppearanceSettingsScreen as default } from '@/frontend/features/settings/appearance';

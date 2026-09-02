@@ -37,10 +37,6 @@
  *     user/assistant message reservation.
  */
 
-import { getLocales } from 'expo-localization';
-
-import type { AiService } from '@/backend/ai/AiService';
-import type { McpRuntimeService } from '@/backend/ai/mcp';
 import {
   AppStatePolicy,
   BaseService,
@@ -49,15 +45,10 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
-import { modelService } from '@/backend/data/services/ModelService';
-import { providerService } from '@/backend/data/services/ProviderService';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
-import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import {
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
@@ -87,11 +78,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
 
-import {
-  managedFileResolver,
-  type ManagedFileResolver,
-  type TurnResourceLedger,
-} from '../resources/managedFileResolver';
+import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
   AgentRuntime,
   AgentRuntimeSession,
@@ -102,24 +89,14 @@ import type {
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
-import {
-  createSystemCapabilitySource,
-  type SystemCapabilitySource,
-} from '../tools/builtInToolSource';
-import {
-  createAgentRuntimeToolResolver,
-  type AgentRuntimeToolResolver,
-} from '../tools/runtimeTools';
-import {
-  createAgentTableDefinitionSource,
-  type AgentDefinition,
-  type AgentDefinitionSource,
-} from './agentDefinitions';
-import { AgentSessionNaming } from './AgentSessionNaming';
-import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
-import { buildAgentSystemPrompt, resolveAgentAppLanguage } from './agentSystemPrompt';
+import type { SystemCapabilitySource } from '../tools/builtInToolSource';
+import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
+import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
+import type { AgentSessionNaming } from './AgentSessionNaming';
+import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
+import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
-import { type AgentInferenceModelResolver, resolveAgentInferenceModel } from './inferenceSnapshot';
+import type { AgentInferenceModelResolver } from './inferenceSnapshot';
 import {
   toAgentApprovalView,
   toAgentErrorView,
@@ -164,15 +141,23 @@ const MESSAGE_SURFACE_EVENTS: ReadonlySet<RuntimeEvent['type']> = new Set([
 
 const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
 
-type MobileAgentHostOverrides = {
+export type MobileAgentHostNaming = Pick<
+  AgentSessionNaming,
+  'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
+>;
+
+/**
+ * Everything the Host needs from the application, as narrow ports. Production
+ * assembles them in `AgentHostDependencies`; tests hand in fakes. The Host
+ * never constructs a collaborator itself.
+ */
+export type MobileAgentHostPorts = {
   agents: AgentDefinitionSource;
   appLanguage: () => LanguageVarious;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
-  naming: Pick<
-    AgentSessionNaming,
-    'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
-  >;
+  /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
+  naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
@@ -234,17 +219,9 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 @Injectable('MobileAgentHost')
 @ServicePhase(Phase.PostReady)
 // Tool Runtime owners stop after this Host has drained its frozen turn
-// catalogs. Constructor injection keeps runtime ownership and lifecycle
-// ordering on the same declared edges. Covered by a stop-order test.
-@DependsOn([
-  'AgentSessionStore',
-  'AiService',
-  'PreferenceService',
-  'BackgroundReplyRuntime',
-  'McpRuntimeService',
-  'WebSearchService',
-  'AgentRuntime',
-])
+// catalogs: `AgentHostDependencies` declares them, so the edge reaches this
+// Host transitively. Covered by a stop-order test.
+@DependsOn(['AgentSessionStore', 'AgentHostDependencies', 'BackgroundReplyRuntime', 'AgentRuntime'])
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
@@ -259,88 +236,43 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     { runtimeId: string; session: AgentRuntimeSession }
   >();
   private readonly runningTurns = new Set<Promise<void>>();
-  private readonly files: ManagedFileResolver;
-  private readonly appLanguage: MobileAgentHostOverrides['appLanguage'];
-  private readonly naming: MobileAgentHostOverrides['naming'];
-  private readonly usage: MobileAgentHostOverrides['usage'];
-  private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
-  private readonly runtimeTools: MobileAgentHostOverrides['runtimeTools'];
+  private readonly naming: MobileAgentHostNaming;
   private readonly lifecycleAbortController = new AbortController();
   private acceptingSubmissions = true;
 
   /**
-   * Lifecycle composition supplies the selected store adapter and the Runtime
-   * bound at the composition root (`AgentRuntime` registration); tests may
-   * replace the Runtime and Agent ports.
+   * Lifecycle composition supplies the selected store adapter, the Host's
+   * ports, and the Runtime bound at the composition root (`AgentRuntime`
+   * registration); tests hand in fakes for all of them.
    */
   constructor(
     private readonly store: AgentSessionStore,
-    private readonly aiService: AiService,
-    private readonly preferenceService: PreferenceService,
+    private readonly ports: MobileAgentHostPorts,
     private readonly backgroundReply: BackgroundReplyLifecycle,
-    mcpRuntime: McpRuntimeService,
-    private readonly webSearchService: WebSearchService,
     private readonly runtime: AgentRuntime,
-    private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();
-    this.appLanguage =
-      overrides.appLanguage ??
-      (() =>
-        resolveAgentAppLanguage(
-          this.preferenceService.readCached('app.language'),
-          getLocales()[0]?.languageCode,
-        ));
-    this.files = overrides.files ?? managedFileResolver;
-    this.naming =
-      overrides.naming ??
-      new AgentSessionNaming({
-        ai: aiService,
-        model: modelService,
-        preference: preferenceService,
-        provider: providerService,
-        signal: this.lifecycleAbortController.signal,
-        store,
-      });
-    this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
-    this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
-    this.runtimeTools =
-      overrides.runtimeTools ??
-      createAgentRuntimeToolResolver({
-        bindings: agentToolBindingService,
-        getMcpRuntime: () => mcpRuntime,
-      });
+    this.naming = ports.naming(this.lifecycleAbortController.signal);
   }
 
-  private get agents(): AgentDefinitionSource {
-    return this.overrides.agents ?? (this.lazyAgents ??= createAgentTableDefinitionSource());
+  private get files(): ManagedFileResolver {
+    return this.ports.files;
   }
 
-  private lazyAgents: AgentDefinitionSource | undefined;
-
-  private get systemCapabilities(): SystemCapabilitySource {
-    return (
-      this.overrides.tools ??
-      (this.lazySystemCapabilities ??= createSystemCapabilitySource({
-        ai: this.aiService,
-        preference: this.preferenceService,
-        webSearch: this.webSearchService,
-      }))
-    );
+  private get usage(): MobileAgentHostPorts['usage'] {
+    return this.ports.usage;
   }
 
-  private lazySystemCapabilities: SystemCapabilitySource | undefined;
-
-  /** Ports for the write-free preparation stage; accessors keep test overrides live. */
+  /** Ports for the write-free preparation stage, read per call so a port may resolve lazily. */
   private get turnPreparation(): TurnPreparationDependencies {
     return {
-      agents: this.agents,
-      files: this.files,
-      inferenceModel: this.inferenceModel,
+      agents: this.ports.agents,
+      files: this.ports.files,
+      inferenceModel: this.ports.inferenceModel,
       routeExecutionTarget: (target) => this.routeExecutionTarget(target),
-      runtimeTools: this.runtimeTools,
+      runtimeTools: this.ports.runtimeTools,
       store: this.store,
-      systemCapabilities: this.systemCapabilities,
+      systemCapabilities: this.ports.tools,
     };
   }
 
@@ -767,7 +699,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         turnId: state.turn.id,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
-          appLanguage: this.appLanguage(),
+          appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
         }),
         model: plan.agent.model,
@@ -780,7 +712,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
         if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
-          state.backgroundReply.update(state.assistantMessage);
+          if (event.type === 'text.delta') {
+            state.backgroundReply.update(state.assistantMessage, { deferPreview: true });
+          } else {
+            state.backgroundReply.update(state.assistantMessage);
+          }
         }
         if (isTerminal) {
           return;
@@ -1084,7 +1020,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private async requireAgent(agentId: string): Promise<AgentDefinition> {
-    const agent = await this.agents.getAgent(agentId);
+    const agent = await this.ports.agents.getAgent(agentId);
     if (!agent) {
       fail('AGENT_NOT_FOUND', `Agent does not exist: ${agentId}`);
     }

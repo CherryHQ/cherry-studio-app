@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { withThemeTransition } from 'react-native-nitro-theme-transition';
@@ -18,7 +18,7 @@ const preferenceMapping = {
 
 export function useSettingPreferences() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
   const persistenceVersionRef = useRef(0);
   const languageValue = resolveLanguage(preferences.language);
@@ -51,14 +51,12 @@ export function useSettingPreferences() {
         }
 
         // Deliberately not wrapped in a transition. A failed write should read as a
-        // failure, not as another polished crossfade, and `alert.show` puts up a
-        // UIAlertController — a system window no snapshot can contain, so it would
-        // land on top of a frozen copy of the app while that copy faded underneath.
+        // failure, not as another polished crossfade.
         applyThemeModePreference(previousThemeMode);
-        alert.show({ title: t('settings.appearance.saveFailed') });
+        toast.show({ label: t('settings.appearance.saveFailed'), variant: 'danger' });
       });
     },
-    [alert, preferences.themeMode, setPreferences, t],
+    [preferences.themeMode, setPreferences, t, toast],
   );
 
   const handleLanguageChange = useCallback(

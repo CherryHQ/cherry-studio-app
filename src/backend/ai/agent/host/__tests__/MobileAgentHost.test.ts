@@ -4,10 +4,6 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
-import type { AiService } from '@/backend/ai/AiService';
-import type { McpRuntimeService } from '@/backend/ai/mcp';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -72,10 +68,6 @@ const FAKE_DESCRIPTOR = {
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 } as const;
 
-const unusedAiService = {} as AiService;
-const unusedMcpRuntime = {} as McpRuntimeService;
-const unusedPreferenceService = {} as PreferenceService;
-const unusedWebSearchService = {} as WebSearchService;
 type NamingOverride = Pick<
   AgentSessionNaming,
   'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
@@ -144,24 +136,20 @@ function createHost(
 ): MobileAgentHost {
   return new MobileAgentHost(
     store,
-    unusedAiService,
-    unusedPreferenceService,
-    backgroundReply,
-    unusedMcpRuntime,
-    unusedWebSearchService,
-    runtime,
     {
       agents: overrides.agents ?? agents,
       appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
       files,
       inferenceModel: resolveInferenceModel,
-      naming,
+      naming: () => naming,
       runtimeTools: {
         resolve: overrides.resolveRuntimeTools ?? (async () => []),
       },
       usage,
       tools,
     },
+    backgroundReply,
+    runtime,
   );
 }
 
@@ -413,6 +401,9 @@ describe('MobileAgentHost', () => {
     // One notification per message-changing event (part.add, two text.delta,
     // part.replace) — a handled event that stops notifying would show up here.
     expect(backgroundReplyTurn.update).toHaveBeenCalledTimes(4);
+    expect(
+      backgroundReplyTurn.update.mock.calls.filter(([, options]) => options?.deferPreview),
+    ).toHaveLength(2);
     expect(backgroundReplyTurn.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         id: submitted.assistantMessageId,

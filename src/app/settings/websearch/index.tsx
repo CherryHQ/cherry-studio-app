@@ -1,1 +1,1 @@
-export { WebSearchScreen as default } from '@/frontend/features/settings/WebSearchScreen';
+export { WebSearchScreen as default } from '@/frontend/features/settings/webSearch';

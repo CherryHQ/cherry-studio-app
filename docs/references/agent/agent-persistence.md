@@ -246,7 +246,7 @@ enforcement here; the plain `status` index exists because Drizzle's bound `statu
 cannot match a partial index — see `message.ts`.)
 
 `data.parts` is exactly the protocol's `AgentMessagePart` union
-([contract](../../../src/shared/contracts/agent.ts)); the version field guards future part-shape
+([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
 migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
 `ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
 agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and

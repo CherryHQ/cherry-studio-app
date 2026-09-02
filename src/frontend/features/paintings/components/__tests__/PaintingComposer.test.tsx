@@ -1,13 +1,13 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messages';
+import type { MessageListProps } from '@/frontend/components/Message';
+import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
 } from '../../hooks/usePaintingGeneration';
-import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
@@ -124,7 +124,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   }),
 }));
 
-jest.mock('@/frontend/components/composer', () => ({
+jest.mock('@/frontend/components/Composer', () => ({
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
     mockProviderProps = props;
@@ -132,7 +132,7 @@ jest.mock('@/frontend/components/composer', () => ({
   },
 }));
 
-jest.mock('@/frontend/components/messages', () => ({
+jest.mock('@/frontend/components/Message', () => ({
   MessageList: (props: MessageListProps) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(() => {
@@ -151,7 +151,7 @@ jest.mock('../../hooks/usePaintingGeneration', () => ({
   usePaintingGeneration: () => mockGeneration,
 }));
 
-jest.mock('../../hooks/usePaintingJobs', () => ({
+jest.mock('@/frontend/data/paintings/usePaintingJobs', () => ({
   paintingJobParamValues: () => undefined,
   usePaintingJobs: () => ({
     activeByPaintingId: new Map(),

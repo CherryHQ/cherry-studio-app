@@ -18,7 +18,7 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
-import { modelService } from '@/backend/data/services/ModelService';
+import type { ModelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -110,6 +110,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
  */
 export type SystemCapabilityServices = {
   ai: PaintingToolDependencies['ai'];
+  model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
 };
@@ -325,7 +326,8 @@ function resolveDependencies(
     painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,
     preference: overrides.preference ?? services.preference,
-    supportsToolCalling: overrides.supportsToolCalling ?? supportsToolCalling,
+    supportsToolCalling:
+      overrides.supportsToolCalling ?? ((model) => supportsToolCalling(services.model, model)),
     webSearch: overrides.webSearch ?? services.webSearch,
   };
 }
@@ -346,9 +348,10 @@ function productionPaintingDependencies(
   };
 }
 
-async function supportsToolCalling(model: RuntimeModel): Promise<boolean> {
-  const configured = await modelService.getById(
-    createUniqueModelId(model.providerId, model.modelId),
-  );
+async function supportsToolCalling(
+  models: SystemCapabilityServices['model'],
+  model: RuntimeModel,
+): Promise<boolean> {
+  const configured = await models.getById(createUniqueModelId(model.providerId, model.modelId));
   return configured?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false;
 }

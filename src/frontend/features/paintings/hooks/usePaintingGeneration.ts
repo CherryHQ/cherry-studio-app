@@ -2,22 +2,21 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComposerAttachmentDraft } from '@/frontend/components/composer/utils/composerAttachments';
+import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
+import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
+import {
+  paintingJobFailureMessage,
+  paintingJobParamValues,
+  usePaintingJobs,
+} from '@/frontend/data/paintings/usePaintingJobs';
+import { useDeletePaintings, useSyncPaintingQueries } from '@/frontend/data/paintings/usePaintings';
 import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
 import type { UniqueModelId } from '@/shared/data/types/model';
-
-import { imageParamsAspectRatio } from '../utils/imageGenerationParams';
-import {
-  paintingJobFailureMessage,
-  paintingJobParamValues,
-  usePaintingJobs,
-} from './usePaintingJobs';
-import { useDeletePaintings, useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating';
 
