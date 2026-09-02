@@ -323,18 +323,20 @@ function DrawingListHeader({
       {isEditing ? null : (
         <>
           <View className="pb-5 pt-2">
-            <Section.Header className="h-10 px-4" title={t('painting.photos.title')}>
-              <Button
-                accessibilityLabel={t('painting.photos.viewAll')}
-                className="min-h-10 px-1 py-0"
-                onPress={() => void onViewAllPress()}
-                size="xs"
-                testID="painting-photos-view-all"
-                variant="ghost"
-              >
-                <Button.Label numberOfLines={1}>{t('painting.photos.viewAll')}</Button.Label>
-              </Button>
-            </Section.Header>
+            <View className="px-4">
+              <Section.Header title={t('painting.photos.title')}>
+                <Button
+                  accessibilityLabel={t('painting.photos.viewAll')}
+                  hitSlop={10}
+                  onPress={() => void onViewAllPress()}
+                  size="inline"
+                  testID="painting-photos-view-all"
+                  variant="ghost"
+                >
+                  <Button.Label numberOfLines={1}>{t('painting.photos.viewAll')}</Button.Label>
+                </Button>
+              </Section.Header>
+            </View>
             {isRecentPhotosLoading ? (
               <View className="h-20 items-center justify-center">
                 <Spinner

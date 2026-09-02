@@ -16,6 +16,7 @@ import { cn } from '../../utils';
 import { SwitchIndicator } from '../switch/switch-indicator';
 import type {
   SectionHeaderProps,
+  SectionItemDensity,
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
@@ -47,17 +48,11 @@ function renderTextSlot(content: ReactNode, className?: string) {
   );
 }
 
-function SectionHeader({
-  children,
-  className,
-  title,
-  titleClassName,
-  ...viewProps
-}: SectionHeaderProps) {
+function SectionHeader({ children, title, ...viewProps }: SectionHeaderProps) {
   return (
-    <View className={cn('flex-row items-center gap-3 px-3', className)} {...viewProps}>
+    <View className="min-h-10 flex-row items-center gap-3" {...viewProps}>
       <View className="min-w-0 flex-1">
-        {renderTextSlot(title, cn('text-base font-semibold text-foreground', titleClassName))}
+        {renderTextSlot(title, 'text-base font-semibold text-foreground')}
       </View>
       {children !== undefined ? (
         <View className="shrink-0 items-center justify-center">{children}</View>
@@ -66,13 +61,19 @@ function SectionHeader({
   );
 }
 
+const itemDensityStyles: Record<SectionItemDensity, string> = {
+  compact: 'py-2',
+  comfortable: 'py-4',
+  default: 'py-3',
+};
+
 function SectionItem({
   accessibilityHint,
   accessibilityLabel,
   accessibilityRole,
   accessibilityState,
   children,
-  className,
+  density = 'default',
   description,
   destructive = false,
   disabled = false,
@@ -83,7 +84,6 @@ function SectionItem({
   onPressOut,
   onPressedChange,
   showChevron,
-  style,
   testID,
   trailing,
 }: InternalSectionItemProps) {
@@ -95,9 +95,9 @@ function SectionItem({
     disabled: disabled || accessibilityState?.disabled,
   };
   const rowClassName = cn(
-    'min-h-10 flex-row items-center gap-3 px-4 py-3',
+    'min-h-10 flex-row items-center gap-3 px-4',
+    itemDensityStyles[density],
     disabled && 'opacity-40',
-    className,
   );
   const content =
     children !== undefined ? (
@@ -148,7 +148,6 @@ function SectionItem({
           onPressedChange?.(false);
           onPressOut?.(event);
         }}
-        style={style}
         testID={testID}
       >
         {content}
@@ -163,7 +162,6 @@ function SectionItem({
       accessibilityRole={accessibilityRole}
       accessibilityState={resolvedAccessibilityState}
       className={rowClassName}
-      style={style}
       testID={testID}
     >
       {content}
@@ -275,7 +273,11 @@ function SectionRoot({
 
   return (
     <View className={cn('gap-1', className)} {...viewProps}>
-      {title !== undefined ? <SectionHeader title={title} /> : headers}
+      {title !== undefined || headers.length > 0 ? (
+        <View className="px-3">
+          {title !== undefined ? <SectionHeader title={title} /> : headers}
+        </View>
+      ) : null}
       <View
         className={cn(
           variant === 'grouped' ? 'overflow-hidden rounded-2xl bg-card' : 'bg-transparent',

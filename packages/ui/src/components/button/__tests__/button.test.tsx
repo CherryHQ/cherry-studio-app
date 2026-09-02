@@ -5,8 +5,8 @@ import { useResolveClassNames } from 'uniwind';
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
 
 jest.mock('../../loading/spinner', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   function Spinner(props: object) {
     return React.createElement(View, { ...props, testID: 'spinner' });
@@ -16,7 +16,7 @@ jest.mock('../../loading/spinner', () => {
 });
 
 jest.mock('heroui-native/utils', () => {
-  const { twMerge } = require('tailwind-merge');
+  const { twMerge } = jest.requireActual('tailwind-merge');
 
   return {
     cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
@@ -68,7 +68,9 @@ describe('Button', () => {
     expect(pressable.props.accessibilityRole).toBe('button');
     expect(pressable.props.className).toEqual(expect.stringContaining('bg-foreground shadow-xs'));
     const rootClassNames = pressable.props.className.split(' ');
-    expect(rootClassNames).toEqual(expect.arrayContaining(['gap-2', 'px-4', 'py-2.5']));
+    expect(rootClassNames).toEqual(
+      expect.arrayContaining(['gap-2', 'px-4', 'py-2.5', 'rounded-xl']),
+    );
     expect(rootClassNames).not.toContain('h-10');
     expect(label.props.children).toBe('Continue');
     expect(label.props.className).toEqual(expect.stringContaining('text-background'));
@@ -101,6 +103,12 @@ describe('Button', () => {
     {
       iconClassName: 'size-4',
       labelClassName: 'text-sm',
+      rootClassNames: ['gap-1', 'px-0', 'py-1'],
+      size: 'inline',
+    },
+    {
+      iconClassName: 'size-4',
+      labelClassName: 'text-sm',
       rootClassNames: ['gap-1', 'px-2', 'py-1.5'],
       size: 'xs',
     },
@@ -115,6 +123,12 @@ describe('Button', () => {
       labelClassName: 'text-base',
       rootClassNames: ['gap-2', 'px-4', 'py-2.5'],
       size: 'default',
+    },
+    {
+      iconClassName: 'size-5',
+      labelClassName: 'text-base',
+      rootClassNames: ['min-h-10', 'gap-2', 'px-4', 'py-2'],
+      size: 'field',
     },
     {
       iconClassName: 'size-6',
@@ -208,6 +222,11 @@ describe('Button', () => {
       variant: 'ghost',
     },
     {
+      labelClassName: 'text-primary',
+      rootClassNames: ['bg-transparent', 'shadow-none', 'active:opacity-70'],
+      variant: 'link',
+    },
+    {
       labelClassName: 'text-foreground',
       rootClassNames: ['border', 'border-border', 'bg-transparent', 'shadow-none'],
       variant: 'outline',
@@ -227,22 +246,23 @@ describe('Button', () => {
     expect(useResolveClassNames).toHaveBeenLastCalledWith(labelClassName);
   });
 
-  test('lets consumer class names override root and label defaults', () => {
-    const tree = render(<Button.Label className="text-black">Delete</Button.Label>, {
-      className: 'rounded-full bg-destructive px-6 py-4',
+  test('combines semantic shape, size, and variant axes', () => {
+    const tree = render(<Button.Label>Details</Button.Label>, {
+      shape: 'pill',
+      size: 'inline',
+      variant: 'link',
     });
     const rootClassName = findPressable(tree).props.className as string;
     const labelClassName = tree.root.findByType(Text).props.className as string;
 
     expect(rootClassName.split(' ')).toEqual(
-      expect.arrayContaining(['rounded-full', 'bg-destructive', 'px-6', 'py-4']),
+      expect.arrayContaining(['rounded-full', 'bg-transparent', 'gap-1', 'px-0', 'py-1']),
     );
     expect(rootClassName).not.toContain('px-4');
     expect(rootClassName).not.toContain('py-2.5');
     expect(rootClassName).not.toContain('rounded-xl');
-    expect(rootClassName).not.toContain('bg-foreground');
-    expect(labelClassName).toContain('text-black');
-    expect(labelClassName).not.toContain('text-background');
+    expect(labelClassName).toContain('text-primary');
+    expect(labelClassName).toContain('underline');
   });
 
   test('disables the Pressable and exposes busy state while loading', () => {

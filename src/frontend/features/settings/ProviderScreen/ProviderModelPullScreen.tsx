@@ -290,16 +290,17 @@ const PullSectionHeader = memo(function PullSectionHeader({
         {ids.length}
       </Text>
       <View className="flex-1" />
-      <Button
-        accessibilityLabel={actionLabel}
-        className="shrink-0"
-        disabled={ids.length === 0}
-        size="xs"
-        variant="ghost"
-        onPress={handleActionPress}
-      >
-        <Button.Label>{actionLabel}</Button.Label>
-      </Button>
+      <View className="shrink-0">
+        <Button
+          accessibilityLabel={actionLabel}
+          disabled={ids.length === 0}
+          size="xs"
+          variant="ghost"
+          onPress={handleActionPress}
+        >
+          <Button.Label>{actionLabel}</Button.Label>
+        </Button>
+      </View>
     </View>
   );
 });

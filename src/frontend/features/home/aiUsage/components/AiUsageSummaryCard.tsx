@@ -35,7 +35,6 @@ export function AiUsageSummaryCard() {
   return (
     <View className="w-full rounded-2xl bg-card p-4" style={styles.continuousCorners}>
       <Section.Header
-        className="px-0"
         title={
           <View className="min-w-0 flex-row items-center gap-2">
             <Text
@@ -60,10 +59,9 @@ export function AiUsageSummaryCard() {
         <Link href="/home/ai-usage" asChild>
           <Button
             accessibilityRole="link"
-            className="gap-0.5 px-0 py-1"
-            size="xs"
+            size="inline"
             testID="ai-usage-view-details"
-            variant="ghost"
+            variant="link"
           >
             <Button.Label numberOfLines={1}>{t('aiUsage.viewDetails')}</Button.Label>
             <ChevronRightIcon className="size-4 text-foreground" />

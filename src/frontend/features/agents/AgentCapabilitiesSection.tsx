@@ -118,7 +118,7 @@ export function AgentCapabilitiesSection({
           return (
             <Section key={row.capability}>
               <Section.SwitchItem
-                className="py-2"
+                density="compact"
                 description={
                   enabled
                     ? permissionCaption(

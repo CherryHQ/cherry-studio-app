@@ -171,8 +171,8 @@ describe('Section', () => {
     );
     const title = tree.root.findByProps({ children: 'Models' });
 
-    expect(header.props.className).toContain('flex-row items-center gap-3 px-3');
-    expect(header.props.className).not.toContain('min-h-10');
+    expect(header.props.className).toContain('min-h-10 flex-row items-center gap-3');
+    expect(header.props.className).not.toContain('px-3');
     expect(title.props.className).toContain('text-base font-semibold text-foreground');
     expect(tree.root.findByProps({ testID: 'header-action' })).toBeDefined();
   });
@@ -193,6 +193,14 @@ describe('Section', () => {
     );
 
     expect(groupedCard.findAllByProps({ testID: 'section-header' })).toHaveLength(0);
+    expect(
+      tree.root.find(
+        (node) =>
+          node.type === View &&
+          node.props.className === 'px-3' &&
+          node.findAllByProps({ testID: 'section-header' }).length > 0,
+      ),
+    ).toBeDefined();
     expect(
       tree.root.findAll((node) => node.type === View && node.props.testID === 'section-separator'),
     ).toHaveLength(1);
@@ -278,6 +286,20 @@ describe('Section', () => {
     expect(
       tree.root.findAll((node) => node.type === View && node.props.testID === 'section-chevron'),
     ).toHaveLength(0);
+  });
+
+  test.each([
+    { className: 'py-2', density: 'compact' },
+    { className: 'py-3', density: 'default' },
+    { className: 'py-4', density: 'comfortable' },
+  ] as const)('renders $density item density', ({ className, density }) => {
+    const tree = render(
+      <Section>
+        <Section.Item density={density} label="Density" testID="density-row" />
+      </Section>,
+    );
+
+    expect(tree.root.findByProps({ testID: 'density-row' }).props.className).toContain(className);
   });
 
   test('supports non-button accessibility roles and states', () => {

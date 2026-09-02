@@ -38,38 +38,39 @@ export function AiUsageRankingSection({
   const rankingListHeader = (
     <View className="gap-7 pb-2">
       {listHeaderComponent}
-      <Section.Header
-        className="px-1"
-        testID="ai-usage-ranking-section"
-        title={
-          <View className="min-w-0 flex-1 flex-row items-center gap-2">
-            <Text
-              selectable
-              className="shrink font-medium text-foreground text-sm"
-              numberOfLines={1}
-            >
-              {t('aiUsage.mostUsed')}
-            </Text>
-            <AiUsageSectionStatus
-              isError={isError && hasData}
-              isRefreshing={isRefreshing}
-              retryTestID={`ai-usage-ranking-refresh-retry-${page.key}`}
-              onRetry={() => void refetch()}
-            />
-          </View>
-        }
-      >
-        <Button
-          size="xs"
-          testID="ai-usage-toggle-ranking-group"
-          variant="ghost"
-          onPress={toggleGroupBy}
+      <View className="px-1">
+        <Section.Header
+          testID="ai-usage-ranking-section"
+          title={
+            <View className="min-w-0 flex-1 flex-row items-center gap-2">
+              <Text
+                selectable
+                className="shrink font-medium text-foreground text-sm"
+                numberOfLines={1}
+              >
+                {t('aiUsage.mostUsed')}
+              </Text>
+              <AiUsageSectionStatus
+                isError={isError && hasData}
+                isRefreshing={isRefreshing}
+                retryTestID={`ai-usage-ranking-refresh-retry-${page.key}`}
+                onRetry={() => void refetch()}
+              />
+            </View>
+          }
         >
-          <Button.Label numberOfLines={1}>
-            {groupBy === 'model' ? t('aiUsage.showProviders') : t('aiUsage.showModels')}
-          </Button.Label>
-        </Button>
-      </Section.Header>
+          <Button
+            size="xs"
+            testID="ai-usage-toggle-ranking-group"
+            variant="ghost"
+            onPress={toggleGroupBy}
+          >
+            <Button.Label numberOfLines={1}>
+              {groupBy === 'model' ? t('aiUsage.showProviders') : t('aiUsage.showModels')}
+            </Button.Label>
+          </Button>
+        </Section.Header>
+      </View>
     </View>
   );
   const emptyState = isInitialError ? (

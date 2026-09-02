@@ -93,7 +93,7 @@ function ContentStateFrame({
           {primaryAction ? (
             <Button
               {...primaryAction}
-              className={cn(isPage && 'rounded-full', primaryAction.className)}
+              shape={isPage ? 'pill' : undefined}
               size={primaryAction.size ?? (isPage ? 'default' : 'sm')}
               variant="default"
             />
@@ -101,7 +101,7 @@ function ContentStateFrame({
           {secondaryAction ? (
             <Button
               {...secondaryAction}
-              className={cn(isPage && 'rounded-full', secondaryAction.className)}
+              shape={isPage ? 'pill' : undefined}
               size={secondaryAction.size ?? (isPage ? 'default' : 'sm')}
               variant="secondary"
             />

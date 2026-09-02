@@ -241,7 +241,6 @@ function PasswordInput({
           accessibilityLabel={
             isVisible ? visibilityAccessibilityLabels.hide : visibilityAccessibilityLabels.show
           }
-          className="disabled:opacity-100"
           disabled={isDisabled}
           hitSlop={6}
           icon={<VisibilityIcon progress={visibilityProgress} />}

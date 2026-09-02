@@ -508,10 +508,9 @@ function ProviderModelAddForm({
 
             <Button
               accessibilityLabel={t('settings.provider.models.addMoreSettings')}
-              className="h-10"
               disabled={isSubmitting}
               onPress={toggleMoreSettings}
-              size="sm"
+              size="field"
               variant="secondary"
             >
               <Button.Label numberOfLines={1}>

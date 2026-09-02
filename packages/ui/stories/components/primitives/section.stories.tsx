@@ -62,7 +62,8 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
             leading={<InfoIcon className="size-5 text-primary" />}
             trailing={<Text className="text-base text-muted-foreground">0.2</Text>}
           />
-          <Section.Item disabled label="Unavailable option" onPress={fn()} />
+          <Section.Item density="compact" label="Compact row" />
+          <Section.Item density="comfortable" disabled label="Comfortable row" onPress={fn()} />
         </Section>
 
         <Section>

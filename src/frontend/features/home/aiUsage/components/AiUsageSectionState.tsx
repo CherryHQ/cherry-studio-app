@@ -27,11 +27,11 @@ export function AiUsageSectionStatus({
   return (
     <Button
       accessibilityLabel={t('aiUsage.retry')}
-      className="rounded-full p-2 active:bg-secondary active:opacity-70"
       hitSlop={6}
       icon={<RefreshCwIcon className="text-destructive" />}
       onPress={onRetry}
-      size="xs"
+      shape="pill"
+      size="sm"
       testID={retryTestID}
       variant="ghost"
     />

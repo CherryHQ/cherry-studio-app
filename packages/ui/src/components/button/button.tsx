@@ -12,24 +12,28 @@ import { useResolveClassNames } from 'uniwind';
 import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
 
-export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
-export type ButtonSize = 'default' | 'lg' | 'sm' | 'xs';
+export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'link' | 'outline' | 'secondary';
+export type ButtonShape = 'pill' | 'rounded';
+export type ButtonSize = 'default' | 'field' | 'inline' | 'lg' | 'sm' | 'xs';
 
-export type ButtonProps = Omit<PressableProps, 'children'> & {
+export type ButtonProps = Omit<PressableProps, 'children' | 'className' | 'style'> & {
   children?: ReactNode;
-  className?: string;
   icon?: ReactElement<{ className?: string }>;
   loading?: boolean;
+  shape?: ButtonShape;
   size?: ButtonSize;
   variant?: ButtonVariant;
 };
 
-export type ButtonLabelProps = TextProps & {
-  className?: string;
-};
+export type ButtonLabelProps = Omit<TextProps, 'className' | 'style'>;
 
 const rootBaseStyles =
-  'flex-row items-center justify-center overflow-hidden rounded-xl active:opacity-80 disabled:opacity-40';
+  'flex-row items-center justify-center overflow-hidden active:opacity-80 disabled:opacity-40';
+
+const shapeStyles: Record<ButtonShape, string> = {
+  pill: 'rounded-full',
+  rounded: 'rounded-xl',
+};
 
 const sizeStyles: Record<
   ButtonSize,
@@ -40,6 +44,20 @@ const sizeStyles: Record<
     iconOnly: 'p-2.5',
     label: 'text-base',
     root: 'gap-2 px-4 py-2.5',
+    spinner: 'sm',
+  },
+  field: {
+    icon: 'size-5',
+    iconOnly: 'p-2.5',
+    label: 'text-base',
+    root: 'min-h-10 gap-2 px-4 py-2',
+    spinner: 'sm',
+  },
+  inline: {
+    icon: 'size-4',
+    iconOnly: 'p-1.5',
+    label: 'text-sm',
+    root: 'gap-1 px-0 py-1',
     spinner: 'sm',
   },
   lg: {
@@ -76,7 +94,11 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   },
   ghost: {
     label: 'text-foreground',
-    root: 'bg-transparent shadow-none',
+    root: 'bg-transparent shadow-none active:bg-secondary',
+  },
+  link: {
+    label: 'text-primary underline',
+    root: 'bg-transparent shadow-none active:opacity-70',
   },
   outline: {
     label: 'text-foreground',
@@ -91,10 +113,7 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 const ButtonVariantContext = createContext<ButtonVariant>('default');
 const ButtonSizeContext = createContext<ButtonSize>('default');
 
-const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(
-  { className, ...props },
-  ref,
-) {
+const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(props, ref) {
   const variant = useContext(ButtonVariantContext);
   const size = useContext(ButtonSizeContext);
 
@@ -105,7 +124,6 @@ const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(
         'min-w-0 shrink text-center font-medium',
         sizeStyles[size].label,
         variantStyles[variant].label,
-        className,
       )}
       ref={ref}
     />
@@ -119,11 +137,11 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
     accessibilityRole = 'button',
     accessibilityState,
     children,
-    className,
     disabled = false,
     hitSlop,
     icon,
     loading = false,
+    shape = 'rounded',
     size = 'default',
     variant = 'default',
     ...props
@@ -155,9 +173,9 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
           className={cn(
             rootBaseStyles,
             variantStyles[variant].root,
+            shapeStyles[shape],
             sizeStyles[size].root,
             isIconOnly ? sizeStyles[size].iconOnly : undefined,
-            className,
           )}
           disabled={isDisabled}
           hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}

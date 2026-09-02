@@ -181,13 +181,20 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
-behavior. The `xs`, `sm`, `default`, and `lg` sizes use content-driven typography and padding without
-fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
-the matching icon-only padding when no label is provided. Icon-only buttons must provide an
-`accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
-need an Expo UI `Host`. The visually compact `xs` size supplies an 8-point hit slop by default so
-its effective touch target remains usable.
+`destructive`, `outline`, `secondary`, `ghost`, and `link` variants, along with loading and disabled
+behavior. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+minimum height that aligns with form controls while still growing for large text, and `inline` is a
+compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+the label and automatically switches to the matching icon-only padding when no label is provided.
+Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
+composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
+8-point hit slop by default so its effective touch target remains usable.
+
+`Section.Header` owns its intrinsic row, typography, and minimum height. A header nested directly in
+`Section` receives the grouped title inset from the root; a standalone header receives placement
+from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
+`"default"`, or `"comfortable"` for intrinsic vertical spacing.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected

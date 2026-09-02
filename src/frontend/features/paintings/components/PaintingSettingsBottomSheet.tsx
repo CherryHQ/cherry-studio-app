@@ -274,7 +274,7 @@ function AspectRatioField({
         />
       </View>
       <Section>
-        <Section.Item className="p-4">
+        <Section.Item density="comfortable">
           <View className="flex-row flex-wrap" style={styles.chipGrid}>
             {options.map((option) => (
               <AspectRatioOption
