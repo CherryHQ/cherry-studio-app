@@ -1,3 +1,4 @@
+import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
@@ -91,5 +92,31 @@ describe('Switch', () => {
     const control = renderer!.root.findByProps({ mockComponent: 'hero-switch' });
 
     expect(control.props.isDisabled).toBe(true);
+  });
+
+  test('owns the press without activating an ancestor press target', () => {
+    const onValueChange = jest.fn();
+    const stopPropagation = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <Switch accessibilityLabel="Airplane mode" onValueChange={onValueChange} value />,
+      );
+    });
+
+    const pressOwner = renderer!.root.findByType(Pressable);
+
+    expect(pressOwner.props.accessible).toBe(false);
+    expect(pressOwner.props.hitSlop).toBe(8);
+
+    act(() => pressOwner.props.onPress({ stopPropagation }));
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    act(() =>
+      renderer!.root.findByProps({ mockComponent: 'hero-switch' }).props.onSelectedChange(false),
+    );
+    expect(onValueChange).toHaveBeenCalledWith(false);
   });
 });
