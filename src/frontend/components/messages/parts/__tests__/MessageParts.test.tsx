@@ -22,11 +22,11 @@ jest.mock('../SourceGroup', () => {
   };
 });
 
-jest.mock('../MessageFileStrip', () => {
+jest.mock('../GeneratedFileStrip', () => {
   const { createElement } = jest.requireActual('react');
 
   return {
-    MessageFileStrip: (props: object) => createElement('MessageFileStrip', props),
+    GeneratedFileStrip: (props: object) => createElement('GeneratedFileStrip', props),
   };
 });
 
@@ -75,7 +75,7 @@ describe('MessageParts', () => {
     const renderedPart = renderer.root.findByType('MessagePartRenderer');
     expect(renderedPart.props.part).toEqual({ text: 'Hello', type: 'text' });
     expect(renderedPart.props.isTextSelectionEnabled).toBe(false);
-    expect(renderer.root.findByType('MessageFileStrip').props.parts).toEqual([
+    expect(renderer.root.findByType('GeneratedFileStrip').props.parts).toEqual([
       expect.objectContaining({ filename: 'report.md' }),
       expect.objectContaining({ filename: 'summary.md' }),
     ]);
@@ -158,13 +158,13 @@ describe('MessageParts', () => {
       (node) =>
         node.type === 'ProcessGroupPart' ||
         node.type === 'MessagePartRenderer' ||
-        node.type === 'MessageFileStrip',
+        node.type === 'GeneratedFileStrip',
     );
 
     expect(rendered.map((node) => node.type)).toEqual([
       'ProcessGroupPart',
       'MessagePartRenderer',
-      'MessageFileStrip',
+      'GeneratedFileStrip',
     ]);
   });
 });

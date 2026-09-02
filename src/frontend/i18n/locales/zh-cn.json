@@ -211,6 +211,7 @@
   "common.officialWebsite": "官网",
   "filePreview.openFailed": "没有可用于打开此文件的应用。",
   "filePreview.openWith": "打开文件",
+  "filePreview.document": "文档",
   "filePreview.unavailable": "文件不可用",
   "navigation.back": "返回",
   "navigation.home": "主页",

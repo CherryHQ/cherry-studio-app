@@ -2,15 +2,17 @@ import { act, create } from 'react-test-renderer';
 
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
+import { FileEntryAttachment, FileEntryPreview, LoadedFileEntryPreview } from './FileEntryPreview';
 
 const mockAlertShow = jest.fn();
+const mockFileAttachmentPreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockFilePreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockLoggerWarn = jest.fn();
 const mockSkeleton = jest.fn((_props: Record<string, unknown>) => null);
 const mockUseResolvedFile = jest.fn();
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  FileAttachmentPreview: (props: Record<string, unknown>) => mockFileAttachmentPreview(props),
   FilePreview: (props: Record<string, unknown>) => mockFilePreview(props),
   Skeleton: (props: Record<string, unknown>) => mockSkeleton(props),
   useAlert: () => ({ alert: { show: mockAlertShow } }),
@@ -92,6 +94,24 @@ describe('FileEntryPreview', () => {
         }),
       }),
     );
+  });
+
+  it('adapts assistant artifacts into the horizontal attachment preview', () => {
+    act(() => {
+      create(<FileEntryAttachment entryId={entry.id} />);
+    });
+
+    expect(mockFileAttachmentPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        categoryLabel: 'filePreview.document',
+        file: expect.objectContaining({ id: entry.id, uri: 'file:///documents/image.png' }),
+        labels: {
+          openWith: 'filePreview.openWith',
+          unavailable: 'filePreview.unavailable',
+        },
+      }),
+    );
+    expect(mockFilePreview).not.toHaveBeenCalled();
   });
 
   it('uses the shared file-entry skeleton while the entry resolves', () => {
