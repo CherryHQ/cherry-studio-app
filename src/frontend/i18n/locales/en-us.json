@@ -127,6 +127,7 @@
   "chat.attachments.importFailed_one": "Could not add {{count}} attachment.",
   "chat.attachments.importFailed_other": "Could not add {{count}} attachments.",
   "chat.attachments.unsupportedImageFormat": "Only JPEG, PNG, GIF, and WebP images are supported.",
+  "chat.draft.greeting": "What should we create together today?",
   "chat.errorPart.message": "Unknown error",
   "chat.errorPart.reason.auth": "Authentication failed",
   "chat.errorPart.reason.contentFilter": "Content was blocked",

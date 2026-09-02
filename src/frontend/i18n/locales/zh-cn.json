@@ -126,6 +126,7 @@
   "chat.attachments.image": "图片附件",
   "chat.attachments.importFailed": "有 {{count}} 个附件导入失败。",
   "chat.attachments.unsupportedImageFormat": "仅支持 JPEG、PNG、GIF 和 WebP 格式的图片。",
+  "chat.draft.greeting": "今天想一起做点什么？",
   "chat.errorPart.message": "未知错误",
   "chat.errorPart.reason.auth": "身份验证失败",
   "chat.errorPart.reason.contentFilter": "内容被安全策略拦截",

@@ -24,7 +24,7 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './input';
 import { ChatRouteResolver } from './navigation';
-import { ChatEmptyState, ChatWorkspace } from './workspace';
+import { ChatDraftState, ChatEmptyState, ChatWorkspace } from './workspace';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -90,6 +90,8 @@ function ResolvedChatScreen({ target }: { target: ChatTarget }) {
             messageWindow={messageWindow}
             sessionId={sessionId}
           />
+        ) : target.kind === 'draft' ? (
+          <ChatDraftState contentBottomInset={contentBottomInset} />
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
