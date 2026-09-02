@@ -7,6 +7,7 @@ import {
   ImageGenerationLoader,
   SelectionIndicator,
   Section,
+  Spinner,
   useAlert,
 } from '@cherrystudio/ui/components';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
@@ -15,15 +16,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ArtifactPreviewLink } from '@/frontend/components/artifactPreview';
@@ -226,10 +219,13 @@ export function DrawingList() {
     () =>
       paintings.isLoadingMore ? (
         <View className="h-16 items-center justify-center">
-          <ActivityIndicator />
+          <Spinner
+            accessibilityLabel={t('painting.history.loading')}
+            accessibilityRole="progressbar"
+          />
         </View>
       ) : null,
-    [paintings.isLoadingMore],
+    [paintings.isLoadingMore, t],
   );
   const listData = paintings.isLoading || gallery.isLoading ? [] : visibleGalleryItems;
 
@@ -341,7 +337,10 @@ function DrawingListHeader({
             </Section.Header>
             {isRecentPhotosLoading ? (
               <View className="h-20 items-center justify-center">
-                <ActivityIndicator />
+                <Spinner
+                  accessibilityLabel={t('painting.photos.loading')}
+                  accessibilityRole="progressbar"
+                />
               </View>
             ) : photos.length > 0 ? (
               <ScrollView

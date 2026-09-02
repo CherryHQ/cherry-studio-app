@@ -1,8 +1,9 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
+import { Spinner } from '@cherrystudio/ui/components';
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
@@ -19,6 +20,7 @@ import { PaintingViewerImage } from './components/PaintingViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     paintingId?: string | string[];
@@ -36,7 +38,11 @@ export function PaintingViewerScreen() {
         <StatusBar style="light" />
         <View className="flex-1 items-center justify-center">
           {painting.isLoading || files.isLoading ? (
-            <ActivityIndicator color={constantWhite} />
+            <Spinner
+              accessibilityLabel={t('painting.viewer.loading')}
+              accessibilityRole="progressbar"
+              color={constantWhite}
+            />
           ) : null}
         </View>
       </View>
