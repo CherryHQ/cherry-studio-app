@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { LogoDrawAnimation } from './logoDraw';
+import { LogoDrawAnimation } from './components/LogoDraw';
 
 /**
  * Onboarding entry screen. Currently a skeleton hosting the logo draw

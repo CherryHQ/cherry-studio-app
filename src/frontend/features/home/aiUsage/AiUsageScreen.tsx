@@ -2,8 +2,8 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation';
+import { RouteHeader } from '@/frontend/appShell/header';
+import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 
 import { AiUsageRankingSection } from './components/AiUsageRankingSection';
 import { AiUsageWeeklySection } from './components/AiUsageWeeklySection';

@@ -6,15 +6,22 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { type AppSearchGroup, useAppSearch } from '@/frontend/components/appSearch';
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { chatHref, type ChatTarget } from '@/frontend/components/navigation/chat';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { chatHref, type ChatTarget } from '@/frontend/appShell/navigation/chat';
+import { type AppSearchGroup, useAppSearch } from '@/frontend/appShell/search';
 import {
   SelectionControls,
   SelectionProvider,
   useSelectionActions,
   useSelectionState,
-} from '@/frontend/components/selection';
+} from '@/frontend/components/Selection';
+import {
+  AgentSessionList,
+  parseSessionViewMode,
+  SessionList,
+  sessionSelectionScope,
+  type SessionViewMode,
+} from '@/frontend/components/SessionList';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useAgentApiById } from '@/frontend/hooks/agent';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -22,11 +29,6 @@ import type {
   EntitySearchItem,
   SessionMessageContentSearchItem,
 } from '@/shared/data/api/schemas/search';
-
-import { AgentSessionList } from './AgentSessionList';
-import { sessionSelectionScope } from './hooks/useSessionSelectionSource';
-import { SessionList } from './SessionList';
-import { parseSessionViewMode, type SessionViewMode } from './sessionViewMode';
 
 /**
  * Full Agent Session management page (`/sessions`), backed by session-title and

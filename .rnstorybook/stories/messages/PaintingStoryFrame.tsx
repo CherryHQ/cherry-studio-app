@@ -1,7 +1,7 @@
 import { Image, ScrollView, Text, View } from 'react-native';
 import { ScopedTheme } from 'uniwind';
 
-import type { MessageListItem } from '@/frontend/components/messages';
+import type { MessageListItem } from '@/frontend/components/Message';
 import {
   PaintingMessage,
   type PaintingMessageState,

@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
-import { chatHref, chatRouteParams } from '@/frontend/components/navigation/chat';
+import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 

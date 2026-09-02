@@ -100,8 +100,8 @@ the native-to-React handoff in preview or production builds on both platforms.[^
 
 - [`app.json`](../../app.json)
 - [`src/app/_layout.tsx`](../../src/app/_layout.tsx)
-- [`src/frontend/components/startup`](../../src/frontend/components/startup)
+- [`src/frontend/appShell/startup`](../../src/frontend/appShell/startup)
 - [`src/frontend/features/chat/ChatScreen.tsx`](../../src/frontend/features/chat/ChatScreen.tsx)
 - [`src/bootstrap/runtime/AppBootstrapProvider.tsx`](../../src/bootstrap/runtime/AppBootstrapProvider.tsx)
 - [`src/bootstrap/runtime/startupCoverHandoff.ts`](../../src/bootstrap/runtime/startupCoverHandoff.ts)
-- [`src/frontend/features/onboarding/logoDraw`](../../src/frontend/features/onboarding/logoDraw)
+- [`src/frontend/features/onboarding/components/LogoDraw`](../../src/frontend/features/onboarding/components/LogoDraw)

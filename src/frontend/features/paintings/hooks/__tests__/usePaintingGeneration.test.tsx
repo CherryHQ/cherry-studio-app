@@ -81,7 +81,7 @@ const dataApi = {
   put: jest.fn(),
 } as unknown as jest.Mocked<ApiClient>;
 
-jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
+jest.mock('@/frontend/data/paintings/usePaintings', () => ({
   useDeletePaintings: () => mockDeletePaintings,
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
 }));

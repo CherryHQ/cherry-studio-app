@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
-import type { MessageListItem } from '@/frontend/components/messages';
+import type { MessageListItem } from '@/frontend/components/Message';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
 export const STORY_WRITTEN_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000102';

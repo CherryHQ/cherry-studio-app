@@ -3,12 +3,12 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/appShell/header';
+import { usePainting, useResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
+import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { PaintingComposer } from './components/PaintingComposer';
-import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
-import { consumePaintingDraftHandoff } from './utils/paintingDraftHandoff';
 
 export function PaintingScreen() {
   // Screen-scoped rather than `router.setParams`: the receipt id can land after

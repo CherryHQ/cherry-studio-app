@@ -2,8 +2,8 @@ import { type DrawerContentComponentProps, Drawer } from 'expo-router/drawer';
 import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { useWindowDimensions } from 'react-native';
 
-import { RouteHeaderProvider } from '@/frontend/components/headers';
-import { Sidebar } from '@/frontend/features/sidebar';
+import { RouteHeaderProvider } from '@/frontend/appShell/header';
+import { Sidebar } from '@/frontend/appShell/sidebar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 

@@ -14,15 +14,15 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/components/appSearch';
-import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/components/headers';
+import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
   NavigationThemeProvider,
   paintingViewerHeaderShown,
-} from '@/frontend/components/navigation';
-import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/components/startup';
+} from '@/frontend/appShell/navigation';
+import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
+import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';

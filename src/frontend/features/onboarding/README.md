@@ -4,11 +4,11 @@ Onboarding entry (route: `/onboarding`, registered headerless in
 `src/app/_layout.tsx`). Currently a skeleton that centers the brand-logo draw
 animation; the real onboarding content lands later.
 
-## logoDraw
+## LogoDraw
 
-`logoDraw/` is the paint-on reveal of the brand logo: the two orange swirls
+`components/LogoDraw/` is the paint-on reveal of the brand logo: the two orange swirls
 draw first as one continuous gesture, then the green check lands with a
-spring. Public surface is `LogoDrawAnimation` (see `logoDraw/index.ts`).
+spring. Its page-local surface is `LogoDrawAnimation` (see `components/LogoDraw/index.ts`).
 
 ### How it works
 

@@ -5,19 +5,19 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/composer';
-import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
-import { MessageList, type MessageListItem } from '@/frontend/components/messages';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation';
+import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
+import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
+import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
+import { MessageList, type MessageListItem } from '@/frontend/components/Message';
+import { imageParamsResolutionLabel } from '@/frontend/data/paintings/imageGenerationParams';
+import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
+import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {
   type PaintingGenerationInput,
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
-import { paintingJobParamValues, usePaintingJobs } from '../hooks/usePaintingJobs';
-import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
-import { imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import { createPaintingMessages } from '../utils/paintingMessages';
 import { PaintingInput } from './PaintingInput';
 import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';

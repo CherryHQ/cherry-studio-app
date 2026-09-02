@@ -4,6 +4,7 @@ import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import {
   ComposerAttachments,
   ComposerField,
@@ -13,13 +14,21 @@ import {
   ComposerSurface,
   useComposerPresentationActions,
   useComposerState,
-} from '@/frontend/components/composer';
+} from '@/frontend/components/Composer';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
-} from '@/frontend/components/modelPicker';
+} from '@/frontend/components/ModelPicker';
 import { usePreference } from '@/frontend/data/hooks';
+import {
+  getImageParamFields,
+  type ImageParamDraft,
+  isImageParamDraftValid,
+  prepareImageParamValues,
+  reconcileImageParamDraft,
+  resolveImageGenerationMode,
+} from '@/frontend/data/paintings/imageGenerationParams';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -30,14 +39,6 @@ import type {
   PaintingGenerationStatus,
 } from '../hooks/usePaintingGeneration';
 import { imageParamSummary } from '../utils/imageGenerationLabels';
-import {
-  getImageParamFields,
-  type ImageParamDraft,
-  isImageParamDraftValid,
-  prepareImageParamValues,
-  reconcileImageParamDraft,
-  resolveImageGenerationMode,
-} from '../utils/imageGenerationParams';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
 type PaintingInputProps = {
@@ -72,6 +73,9 @@ export function PaintingInput({
         : null;
   const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(initialModelId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const openProviderSetup = useOpenProviderSetup(
+    painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings',
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [paramState, setParamState] = useState<{
     mode: ImageGenerationMode;
@@ -142,6 +146,10 @@ export function PaintingInput({
     setSelectedModelId(item.modelId);
     setIsModelPickerOpen(false);
   }, []);
+  const handleAddProvider = useCallback(() => {
+    setIsModelPickerOpen(false);
+    openProviderSetup();
+  }, [openProviderSetup]);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
   const { runInputReplacement } = useComposerPresentationActions();
   const openSettings = useCallback(() => {
@@ -288,6 +296,7 @@ export function PaintingInput({
         <ModelPickerDrawer
           modelType="image"
           open
+          onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}

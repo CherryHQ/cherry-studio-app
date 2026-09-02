@@ -1,4 +1,4 @@
-import { modelService } from '@/backend/data/services/ModelService';
+import type { ModelService } from '@/backend/data/services/ModelService';
 import {
   AgentInferenceSnapshotV1Schema,
   type AgentInferenceSnapshotV1,
@@ -13,21 +13,25 @@ export type AgentInferenceModelResolver = (
 ) => Promise<AgentInferenceModelSnapshot>;
 
 /** Resolves public model facts only; provider credentials never cross this boundary. */
-export const resolveAgentInferenceModel: AgentInferenceModelResolver = async (runtimeModel) => {
-  const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
-  const model = await modelService.getById(uniqueModelId);
-  if (!model) {
-    throw new Error('The selected model is unavailable.');
-  }
+export function createAgentInferenceModelResolver(
+  models: Pick<ModelService, 'getById'>,
+): AgentInferenceModelResolver {
+  return async (runtimeModel) => {
+    const uniqueModelId = createUniqueModelId(runtimeModel.providerId, runtimeModel.modelId);
+    const model = await models.getById(uniqueModelId);
+    if (!model) {
+      throw new Error('The selected model is unavailable.');
+    }
 
-  return {
-    uniqueModelId,
-    providerId: runtimeModel.providerId,
-    modelId: runtimeModel.modelId,
-    ...(model.apiModelId !== undefined ? { apiModelId: model.apiModelId } : {}),
-    name: model.name,
+    return {
+      uniqueModelId,
+      providerId: runtimeModel.providerId,
+      modelId: runtimeModel.modelId,
+      ...(model.apiModelId !== undefined ? { apiModelId: model.apiModelId } : {}),
+      name: model.name,
+    };
   };
-};
+}
 
 /**
  * Copies only the versioned allowlist shared with persistence. Runtime-only

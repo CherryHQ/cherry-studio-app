@@ -14,7 +14,7 @@ existing deep module over a new registry or pass-through wrapper. Read
 3. Implement simple persistence directly in `src/backend/data/services`.
 4. Add an endpoint-family handler under `src/backend/data/api/handlers` and register it in
    `apiHandlers.ts`.
-5. Call it from the owning frontend hook or feature through `useQuery`, `useMutation`, or
+5. Call it from the owning frontend hook or page through `useQuery`, `useMutation`, or
    `useInfiniteQuery`.
 6. Add its key factory under `src/frontend/data/queryKeys` when frontend invalidation or direct
    cache access needs one.
@@ -30,7 +30,7 @@ exercise observable endpoint and storage behavior independently.
 2. Implement it under `src/backend/services` and keep concrete AI/data/platform dependencies behind
    constructor interfaces.
 3. Compose the production implementation in `src/bootstrap/composition/createBackend.ts`.
-4. Call it through `useBackendModule(key)` from the owning frontend feature.
+4. Call it through `useBackendModule(key)` from the owning frontend page.
 
 Frontend tests inject a workflow fake through `BackendProvider`. Backend tests exercise the same
 workflow interface and observable results.
@@ -41,12 +41,12 @@ workflow interface and observable results.
 - Generate and bundle the migration under `src/backend/data/db`.
 - Keep Drizzle row types backend-only; expose entities/DTOs from `@/shared/data`.
 - Expose frontend access through a Data API endpoint, not a new `Backend` module.
-- Keep resource-specific composition in the owning frontend hook or feature, not in shared or
+- Keep resource-specific composition in the owning frontend hook or page, not in shared or
   backend code.
 
 New Agent message-part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts` (the
 transitional home of types `packages/ai-runtime` imports); render
-dispatch belongs in `src/frontend/components/messages/parts/MessagePartRenderer.tsx`. A new JSON
+dispatch belongs in `src/frontend/components/Message/parts/MessagePartRenderer.tsx`. A new JSON
 part does not require a table migration; Agent Session FTS indexes only searchable text parts.
 
 ## Add AI Or Backend Service Behavior
@@ -93,13 +93,13 @@ See [Job Runtime](../references/job-runtime.md).
 
 ## Add UI
 
-- Route files stay thin under `src/app` and import feature module roots.
-- Route-bound UI belongs in `src/frontend/features/<name>`.
-- Cross-feature React modules belong in `src/frontend/components` or `src/frontend/hooks` only after
+- Route files stay thin under `src/app` and import the exact page boundary.
+- Route-bound UI belongs in the matching tree under `src/frontend/features/<name>`.
+- Cross-page React modules belong in `src/frontend/components` or `src/frontend/hooks` only after
   a second independent owner appears.
 - Shared query infrastructure and key factories belong in `src/frontend/data`; resource-specific
   query behavior stays with its frontend owner.
-- A feature that owns a backend session, or subscribes to an app-owned runtime, keeps navigation,
+- A page that owns a backend session, or subscribes to an app-owned runtime, keeps navigation,
   toast, and query invalidation in its frontend provider or hook. Unsubscribing from a runtime is not
   the same as disposing it.
 

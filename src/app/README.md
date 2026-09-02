@@ -4,21 +4,22 @@ This directory contains Expo Router route definitions. It follows the repository
 [naming conventions](../../docs/references/naming-conventions.md) plus Expo Router's file-system
 routing rules.
 
-`src/app` is intentionally thin. Feature implementation belongs under `src/frontend/features`;
-reusable cross-feature modules belong under `src/frontend/components`.
+`src/app` is intentionally thin. Page implementation belongs under `src/frontend/features`; reusable
+cross-page modules belong under `src/frontend/components`.
 
 ## Ownership
 
 - Keep only route files, route groups, dynamic route folders, `_layout.tsx`, and this `README.md`
   here.
-- Put feature composition, private components, hooks, context, utils, and tests in
-  `src/frontend/features`.
-- Put reusable app-shell or cross-feature modules in `src/frontend/components`.
+- Mirror the page hierarchy under `src/frontend/features` and keep each page's private components,
+  hooks, context, utils, and tests with that page.
+- Put reusable app-shell or cross-page modules in `src/frontend/appShell` or
+  `src/frontend/components`, according to ownership.
 - Do not co-locate route-owned UI modules under `src/app`.
 
 ## Route Adapters
 
-Route files should usually re-export a feature module:
+Route files should usually re-export the exact page module:
 
 ```ts
 export { SettingsScreen as default } from '@/frontend/features/settings';
@@ -44,6 +45,7 @@ owning `src/frontend/features/*` module and keep the route as an adapter.
 
 ## Imports
 
-- Route files import features from module roots, for example `@/frontend/features/settings`.
+- Route files import page boundaries, for example `@/frontend/features/settings` or
+  `@/frontend/features/settings/provider/catalog`.
 - Route files may import shared layout components only when implementing `_layout.tsx`.
-- Route files should not import feature-private leaf modules.
+- Route files should not import page-private leaf modules.
