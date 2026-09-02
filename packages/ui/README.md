@@ -207,6 +207,18 @@ value and persistence. The default grouped `Section` supplies its surface and se
 </Section>
 ```
 
+`Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
+press target and switch accessibility node; its trailing switch is a package-private visual
+indicator. Use a separate `Switch` when the surrounding row also contains another action:
+
+```tsx
+<Section.SwitchItem
+  label="Notifications"
+  onValueChange={setNotificationsEnabled}
+  value={notificationsEnabled}
+/>
+```
+
 Use `Section.SelectItem` when a grouped settings row opens a picker. It standardizes the current
 value, optional value icon, truncation, and down disclosure indicator. Use `SelectField` for the
 same interaction in a standalone form, where it shares the border, field surface, height, disabled

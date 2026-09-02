@@ -5,7 +5,7 @@ import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
-import { Section, Switch } from '@cherrystudio/ui/components';
+import { Section } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, Text, View } from 'react-native';
@@ -117,9 +117,7 @@ export function AgentCapabilitiesSection({
           const LeadingIcon = CAPABILITY_ICONS[row.capability];
           return (
             <Section key={row.capability}>
-              <Section.Item
-                accessibilityRole="switch"
-                accessibilityState={{ checked: enabled }}
+              <Section.SwitchItem
                 className="py-2"
                 description={
                   enabled
@@ -133,14 +131,8 @@ export function AgentCapabilitiesSection({
                 }
                 label={label}
                 leading={<LeadingIcon className="size-5 text-foreground" />}
-                onPress={() => handleToggle(row, !enabled)}
-                trailing={
-                  <Switch
-                    accessibilityLabel={label}
-                    onValueChange={(value) => handleToggle(row, value)}
-                    value={enabled}
-                  />
-                }
+                onValueChange={(value) => handleToggle(row, value)}
+                value={enabled}
               />
             </Section>
           );

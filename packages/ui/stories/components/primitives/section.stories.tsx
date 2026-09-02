@@ -3,7 +3,7 @@ import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
-import { Button, Section, Switch } from '@cherrystudio/ui/components';
+import { Button, Section } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -42,16 +42,11 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
             onPress={() => setLanguage((current) => (current === 'System' ? 'English' : 'System'))}
             value={language}
           />
-          <Section.Item
+          <Section.SwitchItem
             label="Notifications"
             leading={<BellIcon className="size-5 text-primary" />}
-            trailing={
-              <Switch
-                accessibilityLabel="Notifications"
-                onValueChange={setNotificationsEnabled}
-                value={notificationsEnabled}
-              />
-            }
+            onValueChange={setNotificationsEnabled}
+            value={notificationsEnabled}
           />
         </Section>
 

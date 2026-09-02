@@ -68,6 +68,17 @@ export type SectionRadioItemProps = Omit<
   selected: boolean;
 };
 
+export type SectionSwitchItemProps = Omit<
+  SectionItemBaseProps,
+  'accessibilityRole' | 'accessibilityState' | 'onPress'
+> & {
+  description?: ReactNode;
+  label: ReactNode;
+  leading?: ReactNode;
+  onValueChange: (value: boolean) => void;
+  value: boolean;
+};
+
 export type SectionSelectItemProps = Omit<
   SectionItemBaseProps,
   'accessibilityRole' | 'accessibilityState' | 'onPress'

@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Section } from '../section';
 
 jest.mock('heroui-native/utils', () => {
-  const { twMerge } = require('tailwind-merge');
+  const { twMerge } = jest.requireActual('tailwind-merge');
 
   return {
     cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
@@ -12,25 +12,40 @@ jest.mock('heroui-native/utils', () => {
 });
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
   return function MockCheckIcon(props: object) {
     return React.createElement(View, { ...props, testID: 'section-radio-check' });
   };
 });
 jest.mock('@cherrystudio/app-icons/icons/chevron-down', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
   return function MockChevronDownIcon(props: object) {
     return React.createElement(View, { ...props, testID: 'section-select-chevron' });
   };
 });
 jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
   return function MockChevronRightIcon(props: object) {
     return React.createElement(View, { ...props, testID: 'section-chevron' });
   };
+});
+
+jest.mock('heroui-native', () => {
+  const React = jest.requireActual('react');
+  const { View: MockView } = jest.requireActual('react-native');
+
+  function Switch(props: object) {
+    return React.createElement(MockView, { ...props, mockComponent: 'hero-switch' });
+  }
+
+  Switch.Thumb = function SwitchThumb(props: object) {
+    return React.createElement(MockView, { ...props, mockComponent: 'hero-switch-thumb' });
+  };
+
+  return { Switch };
 });
 
 describe('Section', () => {
@@ -354,6 +369,68 @@ describe('Section', () => {
 
     act(() => row.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('makes a switch row the only interaction and accessibility owner', () => {
+    const onValueChange = jest.fn();
+    const tree = render(
+      <Section>
+        <Section.SwitchItem
+          description="Allow background updates"
+          label="Notifications"
+          leading={<View testID="switch-leading" />}
+          onValueChange={onValueChange}
+          testID="switch-row"
+          value
+        />
+        <Section.SwitchItem
+          disabled
+          label="Disabled setting"
+          onValueChange={jest.fn()}
+          value={false}
+        />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.testID === 'switch-row' &&
+        node.props.accessibilityRole === 'switch' &&
+        typeof node.props.className === 'string',
+    );
+    const indicators = tree.root.findAllByProps({ mockComponent: 'hero-switch' });
+    const indicator = indicators[0];
+    const disabledRow = tree.root.find(
+      (node) =>
+        node.props.accessibilityLabel === 'Disabled setting' &&
+        node.props.accessibilityRole === 'switch' &&
+        typeof node.props.className === 'string',
+    );
+
+    expect(row.props.accessibilityLabel).toBe('Notifications');
+    expect(row.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
+    expect(indicator?.props).toMatchObject({
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+      isDisabled: false,
+      isSelected: true,
+      pointerEvents: 'none',
+    });
+    expect(indicator?.props.onSelectedChange).toBeUndefined();
+    expect(disabledRow.props.accessibilityState).toEqual({ checked: false, disabled: true });
+    expect(indicators[1]?.props.isDisabled).toBe(true);
+    expect(tree.root.findAllByProps({ testID: 'section-chevron' })).toHaveLength(0);
+    expect(tree.root.findByProps({ children: 'Allow background updates' })).toBeDefined();
+    const separator = () => tree.root.findByProps({ testID: 'section-separator' });
+    expect(separator().props.className).toContain('ml-11');
+
+    act(() => row.props.onPressIn({}));
+    expect(separator().props.className).toContain('opacity-0');
+    act(() => row.props.onPressOut({}));
+    expect(separator().props.className).not.toContain('opacity-0');
+
+    act(() => row.props.onPress());
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith(false);
   });
 
   test('supports custom row content while preserving item layout', () => {

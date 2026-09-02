@@ -13,12 +13,14 @@ import {
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '../../utils';
+import { SwitchIndicator } from '../switch/switch-indicator';
 import type {
   SectionHeaderProps,
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
   SectionSelectItemProps,
+  SectionSwitchItemProps,
 } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
@@ -30,6 +32,10 @@ type InternalSectionRadioItemProps = SectionRadioItemProps & {
 };
 
 type InternalSectionSelectItemProps = SectionSelectItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
+
+type InternalSectionSwitchItemProps = SectionSwitchItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
@@ -205,18 +211,46 @@ function SectionSelectItem({
   );
 }
 
+function SectionSwitchItem({
+  disabled = false,
+  onPressedChange,
+  onValueChange,
+  value,
+  ...props
+}: InternalSectionSwitchItemProps) {
+  return (
+    <SectionItem
+      {...props}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      onPressedChange={onPressedChange}
+      showChevron={false}
+      trailing={<SwitchIndicator disabled={disabled} value={value} />}
+    />
+  );
+}
+
 function isSectionItemElement(
   child: ReactNode,
 ): child is ReactElement<
-  InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+  | InternalSectionItemProps
+  | InternalSectionRadioItemProps
+  | InternalSectionSelectItemProps
+  | InternalSectionSwitchItemProps
 > {
   return (
     isValidElement<
-      InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+      | InternalSectionItemProps
+      | InternalSectionRadioItemProps
+      | InternalSectionSelectItemProps
+      | InternalSectionSwitchItemProps
     >(child) &&
     (child.type === SectionItem ||
       child.type === SectionRadioItem ||
-      child.type === SectionSelectItem)
+      child.type === SectionSelectItem ||
+      child.type === SectionSwitchItem)
   );
 }
 
@@ -291,10 +325,12 @@ SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
 SectionRadioItem.displayName = 'Section.RadioItem';
 SectionSelectItem.displayName = 'Section.SelectItem';
+SectionSwitchItem.displayName = 'Section.SwitchItem';
 
 export const Section = Object.assign(SectionRoot, {
   Header: SectionHeader,
   Item: SectionItem,
   RadioItem: SectionRadioItem,
   SelectItem: SectionSelectItem,
+  SwitchItem: SectionSwitchItem,
 });
