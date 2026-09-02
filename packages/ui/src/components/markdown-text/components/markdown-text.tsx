@@ -32,6 +32,12 @@ export type MarkdownTextProps = {
   selectable?: boolean;
 };
 
+/**
+ * Block spacing lives entirely in `marginBottom`. iOS collapses adjacent block
+ * margins while Android sums them, so a block that also set `marginTop` would
+ * render a different rhythm per platform; bottom-only spacing is identical on
+ * both and keeps a message that opens with a heading from starting with a gap.
+ */
 function createMarkdownTypographyStyle(
   fontSizeStep: TypographySizeStep,
   monoFontFamily: string,
@@ -40,30 +46,34 @@ function createMarkdownTypographyStyle(
 
   return {
     paragraph: { ...scale.base, marginBottom: 12, marginTop: 0 },
-    h1: { ...scale.xl, fontWeight: '700', marginBottom: 10, marginTop: 20 },
-    h2: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 20 },
-    h3: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 16 },
-    h4: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
-    h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
-    h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+    h1: { ...scale.xl, fontWeight: '700', marginBottom: 10, marginTop: 0 },
+    h2: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 0 },
+    h3: { ...scale.base, fontWeight: '600', marginBottom: 8, marginTop: 0 },
+    h4: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 0 },
+    h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 0 },
+    h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 0 },
     blockquote: {
       ...scale.base,
       borderRadius: 0,
       borderWidth: 3,
       gapWidth: 12,
       marginBottom: 12,
-      marginTop: 4,
+      marginTop: 0,
       padding: 2,
     },
     list: {
       ...scale.base,
       bulletSize: 6,
-      gapWidth: 8,
+      gapWidth: 10,
       itemSpacing: 6,
       marginBottom: 12,
-      marginLeft: 16,
+      marginLeft: 20,
       marginTop: 0,
       markerFontWeight: '500',
+      // Floors every marker column to the width an ordered list reserves for
+      // "99." so bullet, number and task items all start their text on the
+      // same edge instead of bullets hugging the paragraph margin.
+      markerMinWidth: Math.ceil(scale.base.fontSize * 1.5),
     },
     code: { fontFamily: monoFontFamily, fontSize: scale.sm.fontSize },
     codeBlock: {
@@ -71,8 +81,8 @@ function createMarkdownTypographyStyle(
       borderRadius: 12,
       borderWidth: 0,
       fontFamily: monoFontFamily,
-      marginBottom: 14,
-      marginTop: 4,
+      marginBottom: 12,
+      marginTop: 0,
       padding: 14,
     },
     table: {
@@ -81,13 +91,13 @@ function createMarkdownTypographyStyle(
       borderWidth: 1,
       cellPaddingHorizontal: 12,
       cellPaddingVertical: 9,
-      marginBottom: 14,
-      marginTop: 4,
+      marginBottom: 12,
+      marginTop: 0,
     },
     math: {
       fontSize: scale.base.fontSize,
-      marginBottom: 14,
-      marginTop: 4,
+      marginBottom: 12,
+      marginTop: 0,
       padding: 12,
       textAlign: 'center',
     },
@@ -179,12 +189,12 @@ export function MarkdownText({
       underline: { color: foreground },
       image: {
         borderRadius: 12,
-        marginBottom: 14,
-        marginTop: 4,
+        marginBottom: 12,
+        marginTop: 0,
         maxHeight: 320,
         resizeMode: 'contain',
       },
-      thematicBreak: { color: border, height: 1, marginBottom: 20, marginTop: 20 },
+      thematicBreak: { color: border, height: 1, marginBottom: 12, marginTop: 0 },
       table: {
         ...typography.table,
         borderColor: border,
