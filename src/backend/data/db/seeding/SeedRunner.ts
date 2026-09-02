@@ -29,7 +29,6 @@ export class SeedRunner {
       const journal = journalMap.get(key);
 
       if (journal?.version === seeder.version) {
-        logger.debug(`Skipping seed "${seeder.name}" (v${seeder.version}) - already applied`);
         continue;
       }
 

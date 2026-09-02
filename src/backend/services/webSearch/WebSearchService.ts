@@ -138,22 +138,9 @@ export class WebSearchService extends BaseService {
     request: RunCapabilityRequest,
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
-    let context: PreparedWebSearchContext | undefined;
-
-    try {
-      context = await this.prepareContext(request);
-      const searchResults = await this.executeCapability(context, httpOptions);
-      return await this.buildFinalResponse(context, searchResults, httpOptions);
-    } catch (error) {
-      if (!isAbortError(error) || !httpOptions?.signal?.aborted) {
-        const normalizedError = error instanceof Error ? error : new Error(String(error));
-        logger.error('Web search failed', normalizedError, {
-          providerId: context?.provider.id ?? request.providerId,
-          capability: context?.capability ?? request.capability,
-        });
-      }
-      throw error;
-    }
+    const context = await this.prepareContext(request);
+    const searchResults = await this.executeCapability(context, httpOptions);
+    return this.buildFinalResponse(context, searchResults, httpOptions);
   }
 
   async searchKeywords(

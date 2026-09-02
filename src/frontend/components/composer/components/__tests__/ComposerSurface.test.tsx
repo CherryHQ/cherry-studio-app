@@ -92,7 +92,6 @@ describe('ComposerSurface', () => {
     });
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(mockLoggerDebug).toHaveBeenCalledWith('Message send started', { attemptId: 1 });
     expect(mockLoggerDebug).toHaveBeenCalledWith('Ignored duplicate message send', {
       attemptId: 1,
     });
@@ -118,7 +117,6 @@ describe('ComposerSurface', () => {
 
     expect(onSend).toHaveBeenNthCalledWith(1, { attachments: [], text: 'first' });
     expect(onSend).toHaveBeenNthCalledWith(2, { attachments: [], text: 'second' });
-    expect(mockLoggerDebug).toHaveBeenCalledWith('Message send started', { attemptId: 2 });
   });
 
   it('restores the exact draft and attachments once when sending fails', async () => {

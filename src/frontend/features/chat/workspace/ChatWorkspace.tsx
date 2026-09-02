@@ -1,6 +1,6 @@
 import { ContentState, useAlert } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -28,7 +28,6 @@ import {
 } from './hooks/useMessageListInitialRenderGate';
 
 const logger = loggerService.withContext('AgentChatWorkspace');
-const gateLog = loggerService.withContext('AgentChatGate');
 
 type ChatWorkspaceProps = {
   assistantAvatarUri?: null | string;
@@ -133,15 +132,6 @@ export function ChatWorkspace({
     forkedFromSessionId && isAtHistoryStart ? (
       <ChatForkOriginDivider sourceSessionId={forkedFromSessionId} />
     ) : undefined;
-
-  useEffect(() => {
-    gateLog.debug('[GATE] state', {
-      isLoadingInitial,
-      isCoverVisible,
-      len: listMessages.length,
-      t: Date.now(),
-    });
-  }, [isLoadingInitial, isCoverVisible, listMessages.length]);
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (

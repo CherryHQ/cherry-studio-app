@@ -71,19 +71,7 @@ export function useManagedComposerAttachments(
 
   const importAttachment = useCallback(
     async (source: ComposerAttachmentSource, token: symbol): Promise<ImportResult> => {
-      const startedAt = Date.now();
       let importedSize = source.size;
-      const finishImport = (result: ImportResult) => {
-        if (__DEV__) {
-          logger.debug('Attachment import finished', {
-            durationMs: Date.now() - startedAt,
-            kind: source.kind,
-            result,
-            size: importedSize ?? null,
-          });
-        }
-        return result;
-      };
 
       try {
         const resolved = await file.createInternalEntry({
@@ -95,15 +83,15 @@ export function useManagedComposerAttachments(
 
         if (cancelledImportTokensRef.current.delete(token)) {
           await deleteEntry(resolved.entry.id);
-          return finishImport('ignored');
+          return 'ignored';
         }
         if (!isMountedRef.current) {
           await deleteEntry(resolved.entry.id);
-          return finishImport('ignored');
+          return 'ignored';
         }
         if (importTokensRef.current.get(source.id) !== token) {
           await deleteEntry(resolved.entry.id);
-          return finishImport('ignored');
+          return 'ignored';
         }
 
         importTokensRef.current.delete(source.id);
@@ -123,13 +111,13 @@ export function useManagedComposerAttachments(
               : attachment,
           ),
         );
-        return finishImport('ready');
+        return 'ready';
       } catch {
         if (cancelledImportTokensRef.current.delete(token)) {
-          return finishImport('ignored');
+          return 'ignored';
         }
         if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current) {
-          return finishImport('ignored');
+          return 'ignored';
         }
 
         importTokensRef.current.delete(source.id);
@@ -138,7 +126,7 @@ export function useManagedComposerAttachments(
           kind: source.kind,
           size: importedSize ?? null,
         });
-        return finishImport('failed');
+        return 'failed';
       }
     },
     [commitAttachments, deleteEntry, file],

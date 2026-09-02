@@ -4,10 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { cacheService } from '@/frontend/data/CacheService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
 
 import type { MessageListItem } from '../types';
-import { scrollLog } from './messageListLogger';
 import { computeScrollAnchor, resolveRestoreTarget } from './messageListScrollMemory';
 import {
   type FollowingReason,
@@ -16,6 +16,7 @@ import {
 } from './useViewportFollowState';
 
 const SAVE_THROTTLE_MS = 200;
+const scrollLog = loggerService.withContext('ChatScroll');
 
 type ScrollMessageToEnd = (options: { animated: boolean; closeKeyboard: boolean }) => Promise<void>;
 
@@ -332,17 +333,12 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   const handleLoad = useCallback(() => {
     didListLoadRef.current = true;
-    scrollLog.debug('[SCROLL] listLoaded', { t: Date.now() });
     attemptRestore();
   }, [attemptRestore]);
 
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      scrollLog.debug('[SCROLL] contentSize', { h: Math.round(height), t: Date.now() });
-      stickToBottomIfFollowing();
-    },
-    [stickToBottomIfFollowing],
-  );
+  const handleContentSizeChange = useCallback(() => {
+    stickToBottomIfFollowing();
+  }, [stickToBottomIfFollowing]);
 
   // A viewport resize (keyboard, rotation) moves the live edge without changing
   // content size, so it needs the same correction from its own native callback.

@@ -72,7 +72,6 @@ export function ComposerSurface({
 
     const attemptId = ++nextSendAttemptIdRef.current;
     activeSendAttemptIdRef.current = attemptId;
-    logger.debug('Message send started', { attemptId });
 
     const draftSnapshot = draft;
 
@@ -100,7 +99,6 @@ export function ComposerSurface({
       });
     } finally {
       activeSendAttemptIdRef.current = null;
-      logger.debug('Message send finished', { attemptId });
     }
   }, [
     attachments,
