@@ -38,6 +38,8 @@ export function MessageFileStrip({ parts }: { parts: readonly MessageFilePart[] 
 
 const styles = StyleSheet.create({
   strip: {
+    flexGrow: 0,
+    flexShrink: 0,
     height: FILE_CARD_SIZE,
   },
 });

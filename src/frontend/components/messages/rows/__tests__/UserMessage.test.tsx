@@ -49,7 +49,13 @@ describe('UserMessage', () => {
     expect(scrollView.props.showsHorizontalScrollIndicator).toBe(false);
     // The row owns its own height; the wrapper only pins it to the user column.
     expect(attachmentContainer).toBeDefined();
-    expect(StyleSheet.flatten(scrollView.props.style)?.height).toBe(112);
+    expect(StyleSheet.flatten(scrollView.props.style)).toEqual(
+      expect.objectContaining({
+        flexGrow: 0,
+        flexShrink: 0,
+        height: 112,
+      }),
+    );
     expect(renderer.root.findAllByType('FilePart').map((node) => node.props.part)).toEqual([
       first,
       second,
