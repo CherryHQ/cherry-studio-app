@@ -95,6 +95,9 @@ jobs:
       - name: Lint Check
         run: pnpm lint
 
+      - name: UI Boundary Check
+        run: pnpm ui:check-boundaries
+
       - name: Format Check
         run: pnpm format:check
 

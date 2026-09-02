@@ -24,6 +24,7 @@
     "ui:icons:generate:general": "tsx packages/ui/src/scripts/generate-icons.ts --type=general",
     "ui:icons:generate:models": "tsx packages/ui/src/scripts/generate-icons.ts --type=models",
     "ui:provider-icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts --type=providers",
+    "ui:check-boundaries": "tsx packages/ui/src/scripts/check-platform-boundaries.ts",
     "design:build": "tsx packages/design-tokens/scripts/build-native-css.ts",
     "design:sync": "tsx packages/design-tokens/scripts/sync-desktop.ts",
     "design:check": "tsx packages/design-tokens/scripts/check.ts && tsx packages/design-tokens/scripts/check-app-theme.ts && tsx packages/ui/src/scripts/check-icons.ts",
