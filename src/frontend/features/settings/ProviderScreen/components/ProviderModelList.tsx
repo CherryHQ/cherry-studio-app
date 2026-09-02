@@ -31,22 +31,15 @@ export function ProviderModelList({
       groupByPurpose={groupByPurpose}
       ListEmptyComponent={
         hasNoVisibleModels && isFiltered ? (
-          <ContentState.Empty
-            className="flex-1 px-6 pb-24"
-            title={t('settings.provider.models.search.empty')}
-          />
+          <View className="flex-1 justify-center px-6 pb-24">
+            <ContentState.Empty title={t('settings.provider.models.search.empty')} />
+          </View>
         ) : (
           <ProviderModelStateCard>
             {isLoading ? (
-              <ContentState.Loading
-                className="flex-row justify-start gap-3"
-                title={t('settings.provider.models.loading')}
-              />
+              <ContentState.Loading layout="row" title={t('settings.provider.models.loading')} />
             ) : (
-              <ContentState.Empty
-                className="items-start"
-                title={t('settings.provider.models.empty')}
-              />
+              <ContentState.Empty layout="leading" title={t('settings.provider.models.empty')} />
             )}
           </ProviderModelStateCard>
         )

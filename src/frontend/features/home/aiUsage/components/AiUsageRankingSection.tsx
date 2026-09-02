@@ -82,7 +82,9 @@ export function AiUsageRankingSection({
   ) : isInitialLoading ? (
     <AiUsageRankingListSkeleton />
   ) : (
-    <ContentState.Empty className="min-h-32 px-6" description={t('aiUsage.noUsageForDay')} />
+    <View className="min-h-32 justify-center px-6">
+      <ContentState.Empty description={t('aiUsage.noUsageForDay')} />
+    </View>
   );
 
   return (

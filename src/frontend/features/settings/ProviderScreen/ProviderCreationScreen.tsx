@@ -115,11 +115,12 @@ function ImportedProviderCreationScreen({
           <Spinner accessibilityLabel={t('settings.provider.loading')} />
         </View>
       ) : importedProviderForm.isError || !importedProviderForm.provider ? (
-        <ContentState.Error
-          className="flex-1 px-6 py-10"
-          primaryAction={{ children: t('common.back'), onPress: requestClose }}
-          title={t('settings.provider.setup.loadFailed')}
-        />
+        <View className="flex-1 justify-center px-6 py-10">
+          <ContentState.Error
+            primaryAction={{ children: t('common.back'), onPress: requestClose }}
+            title={t('settings.provider.setup.loadFailed')}
+          />
+        </View>
       ) : (
         <ProviderNewFormContent
           avatar={

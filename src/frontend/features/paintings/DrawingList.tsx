@@ -193,25 +193,29 @@ export function DrawingList() {
   const listEmpty = useMemo(
     () =>
       paintings.isLoading || gallery.isLoading ? (
-        <ContentState.Loading className="h-32" />
+        <View className="h-32 justify-center">
+          <ContentState.Loading />
+        </View>
       ) : (
-        <ContentState.Empty
-          description={t('painting.history.emptyDescription')}
-          icon={
-            <ContentState.Icon>
-              <ImageIcon className="size-7 text-foreground" />
-            </ContentState.Icon>
-          }
-          layout="page"
-          primaryAction={{
-            accessibilityLabel: t('painting.history.createNew'),
-            children: t('painting.history.createNew'),
-            onPress: handleCreatePainting,
-            testID: 'painting-history-create',
-          }}
-          testID="painting-history-empty"
-          title={t('painting.history.empty')}
-        />
+        <View className="px-8 py-16">
+          <ContentState.Empty
+            description={t('painting.history.emptyDescription')}
+            icon={
+              <ContentState.Icon>
+                <ImageIcon className="size-7 text-foreground" />
+              </ContentState.Icon>
+            }
+            primaryAction={{
+              accessibilityLabel: t('painting.history.createNew'),
+              children: t('painting.history.createNew'),
+              onPress: handleCreatePainting,
+              testID: 'painting-history-create',
+            }}
+            prominence="prominent"
+            testID="painting-history-empty"
+            title={t('painting.history.empty')}
+          />
+        </View>
       ),
     [gallery.isLoading, handleCreatePainting, paintings.isLoading, t],
   );

@@ -70,16 +70,17 @@ export function AiUsageSummaryCard() {
       </Section.Header>
 
       {showInitialError ? (
-        <ContentState.Error
-          primaryAction={{
-            children: t('aiUsage.retry'),
-            icon: <RefreshCwIcon />,
-            onPress: () => void refetch(),
-            testID: 'ai-usage-summary-retry',
-          }}
-          style={styles.stateContent}
-          title={t('aiUsage.loadError')}
-        />
+        <View className="justify-center" style={styles.stateContent}>
+          <ContentState.Error
+            primaryAction={{
+              children: t('aiUsage.retry'),
+              icon: <RefreshCwIcon />,
+              onPress: () => void refetch(),
+              testID: 'ai-usage-summary-retry',
+            }}
+            title={t('aiUsage.loadError')}
+          />
+        </View>
       ) : (
         <View className="mt-4">
           <AiUsageCalendar

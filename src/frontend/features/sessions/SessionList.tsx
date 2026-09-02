@@ -152,21 +152,27 @@ const SessionListView = memo(function SessionListView() {
     () =>
       isInitialDataSettled ? (
         initialLoadError ? (
-          <ContentState.Error className="px-6 py-8" title={t('session.list.loadFailed')} />
+          <View className="px-6 py-8">
+            <ContentState.Error title={t('session.list.loadFailed')} />
+          </View>
         ) : (
-          <ContentState.Empty
-            description={t('session.list.emptyDescription')}
-            icon={
-              <ContentState.Icon>
-                <MessageCircleMoreIcon className="size-7 text-foreground" />
-              </ContentState.Icon>
-            }
-            layout="page"
-            title={t('session.list.empty')}
-          />
+          <View className="px-8 py-16">
+            <ContentState.Empty
+              description={t('session.list.emptyDescription')}
+              icon={
+                <ContentState.Icon>
+                  <MessageCircleMoreIcon className="size-7 text-foreground" />
+                </ContentState.Icon>
+              }
+              prominence="prominent"
+              title={t('session.list.empty')}
+            />
+          </View>
         )
       ) : (
-        <ContentState.Loading className="px-6 py-8" />
+        <View className="px-6 py-8">
+          <ContentState.Loading />
+        </View>
       ),
     [initialLoadError, isInitialDataSettled, t],
   );

@@ -70,15 +70,16 @@ function ResolvedChatScreen({ target }: { target: ChatTarget }) {
       <MainHeader />
       <View className="flex-1">
         {sessionId && session.error ? (
-          <ContentState.Error
-            className="flex-1"
-            layout="page"
-            primaryAction={{
-              children: t('agent.actions.retry'),
-              onPress: () => void session.refetch(),
-            }}
-            title={t('navigation.chatsLoadFailed')}
-          />
+          <View className="flex-1 justify-center px-8 py-16">
+            <ContentState.Error
+              primaryAction={{
+                children: t('agent.actions.retry'),
+                onPress: () => void session.refetch(),
+              }}
+              prominence="prominent"
+              title={t('navigation.chatsLoadFailed')}
+            />
+          </View>
         ) : isSessionAvailable && sessionId ? (
           <ChatWorkspace
             assistantAvatarUri={agent.agent?.avatarUri}

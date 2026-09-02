@@ -305,7 +305,10 @@ Product code keeps query state, retry behavior, list mounting, and localized cop
 ```
 
 Keep screen, list, composer, and card insets in the consuming feature and compose the state inside
-that layout. `ContentState` deliberately has no query, retry, inset, card, or compact-mode props.
+that layout. Use `layout="centered"`, `layout="leading"`, or `layout="row"` for the state's internal
+direction and alignment. `prominence="prominent"` raises the title and action hierarchy without
+allocating any surrounding room. `ContentState` deliberately has no query, retry, inset, card, or
+compact-mode props.
 
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by

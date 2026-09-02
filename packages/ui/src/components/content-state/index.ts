@@ -6,4 +6,5 @@ export {
   type ContentStateIconProps,
   type ContentStateLayout,
   type ContentStateLoadingProps,
+  type ContentStateProminence,
 } from './content-state';

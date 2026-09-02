@@ -1,4 +1,4 @@
-import { ContentState, Spinner, Switch } from '@cherrystudio/ui/components';
+import { ContentState, Switch } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,24 +39,18 @@ export function McpToolsSection({
   }, [toolsQuery]);
 
   if (toolsQuery.isLoading) {
-    return (
-      <ContentState.Loading
-        className="flex-row items-center justify-start gap-2"
-        icon={<Spinner size="sm" />}
-        title={t('settings.mcp.tools.loading')}
-      />
-    );
+    return <ContentState.Loading layout="row" title={t('settings.mcp.tools.loading')} />;
   }
 
   if (toolsQuery.isError) {
     return (
       <ContentState.Error
-        className="items-start"
         // The reason is the whole point here — an expired token and a typo'd
         // URL are the same generic failure without it.
         description={
           toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)
         }
+        layout="leading"
         primaryAction={{ children: t('settings.mcp.tools.retry'), onPress: refetch }}
         title={t('settings.mcp.tools.loadFailed')}
       />
@@ -65,7 +59,7 @@ export function McpToolsSection({
 
   const tools = toolsQuery.data ?? [];
   if (tools.length === 0) {
-    return <ContentState.Empty className="items-start" title={t('settings.mcp.tools.empty')} />;
+    return <ContentState.Empty layout="leading" title={t('settings.mcp.tools.empty')} />;
   }
 
   return (

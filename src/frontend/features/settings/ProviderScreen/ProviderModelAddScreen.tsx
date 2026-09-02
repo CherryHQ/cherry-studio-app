@@ -74,10 +74,9 @@ export default function ProviderModelAddScreen() {
               : 'settings.provider.models.addTitle',
           )}
         />
-        <ContentState.Loading
-          className="flex-1 px-6 py-10"
-          title={t('settings.provider.loading')}
-        />
+        <View className="flex-1 justify-center px-6 py-10">
+          <ContentState.Loading title={t('settings.provider.loading')} />
+        </View>
       </>
     );
   }
@@ -357,29 +356,30 @@ function ProviderModelAddForm({
               toggleModel={toggleSyncModel}
             />
           ) : isPreviewLoading || syncLoadResult === undefined ? (
-            <ContentState.Loading
-              className="px-6 py-10"
-              title={t('settings.provider.models.loading')}
-            />
+            <View className="px-6 py-10">
+              <ContentState.Loading title={t('settings.provider.models.loading')} />
+            </View>
           ) : syncLoadResult === 'failed' || syncLoadResult === 'timedOut' ? (
             // The hook reports how the pull ended and says nothing itself: an
             // alert on top of this state would carry the same sentence twice.
-            <ContentState.Error
-              className="px-6 py-10"
-              primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
-              title={t(
-                syncLoadResult === 'timedOut'
-                  ? 'settings.provider.models.pullTimedOut'
-                  : 'settings.provider.models.pullFailed',
-              )}
-            />
+            <View className="px-6 py-10">
+              <ContentState.Error
+                primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
+                title={t(
+                  syncLoadResult === 'timedOut'
+                    ? 'settings.provider.models.pullTimedOut'
+                    : 'settings.provider.models.pullFailed',
+                )}
+              />
+            </View>
           ) : (
-            <ContentState.Empty
-              className="px-6 py-10"
-              primaryAction={{ children: t('common.done'), onPress: completeFlow }}
-              secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
-              title={t('settings.provider.models.pullUpToDate')}
-            />
+            <View className="px-6 py-10">
+              <ContentState.Empty
+                primaryAction={{ children: t('common.done'), onPress: completeFlow }}
+                secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
+                title={t('settings.provider.models.pullUpToDate')}
+              />
+            </View>
           )
         ) : (
           <KeyboardAwareScrollView

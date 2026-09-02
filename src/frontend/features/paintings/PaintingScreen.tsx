@@ -53,7 +53,9 @@ export function PaintingScreen() {
     <View className="flex-1">
       <RouteHeader />
       {isLoading ? (
-        <ContentState.Loading className="flex-1" />
+        <View className="flex-1 justify-center">
+          <ContentState.Loading />
+        </View>
       ) : (
         <PaintingComposer
           initialAttachments={initialAttachments}
