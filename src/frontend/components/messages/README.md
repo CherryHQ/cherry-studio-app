@@ -9,8 +9,9 @@ history, message rows and parts, viewport following, and scroll restoration.
 - `MessageList` renders a virtualized history from `MessageListItem` values and delegates
   every row to the feature-owned `renderMessage` function.
 - `MessageListItem` contains only the persistence-neutral fields needed for rendering. Its optional
-  `partKeys` carries source-owned part identity beside the projected visual parts; renderers never
-  synthesize positional identity when that source identity is available.
+  `partKeys` carries source-owned part identity beside the projected visual parts; `systemEvent`
+  carries a feature-synthesized timeline row such as a fork origin. Renderers never synthesize
+  positional part identity when source identity is available.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, dataset
   identity, bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered
   state that is not carried by message items.

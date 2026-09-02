@@ -92,8 +92,8 @@ function insertMessage(
   database
     .prepare(
       `INSERT INTO agent_session_message (
-        id, session_id, turn_id, role, data, status, created_at, updated_at
-      ) VALUES (?, 'session-1', ?, 'assistant', ?, 'success', ?, ?)`,
+        id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at
+      ) VALUES (?, 'session-1', ?, 'assistant', ?, 'success', ?, ?, ?)`,
     )
     .run(
       values.id,
@@ -102,6 +102,7 @@ function insertMessage(
         version: 1,
         parts: [{ id: `part-${values.id}`, type: 'text', text: values.text, state: 'done' }],
       }),
+      values.createdAt,
       values.createdAt,
       values.createdAt,
     );

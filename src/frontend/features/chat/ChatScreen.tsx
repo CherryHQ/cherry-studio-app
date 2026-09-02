@@ -85,6 +85,7 @@ function ResolvedChatScreen({ target }: { target: ChatTarget }) {
             assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview}
             contentBottomInset={contentBottomInset}
+            forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
             forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
             keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}

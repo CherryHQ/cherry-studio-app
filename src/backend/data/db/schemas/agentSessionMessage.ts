@@ -67,6 +67,13 @@ export const agentSessionMessageTable = sqliteTable(
     // Stable integer surrogate for the FTS5 content_rowid: trigger-assigned,
     // local-only, and nullable because the AFTER INSERT trigger fills it.
     ftsRowid: integer(),
+    // Conversation-event time for recency. Reservation initializes it and
+    // normal terminal settlement advances it; row maintenance and history
+    // copies preserve it so updatedAt remains exclusively the physical row's
+    // latest update time.
+    activityAt: integer()
+      .notNull()
+      .$defaultFn(() => Date.now()),
     ...createUpdateTimestamps,
   },
   (t) => [
@@ -133,6 +140,7 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   // INSERT. MAX+1 is race-free under withWriteTx serialization and O(log N)
   // via agent_session_message_fts_rowid_uniq.
   `CREATE TRIGGER agent_session_message_ai AFTER INSERT ON agent_session_message BEGIN
+    -- activity_at is application-owned and never derived by FTS maintenance.
     UPDATE agent_session_message SET
       fts_rowid = (SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM agent_session_message),
       searchable_text = ${searchableTextExpression('NEW.data')}
