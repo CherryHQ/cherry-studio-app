@@ -7,15 +7,6 @@ export const PI_TOOL_SEARCH_TOOL_NAME = 'tool_search';
 export const PI_TOOL_DESCRIBE_TOOL_NAME = 'tool_describe';
 export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
-export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `MCP tools are available through a searchable catalog.
-Use tool_search only for tool discovery, not for web search or general research.
-Use tool_search to discover relevant tools and their TypeScript signatures.
-Narrow the search query when the result reports truncated: true.
-Use tool_describe when you need the bounded signature for one exact tool name.
-Use tool_call with an exact discovered name and params matching that signature.
-If tool_call returns a signature, read it and retry with corrected params.
-Do not guess tool names or parameters.`;
-
 const SEARCH_RESULT_LIMIT = 20;
 const SEARCH_RESULT_CHARACTER_LIMIT = 32_000;
 const TOOL_DECLARATION_CHARACTER_LIMIT = 8_000;

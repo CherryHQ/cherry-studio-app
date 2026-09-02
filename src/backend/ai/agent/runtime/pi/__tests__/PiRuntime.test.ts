@@ -25,7 +25,6 @@ import {
 } from '../contextCompaction';
 import { PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX, toPiConversation } from '../modelMessages';
 import {
-  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
   PI_TOOL_CALL_TOOL_NAME,
   PI_TOOL_DESCRIBE_TOOL_NAME,
   PI_TOOL_SEARCH_TOOL_NAME,
@@ -1550,6 +1549,7 @@ describe('PiRuntime mapping', () => {
 
   test('exposes MCP tools through deferred discovery and calls the target through its approval boundary', async () => {
     const runtime = createTestRuntime();
+    const preparedSystemPrompt = 'Host-prepared system prompt with MCP catalog guidance.';
     let executedInput: unknown;
     let searchResult: unknown;
     const builtInTool: RuntimeTool = {
@@ -1639,7 +1639,10 @@ describe('PiRuntime mapping', () => {
     const events: RuntimeEvent[] = [];
     const collecting = (async () => {
       for await (const event of session.execute(
-        baseRequest('turn-deferred-discovery', { tools: [builtInTool, targetTool, deniedTool] }),
+        baseRequest('turn-deferred-discovery', {
+          instructions: preparedSystemPrompt,
+          tools: [builtInTool, targetTool, deniedTool],
+        }),
       )) {
         events.push(event);
       }
@@ -1662,9 +1665,7 @@ describe('PiRuntime mapping', () => {
       PI_TOOL_DESCRIBE_TOOL_NAME,
       PI_TOOL_CALL_TOOL_NAME,
     ]);
-    expect(holder.lastOptions?.initialState?.systemPrompt).toContain(
-      PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
-    );
+    expect(holder.lastOptions?.initialState?.systemPrompt).toBe(preparedSystemPrompt);
     expect(searchResult).toMatchObject({
       value: {
         matchedNamespaces: [

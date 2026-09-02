@@ -45,9 +45,7 @@ You may call this multiple times with different queries to broaden coverage:
   (English for tech / scientific topics, the local language for regional news,
   Japanese for anime / manga, etc.), repeat the search with the topic translated
   into the most likely source language.
-- If the first results miss an angle, refine with synonyms or sub-aspects.
-
-Cite: append [cite:id] immediately after each statement a result supports, using the result's exact \`id\` field.`;
+- If the first results miss an angle, refine with synonyms or sub-aspects.`;
 
 export const WEB_FETCH_DESCRIPTION = `Fetch the readable content from one or more known web page URLs.
 
@@ -56,9 +54,7 @@ Use this when:
 - You need page content from an article, documentation page, or reference URL
 - Search snippets are not enough and you need the source page text
 
-Don't use this when you only have a topic or question; call web_search first.
-
-Cite: append [cite:id] immediately after each statement a result supports, using the result's exact \`id\` field.`;
+Don't use this when you only have a topic or question; call web_search first.`;
 
 /**
  * A failed lookup must be distinguishable from "ran fine, found nothing": both

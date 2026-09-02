@@ -144,8 +144,10 @@ fallback action with broader access.
 
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
-The Pi binding exposes system capabilities directly and translates eligible MCP tools into three
-catalog tools for the active model loop:
+When that catalog contains an executable MCP target, the Host-owned system prompt policy includes
+the catalog workflow below. The Pi binding consumes the prepared prompt unchanged, exposes system
+capabilities directly, and translates eligible MCP tools into three catalog tools for the active
+model loop:
 
 - `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
   including bounded TypeScript call signatures. Its complete serialized model result is capped by

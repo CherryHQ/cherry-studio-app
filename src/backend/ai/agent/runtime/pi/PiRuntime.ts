@@ -52,7 +52,6 @@ import { toPiConversation } from './modelMessages';
 import {
   createPiDispatchActivityInput,
   createPiDeferredToolDiscoveryTools,
-  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
   PI_TOOL_CALL_TOOL_NAME,
   type PiMetaToolActivity,
   type PiMetaToolExecution,
@@ -721,14 +720,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
-      const baseConversation = toPiConversation(request, resolution.model);
-      const conversation =
-        deferredToolDiscoveryTools.length > 0
-          ? {
-              ...baseConversation,
-              systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
-            }
-          : baseConversation;
+      const conversation = toPiConversation(request, resolution.model);
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
