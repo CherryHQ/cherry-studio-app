@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import { PartMarkdown } from './PartMarkdown';
 import { useThinkingTimerMs } from './useThinkingTimerMs';
 
@@ -15,6 +16,7 @@ type ReasoningPartProps = {
 
 export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
+  const handleDisclosureToggle = useMessageListDisclosureToggle();
   const isThinking = part.state === 'streaming';
   const cherryMeta = readCherryMeta(part);
   const displayMs = useThinkingTimerMs(isThinking, cherryMeta?.startedAt, cherryMeta?.thinkingMs);
@@ -38,7 +40,11 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   }
 
   return (
-    <MessagePart.Reasoning state={isThinking ? 'running' : 'complete'} statusText={statusText}>
+    <MessagePart.Reasoning
+      onDisclosureToggle={handleDisclosureToggle}
+      state={isThinking ? 'running' : 'complete'}
+      statusText={statusText}
+    >
       <PartMarkdown isStreaming={isStreaming} markdown={part.text} selectable />
     </MessagePart.Reasoning>
   );

@@ -101,6 +101,7 @@ jest.mock('react-native-reanimated', () => {
     __esModule: true,
     cancelAnimation: jest.fn(),
     default: { View },
+    ReduceMotion: { System: 'system' },
     useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => false,
     useSharedValue,
@@ -148,9 +149,15 @@ describe('MessagePart', () => {
   });
 
   it('expands running reasoning inline instead of opening a sheet', () => {
+    const onDisclosureToggle = jest.fn();
     act(() => {
       renderer = create(
-        <MessagePart.Reasoning state="running" statusText="Thinking for 1.2s" testID="thinking">
+        <MessagePart.Reasoning
+          onDisclosureToggle={onDisclosureToggle}
+          state="running"
+          statusText="Thinking for 1.2s"
+          testID="thinking"
+        >
           <Text>Live reasoning</Text>
         </MessagePart.Reasoning>,
       );
@@ -160,10 +167,12 @@ describe('MessagePart', () => {
     expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
     expect(mockBottomSheetProps).toEqual({});
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findByProps({ testID: 'thinking-detail' })).toBeDefined();
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
 
     act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(2);
     expect(renderer!.root.findAllByProps({ testID: 'thinking-detail' })).toHaveLength(0);
   });
 

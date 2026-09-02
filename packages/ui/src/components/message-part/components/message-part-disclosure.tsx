@@ -1,10 +1,16 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import ListChecksIcon from '@cherrystudio/app-icons/icons/list-checks';
 import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { duration, easing } from '../../../motion';
 import { BottomSheet } from '../../bottom-sheet';
 import { Image } from '../../image';
 import { PrismSweep } from '../../loading';
@@ -17,10 +23,16 @@ import type {
   MessagePartToolGroupProps,
   MessagePartToolProps,
 } from '../message-part.types';
+import { MessagePartCollapsible } from './message-part-collapsible';
 import { MessagePartStatus } from './message-part-status';
 
 const SOURCE_LIST_DETAIL_SIZES = ['large'] as const;
 const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
+const disclosureIconMotion = {
+  duration: duration.fast,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
 
 const toneClassName = {
   danger: 'text-destructive',
@@ -30,19 +42,24 @@ const toneClassName = {
 
 export function MessagePartReasoning({
   children,
+  onDisclosureToggle,
   state,
   statusText,
   testID = 'reasoning',
 }: MessagePartReasoningProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isRunning = state === 'running';
-  const ChevronIcon = isOpen ? ChevronDownIcon : ChevronRightIcon;
+  const toggle = () => {
+    onDisclosureToggle?.();
+    setIsOpen((open) => !open);
+  };
 
   return (
     <View className="gap-1.5">
       <MessagePartStatus
         accessibilityLabel={statusText}
-        onPress={() => setIsOpen((open) => !open)}
+        expanded={isOpen}
+        onPress={toggle}
         testID={`${testID}-trigger`}
       >
         {isRunning ? <PrismSweep active /> : null}
@@ -57,19 +74,22 @@ export function MessagePartReasoning({
             </Text>
           )}
         </View>
-        <ChevronIcon className="size-3.5 text-muted-foreground" />
+        <MessagePartDisclosureIcon isOpen={isOpen} />
       </MessagePartStatus>
-      {isOpen ? (
-        <View className="border-border border-l-2 pl-3" testID={`${testID}-detail`}>
-          {children}
-        </View>
-      ) : null}
+      <MessagePartCollapsible
+        className="border-border border-l-2 pl-3"
+        isOpen={isOpen}
+        testID={`${testID}-detail`}
+      >
+        {children}
+      </MessagePartCollapsible>
     </View>
   );
 }
 
 export function MessagePartToolGroup({
   children,
+  onDisclosureToggle,
   state,
   statusText,
   statusTone = 'default',
@@ -82,13 +102,17 @@ export function MessagePartToolGroup({
   const isRunning = state === 'running';
   const isOpen = manualOpen ?? isRunning;
   const colorClassName = toneClassName[statusTone];
-  const ChevronIcon = isOpen ? ChevronDownIcon : ChevronRightIcon;
+  const toggle = () => {
+    onDisclosureToggle?.();
+    setManualOpen(!isOpen);
+  };
 
   return (
     <View className="gap-1.5">
       <MessagePartStatus
         accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
-        onPress={() => setManualOpen(!isOpen)}
+        expanded={isOpen}
+        onPress={toggle}
         testID={`${testID}-trigger`}
       >
         <ListChecksIcon className={`size-4 ${colorClassName}`} />
@@ -108,14 +132,30 @@ export function MessagePartToolGroup({
             {statusText}
           </Text>
         ) : null}
-        <ChevronIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <MessagePartDisclosureIcon isOpen={isOpen} />
       </MessagePartStatus>
-      {isOpen ? (
-        <View className="gap-1" testID={`${testID}-steps`}>
-          {children}
-        </View>
-      ) : null}
+      <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-steps`}>
+        {children}
+      </MessagePartCollapsible>
     </View>
+  );
+}
+
+function MessagePartDisclosureIcon({ isOpen }: { isOpen: boolean }) {
+  const rotation = useSharedValue(isOpen ? 90 : 0);
+
+  useEffect(() => {
+    rotation.set(withTiming(isOpen ? 90 : 0, disclosureIconMotion));
+  }, [isOpen, rotation]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.get()}deg` }],
+  }));
+
+  return (
+    <Animated.View pointerEvents="none" style={animatedStyle}>
+      <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
+    </Animated.View>
   );
 }
 

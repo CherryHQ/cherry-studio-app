@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
+import { useMessageListDisclosureToggle } from '../../list/MessageListDisclosureContext';
 import { ToolPartRenderer } from './ToolPartRenderer';
 import { deriveToolGroupSummary, type ToolMessagePart } from './toolPartState';
 
@@ -24,6 +25,7 @@ type ToolGroupPartProps = {
  */
 export function ToolGroupPart({ items, messageParts }: ToolGroupPartProps) {
   const { t } = useTranslation();
+  const handleDisclosureToggle = useMessageListDisclosureToggle();
   const { dangerCount, state, tone, warningCount } = deriveToolGroupSummary(
     items.map((item) => item.part),
   );
@@ -40,7 +42,13 @@ export function ToolGroupPart({ items, messageParts }: ToolGroupPartProps) {
         : undefined;
 
   return (
-    <MessagePart.ToolGroup state={state} statusText={statusText} statusTone={tone} title={title}>
+    <MessagePart.ToolGroup
+      onDisclosureToggle={handleDisclosureToggle}
+      state={state}
+      statusText={statusText}
+      statusTone={tone}
+      title={title}
+    >
       {items.map(({ key, part }) => (
         <ToolPartRenderer key={key} messageParts={messageParts} part={part} />
       ))}

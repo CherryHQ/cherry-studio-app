@@ -88,6 +88,11 @@ domain-specific compact triggers, but their expanded views must use `MessagePart
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
 
+A manual inline disclosure toggle is a reading interaction. Before changing local disclosure state,
+the part adapter notifies the list scroll controller, which leaves live-edge following and cancels
+any scheduled end correction. LegendList's size anchoring then keeps the tapped summary in place so
+the detail expands below it, even when the viewport started at the bottom.
+
 `partitionMessageParts` folds a run of two or more consecutive visible tool calls into one
 `tool-group` body item that `ToolGroupPart` renders through `MessagePart.ToolGroup`. The answer —
 not the process — is the visual subject of a settled message, so the group collapses to one summary

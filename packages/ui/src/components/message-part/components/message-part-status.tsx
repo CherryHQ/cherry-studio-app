@@ -7,6 +7,7 @@ const statusClassName = '-mx-2 min-h-10 flex-row items-center gap-1.5 rounded-lg
 export function MessagePartStatus({
   accessibilityLabel,
   children,
+  expanded,
   onPress,
   testID,
 }: MessagePartStatusProps) {
@@ -15,7 +16,8 @@ export function MessagePartStatus({
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        className={`${statusClassName} active:bg-secondary-active active:opacity-80`}
+        accessibilityState={expanded === undefined ? undefined : { expanded }}
+        className={`${statusClassName} active:opacity-80`}
         hitSlop={4}
         onPress={onPress}
         testID={testID}

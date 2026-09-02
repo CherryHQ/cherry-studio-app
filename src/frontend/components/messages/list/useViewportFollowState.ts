@@ -6,7 +6,12 @@ export type FollowingReason =
   | 'scroll-to-bottom'
   | 'user-reached-bottom';
 
-export type ReadingReason = 'initializing' | 'navigation' | 'restored-anchor' | 'user-scrolled-up';
+export type ReadingReason =
+  | 'initializing'
+  | 'navigation'
+  | 'restored-anchor'
+  | 'user-scrolled-up'
+  | 'user-toggled-disclosure';
 
 export type ViewportFollowState =
   | { readonly mode: 'following'; readonly reason: FollowingReason }

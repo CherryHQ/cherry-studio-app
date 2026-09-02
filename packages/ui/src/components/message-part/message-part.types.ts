@@ -12,12 +12,15 @@ export type MessagePartRootProps = ViewProps & {
 export type MessagePartStatusProps = {
   accessibilityLabel?: string;
   children: ReactNode;
+  expanded?: boolean;
   onPress?: () => void;
   testID?: string;
 };
 
 export type MessagePartReasoningProps = {
   children: ReactNode;
+  /** Runs before a reader-initiated inline disclosure toggle. */
+  onDisclosureToggle?: () => void;
   state: 'complete' | 'running';
   statusText: string;
   testID?: string;
@@ -25,6 +28,8 @@ export type MessagePartReasoningProps = {
 
 export type MessagePartToolGroupProps = {
   children: ReactNode;
+  /** Runs before a reader-initiated inline disclosure toggle. */
+  onDisclosureToggle?: () => void;
   state: 'complete' | 'running';
   statusText?: string;
   statusTone?: MessagePartTone;
