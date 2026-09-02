@@ -10,10 +10,10 @@ export const visiblePermissionKinds = [
 ] as const satisfies readonly PermissionKind[];
 
 const permissionImages: Record<PermissionKind, number> = {
-  calendar: require('../../../../../../assets/permissions/ios/calendar.png'),
-  health: require('../../../../../../assets/permissions/ios/health.png'),
-  location: require('../../../../../../assets/permissions/ios/location.png'),
-  reminders: require('../../../../../../assets/permissions/ios/reminders.png'),
+  calendar: require('@/assets/permissions/ios/calendar.png'),
+  health: require('@/assets/permissions/ios/health.png'),
+  location: require('@/assets/permissions/ios/location.png'),
+  reminders: require('@/assets/permissions/ios/reminders.png'),
 };
 
 export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
