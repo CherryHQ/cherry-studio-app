@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ export function useSessionActionAlerts(): SessionActionAlerts {
   const { t } = useTranslation();
   const { deleteSession, renameSession } = useSessionListActions();
   const { alert } = useAlert();
+  const { toast } = useToast();
 
   const requestRename = useCallback(
     (session: AgentSessionEntity) => {
@@ -34,13 +35,13 @@ export function useSessionActionAlerts(): SessionActionAlerts {
           }
 
           void renameSession(session.id, trimmedTitle).catch(() => {
-            alert.show({ title: t('session.rename.failed') });
+            toast.show({ label: t('session.rename.failed'), variant: 'danger' });
           });
         },
         title: t('session.renameTitle'),
       });
     },
-    [alert, renameSession, t],
+    [alert, renameSession, t, toast],
   );
 
   const requestDelete = useCallback(
@@ -50,14 +51,14 @@ export function useSessionActionAlerts(): SessionActionAlerts {
         description: t('session.deleteMessage'),
         onConfirm: () => {
           void deleteSession(session.id).catch(() => {
-            alert.show({ title: t('session.deleteFailed') });
+            toast.show({ label: t('session.deleteFailed'), variant: 'danger' });
           });
         },
         role: 'destructive',
         title: t('session.deleteTitle'),
       });
     },
-    [alert, deleteSession, t],
+    [alert, deleteSession, t, toast],
   );
 
   return { requestDelete, requestRename };

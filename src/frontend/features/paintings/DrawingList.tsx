@@ -7,7 +7,7 @@ import {
   ImageGenerationLoader,
   SelectionIndicator,
   Section,
-  useAlert,
+  useToast,
 } from '@cherrystudio/ui/components';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
@@ -60,7 +60,7 @@ const galleryContentEdge = pageEdge - galleryGap / 2;
 
 export function DrawingList() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const router = useRouter();
   const { isEditing, selectedIds } = useSelectionState();
   const pendingDeletionIds = usePendingDeletionIds('drawings');
@@ -111,11 +111,11 @@ export function DrawingList() {
       try {
         const uri = await new MediaLibrary.Asset(photo.id).getUri();
         openPaintingWithAttachments([createPhotoAttachmentDraft({ ...photo, uri })]);
-      } catch (error) {
-        alert.show({ title: error instanceof Error ? error.message : String(error) });
+      } catch {
+        toast.show({ label: t('painting.photos.openFailed'), variant: 'danger' });
       }
     },
-    [alert, openPaintingWithAttachments],
+    [openPaintingWithAttachments, t, toast],
   );
   const handleViewAllPress = useCallback(async () => {
     try {
@@ -148,10 +148,10 @@ export function DrawingList() {
         };
       });
       openPaintingWithAttachments(attachments);
-    } catch (error) {
-      alert.show({ title: error instanceof Error ? error.message : String(error) });
+    } catch {
+      toast.show({ label: t('painting.photos.openFailed'), variant: 'danger' });
     }
-  }, [alert, openPaintingWithAttachments, requestPhotoAccess]);
+  }, [openPaintingWithAttachments, requestPhotoAccess, t, toast]);
 
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: galleryContentEdge }),

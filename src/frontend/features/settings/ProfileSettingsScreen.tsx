@@ -1,4 +1,4 @@
-import { Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
+import { Input, Label, TextField, useToast } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -18,7 +18,7 @@ const logger = loggerService.withContext('ProfileSettingsScreen');
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const profile = useBackendModule('profile');
@@ -30,9 +30,9 @@ export default function ProfileSettingsScreen() {
   const reportAvatarSaveError = useCallback(
     (error: unknown) => {
       logger.error('Failed to save user avatar', error as Error);
-      alert.show({ title: t('settings.profile.avatarSaveError') });
+      toast.show({ label: t('settings.profile.avatarSaveError'), variant: 'danger' });
     },
-    [alert, t],
+    [t, toast],
   );
 
   const blurInput = useCallback(() => {

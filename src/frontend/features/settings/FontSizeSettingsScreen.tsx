@@ -1,4 +1,4 @@
-import { Slider, useAlert } from '@cherrystudio/ui/components';
+import { Slider, useToast } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,7 @@ import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
 export default function FontSizeSettingsScreen() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const [storedStep, setStoredStep] = usePreference('ui.font_size_step');
   const [draftStep, setDraftStep] = useState(() => normalizeFontSizeStep(storedStep));
   const persistenceVersionRef = useRef(0);
@@ -33,7 +33,7 @@ export default function FontSizeSettingsScreen() {
       const restoredStep = normalizeFontSizeStep(storedStep);
       setDraftStep(restoredStep);
       applyFontSizeStepPreference(restoredStep);
-      alert.show({ title: t('settings.fontSize.saveFailed') });
+      toast.show({ label: t('settings.fontSize.saveFailed'), variant: 'danger' });
     });
   };
 

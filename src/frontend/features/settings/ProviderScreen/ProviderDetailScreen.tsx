@@ -215,7 +215,7 @@ function ProviderDetailSettings({
         toast.show({ label: t('settings.provider.toast.saved'), variant: 'success' });
       })
       .catch(() => {
-        alert.show({ title: t('settings.provider.apiService.saveFailed') });
+        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
       })
       .finally(() => setIsSaving(false));
   }, [

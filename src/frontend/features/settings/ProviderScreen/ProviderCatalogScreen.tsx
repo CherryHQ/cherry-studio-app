@@ -1,5 +1,5 @@
 import DownloadIcon from '@cherrystudio/app-icons/icons/download';
-import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -143,7 +143,6 @@ export default function ProviderCatalogScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const providers = useBackendModule('providers');
   const catalogQuery = useQuery({
@@ -167,7 +166,10 @@ export default function ProviderCatalogScreen() {
   const applyRegistryUpdateMutation = useMutation({
     mutationFn: providers.applyRegistryUpdate,
     onError: () => {
-      alert.show({ title: t('settings.provider.catalog.registryUpdate.updateFailed') });
+      toast.show({
+        label: t('settings.provider.catalog.registryUpdate.updateFailed'),
+        variant: 'danger',
+      });
     },
     onSuccess: (result) => {
       queryClient.setQueryData(registryUpdateQueryKey, { status: 'current' });
@@ -209,7 +211,7 @@ export default function ProviderCatalogScreen() {
   const importMutation = useMutation({
     mutationFn: providers.importPreset,
     onError: () => {
-      alert.show({ title: t('settings.provider.catalog.importFailed') });
+      toast.show({ label: t('settings.provider.catalog.importFailed'), variant: 'danger' });
     },
     onSuccess: async (provider) => {
       await Promise.all([

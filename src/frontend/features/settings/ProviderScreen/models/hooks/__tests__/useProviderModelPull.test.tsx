@@ -9,7 +9,7 @@ type ModelPull = ReturnType<typeof useProviderModelPull>;
 
 const mockPull = jest.fn();
 const mockReconcile = jest.fn();
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn(), refetchQueries: jest.fn() }),
@@ -20,7 +20,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('@/frontend/data', () => ({
@@ -144,6 +144,6 @@ describe('useProviderModelPull', () => {
     mockPull.mockRejectedValue(new ModelPullTimeoutError(30_000));
     await load();
 
-    expect(mockAlertShow).not.toHaveBeenCalled();
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 });

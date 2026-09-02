@@ -4,6 +4,7 @@ import {
   OptionPickerBottomSheet,
   SelectField,
   useAlert,
+  useToast,
 } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -122,6 +123,7 @@ function AgentEditForm({
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const isEditing = Boolean(agentId);
   const { createAgent, isCreating, isSettingAvatar, isUpdating, setAgentAvatar, updateAgent } =
     useAgentMutations();
@@ -204,9 +206,9 @@ function AgentEditForm({
   const reportAvatarPickError = useCallback(
     (error: unknown) => {
       logger.error('Failed to pick an agent avatar', error as Error);
-      alert.show({ title: t('agent.toast.avatarSaveFailed') });
+      toast.show({ label: t('agent.toast.avatarSaveFailed'), variant: 'danger' });
     },
-    [alert, t],
+    [t, toast],
   );
   const handleSave = useCallback(async () => {
     const dto = buildAgentDto(form, {
@@ -228,7 +230,7 @@ function AgentEditForm({
         savedAgentId = (await createAgent(dto.value)).id;
       }
     } catch {
-      alert.show({ title: t('agent.toast.saveFailed') });
+      toast.show({ label: t('agent.toast.saveFailed'), variant: 'danger' });
       return;
     }
 
@@ -242,7 +244,7 @@ function AgentEditForm({
         await setAgentAvatar(savedAgentId, form.avatarUri);
       } catch (error) {
         logger.error('Failed to save agent avatar', error as Error, { agentId: savedAgentId });
-        alert.show({ title: t('agent.toast.avatarSaveFailed') });
+        toast.show({ label: t('agent.toast.avatarSaveFailed'), variant: 'danger' });
       }
     }
 
@@ -258,6 +260,7 @@ function AgentEditForm({
     router,
     setAgentAvatar,
     t,
+    toast,
     toolBindings,
     updateAgent,
   ]);

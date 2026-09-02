@@ -152,11 +152,11 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       }
     } catch (error) {
       logger.error('Failed to save MCP server', error as Error);
-      alert.show({ title: t('settings.mcp.toast.saveFailed') });
+      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
     } finally {
       setIsSaving(false);
     }
-  }, [alert, createServer, form, mcp, router, serverId, t, updateServer]);
+  }, [alert, createServer, form, mcp, router, serverId, t, toast, updateServer]);
 
   const handleToggleServer = useCallback(async () => {
     if (!serverId || !server) {
@@ -167,9 +167,9 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       await updateServer(serverId, { isEnabled: !server.isEnabled });
     } catch (error) {
       logger.error('Failed to toggle MCP server', error as Error);
-      alert.show({ title: t('settings.mcp.toast.saveFailed') });
+      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
     }
-  }, [alert, server, serverId, t, updateServer]);
+  }, [server, serverId, t, toast, updateServer]);
 
   /**
    * A rule is the tool's raw name, so enabling drops that one entry and
@@ -188,10 +188,10 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
       void updateServer(serverId, { disabledTools }).catch((error) => {
         logger.error('Failed to toggle MCP tool', error as Error);
-        alert.show({ title: t('settings.mcp.toast.saveFailed') });
+        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
       });
     },
-    [alert, server, serverId, t, updateServer],
+    [server, serverId, t, toast, updateServer],
   );
 
   const handleDelete = useCallback(() => {
@@ -207,9 +207,9 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       })
       .catch((error) => {
         logger.error('Failed to delete MCP server', error as Error);
-        alert.show({ title: t('settings.mcp.toast.deleteFailed') });
+        toast.show({ label: t('settings.mcp.toast.deleteFailed'), variant: 'danger' });
       });
-  }, [alert, deleteServer, router, serverId, t, toast]);
+  }, [deleteServer, router, serverId, t, toast]);
 
   const requestDelete = useCallback(() => {
     if (!serverId || !server) {

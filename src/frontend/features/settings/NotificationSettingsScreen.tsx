@@ -1,5 +1,5 @@
 import RadioIcon from '@cherrystudio/app-icons/icons/radio';
-import { Section, Switch, useAlert } from '@cherrystudio/ui/components';
+import { Section, Switch, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { usePreference } from '@/frontend/data/hooks';
@@ -8,14 +8,14 @@ import { SettingsScrollPage } from './components/SettingsScrollPage';
 
 export default function NotificationSettingsScreen() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const [isLiveActivityEnabled, setIsLiveActivityEnabled] = usePreference(
     'chat.background_reply.enabled',
   );
 
   const setLiveActivityPreference = (isEnabled: boolean) => {
     void setIsLiveActivityEnabled(isEnabled).catch(() => {
-      alert.show({ title: t('settings.notifications.liveActivity.saveFailed') });
+      toast.show({ label: t('settings.notifications.liveActivity.saveFailed'), variant: 'danger' });
     });
   };
 

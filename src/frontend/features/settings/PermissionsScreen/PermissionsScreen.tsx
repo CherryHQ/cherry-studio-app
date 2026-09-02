@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Section, Spinner, useAlert } from '@cherrystudio/ui/components';
+import { Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -24,7 +24,7 @@ import {
 
 export default function PermissionsSettingsScreen() {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const permissions = useBackendModule('permissions');
   const [activePermissionKind, setActivePermissionKind] = useState<PermissionKind | null>(null);
   const { refresh, statuses } = usePermissionSystemStatuses();
@@ -51,7 +51,7 @@ export default function PermissionsSettingsScreen() {
       }
       setActivePermissionKind(null);
       if (hasFailed) {
-        alert.show({ title: t('settings.permissions.actionFailed') });
+        toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
       }
     }
   };

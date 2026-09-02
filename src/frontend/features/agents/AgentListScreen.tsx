@@ -6,6 +6,7 @@ import {
   ContextMenuScrollBoundary,
   type MenuItem,
   useAlert,
+  useToast,
 } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
@@ -27,6 +28,7 @@ export default function AgentListScreen() {
   const { agents, error, isLoading, refetch } = useAgentsApi();
   const { deleteAgent } = useAgentMutations();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const {
     isFiltering,
     query,
@@ -70,12 +72,12 @@ export default function AgentListScreen() {
         title: t('agent.delete.title'),
         onConfirm: () => {
           void deleteAgent(agent.id).catch(() => {
-            alert.show({ title: t('agent.toast.deleteFailed') });
+            toast.show({ label: t('agent.toast.deleteFailed'), variant: 'danger' });
           });
         },
       });
     },
-    [alert, deleteAgent, t],
+    [alert, deleteAgent, t, toast],
   );
 
   return (

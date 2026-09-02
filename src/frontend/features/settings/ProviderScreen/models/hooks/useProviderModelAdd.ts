@@ -1,4 +1,4 @@
-import { useAlert, useToast } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,7 +33,6 @@ type UseProviderModelAddOptions = {
 
 export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const modelsQuery = useQuery('/models', { query: { providerId: provider.id } });
   const addModelsMutation = useMutation('POST', '/models', { refresh: ['/models'] });
@@ -210,12 +209,11 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     };
     return await submit()
       .catch(() => {
-        alert.show({ title: t('settings.provider.models.addFailed') });
+        toast.show({ label: t('settings.provider.models.addFailed'), variant: 'danger' });
         return false;
       })
       .finally(() => setIsSubmitting(false));
   }, [
-    alert,
     formState,
     addModels,
     existingModels,

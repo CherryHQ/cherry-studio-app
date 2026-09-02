@@ -12,7 +12,6 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { show: jest.fn() } }),
   useToast: () => ({ toast: { show: jest.fn() } }),
 }));
 

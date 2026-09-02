@@ -1,4 +1,4 @@
-import { FilePreview, type FilePreviewOperation, useAlert } from '@cherrystudio/ui/components';
+import { FilePreview, type FilePreviewOperation, useToast } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -55,15 +55,15 @@ function EntryPreview({
   uri: string | undefined;
 }) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const handleError = useCallback(
     (error: Error, operation: FilePreviewOperation) => {
       logger.warn('File preview operation failed', error, { entryId, operation });
       if (operation === 'open') {
-        alert.show({ title: t('filePreview.openFailed') });
+        toast.show({ label: t('filePreview.openFailed'), variant: 'danger' });
       }
     },
-    [alert, entryId, t],
+    [entryId, t, toast],
   );
 
   return (

@@ -1,4 +1,4 @@
-import { Button, useAlert } from '@cherrystudio/ui/components';
+import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
 import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +38,7 @@ import {
 export function useNewProviderForm() {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const providerAvatars = useProviderAvatarActions();
   const createProviderMutation = useMutation('POST', '/providers', {
     refresh: ['/providers', '/providers/page'],
@@ -101,10 +102,10 @@ export function useNewProviderForm() {
       const providerId = await submitProvider(state);
       return { providerId, providerName };
     } catch {
-      alert.show({ title: t('settings.provider.add.error') });
+      toast.show({ label: t('settings.provider.add.error'), variant: 'danger' });
       return undefined;
     }
-  }, [alert, canSubmit, state, submitProvider, t]);
+  }, [alert, canSubmit, state, submitProvider, t, toast]);
 
   return { canSubmit, form, handleSave, isCreating };
 }
@@ -112,6 +113,7 @@ export function useNewProviderForm() {
 export function useImportedProviderForm(providerId: string) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const providerAvatars = useProviderAvatarActions();
   const storedAvatarUri = useProviderAvatar(providerId);
   const {
@@ -210,7 +212,7 @@ export function useImportedProviderForm(providerId: string) {
 
       return { providerId, providerName };
     } catch {
-      alert.show({ title: t('settings.provider.apiService.saveFailed') });
+      toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
       return undefined;
     }
   }, [
@@ -229,6 +231,7 @@ export function useImportedProviderForm(providerId: string) {
     showApiKey,
     storedAvatarUri,
     t,
+    toast,
   ]);
 
   return {

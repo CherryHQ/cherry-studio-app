@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,7 @@ import { SelectionToolbar } from './SelectionToolbar/SelectionToolbar';
 export function SelectionControls({ scope }: { scope: string }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const { toast } = useToast();
   const source = useSelectionSource(scope);
   const { beginDeletion, finishDeletion, toggleAll } = useSelectionActions();
   const { isEditing, selectedIds } = useSelectionState();
@@ -34,14 +35,14 @@ export function SelectionControls({ scope }: { scope: string }) {
         void source
           .deleteSelected(ids)
           .catch(() => {
-            alert.show({ title: t(source.copy.deleteFailed) });
+            toast.show({ label: t(source.copy.deleteFailed), variant: 'danger' });
           })
           .finally(() => finishDeletion(scope, ids));
       },
       role: 'destructive',
       title: t(source.copy.deleteTitle),
     });
-  }, [alert, beginDeletion, finishDeletion, scope, selectedIds, source, t]);
+  }, [alert, beginDeletion, finishDeletion, scope, selectedIds, source, t, toast]);
 
   return (
     <>

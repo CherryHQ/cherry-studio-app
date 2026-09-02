@@ -1,5 +1,5 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Section, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -38,7 +38,6 @@ const renderProviderSectionHeader = ({ section }: { section: ProviderListSection
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
@@ -89,7 +88,7 @@ export default function ProviderSettingsScreen() {
           });
         })
         .catch(() => {
-          alert.show({ title: t('settings.provider.toast.toggleFailed') });
+          toast.show({ label: t('settings.provider.toast.toggleFailed'), variant: 'danger' });
         })
         .finally(() => {
           pendingProviderIdsRef.current.delete(provider.id);
@@ -100,7 +99,7 @@ export default function ProviderSettingsScreen() {
           });
         });
     },
-    [alert, t, toast, updateProviderEnabled],
+    [t, toast, updateProviderEnabled],
   );
 
   const providersPageQuery = useInfiniteQuery('/providers/page', {

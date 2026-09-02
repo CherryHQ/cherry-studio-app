@@ -1,4 +1,4 @@
-import { ContentState, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, useToast } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,7 +58,7 @@ export function ChatWorkspace({
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const mergedMessages = useMemo(
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],
@@ -111,10 +111,10 @@ export function ChatWorkspace({
         );
       } catch (approvalError) {
         logger.error('Tool approval response failed', approvalError as Error);
-        alert.show({ title: t('chat.tool.approval.failed') });
+        toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
       }
     },
-    [alert, client, sessionId, t],
+    [client, sessionId, t, toast],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,

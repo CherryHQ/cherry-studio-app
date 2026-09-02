@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +24,7 @@ export type ProviderModelPullLoadResult = 'empty' | 'failed' | 'ready' | 'timedO
 
 export function useProviderModelPull({ providerId }: UseProviderModelPullOptions) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const models = useBackendModule('models');
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -73,11 +73,11 @@ export function useProviderModelPull({ providerId }: UseProviderModelPullOptions
         }
         return true;
       } catch {
-        alert.show({ title: t('settings.provider.models.pullApplyFailed') });
+        toast.show({ label: t('settings.provider.models.pullApplyFailed'), variant: 'danger' });
         return false;
       }
     },
-    [alert, models, providerId, queryClient, t],
+    [models, providerId, queryClient, t, toast],
   );
 
   return {

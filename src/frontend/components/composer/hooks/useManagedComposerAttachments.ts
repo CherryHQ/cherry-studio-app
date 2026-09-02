@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +26,7 @@ export function useManagedComposerAttachments(
   initialAttachments: readonly ComposerInitialAttachment[] = emptyInitialAttachments,
 ): ComposerAttachmentStore {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const file = useBackendModule('file');
   const [initialAttachmentState] = useState(() => {
     const accepted = initialAttachments.filter(isComposerAttachmentSupported);
@@ -155,19 +155,20 @@ export function useManagedComposerAttachments(
       const failureCount = results.filter((result) => result === 'failed').length;
 
       if (isMountedRef.current && failureCount > 0) {
-        alert.show({
-          title: t('chat.attachments.importFailed', { count: failureCount }),
+        toast.show({
+          label: t('chat.attachments.importFailed', { count: failureCount }),
+          variant: 'danger',
         });
       }
     },
-    [alert, importAttachment, t],
+    [importAttachment, t, toast],
   );
 
   const addAttachments = useCallback(
     (nextAttachments: ComposerAttachmentDraft[]) => {
       const supportedAttachments = nextAttachments.filter(isComposerAttachmentSupported);
       if (supportedAttachments.length < nextAttachments.length) {
-        alert.show({ title: t('chat.attachments.unsupportedImageFormat') });
+        toast.show({ label: t('chat.attachments.unsupportedImageFormat'), variant: 'danger' });
       }
       const seenIds = new Set(attachmentsRef.current.map((attachment) => attachment.id));
       const accepted = supportedAttachments.filter((attachment) => {
@@ -189,7 +190,7 @@ export function useManagedComposerAttachments(
       commitAttachments(appendComposerAttachments(attachmentsRef.current, staged));
       if (sources.length > 0) void importAttachments(sources);
     },
-    [alert, commitAttachments, importAttachments, t],
+    [commitAttachments, importAttachments, t, toast],
   );
 
   const removeAttachment = useCallback(
@@ -276,7 +277,7 @@ export function useManagedComposerAttachments(
       !didReportRejectedInitialAttachmentsRef.current
     ) {
       didReportRejectedInitialAttachmentsRef.current = true;
-      alert.show({ title: t('chat.attachments.unsupportedImageFormat') });
+      toast.show({ label: t('chat.attachments.unsupportedImageFormat'), variant: 'danger' });
     }
     if (!didImportInitialAttachmentsRef.current) {
       didImportInitialAttachmentsRef.current = true;
@@ -286,7 +287,7 @@ export function useManagedComposerAttachments(
       );
       if (sources.length > 0) void importAttachments(sources);
     }
-  }, [alert, importAttachments, initialAttachmentState, t]);
+  }, [importAttachments, initialAttachmentState, t, toast]);
 
   return useMemo(
     () => ({

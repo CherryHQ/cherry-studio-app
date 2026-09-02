@@ -7,7 +7,7 @@ import { useSettingPreferences } from '../useSettingPreferences';
 type SettingPreferences = ReturnType<typeof useSettingPreferences>;
 
 const mockApplyThemeMode = jest.fn();
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 const mockWithThemeTransition = jest.fn((applyTheme: () => void, _config: unknown) => applyTheme());
 const mockSetPreferences = jest.fn(async () => undefined);
 
@@ -27,7 +27,7 @@ jest.mock('@/frontend/i18n', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -143,7 +143,10 @@ describe('useSettingPreferences', () => {
     });
 
     expect(mockApplyThemeMode.mock.calls).toEqual([[ThemeMode.dark], [ThemeMode.light]]);
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'settings.appearance.saveFailed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'settings.appearance.saveFailed',
+      variant: 'danger',
+    });
     // The rollback is deliberately not animated: a failed write should not read as
     // another polished crossfade.
     expect(mockWithThemeTransition).toHaveBeenCalledTimes(1);
@@ -170,6 +173,6 @@ describe('useSettingPreferences', () => {
     // The stale failure must not drag the app back to light after the user has
     // already moved on to system.
     expect(mockApplyThemeMode.mock.calls).toEqual([[ThemeMode.dark], [ThemeMode.system]]);
-    expect(mockAlertShow).not.toHaveBeenCalled();
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 });

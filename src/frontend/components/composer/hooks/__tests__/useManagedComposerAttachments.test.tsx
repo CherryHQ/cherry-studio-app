@@ -12,7 +12,7 @@ import { useManagedComposerAttachments } from '../useManagedComposerAttachments'
 
 const mockCreateInternalEntry = jest.fn();
 const mockDeleteEntry = jest.fn(async () => true);
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockFileModule = {
@@ -26,7 +26,7 @@ jest.mock('@/frontend/data', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -92,8 +92,9 @@ describe('useManagedComposerAttachments', () => {
         status: 'ready',
       }),
     ]);
-    expect(mockAlertShow).toHaveBeenCalledWith({
-      title: 'chat.attachments.importFailed:1',
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.attachments.importFailed:1',
+      variant: 'danger',
     });
     expect(JSON.stringify(mockLoggerWarn.mock.calls)).not.toContain('file:///');
   });
@@ -298,8 +299,9 @@ describe('useManagedComposerAttachments', () => {
 
     expect(snapshot?.attachments).toEqual([]);
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
-    expect(mockAlertShow).toHaveBeenCalledWith({
-      title: 'chat.attachments.unsupportedImageFormat',
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.attachments.unsupportedImageFormat',
+      variant: 'danger',
     });
   });
 });

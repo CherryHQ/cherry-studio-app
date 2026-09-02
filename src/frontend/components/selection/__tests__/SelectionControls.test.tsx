@@ -19,7 +19,7 @@ type ConfirmationOptions = {
 const mockAlertConfirm = jest.fn((options: ConfirmationOptions) => {
   currentConfirmation = options;
 });
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 let currentActions: ReturnType<typeof useSelectionActions> | undefined;
 let currentConfirmation: ConfirmationOptions | undefined;
 let currentPendingIds: ReadonlySet<string> | undefined;
@@ -29,12 +29,8 @@ let mockDeleteSelected = jest.fn<Promise<void>, [readonly string[]]>(() => delet
 let renderer: ReactTestRenderer | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({
-    alert: {
-      confirm: mockAlertConfirm,
-      show: mockAlertShow,
-    },
-  }),
+  useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -151,7 +147,7 @@ describe('SelectionControls', () => {
       await deletion.promise.catch(() => undefined);
     });
 
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'delete.failed' });
+    expect(mockToastShow).toHaveBeenCalledWith({ label: 'delete.failed', variant: 'danger' });
     expect(currentState).toMatchObject({ isDeletionPending: false, isEditing: false });
     expect(currentPendingIds).toEqual(new Set());
   });

@@ -91,7 +91,7 @@ export function useProviderDeletion({
               toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
             })
             .catch(() => {
-              alert.show({ title: t('settings.provider.toast.deleteFailed') });
+              toast.show({ label: t('settings.provider.toast.deleteFailed'), variant: 'danger' });
             });
         },
         role: 'destructive',

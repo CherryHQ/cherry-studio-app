@@ -9,7 +9,7 @@ import {
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockForkSession = jest.fn(async (_input: unknown): Promise<void> => undefined);
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
 
@@ -35,7 +35,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -133,7 +133,10 @@ describe('AssistantMessageActionsProvider', () => {
     await copyAndFlush('assistant-1', 'Answer');
 
     expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.copyFailed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.messageActions.copyFailed',
+      variant: 'danger',
+    });
   });
 
   test('routes fork failures to logging and user feedback', async () => {
@@ -152,7 +155,10 @@ describe('AssistantMessageActionsProvider', () => {
       title: 'chat.fork.sessionTitle:Arithmetic drills',
     });
     expect(mockLoggerError).toHaveBeenCalledWith('Fork assistant message failed', error);
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.forkFailed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.messageActions.forkFailed',
+      variant: 'danger',
+    });
   });
 
   test('leaves an unnamed source unnamed instead of forking it to a bare prefix', async () => {
@@ -184,7 +190,7 @@ describe('AssistantMessageActionsProvider', () => {
     await act(async () => firstClipboardWrite.reject(error));
 
     expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
-    expect(mockAlertShow).not.toHaveBeenCalled();
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 
   test('ignores a pending copy after unmount', async () => {
@@ -199,7 +205,7 @@ describe('AssistantMessageActionsProvider', () => {
     await act(async () => clipboardWrite.resolve());
 
     expect(setTimeoutSpy).not.toHaveBeenCalledWith(expect.any(Function), 1_200);
-    expect(mockAlertShow).not.toHaveBeenCalled();
+    expect(mockToastShow).not.toHaveBeenCalled();
     setTimeoutSpy.mockRestore();
   });
 

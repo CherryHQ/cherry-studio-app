@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import {
   createContext,
@@ -49,7 +49,7 @@ export function AssistantMessageActionsProvider({
   sessionId,
 }: AssistantMessageActionsProviderProps) {
   const { t } = useTranslation();
-  const { alert } = useAlert();
+  const { toast } = useToast();
   const forkSession = useAgentChatFork();
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
@@ -88,10 +88,10 @@ export function AssistantMessageActionsProvider({
             return;
           }
 
-          alert.show({ title: t('chat.messageActions.copyFailed') });
+          toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
         });
     },
-    [alert, t],
+    [t, toast],
   );
 
   const forkFromAssistantMessage = useCallback(
@@ -110,10 +110,10 @@ export function AssistantMessageActionsProvider({
           return;
         }
 
-        alert.show({ title: t('chat.messageActions.forkFailed') });
+        toast.show({ label: t('chat.messageActions.forkFailed'), variant: 'danger' });
       });
     },
-    [alert, forkSession, sessionId, sourceTitle, t],
+    [forkSession, sessionId, sourceTitle, t, toast],
   );
 
   const stateValue = useMemo(

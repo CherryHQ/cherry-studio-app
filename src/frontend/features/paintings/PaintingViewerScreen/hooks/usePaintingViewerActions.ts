@@ -31,9 +31,9 @@ export function usePaintingViewerActions({
       await MediaLibrary.Asset.create(currentOutput.uri);
       toast.show({ label: t('painting.viewer.saved'), variant: 'success' });
     } catch {
-      alert.show({ title: t('painting.viewer.saveFailed') });
+      toast.show({ label: t('painting.viewer.saveFailed'), variant: 'danger' });
     }
-  }, [alert, currentOutput, t, toast]);
+  }, [currentOutput, t, toast]);
 
   const showOpenSettingsAlert = useCallback(() => {
     alert.confirm({
@@ -41,11 +41,11 @@ export function usePaintingViewerActions({
       description: t('painting.viewer.savePermissionDenied'),
       onConfirm: () =>
         Linking.openSettings().catch(() => {
-          alert.show({ title: t('painting.viewer.savePermissionDenied') });
+          toast.show({ label: t('painting.viewer.savePermissionDenied'), variant: 'danger' });
         }),
       title: t('settings.permissions.accessRequired'),
     });
-  }, [alert, t]);
+  }, [alert, t, toast]);
 
   const requestPhotoAccessAndSave = useCallback(async () => {
     try {
@@ -56,9 +56,9 @@ export function usePaintingViewerActions({
         showOpenSettingsAlert();
       }
     } catch {
-      alert.show({ title: t('painting.viewer.saveFailed') });
+      toast.show({ label: t('painting.viewer.saveFailed'), variant: 'danger' });
     }
-  }, [alert, saveToPhotos, showOpenSettingsAlert, t]);
+  }, [saveToPhotos, showOpenSettingsAlert, t, toast]);
 
   const download = useCallback(async () => {
     try {
@@ -78,17 +78,17 @@ export function usePaintingViewerActions({
         showOpenSettingsAlert();
       }
     } catch {
-      alert.show({ title: t('painting.viewer.saveFailed') });
+      toast.show({ label: t('painting.viewer.saveFailed'), variant: 'danger' });
     }
-  }, [alert, requestPhotoAccessAndSave, saveToPhotos, showOpenSettingsAlert, t]);
+  }, [alert, requestPhotoAccessAndSave, saveToPhotos, showOpenSettingsAlert, t, toast]);
 
   const remove = useCallback(() => {
     const deletion = deletePaintings([painting.id]);
     router.back();
     void deletion.catch(() => {
-      alert.show({ title: t('painting.viewer.deleteFailed') });
+      toast.show({ label: t('painting.viewer.deleteFailed'), variant: 'danger' });
     });
-  }, [alert, deletePaintings, painting.id, router, t]);
+  }, [deletePaintings, painting.id, router, t, toast]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.

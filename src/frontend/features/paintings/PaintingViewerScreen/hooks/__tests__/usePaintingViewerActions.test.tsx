@@ -19,7 +19,6 @@ const mockCreatePaintingOutputAttachmentDraft = jest.fn((_output: unknown) => ({
   id: 'painting-output',
 }));
 const mockAlertConfirm = jest.fn();
-const mockAlertShow = jest.fn();
 const mockCreateAsset = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockRequestPermissions = jest.fn();
@@ -37,7 +36,7 @@ jest.mock('expo-media-library', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useAlert: () => ({ alert: { confirm: mockAlertConfirm, show: mockAlertShow } }),
+  useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
@@ -206,12 +205,15 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('shows an Alert when saving to Photos fails', async () => {
+  it('shows a Toast when saving to Photos fails', async () => {
     mockCreateAsset.mockRejectedValueOnce(new Error('Save failed'));
 
     await act(async () => actions?.download());
 
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'painting.viewer.saveFailed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.saveFailed',
+      variant: 'danger',
+    });
   });
 
   it('opens edit with the current output attached and no prefilled prompt', () => {
@@ -242,7 +244,7 @@ describe('usePaintingViewerActions', () => {
     expect(mockDelete).toHaveBeenCalledWith('/paintings', { query: { ids: [painting.id] } });
   });
 
-  it('restores the painting and shows an Alert when deletion fails', async () => {
+  it('restores the painting and shows a Toast when deletion fails', async () => {
     const queryKey = ['/paintings', { limit: 20 }] as const;
     queryClient.setQueryData(queryKey, {
       pageParams: [undefined],
@@ -260,6 +262,9 @@ describe('usePaintingViewerActions', () => {
       pageParams: [undefined],
       pages: [{ items: [painting] }],
     });
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'painting.viewer.deleteFailed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.deleteFailed',
+      variant: 'danger',
+    });
   });
 });

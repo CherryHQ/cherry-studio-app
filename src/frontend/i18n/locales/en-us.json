@@ -812,6 +812,7 @@
   "painting.settings.title": "Image settings",
   "painting.settings.width": "Width",
   "painting.photos.item": "Recent photo {{index}}",
+  "painting.photos.openFailed": "Couldn't open that photo. Try again.",
   "painting.photos.requestAccess": "Allow access to Photos",
   "painting.photos.title": "Start from your photos",
   "painting.photos.viewAll": "View all",

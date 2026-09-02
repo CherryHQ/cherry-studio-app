@@ -22,7 +22,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
-    useAlert: () => ({ alert: { show: jest.fn() } }),
+    useToast: () => ({ toast: { show: jest.fn() } }),
   };
 });
 

@@ -57,10 +57,10 @@ export default function ModelSettingsScreen() {
         toast.show({ label: t('settings.model.saved'), variant: 'success' });
       })
       .catch(() => {
-        alert.show({ title: t('settings.model.saveFailed') });
+        toast.show({ label: t('settings.model.saveFailed'), variant: 'danger' });
       })
       .finally(() => setIsSaving(false));
-  }, [alert, draft, isDirty, isSaving, saveSelections, t, toast]);
+  }, [draft, isDirty, isSaving, saveSelections, t, toast]);
   const requestClose = useCallback(() => {
     if (isSaving) {
       return;

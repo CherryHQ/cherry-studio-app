@@ -11,7 +11,7 @@ const mockRetry = jest.fn(async () => undefined);
 const mockRespondApproval = jest.fn(async () => undefined);
 const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
-const mockAlertShow = jest.fn();
+const mockToastShow = jest.fn();
 const mockTranslate = (key: string) => key;
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
@@ -47,7 +47,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
-    useAlert: () => ({ alert: { show: mockAlertShow } }),
+    useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
 
@@ -304,7 +304,7 @@ describe('ChatWorkspace message rendering integration', () => {
     act(() => renderer?.update(createWorkspaceElement(false, [assistant], 'session-2')));
     await act(async () => clipboardWrite.reject(new Error('copy failed')));
 
-    expect(mockAlertShow).not.toHaveBeenCalled();
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 
   test('uses preview insets and hides assistant actions in preview', () => {
