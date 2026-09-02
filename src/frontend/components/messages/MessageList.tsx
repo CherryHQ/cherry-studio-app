@@ -30,7 +30,6 @@ export function MessageList({
   dataKey,
   enteringMessageId,
   extraData,
-  headerAccessory,
   initialLayoutReady = true,
   keyboardOffset,
   messages,
@@ -78,15 +77,7 @@ export function MessageList({
     },
   );
 
-  const listHeader = useMemo(
-    () => (
-      <>
-        <View style={{ height: contentTopInset }} />
-        {headerAccessory}
-      </>
-    ),
-    [contentTopInset, headerAccessory],
-  );
+  const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom:

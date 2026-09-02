@@ -24,8 +24,9 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Branching is a fork, not a message tree, so `agent_session` carries one nullable lineage column and
-no per-message parent/active-path columns ([Agent Protocol](./agent-protocol.md#branching)).
+Branching is a fork, not a message tree, so `agent_session` carries nullable source and copied-prefix
+boundary metadata but no per-message parent/active-path columns
+([Agent Protocol](./agent-protocol.md#branching)).
 
 Out of scope: message-tree columns, background turns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
@@ -204,9 +205,10 @@ specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server del
 | `title` | text | NOT NULL DEFAULT `''` | |
 | `titleIsManual` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
-| `lastActivityAt` | integer | NOT NULL | Updated only when a turn reserves or finalizes |
+| `lastActivityAt` | integer | NOT NULL | Latest real conversation activity; mirrors the relevant message `activityAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
+| `forkBoundaryMessageId` | text | NULL | Message inside the fork that closes the copied prefix; maintained atomically with lineage and not a cross-table FK |
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
 recency; no `orderKey`).
@@ -228,7 +230,8 @@ recency; no `orderKey`).
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
-| `createdAt` / `updatedAt` | integer | helper defaults | Hard delete via session cascade |
+| `activityAt` | integer | NOT NULL | Conversation-event time; initialized on reservation, copied with history, and advanced only by normal terminal settlement |
+| `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
 Indexes: `(sessionId, createdAt)`, `turnId`, `status` (backs boot reconciliation), unique
 `ftsRowid`, and the invariant-1 guard:
@@ -266,12 +269,21 @@ projection:
   status, parts, usage, turn-level error, and an optional validated context checkpoint — in one
   write (invariant 5). Failed, cancelled, and interrupted terminal rows force the checkpoint to
   `NULL`. The error part and turn-level error column receive the same `AgentErrorView`; historical
-  rows without a failure snapshot remain valid. `deleteSession` is one cascading delete.
+  rows without a failure snapshot remain valid. Reservation writes one `activityAt` across the
+  user/assistant pair and Session; normal finalization advances the assistant and Session activity
+  with one new value while their physical `updatedAt` fields remain row timestamps.
+  Startup reconciliation is administrative recovery and preserves the reservation activity time.
+  `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
+  cascading the source delete to its messages.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
   or else from the source, sets
-  `forkedFromSessionId`, and stamps `lastActivityAt` to now so the fork sorts to the top of the
-  recency list. Copied rows keep `createdAt`, `role`, `data`, `status`, `usage`, `error`,
+  `forkedFromSessionId`, records the reissued copied anchor as `forkBoundaryMessageId`, and copies
+  `lastActivityAt` from the source message's `activityAt` at the inclusive fork point. Creating the
+  fork is an administrative row mutation, not conversation
+  activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
+  the original reservation activity because it is not new conversation activity. Copied rows keep
+  `createdAt`, `activityAt`, `role`, `data`, `status`, `usage`, `error`,
   `modelId`, and `messageSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
@@ -280,6 +292,8 @@ projection:
   preserves order while stamping "now" on every row would be visibly wrong in the UI.
   `searchableText` and `ftsRowid` are left to the insert trigger, which is race-free because the
   whole copy runs inside the serialized write transaction.
+  The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
+  transcript pagination counts, Runtime history, or recursive fork copies.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

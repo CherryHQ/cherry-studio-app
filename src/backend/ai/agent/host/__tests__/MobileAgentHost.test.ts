@@ -2129,10 +2129,9 @@ describe('MobileAgentHost', () => {
       fromMessageId: first.assistantMessageId,
     });
     expect(forked.forkedFromSessionId).toBe(session.id);
-    expect((await store.listMessages(forked.id)).map((message) => message.role)).toEqual([
-      'user',
-      'assistant',
-    ]);
+    const forkedMessages = await store.listMessages(forked.id);
+    expect(forkedMessages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(forked.forkBoundaryMessageId).toBe(forkedMessages.at(-1)?.id);
     // The fork is idle and immediately usable, with no turn carried over.
     const observation = await host.observeSession(forked.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();

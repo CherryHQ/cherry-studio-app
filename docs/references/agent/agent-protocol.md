@@ -59,6 +59,7 @@ type AgentSessionView = {
   executionTarget: AgentExecutionTarget
   title: string
   titleIsManual: boolean
+  forkBoundaryMessageId: string | null
   forkedFromSessionId: string | null
   createdAt: string
   updatedAt: string
@@ -521,11 +522,11 @@ Rules:
    the operation outright while the source Session has an active turn, and the store rejects an
    anchor whose own row has not settled. Unsettled rows before the anchor are skipped rather than
    copied, so a fork never carries a placeholder that will never resolve.
-2. Sessions record lineage so clients can present provenance. Only `forkedFromSessionId` is
-   stored — enough to name and open the source. The fork point itself is not recorded: no surface
-   asks which message a fork was cut at, and storing it would add a second column and a second
-   dangling reference to reconcile. Lineage is a self-referencing `ON DELETE SET NULL` foreign
-   key, so deleting the source clears the claim and leaves the fork intact.
+2. Sessions record `forkedFromSessionId` so clients can name and open the direct source, plus
+   `forkBoundaryMessageId`, which names the copied Message inside the new Session that closes its
+   inherited prefix. The client synthesizes a display-only divider after that Message when the
+   paginated history window contains it; no annotation Message or Message Part enters persistence
+   or model context. Deleting the source clears both fields and leaves the fork intact.
 3. Copied history keeps past tool calls and results verbatim. A fork opens a new future; it does
    not claim to undo executed side effects, and results in the copied transcript reflect the
    world at fork time. Copied messages keep their original `createdAt` for the same reason: the
@@ -534,8 +535,8 @@ Rules:
 Message editing is not implemented, and when it is it follows the same model. An edit-and-continue
 operation creates a new Session, copies the clean transcript before the edited user message, inserts
 the replacement input, and starts a new turn. It does not mutate an already-executed Agent history
-in place, copy later assistant output, or claim to undo tool side effects. A display-only
-annotation, if ever added, must be named separately and must not change model context.
+in place, copy later assistant output, or claim to undo tool side effects. Any display-only
+timeline event remains a client projection and does not change model context.
 
 Fork was an additive protocol extension: no existing operation, event, snapshot, or invariant
 changed.

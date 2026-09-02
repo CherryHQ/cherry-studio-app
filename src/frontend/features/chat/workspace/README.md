@@ -21,3 +21,7 @@ placement. The virtualized list and message rendering live in `@/frontend/compon
   only by toolbar leaves; the virtualized list and expensive message body do not subscribe.
 - `hooks/` owns the cover handoff after the list controller completes initial restoration.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
+
+Fork provenance stays on the Session, not in persisted Messages. When the copied boundary Message
+is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
+until that boundary loads, the divider remains absent rather than attaching to a page edge.

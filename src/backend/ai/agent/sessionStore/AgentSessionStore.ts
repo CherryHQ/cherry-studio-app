@@ -122,7 +122,8 @@ export interface AgentSessionStore {
    * Atomically creates a Session carrying the source's transcript up to and
    * including the fork point (agent-protocol.md "Branching"). Unsettled rows
    * are skipped, turn ids are reissued so the copy shares no correlation with
-   * its source, and no turn is started: the new Session is idle.
+   * its source, the copied anchor is recorded as the Session boundary, and no
+   * turn is started: the new Session is idle.
    */
   forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
 

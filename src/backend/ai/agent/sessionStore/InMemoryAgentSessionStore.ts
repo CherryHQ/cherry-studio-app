@@ -34,6 +34,7 @@ function cloneJson<T>(value: T): T {
 
 /** One stored message: the view plus the turn-level error column. */
 type StoredMessage = {
+  activityAt: string;
   view: AgentMessageView;
   error: AgentErrorView | null;
   contextCheckpoint: unknown | null;
@@ -53,6 +54,7 @@ function createSessionView(input: {
     executionTarget: input.executionTarget ?? { kind: 'local' },
     title: input.title ?? '',
     titleIsManual: input.titleIsManual ?? input.title !== undefined,
+    forkBoundaryMessageId: null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -115,8 +117,8 @@ function reserveInTranscript(
     updatedAt: timestamp,
   };
   transcript.push(
-    { view: userMessage, error: null, contextCheckpoint: null },
-    { view: assistantMessage, error: null, contextCheckpoint: null },
+    { activityAt: timestamp, view: userMessage, error: null, contextCheckpoint: null },
+    { activityAt: timestamp, view: assistantMessage, error: null, contextCheckpoint: null },
   );
   return { turnId, userMessage, assistantMessage };
 }
@@ -200,7 +202,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
       if (session.forkedFromSessionId === sessionId) {
-        this.sessions.set(forkId, { ...session, forkedFromSessionId: null });
+        this.sessions.set(forkId, {
+          ...session,
+          forkBoundaryMessageId: null,
+          forkedFromSessionId: null,
+          updatedAt: nowIso(),
+        });
       }
     }
     return true;
@@ -235,6 +242,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       .slice(0, anchorIndex + 1)
       .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))
       .map<StoredMessage>((stored) => ({
+        activityAt: stored.activityAt,
         // Runtime-private and anchored to a turn id this copy no longer
         // carries, so the fork replays full history instead.
         contextCheckpoint: null,
@@ -247,10 +255,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
           updatedAt: nowIso(),
         }),
       }));
+    const forkBoundaryMessageId = forkedTranscript.at(-1)?.view.id;
+    if (!forkBoundaryMessageId) {
+      throw new Error('Fork transcript is missing its settled boundary message.');
+    }
+    const forkedSession = { ...session, forkBoundaryMessageId, updatedAt: nowIso() };
 
-    this.sessions.set(session.id, session);
+    this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
-    return { session: cloneJson(session), status: 'forked' };
+    return { session: cloneJson(forkedSession), status: 'forked' };
   }
 
   async reserveInitialSubmission(
@@ -267,9 +280,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       modelId: input.modelId,
       inferenceSnapshot: input.inferenceSnapshot,
     });
-    this.sessions.set(session.id, session);
+    const activeSession = { ...session, updatedAt: reserved.assistantMessage.createdAt };
+    this.sessions.set(session.id, activeSession);
     this.messages.set(session.id, transcript);
-    return cloneJson({ ...reserved, session });
+    return cloneJson({ ...reserved, session: activeSession });
   }
 
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
@@ -277,7 +291,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     if (!transcript) {
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
     }
-    return cloneJson(reserveInTranscript(transcript, input));
+    const reserved = reserveInTranscript(transcript, input);
+    const session = this.sessions.get(input.sessionId);
+    if (session) {
+      this.sessions.set(input.sessionId, {
+        ...session,
+        updatedAt: reserved.assistantMessage.createdAt,
+      });
+    }
+    return cloneJson(reserved);
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
@@ -334,25 +356,31 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
-    for (const transcript of this.messages.values()) {
+    for (const [sessionId, transcript] of this.messages) {
       const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
       if (!stored) {
         continue;
       }
       // Synchronous section: message terminal state settles atomically
       // (invariant 5).
+      const activityAt = nowIso();
       stored.view = {
         ...stored.view,
         status: input.status,
         parts: cloneJson(input.parts),
         usage: input.usage === null ? null : cloneJson(input.usage),
-        updatedAt: nowIso(),
+        updatedAt: activityAt,
       };
+      stored.activityAt = activityAt;
       stored.error = input.error === null ? null : cloneJson(input.error);
       stored.contextCheckpoint =
         input.status === 'success' && input.contextCheckpoint !== null
           ? cloneJson(input.contextCheckpoint)
           : null;
+      const session = this.sessions.get(sessionId);
+      if (session) {
+        this.sessions.set(sessionId, { ...session, updatedAt: stored.view.updatedAt });
+      }
       return cloneJson(stored.view);
     }
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
