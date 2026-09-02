@@ -72,6 +72,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     formatMessagePartValue: formatValue,
     hasMessagePartValue: hasValue,
+    Image: (props: Record<string, unknown>) => <MockView {...props} />,
     MessagePart: {
       SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
       Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
@@ -387,11 +388,12 @@ describe('tool message detail sheets', () => {
       findByTestID('mcp-tool-part-trigger').props.onPress();
     });
 
-    expect(
+    const images =
       renderer?.root
         .findAllByType(View)
-        .filter((node) => node.props.source === 'data:image/png;base64,AAAA'),
-    ).toHaveLength(1);
+        .filter((node) => node.props.source === 'data:image/png;base64,AAAA') ?? [];
+    expect(images).toHaveLength(1);
+    expect(images[0]?.props.className).toBe('h-44 w-full rounded-md');
     expect(findText('')).toHaveLength(0);
     expect(findText('chat.mcpTool.response')).toHaveLength(1);
   });
