@@ -244,9 +244,7 @@ function SectionRoot({
       {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
         className={cn(
-          variant === 'grouped'
-            ? 'overflow-hidden rounded-2xl bg-grouped-surface'
-            : 'bg-transparent',
+          variant === 'grouped' ? 'overflow-hidden rounded-2xl bg-card' : 'bg-transparent',
           contentClassName,
         )}
         style={{ borderCurve: 'continuous' }}

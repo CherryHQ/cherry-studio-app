@@ -220,7 +220,7 @@ function MorphMenuRoot({
         {/* The panel stays inside the surface: an empty `GlassView` draws no
             material at all, so the two cannot be split into siblings to fade
             them separately. */}
-        <Surface className="bg-grouped-background" cornerRadius={openRadius} style={fillStyle}>
+        <Surface className="bg-popover" cornerRadius={openRadius} style={fillStyle}>
           <Animated.View
             onLayout={handlePanelLayout}
             pointerEvents={isOpen ? 'auto' : 'none'}

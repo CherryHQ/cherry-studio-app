@@ -20,7 +20,7 @@ export function AiUsageScreen() {
   return (
     <>
       <View
-        className="flex-1 bg-grouped-background"
+        className="flex-1"
         style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
         testID="ai-usage-content"
       >

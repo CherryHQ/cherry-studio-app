@@ -80,7 +80,7 @@ function PaintingHistoryScreenBody() {
         rightActions={isEditing ? doneActions : menuActions}
         title={t('painting.history.title')}
       />
-      <View className="flex-1 bg-background">
+      <View className="flex-1">
         <DrawingList />
         <SelectionControls scope={paintingSelectionScope} />
       </View>

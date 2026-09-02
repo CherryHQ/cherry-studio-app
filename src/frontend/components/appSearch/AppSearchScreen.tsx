@@ -246,7 +246,7 @@ function AppSearchRoutePage({
   return (
     <>
       <RouteHeader title={t('navigation.search')} />
-      <View className="flex-1 bg-background">
+      <View className="flex-1">
         <View className={request.filter ? 'px-4 pt-3 pb-2' : 'px-4 py-3'}>
           <SearchField
             accessibilityLabel={request.placeholder}

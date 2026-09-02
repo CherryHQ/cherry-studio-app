@@ -21,7 +21,7 @@ export function FileLibraryScreen() {
   return (
     <>
       <RouteHeader title={t('library.title')} />
-      <View className="flex-1 bg-background">
+      <View className="flex-1">
         <FileLibraryList filter={filter} isDataLoadEnabled onFilterChange={setFilter} />
       </View>
     </>

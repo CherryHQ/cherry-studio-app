@@ -84,8 +84,6 @@
   --color-constant-black: var(--constant-black);
   --color-constant-white: var(--constant-white);
   --color-scrim: var(--scrim);
-  --color-grouped-background: var(--grouped-background);
-  --color-grouped-surface: var(--grouped-surface);
   --color-usage-level-1: var(--usage-level-1);
   --color-usage-level-2: var(--usage-level-2);
   --color-usage-level-3: var(--usage-level-3);
@@ -202,8 +200,6 @@
       --error-subtle: var(--red-100);
       --error-subtle-foreground: var(--red-1000);
       --error-border: var(--red-400);
-      --grouped-background: var(--gray-100);
-      --grouped-surface: var(--background-100);
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
@@ -326,8 +322,6 @@
       --error-subtle: var(--red-100);
       --error-subtle-foreground: var(--red-1000);
       --error-border: var(--red-400);
-      --grouped-background: var(--background-100);
-      --grouped-surface: var(--gray-100);
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);

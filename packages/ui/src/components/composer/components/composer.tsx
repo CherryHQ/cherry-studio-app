@@ -76,7 +76,7 @@ function ComposerRoot({
   return (
     <View style={style} testID={testID}>
       <Surface
-        className="bg-grouped-surface ios:shadow-field android:shadow-sm"
+        className="bg-card ios:shadow-field android:shadow-sm"
         cornerRadius={surfaceRadius}
         style={surfaceStyle}
       >

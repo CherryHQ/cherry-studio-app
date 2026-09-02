@@ -117,7 +117,7 @@ function ModelCheckResult({
       : undefined;
 
   return (
-    <View className="gap-1 rounded-xl bg-grouped-surface px-4 py-3">
+    <View className="gap-1 rounded-xl bg-card px-4 py-3">
       <Text className="text-base text-success">{title}</Text>
       {detail ? (
         <Text selectable className="text-sm text-foreground">

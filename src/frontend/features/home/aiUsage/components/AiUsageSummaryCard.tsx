@@ -33,7 +33,7 @@ export function AiUsageSummaryCard() {
   const formattedCost = formatCostTotals(data?.costTotals ?? [], locale);
 
   return (
-    <View className="w-full rounded-2xl bg-grouped-surface p-4" style={styles.continuousCorners}>
+    <View className="w-full rounded-2xl bg-card p-4" style={styles.continuousCorners}>
       <Section.Header
         className="px-0"
         title={

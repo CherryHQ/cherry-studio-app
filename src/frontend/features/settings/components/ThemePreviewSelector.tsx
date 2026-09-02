@@ -89,7 +89,7 @@ function ThemePreview({ mode }: { mode: ThemeMode }) {
 function ThemePreviewCanvas({ clipped = false }: { clipped?: boolean }) {
   const clipId = `theme-preview-${useId().replace(/[^a-zA-Z0-9-]/g, '')}`;
   const [ground, surface, line, accent] = useThemeColor([
-    'grouped-background',
+    'background',
     'card',
     'border-strong',
     'primary',

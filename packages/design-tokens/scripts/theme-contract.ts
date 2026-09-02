@@ -132,8 +132,6 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'constant-black',
   'constant-white',
   'scrim',
-  'grouped-background',
-  'grouped-surface',
   'usage-level-1',
   'usage-level-2',
   'usage-level-3',

@@ -59,8 +59,6 @@ export function ProviderModelList({
 
 function ProviderModelStateCard({ children }: { children: ReactNode }) {
   return (
-    <View className="mx-4 min-h-12 justify-center rounded-2xl bg-grouped-surface px-4 py-4">
-      {children}
-    </View>
+    <View className="mx-4 min-h-12 justify-center rounded-2xl bg-card px-4 py-4">{children}</View>
   );
 }
