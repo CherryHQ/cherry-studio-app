@@ -253,6 +253,7 @@
   "agent.capabilities.permission.denied": "系统权限已关闭，前往系统设置开启",
   "agent.capabilities.permission.unavailable": "此设备不可用",
   "agent.create.title": "新建智能体",
+  "agent.default.name": "Cherry 小助手",
   "agent.delete.message": "删除“{{name}}”后，它的会话仍可查看，但无法继续运行。",
   "agent.delete.title": "删除智能体？",
   "agent.edit.title": "编辑智能体",

@@ -37,6 +37,8 @@
  *     user/assistant message reservation.
  */
 
+import { getLocales } from 'expo-localization';
+
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import {
@@ -83,6 +85,7 @@ import {
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { LanguageVarious } from '@/shared/data/preference';
 
 import {
   managedFileResolver,
@@ -114,7 +117,7 @@ import {
 } from './agentDefinitions';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
-import { buildAgentSystemPrompt } from './agentSystemPrompt';
+import { buildAgentSystemPrompt, resolveAgentAppLanguage } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import { type AgentInferenceModelResolver, resolveAgentInferenceModel } from './inferenceSnapshot';
 import {
@@ -163,6 +166,7 @@ const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
 
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
+  appLanguage: () => LanguageVarious;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   naming: Pick<
@@ -256,6 +260,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   >();
   private readonly runningTurns = new Set<Promise<void>>();
   private readonly files: ManagedFileResolver;
+  private readonly appLanguage: MobileAgentHostOverrides['appLanguage'];
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
   private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
@@ -279,6 +284,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();
+    this.appLanguage =
+      overrides.appLanguage ??
+      (() =>
+        resolveAgentAppLanguage(
+          this.preferenceService.readCached('app.language'),
+          getLocales()[0]?.languageCode,
+        ));
     this.files = overrides.files ?? managedFileResolver;
     this.naming =
       overrides.naming ??
@@ -755,6 +767,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         turnId: state.turn.id,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
+          appLanguage: this.appLanguage(),
           tools: plan.tools,
         }),
         model: plan.agent.model,

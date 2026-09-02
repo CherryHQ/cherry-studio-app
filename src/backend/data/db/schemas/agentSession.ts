@@ -32,19 +32,25 @@ export const agentSessionTable = sqliteTable(
       .$type<AgentExecutionTarget>()
       .notNull()
       .default({ kind: 'local' }),
-    // Dedicated conversation activity time: updated only when a submission
-    // reserves or an assistant message settles. Renames must not move it.
+    // Dedicated conversation activity time: mirrors the relevant message's
+    // activityAt when a submission reserves, an assistant settles, or history forks.
+    // Administrative mutations such as renames and forks must not stamp "now".
     lastActivityAt: integer()
       .notNull()
       .$defaultFn(() => Date.now()),
     ...createUpdateTimestamps,
     // Fork provenance (agent-protocol.md "Branching" rule 2). SET NULL, not
     // CASCADE: deleting the source must drop the lineage claim, never the
-    // forked Session. Declared last so the column order matches the physical
-    // order produced by ALTER TABLE ADD COLUMN.
+    // forked Session. Fork metadata stays after the common timestamps so its
+    // order matches the physical ADD COLUMN migrations.
     forkedFromSessionId: text().references((): AnySQLiteColumn => agentSessionTable.id, {
       onDelete: 'set null',
     }),
+    // Id of the copied message inside this Session that closes the inherited
+    // prefix. Application-owned rather than a cross-table FK to avoid a
+    // circular Session ↔ Message schema dependency; fork/delete transactions
+    // maintain it together with forkedFromSessionId.
+    forkBoundaryMessageId: text(),
   },
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),

@@ -23,7 +23,8 @@ _Avoid_: Topic, room
 
 **Session Fork**:
 A new Agent Session created by copying an existing transcript up to and including a chosen Message.
-The fork records only the Session it came from, and the source is never modified.
+The fork records the Session it came from plus the copied Message that closes its inherited prefix;
+the source is never modified.
 _Avoid_: branch, clone, duplicate
 
 **Message**:

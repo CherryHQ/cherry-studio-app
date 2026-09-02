@@ -1,5 +1,5 @@
 import type { RuntimeTool } from '../../runtime';
-import { buildAgentSystemPrompt } from '../agentSystemPrompt';
+import { buildAgentSystemPrompt, resolveAgentAppLanguage } from '../agentSystemPrompt';
 
 function tool(capabilityId: string, providerName = capabilityId): RuntimeTool {
   return {
@@ -22,12 +22,18 @@ function mcpTool(): RuntimeTool {
 
 describe('buildAgentSystemPrompt', () => {
   test('keeps the mobile Runtime rules when the Agent has no configured instructions or tools', () => {
-    const prompt = buildAgentSystemPrompt({ agentInstructions: '   ', tools: [] });
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '   ',
+      appLanguage: 'zh-CN',
+      tools: [],
+    });
 
     expect(prompt).toContain('# Cherry Studio Mobile Runtime');
     expect(prompt).toContain('Treat the tools exposed for this turn as the complete');
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('persistent memory, or background execution');
+    expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
+    expect(prompt).toContain('You must write every response in this language');
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## MCP Tool Discovery');
     expect(prompt).not.toContain('## Web Citations');
@@ -37,6 +43,7 @@ describe('buildAgentSystemPrompt', () => {
   test('preserves user-configured Agent instructions behind the platform rules', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: 'Be a playful travel planner.\nAlways propose two options.',
+      appLanguage: 'en-US',
       tools: [],
     });
 
@@ -51,10 +58,12 @@ describe('buildAgentSystemPrompt', () => {
   test('adds citation rules only for citable built-in web tools', () => {
     const withWeb = buildAgentSystemPrompt({
       agentInstructions: '',
+      appLanguage: 'en-US',
       tools: [tool('web_search', 'mobile_web_search')],
     });
     const withMcp = buildAgentSystemPrompt({
       agentInstructions: '',
+      appLanguage: 'en-US',
       tools: [mcpTool()],
     });
 
@@ -67,10 +76,12 @@ describe('buildAgentSystemPrompt', () => {
   test('adds managed-file rules only when a managed-file tool is available', () => {
     const withFile = buildAgentSystemPrompt({
       agentInstructions: '',
+      appLanguage: 'en-US',
       tools: [tool('write_file')],
     });
     const withoutFile = buildAgentSystemPrompt({
       agentInstructions: '',
+      appLanguage: 'en-US',
       tools: [tool('calendar_list_events')],
     });
 
@@ -82,10 +93,20 @@ describe('buildAgentSystemPrompt', () => {
   });
 
   test('leaves MCP catalog guidance to the Runtime binding', () => {
-    const withMcp = buildAgentSystemPrompt({ agentInstructions: '', tools: [mcpTool()] });
+    const withMcp = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [mcpTool()],
+    });
 
     expect(withMcp).not.toContain('## MCP Tool Discovery');
     expect(withMcp).not.toContain('tool_search');
     expect(withMcp).not.toContain('tool_call');
+  });
+
+  test('resolves the effective App language from preferences before the device fallback', () => {
+    expect(resolveAgentAppLanguage('ja-JP', 'zh')).toBe('ja-JP');
+    expect(resolveAgentAppLanguage(null, 'zh')).toBe('zh-CN');
+    expect(resolveAgentAppLanguage(null, 'en')).toBe('en-US');
   });
 });

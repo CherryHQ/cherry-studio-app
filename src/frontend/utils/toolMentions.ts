@@ -2,21 +2,25 @@
  * Tools a message invoked by naming them in its own text.
  *
  * A mention is a Markdown link whose URL carries the tool id and whose text
- * carries the name the user saw: `[Create image](tool://create-image)`.
+ * carries the name the user saw: `[Summarize](tool://summarize)`.
  *
  * The id lives in the URL rather than being recovered from the name, so a
  * message keeps meaning the same tool after the app's language changes, and so
  * ordinary prose that happens to contain the words is never mistaken for one.
  *
- * Read-only now: the composer no longer offers any tool to mention, so nothing
- * writes new ones. This stays so already-sent messages keep rendering the name
- * the user saw rather than raw link syntax.
+ * The registry is intentionally empty until the composer offers mentionable
+ * actions again. Keeping the parser and an explicitly typed registry makes a
+ * future mention opt-in without restoring retired tool mentions.
  */
 
-export const toolMentions = [{ id: 'create-image', titleKey: 'chat.actions.createImage' }] as const;
+export type ToolMention = {
+  id: string;
+  titleKey: string;
+};
 
-export type ToolMention = (typeof toolMentions)[number];
 export type ToolMentionId = ToolMention['id'];
+
+export const toolMentions: readonly ToolMention[] = [];
 
 export type MentionSegment = {
   /** The tool, when this run is a mention. */

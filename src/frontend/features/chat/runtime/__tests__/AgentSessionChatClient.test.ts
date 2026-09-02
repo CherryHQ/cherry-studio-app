@@ -28,6 +28,7 @@ function snapshot(): AgentSessionSnapshot {
       agentId: 'agent-1',
       createdAt: '2026-08-25T00:00:00.000Z',
       executionTarget: { kind: 'local' },
+      forkBoundaryMessageId: null,
       forkedFromSessionId: null,
       id: 'session-1',
       title: '',
@@ -198,6 +199,23 @@ describe('AgentSessionChatClient', () => {
     await client.observe('session-1');
 
     expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('invalidates Session queries when a user message advances conversation activity', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onSessionChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onSessionChanged });
+    await client.observe('session-1');
+
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+
+    expect(onSessionChanged).toHaveBeenCalledTimes(1);
+    expect(onSessionChanged).toHaveBeenCalledWith('session-1');
   });
 
   test('cancels the active turn with the correlated session and turn ids', async () => {

@@ -105,13 +105,6 @@ describe('MarkdownText', () => {
             padding: 12,
             textAlign: 'center',
           }),
-          linkVariants: {
-            '^cite:': {
-              backgroundColor: 'secondary',
-              color: 'foreground-tertiary',
-              underline: false,
-            },
-          },
           superscript: { baselineOffsetScale: 0.3, fontScale: 0.75 },
         }),
       );

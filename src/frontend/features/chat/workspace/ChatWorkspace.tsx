@@ -34,7 +34,9 @@ type ChatWorkspaceProps = {
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
-  /** Set when this session was forked; names the session it was copied from. */
+  /** Copied message inside this Session that closes the inherited prefix. */
+  forkBoundaryMessageId?: string;
+  /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
@@ -45,14 +47,14 @@ export function ChatWorkspace({
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
+  forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
 }: ChatWorkspaceProps) {
-  const { error, isAtHistoryStart, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } =
-    messageWindow;
+  const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
   const live = useAgentChatSession(sessionId);
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
@@ -64,10 +66,40 @@ export function ChatWorkspace({
   );
   // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId keys the cache lifetime, not its contents
   const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [sessionId]);
-  const listMessages = useMemo(
+  const projectedMessages = useMemo(
     () => toAgentMessageListItems(mergedMessages, projectionCache),
     [mergedMessages, projectionCache],
   );
+  const listMessages = useMemo(() => {
+    if (!forkBoundaryMessageId || !forkedFromSessionId) {
+      return projectedMessages;
+    }
+    const boundaryIndex = projectedMessages.findIndex(
+      (message) => message.id === forkBoundaryMessageId,
+    );
+    if (boundaryIndex < 0) {
+      // Pagination has not loaded the persisted boundary yet. Rendering no
+      // divider is more accurate than attaching it to the current page edge.
+      return projectedMessages;
+    }
+    const boundary = projectedMessages[boundaryIndex];
+    if (!boundary) {
+      return projectedMessages;
+    }
+    const forkOriginItem = {
+      createdAt: boundary.createdAt,
+      data: {},
+      id: `fork-origin:${sessionId}`,
+      role: 'system',
+      status: 'success',
+      systemEvent: { sourceSessionId: forkedFromSessionId, type: 'fork-origin' },
+    } satisfies MessageListItem;
+    return [
+      ...projectedMessages.slice(0, boundaryIndex + 1),
+      forkOriginItem,
+      ...projectedMessages.slice(boundaryIndex + 1),
+    ];
+  }, [forkBoundaryMessageId, forkedFromSessionId, projectedMessages, sessionId]);
   const assistantPresentation = useMemo(
     () => ({
       avatarUri: assistantAvatarUri,
@@ -76,13 +108,21 @@ export function ChatWorkspace({
     [assistantAvatarUri, assistantName, t],
   );
   const renderChatMessage = useCallback(
-    (message: MessageListItem) => (
-      <ChatMessage
-        assistantPresentation={assistantPresentation}
-        isMessageActionsEnabled={isAssistantToolbarEnabled}
-        message={message}
-      />
-    ),
+    (message: MessageListItem) => {
+      if (message.role === 'system') {
+        return message.systemEvent?.type === 'fork-origin' ? (
+          <ChatForkOriginDivider sourceSessionId={message.systemEvent.sourceSessionId} />
+        ) : null;
+      }
+
+      return (
+        <ChatMessage
+          assistantPresentation={assistantPresentation}
+          isMessageActionsEnabled={isAssistantToolbarEnabled}
+          message={message}
+        />
+      );
+    },
     [assistantPresentation, isAssistantToolbarEnabled],
   );
   const messageListExtraData = useMemo(
@@ -125,13 +165,6 @@ export function ChatWorkspace({
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(headerHeight);
-  // The divider claims to sit above the first message, so it may only render
-  // once the whole transcript is in the window — otherwise it would hang above
-  // the earliest loaded page and lie about where the fork begins.
-  const forkOriginDivider =
-    forkedFromSessionId && isAtHistoryStart ? (
-      <ChatForkOriginDivider sourceSessionId={forkedFromSessionId} />
-    ) : undefined;
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
@@ -157,7 +190,6 @@ export function ChatWorkspace({
           dataKey={sessionId}
           enteringMessageId={live.enteringUserMessageId}
           extraData={messageListExtraData}
-          headerAccessory={forkOriginDivider}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
           keyboardOffset={keyboardOffset}
           messages={listMessages}

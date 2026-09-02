@@ -1,8 +1,29 @@
-import { createCitationLinkUrl } from '@/frontend/components/markdown/citationLink';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
 const MARKDOWN_CODE_PATTERN = /```[\s\S]*?```|`[^`\n]*`/gm;
+const CIRCLED_CITATION_MARKERS = [
+  '❶',
+  '❷',
+  '❸',
+  '❹',
+  '❺',
+  '❻',
+  '❼',
+  '❽',
+  '❾',
+  '❿',
+  '⓫',
+  '⓬',
+  '⓭',
+  '⓮',
+  '⓯',
+  '⓰',
+  '⓱',
+  '⓲',
+  '⓳',
+  '⓴',
+] as const;
 
 type CitationSource = {
   content?: string;
@@ -16,15 +37,22 @@ export type ResolvedCitationText = {
   plainText: string;
 };
 
+export type ResolvedMessageCitations = {
+  sourceNumberById: ReadonlyMap<string, number>;
+  textByPartIndex: ReadonlyMap<number, ResolvedCitationText>;
+};
+
 /** Resolve persisted citation markers from their message-local tool results. */
-export function resolveMessageCitationText(
+export function resolveMessageCitations(
   parts: readonly CherryMessagePart[],
-): Map<number, ResolvedCitationText> {
+): ResolvedMessageCitations {
   const sourceById = collectCitationSources(parts);
-  if (sourceById.size === 0) return new Map();
+  if (sourceById.size === 0) {
+    return { sourceNumberById: new Map(), textByPartIndex: new Map() };
+  }
 
   const numberBySource = new Map<CitationSource, number>();
-  const result = new Map<number, ResolvedCitationText>();
+  const textByPartIndex = new Map<number, ResolvedCitationText>();
   let nextNumber = 1;
 
   parts.forEach((part, index) => {
@@ -32,9 +60,9 @@ export function resolveMessageCitationText(
 
     const replace = (content: string, markdown: boolean) =>
       mapMarkdownOutsideCode(content, (text) =>
-        text.replace(/\[cite:([\w-]+)\]/g, (marker, id: string) => {
+        text.replace(/\[cite:([\w-]+)\]/g, (rawMarker, id: string) => {
           const source = sourceById.get(id);
-          if (!source) return marker;
+          if (!source) return rawMarker;
 
           let number = numberBySource.get(source);
           if (!number) {
@@ -42,19 +70,26 @@ export function resolveMessageCitationText(
             numberBySource.set(source, number);
           }
 
-          return markdown && source.url
-            ? `^[${number}](${createCitationLinkUrl(source.url)})^`
-            : `[${number}]`;
+          // Inline citations annotate the claim but are intentionally not touch
+          // targets. SourceGroup owns the mobile-sized entry and source links.
+          const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
+          return markdown ? `^${marker}^` : `[${number}]`;
         }),
       );
 
-    result.set(index, {
+    textByPartIndex.set(index, {
       markdown: replace(part.text, true),
       plainText: replace(part.text, false),
     });
   });
 
-  return result;
+  const sourceNumberById = new Map<string, number>();
+  sourceById.forEach((source, id) => {
+    const number = numberBySource.get(source);
+    if (number !== undefined) sourceNumberById.set(id, number);
+  });
+
+  return { sourceNumberById, textByPartIndex };
 }
 
 function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string, CitationSource> {

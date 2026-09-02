@@ -4,6 +4,7 @@ export const MESSAGE_LIST_TOP_PADDING = 12;
 export const MESSAGE_ROW_HORIZONTAL_PADDING = 16;
 export const MESSAGE_ROW_VERTICAL_PADDING = {
   assistant: 12,
+  system: 0,
   user: 8,
 } as const satisfies Record<MessageListItem['role'], number>;
 
@@ -23,6 +24,9 @@ export function messageKeyExtractor(item: MessageListItem) {
 
 // LegendList 按角色维护真实尺寸均值；空助手行单独分类，避免用长回复均值估算 loading 行。
 export function getMessageRowType(item: MessageListItem) {
+  if (item.role === 'system') {
+    return 'system';
+  }
   if (item.role !== 'assistant') {
     return item.role;
   }

@@ -34,6 +34,7 @@ const SESSION: AgentSessionView = {
   executionTarget: { kind: 'local' },
   title: '',
   titleIsManual: false,
+  forkBoundaryMessageId: null,
   forkedFromSessionId: null,
   createdAt: NOW,
   updatedAt: NOW,

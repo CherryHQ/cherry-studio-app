@@ -5,6 +5,7 @@ import { initializeAppRuntime } from '../initializeAppRuntime';
 const mockSetTheme = jest.fn();
 const mockUpdateCSSVariables = jest.fn();
 const mockInitI18n = jest.fn(async (..._args: unknown[]) => undefined);
+const mockCreateInitialAgent = jest.fn(async (..._args: unknown[]) => undefined);
 const mockWaitForStartupCoverPresented = jest.fn(async (): Promise<void> => undefined);
 
 jest.mock('../startupCoverHandoff', () => ({
@@ -23,6 +24,8 @@ jest.mock('heroui-native/utils', () => ({
 }));
 
 jest.mock('@/frontend/i18n', () => ({
+  __esModule: true,
+  default: { t: (key: string) => (key === 'agent.default.name' ? 'Cherry Agent' : key) },
   initI18n: (...args: unknown[]) => mockInitI18n(...args),
 }));
 
@@ -31,6 +34,9 @@ function createServices(message?: {
   settleCrashedMessages: jest.Mock;
 }) {
   return {
+    agentData: {
+      createInitialAgent: mockCreateInitialAgent,
+    },
     message,
     preference: {
       getMultipleCached: () => ({
@@ -47,6 +53,7 @@ describe('initializeAppRuntime', () => {
     mockSetTheme.mockClear();
     mockUpdateCSSVariables.mockClear();
     mockInitI18n.mockClear();
+    mockCreateInitialAgent.mockClear();
     mockWaitForStartupCoverPresented.mockClear();
     mockWaitForStartupCoverPresented.mockResolvedValue(undefined);
   });
@@ -60,6 +67,10 @@ describe('initializeAppRuntime', () => {
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', variables);
     expect(mockInitI18n).toHaveBeenCalledWith('en-US');
+    expect(mockCreateInitialAgent).toHaveBeenCalledWith({ name: 'Cherry Agent' });
+    expect(mockInitI18n.mock.invocationCallOrder[0]).toBeLessThan(
+      mockCreateInitialAgent.mock.invocationCallOrder[0],
+    );
   });
 
   test('does not apply the app theme before the startup cover owns the surface', async () => {

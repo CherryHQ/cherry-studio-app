@@ -1,5 +1,5 @@
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
-import { initI18n } from '@/frontend/i18n';
+import i18n, { initI18n } from '@/frontend/i18n';
 import { applyThemePreferences } from '@/frontend/utils/theme';
 
 import { waitForStartupCoverPresented } from './startupCoverHandoff';
@@ -18,4 +18,5 @@ export async function initializeAppRuntime(services: BackendServices) {
   await waitForStartupCoverPresented();
   applyThemePreferences(preferences.themeMode, preferences.fontSizeStep);
   await initI18n(preferences.language);
+  await services.agentData.createInitialAgent({ name: i18n.t('agent.default.name') });
 }

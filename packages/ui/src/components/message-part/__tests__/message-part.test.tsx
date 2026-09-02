@@ -193,10 +193,10 @@ describe('MessagePart', () => {
       );
     });
 
-    expect(renderer!.root.findAllByProps({ testID: 'process-detail' })).toHaveLength(0);
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(0);
     act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
     expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findByProps({ testID: 'process-detail' })).toBeDefined();
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
     expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
   });
 

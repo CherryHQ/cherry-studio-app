@@ -141,6 +141,11 @@ export const AgentSessionViewSchema = z.strictObject({
   title: z.string(),
   titleIsManual: z.boolean(),
   /**
+   * Copied-message boundary after which the fork-origin divider is rendered.
+   * Null for ordinary or pre-boundary Sessions, and cleared with fork lineage.
+   */
+  forkBoundaryMessageId: z.string().min(1).nullable(),
+  /**
    * Fork provenance. Null for an ordinary Session, and reset to null when the
    * source Session is deleted, so a surviving fork never cites a Session the
    * user can no longer open.
