@@ -18,13 +18,7 @@ jest.mock('../metaTool/MetaToolPartRenderer', () => ({
   ...mockCreateToolPart('MetaToolPartRenderer'),
   isMetaToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'meta',
 }));
-jest.mock('../WebSearchToolPart', () => ({
-  ...mockCreateToolPart('WebSearchToolPart'),
-  isProviderWebSearchToolPart: (part: ToolMessagePart) =>
-    mockGetToolName(part) === 'provider-search',
-  isWebSearchToolPart: (part: ToolMessagePart) =>
-    mockGetToolName(part) === 'provider-search' || mockGetToolName(part) === 'web-search',
-}));
+jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
   ...mockCreateToolPart('WriteFileToolPart'),
   isWriteFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'write_file',
@@ -32,7 +26,7 @@ jest.mock('../WriteFileToolPart', () => ({
 
 describe('ToolPartRenderer', () => {
   it.each([
-    ['web-search', 'WebSearchToolPart'],
+    ['web_search', 'WebSearchToolPart'],
     ['meta', 'MetaToolPartRenderer'],
     ['mcp', 'McpToolPart'],
     ['edit_file', 'EditFileToolPart'],
@@ -49,9 +43,13 @@ describe('ToolPartRenderer', () => {
   });
 
   it('suppresses provider-owned web search parts before general web-search routing', () => {
+    const part = {
+      ...makeToolPart('web_search'),
+      toolMetadata: { cherry: { tool: { type: 'provider' } } },
+    } as ToolMessagePart;
     let renderer: ReactTestRenderer | undefined;
     act(() => {
-      renderer = create(<ToolPartRenderer part={makeToolPart('provider-search')} />);
+      renderer = create(<ToolPartRenderer part={part} />);
     });
 
     expect(renderer?.toJSON()).toBeNull();

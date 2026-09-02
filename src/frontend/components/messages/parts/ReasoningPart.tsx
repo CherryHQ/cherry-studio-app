@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import { PartMarkdown } from './PartMarkdown';
 import { useThinkingTimerMs } from './useThinkingTimerMs';
 
@@ -15,14 +16,19 @@ type ReasoningPartProps = {
 
 export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
+  const handleDisclosureToggle = useMessageListDisclosureToggle();
   const isThinking = part.state === 'streaming';
   const cherryMeta = readCherryMeta(part);
   const displayMs = useThinkingTimerMs(isThinking, cherryMeta?.startedAt, cherryMeta?.thinkingMs);
 
   const statusText = useMemo(() => {
     const seconds = (Math.max(displayMs, 100) / 1000).toFixed(1);
-    return isThinking
-      ? t('chat.reasoningStatus.thinking', { seconds })
+    if (isThinking) {
+      return t('chat.reasoningStatus.thinking', { seconds });
+    }
+    // A sub-second duration is noise, not information — drop the number.
+    return displayMs < 1000
+      ? t('chat.reasoningStatus.thoughtBrief')
       : t('chat.reasoningStatus.thought', { seconds });
   }, [displayMs, isThinking, t]);
 
@@ -35,7 +41,7 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
 
   return (
     <MessagePart.Reasoning
-      detailTitle={t('chat.reasoningStatus.title')}
+      onDisclosureToggle={handleDisclosureToggle}
       state={isThinking ? 'running' : 'complete'}
       statusText={statusText}
     >

@@ -7,18 +7,12 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { enrichWebSources, parseWebSources } from '../webSource';
 import { WebSourceCard } from '../WebSourceCard';
-import { getToolName, getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
+import { getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
   messageParts?: readonly CherryMessagePart[];
   part: ToolMessagePart;
 };
-
-const WEB_SEARCH_TOOL_NAMES = new Set([
-  'web_search',
-  'builtin_web_search',
-  'builtin_web_search_preview',
-]);
 
 export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps) {
   const { t } = useTranslation();
@@ -55,14 +49,6 @@ export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps
   );
 }
 
-export function isWebSearchToolPart(part: ToolMessagePart) {
-  return isWebSearchToolName(getToolName(part));
-}
-
-export function isProviderWebSearchToolPart(part: ToolMessagePart) {
-  return isWebSearchToolPart(part) && getCherryToolType(part) === 'provider';
-}
-
 function getWebSearchStatusText(
   part: ToolMessagePart,
   resultCount: number,
@@ -96,15 +82,4 @@ function getWebSearchStatusText(
 function getWebSearchQuery(input: unknown) {
   if (!isRecord(input) || typeof input.query !== 'string') return '';
   return input.query.trim();
-}
-
-function isWebSearchToolName(toolName: string) {
-  return WEB_SEARCH_TOOL_NAMES.has(toolName);
-}
-
-function getCherryToolType(part: ToolMessagePart) {
-  const metadata = part.toolMetadata;
-  const cherry = isRecord(metadata?.cherry) ? metadata.cherry : undefined;
-  const tool = isRecord(cherry?.tool) ? cherry.tool : undefined;
-  return typeof tool?.type === 'string' ? tool.type : undefined;
 }

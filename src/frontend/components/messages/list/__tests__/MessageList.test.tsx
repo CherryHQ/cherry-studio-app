@@ -1,6 +1,6 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
-import { Platform, type LayoutChangeEvent } from 'react-native';
+import { Platform, Pressable, type LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -8,6 +8,7 @@ import { cacheService } from '@/frontend/data/CacheService';
 
 import { MessageList } from '../../MessageList';
 import type { MessageListItem, MessageListProps } from '../../types';
+import { useMessageListDisclosureToggle } from '../MessageListDisclosureContext';
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -180,6 +181,11 @@ jest.mock('react-native-reanimated', () => {
 });
 
 const mockRenderMessage = jest.fn((_message: MessageListItem) => null);
+
+function DisclosureToggleProbe() {
+  const onPress = useMessageListDisclosureToggle();
+  return <Pressable onPress={onPress} testID="disclosure-toggle-probe" />;
+}
 
 function createMessage(id: string, role: MessageListItem['role']): MessageListItem {
   return {
@@ -408,6 +414,25 @@ describe('MessageList scroll-controller ownership', () => {
       mockLatestListProps?.onContentSizeChange?.(390, 1_100);
     });
     act(flushAnimationFrames);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
+  test('keeps a tapped disclosure anchored instead of sticking its growth to the end', async () => {
+    const messages = [createMessage('assistant-1', 'assistant')];
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(messages, { renderMessage: () => <DisclosureToggleProbe /> })}
+        />,
+      );
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+
+    act(() => renderer!.root.findByType(Pressable).props.onPress());
+    act(() => mockLatestListProps?.onContentSizeChange?.(390, 1_100));
+    act(flushAnimationFrames);
+
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
   });
 

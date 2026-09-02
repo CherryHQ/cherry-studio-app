@@ -4,12 +4,12 @@ import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
-import type { ToolMessagePart } from './toolPartState';
 import {
   isProviderWebSearchToolPart,
   isWebSearchToolPart,
-  WebSearchToolPart,
-} from './WebSearchToolPart';
+  type ToolMessagePart,
+} from './toolPartState';
+import { WebSearchToolPart } from './WebSearchToolPart';
 import { isWriteFileToolPart, WriteFileToolPart } from './WriteFileToolPart';
 
 type ToolPartRendererProps = {

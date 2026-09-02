@@ -32,6 +32,12 @@ export type MarkdownTextProps = {
   selectable?: boolean;
 };
 
+/**
+ * Block spacing lives entirely in `marginBottom`. iOS collapses adjacent block
+ * margins while Android sums them, so a block that also set `marginTop` would
+ * render a different rhythm per platform; bottom-only spacing is identical on
+ * both and keeps a message that opens with a heading from starting with a gap.
+ */
 function createMarkdownTypographyStyle(
   fontSizeStep: TypographySizeStep,
   monoFontFamily: string,
@@ -40,54 +46,58 @@ function createMarkdownTypographyStyle(
 
   return {
     paragraph: { ...scale.base, marginBottom: 12, marginTop: 0 },
-    h1: { ...scale['2xl'], fontWeight: '600', marginBottom: 10, marginTop: 18 },
-    h2: { ...scale.xl, fontWeight: '600', marginBottom: 8, marginTop: 18 },
-    h3: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 16 },
-    h4: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
-    h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 14 },
-    h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+    h1: { ...scale.xl, fontWeight: '700', marginBottom: 10, marginTop: 0 },
+    h2: { ...scale.lg, fontWeight: '600', marginBottom: 8, marginTop: 0 },
+    h3: { ...scale.base, fontWeight: '600', marginBottom: 8, marginTop: 0 },
+    h4: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 0 },
+    h5: { ...scale.base, fontWeight: '600', marginBottom: 6, marginTop: 0 },
+    h6: { ...scale.sm, fontWeight: '600', marginBottom: 6, marginTop: 0 },
     blockquote: {
       ...scale.base,
-      borderRadius: 8,
-      borderWidth: 2,
-      gapWidth: 10,
+      borderRadius: 0,
+      borderWidth: 3,
+      gapWidth: 12,
       marginBottom: 12,
-      marginTop: 4,
-      padding: 12,
+      marginTop: 0,
+      padding: 2,
     },
     list: {
       ...scale.base,
-      bulletSize: 5,
-      gapWidth: 8,
-      itemSpacing: 4,
+      bulletSize: 6,
+      gapWidth: 10,
+      itemSpacing: 6,
       marginBottom: 12,
       marginLeft: 20,
       marginTop: 0,
       markerFontWeight: '500',
+      // Floors every marker column to the width an ordered list reserves for
+      // "99." so bullet, number and task items all start their text on the
+      // same edge instead of bullets hugging the paragraph margin.
+      markerMinWidth: Math.ceil(scale.base.fontSize * 1.5),
     },
     code: { fontFamily: monoFontFamily, fontSize: scale.sm.fontSize },
     codeBlock: {
       ...scale.sm,
-      borderRadius: 10,
-      borderWidth: 1,
+      borderRadius: 12,
+      borderWidth: 0,
       fontFamily: monoFontFamily,
-      marginBottom: 14,
-      marginTop: 4,
-      padding: 12,
+      marginBottom: 12,
+      marginTop: 0,
+      padding: 14,
     },
     table: {
       ...scale.sm,
-      borderRadius: 10,
+      borderRadius: 12,
       borderWidth: 1,
-      cellPaddingHorizontal: 10,
-      cellPaddingVertical: 8,
-      marginBottom: 14,
-      marginTop: 4,
+      cellPaddingHorizontal: 12,
+      cellPaddingVertical: 9,
+      marginBottom: 12,
+      marginTop: 0,
     },
     math: {
       fontSize: scale.base.fontSize,
-      marginBottom: 14,
-      marginTop: 4,
+      marginBottom: 12,
+      marginTop: 0,
       padding: 12,
       textAlign: 'center',
     },
@@ -149,8 +159,8 @@ export function MarkdownText({
       h6: { ...typography.h6, color: foreground },
       blockquote: {
         ...typography.blockquote,
-        backgroundColor: secondary,
-        borderColor: primary,
+        backgroundColor: 'transparent',
+        borderColor: border,
         color: mutedForeground,
       },
       list: {
@@ -162,7 +172,7 @@ export function MarkdownText({
       code: {
         ...typography.code,
         backgroundColor: inlineCode,
-        borderColor: border,
+        borderColor: inlineCode,
         color: inlineCodeForeground,
       },
       codeBlock: {
@@ -172,19 +182,19 @@ export function MarkdownText({
         color: foreground,
         syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
-      link: { color: link, underline: true },
+      link: { color: link, underline: false },
       strong: { color: foreground },
       em: { color: foreground },
       strikethrough: { color: mutedForeground },
       underline: { color: foreground },
       image: {
-        borderRadius: 10,
-        marginBottom: 14,
-        marginTop: 4,
+        borderRadius: 12,
+        marginBottom: 12,
+        marginTop: 0,
         maxHeight: 320,
         resizeMode: 'contain',
       },
-      thematicBreak: { color: border, height: 1, marginBottom: 20, marginTop: 20 },
+      thematicBreak: { color: border, height: 1, marginBottom: 12, marginTop: 0 },
       table: {
         ...typography.table,
         borderColor: border,
@@ -196,13 +206,13 @@ export function MarkdownText({
       },
       taskList: {
         borderColor: mutedForeground,
-        checkedColor: foreground,
+        checkedColor: primary,
         checkedTextColor: mutedForeground,
-        checkmarkColor: foreground,
+        checkmarkColor: background,
         checkboxBorderRadius: 4,
         checkboxSize: 16,
       },
-      math: { ...typography.math, backgroundColor: codeBlock, color: foreground },
+      math: { ...typography.math, backgroundColor: 'transparent', color: foreground },
       inlineMath: { color: foreground },
       highlight: { backgroundColor: secondary, color: foreground },
       spoiler: { color: mutedForeground, solid: { borderRadius: 4 } },

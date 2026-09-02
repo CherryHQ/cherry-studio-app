@@ -9,7 +9,11 @@ import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
 import type { MessageListItem } from '../types';
 import { scrollLog } from './messageListLogger';
 import { computeScrollAnchor, resolveRestoreTarget } from './messageListScrollMemory';
-import { type FollowingReason, useViewportFollowState } from './useViewportFollowState';
+import {
+  type FollowingReason,
+  type ReadingReason,
+  useViewportFollowState,
+} from './useViewportFollowState';
 
 const SAVE_THROTTLE_MS = 200;
 
@@ -349,19 +353,26 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     [stickToBottomIfFollowing],
   );
 
-  const enterReadingForUser = useCallback(() => {
-    cancelScheduledStick();
-    follow.enterReading('user-scrolled-up');
-    if (suppressSaveRef.current) {
-      // A committed drag outranks mount-time restoration. Invalidate any
-      // pending restore completion, reveal the list, and let MVCP preserve the
-      // position when late history arrives.
-      didRestoreRef.current = true;
-      restoreGenerationRef.current += 1;
-      suppressSaveRef.current = false;
-      reportReadyAfterRestore(restoreGenerationRef.current);
-    }
-  }, [cancelScheduledStick, follow, reportReadyAfterRestore]);
+  const enterReadingForUser = useCallback(
+    (reason: ReadingReason) => {
+      cancelScheduledStick();
+      follow.enterReading(reason);
+      if (suppressSaveRef.current) {
+        // A committed interaction outranks mount-time restoration. Invalidate
+        // any pending restore completion, reveal the list, and let MVCP preserve
+        // the position when late history arrives.
+        didRestoreRef.current = true;
+        restoreGenerationRef.current += 1;
+        suppressSaveRef.current = false;
+        reportReadyAfterRestore(restoreGenerationRef.current);
+      }
+    },
+    [cancelScheduledStick, follow, reportReadyAfterRestore],
+  );
+
+  const handleDisclosureToggle = useCallback(() => {
+    enterReadingForUser('user-toggled-disclosure');
+  }, [enterReadingForUser]);
 
   const finishUserScroll = useCallback(() => {
     const isAtEnd = inputsRef.current.listRef.current?.getState().isAtEnd ?? false;
@@ -375,7 +386,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   }, [clearStoredAnchor, follow, saveScrollAnchor]);
 
   const handleScrollBeginDrag = useCallback(() => {
-    enterReadingForUser();
+    enterReadingForUser('user-scrolled-up');
     userInteractionGenerationRef.current = restoreGenerationRef.current;
   }, [enterReadingForUser]);
 
@@ -407,7 +418,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   const handleTouchStart = useCallback(() => {
     if (isMomentumScrollingRef.current) {
-      enterReadingForUser();
+      enterReadingForUser('user-scrolled-up');
     }
   }, [enterReadingForUser]);
 
@@ -438,6 +449,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   return {
     handleContentSizeChange,
+    handleDisclosureToggle,
     handleLayout,
     handleLoad,
     handleMomentumScrollBegin,
