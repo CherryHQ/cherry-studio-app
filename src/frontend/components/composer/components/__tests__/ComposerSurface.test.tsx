@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect } from 'react';
-import { ActivityIndicator, Text } from 'react-native';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -44,6 +44,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 
   return {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
+    Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
@@ -182,7 +183,12 @@ describe('ComposerSurface', () => {
       [importingAttachment],
     );
 
-    expect(renderer?.root.findAllByType(ActivityIndicator)).toHaveLength(1);
+    expect(renderer?.root.findAllByType('mock-spinner')).toHaveLength(1);
+    expect(renderer?.root.findByType('mock-spinner').props).toMatchObject({
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+      size: 'sm',
+    });
     expect(
       renderer?.root.findAllByType(Text).some((node) => node.props.children === 'uploading.pdf'),
     ).toBe(true);
@@ -197,7 +203,7 @@ describe('ComposerSurface', () => {
       ]);
     });
 
-    expect(renderer?.root.findAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(renderer?.root.findAllByType('mock-spinner')).toHaveLength(0);
     expect(mockComposerProps?.canSend).toBe(true);
   });
 

@@ -168,11 +168,12 @@ export function ChatWorkspace({
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
-      <ContentState.Error
-        className="flex-1 px-8 py-16"
-        primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
-        title={t('chat.history.loadFailed')}
-      />
+      <View className="flex-1 justify-center px-8 py-16">
+        <ContentState.Error
+          primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
+          title={t('chat.history.loadFailed')}
+        />
+      </View>
     );
   }
 

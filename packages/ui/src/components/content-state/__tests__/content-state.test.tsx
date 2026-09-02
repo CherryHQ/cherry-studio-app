@@ -53,6 +53,7 @@ describe('ContentState', () => {
     expect(root?.props.accessibilityState).toEqual({ busy: true });
     expect(spinner.props.accessibilityLabel).toBe('Loading assistants');
     expect(spinner.props.accessibilityRole).toBe('progressbar');
+    expect(spinner.props.size).toBe('default');
     expect(tree.root.findByProps({ children: 'Loading assistants' })).toBeDefined();
   });
 
@@ -92,12 +93,50 @@ describe('ContentState', () => {
     expect(onImport).toHaveBeenCalledTimes(1);
   });
 
-  test('page layout carries its own room and a pill-shaped action', () => {
+  test.each([
+    ['centered', 'items-center justify-center gap-4', 'text-center'],
+    ['leading', 'items-start justify-center gap-4', 'text-left'],
+    ['row', 'flex-row items-center justify-start gap-2', 'text-left'],
+  ] as const)(
+    'keeps %s layout and text alignment in sync',
+    (layout, rootClassName, textClassName) => {
+      const tree = render(
+        <ContentState.Empty
+          description="Description"
+          layout={layout}
+          testID="state"
+          title="Title"
+        />,
+      );
+      const root = tree.root
+        .findAllByProps({ testID: 'state' })
+        .find((node) => typeof node.type === 'string');
+      const title = tree.root
+        .findAllByProps({ children: 'Title' })
+        .find((node) => typeof node.type === 'string');
+      const description = tree.root
+        .findAllByProps({ children: 'Description' })
+        .find((node) => typeof node.type === 'string');
+
+      expect(root?.props.className).toBe(rootClassName);
+      expect(title?.props.className).toContain(textClassName);
+      expect(description?.props.className).toContain(textClassName);
+    },
+  );
+
+  test('uses a compact spinner in row layout', () => {
+    const tree = render(<ContentState.Loading layout="row" title="Loading tools" />);
+    const spinner = tree.root.findByProps({ testID: 'content-state-spinner' });
+
+    expect(spinner.props.size).toBe('sm');
+  });
+
+  test('prominent content changes hierarchy without owning surrounding room', () => {
     const tree = render(
       <ContentState.Empty
         icon={<ContentState.Icon testID="empty-icon" />}
-        layout="page"
         primaryAction={{ children: 'Create', onPress: jest.fn() }}
+        prominence="prominent"
         testID="state"
         title="No assistants"
       />,
@@ -108,33 +147,39 @@ describe('ContentState', () => {
     const button = tree.root.find(
       (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
     );
+    const title = tree.root
+      .findAllByProps({ children: 'No assistants' })
+      .find((node) => typeof node.type === 'string');
     const disc = tree.root
       .findAllByProps({ testID: 'empty-icon' })
       .find((node) => typeof node.type === 'string');
 
-    expect(root?.props.className).toContain('px-8 py-16');
+    expect(root?.props.className).not.toContain('px-8');
+    expect(root?.props.className).not.toContain('py-16');
     expect(button.props.className).toContain('rounded-full');
+    expect(button.props.className).toContain('px-4 py-2.5');
+    expect(title?.props.className).toContain('text-lg');
     expect(disc?.props.className).toContain('rounded-full');
     expect(disc?.props.className).toContain('bg-secondary');
   });
 
-  test('inline layout stays flush so it can annotate a list in place', () => {
+  test('default content uses compact rounded actions', () => {
     const tree = render(
       <ContentState.Empty
         primaryAction={{ children: 'Create', onPress: jest.fn() }}
-        testID="state"
         title="No assistants"
       />,
     );
-    const root = tree.root
-      .findAllByProps({ testID: 'state' })
-      .find((node) => typeof node.type === 'string');
     const button = tree.root.find(
       (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
     );
+    const title = tree.root
+      .findAllByProps({ children: 'No assistants' })
+      .find((node) => typeof node.type === 'string');
 
-    expect(root?.props.className).not.toContain('py-16');
-    expect(button.props.className).not.toContain('rounded-full');
+    expect(button.props.className).toContain('rounded-xl');
+    expect(button.props.className).toContain('px-3 py-2');
+    expect(title?.props.className).toContain('text-base');
   });
 
   test('uses the error hierarchy without inventing retry behavior', () => {

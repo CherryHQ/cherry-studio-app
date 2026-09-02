@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { Image } from '@cherrystudio/ui/components';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/markdown';

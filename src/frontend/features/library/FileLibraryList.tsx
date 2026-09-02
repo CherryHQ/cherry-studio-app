@@ -88,11 +88,9 @@ export function FileLibraryList({
         {isLoading || isLoadingMore ? (
           <FileLibrarySkeleton count={fileLibraryGrid.skeletonTiles} tileSize={tileSize} />
         ) : (
-          <ContentState.Empty
-            className="min-h-48 flex-1 px-6 pb-24"
-            testID="file-library-empty"
-            title={t('library.empty')}
-          />
+          <View className="min-h-48 flex-1 justify-center px-6 pb-24">
+            <ContentState.Empty testID="file-library-empty" title={t('library.empty')} />
+          </View>
         )}
       </View>
     ),

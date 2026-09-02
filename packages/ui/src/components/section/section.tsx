@@ -13,12 +13,15 @@ import {
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '../../utils';
+import { SwitchIndicator } from '../switch/switch-indicator';
 import type {
   SectionHeaderProps,
+  SectionItemDensity,
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
   SectionSelectItemProps,
+  SectionSwitchItemProps,
 } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
@@ -33,6 +36,10 @@ type InternalSectionSelectItemProps = SectionSelectItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
+type InternalSectionSwitchItemProps = SectionSwitchItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
+
 function renderTextSlot(content: ReactNode, className?: string) {
   return typeof content === 'string' || typeof content === 'number' ? (
     <Text className={className}>{content}</Text>
@@ -41,17 +48,11 @@ function renderTextSlot(content: ReactNode, className?: string) {
   );
 }
 
-function SectionHeader({
-  children,
-  className,
-  title,
-  titleClassName,
-  ...viewProps
-}: SectionHeaderProps) {
+function SectionHeader({ children, title, ...viewProps }: SectionHeaderProps) {
   return (
-    <View className={cn('flex-row items-center gap-3 px-3', className)} {...viewProps}>
+    <View className="min-h-10 flex-row items-center gap-3" {...viewProps}>
       <View className="min-w-0 flex-1">
-        {renderTextSlot(title, cn('text-base font-semibold text-foreground', titleClassName))}
+        {renderTextSlot(title, 'text-base font-semibold text-foreground')}
       </View>
       {children !== undefined ? (
         <View className="shrink-0 items-center justify-center">{children}</View>
@@ -60,13 +61,19 @@ function SectionHeader({
   );
 }
 
+const itemDensityStyles: Record<SectionItemDensity, string> = {
+  compact: 'py-2',
+  comfortable: 'py-4',
+  default: 'py-3',
+};
+
 function SectionItem({
   accessibilityHint,
   accessibilityLabel,
   accessibilityRole,
   accessibilityState,
   children,
-  className,
+  density = 'default',
   description,
   destructive = false,
   disabled = false,
@@ -77,7 +84,6 @@ function SectionItem({
   onPressOut,
   onPressedChange,
   showChevron,
-  style,
   testID,
   trailing,
 }: InternalSectionItemProps) {
@@ -89,9 +95,9 @@ function SectionItem({
     disabled: disabled || accessibilityState?.disabled,
   };
   const rowClassName = cn(
-    'min-h-10 flex-row items-center gap-3 px-4 py-3',
+    'min-h-10 flex-row items-center gap-3 px-4',
+    itemDensityStyles[density],
     disabled && 'opacity-40',
-    className,
   );
   const content =
     children !== undefined ? (
@@ -142,7 +148,6 @@ function SectionItem({
           onPressedChange?.(false);
           onPressOut?.(event);
         }}
-        style={style}
         testID={testID}
       >
         {content}
@@ -157,7 +162,6 @@ function SectionItem({
       accessibilityRole={accessibilityRole}
       accessibilityState={resolvedAccessibilityState}
       className={rowClassName}
-      style={style}
       testID={testID}
     >
       {content}
@@ -205,18 +209,46 @@ function SectionSelectItem({
   );
 }
 
+function SectionSwitchItem({
+  disabled = false,
+  onPressedChange,
+  onValueChange,
+  value,
+  ...props
+}: InternalSectionSwitchItemProps) {
+  return (
+    <SectionItem
+      {...props}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      onPressedChange={onPressedChange}
+      showChevron={false}
+      trailing={<SwitchIndicator disabled={disabled} value={value} />}
+    />
+  );
+}
+
 function isSectionItemElement(
   child: ReactNode,
 ): child is ReactElement<
-  InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+  | InternalSectionItemProps
+  | InternalSectionRadioItemProps
+  | InternalSectionSelectItemProps
+  | InternalSectionSwitchItemProps
 > {
   return (
     isValidElement<
-      InternalSectionItemProps | InternalSectionRadioItemProps | InternalSectionSelectItemProps
+      | InternalSectionItemProps
+      | InternalSectionRadioItemProps
+      | InternalSectionSelectItemProps
+      | InternalSectionSwitchItemProps
     >(child) &&
     (child.type === SectionItem ||
       child.type === SectionRadioItem ||
-      child.type === SectionSelectItem)
+      child.type === SectionSelectItem ||
+      child.type === SectionSwitchItem)
   );
 }
 
@@ -241,7 +273,11 @@ function SectionRoot({
 
   return (
     <View className={cn('gap-1', className)} {...viewProps}>
-      {title !== undefined ? <SectionHeader title={title} /> : headers}
+      {title !== undefined || headers.length > 0 ? (
+        <View className="px-3">
+          {title !== undefined ? <SectionHeader title={title} /> : headers}
+        </View>
+      ) : null}
       <View
         className={cn(
           variant === 'grouped' ? 'overflow-hidden rounded-2xl bg-card' : 'bg-transparent',
@@ -291,10 +327,12 @@ SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
 SectionRadioItem.displayName = 'Section.RadioItem';
 SectionSelectItem.displayName = 'Section.SelectItem';
+SectionSwitchItem.displayName = 'Section.SwitchItem';
 
 export const Section = Object.assign(SectionRoot, {
   Header: SectionHeader,
   Item: SectionItem,
   RadioItem: SectionRadioItem,
   SelectItem: SectionSelectItem,
+  SwitchItem: SectionSwitchItem,
 });

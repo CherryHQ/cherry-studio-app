@@ -2,10 +2,7 @@ import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import {
   BottomSheet,
-  Description,
-  FieldError,
   Input,
-  Label,
   Section,
   Slider,
   Switch,
@@ -216,7 +213,7 @@ function PaintingSettingField({
     case 'text':
       return (
         <TextField>
-          <Label>{label}</Label>
+          <TextField.Label>{label}</TextField.Label>
           <Input
             accessibilityLabel={label}
             autoCapitalize="none"
@@ -274,7 +271,7 @@ function AspectRatioField({
         />
       </View>
       <Section>
-        <Section.Item className="p-4">
+        <Section.Item density="comfortable">
           <View className="flex-row flex-wrap" style={styles.chipGrid}>
             {options.map((option) => (
               <AspectRatioOption
@@ -526,8 +523,8 @@ function CustomSizeField({
     min: field.spec.minSide,
   });
   return (
-    <TextField isInvalid={isInvalid}>
-      <Label>{imageParamLabel(t, field.key)}</Label>
+    <TextField invalid={isInvalid}>
+      <TextField.Label>{imageParamLabel(t, field.key)}</TextField.Label>
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('painting.settings.width')}
@@ -547,8 +544,8 @@ function CustomSizeField({
           value={height === undefined || height === null ? '' : String(height)}
         />
       </View>
-      <Description hideOnInvalid>{rangeDescription}</Description>
-      <FieldError>{rangeDescription}</FieldError>
+      <TextField.Description>{rangeDescription}</TextField.Description>
+      <TextField.Error>{rangeDescription}</TextField.Error>
     </TextField>
   );
 }

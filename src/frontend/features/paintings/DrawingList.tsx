@@ -7,6 +7,7 @@ import {
   ImageGenerationLoader,
   SelectionIndicator,
   Section,
+  Spinner,
   useAlert,
 } from '@cherrystudio/ui/components';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
@@ -15,15 +16,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ArtifactPreviewLink } from '@/frontend/components/artifactPreview';
@@ -200,25 +193,29 @@ export function DrawingList() {
   const listEmpty = useMemo(
     () =>
       paintings.isLoading || gallery.isLoading ? (
-        <ContentState.Loading className="h-32" />
+        <View className="h-32 justify-center">
+          <ContentState.Loading />
+        </View>
       ) : (
-        <ContentState.Empty
-          description={t('painting.history.emptyDescription')}
-          icon={
-            <ContentState.Icon>
-              <ImageIcon className="size-7 text-foreground" />
-            </ContentState.Icon>
-          }
-          layout="page"
-          primaryAction={{
-            accessibilityLabel: t('painting.history.createNew'),
-            children: t('painting.history.createNew'),
-            onPress: handleCreatePainting,
-            testID: 'painting-history-create',
-          }}
-          testID="painting-history-empty"
-          title={t('painting.history.empty')}
-        />
+        <View className="px-8 py-16">
+          <ContentState.Empty
+            description={t('painting.history.emptyDescription')}
+            icon={
+              <ContentState.Icon>
+                <ImageIcon className="size-7 text-foreground" />
+              </ContentState.Icon>
+            }
+            primaryAction={{
+              accessibilityLabel: t('painting.history.createNew'),
+              children: t('painting.history.createNew'),
+              onPress: handleCreatePainting,
+              testID: 'painting-history-create',
+            }}
+            prominence="prominent"
+            testID="painting-history-empty"
+            title={t('painting.history.empty')}
+          />
+        </View>
       ),
     [gallery.isLoading, handleCreatePainting, paintings.isLoading, t],
   );
@@ -226,10 +223,13 @@ export function DrawingList() {
     () =>
       paintings.isLoadingMore ? (
         <View className="h-16 items-center justify-center">
-          <ActivityIndicator />
+          <Spinner
+            accessibilityLabel={t('painting.history.loading')}
+            accessibilityRole="progressbar"
+          />
         </View>
       ) : null,
-    [paintings.isLoadingMore],
+    [paintings.isLoadingMore, t],
   );
   const listData = paintings.isLoading || gallery.isLoading ? [] : visibleGalleryItems;
 
@@ -327,21 +327,26 @@ function DrawingListHeader({
       {isEditing ? null : (
         <>
           <View className="pb-5 pt-2">
-            <Section.Header className="h-10 px-4" title={t('painting.photos.title')}>
-              <Button
-                accessibilityLabel={t('painting.photos.viewAll')}
-                className="min-h-10 px-1 py-0"
-                onPress={() => void onViewAllPress()}
-                size="xs"
-                testID="painting-photos-view-all"
-                variant="ghost"
-              >
-                <Button.Label numberOfLines={1}>{t('painting.photos.viewAll')}</Button.Label>
-              </Button>
-            </Section.Header>
+            <View className="px-4">
+              <Section.Header title={t('painting.photos.title')}>
+                <Button
+                  accessibilityLabel={t('painting.photos.viewAll')}
+                  hitSlop={10}
+                  onPress={() => void onViewAllPress()}
+                  size="inline"
+                  testID="painting-photos-view-all"
+                  variant="ghost"
+                >
+                  <Button.Label numberOfLines={1}>{t('painting.photos.viewAll')}</Button.Label>
+                </Button>
+              </Section.Header>
+            </View>
             {isRecentPhotosLoading ? (
               <View className="h-20 items-center justify-center">
-                <ActivityIndicator />
+                <Spinner
+                  accessibilityLabel={t('painting.photos.loading')}
+                  accessibilityRole="progressbar"
+                />
               </View>
             ) : photos.length > 0 ? (
               <ScrollView

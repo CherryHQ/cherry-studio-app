@@ -29,7 +29,9 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
   return (
     <>
       <View className="gap-3 pb-5" testID="painting-template-row">
-        <Section.Header className="px-4" title={t('painting.templates.title')} />
+        <View className="px-4">
+          <Section.Header title={t('painting.templates.title')} />
+        </View>
         <ScrollView
           contentContainerClassName="gap-2 px-4"
           horizontal

@@ -85,22 +85,25 @@ function AgentSessionListView() {
     );
   };
 
-  const emptyState = !isInitialDataSettled ? (
-    <ContentState.Loading className="px-8 py-16" title={t('session.list.loading')} />
-  ) : initialLoadError ? (
-    <ContentState.Error className="px-8 py-16" title={t('session.list.loadFailed')} />
-  ) : (
-    <ContentState.Empty
-      className="px-8 py-16"
-      description={t('session.list.emptyDescription')}
-      icon={
-        <ContentState.Icon>
-          <BotIcon className="size-7 text-foreground" />
-        </ContentState.Icon>
-      }
-      layout="page"
-      title={t('session.list.empty')}
-    />
+  const emptyState = (
+    <View className="px-8 py-16">
+      {!isInitialDataSettled ? (
+        <ContentState.Loading title={t('session.list.loading')} />
+      ) : initialLoadError ? (
+        <ContentState.Error title={t('session.list.loadFailed')} />
+      ) : (
+        <ContentState.Empty
+          description={t('session.list.emptyDescription')}
+          icon={
+            <ContentState.Icon>
+              <BotIcon className="size-7 text-foreground" />
+            </ContentState.Icon>
+          }
+          prominence="prominent"
+          title={t('session.list.empty')}
+        />
+      )}
+    </View>
   );
 
   return (
@@ -229,15 +232,27 @@ function ExpandedAgentSessions({ agentName }: { agentName: string }) {
   const { loadMoreSessions } = useSessionListActions();
 
   if (isSessionListLoading) {
-    return <ContentState.Loading className="py-6" title={t('session.list.loading')} />;
+    return (
+      <View className="py-6">
+        <ContentState.Loading title={t('session.list.loading')} />
+      </View>
+    );
   }
 
   if (sessionQueryError) {
-    return <ContentState.Error className="px-6 py-6" title={t('session.list.loadFailed')} />;
+    return (
+      <View className="px-6 py-6">
+        <ContentState.Error title={t('session.list.loadFailed')} />
+      </View>
+    );
   }
 
   if (sessions.length === 0) {
-    return <ContentState.Empty className="px-6 py-6" title={t('session.list.empty')} />;
+    return (
+      <View className="px-6 py-6">
+        <ContentState.Empty title={t('session.list.empty')} />
+      </View>
+    );
   }
 
   return (

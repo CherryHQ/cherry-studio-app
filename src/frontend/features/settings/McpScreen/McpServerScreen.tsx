@@ -1,7 +1,7 @@
 import {
   ContentState,
   Input,
-  Label,
+  Spinner,
   TextField,
   useAlert,
   useToast,
@@ -9,7 +9,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -231,10 +231,11 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
       isBusy
         ? {
             element: (
-              <ActivityIndicator
+              <Spinner
                 accessibilityLabel={t('common.save')}
-                size="small"
-                style={styles.headerActivityIndicator}
+                accessibilityRole="progressbar"
+                size="sm"
+                style={styles.headerSpinner}
               />
             ),
             key: 'save',
@@ -380,8 +381,8 @@ function FormField({
   label: string;
 }) {
   return (
-    <TextField isDisabled={isDisabled}>
-      <Label>{label}</Label>
+    <TextField disabled={isDisabled}>
+      <TextField.Label>{label}</TextField.Label>
       {children}
     </TextField>
   );
@@ -451,7 +452,7 @@ const styles = StyleSheet.create({
   scrollContentWithChrome: {
     paddingBottom: 96,
   },
-  headerActivityIndicator: {
+  headerSpinner: {
     height: 32,
     width: 32,
   },

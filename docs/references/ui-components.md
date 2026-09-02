@@ -64,6 +64,60 @@ Existing `.ios.tsx` and `.android.tsx` files are implementation inventory, not p
 their boundary when substantially changing the component, but do not migrate unrelated components
 incidentally.
 
+### Component Family Anatomy
+
+A component family is the smallest directory that owns one public product component, its public
+types, private implementation helpers, and tests. A platform split does not create multiple public
+components. When the public component owns shared behavior and only the rendered primitive differs,
+use a shared shell with a private adapter:
+
+```text
+switch/
+├── index.ts                    public exports only
+├── switch.tsx                 shared behavior, events, and composition
+├── switch.types.ts            public product contract
+├── switch-control.types.ts    private adapter props shared by every implementation
+├── switch-control.tsx         extensionless fallback for Web and tooling
+├── switch-control.ios.tsx     iOS provider or system primitive
+├── switch-control.android.tsx Android provider or system primitive
+└── switch-indicator.tsx       private shared implementation helper
+```
+
+`Switch` is the public component. `SwitchControl` is an implementation port: the smallest interface
+through which the shared component delegates to a platform implementation. It is never exported
+from a package barrel or imported by product code.
+
+The shell owns product semantics such as controlled state, event ownership, accessibility defaults,
+shared layout, product styling, and composition. The adapter owns only the platform-imposed
+rendering or API mapping and uses one common props type. Provider SDK types stop at that adapter
+boundary.
+
+Here, extensionless means that the module stem has no `.ios` or `.android` suffix; the physical file
+still has its normal `.ts` or `.tsx` extension. The extensionless adapter is a supported fallback,
+not a placeholder. Metro selects `.ios` or `.android` on native platforms; Web, tests that explicitly
+request the base module, and tools without platform resolution use the extensionless file. A family
+may have only one platform-specific file when only one platform imposes a difference, but it still
+keeps the extensionless fallback and shared adapter props.
+
+Do not introduce this shell-and-adapter shape when the whole component is already correct in shared
+source. If the complete public component is inherently platform-owned and has no meaningful shared
+behavior to retain, a direct platform family may be smaller. In both shapes, product code imports the
+same public component and never selects a platform implementation itself.
+
+A direct platform family keeps the public component name in each implementation:
+
+```text
+tabs/
+├── index.ts          public exports only
+├── tabs.types.ts     public contract shared by every implementation
+├── tabs.tsx          extensionless fallback for Web and tooling
+├── tabs.ios.tsx      complete iOS component
+└── tabs.android.tsx  complete Android component
+```
+
+Use this second shape only when there is no shared shell behavior to preserve. Its fallback, explicit
+platform tests, and public-only barrel follow the same rules as the adapter family.
+
 ## Ownership
 
 `@cherrystudio/ui/components` is the public entry point for reusable, platform-neutral product
@@ -91,6 +145,19 @@ import platform UI SDKs directly. Direct `heroui-native` and `@expo/ui` usage re
 capabilities whose native or third-party behavior is itself part of the contract; a package-owned
 CherryUI wrapper becomes the public surface once the app standardizes behavior around such a
 dependency.
+
+Ready-for-review CI runs `pnpm ui:check-boundaries`. The check scans production TypeScript under
+`src`, rejects the `@cherrystudio/ui` root and unexported deep paths, and rejects direct `@expo/ui`,
+`heroui-native`, or `expo-glass-effect` imports outside a named app-shell or semantic-gateway
+exemption. Inside CherryUI, it recognizes platform `*-control` and `*-frame` families, rejects their
+direct re-export from an `index.ts` barrel, and requires shared props plus an extensionless fallback.
+Exemptions live in the check with their architectural reason and fail when they become stale.
+
+The check is a guardrail, not a proof of the architecture. Tests are excluded, and direct platform
+families and private helpers with other names remain review-owned. It cannot prove that shared props
+are consumed, that provider types do not leak, or that a platform difference is imposed rather than
+chosen. The change author must state the constraint and the reviewer must apply the platform rule
+above. When CherryUI adopts another platform UI SDK, add it to `platformUiPackages` in the check.
 
 App-level singleton surfaces are owned by CherryUI, mounted once at the app root, and reached
 through one hook or component from `@cherrystudio/ui/components`. Toast, portal host, and global
@@ -156,7 +223,11 @@ Reviewable from the change itself:
   Familiarity and convention are not constraints.
 - A platform family shares one props type and one set of helpers, kept in the family directory
   rather than restated in each platform file.
+- A shared shell owns product behavior; private adapters own only platform rendering or API mapping,
+  include an extensionless fallback, and are not package exports.
 - Platform gateways expose one semantic API and keep SDK types out of feature code.
+- `pnpm ui:check-boundaries` passes when the change touches CherryUI exports, provider imports, or a
+  platform adapter family.
 
 ### Control Quality
 

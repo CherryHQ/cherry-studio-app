@@ -1,4 +1,4 @@
-import { Description, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Input, TextField } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -23,12 +23,12 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
         <Text className="text-lg font-semibold text-foreground">{label}</Text>
 
         <TextField>
-          <Label>Name</Label>
+          <TextField.Label>Name</TextField.Label>
           <Input accessibilityLabel="Name" onChangeText={setValue} value={value} />
         </TextField>
 
-        <TextField isRequired>
-          <Label>Email</Label>
+        <TextField required>
+          <TextField.Label>Email</TextField.Label>
           <Input
             accessibilityLabel="Email"
             autoCapitalize="none"
@@ -36,22 +36,22 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
             onChangeText={noop}
             value="hello@cherry.ai"
           />
-          <Description>Used for account notifications.</Description>
+          <TextField.Description>Used for account notifications.</TextField.Description>
         </TextField>
 
-        <TextField isInvalid>
-          <Label>API Key</Label>
+        <TextField invalid>
+          <TextField.Label>API Key</TextField.Label>
           <Input accessibilityLabel="API Key" onChangeText={noop} value="" />
-          <FieldError>API Key is required.</FieldError>
+          <TextField.Error>API Key is required.</TextField.Error>
         </TextField>
 
-        <TextField isDisabled>
-          <Label>Organization</Label>
+        <TextField disabled>
+          <TextField.Label>Organization</TextField.Label>
           <Input accessibilityLabel="Organization" onChangeText={noop} value="Cherry AI" />
         </TextField>
 
         <TextField>
-          <Label>Notes</Label>
+          <TextField.Label>Notes</TextField.Label>
           <Input
             accessibilityLabel="Notes"
             multiline
@@ -59,7 +59,7 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
             textAlignVertical="top"
             value={multilineValue}
           />
-          <Description>Four visible lines with overflow scrolling.</Description>
+          <TextField.Description>Four visible lines with overflow scrolling.</TextField.Description>
         </TextField>
       </View>
     </ScopedTheme>

@@ -51,9 +51,7 @@ export function ProviderModelCheckSection({
   return (
     <View className="gap-5">
       <View className="gap-1">
-        {/* Section's own `title` slot indents the header by 12px, which would
-            sit it out of line with the API keys field label right above. */}
-        <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
+        <Section.Header title={t('settings.provider.models.checkTitle')} />
         <View className="flex-row items-stretch gap-2">
           <SelectField
             accessibilityLabel={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
@@ -70,16 +68,17 @@ export function ProviderModelCheckSection({
               </SelectField.ValueText>
             </SelectField.Value>
           </SelectField>
-          <Button
-            className="self-stretch"
-            disabled={isDisabled || isLoading || !selectedModel}
-            loading={isChecking}
-            onPress={() => void startCheck()}
-          >
-            {isChecking
-              ? t('settings.provider.models.checkChecking')
-              : t('settings.provider.models.checkStart')}
-          </Button>
+          <View className="self-stretch">
+            <Button
+              disabled={isDisabled || isLoading || !selectedModel}
+              loading={isChecking}
+              onPress={() => void startCheck()}
+            >
+              {isChecking
+                ? t('settings.provider.models.checkChecking')
+                : t('settings.provider.models.checkStart')}
+            </Button>
+          </View>
         </View>
         {isDisabled ? (
           <Text className="text-muted-foreground text-xs">

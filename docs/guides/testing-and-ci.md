@@ -44,6 +44,25 @@ Run only the specialized contract checks triggered by the change. Examples inclu
 `pnpm docs:check-links`, `pnpm skills:check`, `pnpm design:check`, database migration checks, and
 desktop synchronization guards.
 
+### Platform Component Families
+
+Tests mirror the ownership boundary described in
+[UI Components](../references/ui-components.md#component-family-anatomy):
+
+- Shared public-component tests mock the extensionless private adapter and assert behavior owned by
+  the shared shell.
+- Adapter tests import the explicit `.ios` or `.android` file so the test does not depend on Jest's
+  active platform resolution.
+- Fallback tests load the exact extensionless file, including its source extension when necessary,
+  so an iOS-default resolver cannot silently substitute the iOS adapter.
+- Fallback assertions may use a dedicated `*-control.test.tsx` file or remain beside the shell test
+  while a family is small, but they load the fallback explicitly and stay grouped by their owner.
+- Provider SDKs are mocked only in adapter or fallback tests. Assertions target the shared contract
+  mapping, not provider implementation details.
+
+Run `pnpm ui:check-boundaries` when changing CherryUI exports, direct provider imports, or a private
+platform adapter family.
+
 ## Before Creating A Draft PR
 
 Run these full local gates on the final local head:

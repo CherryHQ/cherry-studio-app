@@ -1,5 +1,5 @@
 import RadioIcon from '@cherrystudio/app-icons/icons/radio';
-import { Section, Switch, useAlert } from '@cherrystudio/ui/components';
+import { Section, useAlert } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { usePreference } from '@/frontend/data/hooks';
@@ -25,19 +25,11 @@ export default function NotificationSettingsScreen() {
       headerProps={{ title: t('settings.notifications.title') }}
     >
       <Section footer={t('settings.notifications.liveActivity.description')}>
-        <Section.Item
-          accessibilityRole="switch"
-          accessibilityState={{ checked: isLiveActivityEnabled }}
+        <Section.SwitchItem
           label={t('settings.notifications.liveActivity.title')}
           leading={<RadioIcon className="size-5 text-foreground" />}
-          onPress={() => setLiveActivityPreference(!isLiveActivityEnabled)}
-          trailing={
-            <Switch
-              accessibilityLabel={t('settings.notifications.liveActivity.title')}
-              onValueChange={setLiveActivityPreference}
-              value={isLiveActivityEnabled}
-            />
-          }
+          onValueChange={setLiveActivityPreference}
+          value={isLiveActivityEnabled}
         />
       </Section>
     </SettingsScrollPage>

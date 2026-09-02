@@ -1,12 +1,11 @@
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { View } from 'react-native';
 
-import type { SurfaceProps } from './surface.types';
+import type { SurfaceFrameProps } from './surface-frame.types';
 
-// Real Liquid Glass on iOS 26+; older iOS falls back to the plain surface.
 const supportsGlass = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
-export function Surface({
+export function SurfaceFrame({
   children,
   className,
   cornerRadius,
@@ -14,9 +13,7 @@ export function Surface({
   style,
   testID,
   tintColor,
-}: SurfaceProps) {
-  // Alignment is deliberately not set here — callers own it via `style`, so the
-  // glass and fallback branches can't drift apart on it.
+}: SurfaceFrameProps) {
   const shape = { borderRadius: cornerRadius, overflow: 'hidden' } as const;
 
   if (supportsGlass) {

@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
-import { Surface } from '../../surface';
+import { SurfaceFrame } from '../../surface/surface-frame';
 import type { ComposerPillProps } from '../composer.types';
 import { actionHitSlop, composerActionSize, pillStyle } from '../utils/composer-layout';
 
@@ -42,7 +42,7 @@ export function ComposerPill({
       style={style}
       testID={testID}
     >
-      <Surface
+      <SurfaceFrame
         className={fallbackClassName}
         cornerRadius={composerActionSize / 2}
         interactive
@@ -51,7 +51,7 @@ export function ComposerPill({
       >
         {icon ? <View className="shrink-0">{icon}</View> : null}
         {children}
-      </Surface>
+      </SurfaceFrame>
     </Pressable>
   );
 }

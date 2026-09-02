@@ -13,6 +13,8 @@ jest.mock('expo-glass-effect', () => ({
 
     return React.createElement(View, { ...props, testID: 'glass-view' }, children);
   },
+  isGlassEffectAPIAvailable: () => true,
+  isLiquidGlassAvailable: () => true,
 }));
 
 jest.mock('react-native-reanimated', () => {

@@ -1,10 +1,10 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Switch } from '../switch.ios';
+import { SwitchControl } from '../switch-control.ios';
 
 jest.mock('@expo/ui/swift-ui', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   return {
     Host: (props: object) => React.createElement(View, { ...props, mockComponent: 'host' }),
@@ -14,6 +14,7 @@ jest.mock('@expo/ui/swift-ui', () => {
 });
 
 jest.mock('@expo/ui/swift-ui/modifiers', () => ({
+  accessibilityHidden: () => ({ accessibilityHidden: true }),
   accessibilityLabel: (label: string) => ({ accessibilityLabel: label }),
   controlSize: (size: string) => ({ controlSize: size }),
   disabled: (disabled: boolean) => ({ disabled }),
@@ -24,7 +25,7 @@ jest.mock('uniwind', () => ({
   useUniwind: () => ({ theme: 'dark' }),
 }));
 
-describe('Switch (iOS)', () => {
+describe('SwitchControl (iOS)', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -32,22 +33,34 @@ describe('Switch (iOS)', () => {
     renderer = undefined;
   });
 
-  test('renders the Expo UI Toggle inside its Host with a hidden visual label', () => {
+  test('renders a controlled SwiftUI toggle with native accessibility', () => {
     const onValueChange = jest.fn();
 
     act(() => {
       renderer = create(
-        <Switch accessibilityLabel="Airplane mode" onValueChange={onValueChange} value />,
+        <SwitchControl
+          accessibilityLabel="Airplane mode"
+          onValueChange={onValueChange}
+          testID="airplane-mode"
+          value
+        />,
       );
     });
 
     const host = renderer!.root.findByProps({ mockComponent: 'host' });
     const toggle = renderer!.root.findByProps({ mockComponent: 'expo-toggle' });
 
-    expect(host.props.colorScheme).toBe('dark');
-    expect(host.props.matchContents).toBe(true);
-    expect(toggle.props.isOn).toBe(true);
-    expect(toggle.props.label).toBe('Airplane mode');
+    expect(host.props).toMatchObject({
+      colorScheme: 'dark',
+      ignoreSafeArea: 'all',
+      matchContents: true,
+      testID: 'airplane-mode-host',
+    });
+    expect(toggle.props).toMatchObject({
+      isOn: true,
+      label: 'Airplane mode',
+      testID: 'airplane-mode',
+    });
     expect(toggle.props.modifiers).toEqual([
       { labelsHidden: true },
       { controlSize: 'regular' },
@@ -63,32 +76,40 @@ describe('Switch (iOS)', () => {
     { controlSize: 'small', size: 'sm' },
     { controlSize: 'regular', size: 'default' },
     { controlSize: 'large', size: 'lg' },
-  ] as const)('maps $size to the native $controlSize control size', ({ controlSize, size }) => {
+  ] as const)('maps $size to the native $controlSize size', ({ controlSize, size }) => {
     act(() => {
       renderer = create(
-        <Switch accessibilityLabel="Airplane mode" onValueChange={jest.fn()} size={size} value />,
-      );
-    });
-
-    const toggle = renderer!.root.findByProps({ mockComponent: 'expo-toggle' });
-
-    expect(toggle.props.modifiers).toContainEqual({ controlSize });
-  });
-
-  test('maps disabled state to the native modifier', () => {
-    act(() => {
-      renderer = create(
-        <Switch
+        <SwitchControl
           accessibilityLabel="Airplane mode"
-          disabled
           onValueChange={jest.fn()}
-          value={false}
+          size={size}
+          value
         />,
       );
     });
 
+    expect(
+      renderer!.root.findByProps({ mockComponent: 'expo-toggle' }).props.modifiers,
+    ).toContainEqual({ controlSize });
+  });
+
+  test('hides a presentational indicator from accessibility and interaction', () => {
+    act(() => {
+      renderer = create(
+        <SwitchControl accessibilityElementsHidden disabled pointerEvents="none" value={false} />,
+      );
+    });
+
+    const host = renderer!.root.findByProps({ mockComponent: 'host' });
     const toggle = renderer!.root.findByProps({ mockComponent: 'expo-toggle' });
 
-    expect(toggle.props.modifiers).toContainEqual({ disabled: true });
+    expect(host.props.pointerEvents).toBe('none');
+    expect(toggle.props.onIsOnChange).toBeUndefined();
+    expect(toggle.props.modifiers).toEqual([
+      { labelsHidden: true },
+      { controlSize: 'regular' },
+      { accessibilityHidden: true },
+      { disabled: true },
+    ]);
   });
 });

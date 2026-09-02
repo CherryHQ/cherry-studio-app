@@ -124,6 +124,19 @@ page for visual debugging.
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.
 
+`Surface` is the semantic material boundary for shared product chrome. Callers choose a token-backed
+`tone` and a `shape`, then size and align the content inside it. CherryUI maps that specification to
+the complete non-glass fallback and, where supported, the matching Liquid Glass tint and radius:
+
+```tsx
+<Surface interactive shape="circle" tone="sidebar-accent">
+  <Pressable className="size-11 items-center justify-center">...</Pressable>
+</Surface>
+```
+
+Raw fallback classes, numeric radii, tint colors, and styles are private implementation details for
+package components that need dynamic or animated geometry.
+
 `ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
 bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns
 the at-bottom state and the one-shot scroll action:
@@ -185,13 +198,20 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 `Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
-`destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
-behavior. The `xs`, `sm`, `default`, and `lg` sizes use content-driven typography and padding without
-fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
-the matching icon-only padding when no label is provided. Icon-only buttons must provide an
-`accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
-need an Expo UI `Host`. The visually compact `xs` size supplies an 8-point hit slop by default so
-its effective touch target remains usable.
+`destructive`, `outline`, `secondary`, `ghost`, and `link` variants, along with loading and disabled
+behavior. `shape="pill"` selects a capsule without opening a styling escape hatch. The `xs`, `sm`,
+`inline`, `default`, `field`, and `lg` sizes use content-driven typography and padding; `field` has a
+minimum height that aligns with form controls while still growing for large text, and `inline` is a
+compact zero-horizontal-padding action for headings or prose. The `icon` prop renders an icon before
+the label and automatically switches to the matching icon-only padding when no label is provided.
+Icon-only buttons must provide an `accessibilityLabel`. `Button.Label` remains available for custom
+composed content. Callers do not need an Expo UI `Host`. The visually compact `xs` size supplies an
+8-point hit slop by default so its effective touch target remains usable.
+
+`Section.Header` owns its intrinsic row, typography, and minimum height. A header nested directly in
+`Section` receives the grouped title inset from the root; a standalone header receives placement
+from its immediate parent. `Section.Item` and its semantic row variants use `density="compact"`,
+`"default"`, or `"comfortable"` for intrinsic vertical spacing.
 
 `Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
 selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
@@ -209,6 +229,22 @@ value and persistence. The default grouped `Section` supplies its surface and se
     />
   ))}
 </Section>
+```
+
+`Switch` and `Slider` keep one controlled CherryUI contract while private platform adapters render
+native SwiftUI controls on iOS and native Android controls on Android. Feature code never imports a
+platform UI SDK or branches on the operating system. Web keeps the CherryUI fallback controls.
+
+`Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
+press target and switch accessibility node; its trailing switch is a package-private visual
+indicator. Use a separate `Switch` when the surrounding row also contains another action:
+
+```tsx
+<Section.SwitchItem
+  label="Notifications"
+  onValueChange={setNotificationsEnabled}
+  value={notificationsEnabled}
+/>
 ```
 
 Use `Section.SelectItem` when a grouped settings row opens a picker. It standardizes the current
@@ -290,7 +326,10 @@ Product code keeps query state, retry behavior, list mounting, and localized cop
 ```
 
 Keep screen, list, composer, and card insets in the consuming feature and compose the state inside
-that layout. `ContentState` deliberately has no query, retry, inset, card, or compact-mode props.
+that layout. Use `layout="centered"`, `layout="leading"`, or `layout="row"` for the state's internal
+direction and alignment. `prominence="prominent"` raises the title and action hierarchy without
+allocating any surrounding room. `ContentState` deliberately has no query, retry, inset, card, or
+compact-mode props.
 
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
@@ -315,6 +354,23 @@ import { Text } from 'react-native';
 
 The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
 container; `textClassName` styles the phrases.
+
+`TextField` is the provider-neutral field group for labels, descriptions, validation errors, and
+shared disabled/invalid/required state. Use its compound members instead of importing loose field
+typography primitives:
+
+```tsx
+<TextField disabled={isSaving} invalid={Boolean(errorMessage)} required>
+  <TextField.Label>{label}</TextField.Label>
+  <Input accessibilityLabel={label} onChangeText={setValue} value={value} />
+  <TextField.Description>{hint}</TextField.Description>
+  <TextField.Error>{errorMessage}</TextField.Error>
+</TextField>
+```
+
+The component family owns its text presentation and maps neutral Cherry state to the private UI
+provider. Product code should pass the same neutral state directly to an `Input` only when that
+input needs to override the enclosing field.
 
 `Input` is the shared field for ordinary and sensitive text. Set `type="password"` for passwords,
 API keys, and other secrets; the password variant keeps the controlled value with the caller, owns

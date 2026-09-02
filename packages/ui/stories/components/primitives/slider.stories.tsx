@@ -1,6 +1,6 @@
 import { Slider, type SliderProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -9,6 +9,7 @@ const themes = [
   { label: 'Light', value: 'light' },
   { label: 'Dark', value: 'dark' },
 ] as const;
+const noop = () => undefined;
 
 type ThemePreviewProps = {
   args: SliderProps;
@@ -18,8 +19,6 @@ type ThemePreviewProps = {
 
 function ThemePreview({ args, label, theme }: ThemePreviewProps) {
   const [value, setValue] = useState(args.value);
-
-  useEffect(() => setValue(args.value), [args.value]);
 
   return (
     <ScopedTheme theme={theme}>
@@ -36,6 +35,21 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
           }}
           value={value}
         />
+        <View className="gap-2">
+          <Text className="font-medium text-muted-foreground text-sm">Compact range</Text>
+          <Slider
+            accessibilityLabel="Opacity"
+            max={1}
+            min={0}
+            onValueChange={noop}
+            step={0.1}
+            value={0.4}
+          />
+        </View>
+        <View className="gap-2">
+          <Text className="font-medium text-muted-foreground text-sm">Disabled</Text>
+          <Slider accessibilityLabel="Disabled value" disabled onValueChange={noop} value={65} />
+        </View>
       </View>
     </ScopedTheme>
   );
@@ -85,7 +99,12 @@ export const Playground: Story = {
   render: (args) => (
     <View className="gap-4">
       {themes.map((theme) => (
-        <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
+        <ThemePreview
+          args={args}
+          key={`${theme.value}-${args.value}`}
+          label={theme.label}
+          theme={theme.value}
+        />
       ))}
     </View>
   ),

@@ -282,21 +282,21 @@ export default function ProviderCatalogScreen() {
           />
         ) : null}
         {catalogQuery.isPending ? (
-          <ContentState.Loading
-            className="px-1 py-8"
-            title={t('settings.provider.catalog.loading')}
-          />
+          <View className="px-1 py-8">
+            <ContentState.Loading title={t('settings.provider.catalog.loading')} />
+          </View>
         ) : catalogQuery.isError ? (
-          <ContentState.Error
-            className="px-1 py-8"
-            description={
-              catalogQuery.error instanceof Error
-                ? catalogQuery.error.message
-                : String(catalogQuery.error)
-            }
-            primaryAction={{ children: t('common.retry'), onPress: retry }}
-            title={t('settings.provider.catalog.loadFailed')}
-          />
+          <View className="px-1 py-8">
+            <ContentState.Error
+              description={
+                catalogQuery.error instanceof Error
+                  ? catalogQuery.error.message
+                  : String(catalogQuery.error)
+              }
+              primaryAction={{ children: t('common.retry'), onPress: retry }}
+              title={t('settings.provider.catalog.loadFailed')}
+            />
+          </View>
         ) : (
           <View className="-mx-4 min-h-0 flex-1">
             <SectionList

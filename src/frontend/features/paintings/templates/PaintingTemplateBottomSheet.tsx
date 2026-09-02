@@ -82,17 +82,17 @@ function PaintingTemplateSheetBody({
           the width, and `w-full` would resolve to the body's full content box
           and overflow by exactly the margin. The 16 matches the panel's own
           padding, so the button's edges line up with the prompt text above it. */}
-      <Button
-        accessibilityLabel={t('painting.templates.try')}
-        className="mx-4 self-stretch rounded-full"
-        onPress={() => onUse(template)}
-        size="sm"
-        testID="painting-template-try"
-      >
-        <Button.Label className="font-semibold text-base">
-          {t('painting.templates.try')}
-        </Button.Label>
-      </Button>
+      <View className="mx-4 self-stretch">
+        <Button
+          accessibilityLabel={t('painting.templates.try')}
+          onPress={() => onUse(template)}
+          shape="pill"
+          size="sm"
+          testID="painting-template-try"
+        >
+          <Button.Label>{t('painting.templates.try')}</Button.Label>
+        </Button>
+      </View>
     </ScrollView>
   );
 }
