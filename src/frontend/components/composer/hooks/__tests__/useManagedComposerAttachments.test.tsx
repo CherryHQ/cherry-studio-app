@@ -13,7 +13,6 @@ import { useManagedComposerAttachments } from '../useManagedComposerAttachments'
 const mockCreateInternalEntry = jest.fn();
 const mockDeleteEntry = jest.fn(async () => true);
 const mockToastShow = jest.fn();
-const mockLoggerDebug = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockFileModule = {
   createInternalEntry: mockCreateInternalEntry,
@@ -32,7 +31,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
     withContext: () => ({
-      debug: (...args: unknown[]) => mockLoggerDebug(...args),
       warn: (...args: unknown[]) => mockLoggerWarn(...args),
     }),
   },
@@ -269,27 +267,6 @@ describe('useManagedComposerAttachments', () => {
         status: 'ready',
       }),
     ]);
-  });
-
-  it('logs import duration without file identity or location', async () => {
-    const pending = deferred<ReturnType<typeof resolvedFile>>();
-    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
-    mockCreateInternalEntry.mockReturnValue(pending.promise);
-    await renderHook();
-
-    await act(async () => snapshot?.addAttachments([source('private.pdf')]));
-    now.mockReturnValue(1_830);
-    await act(async () => {
-      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000015', 'private.pdf'));
-      await pending.promise;
-    });
-
-    expect(mockLoggerDebug).toHaveBeenCalledWith('Attachment import finished', {
-      durationMs: 830,
-      kind: 'file',
-      result: 'ready',
-      size: 128,
-    });
   });
 
   it('rejects unsupported images before importing them', async () => {

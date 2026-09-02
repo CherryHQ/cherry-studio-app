@@ -51,12 +51,11 @@ export class KeepAliveCoordinator extends BaseService {
     this.registerAppStateListener(this.handleAppStateChange);
   }
 
-  acquire(tag: string): KeepAliveLease {
+  acquire(_tag: string): KeepAliveLease {
     if (Platform.OS !== 'ios' || this.disposed) return noOpLease;
 
     let released = false;
     this.holderCount += 1;
-    logger.info('Keep-alive lease acquired', { holderCount: this.holderCount, tag });
     void this.enqueue(() => this.reconcile());
 
     return {
@@ -64,7 +63,6 @@ export class KeepAliveCoordinator extends BaseService {
         if (released || this.disposed) return;
         released = true;
         this.holderCount -= 1;
-        logger.info('Keep-alive lease released', { holderCount: this.holderCount, tag });
         void this.enqueue(() => this.reconcile());
       },
     };
@@ -126,7 +124,6 @@ export class KeepAliveCoordinator extends BaseService {
       );
       this.clearRetryTimer();
       this.retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
-      logger.info('Background audio started', { holderCount: this.holderCount });
     } catch (error) {
       if (player) this.releasePlayer(player);
       logger.error('Background audio failed to start', error as Error, {
@@ -155,7 +152,6 @@ export class KeepAliveCoordinator extends BaseService {
     }
     try {
       player.remove();
-      logger.info('Background audio stopped');
     } catch (error) {
       logger.error('Background audio removal failed', error as Error);
     }

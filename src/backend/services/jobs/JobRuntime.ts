@@ -705,7 +705,14 @@ export class JobRuntime extends BaseService {
         this.handlers,
         (jobId) => this.inFlightExecuted.has(jobId) || (this.startupLocalIds?.has(jobId) ?? false),
       );
-      logger.info('startup recovery done', { ...stats });
+      if (
+        stats.cancelled > 0 ||
+        stats.pendingReset > 0 ||
+        stats.delayedKept > 0 ||
+        stats.singletonKept > 0
+      ) {
+        logger.info('startup recovery reconciled jobs', { ...stats });
+      }
     } finally {
       this.startupLocalIds = null;
     }

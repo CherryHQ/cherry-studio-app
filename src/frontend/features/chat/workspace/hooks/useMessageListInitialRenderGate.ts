@@ -1,9 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { loggerService } from '@/shared/core/logger/LoggerService';
-
-const gateLog = loggerService.withContext('ChatGate');
-
 export type MessageListInitialRenderGateOptions = {
   renderGateKey: string;
   requiresInitialHistoryLayout: boolean;
@@ -84,12 +80,10 @@ export function useMessageListInitialRenderGate({
       cancelAnimationFrame(pendingReadyFrame.id);
     }
 
-    gateLog.debug('[GATE] markListLoaded(onReady)', { t: Date.now() });
     const readyFrameId = requestAnimationFrame(() => {
       if (pendingReadyFrameRef.current?.id === readyFrameId) {
         pendingReadyFrameRef.current = null;
       }
-      gateLog.debug('[GATE] gateResolved(rAF)', { t: Date.now() });
       if (activeRenderTokenRef.current === renderToken) {
         setResolvedRenderToken(renderToken);
       }
