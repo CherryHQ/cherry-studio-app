@@ -69,6 +69,10 @@ versioned wire design. See
 - The Host combines the shared system capability catalog, the Agent's capability-group deny-list,
   and the current Agent's persisted MCP bindings into a frozen tool snapshot before each turn. An
   empty snapshot is ordinary conversation.
+- The Host builds one mobile-owned system prompt for every turn. Fixed Runtime rules define truthful
+  capability use, approval and permission behavior, untrusted-content handling, mobile lifecycle,
+  and result reporting; the user-configured Agent instructions remain a separate role and style
+  section. Capability guidance is included only when its supporting tool is in the frozen snapshot.
 - Pi owns the model → tool → result loop. Application adapters retain permission, credential,
   managed-file, and approval authority.
 - Managed image and bounded text input are resolved by the Host before execution. Arbitrary paths

@@ -43,9 +43,11 @@ The local Host never turns remote tools into `RuntimeTool` callbacks. See
 [Agent Architecture](./README.md#approved-future-remote-boundary).
 
 The Agent's instructions, model, and MCP bindings, plus application-owned system capabilities, are
-resolved afresh for every turn. Mobile Skill persistence and prompt projection are not implemented;
-their target boundary is documented separately and does not change the current Runtime input. The
-injected Pi Runtime remains stable for the Host lifetime.
+resolved afresh for every turn. After freezing the tool snapshot, the Host combines fixed mobile
+Runtime rules, guidance for capabilities that are actually present, and the user-configured Agent
+instructions into the prepared system prompt. Mobile Skill persistence and prompt projection are
+not implemented; their target boundary is documented separately and does not change the current
+Runtime input. The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Production Pi binding
 
@@ -156,6 +158,7 @@ type RuntimeToolCall = {
 
 type RuntimeExecutionRequest = {
   turnId: string
+  // Host-prepared system prompt: mobile Runtime rules plus user-configured Agent instructions.
   instructions: string
   model: RuntimeModel
   history: RuntimeHistoryTurn[]
