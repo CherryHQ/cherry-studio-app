@@ -28,7 +28,6 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
-import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../runtime';
@@ -39,6 +38,7 @@ import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEffor
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
+import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 
 type ChatInputProps = {
   agentId?: string;
@@ -208,22 +208,8 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
-      if (!(error instanceof AgentProtocolError)) {
-        return undefined;
-      }
-      if (error.view.code === 'ATTACHMENT_INVALID') {
-        return error.view.message;
-      }
-      if (error.view.code === 'CAPABILITY_UNSUPPORTED') {
-        return t('chat.input.attachmentsRejected');
-      }
-      if (
-        error.view.code === 'ATTACHMENT_UNAVAILABLE' ||
-        error.view.code === 'ATTACHMENT_METADATA_MISMATCH'
-      ) {
-        return t('chat.input.attachmentUnavailable');
-      }
-      return undefined;
+      const key = getSendErrorLabelKey(error);
+      return key ? t(key) : undefined;
     },
     [t],
   );

@@ -213,6 +213,11 @@ export const AgentErrorViewSchema = z
       'CANCELLED',
       'INTERRUPTED',
     ]),
+    /**
+     * Diagnostic text for logs and the provider-layer detail line. User-facing
+     * copy is derived from `code` and `failure.reasonCode`; renderers never
+     * localize or display this string for app-owned layers.
+     */
     message: z.string(),
     retryable: z.boolean(),
     /** Present on newly persisted execution failures; optional for historical rows. */

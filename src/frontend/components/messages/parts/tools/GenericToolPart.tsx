@@ -2,6 +2,8 @@ import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { readCherryMeta } from '@/shared/data/types/uiParts';
+
 import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
 import {
   getToolDisplayState,
@@ -21,22 +23,29 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
   const toolName = getToolName(part);
   const toolDisplay = getBuiltInToolDisplay(toolName);
   const title = getToolLabel(part, toolDisplay?.titleKey, t);
-  const statusText = getToolStatusText(part, t);
+  // The app closed this call out when the turn ended; that is not a tool failure.
+  const isSettledByApp = readCherryMeta(part)?.settledByApp === true;
+  const statusText = isSettledByApp ? t('chat.tool.unfinished') : getToolStatusText(part, t);
 
   return (
     <MessagePart.Tool
       state={getToolDisplayState(part)}
       statusText={statusText}
-      statusTone={getToolStatusTone(part)}
+      statusTone={isSettledByApp ? 'warning' : getToolStatusTone(part)}
       testID="tool-part"
       title={title}
     >
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
-      {part.state === 'output-error' ? (
+      {part.state === 'output-error' && isSettledByApp ? (
+        <Text className="text-foreground text-base italic" selectable>
+          {t('chat.tool.unfinishedDetail')}
+        </Text>
+      ) : null}
+      {part.state === 'output-error' && !isSettledByApp ? (
         <MessagePart.TextSection
           tone="danger"
           title={t('chat.tool.error')}
-          value={part.errorText}
+          value={part.errorText || t('chat.tool.callError')}
         />
       ) : null}
       {shouldShowNoDetails(part) ? (
