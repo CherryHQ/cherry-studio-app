@@ -15,7 +15,6 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
 } from '@/backend/data/db/schemas';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   type CreateMcpServerDto,
@@ -27,8 +26,6 @@ import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { timestampToISO } from './utils/rowMappers';
-
-const logger = loggerService.withContext('DataApi:McpServerService');
 
 export type ListMcpServersQuery = {
   id?: string;
@@ -122,7 +119,6 @@ export class McpServerService {
       })
       .returning();
 
-    logger.info('Created MCP server', { id: row.id, name: row.name });
     return rowToMcpServer(row);
   }
 
@@ -158,7 +154,6 @@ export class McpServerService {
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
-    logger.info('Updated MCP server', { changes: Object.keys(updates), id });
     return rowToMcpServer(row);
   }
 
@@ -180,8 +175,6 @@ export class McpServerService {
         throw DataApiErrorFactory.notFound('McpServer', id);
       }
     });
-
-    logger.info('Deleted MCP server', { id });
   }
 
   /**

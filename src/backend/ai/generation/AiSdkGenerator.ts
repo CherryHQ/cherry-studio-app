@@ -133,7 +133,6 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
         await safeCall('onAbort', hooks.onAbort);
         throw error;
       }
-      logger.error('AI SDK generation error', error as Error);
       if (hooks.onError) {
         try {
           await hooks.onError({ error: toError(error) });

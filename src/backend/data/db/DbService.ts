@@ -139,7 +139,6 @@ export class DbService extends BaseService {
       this.sqlite.execSync('PRAGMA journal_mode = WAL');
       this.sqlite.execSync('PRAGMA synchronous = NORMAL');
       this.sqlite.execSync('PRAGMA foreign_keys = ON');
-      logger.info('Database PRAGMAs configured');
     } catch (error) {
       logger.warn('Failed to configure database PRAGMAs', error as Error);
     }

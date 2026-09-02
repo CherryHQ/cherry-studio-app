@@ -17,7 +17,6 @@ import {
   MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
 } from './list/messageListLayout';
-import { scrollLog } from './list/messageListLogger';
 import { MessageListRow } from './list/MessageListRow';
 import { useMessageListScrollController } from './list/useMessageListScrollController';
 import type { MessageListItem, MessageListProps } from './types';
@@ -107,7 +106,6 @@ export function MessageList({
       return;
     }
 
-    scrollLog.debug('[SCROLL] startReached', { t: Date.now() });
     void onLoadOlder();
   }, [onLoadOlder]);
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);

@@ -107,14 +107,10 @@ export class LifecycleManager {
 
     const graph = this.container.buildDependencyGraph(phase);
     if (graph.length === 0) {
-      logger.debug(`No services registered for phase '${phase}'`);
       return;
     }
 
     const layers = this.resolver.resolveLayered(graph);
-    const order = layers.map((layer) => `[${layer.join(', ')}]`).join(' -> ');
-    logger.info(`--- ${phase} start (${layers.flat().length} services) --- ${order}`);
-
     const startedAt = performance.now();
 
     for (const layer of layers) {
@@ -129,7 +125,9 @@ export class LifecycleManager {
       this.initializationOrder.push(...layer);
     }
 
-    logger.info(`--- ${phase} complete (${(performance.now() - startedAt).toFixed(1)}ms) ---`);
+    logger.info(
+      `Phase '${phase}' initialized (${graph.length} services, ${(performance.now() - startedAt).toFixed(1)}ms)`,
+    );
   }
 
   /**
@@ -213,7 +211,6 @@ export class LifecycleManager {
 
       const duration = performance.now() - startedAt;
       this.serviceTiming.set(serviceName, duration);
-      logger.debug(`Service '${serviceName}' initialized (${duration.toFixed(1)}ms)`);
     } catch (error) {
       this.handleInitError(serviceName, error as Error);
     }
