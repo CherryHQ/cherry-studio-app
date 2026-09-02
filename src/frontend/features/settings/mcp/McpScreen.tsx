@@ -65,42 +65,49 @@ export function McpScreen() {
       search={<InlineSearch onChangeText={setQuery} value={query} />}
     >
       {isLoading ? (
-        <ContentState.Loading className="px-1 py-8" title={t('settings.mcp.list.loading')} />
+        <View className="px-1 py-8">
+          <ContentState.Loading title={t('settings.mcp.list.loading')} />
+        </View>
       ) : error ? (
-        <ContentState.Error
-          className="px-1 py-8"
-          description={error instanceof Error ? error.message : String(error)}
-          primaryAction={{
-            children: t('settings.mcp.retry'),
-            onPress: () => void refetch(),
-          }}
-          title={t('settings.mcp.list.loadFailed')}
-        />
+        <View className="px-1 py-8">
+          <ContentState.Error
+            description={error instanceof Error ? error.message : String(error)}
+            primaryAction={{
+              children: t('settings.mcp.retry'),
+              onPress: () => void refetch(),
+            }}
+            title={t('settings.mcp.list.loadFailed')}
+          />
+        </View>
       ) : servers.length === 0 ? (
-        <ContentState.Empty
-          description={t('settings.mcp.emptyDescription')}
-          icon={
-            mcpIcon ? (
-              <ContentState.Icon>
-                <Image
-                  cachePolicy="memory-disk"
-                  className="size-7"
-                  contentFit="contain"
-                  source={mcpIcon}
-                />
-              </ContentState.Icon>
-            ) : null
-          }
-          layout="page"
-          primaryAction={{
-            children: t('settings.mcp.emptyAction'),
-            onPress: openCreate,
-            testID: 'mcp-empty-create',
-          }}
-          title={t('settings.mcp.empty')}
-        />
+        <View className="px-8 py-16">
+          <ContentState.Empty
+            description={t('settings.mcp.emptyDescription')}
+            icon={
+              mcpIcon ? (
+                <ContentState.Icon>
+                  <Image
+                    cachePolicy="memory-disk"
+                    className="size-7"
+                    contentFit="contain"
+                    source={mcpIcon}
+                  />
+                </ContentState.Icon>
+              ) : null
+            }
+            primaryAction={{
+              children: t('settings.mcp.emptyAction'),
+              onPress: openCreate,
+              testID: 'mcp-empty-create',
+            }}
+            prominence="prominent"
+            title={t('settings.mcp.empty')}
+          />
+        </View>
       ) : listedServers.length === 0 ? (
-        <ContentState.Empty className="px-6 py-8" title={t('settings.mcp.list.noResults')} />
+        <View className="px-6 py-8">
+          <ContentState.Empty title={t('settings.mcp.list.noResults')} />
+        </View>
       ) : (
         <View className="overflow-hidden rounded-2xl bg-card">
           {listedServers.map((server, index) => {

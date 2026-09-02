@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 
 import { AiUsageRankingSection } from './components/AiUsageRankingSection';
 import { AiUsageWeeklySection } from './components/AiUsageWeeklySection';
@@ -14,16 +14,13 @@ export function AiUsageScreen() {
   const { activePageIndex, pages, selectDate, selectPage, todayDateKey, weekDataKey } =
     useAiUsageDetail();
   const headerHeight = useHeaderHeight();
+  const contentTopInset = resolveHeaderContentInset(headerHeight);
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const activePage = pages[activePageIndex];
 
   return (
     <>
-      <View
-        className="flex-1"
-        style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
-        testID="ai-usage-content"
-      >
+      <View className="flex-1" style={{ paddingTop: contentTopInset }} testID="ai-usage-content">
         {activePage ? (
           <AiUsageRankingSection
             enabled

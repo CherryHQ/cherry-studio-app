@@ -46,20 +46,21 @@ export function ChatRouteResolver() {
   if (restoreState.status === 'error') {
     return (
       <ChatRouteResolverLayout>
-        <ContentState.Error
-          className="px-8"
-          primaryAction={{
-            children: t('agent.actions.retry'),
-            onPress: () => {
-              const requests: Promise<unknown>[] = [latestSession.refetch()];
-              if (shouldLoadAgentFallback) {
-                requests.push(agents.refetch());
-              }
-              void Promise.all(requests);
-            },
-          }}
-          title={t('navigation.chatsLoadFailed')}
-        />
+        <View className="px-8">
+          <ContentState.Error
+            primaryAction={{
+              children: t('agent.actions.retry'),
+              onPress: () => {
+                const requests: Promise<unknown>[] = [latestSession.refetch()];
+                if (shouldLoadAgentFallback) {
+                  requests.push(agents.refetch());
+                }
+                void Promise.all(requests);
+              },
+            }}
+            title={t('navigation.chatsLoadFailed')}
+          />
+        </View>
       </ChatRouteResolverLayout>
     );
   }

@@ -90,15 +90,27 @@ function SidebarRecentSessionList() {
   const visibleSessions = sessions.slice(0, appSidebar.recentSessionLimit);
 
   if (isSessionListLoading) {
-    return <ContentState.Loading className="py-4" title={t('session.list.loading')} />;
+    return (
+      <View className="py-4">
+        <ContentState.Loading title={t('session.list.loading')} />
+      </View>
+    );
   }
 
   if (sessionQueryError) {
-    return <ContentState.Error className="px-5 py-4" title={t('session.list.loadFailed')} />;
+    return (
+      <View className="px-5 py-4">
+        <ContentState.Error title={t('session.list.loadFailed')} />
+      </View>
+    );
   }
 
   if (visibleSessions.length === 0) {
-    return <ContentState.Empty className="px-5 py-4" description={t('session.list.empty')} />;
+    return (
+      <View className="px-5 py-4">
+        <ContentState.Empty description={t('session.list.empty')} />
+      </View>
+    );
   }
 
   return visibleSessions.map((session) => (
@@ -127,15 +139,27 @@ function SidebarAgentSessionList() {
   };
 
   if (isLoading) {
-    return <ContentState.Loading className="py-4" title={t('agent.list.loading')} />;
+    return (
+      <View className="py-4">
+        <ContentState.Loading title={t('agent.list.loading')} />
+      </View>
+    );
   }
 
   if (error) {
-    return <ContentState.Error className="px-5 py-4" title={t('agent.list.loadFailed')} />;
+    return (
+      <View className="px-5 py-4">
+        <ContentState.Error title={t('agent.list.loadFailed')} />
+      </View>
+    );
   }
 
   if (agents.length === 0 && deletedAgentSessions.length === 0) {
-    return <ContentState.Empty className="px-5 py-4" description={t('agent.list.emptyTitle')} />;
+    return (
+      <View className="px-5 py-4">
+        <ContentState.Empty description={t('agent.list.emptyTitle')} />
+      </View>
+    );
   }
 
   return (
@@ -263,15 +287,27 @@ function SidebarExpandedSessionList() {
   const { isSessionListLoading, sessionQueryError, sessions } = useSessionListSessions();
 
   if (isSessionListLoading) {
-    return <ContentState.Loading className="py-4" />;
+    return (
+      <View className="py-4">
+        <ContentState.Loading />
+      </View>
+    );
   }
 
   if (sessionQueryError) {
-    return <ContentState.Error className="px-4 py-4" description={t('session.list.loadFailed')} />;
+    return (
+      <View className="px-4 py-4">
+        <ContentState.Error description={t('session.list.loadFailed')} />
+      </View>
+    );
   }
 
   if (sessions.length === 0) {
-    return <ContentState.Empty className="px-4 py-4" description={t('session.list.empty')} />;
+    return (
+      <View className="px-4 py-4">
+        <ContentState.Empty description={t('session.list.empty')} />
+      </View>
+    );
   }
 
   return <SidebarResolvedSessionList sessions={sessions} />;

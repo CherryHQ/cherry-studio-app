@@ -1,2 +1,2 @@
 export { Surface } from './surface';
-export type { SurfaceProps } from './surface.types';
+export type { SurfaceProps, SurfaceShape, SurfaceTone } from './surface.types';

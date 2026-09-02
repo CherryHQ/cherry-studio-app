@@ -1,2 +1,2 @@
 export { InlineSearch } from './InlineSearch.android';
-export type { InlineSearchProps } from './InlineSearch.types';
+export type { InlineSearchLayout, InlineSearchProps } from './InlineSearch.types';

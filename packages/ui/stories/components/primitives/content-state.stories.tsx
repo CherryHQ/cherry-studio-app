@@ -38,32 +38,40 @@ export const Playground: Story = {
               {theme === 'light' ? 'Light' : 'Dark'}
             </Text>
             <ContentState.Loading title="Loading assistants" />
+            <View className="rounded-2xl bg-card p-4">
+              <ContentState.Loading layout="row" title="Loading tools" />
+            </View>
             <ContentState.Empty
               description="Create an assistant to get started."
               primaryAction={{ children: 'Create assistant', onPress: fn() }}
               secondaryAction={{ children: 'Import', onPress: fn() }}
               title="No assistants"
             />
-            <ContentState.Empty
-              description="Create an assistant to get started."
-              icon={
-                <ContentState.Icon>
-                  <BotIcon className="size-7 text-foreground" />
-                </ContentState.Icon>
-              }
-              layout="page"
-              primaryAction={{ children: 'Create assistant', onPress: fn() }}
-              title="No assistants"
-            />
-            <ContentState.Error
-              description="The server did not respond."
-              primaryAction={{
-                children: 'Try again',
-                icon: <RefreshCwIcon />,
-                onPress: fn(),
-              }}
-              title="Could not load content"
-            />
+            <View className="px-8 py-16">
+              <ContentState.Empty
+                description="Create an assistant to get started."
+                icon={
+                  <ContentState.Icon>
+                    <BotIcon className="size-7 text-foreground" />
+                  </ContentState.Icon>
+                }
+                primaryAction={{ children: 'Create assistant', onPress: fn() }}
+                prominence="prominent"
+                title="No assistants"
+              />
+            </View>
+            <View className="rounded-2xl bg-card p-4">
+              <ContentState.Error
+                description="The server did not respond."
+                layout="leading"
+                primaryAction={{
+                  children: 'Try again',
+                  icon: <RefreshCwIcon />,
+                  onPress: fn(),
+                }}
+                title="Could not load content"
+              />
+            </View>
           </View>
         </ScopedTheme>
       ))}

@@ -273,13 +273,16 @@ function AppSearchRoutePage({
         {phase === 'idle' ? (
           <View className="flex-1" />
         ) : phase === 'loading' && listItems.length === 0 ? (
-          <ContentState.Loading className="flex-1 px-6" title={t('appSearch.loading')} />
+          <View className="flex-1 justify-center px-6">
+            <ContentState.Loading title={t('appSearch.loading')} />
+          </View>
         ) : phase === 'error' && listItems.length === 0 ? (
-          <ContentState.Error
-            className="flex-1 px-6"
-            primaryAction={{ children: t('appSearch.retry'), onPress: retry }}
-            title={t('appSearch.loadFailed')}
-          />
+          <View className="flex-1 justify-center px-6">
+            <ContentState.Error
+              primaryAction={{ children: t('appSearch.retry'), onPress: retry }}
+              title={t('appSearch.loadFailed')}
+            />
+          </View>
         ) : (
           <LegendList
             contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
@@ -290,7 +293,9 @@ function AppSearchRoutePage({
             keyboardShouldPersistTaps="handled"
             keyExtractor={listKeyExtractor}
             ListEmptyComponent={
-              <ContentState.Empty className="px-6 py-12" description={request.emptyText} />
+              <View className="px-6 py-12">
+                <ContentState.Empty description={request.emptyText} />
+              </View>
             }
             ListFooterComponent={
               isLoadingMore ? (

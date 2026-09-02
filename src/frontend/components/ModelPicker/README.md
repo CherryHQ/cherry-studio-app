@@ -12,9 +12,9 @@ This module owns the model selection surface, model metadata UI, and model setti
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
   jump to their group headers without changing provider/order-key order.
 - `ModelPickerIcon` renders model identity used by picker consumers.
-- `ModelSearchControls` keeps persistent workflow search native in the iOS header and inline on
-  Android. Product workflows own their purpose controls rather than exposing provider capability
-  taxonomies through the shared picker.
+- `ModelSearchControls` composes the shared controlled `InlineSearch`: native in the iOS header and
+  embedded in the Android controls frame. Product workflows own their purpose controls rather than
+  exposing provider capability taxonomies through the shared picker.
 - `useModelSettingSelections` reads model selection preferences and exposes an explicit batch-save
   operation for the settings screen's draft.
 - Model setting and model type helpers are exported from `index.ts`.

@@ -1,25 +1,25 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { ModelSearchField } from '../ModelSearchField/ModelSearchField';
-import type { ModelSearchFieldProps } from '../ModelSearchField/ModelSearchField.types';
+import { InlineSearch, type InlineSearchProps } from '@/frontend/components/InlineSearch';
 
-type ModelSearchControlsProps = ModelSearchFieldProps & {
+type ModelSearchControlsProps = Omit<InlineSearchProps, 'layout'> & {
   children: ReactNode;
 };
 
 export function ModelSearchControls({
   children,
+  onChangeText,
   placeholder,
-  searchText,
-  setSearchText,
+  value,
 }: ModelSearchControlsProps) {
   return (
     <View className="gap-3 px-4 py-3">
-      <ModelSearchField
+      <InlineSearch
+        layout="embedded"
+        onChangeText={onChangeText}
         placeholder={placeholder}
-        searchText={searchText}
-        setSearchText={setSearchText}
+        value={value}
       />
       {children}
     </View>

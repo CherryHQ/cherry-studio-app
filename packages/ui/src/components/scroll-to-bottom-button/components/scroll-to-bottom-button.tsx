@@ -4,7 +4,7 @@ import Animated, { type SharedValue, useAnimatedStyle, withTiming } from 'react-
 import { useResolveClassNames } from 'uniwind';
 
 import { duration, easing } from '../../../motion';
-import { Surface } from '../../surface';
+import { SurfaceFrame } from '../../surface/surface-frame';
 
 export const scrollToBottomButtonSize = 40;
 const SURFACE_CLASS_NAME = 'border border-border bg-background';
@@ -53,14 +53,14 @@ export function ScrollToBottomButton({
           hitSlop={8}
           onPress={onPress}
         >
-          <Surface
+          <SurfaceFrame
             className={SURFACE_CLASS_NAME}
             cornerRadius={scrollToBottomButtonSize / 2}
             interactive
             style={surfaceStyle}
           >
             <ArrowDownIcon className="size-5 text-foreground" />
-          </Surface>
+          </SurfaceFrame>
         </Pressable>
       </Animated.View>
     </Animated.View>

@@ -1,38 +1,35 @@
-import { Host, Slider as ExpoSlider, Text } from '@expo/ui/swift-ui';
+import { Host, Slider as ExpoSlider } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel as accessibilityLabelModifier,
   disabled as disabledModifier,
 } from '@expo/ui/swift-ui/modifiers';
 import { useUniwind } from 'uniwind';
 
-import type { SliderProps } from './slider.types';
+import type { SliderControlProps } from './slider-control.types';
 
-export function Slider({
+export function SliderControl({
   accessibilityLabel,
   disabled = false,
   max = 100,
-  maximumValueLabel,
   min = 0,
-  minimumValueLabel,
   onValueChange,
   step = 1,
   style,
   testID,
   value,
-}: SliderProps) {
+}: SliderControlProps) {
   const { theme } = useUniwind();
 
   return (
     <Host
       colorScheme={theme === 'dark' ? 'dark' : 'light'}
+      ignoreSafeArea="all"
       matchContents={{ vertical: true }}
       style={[{ alignSelf: 'stretch' }, style]}
     >
       <ExpoSlider
         max={max}
-        maximumValueLabel={maximumValueLabel ? <Text>{maximumValueLabel}</Text> : undefined}
         min={min}
-        minimumValueLabel={minimumValueLabel ? <Text>{minimumValueLabel}</Text> : undefined}
         modifiers={[accessibilityLabelModifier(accessibilityLabel), disabledModifier(disabled)]}
         onValueChange={onValueChange}
         step={step}

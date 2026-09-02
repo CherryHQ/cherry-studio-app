@@ -32,6 +32,21 @@ jest.mock('@cherrystudio/ui/components', () => {
     View: MockView,
   } = jest.requireActual('react-native');
 
+  function TextField({ children }: { children?: ReactNode }) {
+    return <MockView>{children}</MockView>;
+  }
+
+  function TextFieldError({ children }: { children?: ReactNode }) {
+    return <MockText>{children}</MockText>;
+  }
+
+  function TextFieldLabel({ children }: { children?: ReactNode }) {
+    return <MockText>{children}</MockText>;
+  }
+
+  TextField.Error = TextFieldError;
+  TextField.Label = TextFieldLabel;
+
   return {
     ContentState: {
       Empty: ({ title }: { title: ReactNode }) => <MockText testID="empty">{title}</MockText>,
@@ -48,13 +63,11 @@ jest.mock('@cherrystudio/ui/components', () => {
       ),
       Loading: ({ title }: { title: ReactNode }) => <MockText testID="loading">{title}</MockText>,
     },
-    FieldError: ({ children }: { children?: ReactNode }) => <MockText>{children}</MockText>,
     Input: (props: Record<string, unknown>) => <MockTextInput {...props} />,
-    Label: ({ children }: { children?: ReactNode }) => <MockText>{children}</MockText>,
     Tabs: ({ value }: { value: string }) => (
       <MockView accessibilityValue={{ text: value }} testID="model-add-mode-tabs" />
     ),
-    TextField: ({ children }: { children?: ReactNode }) => <MockView>{children}</MockView>,
+    TextField,
     useAlert: () => ({ alert: { confirm: jest.fn(), show: jest.fn() } }),
   };
 });

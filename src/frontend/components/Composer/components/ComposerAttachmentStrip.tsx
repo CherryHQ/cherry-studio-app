@@ -1,13 +1,7 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  type GestureResponderEvent,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
 
@@ -79,9 +73,18 @@ function ImportingAttachmentTile({
   onRemove: () => void;
 }) {
   return (
-    <View accessibilityLabel={attachment.name}>
-      <View className="size-28 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-border bg-secondary p-2">
-        <ActivityIndicator size="small" />
+    <View>
+      <View
+        accessibilityLabel={attachment.name}
+        accessibilityState={{ busy: true }}
+        accessible
+        className="size-28 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-border bg-secondary p-2"
+      >
+        <Spinner
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          size="sm"
+        />
         <Text className="text-center text-base text-muted-foreground" numberOfLines={2}>
           {attachment.name}
         </Text>

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { Surface } from '../../surface';
+import { SurfaceFrame } from '../../surface/surface-frame';
 import type { ComposerLabels, ComposerProps } from '../composer.types';
 import {
   ComposerActionsContext,
@@ -75,7 +75,7 @@ function ComposerRoot({
 
   return (
     <View style={style} testID={testID}>
-      <Surface
+      <SurfaceFrame
         className="bg-card ios:shadow-field android:shadow-sm"
         cornerRadius={surfaceRadius}
         style={surfaceStyle}
@@ -96,7 +96,7 @@ function ComposerRoot({
             )}
           </ComposerActionsContext>
         </ComposerStateContext>
-      </Surface>
+      </SurfaceFrame>
     </View>
   );
 }

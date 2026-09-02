@@ -22,7 +22,7 @@ import { useCSSVariable } from 'uniwind';
 import { duration, easing } from '../../motion';
 import { cn } from '../../utils';
 import { Button } from '../button';
-import { useTextField } from '../text-field';
+import { useTextFieldState } from '../text-field/text-field-context';
 import type { InputPasswordProps, InputProps, InputTextProps } from './input.types';
 
 const multilineVisibleLines = 4;
@@ -165,13 +165,13 @@ function PasswordInput({
   ...inputProps
 }: InputPasswordProps) {
   const isOnSurface = useIsOnSurface();
-  const textField = useTextField();
+  const textField = useTextFieldState();
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const visibilityProgress = useSharedValue(0);
-  const isDisabled = disabled ?? textField?.isDisabled ?? false;
-  const isInvalid = invalid ?? textField?.isInvalid ?? false;
+  const isDisabled = disabled ?? textField?.disabled ?? false;
+  const isInvalid = invalid ?? textField?.invalid ?? false;
   const { onBlur, onFocus, ...restInputProps } = inputProps;
   const handleInputRef = useCallback(
     (node: TextInput | null) => {
@@ -241,7 +241,6 @@ function PasswordInput({
           accessibilityLabel={
             isVisible ? visibilityAccessibilityLabels.hide : visibilityAccessibilityLabels.show
           }
-          className="disabled:opacity-100"
           disabled={isDisabled}
           hitSlop={6}
           icon={<VisibilityIcon progress={visibilityProgress} />}

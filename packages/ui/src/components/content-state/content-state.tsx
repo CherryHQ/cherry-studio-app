@@ -5,23 +5,19 @@ import { cn } from '../../utils';
 import { Button, type ButtonProps } from '../button';
 import { Spinner } from '../loading/spinner';
 
-export type ContentStateAction = Omit<ButtonProps, 'children' | 'variant'> & {
+export type ContentStateAction = Omit<ButtonProps, 'children' | 'shape' | 'size' | 'variant'> & {
   children: ReactNode;
 };
 
-/**
- * `inline` states annotate a list or a card that is already on screen, so they
- * add no room of their own. `page` states are the screen — they carry the
- * padding that centers them under a header, and their action reads as the
- * screen's one thing to do rather than as a control inside something else.
- */
-export type ContentStateLayout = 'inline' | 'page';
+export type ContentStateLayout = 'centered' | 'leading' | 'row';
+export type ContentStateProminence = 'default' | 'prominent';
 
-type ContentStateBaseProps = Omit<ViewProps, 'children'> & {
+type ContentStateBaseProps = Omit<ViewProps, 'children' | 'className' | 'style'> & {
   description?: string;
   icon?: ReactNode;
   layout?: ContentStateLayout;
   primaryAction?: ContentStateAction;
+  prominence?: ContentStateProminence;
   secondaryAction?: ContentStateAction;
   title?: string;
 };
@@ -37,23 +33,35 @@ type ContentStateFrameProps = ContentStateBaseProps & {
   kind: ContentStateKind;
 };
 
+const layoutStyles: Record<ContentStateLayout, string> = {
+  centered: 'items-center justify-center gap-4',
+  leading: 'items-start justify-center gap-4',
+  row: 'flex-row items-center justify-start gap-2',
+};
+
 function ContentStateFrame({
   accessibilityState,
-  className,
   description,
   icon,
   kind,
-  layout = 'inline',
+  layout = 'centered',
   primaryAction,
+  prominence = 'default',
   secondaryAction,
   title,
   ...props
 }: ContentStateFrameProps) {
-  const isPage = layout === 'page';
+  const isCentered = layout === 'centered';
+  const isRow = layout === 'row';
+  const isProminent = prominence === 'prominent';
   const resolvedIcon =
     icon ??
     (kind === 'loading' ? (
-      <Spinner accessibilityLabel={title} accessibilityRole="progressbar" />
+      <Spinner
+        accessibilityLabel={title}
+        accessibilityRole="progressbar"
+        size={isRow ? 'sm' : 'default'}
+      />
     ) : null);
 
   return (
@@ -63,17 +71,19 @@ function ContentStateFrame({
         ...accessibilityState,
         ...(kind === 'loading' ? { busy: true } : {}),
       }}
-      className={cn('items-center justify-center gap-4', isPage && 'px-8 py-16', className)}
+      className={layoutStyles[layout]}
     >
       {resolvedIcon ? (
         <View className="shrink-0 items-center justify-center">{resolvedIcon}</View>
       ) : null}
       {title || description ? (
-        <View className="max-w-full items-center gap-1.5">
+        <View className={cn('max-w-full gap-1.5', isCentered ? 'items-center' : 'items-start')}>
           {title ? (
             <Text
               className={cn(
-                'text-center font-semibold text-base',
+                isCentered ? 'text-center' : 'text-left',
+                'font-semibold',
+                isProminent ? 'text-lg' : 'text-base',
                 kind === 'error' ? 'text-destructive-foreground' : 'text-foreground',
               )}
               selectable={kind === 'error'}
@@ -82,27 +92,38 @@ function ContentStateFrame({
             </Text>
           ) : null}
           {description ? (
-            <Text className="text-center text-muted-foreground text-sm" selectable>
+            <Text
+              className={cn(
+                isCentered ? 'text-center' : 'text-left',
+                'text-muted-foreground text-sm',
+              )}
+              selectable
+            >
               {description}
             </Text>
           ) : null}
         </View>
       ) : null}
       {primaryAction || secondaryAction ? (
-        <View className="flex-row flex-wrap items-center justify-center gap-3">
+        <View
+          className={cn(
+            'flex-row flex-wrap items-center gap-3',
+            isCentered ? 'justify-center' : 'justify-start',
+          )}
+        >
           {primaryAction ? (
             <Button
               {...primaryAction}
-              className={cn(isPage && 'rounded-full', primaryAction.className)}
-              size={primaryAction.size ?? (isPage ? 'default' : 'sm')}
+              shape={isProminent ? 'pill' : 'rounded'}
+              size={isProminent ? 'default' : 'sm'}
               variant="default"
             />
           ) : null}
           {secondaryAction ? (
             <Button
               {...secondaryAction}
-              className={cn(isPage && 'rounded-full', secondaryAction.className)}
-              size={secondaryAction.size ?? (isPage ? 'default' : 'sm')}
+              shape={isProminent ? 'pill' : 'rounded'}
+              size={isProminent ? 'default' : 'sm'}
               variant="secondary"
             />
           ) : null}

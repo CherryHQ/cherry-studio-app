@@ -1,24 +1,23 @@
 import { Slider as HeroSlider } from 'heroui-native';
-import { type AccessibilityActionEvent, Text, View } from 'react-native';
+import type { AccessibilityActionEvent } from 'react-native';
 
-import type { SliderProps } from './slider.types';
+import type { SliderControlProps } from './slider-control.types';
 
 const ACCESSIBILITY_ACTIONS = [{ name: 'decrement' }, { name: 'increment' }] as const;
 
-export function Slider({
+// Web and non-native tooling keep the Cherry control. Metro replaces this
+// private adapter with the native iOS or Android implementation on device.
+export function SliderControl({
   accessibilityLabel,
   disabled = false,
   max = 100,
-  maximumValueLabel,
   min = 0,
-  minimumValueLabel,
   onValueChange,
   step = 1,
   style,
   testID,
   value,
-}: SliderProps) {
-  const hasValueLabels = Boolean(minimumValueLabel || maximumValueLabel);
+}: SliderControlProps) {
   const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
     if (disabled) {
       return;
@@ -38,15 +37,15 @@ export function Slider({
       onValueChange(nextValue);
     }
   };
-  const slider = (
+
+  return (
     <HeroSlider
-      className={hasValueLabels ? 'min-w-0 flex-1' : undefined}
       isDisabled={disabled}
       maxValue={max}
       minValue={min}
       onChange={(nextValue) => onValueChange(Array.isArray(nextValue) ? nextValue[0] : nextValue)}
       step={step}
-      style={hasValueLabels ? undefined : style}
+      style={style}
       testID={testID}
       value={value}
     >
@@ -59,21 +58,5 @@ export function Slider({
         />
       </HeroSlider.Track>
     </HeroSlider>
-  );
-
-  if (!hasValueLabels) {
-    return slider;
-  }
-
-  return (
-    <View className="flex-row items-center gap-3" style={style}>
-      {minimumValueLabel ? (
-        <Text className="text-sm text-foreground">{minimumValueLabel}</Text>
-      ) : null}
-      {slider}
-      {maximumValueLabel ? (
-        <Text className="text-sm text-foreground">{maximumValueLabel}</Text>
-      ) : null}
-    </View>
   );
 }

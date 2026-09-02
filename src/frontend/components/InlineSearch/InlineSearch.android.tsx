@@ -15,12 +15,17 @@ import type { InlineSearchProps } from './InlineSearch.types';
  * instead puts it where iOS puts its `stacked` bar and keeps it looking like
  * the rest of the app.
  */
-export function InlineSearch({ onChangeText, placeholder, value }: InlineSearchProps) {
+export function InlineSearch({
+  layout = 'screen',
+  onChangeText,
+  placeholder,
+  value,
+}: InlineSearchProps) {
   const { t } = useTranslation();
   const clear = useCallback(() => onChangeText(''), [onChangeText]);
 
   return (
-    <View className="px-4 pb-2">
+    <View className={layout === 'screen' ? 'px-4 pb-2' : undefined}>
       <SearchField
         accessibilityLabel={t('navigation.search')}
         clearAccessibilityLabel={t('common.clear')}

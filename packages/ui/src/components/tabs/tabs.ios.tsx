@@ -1,4 +1,4 @@
-import { GlassView } from 'expo-glass-effect';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
 import { PlatformColor, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -8,6 +8,7 @@ import type { TabsProps } from './tabs.types';
 
 const tabHeight = 34;
 const indicatorInset = 3;
+const supportsGlass = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 type Segment = { width: number; x: number };
 
@@ -45,6 +46,94 @@ export function Tabs<TValue extends string>({
     transform: [{ translateX: translateX.value }],
     width: indicatorWidth,
   }));
+  const frameStyle = {
+    borderRadius: tabHeight / 2,
+    height: tabHeight,
+    overflow: 'hidden',
+    ...(layout === 'hug' ? {} : { width: '100%' as const }),
+  } as const;
+  const handleLayout = (event: { nativeEvent: { layout: { width: number } } }) => {
+    setMeasuredWidth(event.nativeEvent.layout.width);
+  };
+  const content = (
+    <>
+      {indicatorWidth > 0 ? (
+        <Animated.View
+          className={
+            supportsGlass
+              ? 'absolute left-0 rounded-full'
+              : 'absolute left-0 rounded-full bg-background'
+          }
+          pointerEvents="none"
+          style={[
+            {
+              ...(supportsGlass
+                ? { backgroundColor: PlatformColor('tertiarySystemFill') }
+                : undefined),
+              bottom: indicatorInset,
+              top: indicatorInset,
+            },
+            indicatorStyle,
+          ]}
+          testID={testID ? `${testID}-indicator` : undefined}
+        />
+      ) : null}
+      <View className="h-full flex-row">
+        {items.map((item) => {
+          const isSelected = item.value === value;
+          const customContent =
+            typeof item.children === 'function'
+              ? item.children({ isDisabled: Boolean(item.disabled), isSelected })
+              : item.children;
+
+          return (
+            <Pressable
+              accessibilityLabel={item.label}
+              accessibilityRole="tab"
+              accessibilityState={{ disabled: item.disabled, selected: isSelected }}
+              className={
+                layout === 'hug'
+                  ? 'h-full items-center justify-center px-4 disabled:opacity-40'
+                  : 'h-full flex-1 items-center justify-center disabled:opacity-40'
+              }
+              disabled={item.disabled}
+              hitSlop={{ bottom: 5, top: 5 }}
+              key={item.value}
+              onLayout={
+                layout === 'hug'
+                  ? (event) => {
+                      const { width, x } = event.nativeEvent.layout;
+                      setHugSegments((current) =>
+                        current[item.value]?.width === width && current[item.value]?.x === x
+                          ? current
+                          : { ...current, [item.value]: { width, x } },
+                      );
+                    }
+                  : undefined
+              }
+              onPress={() => onValueChange(item.value)}
+              testID={item.testID}
+            >
+              {item.children !== undefined ? (
+                customContent
+              ) : (
+                <Text
+                  adjustsFontSizeToFit
+                  className="font-medium text-xs"
+                  maxFontSizeMultiplier={1.2}
+                  minimumFontScale={0.9}
+                  numberOfLines={1}
+                  style={{ color: PlatformColor(isSelected ? 'label' : 'secondaryLabel') }}
+                >
+                  {item.label}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
+  );
 
   return (
     <View
@@ -55,88 +144,24 @@ export function Tabs<TValue extends string>({
       style={style}
       testID={testID}
     >
-      <GlassView
-        glassEffectStyle="regular"
-        isInteractive
-        onLayout={(event) => setMeasuredWidth(event.nativeEvent.layout.width)}
-        style={{
-          borderRadius: tabHeight / 2,
-          height: tabHeight,
-          overflow: 'hidden',
-          // `hug` leaves the width to the row of tabs inside.
-          ...(layout === 'hug' ? {} : { width: '100%' as const }),
-        }}
-      >
-        {indicatorWidth > 0 ? (
-          <Animated.View
-            className="absolute left-0 rounded-full"
-            pointerEvents="none"
-            style={[
-              {
-                backgroundColor: PlatformColor('tertiarySystemFill'),
-                bottom: indicatorInset,
-                top: indicatorInset,
-              },
-              indicatorStyle,
-            ]}
-            testID={testID ? `${testID}-indicator` : undefined}
-          />
-        ) : null}
-        <View className="h-full flex-row">
-          {items.map((item) => {
-            const isSelected = item.value === value;
-            const customContent =
-              typeof item.children === 'function'
-                ? item.children({ isDisabled: Boolean(item.disabled), isSelected })
-                : item.children;
-
-            return (
-              <Pressable
-                accessibilityLabel={item.label}
-                accessibilityRole="tab"
-                accessibilityState={{ disabled: item.disabled, selected: isSelected }}
-                className={
-                  layout === 'hug'
-                    ? 'h-full items-center justify-center px-4 disabled:opacity-40'
-                    : 'h-full flex-1 items-center justify-center disabled:opacity-40'
-                }
-                disabled={item.disabled}
-                hitSlop={{ bottom: 5, top: 5 }}
-                key={item.value}
-                onLayout={
-                  layout === 'hug'
-                    ? (event) => {
-                        const { width, x } = event.nativeEvent.layout;
-                        setHugSegments((current) =>
-                          current[item.value]?.width === width && current[item.value]?.x === x
-                            ? current
-                            : { ...current, [item.value]: { width, x } },
-                        );
-                      }
-                    : undefined
-                }
-                onPress={() => onValueChange(item.value)}
-                testID={item.testID}
-              >
-                {item.children !== undefined ? (
-                  customContent
-                ) : (
-                  <Text
-                    adjustsFontSizeToFit
-                    className="font-medium text-xs"
-                    maxFontSizeMultiplier={1.2}
-                    minimumFontScale={0.9}
-                    numberOfLines={1}
-                    style={{ color: PlatformColor(isSelected ? 'label' : 'secondaryLabel') }}
-                  >
-                    {item.label}
-                  </Text>
-                )}
-              </Pressable>
-            );
-          })}
+      {supportsGlass ? (
+        <GlassView
+          glassEffectStyle="regular"
+          isInteractive
+          onLayout={handleLayout}
+          style={frameStyle}
+        >
+          {content}
+        </GlassView>
+      ) : (
+        <View
+          className="overflow-hidden rounded-[17px] bg-secondary"
+          onLayout={handleLayout}
+          style={frameStyle}
+        >
+          {content}
         </View>
-      </GlassView>
+      )}
     </View>
   );
 }

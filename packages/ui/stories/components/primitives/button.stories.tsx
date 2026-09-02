@@ -2,6 +2,7 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import {
   Button,
   type ButtonProps,
+  type ButtonShape,
   type ButtonSize,
   type ButtonVariant,
 } from '@cherrystudio/ui/components';
@@ -15,8 +16,16 @@ const themes = [
   { label: 'Dark', value: 'dark' },
 ] as const;
 
-const variants: ButtonVariant[] = ['default', 'destructive', 'outline', 'secondary', 'ghost'];
-const sizes: ButtonSize[] = ['sm', 'default', 'lg'];
+const variants: ButtonVariant[] = [
+  'default',
+  'destructive',
+  'outline',
+  'secondary',
+  'ghost',
+  'link',
+];
+const shapes: ButtonShape[] = ['rounded', 'pill'];
+const sizes: ButtonSize[] = ['xs', 'sm', 'inline', 'default', 'field', 'lg'];
 
 type ThemePreviewProps = {
   args: ButtonProps;
@@ -78,6 +87,12 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             </Button>
           </View>
         ))}
+        <Text className="text-lg font-semibold text-foreground">Shapes</Text>
+        {shapes.map((shape) => (
+          <Button {...args} key={shape} shape={shape}>
+            {shape}
+          </Button>
+        ))}
       </View>
     </ScopedTheme>
   );
@@ -91,6 +106,7 @@ const meta = {
     disabled: false,
     loading: false,
     onPress: fn(),
+    shape: 'rounded',
     size: 'default',
     variant: 'default',
   },
@@ -98,6 +114,7 @@ const meta = {
     children: { control: 'text' },
     disabled: { control: 'boolean' },
     loading: { control: 'boolean' },
+    shape: { control: 'select', options: shapes },
     size: { control: 'select', options: sizes },
     variant: { control: 'select', options: variants },
   },

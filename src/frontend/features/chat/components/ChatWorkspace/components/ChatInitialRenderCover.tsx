@@ -1,4 +1,5 @@
-import { ActivityIndicator } from 'react-native';
+import { Spinner } from '@cherrystudio/ui/components';
+import { useTranslation } from 'react-i18next';
 import Animated, { Easing, FadeOut } from 'react-native-reanimated';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -8,6 +9,7 @@ type ChatInitialRenderCoverProps = {
 };
 
 export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProps) {
+  const { t } = useTranslation();
   const indicatorColor = useThemeColor('muted-foreground');
 
   if (!isVisible) {
@@ -23,7 +25,12 @@ export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProp
       pointerEvents="none"
       style={{ zIndex: 5 }}
     >
-      <ActivityIndicator color={indicatorColor} size="small" />
+      <Spinner
+        accessibilityLabel={t('chat.history.loading')}
+        accessibilityRole="progressbar"
+        color={indicatorColor}
+        size="sm"
+      />
     </Animated.View>
   );
 }

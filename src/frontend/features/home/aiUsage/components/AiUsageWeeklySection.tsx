@@ -146,9 +146,8 @@ export function AiUsageWeeklySection({
       <Section.Header title={t('aiUsage.tokenUsage')}>
         {activePageIndex === AI_USAGE_CURRENT_WEEK_PAGE_INDEX ? undefined : (
           <Button
-            className="py-0"
             hitSlop={10}
-            size="xs"
+            size="inline"
             testID="ai-usage-show-current-week"
             variant="ghost"
             onPress={handleShowCurrentWeek}

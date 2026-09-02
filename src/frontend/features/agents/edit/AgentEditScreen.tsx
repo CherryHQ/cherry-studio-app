@@ -77,7 +77,9 @@ export default function AgentEditScreen() {
     return (
       <>
         <RouteHeader title={t('agent.edit.title')} />
-        <ContentState.Loading className="p-4" title={t('agent.form.loading')} />
+        <View className="p-4">
+          <ContentState.Loading title={t('agent.form.loading')} />
+        </View>
       </>
     );
   }
@@ -86,16 +88,17 @@ export default function AgentEditScreen() {
     return (
       <>
         <RouteHeader title={t('agent.edit.title')} />
-        <ContentState.Error
-          className="p-4"
-          primaryAction={{
-            children: t('agent.actions.retry'),
-            onPress: () => {
-              void Promise.all([refetch(), refetchBindings(), refetchServers()]);
-            },
-          }}
-          title={t('agent.form.loadFailed')}
-        />
+        <View className="p-4">
+          <ContentState.Error
+            primaryAction={{
+              children: t('agent.actions.retry'),
+              onPress: () => {
+                void Promise.all([refetch(), refetchBindings(), refetchServers()]);
+              },
+            }}
+            title={t('agent.form.loadFailed')}
+          />
+        </View>
       </>
     );
   }

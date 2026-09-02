@@ -4,6 +4,7 @@ import type { ComposerAttachmentReady } from '../../utils/composerAttachments';
 import { ComposerAttachmentStrip } from '../ComposerAttachmentStrip';
 
 jest.mock('@cherrystudio/app-icons/icons/x', () => () => null);
+jest.mock('@cherrystudio/ui/components', () => ({ Spinner: () => null }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/components/FileEntryPreview', () => {
   const React = jest.requireActual('react');

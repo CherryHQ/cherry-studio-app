@@ -1,10 +1,16 @@
 import { View } from 'react-native';
 
-import type { SurfaceProps } from './surface.types';
+import type { SurfaceFrameProps } from './surface-frame.types';
 
 // No Liquid Glass outside iOS 26+, so this never imports expo-glass-effect —
 // keeping it out of the Android bundle entirely.
-export function Surface({ children, className, cornerRadius, style, testID }: SurfaceProps) {
+export function SurfaceFrame({
+  children,
+  className,
+  cornerRadius,
+  style,
+  testID,
+}: SurfaceFrameProps) {
   return (
     <View
       className={className}

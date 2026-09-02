@@ -103,22 +103,16 @@ function ToolApprovalSheetBody({
       </View>
       <ApprovalArgumentsPreview input={approval.input} />
       <View className="flex-row gap-3">
-        <Button
-          className="flex-1"
-          disabled={isSubmitting}
-          onPress={() => void submit(false)}
-          variant="destructive"
-        >
-          <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
-        </Button>
-        <Button
-          className="flex-1"
-          disabled={isSubmitting}
-          onPress={() => void submit(true)}
-          variant="default"
-        >
-          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
-        </Button>
+        <View className="flex-1">
+          <Button disabled={isSubmitting} onPress={() => void submit(false)} variant="destructive">
+            <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
+          </Button>
+        </View>
+        <View className="flex-1">
+          <Button disabled={isSubmitting} onPress={() => void submit(true)} variant="default">
+            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+          </Button>
+        </View>
       </View>
     </View>
   );

@@ -116,7 +116,7 @@ export function AgentToolsSection({
             return (
               <Section key={option.serverId}>
                 <Section.Item
-                  className="py-2"
+                  density="compact"
                   description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
                   label={displayName}
                   leading={<MonitorCloudIcon className="size-5 text-foreground" />}
@@ -183,7 +183,7 @@ export function AgentToolsSection({
               return (
                 <Section key={toolBindingKey(binding)}>
                   <Section.Item
-                    className="py-2"
+                    density="compact"
                     description={statusCaption(t, 'agent.tools.toolStatus', status)}
                     label={`${displayName} · ${binding.rawToolName}`}
                     leading={<WrenchIcon className="size-5 text-foreground" />}

@@ -253,6 +253,9 @@ importers:
       '@openrouter/ai-sdk-provider':
         specifier: ^2.10.0
         version: 2.10.0(patch_hash=fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009)(ai@6.0.183(patch_hash=fb46a93dada4a2926457e0ccbf4749b2f2d9cf7c94e70d9b4e37da59d9010c05)(zod@4.4.3))(zod@4.4.3)
+      '@react-native-community/slider':
+        specifier: 5.2.0
+        version: 5.2.0
       '@react-native-masked-view/masked-view':
         specifier: 0.3.2
         version: 0.3.2(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -512,9 +515,6 @@ importers:
       '@react-native-community/datetimepicker':
         specifier: 9.1.0
         version: 9.1.0(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
-      '@react-native-community/slider':
-        specifier: 5.2.0
-        version: 5.2.0
       '@react-native/jest-preset':
         specifier: 0.86.0
         version: 0.86.0(@babel/core@7.29.7)(react@19.2.3)
@@ -821,6 +821,9 @@ importers:
       '@magrinj/expo-quick-look':
         specifier: '*'
         version: 0.3.1(patch_hash=2b97fda8470c046179cf3e97282b6984fd1b926d2f54df9056a5cc455f073f2f)(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      '@react-native-community/slider':
+        specifier: '*'
+        version: 5.2.0
       '@react-native-masked-view/masked-view':
         specifier: '*'
         version: 0.3.2(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)

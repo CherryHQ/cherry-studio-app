@@ -1,5 +1,6 @@
 import { Host, Toggle } from '@expo/ui/swift-ui';
 import {
+  accessibilityHidden,
   accessibilityLabel as accessibilityLabelModifier,
   controlSize,
   disabled as disabledModifier,
@@ -7,7 +8,8 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useUniwind } from 'uniwind';
 
-import type { SwitchProps, SwitchSize } from './switch.types';
+import type { SwitchControlProps } from './switch-control.types';
+import type { SwitchSize } from './switch.types';
 
 const controlSizes: Record<SwitchSize, 'large' | 'regular' | 'small'> = {
   default: 'regular',
@@ -15,32 +17,40 @@ const controlSizes: Record<SwitchSize, 'large' | 'regular' | 'small'> = {
   sm: 'small',
 };
 
-export function Switch({
+export function SwitchControl({
+  accessibilityElementsHidden = false,
   accessibilityLabel,
   disabled = false,
   onValueChange,
+  pointerEvents,
   size = 'default',
   style,
   testID,
   value,
-}: SwitchProps) {
+}: SwitchControlProps) {
   const { theme } = useUniwind();
+  const accessibilityModifier = accessibilityElementsHidden
+    ? accessibilityHidden()
+    : accessibilityLabel
+      ? accessibilityLabelModifier(accessibilityLabel)
+      : undefined;
 
   return (
     <Host
       colorScheme={theme === 'dark' ? 'dark' : 'light'}
       ignoreSafeArea="all"
       matchContents
+      pointerEvents={pointerEvents}
       style={style}
       testID={testID ? `${testID}-host` : undefined}
     >
       <Toggle
         isOn={value}
-        label={accessibilityLabel}
+        label={accessibilityLabel ?? ''}
         modifiers={[
           labelsHidden(),
           controlSize(controlSizes[size]),
-          accessibilityLabelModifier(accessibilityLabel),
+          ...(accessibilityModifier ? [accessibilityModifier] : []),
           disabledModifier(disabled),
         ]}
         onIsOnChange={onValueChange}
