@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { View } from 'react-native';
 
 import type { MessageListItem } from '../types';
-import { resolveMessageCitationText } from './citations';
+import { resolveMessageCitations } from './citations';
 import { MessageFileStrip } from './MessageFileStrip';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { partitionMessageParts } from './partitionMessageParts';
@@ -31,10 +31,9 @@ export function MessageParts({
   renderMode = 'markdown',
 }: MessagePartsProps) {
   const parts = message.data.parts;
-  // Parts keep their identity across renders (see the projection cache), so this
-  // has to be memoized: a fresh ResolvedCitationText per render would defeat the
-  // memo on MessagePartRenderer for every message that carries citations.
-  const citationText = useMemo(() => resolveMessageCitationText(parts ?? []), [parts]);
+  // Parts keep their identity across renders (see the projection cache), so the
+  // resolved text and source-number map stay stable for their consumers too.
+  const citations = useMemo(() => resolveMessageCitations(parts ?? []), [parts]);
 
   if (!parts?.length) {
     return null;
@@ -47,7 +46,7 @@ export function MessageParts({
     <View className="gap-2">
       {process.length > 0 ? (
         <ProcessGroupPart
-          citationText={citationText}
+          citationText={citations.textByPartIndex}
           isTextSelectionEnabled={isTextSelectionEnabled}
           items={process.map(({ index, part }) => ({
             index,
@@ -67,10 +66,12 @@ export function MessageParts({
           messageParts={parts}
           part={item.part}
           renderMode={renderMode}
-          resolvedText={citationText.get(item.index)}
+          resolvedText={citations.textByPartIndex.get(item.index)}
         />
       ))}
-      {hasSources ? <SourceGroup parts={parts} /> : null}
+      {hasSources ? (
+        <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
+      ) : null}
       {/* Last, so the files a turn produced are the closest thing to the end of
           the message and stay put as the answer above them streams in. */}
       {files.length > 0 ? <MessageFileStrip parts={files} /> : null}

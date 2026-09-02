@@ -70,6 +70,36 @@ describe('webSource', () => {
     ]);
   });
 
+  test('orders source cards by citation number and exposes their matching labels', () => {
+    const parts = [
+      {
+        sourceId: 'result-1',
+        title: 'First result',
+        type: 'source-url',
+        url: 'https://a.example',
+      },
+      {
+        sourceId: 'result-2',
+        title: 'Second result',
+        type: 'source-url',
+        url: 'https://b.example',
+      },
+    ] as CherryMessagePart[];
+
+    expect(
+      resolveCitationWebSources(
+        parts,
+        new Map([
+          ['result-1', 2],
+          ['result-2', 1],
+        ]),
+      ),
+    ).toEqual([
+      expect.objectContaining({ citationNumber: 1, id: 'result-2' }),
+      expect.objectContaining({ citationNumber: 2, id: 'result-1' }),
+    ]);
+  });
+
   test('uses the persisted cited sentence when a result has no summary', () => {
     const parts = [
       {

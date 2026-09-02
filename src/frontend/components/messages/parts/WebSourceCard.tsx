@@ -13,13 +13,18 @@ type WebSourceCardProps = {
 
 export function WebSourceCard({ source }: WebSourceCardProps) {
   const { t } = useTranslation();
+  const citationNumber = source.citationNumber;
+  const openLabel = t('chat.webSearch.openResult', {
+    domain: source.siteName,
+    title: source.title ?? source.siteName,
+  });
+  const accessibilityLabel = citationNumber
+    ? `${t('chat.sources.title')} ${citationNumber}. ${openLabel}`
+    : openLabel;
 
   return (
     <Pressable
-      accessibilityLabel={t('chat.webSearch.openResult', {
-        domain: source.siteName,
-        title: source.title ?? source.siteName,
-      })}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
       className="gap-2.5 rounded-2xl border-continuous bg-background-subtle px-3 py-4 active:bg-secondary-active active:opacity-80"
       onPress={() => void openExternalUrl(source.url)}
