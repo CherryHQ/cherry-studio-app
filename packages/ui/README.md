@@ -185,9 +185,10 @@ the matching icon-only padding when no label is provided. Icon-only buttons must
 need an Expo UI `Host`. The visually compact `xs` size supplies an 8-point hit slop by default so
 its effective touch target remains usable.
 
-`Section.RadioItem` is the controlled single-choice variant for grouped rows. It owns the radio
-accessibility state, selected checkmark, disclosure behavior, separators, and leading-content inset;
-the caller owns the selected value and persistence:
+`Section.RadioItem` is the controlled single-choice row. It owns the radio accessibility state,
+selected checkmark, disclosure behavior, and leading-content inset; the caller owns the selected
+value and persistence. The default grouped `Section` supplies its surface and separators. Use
+`variant="plain"` for an edge-to-edge list without the grouped surface or separators:
 
 ```tsx
 <Section>
@@ -201,6 +202,44 @@ the caller owns the selected value and persistence:
   ))}
 </Section>
 ```
+
+Use `Section.SelectItem` when a grouped settings row opens a picker. It standardizes the current
+value, optional value icon, truncation, and down disclosure indicator. Use `SelectField` for the
+same interaction in a standalone form, where it shares the border, field surface, height, disabled
+state, and pressed feedback of other form controls:
+
+```tsx
+<Section.SelectItem label="Language" onPress={openLanguagePicker} value="English" />
+
+<SelectField accessibilityLabel="Select model" onPress={openModelPicker}>
+  <SelectField.Label>Model</SelectField.Label>
+  <SelectField.Value>
+    <ModelIcon />
+    <SelectField.ValueText>Claude</SelectField.ValueText>
+  </SelectField.Value>
+</SelectField>
+```
+
+`OptionPickerBottomSheet` is the matching controlled single-choice surface. It renders an
+edge-to-edge list of `Section.RadioItem` rows without separators, changes only a newly selected
+value, and closes after any selection. The caller owns localized labels, the selected value, and
+persistence:
+
+```tsx
+<OptionPickerBottomSheet
+  onClose={closePicker}
+  onValueChange={setLanguage}
+  open={isPickerOpen}
+  options={languages}
+  selectedValue={language}
+  size="compact"
+  title="Language"
+/>
+```
+
+`SelectionIndicator` is the decorative selected/unselected mark inside a parent checkbox or radio
+row. The parent owns the accessible role, state, and press handling. Use its `overlay` variant when
+the unselected ring sits on imagery and needs a dark contrast fill.
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest

@@ -4,4 +4,6 @@ export type {
   SectionItemProps,
   SectionProps,
   SectionRadioItemProps,
+  SectionSelectItemProps,
+  SectionVariant,
 } from './section.types';

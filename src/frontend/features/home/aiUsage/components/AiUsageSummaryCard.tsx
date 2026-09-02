@@ -1,13 +1,11 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, ContentState, Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
+import { ProviderBrandAvatar } from '@/frontend/components/avatar';
 import type {
   AiUsageRecordCostTotal,
   AiUsageRecordTimelineBucket,
@@ -164,26 +162,14 @@ function AiUsageProviderPill({
   providerName: string | null;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
   const label = providerName || providerId || t('aiUsage.unknownProvider');
-  const iconSource = resolveProviderIcon(providerId ?? '');
 
   return (
     <View
       className="min-w-0 flex-1 flex-row items-center gap-2"
       testID={`ai-usage-summary-provider-${providerId ?? 'unknown'}`}
     >
-      {iconSource ? (
-        <BrandAvatar label={label} size={24}>
-          <BrandAvatarIcon
-            iconId={providerId ?? undefined}
-            recyclingKey={providerId ?? undefined}
-            source={iconSource[theme === 'dark' ? 'dark' : 'light']}
-          />
-        </BrandAvatar>
-      ) : (
-        <BrandAvatar label={label} size={24} />
-      )}
+      <ProviderBrandAvatar providerId={providerId ?? ''} providerName={label} size={24} />
       <Text className="min-w-0 shrink text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>

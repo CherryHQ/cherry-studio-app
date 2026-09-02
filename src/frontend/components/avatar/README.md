@@ -9,6 +9,8 @@ Cherry product data and presentation rules before composing that primitive.
 - `BrandAvatar`, `BrandAvatarIcon`, and `BrandAvatarPhoto` apply provider/model brand fallback and
   icon inset rules. `shape` defaults to `rounded`, the brand default; editing forms pass `circle`,
   where the avatar is the subject rather than one entry in a list of brands.
+- `ProviderBrandAvatar` resolves a provider's built-in logo and generated-initial fallback. It does
+  not read uploaded avatars, so provider-avatar persistence remains settings-owned.
 - `ModelAvatar` resolves a model icon from its model and provider records.
 - `AgentAvatar` renders an Agent's image, else the generated initial tile, else a neutral bot badge
   for an unnamed draft — round, because an Agent reads as a persona rather than a brand.

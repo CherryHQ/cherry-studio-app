@@ -16,6 +16,7 @@ const themes = [
 ] as const;
 
 function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light' }) {
+  const [language, setLanguage] = useState('System');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   return (
@@ -34,6 +35,12 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
             label="Account"
             leading={<CircleUserRoundIcon className="size-5 text-primary" />}
             onPress={fn()}
+          />
+          <Section.SelectItem
+            label="Language"
+            leading={<InfoIcon className="size-5 text-primary" />}
+            onPress={() => setLanguage((current) => (current === 'System' ? 'English' : 'System'))}
+            value={language}
           />
           <Section.Item
             label="Notifications"

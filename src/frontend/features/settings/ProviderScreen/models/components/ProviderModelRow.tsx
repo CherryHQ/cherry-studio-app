@@ -1,4 +1,4 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import { SelectionIndicator } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -80,10 +80,7 @@ export function ProviderModelRow({
   const content = (
     <>
       {selection ? (
-        <ProviderModelRowCheckbox
-          isDisabled={selection.isDisabled}
-          isSelected={selection.isSelected}
-        />
+        <SelectionIndicator disabled={selection.isDisabled} selected={selection.isSelected} />
       ) : null}
       {/* Unsized, so it is `BrandAvatar`'s own square — the one a provider row
           draws, and the one the picker sheet draws beside the same single line
@@ -140,28 +137,5 @@ export function ProviderModelRow({
     >
       {content}
     </Pressable>
-  );
-}
-
-/** The same tick the session list draws, since both lists select the same way. */
-function ProviderModelRowCheckbox({
-  isDisabled,
-  isSelected,
-}: {
-  isDisabled?: boolean;
-  isSelected: boolean;
-}) {
-  const disabledClassName = isDisabled ? ' opacity-40' : '';
-
-  return (
-    <View
-      className={
-        isSelected
-          ? `size-6 items-center justify-center rounded-full bg-foreground${disabledClassName}`
-          : `size-6 items-center justify-center rounded-full border-2 border-border-strong${disabledClassName}`
-      }
-    >
-      {isSelected ? <CheckIcon className="size-4 text-background" /> : null}
-    </View>
   );
 }

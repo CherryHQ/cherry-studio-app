@@ -1,6 +1,8 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
 import {
+  Button,
+  Chip,
   ContentState,
   FieldError,
   Input,
@@ -9,11 +11,10 @@ import {
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, type TextInputProps, View } from 'react-native';
+import { StyleSheet, Text, type TextInputProps, View } from 'react-native';
 import {
   KeyboardAwareScrollView,
   type KeyboardAwareScrollViewRef,
@@ -461,14 +462,16 @@ function ProviderModelAddForm({
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
                   {providerModelAddEndpointOptions.map((option) => (
-                    <EndpointTypeChip
+                    <Chip.Selectable
+                      accessibilityLabel={t(option.labelKey)}
+                      accessibilityRole="checkbox"
+                      disabled={isSubmitting}
                       key={option.id}
-                      isDisabled={isSubmitting}
-                      isSelected={selectedEndpointTypes.has(option.id)}
-                      label={t(option.labelKey)}
-                      onPress={() => toggleEndpointType(option.id)}
-                      selectionRole="checkbox"
-                    />
+                      onSelectedChange={() => toggleEndpointType(option.id)}
+                      selected={selectedEndpointTypes.has(option.id)}
+                    >
+                      {t(option.labelKey)}
+                    </Chip.Selectable>
                   ))}
                 </View>
                 {endpointTypeError ? (
@@ -487,14 +490,20 @@ function ProviderModelAddForm({
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
                   {PROVIDER_MODEL_PURPOSE_OPTIONS.map((option) => (
-                    <EndpointTypeChip
+                    <Chip.Selectable
+                      accessibilityLabel={t(option.labelKey)}
+                      accessibilityRole="radio"
+                      disabled={isSubmitting}
                       key={option.id}
-                      isDisabled={isSubmitting}
-                      isSelected={modelPurpose === option.id}
-                      label={t(option.labelKey)}
-                      onPress={() => updateModelPurpose(option.id)}
-                      selectionRole="radio"
-                    />
+                      onSelectedChange={(selected) => {
+                        if (selected) {
+                          updateModelPurpose(option.id);
+                        }
+                      }}
+                      selected={modelPurpose === option.id}
+                    >
+                      {t(option.labelKey)}
+                    </Chip.Selectable>
                   ))}
                 </View>
 
@@ -505,14 +514,20 @@ function ProviderModelAddForm({
                     </Text>
                     <View className="flex-row flex-wrap gap-2">
                       {chatEndpointTypes.map((endpointType) => (
-                        <EndpointTypeChip
+                        <Chip.Selectable
+                          accessibilityLabel={t(getProviderModelEndpointLabelKey(endpointType))}
+                          accessibilityRole="radio"
+                          disabled={isSubmitting}
                           key={endpointType}
-                          isDisabled={isSubmitting}
-                          isSelected={formState.endpointTypes[0] === endpointType}
-                          label={t(getProviderModelEndpointLabelKey(endpointType))}
-                          onPress={() => updateChatEndpointType(endpointType)}
-                          selectionRole="radio"
-                        />
+                          onSelectedChange={(selected) => {
+                            if (selected) {
+                              updateChatEndpointType(endpointType);
+                            }
+                          }}
+                          selected={formState.endpointTypes[0] === endpointType}
+                        >
+                          {t(getProviderModelEndpointLabelKey(endpointType))}
+                        </Chip.Selectable>
                       ))}
                     </View>
                   </View>
@@ -520,22 +535,23 @@ function ProviderModelAddForm({
               </View>
             ) : null}
 
-            <Pressable
+            <Button
               accessibilityLabel={t('settings.provider.models.addMoreSettings')}
-              accessibilityRole="button"
-              className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-secondary px-3 active:opacity-70 disabled:opacity-40"
+              className="h-10"
               disabled={isSubmitting}
               onPress={toggleMoreSettings}
+              size="sm"
+              variant="secondary"
             >
-              <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
+              <Button.Label numberOfLines={1}>
                 {t('settings.provider.models.addMoreSettings')}
-              </Text>
+              </Button.Label>
               {showMoreSettings ? (
                 <ChevronUpIcon className="size-4 text-foreground" />
               ) : (
                 <ChevronDownIcon className="size-4 text-foreground" />
               )}
-            </Pressable>
+            </Button>
 
             {showMoreSettings ? (
               <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
@@ -654,40 +670,6 @@ function ProviderModelAddNumberField({
       onChangeText={handleChangeText}
       onFocus={onFocus}
     />
-  );
-}
-
-function EndpointTypeChip({
-  isDisabled,
-  isSelected,
-  label,
-  onPress,
-  selectionRole,
-}: {
-  isDisabled: boolean;
-  isSelected: boolean;
-  label: string;
-  onPress: () => void;
-  selectionRole: 'checkbox' | 'radio';
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole={selectionRole}
-      accessibilityState={{ checked: isSelected, disabled: isDisabled }}
-      className={cn(
-        'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected
-          ? 'border border-border-strong bg-secondary'
-          : 'border border-border bg-secondary',
-      )}
-      disabled={isDisabled}
-      onPress={onPress}
-    >
-      <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 

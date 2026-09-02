@@ -1,7 +1,4 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { useUniwind } from 'uniwind';
-
-import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/avatar';
+import { BrandAvatar, BrandAvatarPhoto, ProviderBrandAvatar } from '@/frontend/components/avatar';
 
 import { useProviderAvatar } from './providerAvatarStore';
 
@@ -45,37 +42,4 @@ export function ProviderAvatar({
       size={size}
     />
   );
-}
-
-/**
- * Tiers ② and ③ on their own — built-in brand icon, else first-character
- * placeholder. This is what a provider looks like with no custom avatar, which
- * is why the provider form uses it as the preview for "reset avatar": unlike
- * {@link ProviderAvatar} it ignores whatever is still on disk.
- */
-export function ProviderBrandAvatar({
-  presetProviderId,
-  providerId,
-  providerName,
-  shape,
-  size,
-}: ProviderAvatarProps) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const displayIconId = presetProviderId ?? providerId;
-  const iconSource = resolveProviderIcon(displayIconId);
-
-  if (iconSource) {
-    return (
-      <BrandAvatar label={providerName} shape={shape} size={size}>
-        <BrandAvatarIcon
-          iconId={displayIconId}
-          recyclingKey={providerId}
-          source={iconSource[iconTheme]}
-        />
-      </BrandAvatar>
-    );
-  }
-
-  return <BrandAvatar label={providerName} shape={shape} size={size} />;
 }

@@ -4,9 +4,9 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { ProviderBrandAvatar } from '@/frontend/components/avatar';
 import { RouteHeader } from '@/frontend/components/headers';
 
-import { ProviderBrandAvatar } from '../components/ProviderAvatar';
 import { useProviderApiServiceSheetClose } from './apiService';
 import {
   ProviderNewFormContent,
