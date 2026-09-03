@@ -176,6 +176,34 @@ describe('agentMessageProjection', () => {
     });
   });
 
+  test('projects provider tool input generation before complete arguments arrive', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-tool-input-streaming', {
+        parts: [
+          {
+            displayName: 'Write file',
+            id: 'tool-streaming',
+            providerName: 'write_file',
+            state: 'input-streaming',
+            toolCallId: 'call-streaming',
+            toolRef: { source: 'builtin', capabilityId: 'write_file' },
+            type: 'tool',
+          },
+        ],
+      }),
+    );
+
+    expect(item.data.parts).toEqual([
+      expect.objectContaining({
+        input: undefined,
+        state: 'input-streaming',
+        toolCallId: 'call-streaming',
+        toolName: 'write_file',
+        type: 'dynamic-tool',
+      }),
+    ]);
+  });
+
   test('unwraps Runtime tool results for the shared tool renderers', () => {
     const item = toAgentMessageListItem(
       message('assistant-tool-result', {

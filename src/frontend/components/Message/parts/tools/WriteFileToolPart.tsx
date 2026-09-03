@@ -11,7 +11,7 @@ type WriteFileToolPartProps = {
 };
 
 /**
- * Completed writes and rejected writes use a user-facing rendering.
+ * Active, completed, and rejected writes use a user-facing rendering.
  *
  * The written file itself is already in the transcript: the tool returns it as
  * an artifact, and the Host persists that as a `purpose: 'artifact'` file part
@@ -22,6 +22,31 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
   const { t } = useTranslation();
   const createdWrite = part.state === 'output-available' ? parseCreatedWrite(part.output) : null;
   const rejection = part.state === 'output-available' ? parseRejection(part.output) : null;
+  const isActive = part.state === 'input-streaming' || part.state === 'input-available';
+
+  if (isActive) {
+    const filename = parseWriteFilename(part.input);
+    const statusText =
+      part.state === 'input-streaming'
+        ? t('chat.builtinTool.file.generating')
+        : t('chat.builtinTool.file.writing');
+
+    return (
+      <MessagePart.Tool
+        state="running"
+        statusText={statusText}
+        testID="write-file-tool-part"
+        title={t('chat.builtinTool.file.write')}
+      >
+        {filename ? (
+          <MessagePart.ValueSection
+            title={statusText}
+            value={{ [t('chat.builtinTool.file.filename')]: filename }}
+          />
+        ) : null}
+      </MessagePart.Tool>
+    );
+  }
 
   if (createdWrite === null && rejection === null) {
     return <GenericToolPart part={part} />;
@@ -72,6 +97,11 @@ type CreatedWrite = {
   filename: string;
   size?: number;
 };
+
+function parseWriteFilename(input: unknown): string | null {
+  if (!isRecord(input) || typeof input.filename !== 'string') return null;
+  return input.filename.trim() || null;
+}
 
 /** Persisted tool output is untrusted JSON; anything else renders generically. */
 function parseCreatedWrite(output: unknown): CreatedWrite | null {

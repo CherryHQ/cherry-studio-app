@@ -188,6 +188,20 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBeDefined();
   });
 
+  test('accepts a tool whose provider input is still streaming', () => {
+    const part = {
+      id: 'tool-part-streaming',
+      type: 'tool',
+      toolCallId: 'call-streaming',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      state: 'input-streaming',
+    } as const;
+
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+  });
+
   test('accepts managed file ids and rejects raw file URIs', () => {
     const input = {
       type: 'file',

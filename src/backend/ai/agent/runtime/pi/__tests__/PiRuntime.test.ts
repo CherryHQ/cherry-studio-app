@@ -467,6 +467,115 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('publishes tool input generation without forwarding every argument delta', async () => {
+    const runtime = createTestRuntime();
+    const fullInput = {
+      filename: 'page.html',
+      content: '<html>large generated document</html>',
+    };
+    let executedInput: RuntimeJsonValue | undefined;
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      approval: 'auto',
+      description: 'Write a managed file.',
+      inputSchema: { type: 'object' },
+      execute: async ({ input }) => {
+        executedInput = input;
+        return { value: { status: 'created', filename: 'page.html' }, artifacts: [] };
+      },
+    };
+    arrange(runtime, async (context) => {
+      const piTool = context.options.initialState?.tools?.[0];
+      if (!piTool) throw new Error('Streaming tool program requires one tool.');
+      const starting = assistantMessage({
+        content: [{ type: 'toolCall', id: 'write-call', name: piTool.name, arguments: {} }],
+        stopReason: 'toolUse',
+      });
+      const partial = assistantMessage({
+        content: [
+          {
+            type: 'toolCall',
+            id: 'write-call',
+            name: piTool.name,
+            arguments: { filename: 'page.html' },
+          },
+        ],
+        stopReason: 'toolUse',
+      });
+      const completed = assistantMessage({
+        content: [{ type: 'toolCall', id: 'write-call', name: piTool.name, arguments: fullInput }],
+        stopReason: 'toolUse',
+      });
+      const completedCall = completed.content[0];
+      if (completedCall.type !== 'toolCall') throw new Error('Missing completed tool call.');
+
+      await context.emit({ type: 'message_start', message: starting });
+      await context.emit({
+        type: 'message_update',
+        message: starting,
+        assistantMessageEvent: { type: 'toolcall_start', contentIndex: 0, partial: starting },
+      });
+      await context.emit({
+        type: 'message_update',
+        message: partial,
+        assistantMessageEvent: {
+          type: 'toolcall_delta',
+          contentIndex: 0,
+          delta: '{"filename":"page.html",',
+          partial,
+        },
+      });
+      await context.emit({
+        type: 'message_update',
+        message: completed,
+        assistantMessageEvent: {
+          type: 'toolcall_end',
+          contentIndex: 0,
+          toolCall: completedCall,
+          partial: completed,
+        },
+      });
+      await context.emit({ type: 'message_end', message: completed });
+
+      const result = await piTool.execute('write-call', fullInput, context.signal);
+      const toolResult: ToolResultMessage = {
+        role: 'toolResult',
+        toolCallId: 'write-call',
+        toolName: piTool.name,
+        content: result.content,
+        details: result.details,
+        isError: false,
+        timestamp: Date.now(),
+      };
+      await context.emit({ type: 'turn_end', message: completed, toolResults: [toolResult] });
+      await emitText(context, 'File created.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-streaming-tool-input', { tools: [tool] })),
+    );
+    const toolEvents = events.flatMap((event) =>
+      (event.type === 'part.add' || event.type === 'part.replace') && event.part.type === 'tool'
+        ? [event.part]
+        : [],
+    );
+
+    expect(toolEvents[0]).toMatchObject({
+      input: undefined,
+      state: 'input-streaming',
+      toolCallId: 'write-call',
+    });
+    expect(toolEvents.filter((part) => part.state === 'input-streaming')).toHaveLength(1);
+    expect(toolEvents).toContainEqual(
+      expect.objectContaining({ input: fullInput, state: 'input-available' }),
+    );
+    expect(executedInput).toEqual(fullInput);
+    await session.close();
+  });
+
   test('encodes structured text attachments as JSON-escaped untrusted user content', () => {
     const runtime = createTestRuntime();
     const holder = holders.get(runtime);

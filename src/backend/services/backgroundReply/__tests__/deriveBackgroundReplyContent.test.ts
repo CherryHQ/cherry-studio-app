@@ -70,6 +70,15 @@ describe('deriveBackgroundReplyContent', () => {
     expect(content).toEqual({ detail, phase: 'using-tool' });
   });
 
+  test('treats provider tool input generation as active tool work', () => {
+    const content = deriveBackgroundReplyContent(
+      message([{ ...toolPart('private_mcp_tool'), input: undefined, state: 'input-streaming' }]),
+      t,
+    );
+
+    expect(content).toEqual({ detail: 'Using a tool', phase: 'using-tool' });
+  });
+
   test('prioritizes approval over text and keeps only the safe reply preview', () => {
     const content = deriveBackgroundReplyContent(
       message([

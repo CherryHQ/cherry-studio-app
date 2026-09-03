@@ -1,33 +1,120 @@
 # Cherry Agent Protocol
 
-> Status: as-built. Mobile Agent execution is device-local only.
+> Status: Version 1 is as-built for device-local execution. A PC Agent Controller extension is
+> planned and is not implemented.
 
-This document defines the application contract between the Agent Client and the Mobile Agent Host.
-It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.
+This document defines the application-facing contract consumed by the Agent Client. Today that
+contract is provided in process by the Mobile Agent Host. The planned PC Agent Controller keeps the
+contract next to the application while a separate adapter translates between it and a PC-owned
+Agent Runtime. This document does not define either the local [Agent Runtime](./agent-runtime.md) or
+the future PC connection protocol.
 
 ## Scope
 
-The protocol owns the product meaning of an Agent Session: creating the Session, submitting a
-message, observing a turn, cancelling it, responding to tool approval, and recovering UI state from
-a snapshot.
+The protocol owns the product meaning the mobile application consumes: Session and message views,
+turn and tool lifecycle, approval presentation, user commands, and recovery of visible state from
+an authoritative snapshot. It does not own model execution or the transport used to reach the
+execution owner.
 
 Version 1 uses an in-process interface. Operation inputs, results, snapshots, and events are
 JSON-safe values validated at the boundary. Subscription callbacks and unsubscribe handles are
 process-local transport mechanics, not protocol data. JSON safety keeps application values
 portable; this document does not define a network wire protocol.
 
-Cloud control and LAN desktop control are separate product domains. They do not execute a Mobile
-Agent, reuse its Session or definition, or extend `AgentExecutionTarget` with remote variants.
+For the planned PC Agent Controller, the PC owns the Agent, Session, conversation, execution, tool,
+approval, task, and persistence state. Mobile consumes normalized application events, maintains
+only the projection needed by its UI, and sends user intent such as a message, cancellation, or
+approval decision back through the adapter. The adapter may eventually use WebSocket, WebRTC, or
+another transport; that choice does not change the Agent Protocol.
 
-The approved future remote boundary preserves that distinction: a mobile-owned HTTP adapter calls
-the remote service and maps its wire DTOs and events into a future versioned Agent Protocol
-representation accepted by the application. The remote API is not this in-process interface, and
-remote data remains authoritative on the service rather than being copied into the Mobile Agent
-Host or its Session store. Version 1 does not yet accept, select, or route a remote source. See
-[Agent Architecture](./README.md#approved-future-remote-boundary).
+Version 1 remains local-only and its TypeScript shapes below are still the as-built contract. The
+planned PC extension is documented separately in [Planned PC Agent Controller
+extension](#planned-pc-agent-controller-extension); it must not be read as implemented behavior.
+See also [Agent Architecture](./README.md#planned-pc-agent-controller-boundary).
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
+
+## Ownership
+
+| Layer | Owns | Does not own |
+| --- | --- | --- |
+| PC Agent Runtime | Agent execution, authoritative Session state, tools, approvals, tasks, and persistence | Mobile rendering and network adaptation |
+| Mobile PC Agent Adapter | Transport, authentication handoff, ordering, reconnection, replay, and mapping PC data into application values | Agent execution semantics and UI presentation |
+| Agent Protocol | Normalized views, application events, user commands, capabilities, and application-level errors | WebSocket/WebRTC frames, acknowledgements, heartbeats, or Runtime-native events |
+| Mobile UI | Rendering a temporary projection and collecting user intent | Authoritative conversation or execution state |
+
+The current local path uses the Mobile Agent Host and Pi Runtime in process and has no PC adapter.
+The table defines the planned PC path; it does not retroactively describe Version 1 internals.
+
+## Planned PC Agent Controller extension
+
+This section records the target application contract before implementation. It deliberately does
+not select a wire transport or claim that the current TypeScript schemas support PC Sessions.
+
+### Required application semantics
+
+The planned protocol must cover the following mobile-visible behavior:
+
+- An authoritative Session snapshot containing the visible transcript window, active turn,
+  streaming message, pending approvals, background work, and a cursor for older messages. Mobile
+  must not depend on its local Agent Data API to reconstruct a PC-owned Session.
+- Incremental message and tool lifecycle events normalized into stable application parts. A tool
+  may expose input generation, execution, progress, streamed output, final output, denial, failure,
+  or interruption without sending an ever-growing argument or output object on every delta.
+- A submission disposition of `started`, `queued`, `redirected`, or `rejected`. The result must say
+  whether the PC opened a turn, queued a follow-up, or injected the input into active work instead
+  of assuming every accepted message creates a new turn immediately.
+- Approval states for `pending`, `approved`, `denied`, `cancelled`, and `expired`. Responding to an
+  approval must distinguish an accepted decision from an already-resolved or stale request.
+- Opaque PC resource references for attachments and generated artifacts. Mobile receives stable
+  display metadata and asks the adapter to open or download content; a PC path never becomes mobile
+  authority and a mobile `fileEntryId` never identifies a PC-owned file.
+- Runtime activities that have a mobile consumer: API retry, context compaction, context usage,
+  supported commands, autonomous turns, background work, background-task progress, and parented
+  subagent output. Internal PC events remain hidden when the mobile product has no presentation or
+  command for them.
+- Dynamic capabilities describing which commands the connected PC Session accepts, including
+  redirect, queue, cancellation, approval response, task stop, attachments, and optional Session
+  management operations.
+- Application-level failures such as unavailable Session, rejected command, stale approval, and
+  unavailable resource. Transport failure remains adapter connection state rather than a
+  conversation event.
+
+The minimum mobile-to-PC command surface is message submission, active-turn cancellation, approval
+response, and background-task stop. Session creation, rename, deletion, fork, retry, and command
+execution enter the protocol only when the corresponding mobile feature is planned and the PC
+advertises support.
+
+### Adapter boundary
+
+The adapter maps PC Runtime DTOs and events into the normalized snapshots and deltas above, and maps
+mobile commands back into PC operations. It exclusively owns:
+
+- WebSocket, WebRTC, HTTP, or any later transport choice;
+- pairing, authentication, encryption, and endpoint discovery;
+- event sequence numbers, acknowledgements, replay cursors, resume tokens, and idempotency keys;
+- connection heartbeat, reconnect policy, framing, compression, and backpressure; and
+- compatibility with the PC Runtime's native event names and payload versions.
+
+If the UI needs a connection banner, the adapter may expose connection state beside the Agent
+Protocol. Connection mechanics do not become conversation events. One adapter instance may bind one
+PC source; the application protocol does not introduce a global source registry until a concrete
+multi-PC product flow requires one.
+
+### Version 1 migration constraints
+
+The PC extension must be introduced as a versioned contract rather than reinterpreting local-only
+fields:
+
+- do not add a remote variant to the current `{ kind: 'local' }` execution target;
+- do not use mobile `UniqueModelId` or local inference snapshots as PC execution authority;
+- do not use mobile managed-file ids for PC attachments or artifacts;
+- do not restrict PC tools to the current local built-in/MCP identity union; and
+- do not copy PC-owned Session rows into the local Host store as a second source of truth.
+
+The sections below describe the current Version 1 implementation unless they explicitly say
+otherwise.
 
 ## Values
 
@@ -145,6 +232,7 @@ type AgentMessagePart =
       providerName: string
       displayName: string
       state:
+        | 'input-streaming'
         | 'input-available'
         | 'awaiting-approval'
         | 'running'
@@ -231,8 +319,11 @@ cannot enter configuration, approval, or inference snapshots. `providerName` is 
 function alias used in model history; `displayName` is a snapshot for historical UI. For every
 persisted tool call, `output-available`, `denied`, `error`, and `interrupted` are terminal states with
 a paired normalized `RuntimeToolResult` JSON projection. No finalized message contains a tool left
-in `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch persists only its
-requested target name and normalized error, never unresolved parameters.
+in `input-streaming`, `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch
+persists only its requested target name and normalized error, never unresolved parameters.
+
+`input-streaming` is a live lifecycle signal and may omit `input`; consumers must not interpret it as
+an executable call until the part advances to `input-available`.
 
 `usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
 the turn and commits the final value together with the terminal message state, so

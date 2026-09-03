@@ -220,6 +220,7 @@ export type RuntimeOutputPart =
       providerName: string;
       displayName: string;
       state:
+        | 'input-streaming'
         | 'input-available'
         | 'awaiting-approval'
         | 'running'

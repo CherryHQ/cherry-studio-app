@@ -6,7 +6,7 @@ import {
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('message settlement', () => {
-  test.each(['input-available', 'awaiting-approval', 'running'] as const)(
+  test.each(['input-streaming', 'input-available', 'awaiting-approval', 'running'] as const)(
     'terminalizes %s tool state with no pending approval',
     (state) => {
       const [part] = interruptNonTerminalToolParts(
@@ -19,7 +19,7 @@ describe('message settlement', () => {
             providerName: 'mcp_server_1_delete_file_a1b2',
             displayName: 'Delete file',
             state,
-            input: { fileEntryId: 'file-1' },
+            ...(state === 'input-streaming' ? {} : { input: { fileEntryId: 'file-1' } }),
             ...(state === 'awaiting-approval' ? { approvalId: 'approval-1' } : {}),
           },
         ],
