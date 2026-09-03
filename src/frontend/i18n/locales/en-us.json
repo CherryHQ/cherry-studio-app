@@ -133,6 +133,7 @@
   "chat.errorPart.interrupted.message": "The app closed before this reply finished. Send the message again.",
   "chat.errorPart.interrupted.title": "Reply interrupted",
   "chat.errorPart.message": "The reply could not be completed.",
+  "chat.errorPart.message.auth": "Check the API key in provider settings, then try again.",
   "chat.errorPart.reason.auth": "Authentication failed",
   "chat.errorPart.reason.contentFilter": "Content was blocked",
   "chat.errorPart.reason.contextLength": "Context is too long",

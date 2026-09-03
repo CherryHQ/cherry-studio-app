@@ -700,6 +700,13 @@ describe.each([
       status: 'supported',
       snapshot: INFERENCE_SNAPSHOT,
     });
+    expect(transcript[1]?.parts).toEqual([
+      {
+        id: expect.stringMatching(/^error-/),
+        type: 'error',
+        error: INTERRUPTED,
+      },
+    ]);
 
     expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(0);
   });
@@ -1135,6 +1142,11 @@ describe('SqliteAgentSessionStore database guarantees', () => {
             value: { status: 'interrupted', reason: INTERRUPTED.message },
             artifacts: [],
           },
+        },
+        {
+          id: expect.stringMatching(/^error-/),
+          type: 'error',
+          error: INTERRUPTED,
         },
       ],
     });

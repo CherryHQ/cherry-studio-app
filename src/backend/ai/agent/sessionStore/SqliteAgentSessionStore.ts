@@ -31,7 +31,10 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
-import { interruptNonTerminalToolParts } from './messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 
@@ -446,13 +449,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
       for (const row of rows) {
         const message = toAgentMessageView(row);
+        const interruptedParts =
+          message.role === 'assistant'
+            ? settleInterruptedAssistantParts(
+                message.parts,
+                error,
+                `error-${message.turnId ?? message.id}`,
+              )
+            : interruptNonTerminalToolParts(message.parts, error.message);
         await tx
           .update(agentSessionMessageTable)
           .set({
             status: 'interrupted',
             data: {
               version: 1,
-              parts: interruptNonTerminalToolParts(message.parts, error.message),
+              parts: interruptedParts,
             },
             ...(message.role === 'assistant' ? { error } : {}),
           })

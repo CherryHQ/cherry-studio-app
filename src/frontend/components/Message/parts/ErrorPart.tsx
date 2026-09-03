@@ -39,25 +39,6 @@ function isAgentFailureReason(value: unknown): value is AgentFailureReason {
   );
 }
 
-/**
- * Only provider text is shown verbatim: it is third-party diagnostic detail
- * the user can act on and no translation exists for it. Every other layer is
- * app-owned, so its `message` stays diagnostic and the copy comes from the
- * protocol code instead.
- */
-function readProviderDetail(data: ErrorPartProps['part']['data']): string | undefined {
-  const source = data.source;
-  const layer =
-    source && typeof source === 'object' && !Array.isArray(source)
-      ? (source as { layer?: unknown }).layer
-      : undefined;
-  if (layer !== 'provider' || typeof data.message !== 'string') {
-    return undefined;
-  }
-  const detail = data.message.trim();
-  return detail.length > 0 ? detail : undefined;
-}
-
 export function ErrorPart({ part }: ErrorPartProps) {
   const { t } = useTranslation();
   const { code, reasonCode, retryable } = part.data;
@@ -74,9 +55,13 @@ export function ErrorPart({ part }: ErrorPartProps) {
   const title = isAgentFailureReason(reasonCode)
     ? t(AGENT_FAILURE_TITLE_KEYS[reasonCode])
     : t('chat.errorPart.title');
-  const message =
-    readProviderDetail(part.data) ??
-    t(retryable === true ? 'chat.errorPart.retryable' : 'chat.errorPart.message');
+  const message = t(
+    reasonCode === 'auth'
+      ? 'chat.errorPart.message.auth'
+      : retryable === true
+        ? 'chat.errorPart.retryable'
+        : 'chat.errorPart.message',
+  );
 
   return <MessagePart.Error message={message} title={title} />;
 }

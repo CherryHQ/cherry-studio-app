@@ -1,4 +1,7 @@
-import { interruptNonTerminalToolParts } from '../messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from '../messageSettlement';
 
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
@@ -33,4 +36,16 @@ describe('message settlement', () => {
       expect(part).not.toHaveProperty('approvalId');
     },
   );
+
+  test('appends a renderable error part when recovery interrupts an assistant message', () => {
+    expect(settleInterruptedAssistantParts([], INTERRUPTED, 'error-turn-1')).toEqual([
+      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+    ]);
+  });
 });
+
+const INTERRUPTED = {
+  code: 'INTERRUPTED' as const,
+  message: 'The app restarted.',
+  retryable: true,
+};

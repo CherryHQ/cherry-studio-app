@@ -132,6 +132,7 @@
   "chat.errorPart.interrupted.message": "应用在本次回复完成前已关闭，请重新发送。",
   "chat.errorPart.interrupted.title": "回复已中断",
   "chat.errorPart.message": "本次回复未能完成。",
+  "chat.errorPart.message.auth": "请检查服务商设置中的 API 密钥，然后重试。",
   "chat.errorPart.reason.auth": "身份验证失败",
   "chat.errorPart.reason.contentFilter": "内容被安全策略拦截",
   "chat.errorPart.reason.contextLength": "上下文过长",

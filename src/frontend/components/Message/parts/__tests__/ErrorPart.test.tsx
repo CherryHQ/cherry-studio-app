@@ -25,7 +25,7 @@ function errorPart(data: ErrorPartInput['data']): ErrorPartInput {
 }
 
 describe('ErrorPart', () => {
-  test('renders provider text verbatim as the detail line', () => {
+  test('renders actionable local copy instead of provider diagnostics for auth failures', () => {
     const renderer = render(
       <ErrorPart
         part={errorPart({
@@ -40,7 +40,7 @@ describe('ErrorPart', () => {
 
     const props = renderer.root.findByType('MessagePartError').props;
     expect(props.title).toBe('chat.errorPart.reason.auth');
-    expect(props.message).toBe('Incorrect API key provided: sk-***');
+    expect(props.message).toBe('chat.errorPart.message.auth');
   });
 
   test('replaces app-owned diagnostic messages with translated copy', () => {

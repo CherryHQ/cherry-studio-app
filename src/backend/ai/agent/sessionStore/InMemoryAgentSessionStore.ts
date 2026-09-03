@@ -19,7 +19,10 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
-import { interruptNonTerminalToolParts } from './messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -393,10 +396,18 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
           continue;
         }
+        const interruptedParts =
+          stored.view.role === 'assistant'
+            ? settleInterruptedAssistantParts(
+                stored.view.parts,
+                error,
+                `error-${stored.view.turnId ?? stored.view.id}`,
+              )
+            : interruptNonTerminalToolParts(stored.view.parts, error.message);
         stored.view = {
           ...stored.view,
           status: 'interrupted',
-          parts: interruptNonTerminalToolParts(stored.view.parts, error.message),
+          parts: interruptedParts,
           updatedAt: nowIso(),
         };
         if (stored.view.role === 'assistant') {
