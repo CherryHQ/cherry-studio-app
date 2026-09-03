@@ -118,6 +118,7 @@
     "expo-localization": "~57.0.1",
     "expo-location": "~57.0.6",
     "expo-media-library": "~57.0.2",
+    "expo-observe": "~57.0.18",
     "expo-paste-input": "0.2.2",
     "expo-router": "~57.0.6",
     "expo-screen-corner-radius": "^1.1.0",

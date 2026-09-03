@@ -3,6 +3,7 @@ import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/webCrypto';
 import { Alert, BottomSheetProvider, Toast } from '@cherrystudio/ui/components';
+import { ObserveRoot } from 'expo-observe';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
@@ -21,6 +22,7 @@ import {
   NavigationThemeProvider,
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
+import { configureObserve } from '@/frontend/appShell/observability';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
 import { QueryProvider } from '@/frontend/data';
@@ -31,9 +33,13 @@ import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 // committed its first layout.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// The router integration has to be live before the first screen mounts, so this
+// runs at module scope alongside the splash screen hold rather than in an effect.
+configureObserve();
+
 const RootGestureView = withUniwind(GestureHandlerRootView);
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <RootGestureView className="flex-1">
       <KeyboardProvider>
@@ -64,6 +70,11 @@ export default function RootLayout() {
     </RootGestureView>
   );
 }
+
+// `wrap` mounts the metrics root above the tree, which is what times the first
+// render. It has to sit outside `RootLayout` rather than inside its JSX so the
+// measurement starts before any provider below renders.
+export default ObserveRoot.wrap(RootLayout);
 
 function AppAlertProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();

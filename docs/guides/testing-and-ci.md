@@ -76,6 +76,22 @@ pnpm typecheck
 Also rerun the behavior-related fixed suites and specialized checks selected above. Do not run the
 full local `pnpm test`; the complete suite belongs to remote PR CI.
 
+### After Changing Dependencies
+
+Adding or removing a package makes pnpm rewrite the whole peer graph, which duplicates packages that
+were previously shared. Two copies of `expo` is enough to break Jest on its own: the copy `jest-expo`
+initializes defines `globalThis.expo`, so the other copy dials a non-existent dev server from
+`Expo.fx`, and the native-module mocks in `jest.setup.ts` stop matching the paths suites resolve.
+
+Collapse the duplicates before pushing, then rerun the gates:
+
+```bash
+pnpm dedupe
+```
+
+This is not a one-time cleanup — every dependency change re-splits the graph, so it belongs to the
+same commit as the change itself.
+
 ## Ready For Review
 
 Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
