@@ -20,7 +20,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     }) =>
       React.createElement(
         'View',
-        { className, primaryAction, secondaryAction },
+        { className, primaryAction, secondaryAction, testID: 'content-state-empty' },
         React.createElement('Text', null, title),
       ),
   };
@@ -69,11 +69,13 @@ describe('ProviderModelList empty state', () => {
     });
 
     expect(renderer?.root.findByType('Text').props.children).toBe('settings.provider.models.empty');
-    expect(renderer?.root.findByType('View').props.primaryAction).toEqual({
+    const emptyState = renderer?.root.findByProps({ testID: 'content-state-empty' });
+
+    expect(emptyState?.props.primaryAction).toEqual({
       children: 'settings.provider.models.emptyAction',
       onPress: onPullModels,
     });
-    expect(renderer?.root.findByType('View').props.secondaryAction).toEqual({
+    expect(emptyState?.props.secondaryAction).toEqual({
       children: 'settings.provider.models.addTitle',
       onPress: onAddModelManually,
     });
