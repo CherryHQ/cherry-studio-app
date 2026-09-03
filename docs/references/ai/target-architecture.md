@@ -1,6 +1,6 @@
 # Backend AI Target Architecture
 
-Status: **local target state landed 2026-08-28; future remote boundary approved but not
+Status: **local target state landed 2026-08-28; future PC Agent Controller boundary planned but not
 implemented** (see [Migration Status](#migration-status)).
 
 This reference records the approved target structure for `src/backend/ai`, the seam rules that keep
@@ -24,14 +24,15 @@ implementation is heading and why.
 - **The Runtime seam stays at `agent/runtime/types.ts`.** It is an in-process execution boundary for
   the local Mobile Agent. Its replacement candidate is a different local loop, not a remote Agent
   service.
-- **Future remote Agent integration sits at the application-protocol boundary.** A mobile-owned
-  HTTP adapter calls the remote service, receives its wire DTOs and events, and maps them into the
-  versioned Agent Protocol representation consumed by the application. The integration neither
-  requires nor depends on the remote service implementing the local TypeScript `AgentProtocol`
-  interface or exposing `AgentRuntime`; the service remains authoritative for its Agents, Sessions,
-  turns, tool execution, approvals, and persistence. The current `local`-only protocol value remains
-  as-built until that product defines its routing, versioning, reconnection, and cache behavior.
-- **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent.ts`), its event
+- **Future PC Agent control sits at the application-protocol boundary.** A mobile-owned adapter
+  receives PC Runtime DTOs and events and maps them into the versioned Agent Protocol representation
+  consumed by the application. The integration neither requires nor depends on the PC implementing
+  the local TypeScript `AgentProtocol` interface or exposing the mobile `AgentRuntime`; the PC
+  remains authoritative for its Agents, Sessions, turns, tool execution, approvals, tasks, and
+  persistence. The adapter separately owns transport, authentication, ordering, replay,
+  reconnection, and wire compatibility. The current `local`-only protocol value remains as-built
+  until that application extension is implemented.
+- **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent/`), its event
   delta semantics, and the frontend projection. Below: the SQLite schema. Everything between the
   two boundaries may be redesigned.
 - The 13 protocol invariants in [Agent Protocol](../agent/agent-protocol.md#invariants) survive
@@ -52,7 +53,10 @@ src/backend/ai/
 │   │                    assembles the Runtime request, runtimeProjection.ts projects Runtime
 │   │                    output onto the protocol. Side effects (naming, usage, background
 │   │                    reply) keep explicit call sites; per-event notification is driven
-│   │                    from the run loop, not repeated in each branch.
+│   │                    from the run loop, not repeated in each branch. The Host
+│   │                    takes its collaborators as `MobileAgentHostPorts`;
+│   │                    AgentHostDependencies.ts is the one place that binds them
+│   │                    to application services, so the Host constructs nothing.
 │   ├── runtime/
 │   │   ├── types.ts     The seam contract. No imports from packages/* ports. Neutral usage
 │   │   │                shape. Model preflight lives here; the language-serving question
@@ -100,32 +104,34 @@ New module and directory names are chosen at implementation time following
    normalized Runtime shape; each Runtime maps that shape into its own messages. Neither side
    imports the other's mapping.
 
-## Future Remote Agent Integration Boundary
+## Planned PC Agent Controller Boundary
 
-Remote Agent integration does not extend the local Runtime seam across HTTP:
+PC Agent control does not extend the local Runtime seam across a network transport:
 
 ```text
 Agent Client
     ↕ Agent Protocol values
-Mobile Remote Agent Adapter
-    ↕ remote HTTP API and remote wire DTOs/events
-Remote Agent Service
+Mobile PC Agent Adapter
+    ↕ transport-specific connection and PC wire DTOs/events
+PC Agent Runtime / Host
     ├─ authoritative Agent and Session data
-    ├─ execution and tool loop
-    └─ approvals and persistence
+    ├─ conversation execution and tool loop
+    └─ approvals, background tasks, and persistence
 ```
 
-The mobile adapter owns HTTP request construction, authentication handoff, remote error
-normalization, event/snapshot translation, and conversion into the application protocol. It does
-not execute remote tools, persist a second authoritative Session, translate remote objects into
-`RuntimeTool` callbacks, or make the remote service conform to Pi or mobile Runtime internals.
+The mobile adapter owns transport requests, authentication handoff, PC error normalization,
+event/snapshot translation, ordering, replay, and conversion into the application protocol. It does
+not execute PC tools, persist a second authoritative Session, translate PC objects into
+`RuntimeTool` callbacks, or make the PC conform to Pi or mobile Runtime internals.
 
 The Agent Client will continue to consume one application-facing protocol shape. Local Sessions are
-served by the Mobile Agent Host; future remote Sessions will be served through the HTTP adapter. Any
-local storage for remote data is a cache or projection whose invalidation and replay rules must be
-specified with the remote wire contract. The exact protocol extension for selecting and routing a
-remote source is intentionally deferred; it must be versioned rather than representing a remote
-Session as the current `{ kind: 'local' }` execution target.
+served by the Mobile Agent Host; future PC Sessions will be served through the PC adapter. Mobile
+renders a temporary projection and sends user intent back to the PC; conversation and execution
+state stay authoritative on the PC. Any local storage for PC data is a cache or projection whose
+invalidation and replay rules must be specified with the adapter contract. The application
+extension must be versioned rather than representing a PC Session as the current `{ kind: 'local' }`
+execution target. A global source registry is intentionally deferred until a concrete multi-PC
+product flow requires one.
 
 ## Success Criteria
 

@@ -120,6 +120,9 @@ primitive owns the quiet divider, running shimmer, disclosure state, and compact
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
 `Message Parts/Playground` collects every public message-part primitive and state on one interactive
 page for visual debugging.
+`MessagePart.Error` is the inline failure block. With `onPress` it reads as a button and opens a
+caller-owned detail surface, typically `MessagePart.Detail` with text and value sections.
+
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
 `Message Parts/Loading` for direct animation and theme inspection.

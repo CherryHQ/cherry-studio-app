@@ -158,11 +158,40 @@ When a screen feels cluttered, separate **volume** from **loudness**. Volume is 
 
 ## Motion
 
-Still by default. Motion is justified in three cases: explaining a state change, preserving continuity, and confirming an action.
+Motion is part of interaction, not decoration. It can make cause and effect legible, preserve
+spatial or state continuity, provide immediate feedback, or help someone track a change. Choose it
+when it improves understanding or control, not as a default treatment.
 
-No scroll-triggered reveals, no decorative pulsing, no parallax, no hover displacement. **The base experience must be complete with zero motion**, and `useReducedMotion` must actually be wired, not merely imported.
+The product contract describes behavior rather than a platform-specific effect. The implementation
+owner adapts that contract to the target environment, input method, component, content, distance,
+and interaction frequency. Prefer established environment behavior and native primitives when they
+satisfy the contract. Supported environments keep the same interaction meaning without being
+forced into identical choreography.
 
-Existing heavy animations (the image-generation prism sweep, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `ImageGenerationLoader`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
+When an interaction uses motion, that motion must be:
+
+- **Responsive.** The interface responds as the causing action begins; motion never hides latency or
+  delays the result.
+- **Continuous.** While motion is running or being interrupted, visual state and velocity do not jump
+  unexpectedly.
+- **Interruptible.** A new action can take control immediately from the current visual state rather
+  than waiting for an animation to finish.
+- **Proportionate.** Distance, duration, emphasis, and repetition match the size, frequency, and
+  importance of the change.
+- **Adaptable.** User preferences and environment capabilities may reduce, replace, or remove
+  motion. The resulting experience remains complete, understandable, and operable.
+- **Performant.** Motion stays within the target environment's frame budget on representative
+  supported hardware. Dropped frames, delayed feedback, and discontinuities are defects.
+
+Repeated motion is reserved for communicating active progress or another changing state. It pauses
+when inactive and has a nonmoving presentation. Reject motion that competes with content, attracts
+attention without conveying new information, replays needlessly during frequent actions, obscures
+causality, or moves an interaction target unpredictably.
+
+Use the shared motion vocabulary for reusable behavior. A custom motion treatment documents its
+purpose, trigger, ownership, interruption behavior, and reduced-motion result beside the component
+or interaction that owns it. Exact implementation and target-specific adaptation remain with that
+owner.
 
 ## Icons
 

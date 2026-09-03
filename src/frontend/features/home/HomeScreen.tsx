@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 
 import { AiUsageSummaryCard } from './aiUsage';
 import { HomeHeaderAvatarButton } from './components/HomeHeaderAvatarButton';

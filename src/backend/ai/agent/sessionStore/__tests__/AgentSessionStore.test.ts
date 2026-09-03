@@ -692,7 +692,10 @@ describe.each([
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
 
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(1);
+    const reconciled = await store.reconcileInterrupted(INTERRUPTED);
+    expect(reconciled.map((message) => [message.sessionId, message.role, message.status])).toEqual([
+      [session.id, 'assistant', 'interrupted'],
+    ]);
     const transcript = await store.listMessages(session.id);
     expect(transcript.map((message) => message.status)).toEqual(['success', 'interrupted']);
     expect(transcript[1]?.modelId).toBe(MODEL_ID);
@@ -700,8 +703,15 @@ describe.each([
       status: 'supported',
       snapshot: INFERENCE_SNAPSHOT,
     });
+    expect(transcript[1]?.parts).toEqual([
+      {
+        id: expect.stringMatching(/^error-/),
+        type: 'error',
+        error: INTERRUPTED,
+      },
+    ]);
 
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(0);
+    expect(await store.reconcileInterrupted(INTERRUPTED)).toEqual([]);
   });
 
   test('deleteSession removes the transcript with the session', async () => {
@@ -1122,7 +1132,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       reserved.assistantMessage.id,
     );
 
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toBe(1);
+    expect(await store.reconcileInterrupted(INTERRUPTED)).toHaveLength(1);
 
     const assistant = (await store.listMessages(session.id))[1];
     expect(assistant).toMatchObject({
@@ -1135,6 +1145,11 @@ describe('SqliteAgentSessionStore database guarantees', () => {
             value: { status: 'interrupted', reason: INTERRUPTED.message },
             artifacts: [],
           },
+        },
+        {
+          id: expect.stringMatching(/^error-/),
+          type: 'error',
+          error: INTERRUPTED,
         },
       ],
     });

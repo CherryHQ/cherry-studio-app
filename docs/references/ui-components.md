@@ -139,12 +139,11 @@ interaction behavior moves into CherryUI through the workflow in
 [UI Development](../guides/ui-development.md). React Native `Button` is reserved for temporary
 examples and non-product test screens.
 
-Shared navigation and platform adapters may remain under `src/frontend/components` when their
-contract depends on app navigation rather than a general product control. Feature screens do not
-import platform UI SDKs directly. Direct `heroui-native` and `@expo/ui` usage remains limited to
-capabilities whose native or third-party behavior is itself part of the contract; a package-owned
-CherryUI wrapper becomes the public surface once the app standardizes behavior around such a
-dependency.
+Shared navigation, header, and startup adapters live under `src/frontend/appShell`, outside the
+cross-feature component-family directory. Feature screens do not import platform UI SDKs directly.
+Direct `heroui-native` and `@expo/ui` usage remains limited to capabilities whose native or
+third-party behavior is itself part of the contract; a package-owned CherryUI wrapper becomes the
+public surface once the app standardizes behavior around such a dependency.
 
 Ready-for-review CI runs `pnpm ui:check-boundaries`. The check scans production TypeScript under
 `src`, rejects the `@cherrystudio/ui` root and unexported deep paths, and rejects direct `@expo/ui`,

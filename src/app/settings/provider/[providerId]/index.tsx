@@ -1,1 +1,1 @@
-export { ProviderDetailScreen as default } from '@/frontend/features/settings/ProviderScreen';
+export { ProviderDetailScreen as default } from '@/frontend/features/settings/provider/detail';

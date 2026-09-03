@@ -273,6 +273,7 @@ async function resolve(
 // services only satisfy the required parameter; the overrides win.
 const SERVICES: SystemCapabilityServices = {
   ai: { generateImage: jest.fn() },
+  model: { getById: jest.fn() },
   preference: { get: jest.fn() },
   webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
 } as unknown as SystemCapabilityServices;

@@ -1,4 +1,4 @@
-import type { ComposerAttachmentReady } from '@/frontend/components/composer/utils/composerAttachments';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 

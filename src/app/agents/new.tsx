@@ -1,1 +1,1 @@
-export { AgentEditScreen as default } from '@/frontend/features/agents';
+export { AgentEditScreen as default } from '@/frontend/features/agents/edit';

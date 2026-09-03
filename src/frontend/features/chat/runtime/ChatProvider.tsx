@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 
-import { chatHref, chatRouteParams } from '@/frontend/components/navigation/chat';
+import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
@@ -179,6 +179,7 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
 
   return {
     cancel,
+    isApprovalPending: activeTurnStatus === 'awaiting-approval',
     isBusy:
       activeTurnStatus !== undefined &&
       activeTurnStatus !== 'completed' &&

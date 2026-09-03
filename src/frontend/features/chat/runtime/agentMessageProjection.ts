@@ -4,7 +4,7 @@ import {
   webSearchOutputSchema,
 } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { MessageListItem } from '@/frontend/components/messages';
+import type { MessageListItem } from '@/frontend/components/Message';
 import {
   type AgentErrorView,
   type AgentMessagePart,
@@ -87,6 +87,8 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
   } as const;
 
   switch (part.state) {
+    case 'input-streaming':
+      return { ...base, state: 'input-streaming' } as CherryMessagePart;
     case 'input-available':
     case 'running':
       return { ...base, state: 'input-available' } as CherryMessagePart;
@@ -110,16 +112,21 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
         state: 'output-denied',
       } as CherryMessagePart;
     case 'error':
-    case 'interrupted':
+      // The tool's own error text is diagnostic detail; renderers translate
+      // the status and fall back to app copy when no detail exists.
       return {
         ...base,
-        errorText:
-          part.error?.message ??
-          (part.state === 'interrupted'
-            ? 'Tool execution was interrupted.'
-            : 'Tool execution failed.'),
+        errorText: part.error?.message ?? '',
         state: 'output-error',
       } as CherryMessagePart;
+    case 'interrupted':
+      return withCherryMeta(
+        { ...base, errorText: '', state: 'output-error' } as Extract<
+          CherryMessagePart,
+          { type: 'dynamic-tool' }
+        >,
+        { settledByApp: true },
+      );
   }
 }
 

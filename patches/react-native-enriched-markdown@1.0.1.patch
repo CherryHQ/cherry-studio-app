@@ -9,3 +9,54 @@ index 9a9987e0d61c907787cff3d6a6f6cea81155f536..299e21b9750c78a30ec56e8fae651b40
 +    [self updatePlaceholderVisibility];
      return;
    }
+diff --git a/ios/renderer/ListItemRenderer.m b/ios/renderer/ListItemRenderer.m
+index 204fc185..c8800496 100644
+--- a/ios/renderer/ListItemRenderer.m
++++ b/ios/renderer/ListItemRenderer.m
+@@ -176,4 +176,10 @@ - (void)renderNodeContent:(MarkdownASTNode *)node
++  // Cover the whole grapheme cluster: anchoring on a single UTF-16 code unit
++  // splits multi-unit graphemes (emoji surrogate pairs, ZWJ sequences) across
++  // two attribute runs, which drops the glyph and hides the marker for every
++  // item but the last.
++  const NSRange anchorRange = [string rangeOfComposedCharacterSequenceAtIndex:anchorLocation];
++
+   NSArray *existingMarkers = [output attribute:ListItemMarkerStartAttribute atIndex:anchorLocation effectiveRange:NULL];
+   NSArray *markers =
+       [existingMarkers isKindOfClass:[NSArray class]] ? [existingMarkers arrayByAddingObject:marker] : @[ marker ];
+-  [output addAttribute:ListItemMarkerStartAttribute value:markers range:NSMakeRange(anchorLocation, 1)];
++  [output addAttribute:ListItemMarkerStartAttribute value:markers range:anchorRange];
+diff --git a/ios/utils/ListMarkerDrawer.m b/ios/utils/ListMarkerDrawer.m
+index 315ec083..93548a1d 100644
+--- a/ios/utils/ListMarkerDrawer.m
++++ b/ios/utils/ListMarkerDrawer.m
+@@ -9 +9,3 @@
+ extern NSString *const ListItemMarkerStartAttribute;
++
++static NSString *const kAppleColorEmojiFontName = @"AppleColorEmoji";
+@@ -58,3 +60,25 @@ - (void)drawMarkersForGlyphRange:(NSRange)glyphsToShow
+                                  CGPoint glyphLoc = [layoutManager locationForGlyphAtIndex:glyphRange.location];
+                                  CGFloat baselineY = origin.y + rect.origin.y + glyphLoc.y;
+-                                 UIFont *font = attrs[NSFontAttributeName] ?: [self defaultFont];
++
++                                 // When the anchor character is an emoji, NSFontAttributeName
++                                 // returns AppleColorEmoji whose metrics (xHeight, capHeight)
++                                 // differ widely from the text font and would misplace the
++                                 // marker. Look past the first composed character sequence
++                                 // to find the actual text font used on the line.
++                                 UIFont *font = attrs[NSFontAttributeName];
++                                 if (charRange.length > 1) {
++                                   NSRange firstGrapheme =
++                                       [storage.string rangeOfComposedCharacterSequenceAtIndex:charRange.location];
++                                   NSUInteger afterFirst = NSMaxRange(firstGrapheme);
++                                   if (afterFirst < NSMaxRange(charRange)) {
++                                     UIFont *textFont = [storage attribute:NSFontAttributeName
++                                                                   atIndex:afterFirst
++                                                            effectiveRange:NULL];
++                                     if (textFont) {
++                                       font = textFont;
++                                     }
++                                   }
++                                 }
++                                 if (!font || [font.fontName isEqualToString:kAppleColorEmojiFontName]) {
++                                   font = [self defaultFont];
++                                 }

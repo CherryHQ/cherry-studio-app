@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/appShell/header';
 import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
 import {
   type DesktopPairingQr,

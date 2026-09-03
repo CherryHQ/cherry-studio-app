@@ -1,0 +1,1 @@
+export { SettingsScrollPage } from './SettingsScrollPage';

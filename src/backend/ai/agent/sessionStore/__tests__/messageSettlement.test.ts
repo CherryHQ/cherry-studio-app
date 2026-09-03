@@ -1,9 +1,12 @@
-import { interruptNonTerminalToolParts } from '../messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from '../messageSettlement';
 
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('message settlement', () => {
-  test.each(['input-available', 'awaiting-approval', 'running'] as const)(
+  test.each(['input-streaming', 'input-available', 'awaiting-approval', 'running'] as const)(
     'terminalizes %s tool state with no pending approval',
     (state) => {
       const [part] = interruptNonTerminalToolParts(
@@ -16,7 +19,7 @@ describe('message settlement', () => {
             providerName: 'mcp_server_1_delete_file_a1b2',
             displayName: 'Delete file',
             state,
-            input: { fileEntryId: 'file-1' },
+            ...(state === 'input-streaming' ? {} : { input: { fileEntryId: 'file-1' } }),
             ...(state === 'awaiting-approval' ? { approvalId: 'approval-1' } : {}),
           },
         ],
@@ -33,4 +36,16 @@ describe('message settlement', () => {
       expect(part).not.toHaveProperty('approvalId');
     },
   );
+
+  test('appends a renderable error part when recovery interrupts an assistant message', () => {
+    expect(settleInterruptedAssistantParts([], INTERRUPTED, 'error-turn-1')).toEqual([
+      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+    ]);
+  });
 });
+
+const INTERRUPTED = {
+  code: 'INTERRUPTED' as const,
+  message: 'The app restarted.',
+  retryable: true,
+};

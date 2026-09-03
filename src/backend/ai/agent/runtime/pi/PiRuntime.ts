@@ -181,11 +181,12 @@ type ApprovalWaiter = {
 type ToolPartBase = {
   displayName: string;
   id: string;
-  input: RuntimeJsonValue;
+  input?: RuntimeJsonValue;
   providerName: string;
   toolCallId: string;
   toolRef: RuntimeMessageToolRef;
 };
+type ToolPartInitialState = 'input-streaming' | 'input-available';
 
 type PiToolBinding =
   | { kind: 'runtime'; runtimeTool: RuntimeTool }
@@ -217,6 +218,7 @@ type ActiveTurn = {
   nextPartIndex: number;
   phase: TurnPhase;
   settledToolCalls: Set<string>;
+  streamingToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
@@ -610,6 +612,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       nextPartIndex: 0,
       phase: 'running',
       settledToolCalls: new Set(),
+      streamingToolCalls: new Set(),
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
@@ -991,6 +994,18 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         break;
       }
+      case 'toolcall_start': {
+        const toolCall = event.partial.content[event.contentIndex];
+        if (toolCall?.type === 'toolCall') {
+          this.ensureStreamingToolPartFromProviderCall(turn, toolCall.id, toolCall.name);
+        }
+        break;
+      }
+      case 'toolcall_delta':
+        // The lifecycle is already visible. Keep the growing provider payload
+        // inside Pi so a large file body is not copied through Host/UI state on
+        // every token; toolcall_end publishes the complete JSON-safe input once.
+        break;
       case 'toolcall_end':
         this.ensureToolPartFromProviderCall(
           turn,
@@ -1292,18 +1307,50 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (!turn.dispatchCalls.has(toolCallId)) turn.dispatchCalls.set(toolCallId, input);
       return undefined;
     }
+    const wasStreaming = turn.streamingToolCalls.delete(toolCallId);
+    let part: ToolPartBase;
     if (binding.kind === 'meta') {
-      return this.ensureMetaToolPart(turn, binding, toolCallId, input);
+      part = this.ensureMetaToolPart(turn, binding, toolCallId, input);
+    } else {
+      const runtimeTool = binding.runtimeTool;
+      part = this.ensureToolPart(turn, {
+        displayName: runtimeTool.displayName,
+        id: `tool-${toolCallId}`,
+        input,
+        providerName,
+        toolCallId,
+        toolRef: runtimeTool.ref,
+      });
+    }
+    if (wasStreaming) this.replaceToolPart(turn, part, { state: 'input-available' });
+    return part;
+  }
+
+  private ensureStreamingToolPartFromProviderCall(
+    turn: ActiveTurn,
+    toolCallId: string,
+    providerName: string,
+  ): void {
+    const binding = turn.toolBindingsByProviderName.get(providerName);
+    if (!binding || binding.kind === 'dispatch') return;
+    if (binding.kind === 'meta') {
+      if (!turn.toolParts.has(toolCallId)) turn.streamingToolCalls.add(toolCallId);
+      this.ensureMetaToolPart(turn, binding, toolCallId, undefined, 'input-streaming');
+      return;
     }
     const runtimeTool = binding.runtimeTool;
-    return this.ensureToolPart(turn, {
-      displayName: runtimeTool.displayName,
-      id: `tool-${toolCallId}`,
-      input,
-      providerName,
-      toolCallId,
-      toolRef: runtimeTool.ref,
-    });
+    if (!turn.toolParts.has(toolCallId)) turn.streamingToolCalls.add(toolCallId);
+    this.ensureToolPart(
+      turn,
+      {
+        displayName: runtimeTool.displayName,
+        id: `tool-${toolCallId}`,
+        providerName,
+        toolCallId,
+        toolRef: runtimeTool.ref,
+      },
+      'input-streaming',
+    );
   }
 
   private bindPiTool(turn: ActiveTurn, providerName: string, binding: PiToolBinding): void {
@@ -1317,26 +1364,40 @@ class PiRuntimeSession implements AgentRuntimeSession {
     turn: ActiveTurn,
     activity: Pick<PiMetaToolActivity, 'displayName' | 'providerName'>,
     toolCallId: string,
-    input: RuntimeJsonValue,
+    input: RuntimeJsonValue | undefined,
+    initialState: ToolPartInitialState = 'input-available',
   ): ToolPartBase {
-    return this.ensureToolPart(turn, {
-      displayName: activity.displayName,
-      id: `tool-${toolCallId}`,
-      input,
-      providerName: activity.providerName,
-      toolCallId,
-      toolRef: { source: 'meta', name: activity.providerName },
-    });
+    return this.ensureToolPart(
+      turn,
+      {
+        displayName: activity.displayName,
+        id: `tool-${toolCallId}`,
+        ...(input !== undefined ? { input } : {}),
+        providerName: activity.providerName,
+        toolCallId,
+        toolRef: { source: 'meta', name: activity.providerName },
+      },
+      initialState,
+    );
   }
 
-  private ensureToolPart(turn: ActiveTurn, base: ToolPartBase): ToolPartBase {
+  private ensureToolPart(
+    turn: ActiveTurn,
+    base: ToolPartBase,
+    initialState: ToolPartInitialState = 'input-available',
+  ): ToolPartBase {
     const existing = turn.toolParts.get(base.toolCallId);
-    if (existing) return existing;
+    if (existing) {
+      if (base.input === undefined || base.input === existing.input) return existing;
+      const updated = { ...existing, input: base.input };
+      turn.toolParts.set(base.toolCallId, updated);
+      return updated;
+    }
     turn.toolParts.set(base.toolCallId, base);
     this.emit(turn, {
       type: 'part.add',
       index: turn.nextPartIndex++,
-      part: { ...base, type: 'tool', state: 'input-available' },
+      part: { ...base, type: 'tool', state: initialState },
     });
     return base;
   }

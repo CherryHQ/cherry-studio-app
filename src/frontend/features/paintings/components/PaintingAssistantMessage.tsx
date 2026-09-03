@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { ArtifactPreviewLink } from '@/frontend/components/artifactPreview';
+import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
 
 import type {
   PaintingGenerationStatus,

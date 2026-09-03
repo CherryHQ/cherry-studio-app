@@ -4,7 +4,7 @@ import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/appShell/header';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,

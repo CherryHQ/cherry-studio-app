@@ -1,1 +1,1 @@
-export { McpServerScreen as default } from '@/frontend/features/settings/McpScreen';
+export { McpServerScreen as default } from '@/frontend/features/settings/mcp/server';

@@ -1,23 +1,23 @@
 # Settings
 
-This module owns settings screens' shared UI and feature-specific settings modules.
+This page tree owns the settings home and every page reached beneath `/settings`.
 
 ## Public Interface
 
-- Route screen components are exported from `index.ts`.
-- Feature settings modules expose their own `index.ts` files under `ProviderScreen/` and
-  `WebSearchScreen/`.
-- Reusable model selection lives in `src/frontend/components/modelPicker`; settings screens consume
+- Each route imports the public boundary of its exact child page.
+- Reusable model selection lives in `src/frontend/components/ModelPicker`; settings screens consume
   that module instead of owning it.
+- The page shell shared by settings child pages lives in `components/SettingsScrollPage`.
+- Provider and MCP share the settings-local row from `components/SettingsServiceRow`.
+- The option shape shared by settings child pages lives in `settingOption.ts`.
 - Generic rows, selectors, pickers, chips, buttons, and selection marks come from CherryUI. Provider,
-  model, profile, and Agent visual identity comes from `src/frontend/components/avatar`.
+  model, profile, and Agent visual identity comes from `src/frontend/components/Avatar`.
 
 ## Organization
 
-- `components/` contains settings-private adapters and layouts: the scroll-page shell, provider/MCP
-  service row, numeric preference input, theme preview, and the provider-avatar persistence adapter.
-  These remain local because they own settings navigation, storage, or high-density list behavior;
-  they compose the public controls instead of duplicating them.
-- `hooks/` contains shared settings preference hooks.
-- `profileHero/` contains the static avatar and name entry shown at the top of the settings home.
-- `ProviderScreen/` and `WebSearchScreen/` contain feature-specific settings modules.
+- `components/` contains UI private to the settings home.
+- `hooks/` and `utils/` contain behavior shared by settings child pages.
+- `about/`, `appearance/`, `fontSize/`, `notifications/`, `permissions/`, and `profile/` each own one
+  direct child page.
+- `model/`, `mcp/`, `provider/`, and `webSearch/` remain under `settings/` because they implement
+  `/settings/*` page flows. Their own nested routes continue as child directories.

@@ -1,7 +1,8 @@
 # UI Development
 
-This guide defines shared component ownership and the component-composition workflow. Current
-component behavior and platform boundaries live in [UI Components](../references/ui-components.md).
+This guide defines shared component ownership and the component-composition workflow. Visual and
+motion decisions follow the [Design Spec](../../DESIGN.md); current component behavior and platform
+boundaries live in [UI Components](../references/ui-components.md).
 
 ## Start With CherryUI
 
@@ -69,12 +70,34 @@ This complements the single-owner spacing rule in [`DESIGN.md`](../../DESIGN.md#
 the visual specification defines how spacing is chosen, while this guide defines which component
 owns it.
 
+## Report Outcomes
+
+Each situation has one feedback owner. Choose by what the user must do next, not by how severe the
+failure feels:
+
+- A screen that cannot load, or has nothing to show, renders `ContentState` inline with a retry
+  action when the load can be repeated.
+- An action whose outcome leaves the user on the same surface reports through `toast`: `success`
+  for a completed change, `danger` for a failure the user can simply repeat. A failure title on its
+  own is never an alert.
+- `alert.show` is reserved for text the user has to read before continuing: validation that blocks
+  a submit, diagnostic detail the user explicitly asked for such as a connection or model check, and
+  permission guidance. Use `alert.confirm` or `alert.prompt` only when the user must decide.
+- A failure that belongs to a transcript renders inline as a message part; see
+  [Agent Protocol](../references/agent/agent-protocol.md#errors).
+- Backend `message` strings are diagnostic and are never displayed inline. Translate from the
+  closed code instead; a detail sheet the user opens on purpose may show them verbatim.
+
 ## Acceptance
 
 - Shared controls retain accessible labels, states, scalable text, and usable platform fallbacks.
 - Competing gestures have one documented winner and cancelled interactions do not fire on release.
 - Feature components keep business state and translations outside CherryUI.
+- Outcome feedback follows [Report Outcomes](#report-outcomes): toasts for in-place outcomes,
+  alerts only for text that must be read or a decision.
 - Containers own external placement and reusable children do not carry screen-specific gutters.
+- Motion defines a clear purpose, remains responsive and interruptible, provides a complete reduced
+  or unavailable-motion result, and leaves target-specific adaptation with its interaction owner.
 - Visual changes are inspected in light and dark themes on a device.
 - iOS device work in parallel worktrees follows
   [Parallel Device Testing](./parallel-device-testing.md).

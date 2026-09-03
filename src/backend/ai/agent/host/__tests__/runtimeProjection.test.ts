@@ -1,6 +1,20 @@
-import { toAgentErrorView } from '../runtimeProjection';
+import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 
 describe('Runtime output projection', () => {
+  test('preserves the tool input-streaming lifecycle state', () => {
+    expect(
+      toAgentMessagePart({
+        displayName: 'Write file',
+        id: 'tool-call-1',
+        providerName: 'write_file',
+        state: 'input-streaming',
+        toolCallId: 'call-1',
+        toolRef: { source: 'builtin', capabilityId: 'write_file' },
+        type: 'tool',
+      }),
+    ).toMatchObject({ state: 'input-streaming', type: 'tool' });
+  });
+
   test('preserves provider identity behind the closed protocol error code', () => {
     expect(
       toAgentErrorView({

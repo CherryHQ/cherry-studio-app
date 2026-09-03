@@ -1,6 +1,7 @@
 # Agent Architecture
 
-> Status: as-built. Mobile Agent execution is device-local only.
+> Status: local Version 1 is as-built. A PC Agent Controller boundary is planned and not
+> implemented.
 
 This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated
 local execution, Cherry Mobile owns Agents, Sessions, persistence, application capabilities, and
@@ -33,36 +34,44 @@ Application capability adapters
 The Agent Client never imports the Runtime contract. The Host is the only adapter that depends on
 both sides.
 
-## Approved Future Remote Boundary
+## Planned PC Agent Controller Boundary
 
-Remote Agent support is an application-protocol integration, not a remote implementation of the
-mobile Runtime:
+The future mobile experience controls a PC-hosted Agent; it does not move that Agent's conversation
+Runtime onto mobile:
 
 ```text
 Agent Client
     ↕ Agent Protocol values
-Mobile Remote Agent Adapter
-    ↕ remote HTTP API
-Remote Agent Service
+Mobile PC Agent Adapter
+    ↕ transport-specific connection
+PC Agent Runtime / Host
+    ├─ authoritative conversation and Session state
+    ├─ execution, tools, approvals, and background tasks
+    └─ persistence
 ```
 
-The adapter calls the remote HTTP API and converts remote-owned snapshots, events, messages,
-approvals, and errors into the protocol values accepted by the application. The remote service owns
-the authoritative Agent, Session, execution, tool, approval, and persistence state; mobile storage
-may only cache or project that data under rules defined with the future wire contract. The remote
-integration neither requires nor depends on the service implementing the local TypeScript
-`AgentProtocol` interface. The mobile app does not wrap remote execution in `AgentRuntime` or copy
-remote tool callbacks into the local Host.
+The PC owns the Agent, Session, conversation, execution, tool, approval, task, and persistence state.
+Mobile consumes normalized events, renders a temporary application projection, and sends user
+intent such as messages, cancellation, approval decisions, and task-stop commands. It does not run
+the PC Agent or copy the PC Runtime into the Mobile Agent Host.
 
-This direction is approved but not as-built. Version 1 remains local-only; remote routing,
-authentication, event replay, reconnection, idempotency, and cache invalidation require a separately
-versioned wire design. See
-[Backend AI Target Architecture](../ai/target-architecture.md#future-remote-agent-integration-boundary).
+The adapter maps the PC's native snapshots, events, resources, and errors into the application-facing
+Agent Protocol and maps mobile commands back to PC operations. It separately owns transport,
+authentication, ordering, replay, reconnection, and compatibility with PC wire versions. The future
+connection may use WebSocket, WebRTC, or another transport; this architecture does not select one.
+The PC implementation is not required to implement the local TypeScript `AgentProtocol` interface
+or expose the local `AgentRuntime` contract.
+
+This direction is planned but not as-built. Version 1 remains local-only. The application-level
+extension is specified in [Agent Protocol](./agent-protocol.md#planned-pc-agent-controller-extension),
+while transport details remain deferred to a separately versioned adapter contract. See
+[Backend AI Target Architecture](../ai/target-architecture.md#planned-pc-agent-controller-boundary).
 
 ## Current Contract
 
 - Execution target is always `local`; there is no local engine registry or persisted Runtime
-  choice. Cloud and LAN desktop control are separate domains and do not execute Mobile Agents.
+  choice. The planned PC Agent Controller is not a second local Runtime or a current execution
+  target.
 - One Session permits at most one active turn, while different Sessions may run concurrently.
 - Mobile SQLite is the complete record for mobile-originated Sessions. The retired
   Assistant/Topic/Message tables and Chat Runtime are not compatibility paths.

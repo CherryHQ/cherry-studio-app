@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/appShell/header';
 
-import { FileLibraryList } from './FileLibraryList';
+import { FileLibraryList } from './components/FileLibraryList';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
 
 /**

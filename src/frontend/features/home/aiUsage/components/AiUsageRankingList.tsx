@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon, ProviderBrandAvatar } from '@/frontend/components/avatar';
+import { BrandAvatar, BrandAvatarIcon, ProviderBrandAvatar } from '@/frontend/components/Avatar';
 
 import type { AiUsageRankingItem } from '../types';
 import { displayAiUsageModelId } from '../utils/aiUsageDetail';

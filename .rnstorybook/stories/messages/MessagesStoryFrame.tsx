@@ -1,7 +1,7 @@
 import { ScrollView, Text, View } from 'react-native';
 import { ScopedTheme } from 'uniwind';
 
-import { AssistantMessage, UserMessage } from '@/frontend/components/messages';
+import { AssistantMessage, UserMessage } from '@/frontend/components/Message';
 
 import type { MessageExample } from './messageFixtures';
 import { MessagesStoryProviders } from './MessagesStoryProviders';

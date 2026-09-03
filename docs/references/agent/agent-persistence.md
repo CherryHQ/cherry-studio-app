@@ -53,13 +53,12 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 **No persisted Runtime identity.** There is no `runtime_binding` column. Runtime ids never appear in
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
-composition injects Pi directly into the Host, so there is no implementation choice to persist.
-Cloud and LAN desktop control are separate domains and must not reuse Mobile Agent definitions,
-Sessions, or execution-target values.
-Future remote Agent Sessions remain authoritative on the remote service. A mobile HTTP adapter may
-map them into Agent Protocol values for the application, but it does not copy them into these tables
-as a second source of truth or represent remote execution as a local Runtime binding. Any offline
-cache or projection requires a separate versioned wire and invalidation design.
+composition injects Pi directly into the Host, so there is no implementation choice to persist. The
+planned PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
+current local execution-target value. PC Agent Sessions remain authoritative on the PC. A mobile
+adapter may map them into Agent Protocol values for the application, but it does not copy them into
+these tables as a second source of truth. Any offline cache or projection requires a separate
+versioned adapter and invalidation design.
 `contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
@@ -95,9 +94,9 @@ protocol keeps Turn as a UI-facing concept unchanged.
 unfinished turn, so a persisted pending approval is dead on arrival. Pending approvals live in
 adapter memory. A user decision is recorded in the terminal ToolPart state and normalized output;
 denial becomes `denied`. Cancellation, failure, or startup reconciliation converts every remaining
-`input-available` / `awaiting-approval` / `running` ToolPart to `interrupted` before the assistant
-message settles. Later model history therefore contains paired calls/results and never replays an
-unanswerable approval. No `agent_approval` table.
+`input-streaming` / `input-available` / `awaiting-approval` / `running` ToolPart to `interrupted`
+before the assistant message settles. Later model history therefore contains paired calls/results
+and never replays an unanswerable approval. No `agent_approval` table.
 
 **Avatar is a stable file reference, not emoji and not `file_entry`.** Agent avatars follow the
 user-avatar pattern ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
@@ -246,7 +245,7 @@ enforcement here; the plain `status` index exists because Drizzle's bound `statu
 cannot match a partial index — see `message.ts`.)
 
 `data.parts` is exactly the protocol's `AgentMessagePart` union
-([contract](../../../src/shared/contracts/agent.ts)); the version field guards future part-shape
+([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
 migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
 `ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
 agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
@@ -307,7 +306,8 @@ projection:
 - The invariant-1 partial unique index turns a concurrent second reservation into a constraint
   violation the Host maps to `SESSION_BUSY`.
 - `reconcileInterrupted` is one bulk `UPDATE` over unsettled messages at `PostReady`, same phase
-  the in-memory adapter occupies today.
+  the in-memory adapter occupies today. It returns the reconciled assistant rows so the Host can
+  publish their settled state to observers that attached before recovery ran.
 - Approvals stay in Host/adapter memory, cleared on destroy — live-process state by design (see
   Decisions), not a missing table.
 - Row ↔ view mapping converts epoch millis to ISO strings and validates `data` against the

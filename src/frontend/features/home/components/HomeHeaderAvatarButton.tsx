@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { ProfileAvatarImage } from '@/frontend/components/avatar';
+import { ProfileAvatarImage } from '@/frontend/components/Avatar';
 
 // Stack.Toolbar.View requires a single child with an explicit width/height.
 const avatarButtonSize = 36;

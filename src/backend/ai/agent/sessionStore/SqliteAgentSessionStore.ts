@@ -31,7 +31,10 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
-import { interruptNonTerminalToolParts } from './messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 
@@ -436,33 +439,49 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<number> {
+  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
     return this.dbService.withWriteTx(async (tx) => {
       const rows = await tx
         .select()
         .from(agentSessionMessageTable)
         .where(inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]));
-      let assistantCount = 0;
+      const assistantIds: string[] = [];
 
       for (const row of rows) {
         const message = toAgentMessageView(row);
+        const interruptedParts =
+          message.role === 'assistant'
+            ? settleInterruptedAssistantParts(
+                message.parts,
+                error,
+                `error-${message.turnId ?? message.id}`,
+              )
+            : interruptNonTerminalToolParts(message.parts, error.message);
         await tx
           .update(agentSessionMessageTable)
           .set({
             status: 'interrupted',
             data: {
               version: 1,
-              parts: interruptNonTerminalToolParts(message.parts, error.message),
+              parts: interruptedParts,
             },
             ...(message.role === 'assistant' ? { error } : {}),
           })
           .where(eq(agentSessionMessageTable.id, message.id));
         if (message.role === 'assistant') {
-          assistantCount += 1;
+          assistantIds.push(message.id);
         }
       }
 
-      return assistantCount;
+      if (assistantIds.length === 0) {
+        return [];
+      }
+      const reconciledRows = await tx
+        .select()
+        .from(agentSessionMessageTable)
+        .where(inArray(agentSessionMessageTable.id, assistantIds))
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+      return reconciledRows.map(toAgentMessageView);
     });
   }
 }

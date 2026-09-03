@@ -1,1 +1,1 @@
-export { FontSizeSettingsScreen as default } from '@/frontend/features/settings';
+export { FontSizeSettingsScreen as default } from '@/frontend/features/settings/fontSize';

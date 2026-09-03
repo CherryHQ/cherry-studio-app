@@ -96,9 +96,12 @@ describe('service registry', () => {
       container.buildDependencyGraph(Phase.PostReady),
     );
     const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
-    const hostDependencies = getDependencies(services.MobileAgentHost);
-
-    expect(hostDependencies).toEqual(
+    // The Host reaches its tool Runtime owners through its ports service, so
+    // the stop-order edge is declared there and inherited by the Host.
+    expect(getDependencies(services.MobileAgentHost)).toEqual(
+      expect.arrayContaining(['AgentHostDependencies']),
+    );
+    expect(getDependencies(services.AgentHostDependencies)).toEqual(
       expect.arrayContaining(['McpRuntimeService', 'WebSearchService']),
     );
 

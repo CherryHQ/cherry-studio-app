@@ -2,7 +2,7 @@
 
 This module owns the Agent Session chat screen, input, live projection, and workspace
 behavior. Structured message rendering is shared with painting through
-`@/frontend/components/messages`.
+`@/frontend/components/Message`.
 
 ## Public Interface
 

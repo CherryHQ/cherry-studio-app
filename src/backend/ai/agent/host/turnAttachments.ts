@@ -115,8 +115,9 @@ export async function resolveManagedInput(
 
 /**
  * Request-level attachment gate: runtime capability, media admissibility, and
- * image limits — all before any network call. A model without image input
- * passes here; execution replaces those references with text notes.
+ * image limits — all before any network call. Historical images may be
+ * omitted after a model switch, but a newly attached image must be rejected
+ * when the selected model cannot consume it.
  */
 export function assertAttachmentRequestSupported(
   runtime: AgentRuntime,
@@ -126,7 +127,7 @@ export function assertAttachmentRequestSupported(
   model: RuntimeModelPreflight,
 ): void {
   let hasAttachments = false;
-  const images = input.flatMap((part) => {
+  const currentImages = input.flatMap((part) => {
     if (part.type !== 'file') {
       return [];
     }
@@ -143,6 +144,7 @@ export function assertAttachmentRequestSupported(
     }
     fail('ATTACHMENT_INVALID', unsupportedAttachmentMessage(fact));
   });
+  const images = [...currentImages];
 
   for (const message of history) {
     for (const part of message.parts) {
@@ -169,8 +171,11 @@ export function assertAttachmentRequestSupported(
     return;
   }
   if (!model.inputModalities.includes('image')) {
-    // materializeRuntimeAttachments replaces these references with text notes
-    // without reading image bytes.
+    if (currentImages.length > 0) {
+      fail('CAPABILITY_UNSUPPORTED', 'The selected model does not accept image attachments.');
+    }
+    // Historical images remain valid transcript references after a model
+    // switch; execution replaces them with text notes without reading bytes.
     return;
   }
 

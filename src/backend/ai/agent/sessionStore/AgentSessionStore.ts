@@ -149,7 +149,8 @@ export interface AgentSessionStore {
 
   /**
    * Marks every unsettled message interrupted and stamps the turn-level error.
-   * Returns the number of reconciled assistant placeholders.
+   * Returns the reconciled assistant placeholders so the Host can publish
+   * their settled state to observers attached before recovery ran.
    */
-  reconcileInterrupted(error: AgentErrorView): Promise<number>;
+  reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]>;
 }

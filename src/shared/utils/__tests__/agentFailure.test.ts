@@ -6,6 +6,14 @@ describe('classifyAgentFailureReason', () => {
     [{ code: 'tool_step_limit_exceeded', message: 'generic failure' }, 'tool_limit'],
     [{ message: 'OpenAI API error (403): access denied' }, 'permission'],
     [{ message: 'HTTP 429', responseBody: '{"type":"insufficient_quota"}' }, 'quota'],
+    [
+      {
+        code: 'forbidden',
+        message: 'HTTP 403',
+        responseBody: '{"message":"用户额度不足, 剩余额度: $0"}',
+      },
+      'quota',
+    ],
     [{ message: 'maximum context length exceeded' }, 'context_length'],
     [{ message: 'stream ended unexpectedly' }, 'stream_interrupted'],
     [{ message: 'self-signed certificate' }, 'proxy_tls'],

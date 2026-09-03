@@ -1,8 +1,8 @@
 /**
  * User Provider table schema
  *
- * Core principle: One Provider instance = One apiHost (1:1 relationship)
- * One apiHost can have multiple API Keys (1:N relationship)
+ * Core principle: one Provider owns a protocol-keyed endpoint map and a shared
+ * pool of API keys. Models choose an endpoint key; the provider owns the URL.
  *
  * Relationship with preset providers:
  * - presetProviderId links to catalog preset provider for inherited config
