@@ -26,7 +26,7 @@ describe('createSystemModelSupport', () => {
     expect(isModelSupportedBySystem(provider, model)).toBe(false);
   });
 
-  it('accepts image models supported by the configured AI SDK adapter without consulting language serving', () => {
+  it('accepts endpoint-declared image models without consulting language serving', () => {
     const supportsLanguageModel = jest.fn().mockReturnValue(false);
     const { isModelSupportedBySystem } = supportWith(supportsLanguageModel);
     const provider = createProvider({
@@ -38,7 +38,7 @@ describe('createSystemModelSupport', () => {
       },
     });
     const model = createModel({
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      capabilities: [],
       endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
     });
 

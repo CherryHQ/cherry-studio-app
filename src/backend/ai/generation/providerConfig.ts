@@ -30,7 +30,7 @@ import {
   withoutTrailingApiVersion,
 } from '@cherrystudio/ai-runtime/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import {
   resolveProviderConnection,
@@ -40,6 +40,7 @@ import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderSer
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 // Config dispatch reads the extension registry before Agent construction.
 registerProviderExtensions();
@@ -675,10 +676,6 @@ function isOllamaProvider(provider: Provider): boolean {
 
 function isGeminiProvider(provider: Provider): boolean {
   return isPreset(provider, 'gemini') || isPreset(provider, 'google');
-}
-
-function isImageGenerationModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
 }
 
 function isAzureOpenAIProvider(provider: Provider): boolean {

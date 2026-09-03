@@ -1,5 +1,5 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
-import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { type ImageGenerationMode } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +33,7 @@ import {
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import type {
   PaintingGenerationInput,
@@ -86,11 +87,11 @@ export function PaintingInput({
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
   const { model: selectedModel } = useModelById(selectedModelId);
-  const { models: enabledImageModels } = useModels({
-    capability: MODEL_CAPABILITY.IMAGE_GENERATION,
+  const { models: enabledModels } = useModels({
     enabled: true,
     isSystemSupported: true,
   });
+  const enabledImageModels = enabledModels.filter(isImageGenerationModel);
   const { providers: enabledProviders } = useProviders({ enabled: true });
   const enabledProviderIds = new Set(enabledProviders.map((provider) => provider.id));
   const isSelectedModelAvailable = enabledImageModels.some(
@@ -105,7 +106,7 @@ export function PaintingInput({
     attachments?.filter((attachment) => attachment.kind === 'image').length ?? 0;
   const requestedMode = imageAttachmentCount > 0 ? 'edit' : 'generate';
   const isSelectedModelModeCompatible = supportsPaintingGenerationMode(
-    selectedModel?.imageGeneration,
+    selectedModel,
     requestedMode,
   );
   const resolvedMode = useMemo(
@@ -158,8 +159,7 @@ export function PaintingInput({
     setIsModelPickerOpen(false);
   }, []);
   const isModelVisible = useCallback(
-    (item: ModelPickerModelItem) =>
-      supportsPaintingGenerationMode(item.model.imageGeneration, requestedMode),
+    (item: ModelPickerModelItem) => supportsPaintingGenerationMode(item.model, requestedMode),
     [requestedMode],
   );
   const handleAddProvider = useCallback(() => {
@@ -193,7 +193,7 @@ export function PaintingInput({
         (attachment) => attachment.kind === 'image',
       ).length;
       const requestedSubmittedMode = submittedImageCount > 0 ? 'edit' : 'generate';
-      if (!supportsPaintingGenerationMode(selectedModel.imageGeneration, requestedSubmittedMode)) {
+      if (!supportsPaintingGenerationMode(selectedModel, requestedSubmittedMode)) {
         throw new PaintingInputValidationError('painting.input.incompatibleModel', {});
       }
       const submittedMode = resolveImageGenerationMode(

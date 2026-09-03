@@ -1,4 +1,11 @@
-import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  type ImageGenerationSupport,
+  MODALITY,
+  MODEL_CAPABILITY,
+} from '@cherrystudio/provider-registry';
+
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import {
   imageParamsAspectRatio,
@@ -58,13 +65,43 @@ describe('image generation parameter resolution', () => {
   });
 
   it('filters models by the requested generate or edit interaction', () => {
-    expect(supportsPaintingGenerationMode(support, 'generate')).toBe(true);
-    expect(supportsPaintingGenerationMode(support, 'edit')).toBe(true);
-    expect(supportsPaintingGenerationMode({ modes: { generate: { supports: {} } } }, 'edit')).toBe(
-      false,
+    expect(supportsPaintingGenerationMode(model({ imageGeneration: support }), 'generate')).toBe(
+      true,
     );
-    expect(supportsPaintingGenerationMode(undefined, 'generate')).toBe(true);
-    expect(supportsPaintingGenerationMode(undefined, 'edit')).toBe(false);
+    expect(supportsPaintingGenerationMode(model({ imageGeneration: support }), 'edit')).toBe(true);
+    expect(
+      supportsPaintingGenerationMode(
+        model({ imageGeneration: { modes: { generate: { supports: {} } } } }),
+        'edit',
+      ),
+    ).toBe(false);
+  });
+
+  it('falls back to exact image endpoint declarations when Registry metadata is absent', () => {
+    const generateOnly = model({
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+    });
+    const editOnly = model({
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
+    });
+
+    expect(supportsPaintingGenerationMode(generateOnly, 'generate')).toBe(true);
+    expect(supportsPaintingGenerationMode(generateOnly, 'edit')).toBe(false);
+    expect(supportsPaintingGenerationMode(editOnly, 'generate')).toBe(false);
+    expect(supportsPaintingGenerationMode(editOnly, 'edit')).toBe(true);
+  });
+
+  it('retains capability and modality fallback for legacy image models', () => {
+    const generateModel = model({ capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION] });
+    const editModel = model({
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      inputModalities: [MODALITY.IMAGE],
+    });
+
+    expect(supportsPaintingGenerationMode(generateModel, 'generate')).toBe(true);
+    expect(supportsPaintingGenerationMode(generateModel, 'edit')).toBe(false);
+    expect(supportsPaintingGenerationMode(editModel, 'edit')).toBe(true);
+    expect(supportsPaintingGenerationMode(undefined, 'generate')).toBe(false);
   });
 });
 
@@ -140,6 +177,21 @@ describe('image generation parameter drafts', () => {
     expect(prepareImageParamValues({ seed: 4 }, undefined, undefined)).toEqual({});
   });
 });
+
+function model(overrides: Partial<Model> = {}): Model {
+  return {
+    capabilities: [],
+    id: createUniqueModelId('test-provider', 'image-model'),
+    isDeprecated: false,
+    isEnabled: true,
+    isHidden: false,
+    modelId: 'image-model',
+    name: 'Image Model',
+    providerId: 'test-provider',
+    supportsStreaming: true,
+    ...overrides,
+  };
+}
 
 describe('placeholder tile sizing', () => {
   it('prefers an explicit ratio, then a pixel size, and squares off when neither is set', () => {

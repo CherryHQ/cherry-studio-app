@@ -48,6 +48,28 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerId).toBe('togetherai');
   });
 
+  it('routes an endpoint-declared image model through the provider image adapter', async () => {
+    const provider = createProvider({
+      id: 'silicon',
+      presetProviderId: 'silicon',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://api.siliconflow.cn/v1',
+        },
+      },
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    });
+    const model = {
+      ...createModel(provider.id, 'opaque-image-model'),
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+    };
+
+    const config = await providerToAiSdkConfig(provider, model, createRuntime());
+
+    expect(config.providerId).toBe('silicon');
+  });
+
   it('adds X-Source only to Radeon Cloud chat request headers', async () => {
     const radeonProvider = createProvider({
       id: 'radeon-cloud',
