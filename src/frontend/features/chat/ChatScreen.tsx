@@ -3,7 +3,9 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
+import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,12 +33,14 @@ import { useAgentChatDraftHandoff } from './runtime';
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
 export function ChatScreen() {
+  const blurTargetRef = useRef<View>(null);
+
   return (
     <>
-      <MainHeader />
-      <View className="flex-1">
+      <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
         <ChatRouteContent />
-      </View>
+      </BlurTargetView>
+      <MainHeader blurTarget={blurTargetRef} />
     </>
   );
 }

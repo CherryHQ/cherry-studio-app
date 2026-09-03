@@ -4,10 +4,10 @@ import { HeaderAction } from '../HeaderAction';
 import type { HeaderActionTone } from '../HeaderAction';
 import type { HeaderActionGroupProps } from './HeaderActionGroup';
 
-const GROUP_BASE_CLASS_NAME = 'absolute inset-1 rounded-full shadow-sm';
+const GROUP_BASE_CLASS_NAME = 'absolute inset-1.5 rounded-full';
 const GROUP_CLASS_NAMES: Record<HeaderActionTone, string> = {
-  default: `${GROUP_BASE_CLASS_NAME} bg-background`,
-  inverse: `${GROUP_BASE_CLASS_NAME} bg-constant-black/55`,
+  default: `${GROUP_BASE_CLASS_NAME} bg-card shadow-xs`,
+  inverse: `${GROUP_BASE_CLASS_NAME} bg-constant-black/55 shadow-sm`,
 };
 
 /** Draws the Android fallback for the shared surface supplied by the iOS native toolbar. */
@@ -19,7 +19,7 @@ export function HeaderActionGroup({ actions, tone = 'default' }: HeaderActionGro
   return (
     <View className="relative flex-row items-center">
       {/* Actions own adjacent, non-overlapping targets. The inset surface stays
-          40dp tall: one icon action forms a circle, while a short label action
+          36dp tall: one icon action forms a circle, while a short label action
           expands to a capsule instead of collapsing to the same geometry. */}
       <View className={GROUP_CLASS_NAMES[tone]} pointerEvents="none" />
       {actions.map((action) => (

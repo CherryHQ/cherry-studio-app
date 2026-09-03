@@ -1,18 +1,24 @@
+import MaskedView from '@react-native-masked-view/masked-view';
+import { BlurView } from 'expo-blur';
 import { Stack } from 'expo-router';
-import { useState } from 'react';
-import { View } from 'react-native';
+import { type RefObject, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUniwind } from 'uniwind';
 
 import { HeaderActionGroup } from '../components/HeaderActionGroup/HeaderActionGroup';
+import { mainHeaderRowHeight } from '../headerScreenOptions';
 import { MainHeaderAgentButton } from './MainHeaderAgentButton';
 import { useMainHeaderActions } from './useMainHeaderActions';
 import { useMainHeaderAgentPicker } from './useMainHeaderAgentPicker';
 
 const HEADER_HORIZONTAL_INSET = 16;
 const HEADER_TITLE_ACTION_GAP = 4;
+const HEADER_BLUR_INTENSITY = 24;
 
-export function MainHeader() {
+export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
   const insets = useSafeAreaInsets();
+  const { theme } = useUniwind();
   const { agent, currentAgentId, leadingAction, rightActions } = useMainHeaderActions();
   const { agentPickerSheet, openAgentPicker } = useMainHeaderAgentPicker(currentAgentId);
   const [leadingActionsWidth, setLeadingActionsWidth] = useState(0);
@@ -25,13 +31,38 @@ export function MainHeader() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View className="bg-background">
-        <View style={{ height: insets.top }} />
-        {/* 56dp row matches the native-stack toolbar height, so the 40dp action
+      <View className="absolute inset-x-0 top-0 z-20" pointerEvents="box-none">
+        <MaskedView
+          maskElement={
+            <View
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  experimental_backgroundImage:
+                    'linear-gradient(to bottom, black 0%, black 62%, transparent 100%)',
+                },
+              ]}
+            />
+          }
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+        >
+          <BlurView
+            blurMethod="dimezisBlurViewSdk31Plus"
+            blurReductionFactor={2}
+            blurTarget={blurTarget}
+            intensity={HEADER_BLUR_INTENSITY}
+            style={StyleSheet.absoluteFill}
+            tint={theme === 'dark' ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'}
+          />
+        </MaskedView>
+        <View pointerEvents="none" style={{ height: insets.top }} />
+        {/* 56dp row matches the native-stack toolbar height, so the 36dp action
             surfaces keep the same clearance as native-header screens. */}
         <View
-          className="relative h-14 flex-row items-center"
-          style={{ paddingHorizontal: HEADER_HORIZONTAL_INSET }}
+          className="relative flex-row items-center"
+          pointerEvents="box-none"
+          style={{ height: mainHeaderRowHeight, paddingHorizontal: HEADER_HORIZONTAL_INSET }}
         >
           {/* The chat route is currently a drawer root, so the route policy
               resolves this leading action to the sidebar button. */}

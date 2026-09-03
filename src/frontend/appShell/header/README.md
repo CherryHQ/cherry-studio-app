@@ -25,16 +25,20 @@ This module owns Expo Router header adapters used by the app screens.
 - `components/HeaderActionGroup` is the platform gateway for adjacent top actions. Callers declare
   placement, tone, and actions without choosing a platform: iOS delegates the group surface to the
   native toolbar, while Android draws the Cherry fallback surface.
-- `MainHeader` keeps a thin platform adapter because Android draws the chat bar inside the scene,
-  while iOS uses the native transparent toolbar. Both adapters mount the same action lists from
+- `MainHeader` keeps a thin platform adapter because Android draws an ultra-thin blurred overlay
+  above the scrolling chat scene, while iOS uses the native transparent toolbar. Android 12 and
+  newer sample the chat surface through Expo Blur; older releases fall back to the material tint.
+  The Android blur fades to fully transparent at the lower edge so it does not split the header and
+  message canvas into separate visual surfaces. Both adapters mount the same action lists from
   `useMainHeaderActions`, so platform files only own how the surface is mounted.
 - `headerScreenOptions` owns native top-header invariants. Top headers are separator-free on both
   platforms, and self-drawn headers do not add bottom borders or elevation.
 - Top-bar controls share one Cherry action size and grouping contract. iOS lets the native toolbar
   draw its system background. Android supplies the matching fallback surface: one action forms a
   circle when it is an icon, while a label action and adjacent actions form a capsule. The visible
-  surface stays 40dp tall inside non-overlapping Android touch targets; short label targets keep a
-  64dp minimum width so their inset surface cannot collapse into a circle. Default surfaces use
-  theme tokens; inverse surfaces use constant contrast because they sit over uncontrolled media.
+  surface stays 36dp tall inside non-overlapping Android touch targets; short label targets keep a
+  64dp minimum width so their inset surface cannot collapse into a circle. Default surfaces use the
+  card token and a compact shadow so their complete outline remains visible against the header;
+  inverse surfaces use constant contrast because they sit over uncontrolled media.
 - `MainHeaderAgentButton` is the one exception to the black-icon rule: it carries the current
   Agent's avatar, so the chat identifies its Agent the same way the Agent list does.

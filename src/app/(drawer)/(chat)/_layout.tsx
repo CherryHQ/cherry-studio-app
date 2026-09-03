@@ -11,7 +11,7 @@ import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
  * only exist inside a native stack screen.
  */
 export default function ChatStackLayout() {
-  const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'background']);
+  const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'chat-background']);
 
   return (
     <Stack
