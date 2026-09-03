@@ -62,7 +62,7 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
       router.replace({
         pathname: '/settings/provider/[providerId]/model-add',
         params: {
-          mode: 'sync',
+          mode: 'manual',
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
           returnTo,
@@ -76,6 +76,7 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
       <RouteHeader onBack={requestClose} title={t('settings.provider.add.title')} />
       <ProviderNewFormContent
         canSave={newProviderForm.canSubmit}
+        endpointMode="custom-text"
         form={newProviderForm.form}
         isSaving={newProviderForm.isCreating}
         onSave={handleSave}

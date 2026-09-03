@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
@@ -112,33 +113,55 @@ describe('Switch', () => {
     expect(control.props.isDisabled).toBe(true);
   });
 
-  test('owns the press without activating an ancestor press target', () => {
+  test('owns the press and keeps the native control presentational', () => {
     const onValueChange = jest.fn();
     const stopPropagation = jest.fn();
 
     act(() => {
       renderer = create(
-        <Switch accessibilityLabel="Airplane mode" onValueChange={onValueChange} value />,
+        <Switch
+          accessibilityLabel="Airplane mode"
+          onValueChange={onValueChange}
+          testID="airplane-mode"
+          value
+        />,
       );
     });
 
     const pressOwner = renderer!.root.find(
       (node) =>
-        node.props.accessible === false &&
-        node.props.hitSlop === 8 &&
+        node.props.accessibilityLabel === 'Airplane mode' &&
+        node.props.accessibilityRole === 'switch' &&
         typeof node.props.onPress === 'function',
     );
     const control = renderer!.root.findByProps({ mockComponent: 'switch-control' });
+    const interactionShield = renderer!.root.find(
+      (node) =>
+        node.type === View &&
+        node.props.accessible === false &&
+        node.props.pointerEvents === 'none' &&
+        node.props.mockComponent === undefined,
+    );
 
-    expect(pressOwner.props.accessible).toBe(false);
-    expect(pressOwner.props.hitSlop).toBe(8);
+    expect(pressOwner.props).toMatchObject({
+      accessibilityState: { checked: true, disabled: false },
+      disabled: false,
+      hitSlop: 8,
+      testID: 'airplane-mode',
+    });
+    expect(interactionShield.props.accessible).toBe(false);
+    expect(control.props).toMatchObject({
+      accessibilityElementsHidden: true,
+      importantForAccessibility: 'no-hide-descendants',
+      pointerEvents: 'none',
+      testID: 'airplane-mode-indicator',
+      value: true,
+    });
+    expect(control.props.onValueChange).toBeUndefined();
 
     act(() => pressOwner.props.onPress({ stopPropagation }));
 
     expect(stopPropagation).toHaveBeenCalledTimes(1);
-    expect(onValueChange).not.toHaveBeenCalled();
-
-    act(() => control.props.onValueChange(false));
     expect(onValueChange).toHaveBeenCalledWith(false);
   });
 });

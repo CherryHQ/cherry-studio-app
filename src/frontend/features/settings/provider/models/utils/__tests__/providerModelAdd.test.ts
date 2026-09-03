@@ -9,6 +9,7 @@ import {
   getDefaultProviderModelGroupName,
   getProviderChatEndpointTypes,
   getProviderModelAddMode,
+  getProviderModelPurposeOptions,
   isNewApiLikeProvider,
   providerModelAddEndpointOptions,
   splitProviderModelIds,
@@ -57,13 +58,59 @@ describe('provider model add helpers', () => {
       getProviderChatEndpointTypes({
         defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
         endpointConfigs: {
-          [ENDPOINT_TYPE.OPENAI_RESPONSES]: {},
-          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {},
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://responses.example.com' },
+          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://anthropic.example.com' },
+          [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: { baseUrl: '' },
           [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {},
           [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: {},
         },
       }),
     ).toEqual([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.ANTHROPIC_MESSAGES]);
+  });
+
+  test('hides image purposes when a non-OpenAI text endpoint would be used as their fallback', () => {
+    expect(
+      getProviderModelPurposeOptions(
+        provider({
+          defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+          endpointConfigs: {
+            [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+              baseUrl: 'https://anthropic.example.com',
+            },
+          },
+          id: 'custom-provider',
+        }),
+      ).map((option) => option.id),
+    ).toEqual(['chat']);
+  });
+
+  test('keeps image purposes for the old single OpenAI endpoint and explicit image URLs', () => {
+    expect(
+      getProviderModelPurposeOptions(
+        provider({
+          defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+          endpointConfigs: {
+            [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://api.example.com/v1' },
+          },
+          id: 'openai-compatible-provider',
+        }),
+      ).map((option) => option.id),
+    ).toEqual(['chat', 'image-generation', 'image-edit']);
+
+    expect(
+      getProviderModelPurposeOptions(
+        provider({
+          defaultChatEndpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+          endpointConfigs: {
+            [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: { baseUrl: 'https://gemini.example.com' },
+            [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
+              baseUrl: 'https://images.example.com/v1',
+            },
+          },
+          id: 'mixed-provider',
+        }),
+      ).map((option) => option.id),
+    ).toEqual(['chat', 'image-generation']);
   });
 
   test('offers generation and editing endpoints without mobile-unsupported rerank', () => {
@@ -219,7 +266,7 @@ function model(modelId: string, providerId = 'openai'): Model {
   };
 }
 
-function provider(input: { id: string; presetProviderId?: string }): Provider {
+function provider(input: Partial<Provider> & { id: string }): Provider {
   return {
     apiFeatures: {
       arrayContent: true,
@@ -230,10 +277,9 @@ function provider(input: { id: string; presetProviderId?: string }): Provider {
     },
     apiKeys: [],
     authType: 'api-key',
-    id: input.id,
     isEnabled: true,
     name: input.id,
-    presetProviderId: input.presetProviderId,
     settings: {},
+    ...input,
   };
 }

@@ -1,9 +1,11 @@
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { agentTable, monotonicUpdateTimestamp } from '@/backend/data/db/schemas';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
+import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type {
   CreateModelDto,
@@ -19,6 +21,7 @@ import {
 } from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
+import { assertCustomProviderModelEndpointTypes } from './providerModelEndpointIntegrity';
 import {
   createCustomModel,
   type ModelRegistryLookup,
@@ -275,6 +278,69 @@ function dtoToCreateInput(
   };
 }
 
+type ModelEndpointWrite = {
+  endpointTypes?: readonly EndpointType[] | null;
+  providerId: string;
+};
+
+function toCreateModelEndpointWrite(
+  input: Pick<CreateModelInput, 'endpointTypes' | 'providerId'>,
+): ModelEndpointWrite {
+  return {
+    // The legacy single-endpoint behavior is an implicit route: a model with
+    // no endpointTypes follows the provider's configured default endpoint.
+    endpointTypes: input.endpointTypes ?? [],
+    providerId: input.providerId,
+  };
+}
+
+async function assertModelEndpointWrites(
+  tx: Database,
+  writes: readonly ModelEndpointWrite[],
+): Promise<void> {
+  const writesToValidate = writes.filter((write) => {
+    if (write.endpointTypes === undefined) {
+      return false;
+    }
+
+    // Registry providers retain their implicit endpoint routing. Custom providers
+    // still validate an omitted/empty endpointTypes value against their default.
+    return (
+      (write.endpointTypes?.length ?? 0) > 0 ||
+      !providerRegistryService.isRegistryProvider(write.providerId)
+    );
+  });
+  if (writesToValidate.length === 0) {
+    return;
+  }
+
+  const providerIds = Array.from(new Set(writesToValidate.map((write) => write.providerId)));
+  const providers = await tx
+    .select({
+      defaultChatEndpoint: userProviderTable.defaultChatEndpoint,
+      endpointConfigs: userProviderTable.endpointConfigs,
+      presetProviderId: userProviderTable.presetProviderId,
+      providerId: userProviderTable.providerId,
+    })
+    .from(userProviderTable)
+    .where(inArray(userProviderTable.providerId, providerIds));
+  const providersById = new Map(providers.map((provider) => [provider.providerId, provider]));
+
+  for (const write of writesToValidate) {
+    const provider = providersById.get(write.providerId);
+    if (!provider) {
+      throw DataApiErrorFactory.notFound('Provider', write.providerId);
+    }
+    if (provider.presetProviderId === null) {
+      assertCustomProviderModelEndpointTypes({
+        defaultChatEndpoint: provider.defaultChatEndpoint,
+        endpointConfigs: provider.endpointConfigs,
+        endpointTypes: write.endpointTypes ?? [],
+      });
+    }
+  }
+}
+
 export class ModelService {
   /**
    * Resolved per call rather than injected once, so the instance holds no
@@ -335,12 +401,13 @@ export class ModelService {
   }
 
   async create(input: CreateModelInput): Promise<Model> {
-    const row = (await this.dbService.withWriteTx((tx) =>
-      insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
+    const row = (await this.dbService.withWriteTx(async (tx) => {
+      await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
+      return insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
         pkColumn: userModelTable.id,
         scope: eq(userModelTable.providerId, input.providerId),
-      }),
-    )) as UserModelRow;
+      });
+    })) as UserModelRow;
     return enrichModelFromRegistry(row);
   }
 
@@ -350,6 +417,7 @@ export class ModelService {
     }
     const values = inputs.map(buildCreateValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
+      await assertModelEndpointWrites(tx, inputs.map(toCreateModelEndpointWrite));
       const result: UserModelRow[] = [];
       for (const providerId of new Set(values.map((value) => value.providerId))) {
         const scopedValues = values.filter((value) => value.providerId === providerId);
@@ -383,6 +451,8 @@ export class ModelService {
         throw DataApiErrorFactory.notFound('Model', `${providerId}/${modelId}`);
       }
 
+      await assertModelEndpointWrites(tx, [{ endpointTypes: dto.endpointTypes, providerId }]);
+
       const updates = this.buildUpdates(existing, dto);
       if (Object.keys(updates).length === 0) {
         return enrichModelFromRegistry(existing);
@@ -403,6 +473,13 @@ export class ModelService {
       return [];
     }
     const rows = await this.dbService.withWriteTx(async (tx) => {
+      await assertModelEndpointWrites(
+        tx,
+        items.map(({ patch, providerId }) => ({
+          endpointTypes: patch.endpointTypes,
+          providerId,
+        })),
+      );
       const result: UserModelRow[] = [];
       for (const { modelId, patch, providerId } of items) {
         // react-doctor-disable-next-line async-await-in-loop -- the transaction must preserve request order and atomicity
@@ -639,6 +716,10 @@ export class ModelService {
     const defaultIds = await this.getUserDefaultModelIds();
 
     return this.dbService.withWriteTx(async (tx) => {
+      await assertModelEndpointWrites(
+        tx,
+        toAdd.map((model) => ({ endpointTypes: model.endpointTypes ?? [], providerId })),
+      );
       const existingRows: Pick<UserModelRow, 'id' | 'presetModelId'>[] = [];
       for (const idChunk of chunks(requestedRemoveIds, sqliteBatchSize)) {
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit

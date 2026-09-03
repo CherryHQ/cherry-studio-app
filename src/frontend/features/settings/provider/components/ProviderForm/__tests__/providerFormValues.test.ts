@@ -4,6 +4,7 @@ import {
   createEmptyProviderFormValues,
   createProviderFormValues,
   isProviderFormDirty,
+  providerDefaultEndpointNeedsRepair,
   type ProviderFormValues,
   resolveProviderFormEndpointTypes,
 } from '../utils/providerFormValues';
@@ -38,15 +39,27 @@ describe('provider form values', () => {
       defaultChatEndpoint: 'anthropic-messages',
       endpointUrls: {
         'anthropic-messages': 'https://anthropic.example.com',
+        'google-generate-content': '',
+        'openai-chat-completions': 'https://chat.example.com',
+        'openai-responses': '',
       },
       name: 'Example',
     });
   });
 
-  it('offers only the current primary endpoint', () => {
+  it('offers all Pi text endpoints for a fully custom provider', () => {
     expect(resolveProviderFormEndpointTypes(createTestProvider())).toEqual([
       'openai-chat-completions',
+      'anthropic-messages',
+      'openai-responses',
+      'google-generate-content',
     ]);
+  });
+
+  it('offers only the current primary endpoint for a preset provider', () => {
+    expect(
+      resolveProviderFormEndpointTypes(createTestProvider({ presetProviderId: 'openai' })),
+    ).toEqual(['openai-chat-completions']);
   });
 
   it('offers no endpoints at all when the auth type has no editable URL', () => {
@@ -84,5 +97,19 @@ describe('provider form values', () => {
       endpointUrls: {},
       name: '',
     });
+  });
+
+  it('repairs a missing custom default with the first configured Pi endpoint', () => {
+    const provider = createTestProvider({
+      defaultChatEndpoint: 'openai-responses',
+      endpointConfigs: {
+        'anthropic-messages': { baseUrl: 'https://anthropic.example.com' },
+      },
+    });
+
+    expect(createProviderFormValues({ avatarUri: null, provider }).defaultChatEndpoint).toBe(
+      'anthropic-messages',
+    );
+    expect(providerDefaultEndpointNeedsRepair(provider)).toBe(true);
   });
 });

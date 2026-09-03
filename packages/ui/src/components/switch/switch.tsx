@@ -1,11 +1,7 @@
 import { Pressable, type GestureResponderEvent } from 'react-native';
 
-import { SwitchControl } from './switch-control';
+import { SwitchIndicator } from './switch-indicator';
 import type { SwitchProps } from './switch.types';
-
-function stopPressPropagation(event: GestureResponderEvent) {
-  event.stopPropagation();
-}
 
 export function Switch({
   accessibilityLabel,
@@ -16,15 +12,26 @@ export function Switch({
   testID,
   value,
 }: SwitchProps) {
+  const handlePress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onValueChange(!value);
+  };
+
   return (
-    <Pressable accessible={false} hitSlop={8} onPress={stopPressPropagation}>
-      <SwitchControl
-        accessibilityLabel={accessibilityLabel}
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      hitSlop={8}
+      onPress={handlePress}
+      testID={testID}
+    >
+      <SwitchIndicator
         disabled={disabled}
-        onValueChange={onValueChange}
         size={size}
         style={style}
-        testID={testID}
+        testID={testID ? `${testID}-indicator` : undefined}
         value={value}
       />
     </Pressable>

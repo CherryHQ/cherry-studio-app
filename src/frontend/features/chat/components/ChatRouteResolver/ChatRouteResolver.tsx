@@ -4,7 +4,6 @@ import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { MainHeader } from '@/frontend/appShell/header';
 import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { resolveChatRestoreState } from '@/frontend/appShell/navigation/chat/chatRestore';
 import { useAgentsApi, useLatestAgentSession } from '@/frontend/hooks/agent';
@@ -73,10 +72,5 @@ export function ChatRouteResolver() {
 }
 
 function ChatRouteResolverLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <MainHeader />
-      <View className="flex-1">{children}</View>
-    </>
-  );
+  return <View className="flex-1">{children}</View>;
 }

@@ -8,6 +8,7 @@ export type ProviderFormActions = {
   reset: (values?: ProviderFormValues) => void;
   setApiKey: (value: string) => void;
   setAvatarUri: (uri: string | null) => void;
+  setDefaultChatEndpoint: (endpoint: EndpointType) => void;
   setEndpointUrl: (endpoint: EndpointType, value: string) => void;
   setName: (value: string) => void;
 };
@@ -21,6 +22,8 @@ export type ProviderFormMeta = {
    * flag per screen.
    */
   canSubmit: boolean;
+  defaultEndpointNeedsRepair: boolean;
+  hasEditedEndpointUrls: boolean;
   isDirty: boolean;
   isSubmitting: boolean;
 };

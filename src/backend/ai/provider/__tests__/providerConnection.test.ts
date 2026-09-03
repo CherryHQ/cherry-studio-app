@@ -34,6 +34,39 @@ describe('resolveProviderConnection', () => {
     expect(serialized).not.toContain('key-1');
     expect(serialized).not.toContain('apiKeys');
   });
+
+  it('routes two models on one provider through independent endpoint URLs', () => {
+    const provider = createProvider();
+    provider.endpointConfigs = {
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+        adapterFamily: 'anthropic',
+        baseUrl: 'https://anthropic.example.com',
+      },
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://openai.example.com/v1',
+      },
+    };
+    const anthropicModel = {
+      ...createModel(),
+      endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES],
+    };
+    const openAiModel = {
+      ...createModel(),
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    };
+
+    expect(resolveProviderConnection(provider, anthropicModel)).toMatchObject({
+      adapterFamily: 'anthropic',
+      baseUrl: 'https://anthropic.example.com',
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+    });
+    expect(resolveProviderConnection(provider, openAiModel)).toMatchObject({
+      adapterFamily: 'openai-compatible',
+      baseUrl: 'https://openai.example.com/v1',
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    });
+  });
 });
 
 function createProvider(): Provider {
