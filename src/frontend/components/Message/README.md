@@ -36,20 +36,23 @@ A tool that returns managed artifacts already has them in the message: the Host 
 as its own file part, right after the tool result that produced it. A per-tool renderer therefore
 renders the *call*, never the artifact, or the same file appears twice.
 
-`MessageParts` lifts every file part out of the ordered stream and renders them as one
-`MessageFileStrip` after the answer — the same strip `UserMessage` renders above its bubble. Two
-rules hold that shape:
+`MessageParts` lifts every file part out of the ordered stream and renders managed assistant
+outputs through `GeneratedFileStrip` after the answer. `UserMessage` separately uses
+`MessageFileStrip` for input attachments above its bubble. Two rules hold the assistant-result
+shape:
 
 - **Files belong to the answer, not to the step.** A deliverable buried between two blocks of prose
   is hard to find on a phone, and the position a file was emitted at tells a reader nothing. The
-  strip is the last thing in the message, so it stays put while the answer above it streams in.
+  result group stays out of layout while the answer streams, then appears at the end when the
+  message reaches any terminal status. This matches source groups and message actions, and keeps a
+  large result card from repeatedly moving the live list tail.
 - **Layout never reads `purpose`.** A file's purpose is a Runtime fact used to decide model replay,
   not a presentation input. A transcript that arrives from a peer without one must lay out
   identically, so the split keys on part type alone. Only assistant messages reach `MessageParts`
   with files, because `UserMessage` lifts its own attachments out first.
 
-The strip carries no heading: whether a file was attached or produced follows from the role of the
-message it sits in.
+Neither file group carries a heading: whether a file was attached or produced follows from the role
+of the message it sits in.
 
 ## Message Disclosure Contract
 

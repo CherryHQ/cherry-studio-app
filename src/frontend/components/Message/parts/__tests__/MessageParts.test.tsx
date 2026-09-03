@@ -82,14 +82,23 @@ describe('MessageParts', () => {
     ['success', true],
     ['error', true],
     ['paused', true],
-  ] as const)('status=%s renders settled sources=%p', (status, shouldRenderSources) => {
+  ] as const)('status=%s renders settled message results=%p', (status, shouldRenderResults) => {
     const message: MessageListItem = {
       ...makeMessage(status),
-      data: { parts: [{ text: 'Hello', type: 'text' }, makeSourcePart()] },
+      data: {
+        parts: [
+          { text: 'Hello', type: 'text' },
+          makeSourcePart(),
+          makeFilePart('file-1', 'report.md'),
+        ],
+      },
     };
     const renderer = render(<MessageParts isTextSelectionEnabled message={message} />);
 
-    expect(renderer.root.findAllByType('SourceGroup')).toHaveLength(shouldRenderSources ? 1 : 0);
+    expect(renderer.root.findAllByType('SourceGroup')).toHaveLength(shouldRenderResults ? 1 : 0);
+    expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(
+      shouldRenderResults ? 1 : 0,
+    );
   });
 
   test('folds intermediate text and later tool calls into the timed process', () => {

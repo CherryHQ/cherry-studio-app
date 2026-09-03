@@ -40,8 +40,9 @@ export function MessageParts({
   }
 
   const { body, files, process } = partitionMessageParts(parts);
-  const isStreaming = message.status === 'pending';
-  const showSources = !isStreaming && parts.some((part) => part.type === 'source-url');
+  const isSettled = message.status !== 'pending';
+  const isStreaming = !isSettled;
+  const showSources = isSettled && parts.some((part) => part.type === 'source-url');
 
   return (
     <View className="gap-2">
@@ -87,9 +88,10 @@ export function MessageParts({
       {showSources ? (
         <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
       ) : null}
-      {/* Last, so the files a turn produced are the closest thing to the end of
-          the message and stay put as the answer above them streams in. */}
-      {files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
+      {/* Like sources and message actions, generated results belong to the
+          settled message footer. Hiding them while text streams prevents the
+          list tail from repeatedly moving around a large card. */}
+      {isSettled && files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}
     </View>
   );
 }
