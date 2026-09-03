@@ -1,7 +1,8 @@
 # UI Development
 
-This guide defines shared component ownership and the component-composition workflow. Current
-component behavior and platform boundaries live in [UI Components](../references/ui-components.md).
+This guide defines shared component ownership and the component-composition workflow. Visual and
+motion decisions follow the [Design Spec](../../DESIGN.md); current component behavior and platform
+boundaries live in [UI Components](../references/ui-components.md).
 
 ## Start With CherryUI
 
@@ -95,6 +96,8 @@ failure feels:
 - Outcome feedback follows [Report Outcomes](#report-outcomes): toasts for in-place outcomes,
   alerts only for text that must be read or a decision.
 - Containers own external placement and reusable children do not carry screen-specific gutters.
+- Motion defines a clear purpose, remains responsive and interruptible, provides a complete reduced
+  or unavailable-motion result, and leaves target-specific adaptation with its interaction owner.
 - Visual changes are inspected in light and dark themes on a device.
 - iOS device work in parallel worktrees follows
   [Parallel Device Testing](./parallel-device-testing.md).

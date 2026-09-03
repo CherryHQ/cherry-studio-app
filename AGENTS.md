@@ -14,6 +14,8 @@ with `pnpm packages:build`, and run the complete repository type check with `pnp
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
 - When building or changing product UI, read
-  [UI Development](docs/guides/ui-development.md).
+  [UI Development](docs/guides/ui-development.md) and [Design Spec](DESIGN.md). The project motion
+  contract determines whether and how an interaction moves; generic skill guidance does not make
+  animation mandatory.
 - When running iOS device acceptance in a Conductor workspace, read
   [Parallel Device Testing](docs/guides/parallel-device-testing.md).
