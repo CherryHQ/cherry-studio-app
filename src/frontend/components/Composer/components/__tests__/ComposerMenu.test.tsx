@@ -1,6 +1,7 @@
 import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import { Composer } from '@cherrystudio/ui/components';
 import { type ReactNode, useEffect } from 'react';
+import { Pressable } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -220,15 +221,9 @@ describe('ComposerMenu', () => {
   it('does not offer documents when the caller accepts images only', () => {
     render(undefined, 'images');
 
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.camera' })).toHaveLength(
-      1,
-    );
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.photos' })).toHaveLength(
-      1,
-    );
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.file' })).toHaveLength(
-      0,
-    );
+    expect(findMenuItems('chat.media.camera')).toHaveLength(1);
+    expect(findMenuItems('chat.media.photos')).toHaveLength(1);
+    expect(findMenuItems('chat.media.file')).toHaveLength(0);
   });
 
   function render(children?: ReactNode, media: 'all' | 'images' = 'all') {
@@ -244,12 +239,18 @@ describe('ComposerMenu', () => {
   }
 
   function press(label: string) {
-    const item = renderer?.root
-      .findAllByProps({ accessibilityLabel: label })
-      .find((node) => typeof node.props.onPress === 'function');
+    const item = findMenuItems(label)[0];
 
     if (!item) throw new Error(`Missing menu item: ${label}`);
     item.props.onPress();
+  }
+
+  function findMenuItems(label: string) {
+    return (
+      renderer?.root
+        .findAllByType(Pressable)
+        .filter((node) => node.props.accessibilityLabel === label) ?? []
+    );
   }
 
   function flushAnimationFrames() {

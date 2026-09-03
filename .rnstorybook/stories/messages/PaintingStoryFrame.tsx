@@ -28,6 +28,7 @@ const baseState = {
   error: null,
   interruption: null,
   outputs: [],
+  prompt: 'Create a cinematic cherry-red city at twilight.',
   resolution: '1024 × 1024',
   status: 'idle',
 } as const satisfies PaintingMessageState;
@@ -98,7 +99,7 @@ export const paintingExamples: readonly PaintingExample[] = [
     message: assistantMessage('painting-interrupted', 'error'),
     state: {
       ...baseState,
-      interruption: { message: 'Generation stopped before an image was produced.' },
+      interruption: { reason: 'interrupted' },
     },
   },
   {

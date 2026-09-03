@@ -53,14 +53,19 @@ jest.mock('../../../utils/paintingOutputAttachment', () => ({
     mockCreatePaintingOutputAttachmentDraft(output),
 }));
 
-const painting = {
+const painting: Painting = {
+  createdAt: '2026-01-01T00:00:00.000Z',
   files: {
     input: [],
     output: ['00000000-0000-7000-8000-000000000002', '00000000-0000-7000-8000-000000000003'],
   },
   id: '00000000-0000-7000-8000-000000000001',
+  modelId: 'provider::image-model',
+  orderKey: 'painting-1',
   prompt: 'Draw a cherry',
-} as Painting;
+  providerId: 'provider',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
 const mockCancelGeneration = jest.fn(async () => undefined);
 const dataApi = {
   delete: mockDelete,
