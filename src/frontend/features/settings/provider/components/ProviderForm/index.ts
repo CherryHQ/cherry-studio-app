@@ -7,6 +7,7 @@ export {
   createProviderFormValues,
   isProviderFormDirty,
   NEW_PROVIDER_ENDPOINT_TYPES,
+  providerDefaultEndpointNeedsRepair,
   type ProviderFormValues,
   resolveProviderFormEndpointTypes,
 } from './utils/providerFormValues';

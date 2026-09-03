@@ -22,6 +22,7 @@ import {
 import {
   buildCustomProviderCreationPayload,
   findInvalidCustomProviderEndpointUrl,
+  hasConfiguredCustomProviderTextEndpoint,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
 import {
   createEmptyProviderFormValues,
@@ -49,10 +50,10 @@ export function useNewProviderForm() {
     createInitialValues: createEmptyProviderFormValues,
     endpointTypes: NEW_PROVIDER_ENDPOINT_TYPES,
     isSubmitting: isCreating,
+    normalizeCustomEndpoints: true,
     sourceKey: 'new-provider',
   });
   const { meta, state } = form;
-  const baseUrl = meta.baseUrlEndpoint ? (state.endpointUrls[meta.baseUrlEndpoint] ?? '') : '';
 
   const submitProvider = useCallback(
     async (values: ProviderFormValues) => {
@@ -82,7 +83,11 @@ export function useNewProviderForm() {
     },
     [createProvider, providerAvatars],
   );
-  const canSubmit = meta.canSubmit && baseUrl.trim().length > 0 && state.apiKey.trim().length > 0;
+  const canSubmit =
+    meta.canSubmit &&
+    hasConfiguredCustomProviderTextEndpoint(state.endpointUrls) &&
+    !findInvalidCustomProviderEndpointUrl(state.endpointUrls) &&
+    state.apiKey.trim().length > 0;
   const handleSave = useCallback(async () => {
     if (!canSubmit) {
       return undefined;
@@ -249,6 +254,7 @@ export function useImportedProviderForm(providerId: string) {
 export function ProviderNewFormContent({
   avatar,
   canSave,
+  endpointMode = 'primary',
   form,
   isSaving,
   onSave,
@@ -256,6 +262,7 @@ export function ProviderNewFormContent({
 }: {
   avatar?: ReactElement;
   canSave: boolean;
+  endpointMode?: 'custom-text' | 'primary';
   form: ProviderFormValue;
   isSaving: boolean;
   onSave: () => void;
@@ -278,8 +285,17 @@ export function ProviderNewFormContent({
       <ProviderForm value={form}>
         <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
         <ProviderForm.Name />
-        <ProviderForm.BaseUrl />
-        {showApiKey ? <ProviderForm.ApiKey /> : null}
+        {endpointMode === 'custom-text' ? (
+          <>
+            {showApiKey ? <ProviderForm.ApiKey /> : null}
+            <ProviderForm.Endpoints />
+          </>
+        ) : (
+          <>
+            <ProviderForm.BaseUrl />
+            {showApiKey ? <ProviderForm.ApiKey /> : null}
+          </>
+        )}
       </ProviderForm>
       <View className="px-4 pb-8">
         <Button disabled={!canSave} loading={isSaving} onPress={onSave} size="lg">

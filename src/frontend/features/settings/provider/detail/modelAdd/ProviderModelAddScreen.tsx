@@ -35,8 +35,8 @@ import {
 import { useProviderModelPullSelection } from '../../models/hooks/useProviderModelPullSelection';
 import {
   getProviderModelEndpointLabelKey,
+  getProviderModelPurposeOptions,
   providerModelAddEndpointOptions,
-  PROVIDER_MODEL_PURPOSE_OPTIONS,
 } from '../../models/utils/providerModelAdd';
 import type { ProviderModelPullPreview } from '../../models/utils/providerModelPullPreview';
 import { useProviderDetailSettings } from '../hooks/useProviderDetailSettings';
@@ -90,7 +90,7 @@ export default function ProviderModelAddScreen() {
   return (
     <ProviderModelAddForm
       key={provider.id}
-      initialMode={mode === 'manual' ? 'manual' : 'sync'}
+      initialMode={provider.presetProviderId == null || mode === 'manual' ? 'manual' : 'sync'}
       provider={provider}
       returnTo={returnTo}
     />
@@ -168,6 +168,10 @@ function ProviderModelAddForm({
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMoreSettings, setShowMoreSettings] = useState(false);
+  const supportsModelSync = provider.presetProviderId != null;
+  const modelPurposeOptions = getProviderModelPurposeOptions(provider);
+  const showsModelPurposeOptions = modelPurposeOptions.length > 1;
+  const showsChatEndpointOptions = modelPurpose === 'chat' && chatEndpointTypes.length > 1;
 
   const clearAdvancedFieldScrollTimer = useCallback(() => {
     if (!advancedFieldScrollTimeoutRef.current) {
@@ -276,11 +280,10 @@ function ProviderModelAddForm({
       : 'settings.provider.models.pullApplySelected',
     { count: selectedIds.size },
   );
-  // Setup hides the switch to keep first-time configuration on a single track.
-  // A sync that came back with nothing to add leaves no track: a self-hosted
-  // endpoint that does not serve a model list still has to be given one model
-  // by hand, or the provider it just created is stranded without any.
-  const showsModeTabs = !returnTo || hasSyncComeBackEmpty;
+  // Preset setup hides the switch to keep first-time configuration on a single
+  // track. If the remote catalogue has nothing to offer, manual add remains the
+  // escape hatch. Fully custom providers never enter the unreliable sync path.
+  const showsModeTabs = supportsModelSync && (!returnTo || hasSyncComeBackEmpty);
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
     if (activeMode === 'sync') {
       if (!preview) {
@@ -355,10 +358,10 @@ function ProviderModelAddForm({
 
   useEffect(() => clearAdvancedFieldScrollTimer, [clearAdvancedFieldScrollTimer]);
   useEffect(() => {
-    if (activeMode === 'sync' && !syncLoadStartedRef.current) {
+    if (supportsModelSync && activeMode === 'sync' && !syncLoadStartedRef.current) {
       loadSyncPreview();
     }
-  }, [activeMode, loadSyncPreview]);
+  }, [activeMode, loadSyncPreview, supportsModelSync]);
 
   return (
     <>
@@ -486,37 +489,45 @@ function ProviderModelAddForm({
               </View>
             ) : null}
 
-            {modelAddMode === 'purpose' ? (
-              <View className="gap-2">
-                <Text className="font-medium text-foreground text-sm">
-                  {t('settings.provider.models.addPurposeLabel')}
-                </Text>
-                <Text className="text-muted-foreground text-xs">
-                  {t('settings.provider.models.addPurposeDescription')}
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {PROVIDER_MODEL_PURPOSE_OPTIONS.map((option) => (
-                    <Chip.Selectable
-                      accessibilityLabel={t(option.labelKey)}
-                      accessibilityRole="radio"
-                      disabled={isSubmitting}
-                      key={option.id}
-                      onSelectedChange={(selected) => {
-                        if (selected) {
-                          updateModelPurpose(option.id);
-                        }
-                      }}
-                      selected={modelPurpose === option.id}
-                    >
-                      {t(option.labelKey)}
-                    </Chip.Selectable>
-                  ))}
-                </View>
+            {modelAddMode === 'purpose' &&
+            (showsModelPurposeOptions || showsChatEndpointOptions) ? (
+              <View className="gap-4">
+                {showsModelPurposeOptions ? (
+                  <View className="gap-2">
+                    <Text className="font-medium text-foreground text-sm">
+                      {t('settings.provider.models.addPurposeLabel')}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">
+                      {t('settings.provider.models.addPurposeDescription')}
+                    </Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      {modelPurposeOptions.map((option) => (
+                        <Chip.Selectable
+                          accessibilityLabel={t(option.labelKey)}
+                          accessibilityRole="radio"
+                          disabled={isSubmitting}
+                          key={option.id}
+                          onSelectedChange={(selected) => {
+                            if (selected) {
+                              updateModelPurpose(option.id);
+                            }
+                          }}
+                          selected={modelPurpose === option.id}
+                        >
+                          {t(option.labelKey)}
+                        </Chip.Selectable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
 
-                {modelPurpose === 'chat' && chatEndpointTypes.length > 1 ? (
-                  <View className="mt-2 gap-2">
+                {showsChatEndpointOptions ? (
+                  <View className="gap-2">
                     <Text className="font-medium text-foreground text-sm">
                       {t('settings.provider.models.addChatEndpointLabel')}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">
+                      {t('settings.provider.models.addChatEndpointDescription')}
                     </Text>
                     <View className="flex-row flex-wrap gap-2">
                       {chatEndpointTypes.map((endpointType) => (

@@ -29,6 +29,10 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/shared/data/types/provider';
 
+import {
+  assertCustomProviderEndpointConfiguration,
+  getRemovedPiTextEndpoints,
+} from './providerModelEndpointIntegrity';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
@@ -521,11 +525,19 @@ export class ProviderService {
   }
 
   async create(input: CreateProviderInput): Promise<Provider> {
-    const row = (await this.dbService.withWriteTx((tx) =>
-      insertWithOrderKey(tx, userProviderTable, toInsert(input), {
+    const values = toInsert(input);
+    const row = (await this.dbService.withWriteTx((tx) => {
+      if (values.presetProviderId === null) {
+        assertCustomProviderEndpointConfiguration({
+          defaultChatEndpoint: values.defaultChatEndpoint,
+          endpointConfigs: values.endpointConfigs,
+        });
+      }
+
+      return insertWithOrderKey(tx, userProviderTable, values, {
         pkColumn: userProviderTable.providerId,
-      }),
-    )) as UserProviderRow;
+      });
+    })) as UserProviderRow;
 
     return rowToProvider(row);
   }
@@ -554,20 +566,68 @@ export class ProviderService {
       updates.name = input.name;
     }
     const [row] = await this.dbService.withWriteTx(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(userProviderTable)
+        .where(eq(userProviderTable.providerId, providerId))
+        .limit(1);
+
+      if (!current) {
+        throw DataApiErrorFactory.notFound('Provider', providerId);
+      }
+
+      if (
+        current.presetProviderId === null &&
+        (input.defaultChatEndpoint !== undefined || input.endpointConfigs !== undefined)
+      ) {
+        const nextEndpointConfigs = (
+          updates.endpointConfigs === undefined ? current.endpointConfigs : updates.endpointConfigs
+        ) as EndpointConfigs | null;
+        const nextDefaultChatEndpoint =
+          updates.defaultChatEndpoint === undefined
+            ? current.defaultChatEndpoint
+            : updates.defaultChatEndpoint;
+
+        assertCustomProviderEndpointConfiguration({
+          defaultChatEndpoint: nextDefaultChatEndpoint,
+          endpointConfigs: nextEndpointConfigs,
+        });
+
+        if (input.endpointConfigs !== undefined) {
+          const removedEndpointTypes = getRemovedPiTextEndpoints(
+            current.endpointConfigs,
+            nextEndpointConfigs,
+          );
+
+          if (removedEndpointTypes.length > 0) {
+            const removedEndpointTypeSet = new Set<EndpointType>(removedEndpointTypes);
+            const referencedModels = await tx
+              .select({ endpointTypes: userModelTable.endpointTypes })
+              .from(userModelTable)
+              .where(eq(userModelTable.providerId, providerId));
+            const referencedCount = referencedModels.filter((model) => {
+              const endpointType = model.endpointTypes?.[0];
+              return endpointType ? removedEndpointTypeSet.has(endpointType) : false;
+            }).length;
+
+            if (referencedCount > 0) {
+              throw DataApiErrorFactory.validation(
+                {
+                  endpointConfigs: [
+                    `${referencedCount} model(s) still explicitly reference a removed endpoint`,
+                  ],
+                },
+                'Provider endpoint is still used by models',
+              );
+            }
+          }
+        }
+      }
+
       if (input.providerSettings !== undefined) {
         if (input.providerSettings === null) {
           updates.providerSettings = null;
         } else {
-          const [current] = await tx
-            .select({ providerSettings: userProviderTable.providerSettings })
-            .from(userProviderTable)
-            .where(eq(userProviderTable.providerId, providerId))
-            .limit(1);
-
-          if (!current) {
-            throw DataApiErrorFactory.notFound('Provider', providerId);
-          }
-
           updates.providerSettings = {
             ...(current.providerSettings as Partial<ProviderSettings> | null),
             ...input.providerSettings,

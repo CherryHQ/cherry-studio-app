@@ -8,9 +8,14 @@ import {
   buildCustomProviderCreationPayload,
   canEditProviderEndpoint,
   findInvalidCustomProviderEndpointUrl,
+  getCustomProviderEndpointRequestPreview,
   getProviderPrimaryBaseUrl,
+  normalizeCustomProviderDefaultEndpoint,
 } from '../apiService/utils/providerApiServiceEndpointRules';
-import { buildProviderPrimaryBaseUrlUpdates } from '../apiService/utils/providerApiServiceSave';
+import {
+  buildProviderPrimaryBaseUrlUpdates,
+  buildProviderTextEndpointUpdates,
+} from '../apiService/utils/providerApiServiceSave';
 
 describe('provider API service form helpers', () => {
   it('hides manual keys only for login-only providers', () => {
@@ -65,6 +70,41 @@ describe('provider API service form helpers', () => {
         'openai-image-edit': '',
       }),
     ).toBeNull();
+    expect(
+      findInvalidCustomProviderEndpointUrl({
+        'openai-chat-completions': 'https://chat.example.com/#',
+      }),
+    ).toBe('openai-chat-completions');
+  });
+
+  it.each([
+    [
+      'openai-chat-completions',
+      'https://api.example.com',
+      'https://api.example.com/v1/chat/completions',
+    ],
+    ['openai-responses', 'https://api.example.com/v1/', 'https://api.example.com/v1/responses'],
+    ['anthropic-messages', 'https://api.example.com', 'https://api.example.com/v1/messages'],
+    [
+      'google-generate-content',
+      'https://api.example.com/proxy',
+      'https://api.example.com/proxy/v1beta/models/{model}:generateContent',
+    ],
+  ] as const)('previews the final %s request URL', (endpointType, baseUrl, expected) => {
+    expect(getCustomProviderEndpointRequestPreview(endpointType, baseUrl)).toBe(expected);
+  });
+
+  it('moves the default to the first remaining configured endpoint', () => {
+    expect(
+      normalizeCustomProviderDefaultEndpoint(
+        {
+          'anthropic-messages': 'https://anthropic.example.com',
+          'openai-chat-completions': '',
+          'openai-responses': 'https://responses.example.com',
+        },
+        'openai-chat-completions',
+      ),
+    ).toBe('anthropic-messages');
   });
 
   it('reads the primary endpoint base URL straight off the provider', () => {
@@ -142,6 +182,40 @@ describe('provider API service form helpers', () => {
         'openai-chat-completions': {
           reasoningFormatType: 'openai-chat',
         },
+      },
+    });
+  });
+
+  it('updates all Pi text endpoints while preserving unknown endpoint metadata', () => {
+    expect(
+      buildProviderTextEndpointUpdates({
+        defaultChatEndpoint: 'anthropic-messages',
+        endpointUrls: {
+          'anthropic-messages': ' https://anthropic.next.example.com ',
+          'openai-chat-completions': '',
+          'openai-responses': 'https://responses.example.com/v1',
+        },
+        provider: {
+          defaultChatEndpoint: 'openai-chat-completions',
+          endpointConfigs: {
+            'anthropic-messages': {
+              baseUrl: 'https://anthropic.example.com',
+              reasoningFormatType: 'anthropic',
+            },
+            'ollama-chat': { baseUrl: 'http://localhost:11434' },
+            'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
+          },
+        } as never,
+      }),
+    ).toEqual({
+      defaultChatEndpoint: 'anthropic-messages',
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.next.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'ollama-chat': { baseUrl: 'http://localhost:11434' },
+        'openai-responses': { baseUrl: 'https://responses.example.com/v1' },
       },
     });
   });

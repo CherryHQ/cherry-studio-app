@@ -1,3 +1,4 @@
+import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
@@ -5,8 +6,8 @@ import type { AuthType, EndpointConfigs, Provider } from '@/shared/data/types/pr
 
 export const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+  ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
 ] as const satisfies readonly EndpointType[];
 
@@ -43,9 +44,15 @@ export function getProviderPrimaryBaseUrl(provider?: Provider | null): string {
 }
 
 export function isCustomProviderTextEndpointType(
-  endpoint: EndpointType,
+  endpoint: EndpointType | null | undefined,
 ): endpoint is CustomProviderTextEndpoint {
-  return CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET.has(endpoint);
+  return endpoint ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET.has(endpoint) : false;
+}
+
+export function isFullyCustomProvider(
+  provider?: Provider | null,
+): provider is Provider & { presetProviderId?: undefined } {
+  return provider !== null && provider !== undefined && provider.presetProviderId == null;
 }
 
 export function canEditProviderEndpoint(provider?: Provider | null): boolean {
@@ -59,7 +66,7 @@ export function canEditProviderEndpoint(provider?: Provider | null): boolean {
 export function isValidEndpointBaseUrl(value: string): boolean {
   const trimmed = value.trim();
 
-  if (!trimmed || /\s/.test(trimmed)) {
+  if (!trimmed || trimmed.endsWith('#') || /\s/.test(trimmed)) {
     return false;
   }
 
@@ -68,6 +75,53 @@ export function isValidEndpointBaseUrl(value: string): boolean {
     return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
     return false;
+  }
+}
+
+export function getConfiguredCustomProviderTextEndpoints(
+  endpointUrls: Partial<Record<EndpointType, string>>,
+): CustomProviderTextEndpoint[] {
+  return CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.filter((endpointType) =>
+    Boolean(endpointUrls[endpointType]?.trim()),
+  );
+}
+
+export function hasConfiguredCustomProviderTextEndpoint(
+  endpointUrls: Partial<Record<EndpointType, string>>,
+): boolean {
+  return getConfiguredCustomProviderTextEndpoints(endpointUrls).length > 0;
+}
+
+export function normalizeCustomProviderDefaultEndpoint(
+  endpointUrls: Partial<Record<EndpointType, string>>,
+  preferredChatEndpoint?: EndpointType | null,
+): CustomProviderTextEndpoint {
+  return (
+    (isCustomProviderTextEndpointType(preferredChatEndpoint) &&
+    endpointUrls[preferredChatEndpoint]?.trim()
+      ? preferredChatEndpoint
+      : getConfiguredCustomProviderTextEndpoints(endpointUrls)[0]) ??
+    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS
+  );
+}
+
+export function getCustomProviderEndpointRequestPreview(
+  endpointType: CustomProviderTextEndpoint,
+  baseUrl: string,
+): string | null {
+  if (!isValidEndpointBaseUrl(baseUrl)) {
+    return null;
+  }
+
+  switch (endpointType) {
+    case ENDPOINT_TYPE.ANTHROPIC_MESSAGES:
+      return `${withoutTrailingApiVersion(formatApiHost(baseUrl, false))}/v1/messages`;
+    case ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT:
+      return `${formatApiHost(baseUrl, true, 'v1beta')}/models/{model}:generateContent`;
+    case ENDPOINT_TYPE.OPENAI_RESPONSES:
+      return `${formatApiHost(baseUrl)}/responses`;
+    default:
+      return `${formatApiHost(baseUrl)}/chat/completions`;
   }
 }
 
@@ -87,14 +141,10 @@ export function buildCustomProviderCreationPayload({
     }
   }
 
-  const defaultChatEndpoint =
-    (preferredChatEndpoint &&
-    isCustomProviderTextEndpointType(preferredChatEndpoint) &&
-    endpointUrls[preferredChatEndpoint]?.trim()
-      ? preferredChatEndpoint
-      : CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.find((endpointType) =>
-          endpointUrls[endpointType]?.trim(),
-        )) ?? ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+  const defaultChatEndpoint = normalizeCustomProviderDefaultEndpoint(
+    endpointUrls,
+    preferredChatEndpoint,
+  );
 
   return { defaultChatEndpoint, endpointConfigs };
 }

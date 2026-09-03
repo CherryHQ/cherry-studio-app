@@ -5,8 +5,12 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import {
   canEditProviderEndpoint,
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   getPrimaryEndpoint,
   getProviderPrimaryBaseUrl,
+  isCustomProviderTextEndpointType,
+  isFullyCustomProvider,
+  normalizeCustomProviderDefaultEndpoint,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
 
 /**
@@ -22,12 +26,9 @@ export type ProviderFormValues = {
   name: string;
 };
 
-/**
- * New mobile providers expose one standard endpoint through the Base URL field.
- */
-export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] = [
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-];
+/** Text protocols offered when creating a fully custom mobile provider. */
+export const NEW_PROVIDER_ENDPOINT_TYPES: readonly EndpointType[] =
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES;
 
 export function createEmptyProviderFormValues(): ProviderFormValues {
   return {
@@ -40,12 +41,17 @@ export function createEmptyProviderFormValues(): ProviderFormValues {
 }
 
 /**
- * Existing mobile providers expose only their current primary endpoint.
- * Empty when the provider's auth type has no editable URLs at all (AWS, GCP),
- * which is what makes a screen drop the endpoint slots entirely.
+ * Fully custom providers expose every Pi text endpoint. Presets keep their
+ * single primary URL. Empty means the auth type has no editable URL at all.
  */
 export function resolveProviderFormEndpointTypes(provider: Provider): readonly EndpointType[] {
-  return canEditProviderEndpoint(provider) ? [getPrimaryEndpoint(provider)] : [];
+  if (!canEditProviderEndpoint(provider)) {
+    return [];
+  }
+
+  return isFullyCustomProvider(provider)
+    ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES
+    : [getPrimaryEndpoint(provider)];
 }
 
 export function createProviderFormValues({
@@ -57,6 +63,26 @@ export function createProviderFormValues({
   avatarUri: string | null;
   provider: Provider;
 }): ProviderFormValues {
+  if (isFullyCustomProvider(provider)) {
+    const endpointUrls = Object.fromEntries(
+      CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((endpointType) => [
+        endpointType,
+        provider.endpointConfigs?.[endpointType]?.baseUrl ?? '',
+      ]),
+    ) as Partial<Record<EndpointType, string>>;
+
+    return {
+      apiKey,
+      avatarUri,
+      defaultChatEndpoint: normalizeCustomProviderDefaultEndpoint(
+        endpointUrls,
+        provider.defaultChatEndpoint,
+      ),
+      endpointUrls,
+      name: provider.name,
+    };
+  }
+
   const primaryEndpoint = getPrimaryEndpoint(provider);
 
   return {
@@ -66,6 +92,17 @@ export function createProviderFormValues({
     endpointUrls: { [primaryEndpoint]: getProviderPrimaryBaseUrl(provider) },
     name: provider.name,
   };
+}
+
+export function providerDefaultEndpointNeedsRepair(provider: Provider): boolean {
+  if (!isFullyCustomProvider(provider)) {
+    return false;
+  }
+
+  const configuredBaseUrl = isCustomProviderTextEndpointType(provider.defaultChatEndpoint)
+    ? provider.endpointConfigs?.[provider.defaultChatEndpoint]?.baseUrl?.trim()
+    : undefined;
+  return !configuredBaseUrl;
 }
 
 /**
