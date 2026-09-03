@@ -307,7 +307,8 @@ projection:
 - The invariant-1 partial unique index turns a concurrent second reservation into a constraint
   violation the Host maps to `SESSION_BUSY`.
 - `reconcileInterrupted` is one bulk `UPDATE` over unsettled messages at `PostReady`, same phase
-  the in-memory adapter occupies today.
+  the in-memory adapter occupies today. It returns the reconciled assistant rows so the Host can
+  publish their settled state to observers that attached before recovery ran.
 - Approvals stay in Host/adapter memory, cleared on destroy — live-process state by design (see
   Decisions), not a missing table.
 - Row ↔ view mapping converts epoch millis to ISO strings and validates `data` against the

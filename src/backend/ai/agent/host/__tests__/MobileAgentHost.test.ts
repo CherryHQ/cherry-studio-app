@@ -1260,6 +1260,51 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('reconciliation publishes settled rows to observers attached before recovery', async () => {
+    // Preload the reference adapter with the state a durable adapter would
+    // restore after a process death.
+    const session = await store.createEmptySession({ agentId: AGENT_ID });
+    const reserved = await store.reserveSubmission({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        version: 1,
+        model: {
+          uniqueModelId: 'mock-provider::mock-model',
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          name: 'Mock Model',
+        },
+        parameters: {},
+        tools: [],
+      },
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+    });
+    expect(reserved.assistantMessage.turnId).toBe(reserved.turnId);
+    expect(reserved.userMessage.turnId).toBe(reserved.turnId);
+
+    const host = hostWithText(['unused']);
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await expect(host.reconcileInterruptedTurns()).resolves.toBe(1);
+
+    expect(events).toEqual([
+      {
+        type: 'message.finalized',
+        message: expect.objectContaining({
+          id: reserved.assistantMessage.id,
+          sessionId: session.id,
+          role: 'assistant',
+          status: 'interrupted',
+        }),
+      },
+    ]);
+    // A second recovery pass has nothing left to publish.
+    await expect(host.reconcileInterruptedTurns()).resolves.toBe(0);
+    expect(events).toHaveLength(1);
+  });
+
   test('settles an active turn before deleting its Session rows', async () => {
     let executionStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {

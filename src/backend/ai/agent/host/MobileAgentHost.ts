@@ -331,7 +331,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
-    return this.store.reconcileInterrupted(INTERRUPTED_ERROR);
+    const reconciled = await this.store.reconcileInterrupted(INTERRUPTED_ERROR);
+    // Recovery runs at PostReady, after the first paint, so a Session screen
+    // may already observe one of these Sessions with its placeholder rendered
+    // as pending. Publishing the settled row refreshes it in place.
+    for (const message of reconciled) {
+      this.publish(message.sessionId, { type: 'message.finalized', message });
+    }
+    return reconciled.length;
   }
 
   // ── Protocol operations ──

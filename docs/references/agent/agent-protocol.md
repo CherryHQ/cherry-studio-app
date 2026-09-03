@@ -412,7 +412,10 @@ Session can render its first exchange immediately without waiting behind the his
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished
 local turns to `interrupted`, replaces their non-terminal tool parts with `interrupted` parts carrying
-normalized results, and removes live approvals; version 1 does not resume execution.
+normalized results, and removes live approvals; version 1 does not resume execution. Recovery runs
+after the first paint, so the Host publishes `message.finalized` for every reconciled assistant
+message: an observer attached before recovery refreshes in place instead of showing a stale
+pending placeholder until the Session is reopened.
 
 ## Errors
 
