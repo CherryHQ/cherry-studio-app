@@ -110,6 +110,30 @@ describe('partitionMessageParts', () => {
     expect(partitioned.body).toHaveLength(0);
   });
 
+  test('keeps a terminal error inline while folding preceding process parts', () => {
+    const failure = error();
+    const partitioned = partitionMessageParts([
+      reasoning('thinking'),
+      tool('a'),
+      text('partial answer'),
+      failure,
+    ]);
+
+    expect(partitioned.process.map(({ index }) => index)).toEqual([0, 1]);
+    expect(partitioned.body.map(({ index, part }) => [index, part.type])).toEqual([
+      [2, 'text'],
+      [3, 'data-error'],
+    ]);
+  });
+
+  test('keeps an error-only assistant outcome out of the collapsed process group', () => {
+    const failure = error();
+    const partitioned = partitionMessageParts([failure]);
+
+    expect(partitioned.process).toEqual([]);
+    expect(partitioned.body).toEqual([{ index: 0, kind: 'part', part: failure }]);
+  });
+
   test('provider web searches stay invisible and do not create an empty process group', () => {
     const provider = providerWebSearch();
     const grouped = partitionMessageParts([tool('a'), provider, tool('b')]);
@@ -147,4 +171,17 @@ function providerWebSearch(): CherryMessagePart {
     toolName: 'web_search',
     type: 'dynamic-tool',
   } as unknown as CherryMessagePart;
+}
+
+function error(): CherryMessagePart {
+  return {
+    type: 'data-error',
+    data: {
+      code: 'EXECUTION_FAILED',
+      message: 'provider diagnostic',
+      reasonCode: 'auth',
+      retryable: false,
+      source: { layer: 'provider', code: 'invalid_api_key' },
+    },
+  } as CherryMessagePart;
 }

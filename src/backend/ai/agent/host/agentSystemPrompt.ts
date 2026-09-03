@@ -27,6 +27,7 @@ const MANAGED_FILE_TOOL_NAMES = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NA
 export type BuildAgentSystemPromptInput = {
   agentInstructions: string;
   appLanguage: LanguageVarious;
+  currentDate?: string;
   tools: readonly RuntimeTool[];
 };
 
@@ -34,16 +35,21 @@ export type BuildAgentSystemPromptInput = {
 export function buildAgentSystemPrompt({
   agentInstructions,
   appLanguage,
+  currentDate = formatLocalDate(new Date()),
   tools,
 }: BuildAgentSystemPromptInput): string {
-  const sections = [MOBILE_RUNTIME_RULES, buildResponseLanguageSection(appLanguage)];
+  const sections = [
+    MOBILE_RUNTIME_RULES,
+    `## Current Date\n\nThe current local date is \`${currentDate}\`.`,
+    buildResponseLanguageSection(appLanguage),
+  ];
   const citableTools = findBuiltInToolNames(tools, CITABLE_WEB_TOOL_NAMES);
   if (citableTools.length > 0) {
     sections.push(buildCitationsSection(citableTools));
   }
 
   if (findBuiltInToolNames(tools, MANAGED_FILE_TOOL_NAMES).length > 0) {
-    sections.push(MANAGED_FILES_SECTION);
+    sections.push(buildManagedFilesSection(tools));
   }
 
   const configuredInstructions = agentInstructions.trim();
@@ -58,6 +64,13 @@ ${configuredInstructions}
   }
 
   return sections.join('\n\n');
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** Match the language already resolved for the mobile UI. */
@@ -96,6 +109,15 @@ function buildCitationsSection(toolNames: readonly string[]): string {
 Results from ${tools} carry an \`id\` for each source. When a factual statement relies on one of those results, append \`[cite:ID]\` immediately after that statement using the exact returned id. Chain multiple markers when needed. Never invent or renumber ids, and do not add a separate Sources or References section because Cherry Studio renders the inline markers.`;
 }
 
-const MANAGED_FILES_SECTION = `## Managed Files
+function buildManagedFilesSection(tools: readonly RuntimeTool[]): string {
+  const canEdit = tools.some(
+    (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === EDIT_FILE_TOOL_NAME,
+  );
+  return `## Managed Files
 
-Use a managed-file tool only when the user explicitly asks to save, export, download, create, or edit a text file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.`;
+Use a managed-file tool only when the user explicitly asks to save, export, download, create, or edit a text file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.${
+    canEdit
+      ? ` When the user asks to modify an existing managed text file or text attachment, call \`${EDIT_FILE_TOOL_NAME}\` with its \`file_entry_id\`; do not create a replacement with \`${WRITE_FILE_TOOL_NAME}\`.`
+      : ''
+  }`;
+}

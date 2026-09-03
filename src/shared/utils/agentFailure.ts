@@ -48,12 +48,13 @@ function includesAny(text: string, values: readonly string[]): boolean {
 
 /**
  * Stable product classification derived from allowlisted failure facts.
- * Explicit source codes and HTTP status win over provider-message heuristics.
+ * Specific source codes win; a generic `forbidden` code still yields to more
+ * precise region, authentication, model, or quota evidence in the payload.
  */
 export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailureReason {
   const code = facts.code?.trim().toLowerCase();
   const codeReason = code ? CODE_REASONS[code] : undefined;
-  if (codeReason) {
+  if (codeReason && code !== 'forbidden') {
     return codeReason;
   }
 
@@ -121,8 +122,12 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
       'insufficient balance',
       'insufficient_credit',
       'insufficient credit',
+      'credit balance',
       'billing',
       'payment',
+      '额度不足',
+      '余额不足',
+      '剩余额度',
     ])
   ) {
     return 'quota';

@@ -131,7 +131,6 @@ export class AgentSessionNaming {
       ]);
       const { text } = await this.dependencies.ai.generateText({
         prompt,
-        reasoningEffort: 'none',
         system,
         uniqueModelId,
         ...(this.dependencies.signal

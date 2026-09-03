@@ -209,9 +209,9 @@ export const AgentErrorViewSchema = z
       'INTERRUPTED',
     ]),
     /**
-     * Diagnostic text for logs and the provider-layer detail line. User-facing
-     * copy is derived from `code` and `failure.reasonCode`; renderers never
-     * localize or display this string for app-owned layers.
+     * Diagnostic text for logs and the error detail sheet. User-facing copy is
+     * derived from `code` and `failure.reasonCode`; renderers never localize
+     * this string or show it inline.
      */
     message: z.string(),
     retryable: z.boolean(),

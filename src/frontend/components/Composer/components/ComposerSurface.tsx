@@ -86,17 +86,20 @@ export function ComposerSurface({
     try {
       await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
     } catch (error) {
+      const explainedLabel = getSendErrorLabel?.(error);
       // The toast is deliberately vague, so without this the failure leaves no
       // trace at all and there is nothing to go on when a send breaks on device.
-      logger.error('Message send failed', error instanceof Error ? error : { error }, {
-        attemptId,
-      });
+      // An explained rejection is an expected outcome, so it stays below the
+      // error level that raises the development overlay.
+      const errorDetail = error instanceof Error ? error : { error };
+      if (explainedLabel) {
+        logger.warn('Message send rejected', errorDetail, { attemptId });
+      } else {
+        logger.error('Message send failed', errorDetail, { attemptId });
+      }
       setDraft(draftSnapshot);
       setAttachments(attachmentSnapshot);
-      toast.show({
-        label: getSendErrorLabel?.(error) ?? t('chat.input.sendFailed'),
-        variant: 'danger',
-      });
+      toast.show({ label: explainedLabel ?? t('chat.input.sendFailed'), variant: 'danger' });
     } finally {
       activeSendAttemptIdRef.current = null;
     }

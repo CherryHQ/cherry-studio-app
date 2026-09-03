@@ -331,7 +331,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
-    return this.store.reconcileInterrupted(INTERRUPTED_ERROR);
+    const reconciled = await this.store.reconcileInterrupted(INTERRUPTED_ERROR);
+    // Recovery runs at PostReady, after the first paint, so a Session screen
+    // may already observe one of these Sessions with its placeholder rendered
+    // as pending. Publishing the settled row refreshes it in place.
+    for (const message of reconciled) {
+      this.publish(message.sessionId, { type: 'message.finalized', message });
+    }
+    return reconciled.length;
   }
 
   // ── Protocol operations ──
@@ -920,7 +927,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.activeTurns.delete(sessionId);
     }
     if (outcome === 'failed' && error) {
-      logger.error('Agent turn reached a failed terminal state', {
+      const failureLayer = error.failure?.source.layer;
+      // Provider and tool failures are expected outcomes the transcript already
+      // shows; only an app-owned layer indicates a defect worth the error level
+      // and the development overlay it raises.
+      const logFailure =
+        failureLayer === 'provider' || failureLayer === 'tool'
+          ? logger.warn.bind(logger)
+          : logger.error.bind(logger);
+      logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
         durationMs: Math.max(0, Date.parse(finalized.updatedAt) - Date.parse(state.turn.startedAt)),
         hasUsage: state.usage !== null,

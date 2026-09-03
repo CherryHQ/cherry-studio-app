@@ -325,6 +325,44 @@ describe('MobileAgentHost', () => {
     expect(reserveInitialSubmission).not.toHaveBeenCalled();
   });
 
+  test('does not create a Session when a text-only model receives an image', async () => {
+    const imageFact = {
+      fileEntryId: FILE_ENTRY_ID,
+      mediaType: 'image/png',
+      name: 'managed.png',
+      size: 128,
+    };
+    const reserveInitialSubmission = jest.spyOn(store, 'reserveInitialSubmission');
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    jest.spyOn(runtime, 'preflightModel').mockResolvedValue({
+      contextWindow: 128_000,
+      inputModalities: ['text'],
+      maxInputTokens: 120_000,
+      maxOutputTokens: 8_000,
+      supportsTools: true,
+    });
+    const host = createHost(runtime, noOpNaming, {
+      readAsBytes: jest.fn(async () => undefined),
+      readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
+      resolveAvailable: jest.fn(async () => new Map([[FILE_ENTRY_ID, imageFact]])),
+    });
+
+    await expect(
+      host.startSession({
+        agentId: AGENT_ID,
+        executionTarget: { kind: 'local' },
+        parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+      }),
+    ).rejects.toMatchObject({
+      view: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'The selected model does not accept image attachments.',
+      },
+    });
+
+    expect(reserveInitialSubmission).not.toHaveBeenCalled();
+  });
+
   test('runs basic chat end to end: create, observe, submit, stream, record', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['Hi', 'Ok'], requests);
@@ -1222,6 +1260,51 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('reconciliation publishes settled rows to observers attached before recovery', async () => {
+    // Preload the reference adapter with the state a durable adapter would
+    // restore after a process death.
+    const session = await store.createEmptySession({ agentId: AGENT_ID });
+    const reserved = await store.reserveSubmission({
+      modelId: 'mock-provider::mock-model',
+      inferenceSnapshot: {
+        version: 1,
+        model: {
+          uniqueModelId: 'mock-provider::mock-model',
+          providerId: 'mock-provider',
+          modelId: 'mock-model',
+          name: 'Mock Model',
+        },
+        parameters: {},
+        tools: [],
+      },
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+    });
+    expect(reserved.assistantMessage.turnId).toBe(reserved.turnId);
+    expect(reserved.userMessage.turnId).toBe(reserved.turnId);
+
+    const host = hostWithText(['unused']);
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await expect(host.reconcileInterruptedTurns()).resolves.toBe(1);
+
+    expect(events).toEqual([
+      {
+        type: 'message.finalized',
+        message: expect.objectContaining({
+          id: reserved.assistantMessage.id,
+          sessionId: session.id,
+          role: 'assistant',
+          status: 'interrupted',
+        }),
+      },
+    ]);
+    // A second recovery pass has nothing left to publish.
+    await expect(host.reconcileInterruptedTurns()).resolves.toBe(0);
+    expect(events).toHaveLength(1);
+  });
+
   test('settles an active turn before deleting its Session rows', async () => {
     let executionStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
@@ -1698,7 +1781,7 @@ describe('MobileAgentHost', () => {
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
   });
 
-  test('replaces current and historical images after switching to a text-only model', async () => {
+  test('rejects new images but omits historical images after switching to a text-only model', async () => {
     const firstFact = {
       fileEntryId: FILE_ENTRY_ID,
       mediaType: 'image/png',
@@ -1740,6 +1823,13 @@ describe('MobileAgentHost', () => {
         maxInputTokens: 120_000,
         maxOutputTokens: 8_000,
         supportsTools: true,
+      })
+      .mockResolvedValueOnce({
+        contextWindow: 128_000,
+        inputModalities: ['text'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: true,
       });
     const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
     const files: ManagedFileResolver = {
@@ -1759,12 +1849,21 @@ describe('MobileAgentHost', () => {
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the image turn');
     events.length = 0;
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        parts: [
+          { type: 'text', text: 'Continue.' },
+          { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID, mediaType: 'image/png' },
+        ],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(requests).toHaveLength(1);
+    expect(await store.listMessages(session.id)).toHaveLength(2);
+
     await host.submitMessage({
       sessionId: session.id,
-      parts: [
-        { type: 'text', text: 'Continue.' },
-        { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID, mediaType: 'image/png' },
-      ],
+      parts: [{ type: 'text', text: 'Continue without a new image.' }],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the text-only follow-up turn');
 
@@ -1777,13 +1876,7 @@ describe('MobileAgentHost', () => {
         text: '[image attachment omitted: this model does not accept image input]',
       },
     ]);
-    expect(requests[1]?.input).toEqual([
-      { type: 'text', text: 'Continue.' },
-      {
-        type: 'text',
-        text: '[image attachment omitted: this model does not accept image input]',
-      },
-    ]);
+    expect(requests[1]?.input).toEqual([{ type: 'text', text: 'Continue without a new image.' }]);
     expect(readAsDataUrl).toHaveBeenCalledTimes(1);
     const transcript = await store.listMessages(session.id);
     expect(transcript[0]?.parts[0]).toMatchObject({
@@ -1791,11 +1884,9 @@ describe('MobileAgentHost', () => {
       fileEntryId: FILE_ENTRY_ID,
       purpose: 'input-attachment',
     });
-    expect(transcript[2]?.parts[1]).toMatchObject({
-      type: 'file',
-      fileEntryId: SECOND_FILE_ENTRY_ID,
-      purpose: 'input-attachment',
-    });
+    expect(transcript[2]?.parts).toEqual([
+      { id: 'input-0', state: 'done', text: 'Continue without a new image.', type: 'text' },
+    ]);
   });
 
   test('rejects an unavailable model endpoint before reserving image messages', async () => {

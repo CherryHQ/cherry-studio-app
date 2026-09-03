@@ -179,6 +179,7 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
 
   return {
     cancel,
+    isApprovalPending: activeTurnStatus === 'awaiting-approval',
     isBusy:
       activeTurnStatus !== undefined &&
       activeTurnStatus !== 'completed' &&

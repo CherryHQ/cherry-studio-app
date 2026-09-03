@@ -25,6 +25,7 @@ describe('buildAgentSystemPrompt', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '   ',
       appLanguage: 'zh-CN',
+      currentDate: '2026-09-03',
       tools: [],
     });
 
@@ -33,6 +34,7 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('persistent memory, or background execution');
     expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
+    expect(prompt).toContain('The current local date is `2026-09-03`.');
     expect(prompt).toContain('You must write every response in this language');
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## MCP Tool Discovery');
@@ -77,7 +79,7 @@ describe('buildAgentSystemPrompt', () => {
     const withFile = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
-      tools: [tool('write_file')],
+      tools: [tool('edit_file'), tool('write_file')],
     });
     const withoutFile = buildAgentSystemPrompt({
       agentInstructions: '',
@@ -89,6 +91,8 @@ describe('buildAgentSystemPrompt', () => {
     expect(withFile).toContain('only when the user explicitly asks');
     expect(withFile).toContain('otherwise provide the requested answer');
     expect(withFile).toContain('never invent an absolute path');
+    expect(withFile).toContain('call `edit_file` with its `file_entry_id`');
+    expect(withFile).toContain('do not create a replacement with `write_file`');
     expect(withoutFile).not.toContain('## Managed Files');
   });
 

@@ -19,7 +19,10 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
-import { interruptNonTerminalToolParts } from './messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleInterruptedAssistantParts,
+} from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -386,25 +389,33 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<number> {
-    let count = 0;
+  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+    const reconciled: AgentMessageView[] = [];
     for (const transcript of this.messages.values()) {
       for (const stored of transcript) {
         if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
           continue;
         }
+        const interruptedParts =
+          stored.view.role === 'assistant'
+            ? settleInterruptedAssistantParts(
+                stored.view.parts,
+                error,
+                `error-${stored.view.turnId ?? stored.view.id}`,
+              )
+            : interruptNonTerminalToolParts(stored.view.parts, error.message);
         stored.view = {
           ...stored.view,
           status: 'interrupted',
-          parts: interruptNonTerminalToolParts(stored.view.parts, error.message),
+          parts: interruptedParts,
           updatedAt: nowIso(),
         };
         if (stored.view.role === 'assistant') {
           stored.error = cloneJson(error);
-          count += 1;
+          reconciled.push(cloneJson(stored.view));
         }
       }
     }
-    return count;
+    return reconciled;
   }
 }

@@ -13,7 +13,10 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     MessagePart: {
+      Detail: (props: object) => createElement('MessagePartDetail', props),
       Error: (props: object) => createElement('MessagePartError', props),
+      TextSection: (props: object) => createElement('MessagePartTextSection', props),
+      ValueSection: (props: object) => createElement('MessagePartValueSection', props),
     },
   };
 });
@@ -25,7 +28,7 @@ function errorPart(data: ErrorPartInput['data']): ErrorPartInput {
 }
 
 describe('ErrorPart', () => {
-  test('renders provider text verbatim as the detail line', () => {
+  test('renders actionable local copy instead of provider diagnostics for auth failures', () => {
     const renderer = render(
       <ErrorPart
         part={errorPart({
@@ -40,7 +43,7 @@ describe('ErrorPart', () => {
 
     const props = renderer.root.findByType('MessagePartError').props;
     expect(props.title).toBe('chat.errorPart.reason.auth');
-    expect(props.message).toBe('Incorrect API key provided: sk-***');
+    expect(props.message).toBe('chat.errorPart.message.auth');
   });
 
   test('replaces app-owned diagnostic messages with translated copy', () => {
@@ -95,6 +98,54 @@ describe('ErrorPart', () => {
     const props = renderer.root.findByType('MessagePartError').props;
     expect(props.title).toBe('chat.errorPart.interrupted.title');
     expect(props.message).toBe('chat.errorPart.interrupted.message');
+    expect(props.onPress).toBeUndefined();
+  });
+
+  test('opens a detail sheet with the diagnostic message and failure facts on request', () => {
+    const renderer = render(
+      <ErrorPart
+        part={errorPart({
+          code: 'EXECUTION_FAILED',
+          message: '{"error":{"message":"Insufficient credits","request_id":"req-1"}}',
+          reasonCode: 'quota',
+          retryable: false,
+          source: { layer: 'provider', name: 'AI_APICallError', code: 'insufficient_credit' },
+          context: {
+            statusCode: 403,
+            providerId: 'cherryin',
+            modelId: 'gpt-test',
+            responseBody: '{"error":"insufficient_credit"}',
+          },
+        })}
+      />,
+    );
+
+    expect(renderer.root.findAllByType('MessagePartDetail')).toHaveLength(0);
+    const errorProps = renderer.root.findByType('MessagePartError').props;
+    expect(errorProps.accessibilityHint).toBe('chat.errorPart.detail.hint');
+    act(() => errorProps.onPress());
+
+    const detail = renderer.root.findByType('MessagePartDetail');
+    expect(detail.props.title).toBe('chat.errorPart.detail.title');
+    const textSections = renderer.root.findAllByType('MessagePartTextSection');
+    expect(textSections.map((section) => [section.props.title, section.props.value])).toEqual([
+      [
+        'chat.errorPart.detail.message',
+        '{"error":{"message":"Insufficient credits","request_id":"req-1"}}',
+      ],
+      ['chat.errorPart.detail.responseBody', '{"error":"insufficient_credit"}'],
+    ]);
+    expect(renderer.root.findByType('MessagePartValueSection').props.value).toEqual({
+      'chat.errorPart.detail.reason': 'quota',
+      'chat.errorPart.detail.source': 'provider \u00B7 insufficient_credit',
+      'chat.errorPart.detail.name': 'AI_APICallError',
+      'chat.errorPart.detail.status': 403,
+      'chat.errorPart.detail.provider': 'cherryin',
+      'chat.errorPart.detail.model': 'gpt-test',
+    });
+
+    act(() => detail.props.onClose());
+    expect(renderer.root.findAllByType('MessagePartDetail')).toHaveLength(0);
   });
 
   test('never uses raw names or codes as the title', () => {

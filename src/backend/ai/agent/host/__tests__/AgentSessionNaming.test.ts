@@ -84,10 +84,10 @@ describe('AgentSessionNaming', () => {
     expect(renamed).toMatchObject({ title: 'Generated summary', titleIsManual: false });
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        reasoningEffort: 'none',
         uniqueModelId: DEFAULT_NAMING_MODEL_ID,
       }),
     );
+    expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty('reasoningEffort');
   });
 
   test('keeps the first-message title when no usable naming model is configured', async () => {

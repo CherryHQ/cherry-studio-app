@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem, MessageListProps } from '@/frontend/components/Message';
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentApprovalView, AgentMessageView } from '@/shared/contracts/agent';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 
@@ -10,6 +10,7 @@ const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
 const mockReconcilePersistedMessages = jest.fn();
 const mockRespondApproval = jest.fn(async () => undefined);
+const mockCancelTurn = jest.fn(async () => undefined);
 const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockToastShow = jest.fn();
@@ -17,12 +18,17 @@ const mockTranslate = (key: string) => key;
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
+let mockToolApprovalSheetProps:
+  | {
+      onCancel: () => Promise<void>;
+    }
+  | undefined;
 let mockAgentChatSession: {
   activeTurn: null;
   enteringUserMessageId?: string;
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
-  pendingApprovals: readonly [];
+  pendingApprovals: readonly AgentApprovalView[];
   sessionId: string;
   status: 'ready';
 };
@@ -100,7 +106,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 jest.mock('../../ToolApprovalSheet', () => ({
-  ToolApprovalSheet: () => null,
+  ToolApprovalSheet: (props: { onCancel: () => Promise<void> }) => {
+    mockToolApprovalSheetProps = props;
+    return null;
+  },
 }));
 
 jest.mock('../../../runtime', () => ({
@@ -126,6 +135,7 @@ jest.mock('../../../runtime', () => ({
         status: message.status === 'success' ? 'success' : 'pending',
       })),
   useAgentChatActions: () => ({
+    cancelTurn: mockCancelTurn,
     reconcilePersistedMessages: mockReconcilePersistedMessages,
     respondApproval: mockRespondApproval,
   }),
@@ -243,6 +253,7 @@ describe('ChatWorkspace message rendering integration', () => {
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
     mockMessageListProps = undefined;
+    mockToolApprovalSheetProps = undefined;
     readyFrame = undefined;
     requestAnimationFrameSpy = jest
       .spyOn(global, 'requestAnimationFrame')
@@ -399,5 +410,13 @@ describe('ChatWorkspace message rendering integration', () => {
       'assistant-1',
     ]);
     expect(mockCoverVisible).toBe(false);
+  });
+
+  test('cancels the active turn from the approval sheet', async () => {
+    renderer = renderWorkspace(false, []);
+
+    await act(async () => mockToolApprovalSheetProps?.onCancel());
+
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
   });
 });

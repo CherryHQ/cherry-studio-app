@@ -34,6 +34,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 const allowLabel = 'chat.tool.approval.allow';
 const denyLabel = 'chat.tool.approval.deny';
+const stopLabel = 'chat.input.action.stopGenerating';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
   return {
@@ -54,11 +55,16 @@ describe('ToolApprovalSheet', () => {
   });
 
   function render(
-    overrides: { approvals?: readonly PendingToolApproval[]; onRespond?: () => Promise<void> } = {},
+    overrides: {
+      approvals?: readonly PendingToolApproval[];
+      onCancel?: () => Promise<void>;
+      onRespond?: () => Promise<void>;
+    } = {},
   ) {
+    const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <ToolApprovalSheet approvals={approvals} isOpen onRespond={onRespond} />
+      <ToolApprovalSheet approvals={approvals} isOpen onCancel={onCancel} onRespond={onRespond} />
     );
 
     act(() => {
@@ -66,6 +72,7 @@ describe('ToolApprovalSheet', () => {
     });
 
     return {
+      onCancel,
       onRespond,
       rerender: (approvals: readonly PendingToolApproval[]) =>
         act(() => {
@@ -119,7 +126,14 @@ describe('ToolApprovalSheet', () => {
 
   test('does not mount a sheet before an approval exists', () => {
     act(() => {
-      renderer = create(<ToolApprovalSheet approvals={[]} isOpen={false} onRespond={jest.fn()} />);
+      renderer = create(
+        <ToolApprovalSheet
+          approvals={[]}
+          isOpen={false}
+          onCancel={jest.fn()}
+          onRespond={jest.fn()}
+        />,
+      );
     });
 
     expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
@@ -143,6 +157,15 @@ describe('ToolApprovalSheet', () => {
       approved: false,
       messageId: 'assistant-1',
     });
+  });
+
+  test('stops the turn without approving or denying the tool', async () => {
+    const { onCancel, onRespond } = render();
+
+    await press(stopLabel);
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onRespond).not.toHaveBeenCalled();
   });
 
   test('uses a solid danger action for denial', () => {

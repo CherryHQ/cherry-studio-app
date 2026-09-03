@@ -149,6 +149,31 @@ describe('turn attachments', () => {
         ),
       ),
     ).toMatchObject({ view: { code: 'ATTACHMENT_INVALID' } });
+
+    const image = fact(FIRST_ID, 'photo.png', 'image/png');
+    expect(
+      captureProtocolError(() =>
+        assertAttachmentRequestSupported(
+          new FakeRuntime(),
+          [
+            {
+              type: 'file',
+              fileEntryId: FIRST_ID,
+              mediaType: image.mediaType,
+              name: image.name,
+            },
+          ],
+          [],
+          createTurnResourceLedger(new Map([[FIRST_ID, image]]), []),
+          TEXT_MODEL,
+        ),
+      ),
+    ).toMatchObject({
+      view: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'The selected model does not accept image attachments.',
+      },
+    });
   });
 
   test('projects invalid current text content to an attachment protocol error', async () => {
@@ -181,35 +206,19 @@ describe('turn attachments', () => {
     });
   });
 
-  test('replaces current and historical images with notes without reading bytes for a text model', async () => {
-    const current = fact(FIRST_ID, 'current.png', 'image/png');
-    const historical = fact(SECOND_ID, 'historical.png', 'image/png');
-    const files = resolver(
-      new Map([
-        [FIRST_ID, current],
-        [SECOND_ID, historical],
-      ]),
-    );
+  test('replaces historical images with notes without reading bytes for a text model', async () => {
+    const historical = fact(FIRST_ID, 'historical.png', 'image/png');
+    const files = resolver(new Map([[FIRST_ID, historical]]));
     const resources = createTurnResourceLedger(
-      new Map([[FIRST_ID, current]]),
-      [SECOND_ID],
-      new Map([
-        [FIRST_ID, current],
-        [SECOND_ID, historical],
-      ]),
+      new Map(),
+      [FIRST_ID],
+      new Map([[FIRST_ID, historical]]),
     );
 
     const attachments = await materializeRuntimeAttachments({
       files,
       history: [messageWithFile(historical)],
-      inputParts: [
-        {
-          type: 'file',
-          fileEntryId: FIRST_ID,
-          mediaType: current.mediaType,
-          name: current.name,
-        },
-      ],
+      inputParts: [],
       modelPreflight: TEXT_MODEL,
       resources,
       signal: new AbortController().signal,
@@ -220,12 +229,7 @@ describe('turn attachments', () => {
       type: 'text',
       text: '[image attachment omitted: this model does not accept image input]',
     };
-    expect(attachments).toEqual(
-      new Map([
-        [FIRST_ID, omitted],
-        [SECOND_ID, omitted],
-      ]),
-    );
+    expect(attachments).toEqual(new Map([[FIRST_ID, omitted]]));
     expect(files.readAsDataUrl).not.toHaveBeenCalled();
   });
 });

@@ -1,12 +1,17 @@
 import { MessagePart } from '@cherrystudio/ui/components';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AgentFailureReason } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
+import { readErrorPartDetail } from './errorPartDetail';
+
 type ErrorPartProps = {
   part: Extract<CherryMessagePart, { type: 'data-error' }>;
 };
+
+const DETAIL_SIZES = ['compact', 'large'] as const;
 
 const AGENT_FAILURE_TITLE_KEYS = {
   auth: 'chat.errorPart.reason.auth',
@@ -39,27 +44,9 @@ function isAgentFailureReason(value: unknown): value is AgentFailureReason {
   );
 }
 
-/**
- * Only provider text is shown verbatim: it is third-party diagnostic detail
- * the user can act on and no translation exists for it. Every other layer is
- * app-owned, so its `message` stays diagnostic and the copy comes from the
- * protocol code instead.
- */
-function readProviderDetail(data: ErrorPartProps['part']['data']): string | undefined {
-  const source = data.source;
-  const layer =
-    source && typeof source === 'object' && !Array.isArray(source)
-      ? (source as { layer?: unknown }).layer
-      : undefined;
-  if (layer !== 'provider' || typeof data.message !== 'string') {
-    return undefined;
-  }
-  const detail = data.message.trim();
-  return detail.length > 0 ? detail : undefined;
-}
-
 export function ErrorPart({ part }: ErrorPartProps) {
   const { t } = useTranslation();
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const { code, reasonCode, retryable } = part.data;
 
   if (code === 'INTERRUPTED') {
@@ -74,9 +61,65 @@ export function ErrorPart({ part }: ErrorPartProps) {
   const title = isAgentFailureReason(reasonCode)
     ? t(AGENT_FAILURE_TITLE_KEYS[reasonCode])
     : t('chat.errorPart.title');
-  const message =
-    readProviderDetail(part.data) ??
-    t(retryable === true ? 'chat.errorPart.retryable' : 'chat.errorPart.message');
+  const message = t(
+    reasonCode === 'auth'
+      ? 'chat.errorPart.message.auth'
+      : retryable === true
+        ? 'chat.errorPart.retryable'
+        : 'chat.errorPart.message',
+  );
 
-  return <MessagePart.Error message={message} title={title} />;
+  return (
+    <>
+      <MessagePart.Error
+        accessibilityHint={t('chat.errorPart.detail.hint')}
+        message={message}
+        onPress={() => setIsDetailOpen(true)}
+        title={title}
+      />
+      {isDetailOpen ? (
+        <ErrorPartDetailSheet data={part.data} onClose={() => setIsDetailOpen(false)} />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Diagnostic detail the user explicitly asked for: the persisted `message`
+ * and failure snapshot are shown verbatim here, never inline in the card.
+ */
+function ErrorPartDetailSheet({
+  data,
+  onClose,
+}: {
+  data: ErrorPartProps['part']['data'];
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const detail = readErrorPartDetail(data);
+  const facts = Object.fromEntries(detail.facts.map((fact) => [t(fact.labelKey), fact.value]));
+
+  return (
+    <MessagePart.Detail
+      onClose={onClose}
+      sizes={DETAIL_SIZES}
+      testID="error-part-detail"
+      title={t('chat.errorPart.detail.title')}
+    >
+      {detail.message ? (
+        <MessagePart.TextSection
+          title={t('chat.errorPart.detail.message')}
+          value={detail.message}
+        />
+      ) : null}
+      <MessagePart.ValueSection title={t('chat.errorPart.detail.facts')} value={facts} />
+      {detail.responseBody ? (
+        <MessagePart.TextSection
+          title={t('chat.errorPart.detail.responseBody')}
+          value={detail.responseBody}
+          variant="code"
+        />
+      ) : null}
+    </MessagePart.Detail>
+  );
 }
