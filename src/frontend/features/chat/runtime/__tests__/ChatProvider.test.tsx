@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatProvider, useAgentChatControls, useAgentChatDraftHandoff } from '../ChatProvider';
@@ -17,12 +18,6 @@ jest.mock('@tanstack/react-query', () => ({
 jest.mock('expo-router', () => ({
   usePathname: () => '/',
   useRouter: () => ({ replace: mockReplace, setParams: mockSetParams }),
-}));
-
-jest.mock('react-native', () => ({
-  AppState: {
-    addEventListener: () => ({ remove: jest.fn() }),
-  },
 }));
 
 jest.mock('@/frontend/data', () => ({
@@ -76,6 +71,7 @@ describe('ChatProvider Draft handoff', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
     chatControls = undefined;
     draftHandoff = undefined;
     mockStartSession.mockResolvedValue({ id: 'session-1' });
@@ -84,6 +80,7 @@ describe('ChatProvider Draft handoff', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {
