@@ -86,9 +86,15 @@ export function usePaintingViewerActions({
   }, [alert, requestPhotoAccessAndSave, saveToPhotos, showOpenSettingsAlert, t, toast]);
 
   const remove = useCallback(() => {
+    const hasMultipleOutputs = painting.files.output.length > 1;
     alert.confirm({
       confirmLabel: t('common.delete'),
-      description: t('painting.viewer.deleteMessage'),
+      description: t(
+        hasMultipleOutputs
+          ? 'painting.viewer.deleteGenerationMessage'
+          : 'painting.viewer.deleteMessage',
+        { count: painting.files.output.length },
+      ),
       onConfirm: () => {
         const deletion = deletePaintings([painting.id]);
         router.back();
@@ -97,9 +103,13 @@ export function usePaintingViewerActions({
         });
       },
       role: 'destructive',
-      title: t('painting.viewer.deleteTitle'),
+      title: t(
+        hasMultipleOutputs
+          ? 'painting.viewer.deleteGenerationTitle'
+          : 'painting.viewer.deleteTitle',
+      ),
     });
-  }, [alert, deletePaintings, painting.id, router, t, toast]);
+  }, [alert, deletePaintings, painting.files.output.length, painting.id, router, t, toast]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.

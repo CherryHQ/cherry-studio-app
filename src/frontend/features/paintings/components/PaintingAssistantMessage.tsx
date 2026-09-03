@@ -15,6 +15,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 
 import type {
   PaintingGenerationStatus,
@@ -135,7 +136,7 @@ export function PaintingAssistantMessage({
   const results = visibleOutputs.map((output, index) => {
     const result = (
       <Pressable
-        accessibilityLabel={t('painting.outputAccessibility', {
+        accessibilityLabel={paintingOutputAccessibilityLabel(t, {
           count: visibleOutputs.length,
           index: index + 1,
           prompt,

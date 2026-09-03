@@ -46,6 +46,7 @@ import {
   usePaintingGalleryEntries,
   usePaintings,
 } from '@/frontend/data/paintings/usePaintings';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 
@@ -459,7 +460,7 @@ function DrawingGridItem({
   const content = renderTileContent({ height, item, statusHint, statusLabel, width });
   const accessibilityLabel =
     item.kind === 'output'
-      ? t('painting.outputAccessibility', {
+      ? paintingOutputAccessibilityLabel(t, {
           count: item.outputCount,
           index: item.outputIndex,
           prompt: item.painting.prompt,

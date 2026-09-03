@@ -54,6 +54,10 @@ jest.mock('../../../utils/paintingOutputAttachment', () => ({
 }));
 
 const painting = {
+  files: {
+    input: [],
+    output: ['00000000-0000-7000-8000-000000000002', '00000000-0000-7000-8000-000000000003'],
+  },
   id: '00000000-0000-7000-8000-000000000001',
   prompt: 'Draw a cherry',
 } as Painting;
@@ -280,15 +284,15 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('confirms before deleting and navigating back', async () => {
+  it('makes multi-output deletion scope explicit before navigating back', async () => {
     actions?.remove();
 
     expect(mockAlertConfirm).toHaveBeenCalledWith({
       confirmLabel: 'common.delete',
-      description: 'painting.viewer.deleteMessage',
+      description: 'painting.viewer.deleteGenerationMessage',
       onConfirm: expect.any(Function),
       role: 'destructive',
-      title: 'painting.viewer.deleteTitle',
+      title: 'painting.viewer.deleteGenerationTitle',
     });
     expect(mockRouterBack).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();

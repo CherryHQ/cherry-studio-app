@@ -14,6 +14,7 @@ import {
 } from '@/frontend/data/paintings/usePaintings';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -32,7 +33,9 @@ export function PaintingViewerScreen() {
   const fileEntryId = getSingleRouteParam(params.fileEntryId);
   const painting = usePainting(paintingId);
   const files = useResolvedPaintingFiles(painting.data);
-  const current = files.data?.outputs.find((output) => output.fileEntryId === fileEntryId);
+  const outputs = files.data?.outputs ?? [];
+  const currentIndex = outputs.findIndex((output) => output.fileEntryId === fileEntryId);
+  const current = currentIndex >= 0 ? outputs[currentIndex] : undefined;
   const constantWhite = useThemeColor('constant-white');
   const closeViewer = useCallback(() => {
     if (router.canGoBack()) {
@@ -77,16 +80,25 @@ export function PaintingViewerScreen() {
   return (
     <View className="flex-1 bg-constant-black">
       <StatusBar style="light" />
-      <PaintingViewerContent current={current} painting={painting.data} />
+      <PaintingViewerContent
+        current={current}
+        outputCount={outputs.length}
+        outputIndex={currentIndex + 1}
+        painting={painting.data}
+      />
     </View>
   );
 }
 
 function PaintingViewerContent({
   current,
+  outputCount,
+  outputIndex,
   painting,
 }: {
   current: ResolvedPaintingAttachment;
+  outputCount: number;
+  outputIndex: number;
   painting: Painting;
 }) {
   const { t } = useTranslation();
@@ -106,7 +118,14 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <PaintingViewerImage accessibilityLabel={t('painting.output')} uri={current.uri} />
+        <PaintingViewerImage
+          accessibilityLabel={paintingOutputAccessibilityLabel(t, {
+            count: outputCount,
+            index: outputIndex,
+            prompt: painting.prompt,
+          })}
+          uri={current.uri}
+        />
       </View>
     </>
   );
