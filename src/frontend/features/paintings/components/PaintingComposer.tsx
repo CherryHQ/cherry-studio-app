@@ -60,6 +60,7 @@ export function PaintingComposer({
     onReceipt,
     paintingId: receiptId,
   });
+  const generatePainting = generation.generate;
   const jobs = usePaintingJobs();
   const restoredParamValues = receiptId
     ? paintingJobParamValues(
@@ -113,7 +114,7 @@ export function PaintingComposer({
         userMessageId: Crypto.randomUUID(),
       });
 
-      const result = await generation.generate(input);
+      const result = await generatePainting(input);
       if (!result) {
         setActiveTurn(null);
         return null;
@@ -124,8 +125,20 @@ export function PaintingComposer({
       );
       return result;
     },
-    [generation.generate],
+    [generatePainting],
   );
+  const retryInput = activeTurn?.input;
+  const canRetry = Boolean(failure && retryInput);
+  const messagePrompt = retryInput?.prompt ?? painting?.prompt ?? '';
+  const handleRetry = useCallback(() => {
+    if (!retryInput) {
+      return;
+    }
+
+    // The generation hook owns the resulting inline error state. Consume the
+    // rejection here so a button-triggered retry cannot become unhandled.
+    void handleGenerate(retryInput).catch(() => {});
+  }, [handleGenerate, retryInput]);
   const messageRenderState = useMemo<PaintingMessageState>(
     () => ({
       animateOutput:
@@ -134,20 +147,25 @@ export function PaintingComposer({
       aspectRatio: generation.aspectRatio,
       error: generation.error,
       interruption: generation.interruption,
+      onRetry: canRetry ? handleRetry : undefined,
       outputs,
       paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
+      prompt: messagePrompt,
       resolution: generationResolution,
       status: generation.status,
     }),
     [
       activeTurn?.paintingId,
+      canRetry,
       generation.aspectRatio,
       generation.error,
       generation.interruption,
       generation.status,
       generationResolution,
+      handleRetry,
       initialFiles.outputs,
       firstOutput,
+      messagePrompt,
       outputs,
       painting?.id,
       showPersistedTurn,
@@ -160,8 +178,16 @@ export function PaintingComposer({
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
   const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
-  const composerInitialAttachments = firstOutput ? [] : initialAttachments;
-  const composerInitialDraft = firstOutput ? '' : initialDraft;
+  const composerInitialAttachments = firstOutput
+    ? []
+    : initialAttachments.length > 0
+      ? initialAttachments
+      : receiptId
+        ? initialFiles.inputs
+        : [];
+  const composerInitialDraft = firstOutput
+    ? ''
+    : initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
 
   return (
     <View className="flex-1">

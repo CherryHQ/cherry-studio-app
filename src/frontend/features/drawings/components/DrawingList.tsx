@@ -185,15 +185,12 @@ export function DrawingList() {
   );
   const listExtraData = useMemo<DrawingListExtraData>(
     () => ({
-      generatingLabel: t('painting.status.generating'),
-      interruptedLabel: t('painting.status.interrupted'),
       isEditing,
-      label: t('painting.history.item'),
       onToggle: toggleId,
       selectedIds,
       width: columnWidth,
     }),
-    [columnWidth, isEditing, selectedIds, t, toggleId],
+    [columnWidth, isEditing, selectedIds, toggleId],
   );
   const listHeader = useMemo(
     () => (
@@ -295,10 +292,7 @@ export function DrawingList() {
 }
 
 type DrawingListExtraData = {
-  generatingLabel: string;
-  interruptedLabel: string;
   isEditing: boolean;
-  label: string;
   onToggle: (paintingId: string) => void;
   selectedIds: ReadonlySet<string>;
   width: number;
@@ -318,13 +312,10 @@ function renderDrawingGridItem({ extraData, item }: ListRenderItemInfo<PaintingG
   return (
     <View className="px-[3px] pb-1.5">
       <DrawingGridItem
-        generatingLabel={listData.generatingLabel}
         height={listData.width / item.aspectRatio}
-        interruptedLabel={listData.interruptedLabel}
         isEditing={listData.isEditing}
         isSelected={listData.selectedIds.has(item.painting.id)}
         item={item}
-        label={listData.label}
         onToggle={listData.onToggle}
         width={listData.width}
       />
@@ -434,35 +425,48 @@ function DrawingListHeader({
 }
 
 type DrawingGridItemProps = {
-  generatingLabel: string;
   height: number;
-  interruptedLabel: string;
   isEditing: boolean;
   isSelected: boolean;
   item: PaintingGalleryItem;
-  label: string;
   onToggle: (paintingId: string) => void;
   width: number;
 };
 
 function DrawingGridItem({
-  generatingLabel,
   height,
-  interruptedLabel,
   isEditing,
   isSelected,
   item,
-  label,
   onToggle,
   width,
 }: DrawingGridItemProps) {
-  const content = renderTileContent({ generatingLabel, height, interruptedLabel, item, width });
+  const { t } = useTranslation();
+  const statusLabel =
+    item.kind === 'generating'
+      ? t('painting.status.generating')
+      : item.kind === 'interrupted' && item.interruptionReason === 'failed'
+        ? t('painting.status.failed')
+        : t('painting.status.interrupted');
+  const statusHint =
+    item.kind === 'interrupted'
+      ? t(
+          item.interruptionReason === 'failed'
+            ? 'painting.status.failedHint'
+            : 'painting.status.interruptedHint',
+        )
+      : undefined;
+  const content = renderTileContent({ height, item, statusHint, statusLabel, width });
   const accessibilityLabel =
     item.kind === 'output'
-      ? label
-      : item.kind === 'generating'
-        ? generatingLabel
-        : interruptedLabel;
+      ? t('painting.outputAccessibility', {
+          count: item.outputCount,
+          index: item.outputIndex,
+          prompt: item.painting.prompt,
+        })
+      : statusHint
+        ? `${statusLabel}. ${statusHint}`
+        : statusLabel;
   // A generating tile is the loader card itself — its own surface, rounding and
   // border. Wrapping that in the placeholder tile would show a card inside a
   // card, so the wrapper only carries the press feedback.
@@ -528,16 +532,16 @@ function DrawingGridItem({
 }
 
 function renderTileContent({
-  generatingLabel,
   height,
-  interruptedLabel,
   item,
+  statusHint,
+  statusLabel,
   width,
 }: {
-  generatingLabel: string;
   height: number;
-  interruptedLabel: string;
   item: PaintingGalleryItem;
+  statusHint: string | undefined;
+  statusLabel: string;
   width: number;
 }) {
   if (item.kind === 'output') {
@@ -562,7 +566,7 @@ function renderTileContent({
       <ImageGenerationLoader
         accessible={false}
         height={height}
-        label={generatingLabel}
+        label={statusLabel}
         resolution={item.resolution}
         testID={`painting-history-loader-${item.painting.id}`}
         width={width}
@@ -573,12 +577,10 @@ function renderTileContent({
   return (
     <View className="flex-1 items-center justify-center gap-1 px-2">
       <RotateCcwIcon className="size-5 text-foreground-tertiary" />
-      <Text className="text-center font-medium text-muted-foreground text-xs">
-        {interruptedLabel}
-      </Text>
-      {item.message ? (
+      <Text className="text-center font-medium text-muted-foreground text-xs">{statusLabel}</Text>
+      {statusHint ? (
         <Text className="text-center text-foreground-tertiary text-xs" numberOfLines={2}>
-          {item.message}
+          {statusHint}
         </Text>
       ) : null}
     </View>

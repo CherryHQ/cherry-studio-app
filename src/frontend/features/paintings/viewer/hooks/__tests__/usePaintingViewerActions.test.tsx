@@ -195,6 +195,39 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
+  it('reports when a native photo-save request is denied without saving', async () => {
+    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+    mockRequestPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+
+    await act(async () => actions?.download());
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
+      onConfirm: () => Promise<void>;
+    };
+    await act(onConfirm);
+
+    expect(mockCreateAsset).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.saveAccessDenied',
+      variant: 'danger',
+    });
+  });
+
+  it('reports when system settings cannot be opened', async () => {
+    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: false });
+    mockOpenSettings.mockRejectedValueOnce(new Error('settings unavailable'));
+
+    await act(async () => actions?.download());
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
+      onConfirm: () => Promise<void>;
+    };
+    await act(onConfirm);
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.openSettingsFailed',
+      variant: 'danger',
+    });
+  });
+
   it('shows a Toast after saving to Photos', async () => {
     await act(async () => actions?.download());
 

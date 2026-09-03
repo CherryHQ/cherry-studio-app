@@ -42,7 +42,7 @@ export function usePaintingViewerActions({
       description: t('painting.viewer.savePermissionDenied'),
       onConfirm: () =>
         Linking.openSettings().catch(() => {
-          toast.show({ label: t('painting.viewer.savePermissionDenied'), variant: 'danger' });
+          toast.show({ label: t('painting.viewer.openSettingsFailed'), variant: 'danger' });
         }),
       title: t('settings.permissions.accessRequired'),
     });
@@ -55,6 +55,8 @@ export function usePaintingViewerActions({
         await saveToPhotos();
       } else if (!permission.canAskAgain) {
         showOpenSettingsAlert();
+      } else {
+        toast.show({ label: t('painting.viewer.saveAccessDenied'), variant: 'danger' });
       }
     } catch {
       toast.show({ label: t('painting.viewer.saveFailed'), variant: 'danger' });
