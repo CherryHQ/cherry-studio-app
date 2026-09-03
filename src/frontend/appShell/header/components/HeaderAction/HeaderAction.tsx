@@ -48,7 +48,7 @@ export function HeaderAction({
           accessibilityState={{ disabled: action.disabled }}
           className={cn(
             HEADER_ACTION_BASE_CLASS_NAME,
-            targetSize === 'touch-target' ? 'min-h-12 min-w-12' : 'min-h-10',
+            targetSize === 'touch-target' ? 'min-h-12 min-w-16' : 'min-h-10',
             'px-3 active:opacity-60',
             action.disabled && 'opacity-50',
           )}

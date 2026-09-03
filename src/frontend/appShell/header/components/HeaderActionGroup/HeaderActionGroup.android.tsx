@@ -18,8 +18,9 @@ export function HeaderActionGroup({ actions, tone = 'default' }: HeaderActionGro
 
   return (
     <View className="relative flex-row items-center">
-      {/* Actions own adjacent, non-overlapping 48dp targets. The inset surface
-          stays 40dp tall and remains a circle when the group has one action. */}
+      {/* Actions own adjacent, non-overlapping targets. The inset surface stays
+          40dp tall: one icon action forms a circle, while a short label action
+          expands to a capsule instead of collapsing to the same geometry. */}
       <View className={GROUP_CLASS_NAMES[tone]} pointerEvents="none" />
       {actions.map((action) => (
         <HeaderAction action={action} key={action.key} targetSize="touch-target" tone={tone} />
