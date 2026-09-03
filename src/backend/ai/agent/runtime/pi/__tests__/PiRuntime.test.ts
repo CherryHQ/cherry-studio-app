@@ -17,7 +17,13 @@ import {
   describeRuntimeConformance,
   type RuntimeConformanceHarness,
 } from '../../__tests__/_runtimeConformance';
-import type { AgentRuntime, RuntimeEvent, RuntimeExecutionRequest, RuntimeTool } from '../../types';
+import type {
+  AgentRuntime,
+  RuntimeEvent,
+  RuntimeExecutionRequest,
+  RuntimeJsonValue,
+  RuntimeTool,
+} from '../../types';
 import {
   estimatePiContextFixedCosts,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
@@ -564,10 +570,10 @@ describe('PiRuntime mapping', () => {
     );
 
     expect(toolEvents[0]).toMatchObject({
-      input: undefined,
       state: 'input-streaming',
       toolCallId: 'write-call',
     });
+    expect(toolEvents[0]).not.toHaveProperty('input');
     expect(toolEvents.filter((part) => part.state === 'input-streaming')).toHaveLength(1);
     expect(toolEvents).toContainEqual(
       expect.objectContaining({ input: fullInput, state: 'input-available' }),

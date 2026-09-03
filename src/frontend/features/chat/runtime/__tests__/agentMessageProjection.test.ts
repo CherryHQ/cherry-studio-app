@@ -193,7 +193,7 @@ describe('agentMessageProjection', () => {
       }),
     );
 
-    expect(item.data.parts).toEqual([
+    expect(item?.data.parts).toEqual([
       expect.objectContaining({
         input: undefined,
         state: 'input-streaming',
