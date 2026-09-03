@@ -8,6 +8,7 @@ import {
   SelectionIndicator,
   Section,
   Spinner,
+  useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
@@ -16,7 +17,15 @@ import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
@@ -41,7 +50,11 @@ import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandof
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 
 import { usePaintingSelectionSource } from '../hooks/usePaintingSelectionSource';
-import { loadPhotoPreviewPage, type PhotoPreview } from '../utils/photoLibrary';
+import {
+  loadPhotoPreviewPage,
+  type PhotoPreview,
+  shouldRequestPhotoPreviewAccess,
+} from '../utils/photoLibrary';
 import {
   type PaintingTemplate,
   PaintingTemplateRow,
@@ -55,6 +68,7 @@ const galleryContentEdge = pageEdge - galleryGap / 2;
 
 export function DrawingList() {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
   const { isEditing, selectedIds } = useSelectionState();
@@ -64,8 +78,9 @@ export function DrawingList() {
   useRegisterSelectionSource('drawings', selectionSource);
   const bottomInset = useListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
-  // Mounted means visible now that the gallery owns a whole screen, so photo
-  // access is simply always armed here.
+  // Mounted means visible now that the gallery owns a whole screen. The hook
+  // reads existing access immediately, but only requests new access after the
+  // user presses the photo placeholder.
   const recentPhotos = useRecentPaintingPhotos(true);
   const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
@@ -112,12 +127,28 @@ export function DrawingList() {
     },
     [openPaintingWithAttachments, t, toast],
   );
+  const handleRequestPhotoAccess = useCallback(async () => {
+    const result = await requestPhotoAccess();
+    if (result === 'denied') {
+      toast.show({ label: t('painting.photos.accessDenied'), variant: 'danger' });
+      return;
+    }
+    if (result !== 'blocked') {
+      return;
+    }
+
+    alert.confirm({
+      confirmLabel: t('settings.permissions.openSystemSettings'),
+      description: t('painting.photos.accessRequired'),
+      onConfirm: () =>
+        Linking.openSettings().catch(() => {
+          toast.show({ label: t('painting.photos.openSettingsFailed'), variant: 'danger' });
+        }),
+      title: t('settings.permissions.accessRequired'),
+    });
+  }, [alert, requestPhotoAccess, t, toast]);
   const handleViewAllPress = useCallback(async () => {
     try {
-      const hasAccess = await requestPhotoAccess();
-      if (!hasAccess) {
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
         mediaTypes: ['images'],
@@ -146,7 +177,7 @@ export function DrawingList() {
     } catch {
       toast.show({ label: t('painting.photos.openFailed'), variant: 'danger' });
     }
-  }, [openPaintingWithAttachments, requestPhotoAccess, t, toast]);
+  }, [openPaintingWithAttachments, t, toast]);
 
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: galleryContentEdge }),
@@ -174,7 +205,7 @@ export function DrawingList() {
         isRecentPhotosLoading={recentPhotos.isLoading}
         photos={recentPhotos.photos}
         onRecentPhotoPress={handleRecentPhotoPress}
-        onRequestPhotoAccess={requestPhotoAccess}
+        onRequestPhotoAccess={handleRequestPhotoAccess}
         onTemplateUse={handleTemplateUse}
         onViewAllPress={handleViewAllPress}
       />
@@ -182,13 +213,13 @@ export function DrawingList() {
     [
       gallery.isLoading,
       handleRecentPhotoPress,
+      handleRequestPhotoAccess,
       handleTemplateUse,
       handleViewAllPress,
       isEditing,
       paintings.isLoading,
       recentPhotos.isLoading,
       recentPhotos.photos,
-      requestPhotoAccess,
       visibleGalleryItems.length,
     ],
   );
@@ -306,7 +337,7 @@ type DrawingListHeaderProps = {
   isHistoryVisible: boolean;
   isRecentPhotosLoading: boolean;
   onRecentPhotoPress: (photo: PhotoPreview) => Promise<void>;
-  onRequestPhotoAccess: () => Promise<boolean>;
+  onRequestPhotoAccess: () => Promise<void>;
   onTemplateUse: (template: PaintingTemplate) => void;
   onViewAllPress: () => Promise<void>;
   photos: readonly PhotoPreview[];
@@ -560,14 +591,14 @@ function useRecentPaintingPhotos(enabled: boolean) {
   const isActiveRef = useRef(false);
 
   const refresh = useCallback(
-    async (requestPermission: boolean) => {
+    async (isUserInitiated: boolean): Promise<PhotoAccessResult> => {
       if (!enabled) {
-        return false;
+        return 'denied';
       }
 
       try {
         let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
-        if (!permission.granted && (requestPermission || permission.canAskAgain)) {
+        if (shouldRequestPhotoPreviewAccess(permission, isUserInitiated)) {
           permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
         }
         const nextPhotos = permission.granted
@@ -577,13 +608,13 @@ function useRecentPaintingPhotos(enabled: boolean) {
           setPhotos(nextPhotos);
           setLoading(false);
         }
-        return permission.granted;
+        return permission.granted ? 'granted' : permission.canAskAgain ? 'denied' : 'blocked';
       } catch {
         if (isActiveRef.current) {
           setPhotos([]);
           setLoading(false);
         }
-        return false;
+        return 'denied';
       }
     },
     [enabled],
@@ -610,6 +641,8 @@ function useRecentPaintingPhotos(enabled: boolean) {
     [enabled, isLoading, photos, requestAccess],
   );
 }
+
+type PhotoAccessResult = 'blocked' | 'denied' | 'granted';
 
 const styles = StyleSheet.create({
   empty: {

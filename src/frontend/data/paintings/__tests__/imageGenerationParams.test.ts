@@ -7,6 +7,7 @@ import {
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
+  supportsPaintingGenerationMode,
 } from '../imageGenerationParams';
 
 const support = {
@@ -54,6 +55,16 @@ describe('image generation parameter resolution', () => {
 
     expect(resolveImageGenerationMode(editOnly, false)?.mode).toBe('edit');
     expect(resolveImageGenerationMode(undefined, false)).toBeUndefined();
+  });
+
+  it('filters models by the requested generate or edit interaction', () => {
+    expect(supportsPaintingGenerationMode(support, 'generate')).toBe(true);
+    expect(supportsPaintingGenerationMode(support, 'edit')).toBe(true);
+    expect(supportsPaintingGenerationMode({ modes: { generate: { supports: {} } } }, 'edit')).toBe(
+      false,
+    );
+    expect(supportsPaintingGenerationMode(undefined, 'generate')).toBe(true);
+    expect(supportsPaintingGenerationMode(undefined, 'edit')).toBe(false);
   });
 });
 

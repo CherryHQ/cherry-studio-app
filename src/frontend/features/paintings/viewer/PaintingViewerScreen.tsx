@@ -1,10 +1,12 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import { Spinner } from '@cherrystudio/ui/components';
-import { useLocalSearchParams } from 'expo-router';
+import { ContentState, Spinner } from '@cherrystudio/ui/components';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { RouteHeader } from '@/frontend/appShell/header';
 import {
   type ResolvedPaintingAttachment,
   usePainting,
@@ -21,6 +23,7 @@ import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     paintingId?: string | string[];
@@ -31,19 +34,41 @@ export function PaintingViewerScreen() {
   const files = useResolvedPaintingFiles(painting.data);
   const current = files.data?.outputs.find((output) => output.fileEntryId === fileEntryId);
   const constantWhite = useThemeColor('constant-white');
+  const closeViewer = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/drawings');
+    }
+  }, [router]);
 
   if (!painting.data || !current) {
+    if (!painting.isLoading && !files.isLoading) {
+      return (
+        <View className="flex-1 bg-background">
+          <StatusBar style="auto" />
+          <RouteHeader onBack={closeViewer} />
+          <View className="flex-1 justify-center px-8 py-16">
+            <ContentState.Error
+              description={t('painting.viewer.unavailableDescription')}
+              primaryAction={{ children: t('common.back'), onPress: closeViewer }}
+              prominence="prominent"
+              title={t('painting.viewer.unavailable')}
+            />
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View className="flex-1 bg-constant-black">
         <StatusBar style="light" />
         <View className="flex-1 items-center justify-center">
-          {painting.isLoading || files.isLoading ? (
-            <Spinner
-              accessibilityLabel={t('painting.viewer.loading')}
-              accessibilityRole="progressbar"
-              color={constantWhite}
-            />
-          ) : null}
+          <Spinner
+            accessibilityLabel={t('painting.viewer.loading')}
+            accessibilityRole="progressbar"
+            color={constantWhite}
+          />
         </View>
       </View>
     );

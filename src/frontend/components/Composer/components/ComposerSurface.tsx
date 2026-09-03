@@ -26,6 +26,11 @@ type ComposerSurfaceProps = PropsWithChildren<{
   dismissKeyboardOnSend?: boolean;
   /** A message for a failure the caller recognises; `undefined` falls back. */
   getSendErrorLabel?: (error: unknown) => string | undefined;
+  labels?: {
+    send: string;
+    sendFailed: string;
+    stop: string;
+  };
   onSend: (payload: ComposerSendPayload) => Promise<void>;
   onStop: () => void;
   streaming: boolean;
@@ -44,6 +49,7 @@ export function ComposerSurface({
   children,
   dismissKeyboardOnSend = true,
   getSendErrorLabel,
+  labels,
   onSend,
   onStop,
   streaming,
@@ -66,7 +72,7 @@ export function ComposerSurface({
     const attachmentSnapshot = attachments.filter(isComposerAttachmentReady);
     if (attachmentSnapshot.length !== attachments.length) {
       logger.warn('Ignored message send with attachments that are not ready');
-      toast.show({ label: t('chat.input.sendFailed'), variant: 'danger' });
+      toast.show({ label: labels?.sendFailed ?? t('chat.input.sendFailed'), variant: 'danger' });
       return;
     }
 
@@ -99,7 +105,10 @@ export function ComposerSurface({
       }
       setDraft(draftSnapshot);
       setAttachments(attachmentSnapshot);
-      toast.show({ label: explainedLabel ?? t('chat.input.sendFailed'), variant: 'danger' });
+      toast.show({
+        label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
+        variant: 'danger',
+      });
     } finally {
       activeSendAttemptIdRef.current = null;
     }
@@ -109,6 +118,7 @@ export function ComposerSurface({
     dismissKeyboardOnSend,
     draft,
     getSendErrorLabel,
+    labels?.sendFailed,
     onSend,
     setAttachments,
     setDraft,
@@ -123,8 +133,8 @@ export function ComposerSurface({
         (canSend ?? hasComposerSendableContent(draft, attachments))
       }
       labels={{
-        send: t('chat.input.action.sendMessage'),
-        stop: t('chat.input.action.stopGenerating'),
+        send: labels?.send ?? t('chat.input.action.sendMessage'),
+        stop: labels?.stop ?? t('chat.input.action.stopGenerating'),
       }}
       onChangeText={setDraft}
       onSend={handleSend}

@@ -217,13 +217,27 @@ describe('ComposerMenu', () => {
     expect(mockPickDocument).not.toHaveBeenCalled();
   });
 
-  function render(children?: ReactNode) {
+  it('does not offer documents when the caller accepts images only', () => {
+    render(undefined, 'images');
+
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.camera' })).toHaveLength(
+      1,
+    );
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.photos' })).toHaveLength(
+      1,
+    );
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'chat.media.file' })).toHaveLength(
+      0,
+    );
+  });
+
+  function render(children?: ReactNode, media: 'all' | 'images' = 'all') {
     act(() => {
       renderer = create(
         <ComposerProvider>
           <ComposerDock onHeightChange={jest.fn()} />
           <FieldProbe />
-          <ComposerMenu>{children}</ComposerMenu>
+          <ComposerMenu media={media}>{children}</ComposerMenu>
         </ComposerProvider>,
       );
     });

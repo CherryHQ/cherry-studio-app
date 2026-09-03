@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
+import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -11,6 +12,7 @@ import type {
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
+  initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
 };
@@ -234,6 +236,23 @@ describe('PaintingComposer', () => {
       status: 'idle',
     });
     expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
+  });
+
+  it('passes one-shot handoff params into the painting input', () => {
+    act(() => {
+      renderer = create(
+        <PaintingComposer
+          initialAttachments={[]}
+          initialDraft="Change the aspect ratio"
+          initialFiles={{ inputs: [], outputAspectRatio: 1, outputs: [] }}
+          initialParamValues={{ aspectRatio: '16:9' }}
+          isHandoff
+          painting={painting}
+        />,
+      );
+    });
+
+    expect(mockInputProps?.initialParamValues).toEqual({ aspectRatio: '16:9' });
   });
 
   it('replaces the persisted turn with a pending request and then its result', async () => {

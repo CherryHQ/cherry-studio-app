@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking } from 'react-native';
 
+import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { Painting } from '@/shared/data/types/painting';
@@ -83,12 +84,20 @@ export function usePaintingViewerActions({
   }, [alert, requestPhotoAccessAndSave, saveToPhotos, showOpenSettingsAlert, t, toast]);
 
   const remove = useCallback(() => {
-    const deletion = deletePaintings([painting.id]);
-    router.back();
-    void deletion.catch(() => {
-      toast.show({ label: t('painting.viewer.deleteFailed'), variant: 'danger' });
+    alert.confirm({
+      confirmLabel: t('common.delete'),
+      description: t('painting.viewer.deleteMessage'),
+      onConfirm: () => {
+        const deletion = deletePaintings([painting.id]);
+        router.back();
+        void deletion.catch(() => {
+          toast.show({ label: t('painting.viewer.deleteFailed'), variant: 'danger' });
+        });
+      },
+      role: 'destructive',
+      title: t('painting.viewer.deleteTitle'),
     });
-  }, [deletePaintings, painting.id, router, t, toast]);
+  }, [alert, deletePaintings, painting.id, router, t, toast]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.
@@ -96,10 +105,11 @@ export function usePaintingViewerActions({
   // with just the aspect-ratio directive, and the user reviews and sends it
   // manually.
   const openComposer = useCallback(
-    (draft: string) => {
+    (draft: string, paramValues?: ImageParamDraft) => {
       const handoff = createPaintingDraftHandoff({
         attachments: [createPaintingOutputAttachmentDraft(currentOutput)],
         draft,
+        ...(paramValues ? { paramValues } : {}),
       });
       router.push({ pathname: '/paintings', params: { handoff, paintingId: painting.id } });
     },
@@ -109,7 +119,8 @@ export function usePaintingViewerActions({
   const edit = useCallback(() => openComposer(''), [openComposer]);
 
   const resize = useCallback(
-    (ratio: string) => openComposer(t('painting.viewer.resizePrompt', { ratio })),
+    (ratio: string) =>
+      openComposer(t('painting.viewer.resizePrompt', { ratio }), { aspectRatio: ratio }),
     [openComposer, t],
   );
 

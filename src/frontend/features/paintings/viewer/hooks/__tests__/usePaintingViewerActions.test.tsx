@@ -233,8 +233,35 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('navigates back while deleting the painting through the data endpoint', async () => {
+  it('carries the selected aspect ratio into the AI expansion composer', () => {
+    actions?.resize('16:9');
+
+    expect(mockCreatePaintingDraftHandoff).toHaveBeenCalledWith({
+      attachments: [{ id: 'painting-output' }],
+      draft: 'painting.viewer.resizePrompt',
+      paramValues: { aspectRatio: '16:9' },
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      params: { handoff: 'handoff', paintingId: painting.id },
+      pathname: '/paintings',
+    });
+  });
+
+  it('confirms before deleting and navigating back', async () => {
     actions?.remove();
+
+    expect(mockAlertConfirm).toHaveBeenCalledWith({
+      confirmLabel: 'common.delete',
+      description: 'painting.viewer.deleteMessage',
+      onConfirm: expect.any(Function),
+      role: 'destructive',
+      title: 'painting.viewer.deleteTitle',
+    });
+    expect(mockRouterBack).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as { onConfirm: () => void };
+    act(onConfirm);
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -253,6 +280,8 @@ describe('usePaintingViewerActions', () => {
     mockDelete.mockRejectedValueOnce(new Error('delete failed'));
 
     actions?.remove();
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as { onConfirm: () => void };
+    act(onConfirm);
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

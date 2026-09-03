@@ -21,12 +21,13 @@ import {
 const logger = loggerService.withContext('ComposerMenu');
 
 /**
- * The ＋ menu: camera, photos, files, plus whatever the caller appends below a
- * separator. Every row closes the menu; the media rows hand off to a system
- * picker rather than drawing anything here.
+ * The ＋ menu: camera, photos, optionally files, plus whatever the caller
+ * appends below a separator. Every row closes the menu; the media rows hand off
+ * to a system picker rather than drawing anything here.
  *
  * `children` are `Composer.Menu.Item`s — chat puts its tools there; painting
- * has nothing to add, so its menu is media only.
+ * has nothing to add and narrows media to images, so unsupported documents are
+ * never offered there.
  *
  * Opening it leaves the keyboard **up**. Choosing camera, photos, or files
  * closes the menu, dismisses and blurs the field, then opens the system picker;
@@ -40,7 +41,11 @@ const logger = loggerService.withContext('ComposerMenu');
  * the ＋ button and clears the keyboard on its own, so it never needed that
  * space.
  */
-export function ComposerMenu({ children }: PropsWithChildren) {
+type ComposerMenuProps = PropsWithChildren<{
+  media?: 'all' | 'images';
+}>;
+
+export function ComposerMenu({ children, media = 'all' }: ComposerMenuProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
@@ -130,11 +135,13 @@ export function ComposerMenu({ children }: PropsWithChildren) {
         label={t('chat.media.photos')}
         onPress={() => present('photo', openPhotoLibrary)}
       />
-      <Composer.Menu.Item
-        icon={<FileIcon className="size-5 text-foreground" />}
-        label={t('chat.media.file')}
-        onPress={() => present('document', openDocumentPicker)}
-      />
+      {media === 'all' ? (
+        <Composer.Menu.Item
+          icon={<FileIcon className="size-5 text-foreground" />}
+          label={t('chat.media.file')}
+          onPress={() => present('document', openDocumentPicker)}
+        />
+      ) : null}
       {children ? (
         <>
           <View className="my-1 h-px bg-border" />

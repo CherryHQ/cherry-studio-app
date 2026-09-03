@@ -9,7 +9,10 @@ import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
-import { imageParamsResolutionLabel } from '@/frontend/data/paintings/imageGenerationParams';
+import {
+  type ImageParamDraft,
+  imageParamsResolutionLabel,
+} from '@/frontend/data/paintings/imageGenerationParams';
 import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
@@ -33,6 +36,7 @@ export function PaintingComposer({
   initialAttachments,
   initialDraft,
   initialFiles,
+  initialParamValues,
   isHandoff,
   onReceipt,
   painting,
@@ -40,6 +44,7 @@ export function PaintingComposer({
   initialAttachments: readonly ComposerInitialAttachment[];
   initialDraft: string;
   initialFiles: ResolvedPaintingFiles;
+  initialParamValues?: ImageParamDraft;
   isHandoff: boolean;
   onReceipt?: (paintingId: string | undefined) => void;
   painting?: Painting;
@@ -56,13 +61,14 @@ export function PaintingComposer({
     paintingId: receiptId,
   });
   const jobs = usePaintingJobs();
-  const initialParamValues = receiptId
+  const restoredParamValues = receiptId
     ? paintingJobParamValues(
         jobs.activeByPaintingId.get(receiptId) ?? jobs.interruptedByPaintingId.get(receiptId),
       )
     : undefined;
+  const seededParamValues = initialParamValues ?? restoredParamValues;
   const generationResolution =
-    imageParamsResolutionLabel(generation.paramValues ?? initialParamValues) ??
+    imageParamsResolutionLabel(generation.paramValues ?? seededParamValues) ??
     t('painting.settings.option.auto');
   const outputs = generation.outputs.length > 0 ? generation.outputs : initialFiles.outputs;
   const firstOutput = outputs[0];
@@ -176,7 +182,7 @@ export function PaintingComposer({
       >
         <ComposerDock onHeightChange={handleInputHeightChange}>
           <PaintingInput
-            initialParamValues={initialParamValues}
+            initialParamValues={seededParamValues}
             onCancel={generation.cancel}
             onGenerate={handleGenerate}
             painting={painting}

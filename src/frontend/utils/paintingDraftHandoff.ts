@@ -1,10 +1,12 @@
 import * as Crypto from 'expo-crypto';
 
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 
 export type PaintingDraftHandoff = {
   attachments: readonly ComposerInitialAttachment[];
   draft?: string;
+  paramValues?: ImageParamDraft;
 };
 
 const handoffs = new Map<string, PaintingDraftHandoff>();
@@ -14,6 +16,7 @@ export function createPaintingDraftHandoff(payload: PaintingDraftHandoff): strin
   handoffs.set(token, {
     ...payload,
     attachments: payload.attachments.map((attachment) => ({ ...attachment })),
+    ...(payload.paramValues ? { paramValues: { ...payload.paramValues } } : {}),
   });
   return token;
 }

@@ -43,6 +43,20 @@ export function resolveImageGenerationMode(
 }
 
 /**
+ * Whether a model can serve the generic painting composer for the requested
+ * text-to-image or image-edit interaction. Legacy models without a Registry
+ * declaration remain eligible for text-to-image, matching the Agent tool.
+ */
+export function supportsPaintingGenerationMode(
+  support: ImageGenerationSupport | undefined,
+  mode: Extract<ImageGenerationMode, 'edit' | 'generate'>,
+): boolean {
+  return mode === 'generate'
+    ? support === undefined || Boolean(support.modes.generate)
+    : Boolean(support?.modes.edit);
+}
+
+/**
  * Shape of the image a request will produce, read back from the params that
  * asked for it. A placeholder tile has no image to measure, so this is the only
  * way to size it before the generation lands — and every key here is optional
