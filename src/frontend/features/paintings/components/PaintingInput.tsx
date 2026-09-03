@@ -1,5 +1,5 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
-import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { type ImageGenerationMode } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,10 +28,12 @@ import {
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
+  supportsPaintingGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import type {
   PaintingGenerationInput,
@@ -43,9 +45,9 @@ import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
 type PaintingInputProps = {
   /**
-   * Params to restore rather than derive — the settings an interrupted attempt
-   * ran with. They arrive a beat after mount (they live in the job ledger), so
-   * they are applied as a one-shot override of the model defaults.
+   * Params to restore rather than derive — either an interrupted attempt's
+   * ledger values or a one-shot handoff such as an AI expansion ratio. They can
+   * arrive after mount, so they override model defaults once.
    */
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
@@ -85,11 +87,11 @@ export function PaintingInput({
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
   const { model: selectedModel } = useModelById(selectedModelId);
-  const { models: enabledImageModels } = useModels({
-    capability: MODEL_CAPABILITY.IMAGE_GENERATION,
+  const { models: enabledModels } = useModels({
     enabled: true,
     isSystemSupported: true,
   });
+  const enabledImageModels = enabledModels.filter(isImageGenerationModel);
   const { providers: enabledProviders } = useProviders({ enabled: true });
   const enabledProviderIds = new Set(enabledProviders.map((provider) => provider.id));
   const isSelectedModelAvailable = enabledImageModels.some(
@@ -102,11 +104,19 @@ export function PaintingInput({
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
   const imageAttachmentCount =
     attachments?.filter((attachment) => attachment.kind === 'image').length ?? 0;
-  const resolvedMode = useMemo(
-    () => resolveImageGenerationMode(selectedModel?.imageGeneration, imageAttachmentCount > 0),
-    [imageAttachmentCount, selectedModel?.imageGeneration],
+  const requestedMode = imageAttachmentCount > 0 ? 'edit' : 'generate';
+  const isSelectedModelModeCompatible = supportsPaintingGenerationMode(
+    selectedModel,
+    requestedMode,
   );
-  const generationMode = resolvedMode?.mode ?? (imageAttachmentCount > 0 ? 'edit' : 'generate');
+  const resolvedMode = useMemo(
+    () =>
+      isSelectedModelModeCompatible
+        ? resolveImageGenerationMode(selectedModel?.imageGeneration, imageAttachmentCount > 0)
+        : undefined,
+    [imageAttachmentCount, isSelectedModelModeCompatible, selectedModel?.imageGeneration],
+  );
+  const generationMode = resolvedMode?.mode ?? requestedMode;
   const paramValues = reconcileImageParamDraft(paramState?.values ?? {}, resolvedMode);
   const paramFields = getImageParamFields(resolvedMode);
   const settingsSummary = imageParamSummary(t, paramFields, paramValues);
@@ -123,10 +133,12 @@ export function PaintingInput({
     if (paramState !== null) {
       setParamState(null);
     }
-  } else if (pendingSeed) {
+  } else if (pendingSeed && selectedModel && isSelectedModelModeCompatible) {
     // Restore branch, checked first: by the time the interrupted attempt's
     // params load, the draft above has already reconciled to the model's
-    // defaults, so the equality guard would never let them through.
+    // defaults, so the equality guard would never let them through. Wait for a
+    // compatible model before consuming the seed so a late model query or an
+    // edit-only switch cannot discard a resize handoff.
     setSeedApplied(true);
     setParamState({
       mode: generationMode,
@@ -146,6 +158,10 @@ export function PaintingInput({
     setSelectedModelId(item.modelId);
     setIsModelPickerOpen(false);
   }, []);
+  const isModelVisible = useCallback(
+    (item: ModelPickerModelItem) => supportsPaintingGenerationMode(item.model, requestedMode),
+    [requestedMode],
+  );
   const handleAddProvider = useCallback(() => {
     setIsModelPickerOpen(false);
     openProviderSetup();
@@ -176,11 +192,15 @@ export function PaintingInput({
       const submittedImageCount = attachments.filter(
         (attachment) => attachment.kind === 'image',
       ).length;
+      const requestedSubmittedMode = submittedImageCount > 0 ? 'edit' : 'generate';
+      if (!supportsPaintingGenerationMode(selectedModel, requestedSubmittedMode)) {
+        throw new PaintingInputValidationError('painting.input.incompatibleModel', {});
+      }
       const submittedMode = resolveImageGenerationMode(
         selectedModel?.imageGeneration,
         submittedImageCount > 0,
       );
-      const mode = submittedMode?.mode ?? (submittedImageCount > 0 ? 'edit' : 'generate');
+      const mode = submittedMode?.mode ?? requestedSubmittedMode;
       if (
         submittedMode?.definition.maxInputImages !== undefined &&
         submittedImageCount > submittedMode.definition.maxInputImages
@@ -243,17 +263,26 @@ export function PaintingInput({
         // `isPromptValid` already carries the promptless case, so this is the
         // whole gate: a model that can run, valid params, nothing in flight.
         canSend={
-          Boolean(selectedModelId) && isSelectedModelAvailable && isPromptValid && status === 'idle'
+          Boolean(selectedModelId) &&
+          isSelectedModelAvailable &&
+          isPromptValid &&
+          status === 'idle' &&
+          isSelectedModelModeCompatible
         }
         getSendErrorLabel={getSendErrorLabel}
+        labels={{
+          send: t('painting.input.generate'),
+          sendFailed: t('painting.input.generateFailed'),
+          stop: t('painting.input.stop'),
+        }}
         onSend={handleSend}
         onStop={onCancel}
         streaming={status === 'generating'}
       >
         <ComposerAttachments />
-        <ComposerField />
+        <ComposerField placeholder={t('painting.input.placeholder')} />
         <Composer.Toolbar>
-          <ComposerMenu />
+          <ComposerMenu media="images" />
           {resolvedMode && paramFields.length > 0 ? (
             <Composer.Action
               accessibilityLabel={
@@ -278,7 +307,11 @@ export function PaintingInput({
                 />
               ) : undefined
             }
-            label={selectedModelLabel}
+            label={
+              selectedModel && !isSelectedModelModeCompatible
+                ? t('painting.input.selectCompatibleModel')
+                : selectedModelLabel
+            }
             onPress={() => setIsModelPickerOpen(true)}
           />
           <Composer.Send />
@@ -294,12 +327,15 @@ export function PaintingInput({
       ) : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
+          emptyText={t('painting.input.noCompatibleModels')}
+          isModelVisible={isModelVisible}
           modelType="image"
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
+          title={t('settings.model.painting.title')}
         />
       ) : null}
     </>

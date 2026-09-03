@@ -53,10 +53,19 @@ jest.mock('../../../utils/paintingOutputAttachment', () => ({
     mockCreatePaintingOutputAttachmentDraft(output),
 }));
 
-const painting = {
+const painting: Painting = {
+  createdAt: '2026-01-01T00:00:00.000Z',
+  files: {
+    input: [],
+    output: ['00000000-0000-7000-8000-000000000002', '00000000-0000-7000-8000-000000000003'],
+  },
   id: '00000000-0000-7000-8000-000000000001',
+  modelId: 'provider::image-model',
+  orderKey: 'painting-1',
   prompt: 'Draw a cherry',
-} as Painting;
+  providerId: 'provider',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
 const mockCancelGeneration = jest.fn(async () => undefined);
 const dataApi = {
   delete: mockDelete,
@@ -195,6 +204,39 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
+  it('reports when a native photo-save request is denied without saving', async () => {
+    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+    mockRequestPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+
+    await act(async () => actions?.download());
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
+      onConfirm: () => Promise<void>;
+    };
+    await act(onConfirm);
+
+    expect(mockCreateAsset).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.saveAccessDenied',
+      variant: 'danger',
+    });
+  });
+
+  it('reports when system settings cannot be opened', async () => {
+    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: false });
+    mockOpenSettings.mockRejectedValueOnce(new Error('settings unavailable'));
+
+    await act(async () => actions?.download());
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
+      onConfirm: () => Promise<void>;
+    };
+    await act(onConfirm);
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'painting.viewer.openSettingsFailed',
+      variant: 'danger',
+    });
+  });
+
   it('shows a Toast after saving to Photos', async () => {
     await act(async () => actions?.download());
 
@@ -233,8 +275,35 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('navigates back while deleting the painting through the data endpoint', async () => {
+  it('carries the selected aspect ratio into the AI expansion composer', () => {
+    actions?.resize('16:9');
+
+    expect(mockCreatePaintingDraftHandoff).toHaveBeenCalledWith({
+      attachments: [{ id: 'painting-output' }],
+      draft: 'painting.viewer.resizePrompt',
+      paramValues: { aspectRatio: '16:9' },
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      params: { handoff: 'handoff', paintingId: painting.id },
+      pathname: '/paintings',
+    });
+  });
+
+  it('makes multi-output deletion scope explicit before navigating back', async () => {
     actions?.remove();
+
+    expect(mockAlertConfirm).toHaveBeenCalledWith({
+      confirmLabel: 'common.delete',
+      description: 'painting.viewer.deleteGenerationMessage',
+      onConfirm: expect.any(Function),
+      role: 'destructive',
+      title: 'painting.viewer.deleteGenerationTitle',
+    });
+    expect(mockRouterBack).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
+
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as { onConfirm: () => void };
+    act(onConfirm);
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -253,6 +322,8 @@ describe('usePaintingViewerActions', () => {
     mockDelete.mockRejectedValueOnce(new Error('delete failed'));
 
     actions?.remove();
+    const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as { onConfirm: () => void };
+    act(onConfirm);
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

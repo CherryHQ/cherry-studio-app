@@ -1,10 +1,12 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
-import { Spinner } from '@cherrystudio/ui/components';
-import { useLocalSearchParams } from 'expo-router';
+import { ContentState, Spinner } from '@cherrystudio/ui/components';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { RouteHeader } from '@/frontend/appShell/header';
 import {
   type ResolvedPaintingAttachment,
   usePainting,
@@ -12,6 +14,7 @@ import {
 } from '@/frontend/data/paintings/usePaintings';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -21,6 +24,7 @@ import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     paintingId?: string | string[];
@@ -29,21 +33,45 @@ export function PaintingViewerScreen() {
   const fileEntryId = getSingleRouteParam(params.fileEntryId);
   const painting = usePainting(paintingId);
   const files = useResolvedPaintingFiles(painting.data);
-  const current = files.data?.outputs.find((output) => output.fileEntryId === fileEntryId);
+  const outputs = files.data?.outputs ?? [];
+  const currentIndex = outputs.findIndex((output) => output.fileEntryId === fileEntryId);
+  const current = currentIndex >= 0 ? outputs[currentIndex] : undefined;
   const constantWhite = useThemeColor('constant-white');
+  const closeViewer = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/drawings');
+    }
+  }, [router]);
 
   if (!painting.data || !current) {
+    if (!painting.isLoading && !files.isLoading) {
+      return (
+        <View className="flex-1 bg-background">
+          <StatusBar style="auto" />
+          <RouteHeader onBack={closeViewer} />
+          <View className="flex-1 justify-center px-8 py-16">
+            <ContentState.Error
+              description={t('painting.viewer.unavailableDescription')}
+              primaryAction={{ children: t('common.back'), onPress: closeViewer }}
+              prominence="prominent"
+              title={t('painting.viewer.unavailable')}
+            />
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View className="flex-1 bg-constant-black">
         <StatusBar style="light" />
         <View className="flex-1 items-center justify-center">
-          {painting.isLoading || files.isLoading ? (
-            <Spinner
-              accessibilityLabel={t('painting.viewer.loading')}
-              accessibilityRole="progressbar"
-              color={constantWhite}
-            />
-          ) : null}
+          <Spinner
+            accessibilityLabel={t('painting.viewer.loading')}
+            accessibilityRole="progressbar"
+            color={constantWhite}
+          />
         </View>
       </View>
     );
@@ -52,16 +80,25 @@ export function PaintingViewerScreen() {
   return (
     <View className="flex-1 bg-constant-black">
       <StatusBar style="light" />
-      <PaintingViewerContent current={current} painting={painting.data} />
+      <PaintingViewerContent
+        current={current}
+        outputCount={outputs.length}
+        outputIndex={currentIndex + 1}
+        painting={painting.data}
+      />
     </View>
   );
 }
 
 function PaintingViewerContent({
   current,
+  outputCount,
+  outputIndex,
   painting,
 }: {
   current: ResolvedPaintingAttachment;
+  outputCount: number;
+  outputIndex: number;
   painting: Painting;
 }) {
   const { t } = useTranslation();
@@ -81,7 +118,14 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <PaintingViewerImage accessibilityLabel={t('painting.output')} uri={current.uri} />
+        <PaintingViewerImage
+          accessibilityLabel={paintingOutputAccessibilityLabel(t, {
+            count: outputCount,
+            index: outputIndex,
+            prompt: painting.prompt,
+          })}
+          uri={current.uri}
+        />
       </View>
     </>
   );

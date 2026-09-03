@@ -61,6 +61,7 @@ export function PaintingScreen() {
           initialAttachments={initialAttachments}
           initialDraft={initialDraft}
           initialFiles={paintingFiles}
+          initialParamValues={handoff?.paramValues}
           isHandoff={Boolean(handoff)}
           onReceipt={handleReceipt}
           painting={painting}

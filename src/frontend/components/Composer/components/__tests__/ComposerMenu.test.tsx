@@ -217,25 +217,37 @@ describe('ComposerMenu', () => {
     expect(mockPickDocument).not.toHaveBeenCalled();
   });
 
-  function render(children?: ReactNode) {
+  it('does not offer documents when the caller accepts images only', () => {
+    render(undefined, 'images');
+
+    expect(findMenuItem('chat.media.camera')).toBeDefined();
+    expect(findMenuItem('chat.media.photos')).toBeDefined();
+    expect(findMenuItem('chat.media.file')).toBeUndefined();
+  });
+
+  function render(children?: ReactNode, media: 'all' | 'images' = 'all') {
     act(() => {
       renderer = create(
         <ComposerProvider>
           <ComposerDock onHeightChange={jest.fn()} />
           <FieldProbe />
-          <ComposerMenu>{children}</ComposerMenu>
+          <ComposerMenu media={media}>{children}</ComposerMenu>
         </ComposerProvider>,
       );
     });
   }
 
   function press(label: string) {
-    const item = renderer?.root
-      .findAllByProps({ accessibilityLabel: label })
-      .find((node) => typeof node.props.onPress === 'function');
+    const item = findMenuItem(label);
 
     if (!item) throw new Error(`Missing menu item: ${label}`);
     item.props.onPress();
+  }
+
+  function findMenuItem(label: string) {
+    return renderer?.root
+      .findAllByProps({ accessibilityLabel: label })
+      .find((node) => typeof node.props.onPress === 'function');
   }
 
   function flushAnimationFrames() {

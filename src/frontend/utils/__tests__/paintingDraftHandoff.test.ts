@@ -27,14 +27,18 @@ describe('painting draft handoff', () => {
   });
 
   it('carries the draft through the handoff', () => {
+    const paramValues = { aspectRatio: '16:9' };
     const token = createPaintingDraftHandoff({
       attachments: [],
       draft: 'Change the aspect ratio to 1:1',
+      paramValues,
     });
+    paramValues.aspectRatio = '1:1';
 
     expect(consumePaintingDraftHandoff(token)).toEqual({
       attachments: [],
       draft: 'Change the aspect ratio to 1:1',
+      paramValues: { aspectRatio: '16:9' },
     });
   });
 

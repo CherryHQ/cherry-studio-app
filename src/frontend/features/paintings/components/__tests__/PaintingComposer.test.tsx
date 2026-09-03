@@ -1,6 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
+import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -11,6 +12,7 @@ import type {
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
+  initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
 };
@@ -86,7 +88,7 @@ const mockGeneration = {
   cancel: mockCancel,
   error: null as Error | null,
   generate: mockGenerate,
-  interruption: null as { message?: string } | null,
+  interruption: null as { reason: 'failed' | 'interrupted' } | null,
   outputs: [...result.outputs],
   paramValues: { size: '1664x928' },
   status: 'idle' as 'generating' | 'idle',
@@ -236,6 +238,23 @@ describe('PaintingComposer', () => {
     expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
   });
 
+  it('passes one-shot handoff params into the painting input', () => {
+    act(() => {
+      renderer = create(
+        <PaintingComposer
+          initialAttachments={[]}
+          initialDraft="Change the aspect ratio"
+          initialFiles={{ inputs: [], outputAspectRatio: 1, outputs: [] }}
+          initialParamValues={{ aspectRatio: '16:9' }}
+          isHandoff
+          painting={painting}
+        />,
+      );
+    });
+
+    expect(mockInputProps?.initialParamValues).toEqual({ aspectRatio: '16:9' });
+  });
+
   it('replaces the persisted turn with a pending request and then its result', async () => {
     let resolveGeneration: ((value: PaintingGenerationResult) => void) | undefined;
     mockGenerate.mockImplementationOnce(
@@ -289,6 +308,7 @@ describe('PaintingComposer', () => {
     });
     expect(mockMessageListProps?.messages[1].status).toBe('error');
     expect(mockAssistantProps?.error).toEqual(new Error('provider unavailable'));
+    expect(mockAssistantProps?.onRetry).toEqual(expect.any(Function));
 
     mockGeneration.error = null;
     mockGenerate.mockResolvedValueOnce(null);
@@ -298,11 +318,33 @@ describe('PaintingComposer', () => {
     expect(mockMessageListProps?.messages).toEqual([]);
   });
 
-  it('keeps an interrupted receipt in the message list with an empty composer', () => {
+  it('retries a failed active turn from its inline action', async () => {
+    renderComposer();
+    mockGenerate.mockImplementationOnce(async () => {
+      mockGeneration.error = new Error('provider unavailable');
+      throw mockGeneration.error;
+    });
+    await act(async () => {
+      await mockInputProps?.onGenerate(input).catch(() => undefined);
+    });
+
+    mockGeneration.error = null;
+    mockGenerate.mockResolvedValueOnce(result);
+    act(() => (mockAssistantProps?.onRetry as (() => void) | undefined)?.());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockGenerate).toHaveBeenLastCalledWith(input);
+  });
+
+  it('restores an interrupted receipt in the message list and composer', () => {
     const receipt = { ...painting, files: { input: ['input-1'], output: [] } };
     const pendingFiles = { inputs: files.inputs, outputs: [] };
     mockGeneration.outputs = [];
-    mockGeneration.interruption = { message: 'Invalid JSON response' };
+    mockGeneration.interruption = { reason: 'failed' };
     act(() => {
       renderer = create(
         <PaintingComposer
@@ -329,9 +371,13 @@ describe('PaintingComposer', () => {
     ]);
     expect(mockMessageListProps?.messages[1].status).toBe('error');
     expect(mockAssistantProps).toMatchObject({
-      interruption: { message: 'Invalid JSON response' },
+      interruption: { reason: 'failed' },
       paintingId: receipt.id,
+      prompt: receipt.prompt,
     });
-    expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: files.inputs,
+      initialDraft: receipt.prompt,
+    });
   });
 });

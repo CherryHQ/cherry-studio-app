@@ -102,15 +102,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Cherry Studio to preview and select photos for chat messages.",
-          "cameraPermission": "Allow Cherry Studio to open the camera for chat messages.",
+          "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
+          "cameraPermission": "Allow Cherry Studio to open the camera for drawings and chat messages.",
           "microphonePermission": false
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Cherry Studio to preview photos for chat messages.",
+          "photosPermission": "Allow Cherry Studio to preview photos for drawings and chat messages.",
           "savePhotosPermission": "Allow Cherry Studio to save photos.",
           "preventAutomaticLimitedAccessAlert": true,
           "granularPermissions": ["photo"]

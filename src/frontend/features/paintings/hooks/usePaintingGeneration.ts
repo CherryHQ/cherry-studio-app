@@ -6,7 +6,8 @@ import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/uti
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
-  paintingJobFailureMessage,
+  type PaintingJobInterruptionReason,
+  paintingJobInterruptionReason,
   paintingJobParamValues,
   usePaintingJobs,
 } from '@/frontend/data/paintings/usePaintingJobs';
@@ -23,9 +24,10 @@ export type PaintingGenerationStatus = 'idle' | 'generating';
 /**
  * The receipt exists but holds no images and nothing is running for it — the
  * previous attempt died with the app, timed out, or the provider refused.
- * `message` is provider text when there is any worth repeating.
+ * The closed reason selects localized recovery copy while provider diagnostics
+ * remain available only through the persisted job ledger.
  */
-export type PaintingInterruption = { message?: string };
+export type PaintingInterruption = { reason: PaintingJobInterruptionReason };
 
 export type PaintingOutput = PaintingGenerationOutput;
 
@@ -117,7 +119,7 @@ export function usePaintingGeneration({
     outputs.length === 0;
   const interruptedJob = paintingId ? jobs.interruptedByPaintingId.get(paintingId) : undefined;
   const interruption: PaintingInterruption | null = useMemo(
-    () => (isInterrupted ? { message: paintingJobFailureMessage(interruptedJob) } : null),
+    () => (isInterrupted ? { reason: paintingJobInterruptionReason(interruptedJob) } : null),
     [interruptedJob, isInterrupted],
   );
 

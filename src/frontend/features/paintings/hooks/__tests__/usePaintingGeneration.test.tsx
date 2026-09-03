@@ -424,7 +424,7 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it('reports an image-less receipt with nothing running as interrupted, carrying the provider text', async () => {
+  it('reports a failed image-less receipt without projecting provider diagnostics', async () => {
     interruptedJobs = [
       jobSnapshot({
         error: { code: 'JOB_HANDLER_THREW', message: 'Invalid JSON response', retryable: true },
@@ -435,10 +435,10 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ message: 'Invalid JSON response' });
+    expect(api?.interruption).toEqual({ reason: 'failed' });
   });
 
-  it('keeps a cancelled job wordless: its message never went through i18n', async () => {
+  it('reports a cancelled recovery as an interruption', async () => {
     interruptedJobs = [
       jobSnapshot({
         error: {
@@ -453,7 +453,7 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ message: undefined });
+    expect(api?.interruption).toEqual({ reason: 'interrupted' });
   });
 
   it('retries into the interrupted receipt instead of minting a second painting', async () => {

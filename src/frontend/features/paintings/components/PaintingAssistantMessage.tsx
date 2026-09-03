@@ -1,5 +1,5 @@
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Button, Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 
 import type {
   PaintingGenerationStatus,
@@ -34,8 +35,10 @@ export function PaintingAssistantMessage({
   aspectRatio,
   error,
   interruption,
+  onRetry,
   outputs,
   paintingId,
+  prompt,
   resolution,
   status,
 }: {
@@ -43,8 +46,10 @@ export function PaintingAssistantMessage({
   aspectRatio: number;
   error: Error | null;
   interruption: PaintingInterruption | null;
+  onRetry?: () => void;
   outputs: readonly PaintingOutput[];
   paintingId?: string;
+  prompt: string;
   resolution: string;
   status: PaintingGenerationStatus;
 }) {
@@ -90,19 +95,30 @@ export function PaintingAssistantMessage({
   }, [completeFade, resultOpacity]);
   const resultStyle = useAnimatedStyle(() => ({ opacity: resultOpacity.get() }));
 
-  const failureMessage = error?.message ?? interruption?.message;
   if (status !== 'generating' && (error || interruption)) {
+    const didFail = Boolean(error) || interruption?.reason === 'failed';
+
     return (
       <View className="w-full">
         <View className="flex-row items-start gap-2 rounded-md border border-border bg-card p-3">
           <CircleAlertIcon className="mt-0.5 size-5 text-destructive" />
-          <View className="min-w-0 flex-1 gap-0.5">
+          <View className="min-w-0 flex-1 items-start gap-2">
             <Text accessibilityRole="alert" className="font-medium text-foreground text-sm">
-              {interruption ? t('painting.status.interrupted') : t('painting.status.failed')}
+              {t(didFail ? 'painting.status.failed' : 'painting.status.interrupted')}
             </Text>
             <Text className="text-foreground-tertiary text-xs">
-              {failureMessage || t('painting.status.interruptedHint')}
+              {t(didFail ? 'painting.status.failedHint' : 'painting.status.interruptedHint')}
             </Text>
+            {onRetry ? (
+              <Button
+                accessibilityLabel={t('painting.status.retry')}
+                onPress={onRetry}
+                size="sm"
+                variant="secondary"
+              >
+                <Button.Label>{t('painting.status.retry')}</Button.Label>
+              </Button>
+            ) : null}
           </View>
         </View>
       </View>
@@ -120,7 +136,11 @@ export function PaintingAssistantMessage({
   const results = visibleOutputs.map((output, index) => {
     const result = (
       <Pressable
-        accessibilityLabel={t('painting.output')}
+        accessibilityLabel={paintingOutputAccessibilityLabel(t, {
+          count: visibleOutputs.length,
+          index: index + 1,
+          prompt,
+        })}
         accessibilityElementsHidden={!isResultInteractive}
         accessibilityRole={paintingId ? 'button' : 'image'}
         className="relative h-full w-full overflow-hidden rounded-xl border-continuous bg-card active:opacity-80"

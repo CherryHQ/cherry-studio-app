@@ -29,6 +29,8 @@ export type PaintingJobs = {
   interruptedByPaintingId: ReadonlyMap<string, JobSnapshot>;
 };
 
+export type PaintingJobInterruptionReason = 'failed' | 'interrupted';
+
 /**
  * The gallery's live view of `painting.generate`. An output-less painting is
  * "generating" when it appears in {@link PaintingJobs.activeByPaintingId} and
@@ -97,13 +99,13 @@ export function usePaintingJobs(): PaintingJobs {
 }
 
 /**
- * Provider text worth putting in front of the user. A cancelled job carries an
- * internal English string (`Cancelled by startup recovery`, `Cancelled by
- * user`) that never went through i18n, so only genuine failures speak for
- * themselves; the caller supplies its own copy for the rest.
+ * Maps persisted job state to a closed set of presentation reasons. Diagnostic
+ * messages stay in the ledger and are never rendered inline.
  */
-export function paintingJobFailureMessage(job: JobSnapshot | undefined): string | undefined {
-  return job?.status === 'failed' ? job.error?.message : undefined;
+export function paintingJobInterruptionReason(
+  job: JobSnapshot | undefined,
+): PaintingJobInterruptionReason {
+  return job?.status === 'failed' ? 'failed' : 'interrupted';
 }
 
 export function paintingJobParamValues(job: JobSnapshot | undefined): ParamValues | undefined {

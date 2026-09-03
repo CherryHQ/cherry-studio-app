@@ -6,7 +6,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { JobSnapshot } from '@/shared/data/api/schemas/jobs';
 import type { ApiClient } from '@/shared/data/api/types';
 
-import { paintingJobFailureMessage, usePaintingJobs } from '../usePaintingJobs';
+import { paintingJobInterruptionReason, usePaintingJobs } from '../usePaintingJobs';
 
 function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
   return {
@@ -172,18 +172,18 @@ describe('usePaintingJobs', () => {
   });
 });
 
-describe('paintingJobFailureMessage', () => {
-  it('repeats provider text but never the internal cancellation wording', () => {
+describe('paintingJobInterruptionReason', () => {
+  it('maps diagnostics to a closed user-facing reason', () => {
     expect(
-      paintingJobFailureMessage(
+      paintingJobInterruptionReason(
         jobSnapshot({
           error: { code: 'JOB_HANDLER_THREW', message: 'Invalid JSON response', retryable: true },
           status: 'failed',
         }),
       ),
-    ).toBe('Invalid JSON response');
+    ).toBe('failed');
     expect(
-      paintingJobFailureMessage(
+      paintingJobInterruptionReason(
         jobSnapshot({
           error: {
             code: 'JOB_CANCELLED',
@@ -193,7 +193,7 @@ describe('paintingJobFailureMessage', () => {
           status: 'cancelled',
         }),
       ),
-    ).toBeUndefined();
-    expect(paintingJobFailureMessage(undefined)).toBeUndefined();
+    ).toBe('interrupted');
+    expect(paintingJobInterruptionReason(undefined)).toBe('interrupted');
   });
 });

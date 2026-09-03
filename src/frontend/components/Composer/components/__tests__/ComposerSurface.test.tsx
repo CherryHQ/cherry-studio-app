@@ -17,6 +17,7 @@ import { ComposerSurface } from '../ComposerSurface';
 type MockComposerProps = {
   canSend?: boolean;
   children?: ReactNode;
+  labels?: { send: string; stop: string };
   onSend: () => Promise<void> | void;
   value: string;
 };
@@ -140,6 +141,33 @@ describe('ComposerSurface', () => {
     expect(mockToastShow).toHaveBeenCalledTimes(1);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.input.sendFailed',
+      variant: 'danger',
+    });
+  });
+
+  it('uses caller-owned action and failure labels', async () => {
+    const onSend = jest.fn(async () => {
+      throw new Error('generation failed');
+    });
+    render(
+      <ComposerSurface
+        labels={{ send: 'Generate image', sendFailed: 'Image failed', stop: 'Stop generating' }}
+        onSend={onSend}
+        onStop={jest.fn()}
+        streaming={false}
+      />,
+      'paint',
+    );
+
+    expect(mockComposerProps?.labels).toEqual({
+      send: 'Generate image',
+      stop: 'Stop generating',
+    });
+
+    await act(async () => mockComposerProps?.onSend());
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'Image failed',
       variant: 'danger',
     });
   });
