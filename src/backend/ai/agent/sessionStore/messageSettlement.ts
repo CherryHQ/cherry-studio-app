@@ -9,7 +9,8 @@ export function interruptNonTerminalToolParts(
   return parts.map((part) => {
     if (
       part.type !== 'tool' ||
-      (part.state !== 'input-available' &&
+      (part.state !== 'input-streaming' &&
+        part.state !== 'input-available' &&
         part.state !== 'awaiting-approval' &&
         part.state !== 'running')
     ) {

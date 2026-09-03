@@ -76,12 +76,33 @@ describe('WriteFileToolPart', () => {
     expect(renderer.root.findAllByType('FileEntryPreview')).toHaveLength(0);
   });
 
-  it('falls back to the generic rendering while the write is still running', () => {
+  it('shows file content generation before complete arguments arrive', () => {
+    const renderer = render(toolPart({ input: undefined, state: 'input-streaming' }));
+
+    expect(renderer.root.findAllByType('GenericToolPart')).toHaveLength(0);
+    expect(renderer.root.findAllByType('ValueSection')).toHaveLength(0);
+    expect(renderer.root.findByProps({ testID: 'write-file-tool-part' }).props).toMatchObject({
+      state: 'running',
+      statusText: 'chat.builtinTool.file.generating',
+    });
+  });
+
+  it('shows the filename but not the file body while writing', () => {
     const renderer = render(
-      toolPart({ input: { filename: 'report.md' }, state: 'input-available' }),
+      toolPart({
+        input: { filename: 'report.md', content: '<html>large generated document</html>' },
+        state: 'input-available',
+      }),
     );
 
-    expect(renderer.root.findByType('GenericToolPart')).toBeDefined();
+    expect(renderer.root.findAllByType('GenericToolPart')).toHaveLength(0);
+    expect(renderer.root.findByProps({ testID: 'write-file-tool-part' }).props).toMatchObject({
+      state: 'running',
+      statusText: 'chat.builtinTool.file.writing',
+    });
+    expect(renderer.root.findByType('ValueSection').props.value).toEqual({
+      'chat.builtinTool.file.filename': 'report.md',
+    });
   });
 });
 

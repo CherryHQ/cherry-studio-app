@@ -87,6 +87,8 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
   } as const;
 
   switch (part.state) {
+    case 'input-streaming':
+      return { ...base, state: 'input-streaming' } as CherryMessagePart;
     case 'input-available':
     case 'running':
       return { ...base, state: 'input-available' } as CherryMessagePart;

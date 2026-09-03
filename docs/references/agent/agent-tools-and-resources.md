@@ -354,11 +354,12 @@ JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and 
 trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
 adapters are semantic ports.
 
-Cloud and LAN desktop control may reuse the user-interface concept of an approval request, but they
-do not execute Mobile Agents and must own separate identities, policy, transport, and audit state.
-Those future Remote Agent tools are owned and executed by the remote Agent service. They are
-different from a local Agent's Streamable HTTP MCP tools: the latter remain in the local Host/Pi
-tool loop, while only their individual MCP request crosses to a remote endpoint.
+The planned PC Agent Controller may reuse the normalized application presentation of a tool or
+approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps
+their opaque identities, lifecycle, approval requests, and resource results into Agent Protocol
+values; it does not register them as local `RuntimeTool` callbacks. They are different from a local
+Agent's Streamable HTTP MCP tools: the latter remain in the local Host/Pi tool loop, while only their
+individual MCP request crosses to a remote endpoint.
 
 Desktop also keeps pending approvals in process memory, emits a terminal denied tool output when the
 user refuses a call, finalizes non-terminal tool parts when a stream is interrupted, and omits an

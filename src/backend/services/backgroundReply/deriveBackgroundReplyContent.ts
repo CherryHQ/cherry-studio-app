@@ -134,7 +134,9 @@ function getToolName(part: ToolPart): string {
 }
 
 function isActiveToolPart(part: ToolPart): boolean {
-  return part.state === 'input-available' || part.state === 'running';
+  return (
+    part.state === 'input-streaming' || part.state === 'input-available' || part.state === 'running'
+  );
 }
 
 function isToolPart(part: AgentMessagePart): part is ToolPart {

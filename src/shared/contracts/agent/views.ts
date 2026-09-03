@@ -291,6 +291,7 @@ const AgentToolMessagePartSchema = z
     providerName: z.string(),
     displayName: z.string(),
     state: z.enum([
+      'input-streaming',
       'input-available',
       'awaiting-approval',
       'running',
