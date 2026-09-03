@@ -18,6 +18,11 @@
       "infoPlist": {
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add and update calendar events when you ask the assistant.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
+        "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to Cherry Studio on your local network.",
+        "NSBonjourServices": ["_cherrystudio-api._tcp"],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
         "UIBackgroundModes": ["audio"],
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -73,6 +78,14 @@
       "expo-localization",
       "expo-sqlite",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Cherry Studio to scan a PC pairing QR code.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
         "expo-calendar",
         {
           "calendarPermission": "Allow Cherry Studio to access calendars when you ask the assistant.",
@@ -124,7 +137,8 @@
             "minSdkVersion": 26,
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
-            "buildToolsVersion": "36.0.0"
+            "buildToolsVersion": "36.0.0",
+            "usesCleartextTraffic": true
           },
           "ios": {
             "deploymentTarget": "17.0",
@@ -133,7 +147,8 @@
         }
       ],
       "./scripts/with-health-connect",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

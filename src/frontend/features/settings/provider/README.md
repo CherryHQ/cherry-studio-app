@@ -13,6 +13,7 @@ This page branch owns the `/settings/provider` list and its child pages.
 ## Organization
 
 - `catalog/` and `new/` own direct provider-list child pages.
+- `desktopSync/` owns provider import from a paired desktop device.
 - `detail/` owns `/settings/provider/[providerId]`; its `edit/`, `modelAdd/`, and `modelPull/`
   directories own the dynamic route's child pages.
 - `apiService/` owns API key, authentication, endpoint draft, dirty-state, and save behavior.
@@ -29,6 +30,13 @@ item in the recommended section; preset rows keep their explicit Add action. Bot
 `new/ProviderCreationScreen`, which renders the shared provider form before model synchronization. The
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
+
+## Desktop Provider Synchronization
+
+The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
+PC. Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
+only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
+ones to synchronize, and refreshes provider/model queries after the import transaction succeeds.
 
 ## Provider Form
 

@@ -51,6 +51,7 @@ describe('bundled SQLite migrations', () => {
         'agent_tool_binding',
         'ai_usage_record',
         'app_state',
+        'desktop_connection',
         'file_entry',
         'job',
         'mcp_server',
@@ -69,6 +70,17 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'disabled_tools',
         'headers',
+      ]);
+      expect(columnNames(database, 'desktop_connection')).toEqual([
+        'id',
+        'name',
+        'base_urls',
+        'active_base_url',
+        'desktop_version',
+        'status',
+        'last_fetched_at',
+        'created_at',
+        'updated_at',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'key',

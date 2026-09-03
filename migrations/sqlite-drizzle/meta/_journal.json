@@ -113,6 +113,13 @@
       "when": 1788336595250,
       "tag": "0015_agent-session-activity-and-fork-boundary",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788354124761,
+      "tag": "0016_desktop-connection",
+      "breakpoints": true
     }
   ]
 }

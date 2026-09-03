@@ -70,7 +70,7 @@ export type ReconcileProviderModelsResult = {
   removedIds: string[];
 };
 
-type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
+export type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
 type UpdateField = keyof UpdateModelDto;
 
 export const UPDATE_MODEL_FIELD_MAP: Array<UpdateField | [UpdateField, keyof InsertUserModelRow]> =
@@ -252,7 +252,7 @@ function presetDeltaToInsert(
   };
 }
 
-function buildCreateValues(input: CreateModelInput): ModelInputWithoutOrderKey {
+export function buildModelInsertValues(input: CreateModelInput): ModelInputWithoutOrderKey {
   if (!input.registryData?.presetModel) {
     return customInputToInsert(input);
   }
@@ -403,7 +403,7 @@ export class ModelService {
   async create(input: CreateModelInput): Promise<Model> {
     const row = (await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
-      return insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
+      return insertWithOrderKey(tx, userModelTable, buildModelInsertValues(input), {
         pkColumn: userModelTable.id,
         scope: eq(userModelTable.providerId, input.providerId),
       });
@@ -415,7 +415,7 @@ export class ModelService {
     if (inputs.length === 0) {
       return [];
     }
-    const values = inputs.map(buildCreateValues);
+    const values = inputs.map(buildModelInsertValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(tx, inputs.map(toCreateModelEndpointWrite));
       const result: UserModelRow[] = [];
@@ -711,7 +711,7 @@ export class ModelService {
       const registryData =
         model.registryData ??
         providerRegistryService.lookupModel(providerId, model.modelId, providerConfig);
-      return buildCreateValues({ ...model, providerId, registryData });
+      return buildModelInsertValues({ ...model, providerId, registryData });
     });
     const defaultIds = await this.getUserDefaultModelIds();
 
