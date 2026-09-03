@@ -13,21 +13,18 @@ This module owns provider model listing, connectivity checks, synchronization, a
 - `utils/` contains pure grouping and filtering helpers, synchronization previews, and the check's
   selection resolvers.
 
-`ProviderModelAddScreen` exposes synchronization and manual creation as modes of one page. The
-legacy pull route redirects into its synchronization mode. The detail list itself is browse-only and
-opens model creation from the header.
+The provider detail page exposes synchronization and manual creation as two independent header
+actions. `ProviderModelAddScreen` renders the task selected by the route without a mode switch. The
+legacy pull route redirects into the synchronization task.
 
-Provider setup hides the mode switch, requires an explicit model selection, and finishes on the
-validated `returnTo` href supplied by its entry point. Settings uses the provider list as the
-fallback. A synchronization that comes back with nothing to add reveals the switch and keeps it
-revealed: the provider is already created by then, and a self-hosted endpoint that serves chat
-without a model list still has to be given one model by hand.
+Provider setup starts with synchronization, requires an explicit model selection, and finishes on
+the validated `returnTo` href supplied by its entry point. Settings uses the provider list as the
+fallback. A provider that does not expose a model list stays in the synchronization task with retry
+guidance; manual creation remains available from the provider model page's separate Add action.
 
-Model management opened from provider detail lands on manual mode and returns to detail.
-Synchronization pulls the provider's whole remote catalogue the moment it opens, which is too much
-to spend on a header button that is just as often one model typed by hand. Switching to the
-synchronization tab still pulls, once per visit. A pulled catalogue starts with no proposed changes
-selected: choosing models is explicit, and the header action reports how many changes it will apply.
+Model synchronization pulls the provider's whole remote catalogue once per visit. A pulled catalogue
+starts with no proposed changes selected: choosing models is explicit, and the header action reports
+how many changes it will apply. Manual creation opens its own form and returns to provider detail.
 
 `useProviderModelPull` reports how a pull ended and shows nothing itself. The screen a pull runs on
 has room for a full state, so an alert or a toast from the hook would put the same sentence on

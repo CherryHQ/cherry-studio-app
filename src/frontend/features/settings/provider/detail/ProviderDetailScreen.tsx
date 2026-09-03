@@ -365,25 +365,37 @@ function ProviderDetailSettings({
     ],
     [canSubmitProvider, formMeta.isDirty, handleSave, isDeleting, isSaving, t],
   );
-  const openModelAddSettings = useCallback(() => {
-    if (!providerId) {
-      return;
-    }
-
+  const configuredProviderName = provider?.name;
+  const openModelSyncSettings = useCallback(() => {
     router.push({
       params: {
-        // Land on the manual tab: sync pulls the provider's whole remote
-        // catalogue the moment it opens, and "+" is just as often one model
-        // typed by hand. Switching to the sync tab still pulls, once.
-        mode: 'manual',
-        ...(provider?.name ? { providerName: provider.name } : {}),
+        mode: 'sync',
+        ...(configuredProviderName ? { providerName: configuredProviderName } : {}),
         providerId,
       },
       pathname: '/settings/provider/[providerId]/model-add',
     });
-  }, [provider, providerId, router]);
-  const modelAddActions = useMemo<HeaderToolbarAction[]>(
+  }, [configuredProviderName, providerId, router]);
+  const openModelAddSettings = useCallback(() => {
+    router.push({
+      params: {
+        mode: 'manual',
+        ...(configuredProviderName ? { providerName: configuredProviderName } : {}),
+        providerId,
+      },
+      pathname: '/settings/provider/[providerId]/model-add',
+    });
+  }, [configuredProviderName, providerId, router]);
+  const modelActions = useMemo<HeaderToolbarAction[]>(
     () => [
+      {
+        accessibilityLabel: t('settings.provider.models.syncTitle'),
+        disabled: !provider,
+        label: t('settings.provider.models.syncAction'),
+        key: 'sync-provider-models',
+        onPress: openModelSyncSettings,
+        type: 'label',
+      },
       {
         accessibilityLabel: t('settings.provider.models.addTitle'),
         disabled: !provider,
@@ -393,7 +405,7 @@ function ProviderDetailSettings({
         type: 'icon',
       },
     ],
-    [openModelAddSettings, provider, t],
+    [openModelAddSettings, openModelSyncSettings, provider, t],
   );
   const handleTabChange = useCallback(
     (tab: ProviderDetailTab) => {
@@ -421,7 +433,7 @@ function ProviderDetailSettings({
     <>
       <RouteHeader
         onBack={requestClose}
-        rightActions={activeTab === 'configuration' ? configurationSaveActions : modelAddActions}
+        rightActions={activeTab === 'configuration' ? configurationSaveActions : modelActions}
         title={
           // The route param is only there to name the page before the record
           // lands; once it has, it is what a rename shows up in.
@@ -519,6 +531,8 @@ function ProviderDetailSettings({
             isFiltered={isModelListFiltered}
             isLoading={isCustomProvider ? allProviderModelsQuery.isPending : modelsQuery.isPending}
             models={listedModels}
+            onAddModelManually={openModelAddSettings}
+            onPullModels={openModelSyncSettings}
             provider={provider}
           />
         </>

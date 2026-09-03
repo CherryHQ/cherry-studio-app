@@ -28,6 +28,8 @@ type ProviderModelListProps = {
   isFiltered?: boolean;
   isLoading: boolean;
   models: Model[];
+  onAddModelManually?: () => void;
+  onPullModels?: () => void;
   provider: Provider | undefined;
 };
 
@@ -37,6 +39,8 @@ export function ProviderModelList({
   isFiltered = false,
   isLoading,
   models,
+  onAddModelManually,
+  onPullModels,
   provider,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
@@ -90,7 +94,27 @@ export function ProviderModelList({
               {isLoading ? (
                 <ContentState.Loading layout="row" title={t('settings.provider.models.loading')} />
               ) : (
-                <ContentState.Empty layout="leading" title={t('settings.provider.models.empty')} />
+                <ContentState.Empty
+                  description={t('settings.provider.models.emptyDescription')}
+                  layout="leading"
+                  primaryAction={
+                    onPullModels
+                      ? {
+                          children: t('settings.provider.models.emptyAction'),
+                          onPress: onPullModels,
+                        }
+                      : undefined
+                  }
+                  secondaryAction={
+                    onAddModelManually
+                      ? {
+                          children: t('settings.provider.models.addTitle'),
+                          onPress: onAddModelManually,
+                        }
+                      : undefined
+                  }
+                  title={t('settings.provider.models.empty')}
+                />
               )}
             </ProviderModelStateCard>
           )

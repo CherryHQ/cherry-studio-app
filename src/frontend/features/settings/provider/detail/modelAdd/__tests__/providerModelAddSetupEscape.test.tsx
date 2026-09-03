@@ -4,10 +4,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { ProviderModelPullLoadResult } from '../../../models/hooks/useProviderModelPull';
 import ProviderModelAddScreen from '../ProviderModelAddScreen';
 
-const MODE_TABS_TEST_ID = 'model-add-mode-tabs';
-
 let mockSearchParams: Record<string, string> = {};
 let mockPullResult: ProviderModelPullLoadResult = 'failed';
+let mockHasConfiguredModels = false;
 let mockProvider: {
   authType: 'api-key';
   id: string;
@@ -55,6 +54,10 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockText>{children}</MockText>;
   }
 
+  function TextFieldDescription({ children }: { children?: ReactNode }) {
+    return <MockText>{children}</MockText>;
+  }
+
   function TextFieldLabel({ children }: { children?: ReactNode }) {
     return <MockText>{children}</MockText>;
   }
@@ -78,6 +81,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
 
   Button.Label = ButtonLabel;
+  TextField.Description = TextFieldDescription;
   TextField.Error = TextFieldError;
   TextField.Label = TextFieldLabel;
 
@@ -87,32 +91,39 @@ jest.mock('@cherrystudio/ui/components', () => {
     ContentState: {
       Empty: ({
         primaryAction,
+        secondaryAction,
         title,
       }: {
         primaryAction?: { onPress?: () => void };
+        secondaryAction?: { onPress?: () => void };
         title: ReactNode;
       }) => (
-        <MockText onPress={primaryAction?.onPress} testID="empty">
-          {title}
-        </MockText>
+        <MockView testID="empty">
+          <MockText onPress={primaryAction?.onPress} testID="empty-primary">
+            {title}
+          </MockText>
+          <MockText onPress={secondaryAction?.onPress} testID="empty-secondary" />
+        </MockView>
       ),
       Error: ({
         primaryAction,
+        secondaryAction,
         title,
       }: {
         primaryAction?: { onPress?: () => void };
+        secondaryAction?: { onPress?: () => void };
         title: ReactNode;
       }) => (
-        <MockText onPress={primaryAction?.onPress} testID="error">
-          {title}
-        </MockText>
+        <MockView testID="error">
+          <MockText onPress={primaryAction?.onPress} testID="error-primary">
+            {title}
+          </MockText>
+          <MockText onPress={secondaryAction?.onPress} testID="error-secondary" />
+        </MockView>
       ),
       Loading: ({ title }: { title: ReactNode }) => <MockText testID="loading">{title}</MockText>,
     },
     Input: (props: Record<string, unknown>) => <MockTextInput {...props} />,
-    Tabs: ({ value }: { value: string }) => (
-      <MockView accessibilityValue={{ text: value }} testID="model-add-mode-tabs" />
-    ),
     TextField,
     useAlert: () => ({ alert: { confirm: jest.fn(), show: jest.fn() } }),
   };
@@ -150,6 +161,8 @@ jest.mock('../../../apiService', () => ({
 
 jest.mock('../../hooks/useProviderDetailSettings', () => ({
   useProviderDetailSettings: () => ({
+    models: mockHasConfiguredModels ? [{}] : [],
+    modelsQuery: { isPending: false },
     provider: mockProvider,
     providerQuery: { isError: false },
   }),
@@ -211,9 +224,9 @@ jest.mock('../../modelPull/ProviderModelPullScreen', () => {
 });
 
 /**
- * Preset-provider setup drops the user straight into sync so first-time
- * configuration is one pass. If its model catalog is unavailable, the user
- * still needs an escape hatch to add a model manually.
+ * Provider setup drops the user straight into sync so first-time configuration
+ * is one pass. Manual creation is a separate route rather than a mode the sync
+ * screen reveals.
  */
 describe('provider setup flow when the sync has nothing to offer', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -224,8 +237,12 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     });
   }
 
-  function modeTabs() {
-    return renderer?.root.findAllByProps({ testID: MODE_TABS_TEST_ID }) ?? [];
+  function manualModelFields() {
+    return (
+      renderer?.root.findAllByProps({
+        accessibilityLabel: 'settings.provider.models.addModelIdLabel',
+      }) ?? []
+    );
   }
 
   beforeEach(() => {
@@ -239,6 +256,7 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     };
     mockSearchParams = { mode: 'sync', providerId: 'preset', returnTo: '/agents/new' };
     mockPullResult = 'failed';
+    mockHasConfiguredModels = false;
     mockDismissTo.mockReset();
     mockLoadPullPreview.mockReset();
     mockLoadPullPreview.mockImplementation(async () => mockPullResult);
@@ -249,32 +267,34 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     renderer = undefined;
   });
 
-  it('offers the mode switch once the pull fails', async () => {
+  it('keeps a failed sync on the sync screen', async () => {
     await mountSetupFlow();
 
     expect(renderer?.root.findByProps({ testID: 'error' })).toBeDefined();
-    expect(modeTabs()).not.toHaveLength(0);
+    expect(manualModelFields()).toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'error-secondary' }).props.onPress).toBeUndefined();
   });
 
-  it('offers the mode switch when the provider serves no models at all', async () => {
+  it('keeps an empty sync result on the sync screen', async () => {
     mockPullResult = 'empty';
     await mountSetupFlow();
 
-    expect(modeTabs()).not.toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'empty' })).toBeDefined();
+    expect(manualModelFields()).toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'empty-secondary' }).props.onPress).toBeUndefined();
   });
 
   it('returns to the requesting surface when setup finishes', async () => {
     mockPullResult = 'empty';
+    mockHasConfiguredModels = true;
     await mountSetupFlow();
 
-    act(() => renderer?.root.findByProps({ testID: 'empty' }).props.onPress());
+    act(() => renderer?.root.findByProps({ testID: 'empty-primary' }).props.onPress());
 
     expect(mockDismissTo).toHaveBeenCalledWith('/agents/new');
   });
 
-  // The switch is hidden while the sync can still succeed, so a normal setup
-  // stays on one track.
-  it('keeps the switch hidden while the pull is still in flight', async () => {
+  it('keeps manual creation out of the primary flow while the pull is in flight', async () => {
     let settle: (result: ProviderModelPullLoadResult) => void = () => undefined;
     mockLoadPullPreview.mockImplementationOnce(
       () =>
@@ -284,17 +304,15 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     );
 
     await mountSetupFlow();
-    expect(modeTabs()).toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'loading' })).toBeDefined();
+    expect(manualModelFields()).toHaveLength(0);
 
     await act(async () => settle('failed'));
-    expect(modeTabs()).not.toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'error' })).toBeDefined();
   });
 
-  // A retry clears the previous outcome. Deriving the switch from that outcome
-  // would pull it back off screen under the finger reaching for it.
-  it('keeps the switch through a retry that is still in flight', async () => {
+  it('retries the pull from the inline error state', async () => {
     await mountSetupFlow();
-    expect(modeTabs()).not.toHaveLength(0);
 
     let settleRetry: () => void = () => undefined;
     mockLoadPullPreview.mockImplementationOnce(
@@ -305,16 +323,16 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     );
 
     await act(async () => {
-      renderer?.root.findByProps({ testID: 'error' }).props.onPress();
+      renderer?.root.findByProps({ testID: 'error-primary' }).props.onPress();
     });
     expect(mockLoadPullPreview).toHaveBeenCalledTimes(2);
-    expect(modeTabs()).not.toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'loading' })).toBeDefined();
 
     await act(async () => settleRetry());
-    expect(modeTabs()).not.toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'error' })).toBeDefined();
   });
 
-  it('keeps custom providers in manual mode even for a legacy sync route', async () => {
+  it('starts custom providers in sync mode when requested', async () => {
     mockProvider = {
       authType: 'api-key',
       id: 'custom',
@@ -324,15 +342,11 @@ describe('provider setup flow when the sync has nothing to offer', () => {
       settings: {},
     };
     mockSearchParams = { mode: 'sync', providerId: 'custom', returnTo: '/agents/new' };
+    mockPullResult = 'ready';
 
     await mountSetupFlow();
 
-    expect(mockLoadPullPreview).not.toHaveBeenCalled();
-    expect(modeTabs()).toHaveLength(0);
-    expect(
-      renderer?.root.findAllByProps({
-        accessibilityLabel: 'settings.provider.models.addModelIdLabel',
-      }),
-    ).not.toHaveLength(0);
+    expect(mockLoadPullPreview).toHaveBeenCalledTimes(1);
+    expect(manualModelFields()).toHaveLength(0);
   });
 });

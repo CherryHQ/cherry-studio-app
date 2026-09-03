@@ -14,7 +14,8 @@ This page branch owns the `/settings/provider` list and its child pages.
 
 - `catalog/` and `new/` own direct provider-list child pages.
 - `detail/` owns `/settings/provider/[providerId]`; its `edit/`, `modelAdd/`, and `modelPull/`
-  directories own the dynamic route's child pages.
+  directories own the dynamic route's child pages. Model synchronization and manual model creation
+  are separate entry points and do not switch modes inside either task.
 - `apiService/` owns API key, authentication, endpoint draft, dirty-state, and save behavior.
 - `components/` contains UI shared within the provider page branch. Page-specific UI stays in the
   child page's own `components/` directory.
@@ -40,6 +41,8 @@ same form with different slots instead of configuring it with screen flags.
 ## Connectivity And Models
 
 The connectivity check selects one provider-scoped model and uses the first enabled API key;
-neither choice is stored. `ProviderModelAddScreen` owns both synchronization and manual creation as
-two modes on one page. Model grouping, selection, synchronization previews, and health-check logic
-remain private under `models/`.
+neither choice is stored. New and newly enabled providers continue through synchronization before
+setup completes. The provider's model tab exposes synchronization and manual creation as two direct
+header actions; synchronization is the primary workflow, while manual creation remains an explicit
+separate task. Model grouping, selection, synchronization previews, and health-check logic remain
+private under `models/`.
