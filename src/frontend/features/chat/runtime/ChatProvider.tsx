@@ -7,7 +7,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -17,6 +16,10 @@ import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
+import {
+  type AgentChatDraftHandoff,
+  createAgentChatDraftHandoffState,
+} from './agentChatDraftHandoff';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
 type AgentChatSendInput = {
@@ -33,11 +36,6 @@ type AgentChatForkInput = {
   /** Localized name for the copy; omitted, the fork inherits the source's. */
   title?: string;
 };
-
-export type AgentChatDraftHandoff = Readonly<{
-  agentId: string;
-  sessionId: string;
-}>;
 
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
@@ -63,7 +61,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
-  const draftHandoffRef = useRef<AgentChatDraftHandoff | undefined>(undefined);
+  const [draftHandoff] = useState(createAgentChatDraftHandoffState);
   const [client] = useState(
     () =>
       new AgentSessionChatClient(agent, {
@@ -97,16 +95,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
   }, [client]);
   useEffect(() => () => client.dispose(), [client]);
 
-  const completeDraftHandoff = useCallback((sessionId: string) => {
-    if (draftHandoffRef.current?.sessionId === sessionId) {
-      draftHandoffRef.current = undefined;
-    }
-  }, []);
-  const getDraftHandoff = useCallback((sessionId: string | undefined) => {
-    const handoff = draftHandoffRef.current;
-    return sessionId && handoff?.sessionId === sessionId ? handoff : undefined;
-  }, []);
-
   const sendMessage = useCallback(
     async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
@@ -120,10 +108,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
           ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         });
         targetSessionId = session.id;
-        // Publish the one-shot handoff before mutating the route. The route
-        // change is what makes the chat content read and consume this value.
-        draftHandoffRef.current = { agentId, sessionId: targetSessionId };
-        navigation.openSession(targetSessionId);
+        draftHandoff.handoffToSession(
+          { agentId, sessionId: targetSessionId },
+          navigation.openSession,
+        );
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
       }
@@ -133,7 +121,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       });
     },
-    [client, navigation, queryClient],
+    [client, draftHandoff, navigation, queryClient],
   );
   const forkSession = useCallback(
     async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
@@ -144,8 +132,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
     [client, navigation, queryClient],
   );
   const value = useMemo(
-    () => ({ client, completeDraftHandoff, forkSession, getDraftHandoff, sendMessage }),
-    [client, completeDraftHandoff, forkSession, getDraftHandoff, sendMessage],
+    () => ({
+      client,
+      completeDraftHandoff: draftHandoff.complete,
+      forkSession,
+      getDraftHandoff: draftHandoff.get,
+      sendMessage,
+    }),
+    [client, draftHandoff, forkSession, sendMessage],
   );
 
   return <AgentChatContext value={value}>{children}</AgentChatContext>;

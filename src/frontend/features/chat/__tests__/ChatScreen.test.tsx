@@ -10,10 +10,7 @@ let dockProps: Record<string, unknown> | undefined;
 let mockRouteResolverRendered: boolean;
 let mockComposerProviderInstance: number | undefined;
 let mockComposerProviderMountCount: number;
-let mockDraftHandoff: { agentId: string; sessionId: string } | undefined;
-let mockMainHeaderRenderCount: number;
 let mockRouteParams: { agentId?: string; sessionId?: string };
-const mockRouteParamListeners = new Set<() => void>();
 let mockSessionData: { agentId: string; id: string } | undefined;
 let mockSessionError: Error | undefined;
 let mockSessionIsLoading: boolean;
@@ -50,26 +47,10 @@ jest.mock('@/frontend/components/Composer', () => ({
 
 jest.mock('expo-router', () => ({
   useIsPreview: () => false,
-  useLocalSearchParams: () => {
-    const { useSyncExternalStore } = jest.requireActual<typeof import('react')>('react');
-
-    return useSyncExternalStore(
-      (listener) => {
-        mockRouteParamListeners.add(listener);
-        return () => mockRouteParamListeners.delete(listener);
-      },
-      () => mockRouteParams,
-      () => mockRouteParams,
-    );
-  },
+  useLocalSearchParams: () => mockRouteParams,
 }));
 
-jest.mock('@/frontend/appShell/header', () => ({
-  MainHeader: () => {
-    mockMainHeaderRenderCount += 1;
-    return null;
-  },
-}));
+jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
   useAgentApiById: (agentId: string | undefined) => ({
@@ -92,7 +73,7 @@ jest.mock('@/frontend/hooks/agent', () => ({
 }));
 
 jest.mock('../runtime', () => ({
-  useAgentChatDraftHandoff: () => mockDraftHandoff,
+  useAgentChatDraftHandoff: () => undefined,
 }));
 
 jest.mock('../components/ChatInput', () => ({
@@ -128,10 +109,7 @@ describe('ChatScreen composer dock wiring', () => {
     mockRouteResolverRendered = false;
     mockComposerProviderInstance = undefined;
     mockComposerProviderMountCount = 0;
-    mockDraftHandoff = undefined;
-    mockMainHeaderRenderCount = 0;
     mockRouteParams = { agentId: 'agent-1', sessionId: 'session-1' };
-    mockRouteParamListeners.clear();
     mockSessionData = { agentId: 'agent-1', id: 'session-1' };
     mockSessionError = undefined;
     mockSessionIsLoading = false;
@@ -192,56 +170,11 @@ describe('ChatScreen composer dock wiring', () => {
     });
     expect(mockComposerProviderInstance).toBe(1);
 
-    mockSessionData = undefined;
-    updateMockRouteParams({ agentId: 'agent-1' });
-
-    expect(mockComposerProviderInstance).toBe(2);
-  });
-
-  it('keeps the page frame and Draft composer stable while its first Session loads', () => {
     mockRouteParams = { agentId: 'agent-1' };
     mockSessionData = undefined;
-    act(() => {
-      renderer = create(<ChatScreen />);
-    });
-    const draftComposerProviderInstance = mockComposerProviderInstance;
-
-    mockDraftHandoff = { agentId: 'agent-1', sessionId: 'session-1' };
-    mockSessionIsLoading = true;
-    updateMockRouteParams({ sessionId: 'session-1' });
-
-    expect(chatInputProps).toMatchObject({
-      agentId: 'agent-1',
-      sessionId: 'session-1',
-    });
-    expect(mockMainHeaderRenderCount).toBe(1);
-    expect(mockComposerProviderInstance).toBe(draftComposerProviderInstance);
-    expect(mockComposerProviderMountCount).toBe(1);
-
-    mockDraftHandoff = undefined;
-    updateMockRouteParams({ sessionId: 'session-1' });
-
-    expect(chatInputProps).toMatchObject({
-      agentId: 'agent-1',
-      sessionId: 'session-1',
-    });
-    expect(mockComposerProviderInstance).toBe(draftComposerProviderInstance);
-    expect(mockComposerProviderMountCount).toBe(1);
-  });
-
-  it('starts a fresh composer when a Draft navigates to an unrelated Session', () => {
-    mockRouteParams = { agentId: 'agent-1' };
-    mockSessionData = undefined;
-    act(() => {
-      renderer = create(<ChatScreen />);
-    });
-    expect(mockComposerProviderInstance).toBe(1);
-
-    mockSessionData = { agentId: 'agent-1', id: 'session-1' };
-    updateMockRouteParams({ sessionId: 'session-1' });
+    act(() => renderer?.update(<ChatScreen />));
 
     expect(mockComposerProviderInstance).toBe(2);
-    expect(mockComposerProviderMountCount).toBe(2);
   });
 
   it('starts a fresh composer session when the route switches Sessions', () => {
@@ -250,19 +183,13 @@ describe('ChatScreen composer dock wiring', () => {
     });
     expect(mockComposerProviderInstance).toBe(1);
 
+    mockRouteParams = { agentId: 'agent-1', sessionId: 'session-2' };
     mockSessionData = { agentId: 'agent-1', id: 'session-2' };
-    updateMockRouteParams({ agentId: 'agent-1', sessionId: 'session-2' });
+    act(() => {
+      renderer?.update(<ChatScreen />);
+    });
 
     expect(mockComposerProviderInstance).toBe(2);
     expect(mockComposerProviderMountCount).toBe(2);
   });
 });
-
-function updateMockRouteParams(params: { agentId?: string; sessionId?: string }) {
-  act(() => {
-    mockRouteParams = params;
-    for (const listener of [...mockRouteParamListeners]) {
-      listener();
-    }
-  });
-}

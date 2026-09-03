@@ -1,5 +1,5 @@
+export { type AgentChatDraftHandoff } from './agentChatDraftHandoff';
 export {
-  type AgentChatDraftHandoff,
   ChatProvider,
   useAgentChatActions,
   useAgentChatControls,
