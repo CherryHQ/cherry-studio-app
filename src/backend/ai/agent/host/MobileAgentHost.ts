@@ -927,7 +927,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.activeTurns.delete(sessionId);
     }
     if (outcome === 'failed' && error) {
-      logger.error('Agent turn reached a failed terminal state', {
+      const failureLayer = error.failure?.source.layer;
+      // Provider and tool failures are expected outcomes the transcript already
+      // shows; only an app-owned layer indicates a defect worth the error level
+      // and the development overlay it raises.
+      const logFailure =
+        failureLayer === 'provider' || failureLayer === 'tool'
+          ? logger.warn.bind(logger)
+          : logger.error.bind(logger);
+      logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
         durationMs: Math.max(0, Date.parse(finalized.updatedAt) - Date.parse(state.turn.startedAt)),
         hasUsage: state.usage !== null,
