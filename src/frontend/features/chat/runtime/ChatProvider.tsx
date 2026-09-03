@@ -16,6 +16,10 @@ import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
+import {
+  type AgentChatDraftHandoff,
+  createAgentChatDraftHandoffState,
+} from './agentChatDraftHandoff';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
 type AgentChatSendInput = {
@@ -35,7 +39,9 @@ type AgentChatForkInput = {
 
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
+  completeDraftHandoff: (sessionId: string) => void;
   forkSession: (input: AgentChatForkInput) => Promise<void>;
+  getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
@@ -55,6 +61,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
+  const [draftHandoff] = useState(createAgentChatDraftHandoffState);
   const [client] = useState(
     () =>
       new AgentSessionChatClient(agent, {
@@ -101,7 +108,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
           ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         });
         targetSessionId = session.id;
-        navigation.openSession(targetSessionId);
+        draftHandoff.handoffToSession(
+          { agentId, sessionId: targetSessionId },
+          navigation.openSession,
+        );
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
       }
@@ -111,7 +121,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       });
     },
-    [client, navigation, queryClient],
+    [client, draftHandoff, navigation, queryClient],
   );
   const forkSession = useCallback(
     async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
@@ -122,8 +132,14 @@ export function ChatProvider({ children }: PropsWithChildren) {
     [client, navigation, queryClient],
   );
   const value = useMemo(
-    () => ({ client, forkSession, sendMessage }),
-    [client, forkSession, sendMessage],
+    () => ({
+      client,
+      completeDraftHandoff: draftHandoff.complete,
+      forkSession,
+      getDraftHandoff: draftHandoff.get,
+      sendMessage,
+    }),
+    [client, draftHandoff, forkSession, sendMessage],
   );
 
   return <AgentChatContext value={value}>{children}</AgentChatContext>;
@@ -159,6 +175,22 @@ function useAgentChatContext() {
 export function useAgentChatSession(sessionId: string | undefined): AgentSessionChatState {
   const { client } = useAgentChatContext();
   return useAgentSessionSelection(client, sessionId, selectSessionState);
+}
+
+/** Keeps the Draft composer mounted while its accepted first message becomes a Session route. */
+export function useAgentChatDraftHandoff(
+  sessionId: string | undefined,
+): AgentChatDraftHandoff | undefined {
+  const { completeDraftHandoff, getDraftHandoff } = useAgentChatContext();
+  const handoff = getDraftHandoff(sessionId);
+
+  useEffect(() => {
+    if (handoff) {
+      completeDraftHandoff(handoff.sessionId);
+    }
+  }, [completeDraftHandoff, handoff]);
+
+  return handoff;
 }
 
 export function useAgentChatControls(input: { agentId?: string; sessionId?: string }) {

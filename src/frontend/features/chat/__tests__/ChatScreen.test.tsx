@@ -72,6 +72,10 @@ jest.mock('@/frontend/hooks/agent', () => ({
   }),
 }));
 
+jest.mock('../runtime', () => ({
+  useAgentChatDraftHandoff: () => undefined,
+}));
+
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;
