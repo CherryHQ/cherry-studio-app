@@ -353,6 +353,31 @@ describe('MessagePart', () => {
     act(() => status.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
   });
+
+  it('turns the error block into a button only when it opens details', () => {
+    act(() => {
+      renderer = create(<MessagePart.Error message="Could not complete." title="Quota exceeded" />);
+    });
+    expect(renderer!.root.findAllByProps({ accessibilityRole: 'button' })).toHaveLength(0);
+
+    const onPress = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessagePart.Error
+          accessibilityHint="Opens the error details."
+          message="Could not complete."
+          onPress={onPress}
+          title="Quota exceeded"
+        />,
+      );
+    });
+
+    const block = renderer!.root.findByProps({ accessibilityRole: 'button' });
+    expect(block.props.accessibilityLabel).toBe('Quota exceeded, Could not complete.');
+    expect(block.props.accessibilityHint).toBe('Opens the error details.');
+    act(() => block.props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('message part values', () => {

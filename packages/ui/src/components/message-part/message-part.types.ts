@@ -86,7 +86,11 @@ export type MessagePartToolProps = Omit<
 };
 
 export type MessagePartErrorProps = {
+  /** Read after the label when the block opens a detail surface. */
+  accessibilityHint?: string;
   message: string;
+  /** Opens a caller-owned detail surface; the block then reads as a button. */
+  onPress?: () => void;
   title: string;
 };
 

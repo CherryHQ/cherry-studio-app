@@ -489,9 +489,9 @@ request bodies, credentials, and stack traces stay behind the Host boundary.
 tests, and the frontend derives every displayed string from the closed vocabulary instead: the
 composer maps a rejected submission's `code` to a translation, the transcript error part maps
 `failure.reasonCode` (or `code` for `INTERRUPTED`) to a translated title, and a tool part translates
-its status. The only `message` rendered verbatim is a `failure.source.layer === 'provider'` detail
-line, because provider text is third-party diagnostic output the user may need to act on and no
-translation of it exists.
+its status. The error part never renders `message` inline. Tapping it opens a detail sheet that
+shows `message`, the failure snapshot facts, and `context.responseBody` verbatim: diagnostic
+detail the user explicitly asked for, kept so a provider failure can be investigated in place.
 
 ## Invariants
 

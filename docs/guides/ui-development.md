@@ -85,8 +85,8 @@ failure feels:
   permission guidance. Use `alert.confirm` or `alert.prompt` only when the user must decide.
 - A failure that belongs to a transcript renders inline as a message part; see
   [Agent Protocol](../references/agent/agent-protocol.md#errors).
-- Backend `message` strings are diagnostic and are never displayed. Translate from the closed code
-  instead.
+- Backend `message` strings are diagnostic and are never displayed inline. Translate from the
+  closed code instead; a detail sheet the user opens on purpose may show them verbatim.
 
 ## Acceptance
 
