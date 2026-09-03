@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -33,9 +34,16 @@ type AgentChatForkInput = {
   title?: string;
 };
 
+export type AgentChatDraftHandoff = Readonly<{
+  agentId: string;
+  sessionId: string;
+}>;
+
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
+  completeDraftHandoff: (sessionId: string) => void;
   forkSession: (input: AgentChatForkInput) => Promise<void>;
+  getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
@@ -55,6 +63,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
+  const draftHandoffRef = useRef<AgentChatDraftHandoff | undefined>(undefined);
   const [client] = useState(
     () =>
       new AgentSessionChatClient(agent, {
@@ -88,6 +97,16 @@ export function ChatProvider({ children }: PropsWithChildren) {
   }, [client]);
   useEffect(() => () => client.dispose(), [client]);
 
+  const completeDraftHandoff = useCallback((sessionId: string) => {
+    if (draftHandoffRef.current?.sessionId === sessionId) {
+      draftHandoffRef.current = undefined;
+    }
+  }, []);
+  const getDraftHandoff = useCallback((sessionId: string | undefined) => {
+    const handoff = draftHandoffRef.current;
+    return sessionId && handoff?.sessionId === sessionId ? handoff : undefined;
+  }, []);
+
   const sendMessage = useCallback(
     async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
@@ -101,6 +120,9 @@ export function ChatProvider({ children }: PropsWithChildren) {
           ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         });
         targetSessionId = session.id;
+        // Publish the one-shot handoff before mutating the route. The route
+        // change is what makes the chat content read and consume this value.
+        draftHandoffRef.current = { agentId, sessionId: targetSessionId };
         navigation.openSession(targetSessionId);
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
@@ -122,8 +144,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
     [client, navigation, queryClient],
   );
   const value = useMemo(
-    () => ({ client, forkSession, sendMessage }),
-    [client, forkSession, sendMessage],
+    () => ({ client, completeDraftHandoff, forkSession, getDraftHandoff, sendMessage }),
+    [client, completeDraftHandoff, forkSession, getDraftHandoff, sendMessage],
   );
 
   return <AgentChatContext value={value}>{children}</AgentChatContext>;
@@ -159,6 +181,22 @@ function useAgentChatContext() {
 export function useAgentChatSession(sessionId: string | undefined): AgentSessionChatState {
   const { client } = useAgentChatContext();
   return useAgentSessionSelection(client, sessionId, selectSessionState);
+}
+
+/** Keeps the Draft composer mounted while its accepted first message becomes a Session route. */
+export function useAgentChatDraftHandoff(
+  sessionId: string | undefined,
+): AgentChatDraftHandoff | undefined {
+  const { completeDraftHandoff, getDraftHandoff } = useAgentChatContext();
+  const handoff = getDraftHandoff(sessionId);
+
+  useEffect(() => {
+    if (handoff) {
+      completeDraftHandoff(handoff.sessionId);
+    }
+  }, [completeDraftHandoff, handoff]);
+
+  return handoff;
 }
 
 export function useAgentChatControls(input: { agentId?: string; sessionId?: string }) {
