@@ -59,4 +59,24 @@ describe('HeaderActionGroup.android', () => {
       expect(action.props.hitSlop).toBeUndefined();
     });
   });
+
+  it('keeps a short label action wider than the circular icon target', () => {
+    act(() => {
+      renderer = create(
+        <HeaderActionGroup
+          actions={[{ key: 'save', label: 'Save', onPress: jest.fn(), type: 'label' }]}
+          placement="right"
+        />,
+      );
+    });
+
+    const action = renderer!.root.find(
+      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
+    );
+    const classNames = action.props.className.split(' ');
+
+    expect(classNames).toContain('min-h-12');
+    expect(classNames).toContain('min-w-16');
+    expect(classNames).not.toContain('min-w-12');
+  });
 });
