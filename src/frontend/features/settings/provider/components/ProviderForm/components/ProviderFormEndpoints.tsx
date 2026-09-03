@@ -10,7 +10,6 @@ import type { EndpointType } from '@/shared/data/types/model';
 import {
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
-  getCustomProviderEndpointRequestPreview,
   getConfiguredCustomProviderTextEndpoints,
   hasConfiguredCustomProviderTextEndpoint,
   isValidEndpointBaseUrl,
@@ -65,38 +64,39 @@ export function ProviderFormTextEndpoints() {
   const hasConfiguredEndpoint = hasConfiguredCustomProviderTextEndpoint(state.endpointUrls);
 
   return (
-    <View className="gap-4">
-      <View className="gap-1">
-        <Text className="font-medium text-base text-foreground">
-          {t('settings.provider.apiService.textEndpointsTitle')}
-        </Text>
-        <Text className="text-muted-foreground text-xs">
-          {t('settings.provider.apiService.sharedApiKeyDescription')}
-        </Text>
-      </View>
+    <View className="gap-3">
+      <Text className="font-medium text-base text-foreground">
+        {t('settings.provider.apiService.textEndpointsTitle')}
+      </Text>
 
       {COMMON_TEXT_ENDPOINTS.map((endpointType) => (
         <ProviderFormTextEndpointField endpoint={endpointType} key={endpointType} />
       ))}
 
-      <Button
-        accessibilityLabel={t('settings.provider.apiService.moreEndpoints')}
-        disabled={meta.isSubmitting}
-        onPress={() => setShowsAdvancedEndpoints((current) => !current)}
-        size="field"
-        variant="secondary"
-      >
-        <Button.Label numberOfLines={1}>
-          {t('settings.provider.apiService.moreEndpointsConfigured', {
-            count: configuredAdvancedCount,
-          })}
-        </Button.Label>
-        {showsAdvancedEndpoints ? (
-          <ChevronUpIcon className="size-4 text-foreground" />
-        ) : (
-          <ChevronDownIcon className="size-4 text-foreground" />
-        )}
-      </Button>
+      <View className="items-start">
+        <Button
+          accessibilityLabel={t('settings.provider.apiService.moreEndpoints')}
+          accessibilityState={{ expanded: showsAdvancedEndpoints }}
+          disabled={meta.isSubmitting}
+          hitSlop={8}
+          onPress={() => setShowsAdvancedEndpoints((current) => !current)}
+          size="inline"
+          variant="ghost"
+        >
+          <Button.Label numberOfLines={1}>
+            {configuredAdvancedCount > 0
+              ? t('settings.provider.apiService.moreEndpointsConfigured', {
+                  count: configuredAdvancedCount,
+                })
+              : t('settings.provider.apiService.moreEndpoints')}
+          </Button.Label>
+          {showsAdvancedEndpoints ? (
+            <ChevronUpIcon className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
+          )}
+        </Button>
+      </View>
 
       {showsAdvancedEndpoints
         ? ADVANCED_TEXT_ENDPOINTS.map((endpointType) => (
@@ -129,7 +129,6 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
   const value = state.endpointUrls[endpoint] ?? '';
   const trimmedValue = value.trim();
   const isInvalid = trimmedValue.length > 0 && !isValidEndpointBaseUrl(trimmedValue);
-  const requestPreview = getCustomProviderEndpointRequestPreview(endpoint, trimmedValue);
   const isDefault = endpoint === state.defaultChatEndpoint && trimmedValue.length > 0;
 
   return (
@@ -163,11 +162,6 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
         placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
         value={value}
       />
-      {requestPreview ? (
-        <TextField.Description>
-          {t('settings.provider.apiService.requestPreview', { url: requestPreview })}
-        </TextField.Description>
-      ) : null}
       <TextField.Error>
         {isInvalid ? t('settings.provider.apiService.invalidBaseUrlMessage') : undefined}
       </TextField.Error>
