@@ -277,7 +277,6 @@ function provider(input: Partial<Provider> & { id: string }): Provider {
     },
     apiKeys: [],
     authType: 'api-key',
-    id: input.id,
     isEnabled: true,
     name: input.id,
     settings: {},

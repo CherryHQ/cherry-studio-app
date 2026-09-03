@@ -298,12 +298,23 @@ async function assertModelEndpointWrites(
   tx: Database,
   writes: readonly ModelEndpointWrite[],
 ): Promise<void> {
-  const explicitWrites = writes.filter((write) => write.endpointTypes !== undefined);
-  if (explicitWrites.length === 0) {
+  const writesToValidate = writes.filter((write) => {
+    if (write.endpointTypes === undefined) {
+      return false;
+    }
+
+    // Registry providers retain their implicit endpoint routing. Custom providers
+    // still validate an omitted/empty endpointTypes value against their default.
+    return (
+      (write.endpointTypes?.length ?? 0) > 0 ||
+      !providerRegistryService.isRegistryProvider(write.providerId)
+    );
+  });
+  if (writesToValidate.length === 0) {
     return;
   }
 
-  const providerIds = Array.from(new Set(explicitWrites.map((write) => write.providerId)));
+  const providerIds = Array.from(new Set(writesToValidate.map((write) => write.providerId)));
   const providers = await tx
     .select({
       defaultChatEndpoint: userProviderTable.defaultChatEndpoint,
@@ -315,7 +326,7 @@ async function assertModelEndpointWrites(
     .where(inArray(userProviderTable.providerId, providerIds));
   const providersById = new Map(providers.map((provider) => [provider.providerId, provider]));
 
-  for (const write of explicitWrites) {
+  for (const write of writesToValidate) {
     const provider = providersById.get(write.providerId);
     if (!provider) {
       throw DataApiErrorFactory.notFound('Provider', write.providerId);
