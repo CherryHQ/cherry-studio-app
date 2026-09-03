@@ -62,7 +62,7 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
       router.replace({
         pathname: '/settings/provider/[providerId]/model-add',
         params: {
-          mode: 'manual',
+          mode: 'sync',
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
           returnTo,

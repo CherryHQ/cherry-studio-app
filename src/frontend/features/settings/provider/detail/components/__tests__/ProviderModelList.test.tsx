@@ -7,8 +7,22 @@ jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
 
   const ContentState = {
-    Empty: ({ className, title }: { className?: string; title: React.ReactNode }) =>
-      React.createElement('View', { className }, React.createElement('Text', null, title)),
+    Empty: ({
+      className,
+      primaryAction,
+      secondaryAction,
+      title,
+    }: {
+      className?: string;
+      primaryAction?: { children: React.ReactNode; onPress: () => void };
+      secondaryAction?: { children: React.ReactNode; onPress: () => void };
+      title: React.ReactNode;
+    }) =>
+      React.createElement(
+        'View',
+        { className, primaryAction, secondaryAction },
+        React.createElement('Text', null, title),
+      ),
   };
 
   return { ContentState, OptionPickerBottomSheet: () => null };
@@ -38,12 +52,31 @@ describe('ProviderModelList empty state', () => {
     renderer = undefined;
   });
 
-  it('shows the empty message without an inline action', () => {
+  it('makes model sync primary and manual creation secondary when the provider is empty', () => {
+    const onAddModelManually = jest.fn();
+    const onPullModels = jest.fn();
+
     act(() => {
-      renderer = create(<ProviderModelList isLoading={false} models={[]} provider={undefined} />);
+      renderer = create(
+        <ProviderModelList
+          isLoading={false}
+          models={[]}
+          onAddModelManually={onAddModelManually}
+          onPullModels={onPullModels}
+          provider={undefined}
+        />,
+      );
     });
 
     expect(renderer?.root.findByType('Text').props.children).toBe('settings.provider.models.empty');
+    expect(renderer?.root.findByType('View').props.primaryAction).toEqual({
+      children: 'settings.provider.models.emptyAction',
+      onPress: onPullModels,
+    });
+    expect(renderer?.root.findByType('View').props.secondaryAction).toEqual({
+      children: 'settings.provider.models.addTitle',
+      onPress: onAddModelManually,
+    });
   });
 
   it('shows a search empty state without provider actions for a filtered list', () => {

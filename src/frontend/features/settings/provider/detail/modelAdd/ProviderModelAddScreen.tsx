@@ -5,12 +5,11 @@ import {
   Chip,
   ContentState,
   Input,
-  Tabs,
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
 import { type Href, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, type TextInputProps, View } from 'react-native';
 import {
@@ -37,6 +36,7 @@ import {
   getProviderModelEndpointLabelKey,
   getProviderModelPurposeOptions,
   providerModelAddEndpointOptions,
+  splitProviderModelIds,
 } from '../../models/utils/providerModelAdd';
 import type { ProviderModelPullPreview } from '../../models/utils/providerModelPullPreview';
 import { useProviderDetailSettings } from '../hooks/useProviderDetailSettings';
@@ -48,7 +48,7 @@ const advancedSettingsKeyboardBottomOffset = 180;
 const advancedSettingsKeyboardPadding = 220;
 const EMPTY_PULL_PREVIEW: ProviderModelPullPreview = { added: [], missing: [] };
 
-type ProviderModelAddMode = 'manual' | 'sync';
+type ProviderModelTask = 'manual' | 'sync';
 
 export default function ProviderModelAddScreen() {
   const {
@@ -62,24 +62,22 @@ export default function ProviderModelAddScreen() {
     }
   >();
   const { t } = useTranslation();
-  const { provider, providerQuery } = useProviderDetailSettings(providerId ?? '');
+  const { models, modelsQuery, provider, providerQuery } = useProviderDetailSettings(
+    providerId ?? '',
+  );
   const returnTo = readProviderSetupReturnTo(rawReturnTo);
+  const task = mode === 'sync' ? 'sync' : 'manual';
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
   }
 
-  // Mount the form only once the provider is loaded: it decides which model-routing
-  // controls exist, and that block sits directly above the
-  // "More settings" control — growing it a commit later moves a live tap target.
+  // Mount the selected task only once the provider is loaded: the manual form
+  // shape and synchronized-model metadata both depend on the provider contract.
   if (!provider) {
     return (
       <>
-        <RouteHeader
-          title={t(
-            returnTo ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
-          )}
-        />
+        <RouteHeader title={t(getProviderModelScreenTitleKey(task))} />
         <View className="flex-1 justify-center px-6 py-10">
           <ContentState.Loading title={t('settings.provider.loading')} />
         </View>
@@ -90,31 +88,32 @@ export default function ProviderModelAddScreen() {
   return (
     <ProviderModelAddForm
       key={provider.id}
-      initialMode={provider.presetProviderId == null || mode === 'manual' ? 'manual' : 'sync'}
+      hasConfiguredModels={models.length > 0}
+      isConfiguredModelsLoading={modelsQuery.isPending}
       provider={provider}
       returnTo={returnTo}
+      task={task}
     />
   );
 }
 
 function ProviderModelAddForm({
-  initialMode,
+  hasConfiguredModels,
+  isConfiguredModelsLoading,
   provider,
   returnTo,
+  task,
 }: {
-  initialMode: ProviderModelAddMode;
+  hasConfiguredModels: boolean;
+  isConfiguredModelsLoading: boolean;
   provider: Provider;
   returnTo?: string;
+  task: ProviderModelTask;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
-  const [activeMode, setActiveMode] = useState<ProviderModelAddMode>(initialMode);
   const [syncLoadResult, setSyncLoadResult] = useState<ProviderModelPullLoadResult>();
-  // Latched rather than derived from `syncLoadResult`, which a retry clears:
-  // once the setup flow has offered the way out it keeps offering it, instead
-  // of pulling the control back out from under the finger reaching for it.
-  const [hasSyncComeBackEmpty, setHasSyncComeBackEmpty] = useState(false);
   const syncLoadStartedRef = useRef(false);
   const {
     canSubmit,
@@ -126,7 +125,6 @@ function ProviderModelAddForm({
     modelAddMode,
     modelIdError,
     modelPurpose,
-    resetForm,
     submitAddModel,
     updateChatEndpointType,
     updateContextWindow,
@@ -152,7 +150,7 @@ function ProviderModelAddForm({
     preview: preview ?? EMPTY_PULL_PREVIEW,
   });
   const { allowNavigation, closeWithoutPrompt, requestClose } = useProviderApiServiceSheetClose({
-    hasUnsavedChanges: activeMode === 'manual' && isDirty,
+    hasUnsavedChanges: task === 'manual' && isDirty,
     isSaving: isSubmitting || isApplying,
   });
   const completeFlow = useCallback(() => {
@@ -168,7 +166,7 @@ function ProviderModelAddForm({
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMoreSettings, setShowMoreSettings] = useState(false);
-  const supportsModelSync = provider.presetProviderId != null;
+  const isBatchAdd = splitProviderModelIds(formState.modelId).length > 1;
   const modelPurposeOptions = getProviderModelPurposeOptions(provider);
   const showsModelPurposeOptions = modelPurposeOptions.length > 1;
   const showsChatEndpointOptions = modelPurpose === 'chat' && chatEndpointTypes.length > 1;
@@ -207,6 +205,15 @@ function ProviderModelAddForm({
   const toggleMoreSettings = useCallback(() => {
     setShowMoreSettings((current) => !current);
   }, []);
+  const handleModelIdChange = useCallback(
+    (value: string) => {
+      if (splitProviderModelIds(value).length > 1) {
+        setShowMoreSettings(false);
+      }
+      updateModelId(value);
+    },
+    [updateModelId],
+  );
   const selectedEndpointTypes = useMemo(
     () => new Set(formState.endpointTypes),
     [formState.endpointTypes],
@@ -235,9 +242,6 @@ function ProviderModelAddForm({
     setSyncLoadResult(undefined);
     void loadPullPreview().then((result) => {
       setSyncLoadResult(result);
-      if (result !== 'ready') {
-        setHasSyncComeBackEmpty(true);
-      }
     });
   }, [loadPullPreview]);
   const applySyncSelection = useCallback(() => {
@@ -251,6 +255,14 @@ function ProviderModelAddForm({
     () => preview?.missing.filter((model) => selectedIds.has(model.id)).length ?? 0,
     [preview, selectedIds],
   );
+  const syncSubmitLabel = returnTo
+    ? t('settings.provider.models.completeSetup')
+    : t(
+        selectedIds.size === 0
+          ? 'settings.provider.models.pullApply'
+          : 'settings.provider.models.pullApplySelected',
+        { count: selectedIds.size },
+      );
   const handleSyncSubmit = useCallback(() => {
     if (selectedIds.size === 0) {
       return;
@@ -262,30 +274,18 @@ function ProviderModelAddForm({
     }
 
     alert.confirm({
-      confirmLabel: t('settings.provider.models.pullApplySelected', {
-        count: selectedIds.size,
-      }),
+      confirmLabel: syncSubmitLabel,
       description: t('settings.provider.models.syncRemoveMessage', {
         count: selectedMissingCount,
       }),
       onConfirm: applySyncSelection,
       title: t('settings.provider.models.syncRemoveTitle'),
     });
-  }, [alert, applySyncSelection, selectedIds.size, selectedMissingCount, t]);
+  }, [alert, applySyncSelection, selectedIds.size, selectedMissingCount, syncSubmitLabel, t]);
   const isSaving = isSubmitting || isApplying;
   const isManualSubmitDisabled = isSubmitting || !canSubmit;
-  const syncSubmitLabel = t(
-    selectedIds.size === 0
-      ? 'settings.provider.models.pullApply'
-      : 'settings.provider.models.pullApplySelected',
-    { count: selectedIds.size },
-  );
-  // Preset setup hides the switch to keep first-time configuration on a single
-  // track. If the remote catalogue has nothing to offer, manual add remains the
-  // escape hatch. Fully custom providers never enter the unreliable sync path.
-  const showsModeTabs = supportsModelSync && (!returnTo || hasSyncComeBackEmpty);
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
-    if (activeMode === 'sync') {
+    if (task === 'sync') {
       if (!preview) {
         return [];
       }
@@ -313,7 +313,6 @@ function ProviderModelAddForm({
       },
     ];
   }, [
-    activeMode,
     handleSubmit,
     handleSyncSubmit,
     isApplying,
@@ -322,68 +321,26 @@ function ProviderModelAddForm({
     preview,
     selectedIds.size,
     syncSubmitLabel,
+    task,
     t,
   ]);
-  const modeItems = useMemo(
-    () => [
-      { label: t('settings.provider.models.addMode.sync'), value: 'sync' as const },
-      { label: t('settings.provider.models.addMode.manual'), value: 'manual' as const },
-    ],
-    [t],
-  );
-  const handleModeChange = useCallback(
-    (nextMode: ProviderModelAddMode) => {
-      if (nextMode === activeMode || isSaving) {
-        return;
-      }
-
-      if (activeMode !== 'manual' || !isDirty) {
-        setActiveMode(nextMode);
-        return;
-      }
-
-      alert.confirm({
-        confirmLabel: t('common.discard'),
-        description: t('settings.provider.apiService.discardMessage'),
-        onConfirm: () => {
-          resetForm();
-          setActiveMode(nextMode);
-        },
-        role: 'destructive',
-        title: t('settings.provider.apiService.discardTitle'),
-      });
-    },
-    [activeMode, alert, isDirty, isSaving, resetForm, t],
-  );
 
   useEffect(() => clearAdvancedFieldScrollTimer, [clearAdvancedFieldScrollTimer]);
   useEffect(() => {
-    if (supportsModelSync && activeMode === 'sync' && !syncLoadStartedRef.current) {
+    if (task === 'sync' && !syncLoadStartedRef.current) {
       loadSyncPreview();
     }
-  }, [activeMode, loadSyncPreview, supportsModelSync]);
+  }, [loadSyncPreview, task]);
 
   return (
     <>
       <RouteHeader
         onBack={requestClose}
         rightActions={rightActions}
-        title={t(
-          returnTo ? 'settings.provider.models.setupTitle' : 'settings.provider.models.addTitle',
-        )}
+        title={t(getProviderModelScreenTitleKey(task))}
       />
-      {showsModeTabs ? (
-        <View className="px-4 pb-3">
-          <Tabs
-            accessibilityLabel={t('settings.provider.models.addMode.label')}
-            items={modeItems}
-            onValueChange={handleModeChange}
-            value={activeMode}
-          />
-        </View>
-      ) : null}
       <View className="flex-1">
-        {activeMode === 'sync' ? (
+        {task === 'sync' ? (
           preview ? (
             <ProviderModelPullPreviewContent
               isApplying={isApplying}
@@ -393,15 +350,18 @@ function ProviderModelAddForm({
               toggleAll={toggleAllSyncModels}
               toggleModel={toggleSyncModel}
             />
-          ) : isPreviewLoading || syncLoadResult === undefined ? (
+          ) : isPreviewLoading ||
+            syncLoadResult === undefined ||
+            (syncLoadResult === 'empty' && isConfiguredModelsLoading) ? (
             <View className="px-6 py-10">
-              <ContentState.Loading title={t('settings.provider.models.loading')} />
+              <ContentState.Loading title={t('settings.provider.models.pulling')} />
             </View>
           ) : syncLoadResult === 'failed' || syncLoadResult === 'timedOut' ? (
             // The hook reports how the pull ended and says nothing itself: an
             // alert on top of this state would carry the same sentence twice.
             <View className="px-6 py-10">
               <ContentState.Error
+                description={t('settings.provider.models.pullFailedDescription')}
                 primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
                 title={t(
                   syncLoadResult === 'timedOut'
@@ -410,23 +370,36 @@ function ProviderModelAddForm({
                 )}
               />
             </View>
+          ) : hasConfiguredModels ? (
+            <View className="px-6 py-10">
+              <ContentState.Empty
+                primaryAction={{
+                  children: t(returnTo ? 'settings.provider.models.completeSetup' : 'common.done'),
+                  onPress: completeFlow,
+                }}
+                secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
+                title={t('settings.provider.models.pullUpToDate')}
+              />
+            </View>
           ) : (
             <View className="px-6 py-10">
               <ContentState.Empty
-                primaryAction={{ children: t('common.done'), onPress: completeFlow }}
-                secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
-                title={t('settings.provider.models.pullUpToDate')}
+                description={t('settings.provider.models.pullEmptyDescription')}
+                primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
+                title={t('settings.provider.models.pullEmpty')}
               />
             </View>
           )
         ) : (
           <KeyboardAwareScrollView
             bottomOffset={
-              showMoreSettings ? advancedSettingsKeyboardBottomOffset : defaultKeyboardBottomOffset
+              showMoreSettings && !isBatchAdd
+                ? advancedSettingsKeyboardBottomOffset
+                : defaultKeyboardBottomOffset
             }
             contentContainerStyle={[
               styles.scrollContent,
-              showMoreSettings ? styles.expandedScrollContent : null,
+              showMoreSettings && !isBatchAdd ? styles.expandedScrollContent : null,
             ]}
             contentInsetAdjustmentBehavior="automatic"
             disableScrollOnKeyboardHide
@@ -436,39 +409,58 @@ function ProviderModelAddForm({
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
           >
-            <ProviderModelAddTextField
-              accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
-              errorMessage={modelIdError}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addModelIdLabel')}
-              placeholder={t('settings.provider.models.addModelIdPlaceholder')}
-              value={formState.modelId}
-              onChangeText={updateModelId}
-            />
+            <Text className="text-foreground-secondary text-sm">
+              {t('settings.provider.models.addManualDescription')}
+            </Text>
 
-            <ProviderModelAddTextField
-              accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addModelNameLabel')}
-              placeholder={t('settings.provider.models.addModelNamePlaceholder')}
-              value={formState.name}
-              onChangeText={updateName}
-            />
+            <ProviderModelAddSection
+              description={t(
+                isBatchAdd
+                  ? 'settings.provider.models.addBatchDescription'
+                  : 'settings.provider.models.addModelInfoDescription',
+              )}
+              title={t('settings.provider.models.addModelInfoTitle')}
+            >
+              <ProviderModelAddTextField
+                required
+                accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
+                description={t('settings.provider.models.addModelIdDescription')}
+                errorMessage={modelIdError}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addModelIdLabel')}
+                placeholder={t('settings.provider.models.addModelIdPlaceholder')}
+                value={formState.modelId}
+                onChangeText={handleModelIdChange}
+              />
 
-            <ProviderModelAddTextField
-              accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
-              isDisabled={isSubmitting}
-              label={t('settings.provider.models.addGroupNameLabel')}
-              placeholder={t('settings.provider.models.addGroupNamePlaceholder')}
-              value={formState.group}
-              onChangeText={updateGroup}
-            />
+              {!isBatchAdd ? (
+                <>
+                  <ProviderModelAddTextField
+                    accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
+                    isDisabled={isSubmitting}
+                    label={t('settings.provider.models.addModelNameLabel')}
+                    placeholder={t('settings.provider.models.addModelNamePlaceholder')}
+                    value={formState.name}
+                    onChangeText={updateName}
+                  />
+
+                  <ProviderModelAddTextField
+                    accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
+                    isDisabled={isSubmitting}
+                    label={t('settings.provider.models.addGroupNameLabel')}
+                    placeholder={t('settings.provider.models.addGroupNamePlaceholder')}
+                    value={formState.group}
+                    onChangeText={updateGroup}
+                  />
+                </>
+              ) : null}
+            </ProviderModelAddSection>
 
             {modelAddMode === 'endpoint-types' ? (
-              <View className="gap-2">
-                <Text className="font-medium text-foreground text-sm">
-                  {t('settings.provider.models.addEndpointTypeLabel')}
-                </Text>
+              <ProviderModelAddSection
+                description={t('settings.provider.models.addEndpointTypeDescription')}
+                title={t('settings.provider.models.addEndpointTypeLabel')}
+              >
                 <View className="flex-row flex-wrap gap-2">
                   {providerModelAddEndpointOptions.map((option) => (
                     <Chip.Selectable
@@ -486,49 +478,56 @@ function ProviderModelAddForm({
                 {endpointTypeError ? (
                   <Text className="text-destructive text-xs">{endpointTypeError}</Text>
                 ) : null}
-              </View>
+              </ProviderModelAddSection>
             ) : null}
 
             {modelAddMode === 'purpose' &&
             (showsModelPurposeOptions || showsChatEndpointOptions) ? (
-              <View className="gap-4">
+              <ProviderModelAddSection
+                description={t(
+                  showsModelPurposeOptions
+                    ? 'settings.provider.models.addPurposeDescription'
+                    : 'settings.provider.models.addChatEndpointDescription',
+                )}
+                title={t(
+                  showsModelPurposeOptions
+                    ? 'settings.provider.models.addPurposeLabel'
+                    : 'settings.provider.models.addChatEndpointLabel',
+                )}
+              >
                 {showsModelPurposeOptions ? (
-                  <View className="gap-2">
-                    <Text className="font-medium text-foreground text-sm">
-                      {t('settings.provider.models.addPurposeLabel')}
-                    </Text>
-                    <Text className="text-muted-foreground text-xs">
-                      {t('settings.provider.models.addPurposeDescription')}
-                    </Text>
-                    <View className="flex-row flex-wrap gap-2">
-                      {modelPurposeOptions.map((option) => (
-                        <Chip.Selectable
-                          accessibilityLabel={t(option.labelKey)}
-                          accessibilityRole="radio"
-                          disabled={isSubmitting}
-                          key={option.id}
-                          onSelectedChange={(selected) => {
-                            if (selected) {
-                              updateModelPurpose(option.id);
-                            }
-                          }}
-                          selected={modelPurpose === option.id}
-                        >
-                          {t(option.labelKey)}
-                        </Chip.Selectable>
-                      ))}
-                    </View>
+                  <View className="flex-row flex-wrap gap-2">
+                    {modelPurposeOptions.map((option) => (
+                      <Chip.Selectable
+                        accessibilityLabel={t(option.labelKey)}
+                        accessibilityRole="radio"
+                        disabled={isSubmitting}
+                        key={option.id}
+                        onSelectedChange={(selected) => {
+                          if (selected) {
+                            updateModelPurpose(option.id);
+                          }
+                        }}
+                        selected={modelPurpose === option.id}
+                      >
+                        {t(option.labelKey)}
+                      </Chip.Selectable>
+                    ))}
                   </View>
                 ) : null}
 
                 {showsChatEndpointOptions ? (
                   <View className="gap-2">
-                    <Text className="font-medium text-foreground text-sm">
-                      {t('settings.provider.models.addChatEndpointLabel')}
-                    </Text>
-                    <Text className="text-muted-foreground text-xs">
-                      {t('settings.provider.models.addChatEndpointDescription')}
-                    </Text>
+                    {showsModelPurposeOptions ? (
+                      <>
+                        <Text className="font-medium text-foreground text-sm">
+                          {t('settings.provider.models.addChatEndpointLabel')}
+                        </Text>
+                        <Text className="text-muted-foreground text-xs">
+                          {t('settings.provider.models.addChatEndpointDescription')}
+                        </Text>
+                      </>
+                    ) : null}
                     <View className="flex-row flex-wrap gap-2">
                       {chatEndpointTypes.map((endpointType) => (
                         <Chip.Selectable
@@ -549,55 +548,66 @@ function ProviderModelAddForm({
                     </View>
                   </View>
                 ) : null}
-              </View>
+              </ProviderModelAddSection>
             ) : null}
 
-            <Button
-              accessibilityLabel={t('settings.provider.models.addMoreSettings')}
-              disabled={isSubmitting}
-              onPress={toggleMoreSettings}
-              size="field"
-              variant="secondary"
-            >
-              <Button.Label numberOfLines={1}>
-                {t('settings.provider.models.addMoreSettings')}
-              </Button.Label>
-              {showMoreSettings ? (
-                <ChevronUpIcon className="size-4 text-foreground" />
-              ) : (
-                <ChevronDownIcon className="size-4 text-foreground" />
-              )}
-            </Button>
+            {!isBatchAdd ? (
+              <View className="gap-3">
+                <View className="items-start">
+                  <Button
+                    accessibilityLabel={t('settings.provider.models.addMoreSettings')}
+                    accessibilityState={{ expanded: showMoreSettings }}
+                    disabled={isSubmitting}
+                    hitSlop={8}
+                    onPress={toggleMoreSettings}
+                    size="inline"
+                    variant="ghost"
+                  >
+                    <Button.Label numberOfLines={1}>
+                      {t('settings.provider.models.addMoreSettings')}
+                    </Button.Label>
+                    {showMoreSettings ? (
+                      <ChevronUpIcon className="size-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDownIcon className="size-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </View>
 
-            {showMoreSettings ? (
-              <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
-                <ProviderModelAddNumberField
-                  accessibilityLabel={t('settings.provider.models.addContextWindowLabel')}
-                  isDisabled={isSubmitting}
-                  label={t('settings.provider.models.addContextWindowLabel')}
-                  placeholder={t('settings.provider.models.addContextWindowPlaceholder')}
-                  value={formState.contextWindow}
-                  onChangeText={updateContextWindow}
-                  onFocus={handleAdvancedFieldFocus}
-                />
-                <ProviderModelAddNumberField
-                  accessibilityLabel={t('settings.provider.models.addMaxInputTokensLabel')}
-                  isDisabled={isSubmitting}
-                  label={t('settings.provider.models.addMaxInputTokensLabel')}
-                  placeholder={t('settings.provider.models.addMaxInputTokensPlaceholder')}
-                  value={formState.maxInputTokens}
-                  onChangeText={updateMaxInputTokens}
-                  onFocus={handleAdvancedFieldFocus}
-                />
-                <ProviderModelAddNumberField
-                  accessibilityLabel={t('settings.provider.models.addMaxOutputTokensLabel')}
-                  isDisabled={isSubmitting}
-                  label={t('settings.provider.models.addMaxOutputTokensLabel')}
-                  placeholder={t('settings.provider.models.addMaxOutputTokensPlaceholder')}
-                  value={formState.maxOutputTokens}
-                  onChangeText={updateMaxOutputTokens}
-                  onFocus={handleAdvancedFieldFocus}
-                />
+                {showMoreSettings ? (
+                  <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
+                    <Text className="text-muted-foreground text-xs">
+                      {t('settings.provider.models.addAdvancedDescription')}
+                    </Text>
+                    <ProviderModelAddNumberField
+                      accessibilityLabel={t('settings.provider.models.addContextWindowLabel')}
+                      isDisabled={isSubmitting}
+                      label={t('settings.provider.models.addContextWindowLabel')}
+                      placeholder={t('settings.provider.models.addContextWindowPlaceholder')}
+                      value={formState.contextWindow}
+                      onChangeText={updateContextWindow}
+                      onFocus={handleAdvancedFieldFocus}
+                    />
+                    <ProviderModelAddNumberField
+                      accessibilityLabel={t('settings.provider.models.addMaxInputTokensLabel')}
+                      isDisabled={isSubmitting}
+                      label={t('settings.provider.models.addMaxInputTokensLabel')}
+                      placeholder={t('settings.provider.models.addMaxInputTokensPlaceholder')}
+                      value={formState.maxInputTokens}
+                      onChangeText={updateMaxInputTokens}
+                      onFocus={handleAdvancedFieldFocus}
+                    />
+                    <ProviderModelAddNumberField
+                      accessibilityLabel={t('settings.provider.models.addMaxOutputTokensLabel')}
+                      isDisabled={isSubmitting}
+                      label={t('settings.provider.models.addMaxOutputTokensLabel')}
+                      placeholder={t('settings.provider.models.addMaxOutputTokensPlaceholder')}
+                      value={formState.maxOutputTokens}
+                      onChangeText={updateMaxOutputTokens}
+                      onFocus={handleAdvancedFieldFocus}
+                    />
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </KeyboardAwareScrollView>
@@ -607,45 +617,72 @@ function ProviderModelAddForm({
   );
 }
 
+function getProviderModelScreenTitleKey(task: ProviderModelTask) {
+  return task === 'sync'
+    ? 'settings.provider.models.syncTitle'
+    : 'settings.provider.models.addTitle';
+}
+
+function ProviderModelAddSection({
+  children,
+  description,
+  title,
+}: {
+  children: ReactNode;
+  description?: string;
+  title: string;
+}) {
+  return (
+    <View className="gap-3">
+      <View className="gap-1">
+        <Text className="font-medium text-base text-foreground">{title}</Text>
+        {description ? <Text className="text-muted-foreground text-xs">{description}</Text> : null}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 function ProviderModelAddTextField({
   accessibilityLabel,
+  description,
   errorMessage,
   isDisabled,
   label,
-  multiline = false,
   onChangeText,
   onFocus,
   placeholder,
+  required = false,
   value,
   textInputProps,
 }: {
   accessibilityLabel: string;
+  description?: string;
   errorMessage?: string;
   isDisabled: boolean;
   label: string;
-  multiline?: boolean;
   onChangeText: (value: string) => void;
   onFocus?: TextInputProps['onFocus'];
   placeholder: string;
+  required?: boolean;
   textInputProps?: Pick<TextInputProps, 'inputMode' | 'keyboardType'>;
   value: string;
 }) {
   return (
-    <TextField disabled={isDisabled} invalid={Boolean(errorMessage)}>
+    <TextField disabled={isDisabled} invalid={Boolean(errorMessage)} required={required}>
       <TextField.Label>{label}</TextField.Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        multiline={multiline}
         onChangeText={onChangeText}
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
         {...textInputProps}
       />
+      {description ? <TextField.Description>{description}</TextField.Description> : null}
       <TextField.Error>{errorMessage}</TextField.Error>
     </TextField>
   );
@@ -691,9 +728,10 @@ function ProviderModelAddNumberField({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    gap: 16,
+    gap: 28,
+    paddingBottom: 32,
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingTop: 20,
   },
   expandedScrollContent: {
     paddingBottom: advancedSettingsKeyboardPadding,

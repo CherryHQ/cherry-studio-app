@@ -71,6 +71,26 @@ export default function ProviderListScreen() {
         return;
       }
 
+      if (isEnabled) {
+        // Enabling is a setup flow: model synchronization turns the provider on
+        // only after it has confirmed that usable models are available.
+        if (isNavigatingRef.current) {
+          return;
+        }
+
+        isNavigatingRef.current = true;
+        router.push({
+          params: {
+            mode: 'sync',
+            providerId: provider.id,
+            providerName: provider.name,
+            returnTo: '/settings/provider',
+          },
+          pathname: '/settings/provider/[providerId]/model-add',
+        });
+        return;
+      }
+
       pendingProviderIdsRef.current.add(provider.id);
       setPendingProviderStates((current) => new Map(current).set(provider.id, isEnabled));
 
@@ -80,10 +100,7 @@ export default function ProviderListScreen() {
       })
         .then(() => {
           toast.show({
-            label: t(
-              isEnabled ? 'settings.provider.toast.enabled' : 'settings.provider.toast.disabled',
-              { name: provider.name },
-            ),
+            label: t('settings.provider.toast.disabled', { name: provider.name }),
             variant: 'success',
           });
         })
@@ -99,7 +116,7 @@ export default function ProviderListScreen() {
           });
         });
     },
-    [t, toast, updateProviderEnabled],
+    [router, t, toast, updateProviderEnabled],
   );
 
   const providersPageQuery = useInfiniteQuery('/providers/page', {
