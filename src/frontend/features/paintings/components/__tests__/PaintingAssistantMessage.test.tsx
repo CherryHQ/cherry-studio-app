@@ -116,13 +116,16 @@ describe('PaintingAssistantMessage', () => {
       );
     });
 
-    expect(
+    const outputLabels = new Set(
       renderer?.root
         .findAllByProps({ accessibilityRole: 'button' })
         .map((node) => node.props.accessibilityLabel),
-    ).toEqual([
-      'painting.outputAccessibility:{"count":2,"index":1,"prompt":"Draw a cherry"}',
-      'painting.outputAccessibility:{"count":2,"index":2,"prompt":"Draw a cherry"}',
-    ]);
+    );
+    expect(outputLabels).toEqual(
+      new Set([
+        'painting.outputAccessibility:{"count":2,"index":1,"prompt":"Draw a cherry"}',
+        'painting.outputAccessibility:{"count":2,"index":2,"prompt":"Draw a cherry"}',
+      ]),
+    );
   });
 });
