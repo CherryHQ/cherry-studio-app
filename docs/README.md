@@ -34,7 +34,7 @@ They are the source of truth for how the repository works today.
 | [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
 | [Expo UI Bottom Sheet Navigation](./references/expo-ui-bottom-sheet-navigation.md) | Sheet page transitions, physical stacking, and platform constraints |
-| [Design Spec](../DESIGN.md) | Visual decisions: token sourcing, contrast, type scale, hierarchy, and the literal-colour exemptions |
+| [Design Spec](../DESIGN.md) | Visual and motion decisions: token sourcing, contrast, type scale, hierarchy, interaction motion, and literal-colour exemptions |
 
 ### Product Systems
 
