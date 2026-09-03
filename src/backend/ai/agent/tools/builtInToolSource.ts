@@ -140,7 +140,6 @@ export function createSystemCapabilitySource(
 
 export type ResolvedToolPolicy = {
   approval: RuntimeTool['approval'];
-  approvalScope?: string;
   autoApprovalEligible: boolean;
 };
 
@@ -176,13 +175,7 @@ export function resolveApproval(
     return null;
   }
   if (statuses.some((status) => status === 'undetermined')) {
-    return {
-      approval: 'ask',
-      autoApprovalEligible: false,
-      ...(descriptor.defaultApproval === 'auto'
-        ? { approvalScope: `device-permission:${descriptor.permissionScopes.join('+')}` }
-        : {}),
-    };
+    return { approval: 'ask', autoApprovalEligible: false };
   }
   return {
     approval: descriptor.defaultApproval,

@@ -2103,53 +2103,6 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('reuses an approved scope for later read tools in the same turn', async () => {
-    const runtime = createTestRuntime();
-    const executed: string[] = [];
-    const first = {
-      ...askTool(() => executed.push('collections')),
-      approvalScope: 'device-permission:calendar.read',
-      providerName: 'calendar_list_collections',
-    };
-    const second = {
-      ...askTool(() => executed.push('events')),
-      approvalScope: 'device-permission:calendar.read',
-      providerName: 'calendar_list_events',
-    };
-    arrange(runtime, async (context) => {
-      const [firstTool, secondTool] = context.options.initialState?.tools ?? [];
-      if (!firstTool || !secondTool) throw new Error('Scoped approval tools are missing.');
-      await firstTool.execute('scoped-call-1', {}, context.signal);
-      await secondTool.execute('scoped-call-2', {}, context.signal);
-      await emitText(context, 'Calendar reads completed.');
-    });
-    const session = await runtime.open();
-    const events: RuntimeEvent[] = [];
-    const collecting = (async () => {
-      for await (const event of session.execute(
-        baseRequest('turn-scoped-approval', { tools: [first, second] }),
-      )) {
-        events.push(event);
-      }
-    })();
-    await waitFor(
-      () => events.some((event) => event.type === 'approval.requested'),
-      'the scoped approval request',
-    );
-
-    await session.respondApproval({
-      approvalId: 'approval-scoped-call-1',
-      decision: 'approve',
-      turnId: 'turn-scoped-approval',
-    });
-    await collecting;
-
-    expect(events.filter((event) => event.type === 'approval.requested')).toHaveLength(1);
-    expect(executed).toEqual(['collections', 'events']);
-    expect(events.at(-1)).toEqual({ type: 'completed' });
-    await session.close();
-  });
-
   test('does not publish a second approval when a provider reuses a pending call id', async () => {
     const runtime = createTestRuntime();
     let executionCount = 0;

@@ -205,7 +205,6 @@ type TurnPhase = 'running' | 'cancelling' | 'timing-out' | 'terminated';
 type ActiveTurn = {
   abortController: AbortController;
   agent?: PiRuntimeAgent;
-  approvedToolApprovalScopes: Set<string>;
   approvalWaiters: Map<string, ApprovalWaiter>;
   channel: RuntimeEventChannel;
   currentMessageOrdinal?: number;
@@ -601,7 +600,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     const turn: ActiveTurn = {
       abortController: new AbortController(),
-      approvedToolApprovalScopes: new Set(),
       approvalWaiters: new Map(),
       channel,
       dispatchCalls: new Map(),
@@ -1139,10 +1137,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       return DENIED_TOOL_RESULT;
     }
 
-    const hasScopedApproval =
-      runtimeTool.approvalScope !== undefined &&
-      turn.approvedToolApprovalScopes.has(runtimeTool.approvalScope);
-    if (runtimeTool.approval === 'ask' && !hasScopedApproval) {
+    if (runtimeTool.approval === 'ask') {
       const approvalId = `approval-${toolCallId}`;
       // A failed registration must never publish an approval card: a duplicate
       // provider call id would orphan the earlier waiter, so the collision
@@ -1191,9 +1186,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
         turn.settledToolCalls.add(toolCallId);
         return DENIED_TOOL_RESULT;
-      }
-      if (runtimeTool.approvalScope) {
-        turn.approvedToolApprovalScopes.add(runtimeTool.approvalScope);
       }
       if (turn.phase !== 'running' || signal?.aborted) {
         return this.interruptToolCall(turn, part);

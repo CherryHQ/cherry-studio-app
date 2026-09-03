@@ -182,12 +182,6 @@ export type RuntimeTool = {
    * (cost-bearing or permission-gated calls). Absent means eligible.
    */
   autoApprovalEligible?: boolean;
-  /**
-   * One-turn consent scope. After the user approves one `ask` tool in this
-   * scope, later `ask` tools with the same scope skip duplicate prompts. Only
-   * app-owned policies may set it; independent side effects stay unscoped.
-   */
-  approvalScope?: string;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

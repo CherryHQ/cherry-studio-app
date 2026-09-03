@@ -58,22 +58,6 @@ describe('createSystemCapabilitySource', () => {
     // The escalated ask is a consent requirement; the Agent's global auto
     // mode must not silence the in-app card before the one-shot OS prompt.
     expect(location?.autoApprovalEligible).toBe(false);
-    expect(location?.approvalScope).toBe('device-permission:location.read');
-  });
-
-  test('shares one-turn approval only across default-auto tools with the same permission scope', async () => {
-    const tools = await resolve({ deviceAccess: { 'calendar.read': 'undetermined' } });
-    const collections = tools.find((tool) => tool.providerName === 'calendar_list_collections');
-    const events = tools.find((tool) => tool.providerName === 'calendar_list_events');
-
-    expect(collections?.approvalScope).toBe('device-permission:calendar.read');
-    expect(events?.approvalScope).toBe(collections?.approvalScope);
-
-    const mutation = (await resolve({ deviceAccess: { 'calendar.write': 'undetermined' } })).find(
-      (tool) => tool.providerName === 'calendar_create_event',
-    );
-    expect(mutation?.approval).toBe('ask');
-    expect(mutation?.approvalScope).toBeUndefined();
   });
 
   test('omits a device tool once any scope it needs is denied', async () => {
