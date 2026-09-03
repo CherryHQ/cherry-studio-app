@@ -11,6 +11,7 @@ import {
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getConfiguredCustomProviderTextEndpoints,
+  getCustomProviderEndpointRequestPreview,
   hasConfiguredCustomProviderTextEndpoint,
   isValidEndpointBaseUrl,
 } from '../../../apiService/utils/providerApiServiceEndpointRules';
@@ -130,6 +131,7 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
   const trimmedValue = value.trim();
   const isInvalid = trimmedValue.length > 0 && !isValidEndpointBaseUrl(trimmedValue);
   const isDefault = endpoint === state.defaultChatEndpoint && trimmedValue.length > 0;
+  const requestUrl = getCustomProviderEndpointRequestPreview(endpoint, trimmedValue);
 
   return (
     <TextField disabled={meta.isSubmitting} invalid={isInvalid}>
@@ -162,6 +164,19 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
         placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
         value={value}
       />
+      {requestUrl ? (
+        <Text
+          accessibilityLabel={t('settings.provider.apiService.requestUrlAccessibility', {
+            url: requestUrl,
+          })}
+          className="font-mono text-muted-foreground text-xs"
+          ellipsizeMode="middle"
+          numberOfLines={1}
+          selectable
+        >
+          {requestUrl}
+        </Text>
+      ) : null}
       <TextField.Error>
         {isInvalid ? t('settings.provider.apiService.invalidBaseUrlMessage') : undefined}
       </TextField.Error>

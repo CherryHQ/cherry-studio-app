@@ -283,6 +283,17 @@ type ModelEndpointWrite = {
   providerId: string;
 };
 
+function toCreateModelEndpointWrite(
+  input: Pick<CreateModelInput, 'endpointTypes' | 'providerId'>,
+): ModelEndpointWrite {
+  return {
+    // The legacy single-endpoint behavior is an implicit route: a model with
+    // no endpointTypes follows the provider's configured default endpoint.
+    endpointTypes: input.endpointTypes ?? [],
+    providerId: input.providerId,
+  };
+}
+
 async function assertModelEndpointWrites(
   tx: Database,
   writes: readonly ModelEndpointWrite[],
@@ -380,7 +391,7 @@ export class ModelService {
 
   async create(input: CreateModelInput): Promise<Model> {
     const row = (await this.dbService.withWriteTx(async (tx) => {
-      await assertModelEndpointWrites(tx, [input]);
+      await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
       return insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
         pkColumn: userModelTable.id,
         scope: eq(userModelTable.providerId, input.providerId),
@@ -395,7 +406,7 @@ export class ModelService {
     }
     const values = inputs.map(buildCreateValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
-      await assertModelEndpointWrites(tx, inputs);
+      await assertModelEndpointWrites(tx, inputs.map(toCreateModelEndpointWrite));
       const result: UserModelRow[] = [];
       for (const providerId of new Set(values.map((value) => value.providerId))) {
         const scopedValues = values.filter((value) => value.providerId === providerId);
@@ -696,7 +707,7 @@ export class ModelService {
     return this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(
         tx,
-        toAdd.map((model) => ({ endpointTypes: model.endpointTypes, providerId })),
+        toAdd.map((model) => ({ endpointTypes: model.endpointTypes ?? [], providerId })),
       );
       const existingRows: Pick<UserModelRow, 'id' | 'presetModelId'>[] = [];
       for (const idChunk of chunks(requestedRemoveIds, sqliteBatchSize)) {

@@ -613,6 +613,7 @@
   "settings.provider.apiService.removeEndpointTitle": "Remove endpoint?",
   "settings.provider.apiService.removeApiKeyMessage": "Remove this API key from this provider?",
   "settings.provider.apiService.removeApiKeyTitle": "Remove API key?",
+  "settings.provider.apiService.requestUrlAccessibility": "Request URL: {{url}}",
   "settings.provider.apiService.saveFailed": "Failed to save",
   "settings.provider.apiService.secretAccessKey": "Secret Access Key",
   "settings.provider.apiService.showApiKeys": "Show API Key",

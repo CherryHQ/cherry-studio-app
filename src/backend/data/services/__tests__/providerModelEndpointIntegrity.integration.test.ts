@@ -1,6 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 
+import { eq } from 'drizzle-orm';
+
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
@@ -118,6 +121,28 @@ describe('custom provider model endpoint integrity', () => {
       }),
     ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
+
+  it.each(['create', 'batch', 'reconcile'] as const)(
+    'validates the provider default when %s omits endpointTypes',
+    async (writePath) => {
+      const providerId = `implicit-${writePath}`;
+      await createProvider(providerId);
+      await db.database
+        .update(userProviderTable)
+        .set({ defaultChatEndpoint: 'openai-responses' })
+        .where(eq(userProviderTable.providerId, providerId));
+
+      const model = { modelId: `${writePath}-model`, providerId };
+      const write =
+        writePath === 'create'
+          ? models.create(model)
+          : writePath === 'batch'
+            ? models.batchCreate([model])
+            : models.reconcileProviderModels(providerId, { toAdd: [model] });
+
+      await expect(write).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    },
+  );
 
   it('requires a configured Pi text default when custom endpoint settings are written', async () => {
     await expect(

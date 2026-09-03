@@ -35,8 +35,8 @@ import {
 import { useProviderModelPullSelection } from '../../models/hooks/useProviderModelPullSelection';
 import {
   getProviderModelEndpointLabelKey,
+  getProviderModelPurposeOptions,
   providerModelAddEndpointOptions,
-  PROVIDER_MODEL_PURPOSE_OPTIONS,
 } from '../../models/utils/providerModelAdd';
 import type { ProviderModelPullPreview } from '../../models/utils/providerModelPullPreview';
 import { useProviderDetailSettings } from '../hooks/useProviderDetailSettings';
@@ -169,6 +169,9 @@ function ProviderModelAddForm({
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showMoreSettings, setShowMoreSettings] = useState(false);
   const supportsModelSync = provider.presetProviderId != null;
+  const modelPurposeOptions = getProviderModelPurposeOptions(provider);
+  const showsModelPurposeOptions = modelPurposeOptions.length > 1;
+  const showsChatEndpointOptions = modelPurpose === 'chat' && chatEndpointTypes.length > 1;
 
   const clearAdvancedFieldScrollTimer = useCallback(() => {
     if (!advancedFieldScrollTimeoutRef.current) {
@@ -486,35 +489,40 @@ function ProviderModelAddForm({
               </View>
             ) : null}
 
-            {modelAddMode === 'purpose' ? (
-              <View className="gap-2">
-                <Text className="font-medium text-foreground text-sm">
-                  {t('settings.provider.models.addPurposeLabel')}
-                </Text>
-                <Text className="text-muted-foreground text-xs">
-                  {t('settings.provider.models.addPurposeDescription')}
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {PROVIDER_MODEL_PURPOSE_OPTIONS.map((option) => (
-                    <Chip.Selectable
-                      accessibilityLabel={t(option.labelKey)}
-                      accessibilityRole="radio"
-                      disabled={isSubmitting}
-                      key={option.id}
-                      onSelectedChange={(selected) => {
-                        if (selected) {
-                          updateModelPurpose(option.id);
-                        }
-                      }}
-                      selected={modelPurpose === option.id}
-                    >
-                      {t(option.labelKey)}
-                    </Chip.Selectable>
-                  ))}
-                </View>
+            {modelAddMode === 'purpose' &&
+            (showsModelPurposeOptions || showsChatEndpointOptions) ? (
+              <View className="gap-4">
+                {showsModelPurposeOptions ? (
+                  <View className="gap-2">
+                    <Text className="font-medium text-foreground text-sm">
+                      {t('settings.provider.models.addPurposeLabel')}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">
+                      {t('settings.provider.models.addPurposeDescription')}
+                    </Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      {modelPurposeOptions.map((option) => (
+                        <Chip.Selectable
+                          accessibilityLabel={t(option.labelKey)}
+                          accessibilityRole="radio"
+                          disabled={isSubmitting}
+                          key={option.id}
+                          onSelectedChange={(selected) => {
+                            if (selected) {
+                              updateModelPurpose(option.id);
+                            }
+                          }}
+                          selected={modelPurpose === option.id}
+                        >
+                          {t(option.labelKey)}
+                        </Chip.Selectable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
 
-                {modelPurpose === 'chat' && chatEndpointTypes.length > 1 ? (
-                  <View className="mt-2 gap-2">
+                {showsChatEndpointOptions ? (
+                  <View className="gap-2">
                     <Text className="font-medium text-foreground text-sm">
                       {t('settings.provider.models.addChatEndpointLabel')}
                     </Text>

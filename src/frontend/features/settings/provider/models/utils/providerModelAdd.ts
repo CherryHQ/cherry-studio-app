@@ -36,6 +36,11 @@ export const PROVIDER_MODEL_PURPOSE_OPTIONS = [
   { id: 'image-edit', labelKey: 'settings.provider.models.addPurpose.imageEdit' },
 ] as const satisfies readonly { id: ProviderModelPurpose; labelKey: string }[];
 
+const OPENAI_COMPATIBLE_TEXT_ENDPOINT_TYPES = new Set<EndpointType>([
+  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+  ENDPOINT_TYPE.OPENAI_RESPONSES,
+]);
+
 export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
   ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
@@ -154,6 +159,29 @@ export function getProviderChatEndpointTypes(
   }
 
   return endpointTypes;
+}
+
+export function getProviderModelPurposeOptions(provider: Provider) {
+  return PROVIDER_MODEL_PURPOSE_OPTIONS.filter(({ id }) => {
+    if (id === 'chat') {
+      return true;
+    }
+
+    const endpointType = getProviderModelPurposeEndpointType(
+      id,
+      providerModelAddDefaultEndpointType,
+    );
+    if (provider.endpointConfigs?.[endpointType]?.baseUrl?.trim()) {
+      return true;
+    }
+
+    const defaultEndpointType = provider.defaultChatEndpoint;
+    return (
+      defaultEndpointType != null &&
+      OPENAI_COMPATIBLE_TEXT_ENDPOINT_TYPES.has(defaultEndpointType) &&
+      Boolean(provider.endpointConfigs?.[defaultEndpointType]?.baseUrl?.trim())
+    );
+  });
 }
 
 export function inferProviderModelPurpose(

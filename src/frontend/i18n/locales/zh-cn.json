@@ -611,6 +611,7 @@
   "settings.provider.apiService.removeEndpointTitle": "移除 Endpoint？",
   "settings.provider.apiService.removeApiKeyMessage": "从当前服务商移除这个 API Key？",
   "settings.provider.apiService.removeApiKeyTitle": "移除 API Key？",
+  "settings.provider.apiService.requestUrlAccessibility": "请求地址：{{url}}",
   "settings.provider.apiService.saveFailed": "保存失败",
   "settings.provider.apiService.secretAccessKey": "Secret Access Key",
   "settings.provider.apiService.showApiKeys": "显示 API Key",
