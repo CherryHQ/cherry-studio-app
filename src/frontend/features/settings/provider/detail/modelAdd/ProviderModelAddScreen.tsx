@@ -270,27 +270,57 @@ function ProviderModelAddForm({
   }, [alert, applySyncSelection, selectedIds.size, selectedMissingCount, t]);
   const isSaving = isSubmitting || isApplying;
   const isManualSubmitDisabled = isSubmitting || !canSubmit;
+  const syncSubmitLabel = t(
+    selectedIds.size === 0
+      ? 'settings.provider.models.pullApply'
+      : 'settings.provider.models.pullApplySelected',
+    { count: selectedIds.size },
+  );
   // Setup hides the switch to keep first-time configuration on a single track.
   // A sync that came back with nothing to add leaves no track: a self-hosted
   // endpoint that does not serve a model list still has to be given one model
   // by hand, or the provider it just created is stranded without any.
   const showsModeTabs = !returnTo || hasSyncComeBackEmpty;
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () =>
-      activeMode === 'sync'
-        ? []
-        : [
-            {
-              accessibilityLabel: t('settings.provider.models.addSubmit'),
-              disabled: isManualSubmitDisabled,
-              key: 'add-model',
-              label: isSaving ? t('common.saving') : t('settings.provider.models.add'),
-              onPress: () => void handleSubmit(),
-              type: 'label',
-            },
-          ],
-    [activeMode, handleSubmit, isManualSubmitDisabled, isSaving, t],
-  );
+  const rightActions = useMemo<HeaderToolbarAction[]>(() => {
+    if (activeMode === 'sync') {
+      if (!preview) {
+        return [];
+      }
+
+      return [
+        {
+          accessibilityLabel: syncSubmitLabel,
+          disabled: selectedIds.size === 0 || isApplying,
+          key: 'apply-model-changes',
+          label: isApplying ? t('common.saving') : syncSubmitLabel,
+          onPress: handleSyncSubmit,
+          type: 'label',
+        },
+      ];
+    }
+
+    return [
+      {
+        accessibilityLabel: t('settings.provider.models.addSubmit'),
+        disabled: isManualSubmitDisabled,
+        key: 'add-model',
+        label: isSaving ? t('common.saving') : t('settings.provider.models.add'),
+        onPress: () => void handleSubmit(),
+        type: 'label',
+      },
+    ];
+  }, [
+    activeMode,
+    handleSubmit,
+    handleSyncSubmit,
+    isApplying,
+    isManualSubmitDisabled,
+    isSaving,
+    preview,
+    selectedIds.size,
+    syncSubmitLabel,
+    t,
+  ]);
   const modeItems = useMemo(
     () => [
       { label: t('settings.provider.models.addMode.sync'), value: 'sync' as const },
@@ -354,7 +384,6 @@ function ProviderModelAddForm({
           preview ? (
             <ProviderModelPullPreviewContent
               isApplying={isApplying}
-              onApply={handleSyncSubmit}
               preview={preview}
               provider={provider}
               selectedIds={selectedIds}

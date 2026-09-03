@@ -10,11 +10,9 @@ import {
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ModelSearchControls } from '@/frontend/components/ModelPicker';
-import { useListBottomInset } from '@/frontend/components/Selection';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { ProviderModelPullChrome } from '../../models/components/ProviderModelPullChrome';
 import { ProviderModelPurposeTabs } from '../../models/components/ProviderModelPurposeTabs';
 import {
   ProviderModelRow,
@@ -80,7 +78,6 @@ export default function ProviderModelPullScreen() {
 
 export function ProviderModelPullPreviewContent({
   isApplying,
-  onApply,
   preview,
   provider,
   selectedIds,
@@ -88,7 +85,6 @@ export function ProviderModelPullPreviewContent({
   toggleModel,
 }: {
   isApplying: boolean;
-  onApply: () => void;
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
   selectedIds: ReadonlySet<UniqueModelId>;
@@ -97,7 +93,6 @@ export function ProviderModelPullPreviewContent({
 }) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
-  const listBottomInset = useListBottomInset();
   const deferredSearchText = useDeferredValue(searchText);
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const missingCount = preview.missing.length;
@@ -156,54 +151,46 @@ export function ProviderModelPullPreviewContent({
     }),
     [isApplying, provider, sectionIds, sectionSelectedAll, selectedIds, toggleAll, toggleModel],
   );
-  const listContentStyle = useMemo(() => ({ paddingBottom: listBottomInset }), [listBottomInset]);
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
   return (
-    <>
-      <LegendList
-        alwaysBounceVertical={false}
-        contentContainerStyle={listContentStyle}
-        contentInsetAdjustmentBehavior="automatic"
-        data={listItems}
-        drawDistance={320}
-        estimatedItemSize={providerModelRowEstimatedHeights.synchronization}
-        extraData={listExtraData}
-        getItemType={getPullListItemType}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={pullListKeyExtractor}
-        ListFooterComponent={
-          isSearchEmpty ? (
-            <View className="items-center justify-center px-4 py-10">
-              <Text className="text-center text-base text-foreground">
-                {t('settings.provider.models.search.empty')}
-              </Text>
-            </View>
-          ) : null
-        }
-        ListHeaderComponent={
-          <ModelSearchControls
-            onChangeText={setSearchText}
-            placeholder={t('modelPicker.searchPlaceholder')}
-            value={searchText}
-          >
-            {showsModelPurposeTabs ? (
-              <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
-            ) : null}
-          </ModelSearchControls>
-        }
-        maintainVisibleContentPosition={false}
-        recycleItems
-        renderItem={renderPullListItem}
-        showsVerticalScrollIndicator={false}
-        style={styles.list}
-      />
-      <ProviderModelPullChrome
-        isApplying={isApplying}
-        selectedCount={selectedIds.size}
-        onApply={onApply}
-      />
-    </>
+    <LegendList
+      alwaysBounceVertical={false}
+      contentContainerStyle={styles.listContent}
+      contentInsetAdjustmentBehavior="automatic"
+      data={listItems}
+      drawDistance={320}
+      estimatedItemSize={providerModelRowEstimatedHeights.synchronization}
+      extraData={listExtraData}
+      getItemType={getPullListItemType}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+      keyExtractor={pullListKeyExtractor}
+      ListFooterComponent={
+        isSearchEmpty ? (
+          <View className="items-center justify-center px-4 py-10">
+            <Text className="text-center text-base text-foreground">
+              {t('settings.provider.models.search.empty')}
+            </Text>
+          </View>
+        ) : null
+      }
+      ListHeaderComponent={
+        <ModelSearchControls
+          onChangeText={setSearchText}
+          placeholder={t('modelPicker.searchPlaceholder')}
+          value={searchText}
+        >
+          {showsModelPurposeTabs ? (
+            <ProviderModelPurposeTabs onChange={setModelPurpose} value={effectiveModelPurpose} />
+          ) : null}
+        </ModelSearchControls>
+      }
+      maintainVisibleContentPosition={false}
+      recycleItems
+      renderItem={renderPullListItem}
+      showsVerticalScrollIndicator={false}
+      style={styles.list}
+    />
   );
 }
 
@@ -354,5 +341,8 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+  },
+  listContent: {
+    paddingBottom: 24,
   },
 });

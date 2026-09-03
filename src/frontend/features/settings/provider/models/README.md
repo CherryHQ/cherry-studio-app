@@ -27,7 +27,7 @@ Model management opened from provider detail lands on manual mode and returns to
 Synchronization pulls the provider's whole remote catalogue the moment it opens, which is too much
 to spend on a header button that is just as often one model typed by hand. Switching to the
 synchronization tab still pulls, once per visit. A pulled catalogue starts with no proposed changes
-selected: choosing models is explicit, and the bottom action reports how many changes it will apply.
+selected: choosing models is explicit, and the header action reports how many changes it will apply.
 
 `useProviderModelPull` reports how a pull ended and shows nothing itself. The screen a pull runs on
 has room for a full state, so an alert or a toast from the hook would put the same sentence on
