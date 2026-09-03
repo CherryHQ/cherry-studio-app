@@ -8,9 +8,11 @@ export {
 export { getEffectiveAuthConfig, shouldShowApiKeys } from './utils/providerApiServiceAuth';
 export {
   canEditProviderEndpoint,
+  isFullyCustomProvider,
   getProviderPrimaryBaseUrl,
 } from './utils/providerApiServiceEndpointRules';
 export {
   buildProviderPrimaryBaseUrlUpdates,
+  buildProviderTextEndpointUpdates,
   ProviderApiServiceSaveError,
 } from './utils/providerApiServiceSave';

@@ -8,6 +8,21 @@ const MODE_TABS_TEST_ID = 'model-add-mode-tabs';
 
 let mockSearchParams: Record<string, string> = {};
 let mockPullResult: ProviderModelPullLoadResult = 'failed';
+let mockProvider: {
+  authType: 'api-key';
+  id: string;
+  isEnabled: boolean;
+  name: string;
+  presetProviderId?: string;
+  settings: Record<string, never>;
+} = {
+  authType: 'api-key',
+  id: 'preset',
+  isEnabled: true,
+  name: 'Preset',
+  presetProviderId: 'openai',
+  settings: {},
+};
 const mockLoadPullPreview = jest.fn(async () => mockPullResult);
 const mockDismissTo = jest.fn();
 
@@ -114,7 +129,7 @@ jest.mock('../../../apiService', () => ({
 
 jest.mock('../../hooks/useProviderDetailSettings', () => ({
   useProviderDetailSettings: () => ({
-    provider: { authType: 'api-key', id: 'custom', isEnabled: true, name: 'Custom', settings: {} },
+    provider: mockProvider,
     providerQuery: { isError: false },
   }),
 }));
@@ -175,10 +190,9 @@ jest.mock('../../modelPull/ProviderModelPullScreen', () => {
 });
 
 /**
- * Setup drops the user straight into a sync so first-time configuration is one
- * pass. A self-hosted endpoint that answers chat but not `/models` turns that
- * into a dead end: the provider is already created, and without the mode switch
- * there is no way to name a model by hand and finish.
+ * Preset-provider setup drops the user straight into sync so first-time
+ * configuration is one pass. If its model catalog is unavailable, the user
+ * still needs an escape hatch to add a model manually.
  */
 describe('provider setup flow when the sync has nothing to offer', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -194,7 +208,15 @@ describe('provider setup flow when the sync has nothing to offer', () => {
   }
 
   beforeEach(() => {
-    mockSearchParams = { mode: 'sync', providerId: 'custom', returnTo: '/agents/new' };
+    mockProvider = {
+      authType: 'api-key',
+      id: 'preset',
+      isEnabled: true,
+      name: 'Preset',
+      presetProviderId: 'openai',
+      settings: {},
+    };
+    mockSearchParams = { mode: 'sync', providerId: 'preset', returnTo: '/agents/new' };
     mockPullResult = 'failed';
     mockDismissTo.mockReset();
     mockLoadPullPreview.mockReset();
@@ -269,5 +291,27 @@ describe('provider setup flow when the sync has nothing to offer', () => {
 
     await act(async () => settleRetry());
     expect(modeTabs()).not.toHaveLength(0);
+  });
+
+  it('keeps custom providers in manual mode even for a legacy sync route', async () => {
+    mockProvider = {
+      authType: 'api-key',
+      id: 'custom',
+      isEnabled: true,
+      name: 'Custom',
+      presetProviderId: undefined,
+      settings: {},
+    };
+    mockSearchParams = { mode: 'sync', providerId: 'custom', returnTo: '/agents/new' };
+
+    await mountSetupFlow();
+
+    expect(mockLoadPullPreview).not.toHaveBeenCalled();
+    expect(modeTabs()).toHaveLength(0);
+    expect(
+      renderer?.root.findAllByProps({
+        accessibilityLabel: 'settings.provider.models.addModelIdLabel',
+      }),
+    ).not.toHaveLength(0);
   });
 });

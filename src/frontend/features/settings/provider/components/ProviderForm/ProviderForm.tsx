@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { ProviderFormAvatar } from './components/ProviderFormAvatar';
-import { ProviderFormBaseUrl } from './components/ProviderFormEndpoints';
+import { ProviderFormBaseUrl, ProviderFormTextEndpoints } from './components/ProviderFormEndpoints';
 import { ProviderFormApiKey, ProviderFormName } from './components/ProviderFormFields';
 import { type ProviderForm as ProviderFormValue, ProviderFormContext } from './context';
 
@@ -13,7 +13,7 @@ type ProviderFormProps = {
 
 /**
  * Provider editing as a compound component: `ProviderForm.Avatar` / `.Name` /
- * `.BaseUrl` / `.ApiKey` under a root that carries the draft.
+ * `.BaseUrl` or `.Endpoints` / `.ApiKey` under a root that carries the draft.
  * Screens compose the fields they want instead of switching them on and off.
  *
  * The root deliberately renders no scroll container: the screen owns that, so
@@ -37,5 +37,6 @@ export const ProviderForm = Object.assign(ProviderFormRoot, {
   ApiKey: ProviderFormApiKey,
   Avatar: ProviderFormAvatar,
   BaseUrl: ProviderFormBaseUrl,
+  Endpoints: ProviderFormTextEndpoints,
   Name: ProviderFormName,
 });

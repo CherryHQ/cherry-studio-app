@@ -24,8 +24,8 @@ const providerModelBadgeLabelKeys = {
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
- * and the pull preview. Both now select rather than act row by row, so neither
- * puts anything at the end of the row; `children` is the slot if one ever does.
+ * and the pull preview. `children` carries a compact trailing control in
+ * management mode; synchronization mode makes the whole row selectable.
  *
  * Laid out here rather than through `Section.Item`, whose `py-3` is fixed: a
  * settings row holds one tappable line and can afford the height, but this one
@@ -105,7 +105,11 @@ export function ProviderModelRow({
 
   if (!selection) {
     return (
-      <View accessibilityLabel={accessibilityLabel} accessible className={rowClassName}>
+      <View
+        accessibilityLabel={children ? undefined : accessibilityLabel}
+        accessible={!children}
+        className={rowClassName}
+      >
         {content}
       </View>
     );

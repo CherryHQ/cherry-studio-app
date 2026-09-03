@@ -57,8 +57,9 @@ describe('provider model add helpers', () => {
       getProviderChatEndpointTypes({
         defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
         endpointConfigs: {
-          [ENDPOINT_TYPE.OPENAI_RESPONSES]: {},
-          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {},
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://responses.example.com' },
+          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://anthropic.example.com' },
+          [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: { baseUrl: '' },
           [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {},
           [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: {},
         },

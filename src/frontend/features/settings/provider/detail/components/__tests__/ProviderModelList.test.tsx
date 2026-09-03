@@ -11,12 +11,19 @@ jest.mock('@cherrystudio/ui/components', () => {
       React.createElement('View', { className }, React.createElement('Text', null, title)),
   };
 
-  return { ContentState };
+  return { ContentState, OptionPickerBottomSheet: () => null };
 });
 
 jest.mock('../../../models/components/ProviderModelListContent', () => ({
   ProviderModelListContent: ({ ListEmptyComponent }: { ListEmptyComponent?: ReactElement }) =>
     ListEmptyComponent ?? null,
+}));
+
+jest.mock('../../../models/hooks/useProviderModelEndpointUpdate', () => ({
+  useProviderModelEndpointUpdate: () => ({
+    updateEndpoint: jest.fn(),
+    updatingModelId: undefined,
+  }),
 }));
 
 jest.mock('react-i18next', () => ({

@@ -1,3 +1,5 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import { Button } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +8,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
+import { getProviderModelEndpointLabelKey } from '../utils/providerModelAdd';
+import {
+  getProviderModelEndpointState,
+  shouldShowProviderModelEndpointPicker,
+} from '../utils/providerModelEndpoint';
 import {
   buildProviderModelListItems,
   type ProviderModelListItem,
@@ -15,26 +22,43 @@ import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderMo
 export type ProviderModelListContentProps = {
   groupByPurpose: boolean;
   ListEmptyComponent?: ReactElement;
+  isEndpointSelectionDisabled?: boolean;
   models: Model[];
+  onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
+  updatingModelId?: string;
 };
 
 type ProviderModelListExtraData = {
+  isEndpointSelectionDisabled: boolean;
+  onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
+  updatingModelId?: string;
 };
 
 export function ProviderModelListContent({
   groupByPurpose,
+  isEndpointSelectionDisabled = false,
   ListEmptyComponent,
   models,
+  onEndpointPress,
   provider,
+  updatingModelId,
 }: ProviderModelListContentProps) {
   const { t } = useTranslation();
   const listItems = useMemo(
     () => buildProviderModelListItems(models, groupByPurpose),
     [groupByPurpose, models],
   );
-  const extraData = useMemo<ProviderModelListExtraData>(() => ({ provider }), [provider]);
+  const extraData = useMemo<ProviderModelListExtraData>(
+    () => ({
+      isEndpointSelectionDisabled,
+      onEndpointPress,
+      provider,
+      updatingModelId,
+    }),
+    [isEndpointSelectionDisabled, onEndpointPress, provider, updatingModelId],
+  );
   const renderItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
       if (item.type === 'section') {
@@ -60,12 +84,25 @@ export function ProviderModelListContent({
         );
       }
 
+      const itemProvider = itemExtraData.provider;
+      const endpointButton =
+        itemProvider &&
+        itemExtraData.onEndpointPress &&
+        shouldShowProviderModelEndpointPicker({ model: item.model, provider: itemProvider }) ? (
+          <ProviderModelEndpointButton
+            disabled={
+              itemExtraData.isEndpointSelectionDisabled || Boolean(itemExtraData.updatingModelId)
+            }
+            model={item.model}
+            onPress={itemExtraData.onEndpointPress}
+            provider={itemProvider}
+          />
+        ) : null;
+
       return (
-        <ProviderModelRow
-          model={item.model}
-          provider={itemExtraData.provider}
-          variant="management"
-        />
+        <ProviderModelRow model={item.model} provider={itemProvider} variant="management">
+          {endpointButton}
+        </ProviderModelRow>
       );
     },
     [t],
@@ -90,6 +127,52 @@ export function ProviderModelListContent({
       showsVerticalScrollIndicator={false}
       style={styles.list}
     />
+  );
+}
+
+function ProviderModelEndpointButton({
+  disabled,
+  model,
+  onPress,
+  provider,
+}: {
+  disabled: boolean;
+  model: Model;
+  onPress: (model: Model) => void;
+  provider: Provider;
+}) {
+  const { t } = useTranslation();
+  const endpointState = getProviderModelEndpointState(provider, model);
+  const endpointLabel =
+    (endpointState.kind === 'default' || endpointState.kind === 'explicit') &&
+    endpointState.endpointType
+      ? t(getProviderModelEndpointLabelKey(endpointState.endpointType))
+      : undefined;
+  const label =
+    endpointState.kind === 'default'
+      ? t('settings.provider.models.endpoint.defaultLabel', { endpoint: endpointLabel })
+      : endpointState.kind === 'explicit'
+        ? endpointLabel
+        : t(
+            endpointState.kind === 'unsupported'
+              ? 'settings.provider.models.endpoint.unsupported'
+              : 'settings.provider.models.endpoint.unavailable',
+          );
+  const handlePress = useCallback(() => onPress(model), [model, onPress]);
+
+  return (
+    <Button
+      accessibilityLabel={t('settings.provider.models.endpoint.changeAccessibility', {
+        model: model.name,
+      })}
+      disabled={disabled}
+      onPress={handlePress}
+      size="inline"
+      variant="ghost"
+    >
+      <Button.Label numberOfLines={1}>{label}</Button.Label>
+      <ChevronDownIcon className="size-4 text-muted-foreground" />
+    </Button>
   );
 }
 

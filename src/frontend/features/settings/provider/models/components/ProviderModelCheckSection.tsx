@@ -13,6 +13,8 @@ import type { Model } from '@/shared/data/types/model';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
+import { getProviderModelEndpointLabelKey } from '../utils/providerModelAdd';
+import { getProviderModelEndpointState } from '../utils/providerModelEndpoint';
 
 type ProviderModelCheckSectionProps = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
@@ -47,6 +49,26 @@ export function ProviderModelCheckSection({
     setSelectedModelId(item.modelId);
     setIsModelPickerOpen(false);
   }, []);
+  const endpointDetail = useMemo(() => {
+    if (!provider || !selectedModel) {
+      return undefined;
+    }
+
+    const endpointState = getProviderModelEndpointState(provider, selectedModel);
+    if (
+      (endpointState.kind !== 'default' && endpointState.kind !== 'explicit') ||
+      !endpointState.endpointType
+    ) {
+      return undefined;
+    }
+
+    const baseUrl = provider.endpointConfigs?.[endpointState.endpointType]?.baseUrl;
+    if (!baseUrl) {
+      return undefined;
+    }
+
+    return `${t(getProviderModelEndpointLabelKey(endpointState.endpointType))} · ${getUrlHost(baseUrl)}`;
+  }, [provider, selectedModel, t]);
 
   return (
     <View className="gap-5">
@@ -85,6 +107,9 @@ export function ProviderModelCheckSection({
             {t('settings.provider.models.checkSaveFirst')}
           </Text>
         ) : null}
+        {endpointDetail ? (
+          <Text className="text-muted-foreground text-xs">{endpointDetail}</Text>
+        ) : null}
       </View>
 
       {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
@@ -100,6 +125,14 @@ export function ProviderModelCheckSection({
       ) : null}
     </View>
   );
+}
+
+function getUrlHost(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return baseUrl;
+  }
 }
 
 function ModelCheckResult({

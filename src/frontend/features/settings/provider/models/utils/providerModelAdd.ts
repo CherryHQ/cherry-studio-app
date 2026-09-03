@@ -38,8 +38,8 @@ export const PROVIDER_MODEL_PURPOSE_OPTIONS = [
 
 export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+  ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
 ] as const satisfies readonly EndpointType[];
 
@@ -137,12 +137,18 @@ export function getProviderChatEndpointTypes(
 ): ProviderModelChatEndpointType[] {
   const endpointTypes: ProviderModelChatEndpointType[] = [];
 
-  if (isProviderModelChatEndpointType(provider.defaultChatEndpoint)) {
+  if (
+    isProviderModelChatEndpointType(provider.defaultChatEndpoint) &&
+    provider.endpointConfigs?.[provider.defaultChatEndpoint]?.baseUrl?.trim()
+  ) {
     endpointTypes.push(provider.defaultChatEndpoint);
   }
 
-  for (const endpointType of Object.keys(provider.endpointConfigs ?? {})) {
-    if (isProviderModelChatEndpointType(endpointType) && !endpointTypes.includes(endpointType)) {
+  for (const endpointType of PROVIDER_MODEL_CHAT_ENDPOINT_TYPES) {
+    if (
+      provider.endpointConfigs?.[endpointType]?.baseUrl?.trim() &&
+      !endpointTypes.includes(endpointType)
+    ) {
       endpointTypes.push(endpointType);
     }
   }

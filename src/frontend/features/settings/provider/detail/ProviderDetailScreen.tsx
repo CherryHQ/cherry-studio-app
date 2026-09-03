@@ -9,6 +9,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
+import { useQuery } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 import type { Model } from '@/shared/data/types/model';
@@ -17,7 +18,9 @@ import {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   buildProviderPrimaryBaseUrlUpdates,
+  buildProviderTextEndpointUpdates,
   getEffectiveAuthConfig,
+  isFullyCustomProvider,
   normalizeApiKeyEntries,
   ProviderApiServiceSaveError,
   shouldShowApiKeys,
@@ -25,8 +28,14 @@ import {
   useProviderApiServiceSheetClose,
 } from '../apiService';
 import {
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
+  findInvalidCustomProviderEndpointUrl,
+  hasConfiguredCustomProviderTextEndpoint,
+} from '../apiService/utils/providerApiServiceEndpointRules';
+import {
   createEmptyProviderFormValues,
   createProviderFormValues,
+  providerDefaultEndpointNeedsRepair,
   ProviderForm,
   providerFormAvatarSize,
   resolveProviderFormEndpointTypes,
@@ -79,6 +88,16 @@ function ProviderDetailSettings({
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
   const [isSaving, setIsSaving] = useState(false);
   const { models, modelsQuery, provider, providerQuery } = useProviderDetailSettings(providerId);
+  const isCustomProvider = isFullyCustomProvider(provider);
+  const allProviderModelsQuery = useQuery('/models', {
+    enabled: Boolean(providerId) && isCustomProvider,
+    query: { providerId },
+  });
+  const allProviderModels = useMemo(
+    () => allProviderModelsQuery.data ?? [],
+    [allProviderModelsQuery.data],
+  );
+  const managedModels = isCustomProvider ? allProviderModels : models;
   const {
     isFiltering: isModelSearchActive,
     query: modelSearchText,
@@ -86,9 +105,12 @@ function ProviderDetailSettings({
     setQuery: setModelSearchText,
   } = useInlineSearch({
     fields: (model: Model) => [model.id, model.modelId, model.name, model.group, model.description],
-    items: models,
+    items: managedModels,
   });
-  const modelPurposeCounts = useMemo(() => getProviderModelPurposeCounts(models), [models]);
+  const modelPurposeCounts = useMemo(
+    () => getProviderModelPurposeCounts(managedModels),
+    [managedModels],
+  );
   const effectiveModelPurpose = getEffectiveProviderModelPurpose(modelPurpose, modelPurposeCounts);
   const listedModels = useMemo(
     () => filterProviderModelsByPurpose(searchedModels, effectiveModelPurpose),
@@ -105,6 +127,9 @@ function ProviderDetailSettings({
     saveProviderMutation,
   } = useProviderApiServiceQueries(providerId);
   const storedAvatarUri = useProviderAvatar(providerId);
+  const defaultEndpointNeedsRepair = provider
+    ? providerDefaultEndpointNeedsRepair(provider)
+    : false;
   const endpointTypes = useMemo(
     () => (provider ? resolveProviderFormEndpointTypes(provider) : []),
     [provider],
@@ -117,11 +142,14 @@ function ProviderDetailSettings({
     () => buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? [])),
     [apiKeys],
   );
-  // Gate on all three so the content reaches its final structure on the first frame.
+  // Gate on every required query so the content reaches its final structure on the first frame.
   // Inserting the Base URL / API keys blocks a commit later shifts the model toolbar
   // under a finger that already aimed at it.
   const isProviderDetailLoading =
-    providerQuery.isPending || apiKeysQuery.isPending || authConfigQuery.isPending;
+    providerQuery.isPending ||
+    apiKeysQuery.isPending ||
+    authConfigQuery.isPending ||
+    (isCustomProvider && allProviderModelsQuery.isPending);
   const createInitialFormValues = useCallback(
     () =>
       provider
@@ -135,11 +163,21 @@ function ProviderDetailSettings({
   );
   const form = useProviderFormDraft({
     createInitialValues: createInitialFormValues,
+    defaultEndpointNeedsRepair,
     endpointTypes,
+    initiallyDirty: defaultEndpointNeedsRepair,
     isSubmitting: isSaving,
+    normalizeCustomEndpoints: isCustomProvider,
     sourceKey: !isProviderDetailLoading && provider ? provider.id : '',
   });
   const { meta: formMeta, state: formState } = form;
+  const customEndpointError = isCustomProvider
+    ? findInvalidCustomProviderEndpointUrl(formState.endpointUrls)
+    : null;
+  const canSubmitProvider =
+    formMeta.canSubmit &&
+    (!isCustomProvider ||
+      (hasConfiguredCustomProviderTextEndpoint(formState.endpointUrls) && !customEndpointError));
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: formMeta.isDirty,
     isSaving,
@@ -151,7 +189,7 @@ function ProviderDetailSettings({
     }
   }, [provider, requestDelete]);
   const handleSave = useCallback(() => {
-    if (!provider || !providerId || !formMeta.canSubmit || !formMeta.isDirty) {
+    if (!provider || !providerId || !canSubmitProvider || !formMeta.isDirty) {
       return;
     }
 
@@ -160,8 +198,37 @@ function ProviderDetailSettings({
       name: trimmedName,
     };
     const baseUrlEndpoint = endpointTypes[0];
+    let savedEndpointUrls = formState.endpointUrls;
 
-    if (baseUrlEndpoint) {
+    if (isCustomProvider) {
+      try {
+        const endpointUpdates = buildProviderTextEndpointUpdates({
+          defaultChatEndpoint: formState.defaultChatEndpoint,
+          endpointUrls: formState.endpointUrls,
+          provider,
+        });
+        updates = { ...updates, ...endpointUpdates };
+        savedEndpointUrls = Object.fromEntries(
+          CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.map((endpointType) => [
+            endpointType,
+            formState.endpointUrls[endpointType]?.trim() ?? '',
+          ]),
+        );
+      } catch (error) {
+        alert.show(
+          error instanceof ProviderApiServiceSaveError && error.code === 'missing-text-endpoint'
+            ? {
+                description: t('settings.provider.apiService.textEndpointRequired'),
+                title: t('settings.provider.apiService.textEndpointsTitle'),
+              }
+            : {
+                description: t('settings.provider.apiService.invalidBaseUrlMessage'),
+                title: t('settings.provider.apiService.invalidBaseUrlTitle'),
+              },
+        );
+        return;
+      }
+    } else if (baseUrlEndpoint) {
       try {
         updates = {
           ...updates,
@@ -181,52 +248,100 @@ function ProviderDetailSettings({
         );
         return;
       }
+      savedEndpointUrls = {
+        ...formState.endpointUrls,
+        [baseUrlEndpoint]: (formState.endpointUrls[baseUrlEndpoint] ?? '').trim(),
+      };
+    }
+
+    const removedEndpointTypes = isCustomProvider
+      ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.filter(
+          (endpointType) =>
+            provider.endpointConfigs?.[endpointType]?.baseUrl?.trim() &&
+            !updates.endpointConfigs?.[endpointType]?.baseUrl?.trim(),
+        )
+      : [];
+    const referencedModelCount = allProviderModels.filter((model) => {
+      const endpointType = model.endpointTypes?.[0];
+      return endpointType
+        ? removedEndpointTypes.some((removed) => removed === endpointType)
+        : false;
+    }).length;
+    if (referencedModelCount > 0) {
+      alert.show({
+        description: t('settings.provider.apiService.endpointInUseMessage', {
+          count: referencedModelCount,
+        }),
+        title: t('settings.provider.apiService.endpointInUseTitle'),
+      });
+      return;
     }
 
     const nextApiKeys = buildApiKeyEntriesFromInput(formState.apiKey, apiKeys ?? []);
     const shouldSaveApiKeys = showApiKeys && formState.apiKey !== apiKeysInput;
-
-    Keyboard.dismiss();
-    setIsSaving(true);
-    void Promise.all([
-      saveProviderMutation.mutateAsync(updates),
-      shouldSaveApiKeys ? replaceApiKeysMutation.mutateAsync(nextApiKeys) : Promise.resolve(),
-    ])
-      .then(async () => {
-        if (formState.avatarUri !== (storedAvatarUri ?? null)) {
-          if (formState.avatarUri) {
-            await providerAvatars.persist(providerId, formState.avatarUri);
-          } else {
-            providerAvatars.remove(providerId);
+    const persistUpdates = () => {
+      Keyboard.dismiss();
+      setIsSaving(true);
+      void Promise.all([
+        saveProviderMutation.mutateAsync(updates),
+        shouldSaveApiKeys ? replaceApiKeysMutation.mutateAsync(nextApiKeys) : Promise.resolve(),
+      ])
+        .then(async () => {
+          if (formState.avatarUri !== (storedAvatarUri ?? null)) {
+            if (formState.avatarUri) {
+              await providerAvatars.persist(providerId, formState.avatarUri);
+            } else {
+              providerAvatars.remove(providerId);
+            }
           }
-        }
 
-        form.actions.reset({
-          ...formState,
-          apiKey: shouldSaveApiKeys ? buildApiKeysInputFromEntries(nextApiKeys) : formState.apiKey,
-          endpointUrls: baseUrlEndpoint
-            ? {
-                ...formState.endpointUrls,
-                [baseUrlEndpoint]: (formState.endpointUrls[baseUrlEndpoint] ?? '').trim(),
-              }
-            : formState.endpointUrls,
-          name: trimmedName,
-        });
-        toast.show({ label: t('settings.provider.toast.saved'), variant: 'success' });
-      })
-      .catch(() => {
-        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
-      })
-      .finally(() => setIsSaving(false));
+          form.actions.reset({
+            ...formState,
+            apiKey: shouldSaveApiKeys
+              ? buildApiKeysInputFromEntries(nextApiKeys)
+              : formState.apiKey,
+            defaultChatEndpoint: updates.defaultChatEndpoint ?? formState.defaultChatEndpoint,
+            endpointUrls: savedEndpointUrls,
+            name: trimmedName,
+          });
+          toast.show({ label: t('settings.provider.toast.saved'), variant: 'success' });
+        })
+        .catch(() => {
+          toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
+        })
+        .finally(() => setIsSaving(false));
+    };
+    const followingModelCount = allProviderModels.filter(
+      (model) => !model.endpointTypes?.[0],
+    ).length;
+    if (
+      isCustomProvider &&
+      provider.defaultChatEndpoint !== updates.defaultChatEndpoint &&
+      followingModelCount > 0
+    ) {
+      alert.confirm({
+        confirmLabel: t('common.save'),
+        description: t('settings.provider.apiService.defaultEndpointChangeMessage', {
+          count: followingModelCount,
+        }),
+        onConfirm: persistUpdates,
+        title: t('settings.provider.apiService.defaultEndpointChangeTitle'),
+      });
+      return;
+    }
+
+    persistUpdates();
   }, [
     alert,
+    allProviderModels,
     apiKeys,
     apiKeysInput,
+    canSubmitProvider,
     endpointTypes,
     form.actions,
-    formMeta.canSubmit,
     formMeta.isDirty,
     formState,
+    isCustomProvider,
     provider,
     providerAvatars,
     providerId,
@@ -241,14 +356,14 @@ function ProviderDetailSettings({
     () => [
       {
         accessibilityLabel: t('common.save'),
-        disabled: !formMeta.canSubmit || !formMeta.isDirty || isDeleting,
+        disabled: !canSubmitProvider || !formMeta.isDirty || isDeleting,
         key: 'save-provider',
         label: isSaving ? t('common.saving') : t('common.save'),
         onPress: handleSave,
         type: 'label',
       },
     ],
-    [formMeta.canSubmit, formMeta.isDirty, handleSave, isDeleting, isSaving, t],
+    [canSubmitProvider, formMeta.isDirty, handleSave, isDeleting, isSaving, t],
   );
   const openModelAddSettings = useCallback(() => {
     if (!providerId) {
@@ -346,8 +461,17 @@ function ProviderDetailSettings({
                   ) : undefined}
                 </ProviderForm.Avatar>
                 <ProviderForm.Name />
-                <ProviderForm.BaseUrl />
-                {showApiKeys ? <ProviderForm.ApiKey /> : null}
+                {isCustomProvider ? (
+                  <>
+                    {showApiKeys ? <ProviderForm.ApiKey /> : null}
+                    <ProviderForm.Endpoints />
+                  </>
+                ) : (
+                  <>
+                    <ProviderForm.BaseUrl />
+                    {showApiKeys ? <ProviderForm.ApiKey /> : null}
+                  </>
+                )}
               </ProviderForm>
               <View className="gap-6 px-4 pb-8">
                 <ProviderModelCheckSection
@@ -372,7 +496,7 @@ function ProviderDetailSettings({
         </KeyboardAwareScrollView>
       ) : (
         <>
-          {models.length === 0 ? null : (
+          {managedModels.length === 0 ? null : (
             <>
               <InlineSearch
                 onChangeText={setModelSearchText}
@@ -391,8 +515,9 @@ function ProviderDetailSettings({
           )}
           <ProviderModelList
             groupByPurpose={effectiveModelPurpose === 'all'}
+            isEndpointSelectionDisabled={formMeta.isDirty}
             isFiltered={isModelListFiltered}
-            isLoading={modelsQuery.isPending}
+            isLoading={isCustomProvider ? allProviderModelsQuery.isPending : modelsQuery.isPending}
             models={listedModels}
             provider={provider}
           />
