@@ -49,7 +49,9 @@ export function isCustomProviderTextEndpointType(
   return endpoint ? CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET.has(endpoint) : false;
 }
 
-export function isFullyCustomProvider(provider?: Provider | null): provider is Provider {
+export function isFullyCustomProvider(
+  provider?: Provider | null,
+): provider is Provider & { presetProviderId?: undefined } {
   return provider !== null && provider !== undefined && provider.presetProviderId == null;
 }
 

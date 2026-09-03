@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 
+import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
 import { ProviderService } from '../ProviderService';
 import { createTestDb, type TestDb } from './_testDb';
@@ -15,7 +16,10 @@ describe('custom provider model endpoint integrity', () => {
   beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     db = createTestDb(sqlite);
-    await installTestHost({ DbService: db.dbService });
+    await installTestHost({
+      DbService: db.dbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+    });
     models = new ModelService();
     providers = new ProviderService();
   });

@@ -36,7 +36,7 @@ jest.mock('../../utils/refreshProviderModelQueries', () => ({
 
 const model = {
   capabilities: [],
-  id: 'provider-1:model-1',
+  id: 'provider-1::model-1',
   isDeprecated: false,
   isEnabled: true,
   isHidden: false,

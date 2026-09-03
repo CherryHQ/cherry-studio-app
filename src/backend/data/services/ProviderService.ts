@@ -528,7 +528,10 @@ export class ProviderService {
     const values = toInsert(input);
     const row = (await this.dbService.withWriteTx((tx) => {
       if (values.presetProviderId === null) {
-        assertCustomProviderEndpointConfiguration(values);
+        assertCustomProviderEndpointConfiguration({
+          defaultChatEndpoint: values.defaultChatEndpoint,
+          endpointConfigs: values.endpointConfigs,
+        });
       }
 
       return insertWithOrderKey(tx, userProviderTable, values, {

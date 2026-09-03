@@ -59,10 +59,21 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockText>{children}</MockText>;
   }
 
+  function ChipSelectable({
+    accessibilityLabel,
+    children,
+  }: {
+    accessibilityLabel?: string;
+    children?: ReactNode;
+  }) {
+    return <MockText accessibilityLabel={accessibilityLabel}>{children}</MockText>;
+  }
+
   TextField.Error = TextFieldError;
   TextField.Label = TextFieldLabel;
 
   return {
+    Chip: { Selectable: ChipSelectable },
     ContentState: {
       Empty: ({
         primaryAction,

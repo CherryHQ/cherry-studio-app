@@ -279,7 +279,7 @@ function dtoToCreateInput(
 }
 
 type ModelEndpointWrite = {
-  endpointTypes: readonly EndpointType[] | null | undefined;
+  endpointTypes?: readonly EndpointType[] | null;
   providerId: string;
 };
 
