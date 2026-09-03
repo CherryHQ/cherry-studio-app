@@ -3,7 +3,9 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { mainHeaderRowHeight } from '@/frontend/appShell/header';
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
@@ -58,6 +60,7 @@ export function ChatWorkspace({
   const live = useAgentChatSession(sessionId);
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
+  const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
   const { toast } = useToast();
   useEffect(() => {
@@ -175,7 +178,10 @@ export function ChatWorkspace({
     renderGateKey: sessionId,
     requiresInitialHistoryLayout,
   });
-  const contentTopInset = resolveHeaderContentInset(headerHeight);
+  const contentTopInset = resolveHeaderContentInset(
+    headerHeight,
+    safeAreaTop + mainHeaderRowHeight,
+  );
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
