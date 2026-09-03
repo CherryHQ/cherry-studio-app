@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
@@ -136,9 +137,10 @@ describe('Switch', () => {
     const control = renderer!.root.findByProps({ mockComponent: 'switch-control' });
     const interactionShield = renderer!.root.find(
       (node) =>
+        node.type === View &&
+        node.props.accessible === false &&
         node.props.pointerEvents === 'none' &&
-        node.props.mockComponent === undefined &&
-        node.findAllByProps({ mockComponent: 'switch-control' }).length === 1,
+        node.props.mockComponent === undefined,
     );
 
     expect(pressOwner.props).toMatchObject({
