@@ -61,7 +61,10 @@ const focusTransitionMotion = {
 
 export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
-  const { cancel, isBusy, sendMessage } = useAgentChatControls({ agentId, sessionId });
+  const { cancel, isApprovalPending, isBusy, sendMessage } = useAgentChatControls({
+    agentId,
+    sessionId,
+  });
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
@@ -228,74 +231,80 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
 
   return (
     <>
-      <ChatInputEffortOverlay
-        modelLabel={selectedModelLabel}
-        onChange={selectReasoningEffort}
-        reasoningEffort={reasoningEffort}
-        reasoningEfforts={reasoningEfforts}
+      <View
+        accessibilityElementsHidden={isApprovalPending}
+        importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={isApprovalPending ? 'none' : 'auto'}
       >
-        {(effortGauge) => (
-          <ComposerSurface
-            dismissKeyboardOnSend={dismissKeyboardOnSend}
-            getSendErrorLabel={getSendErrorLabel}
-            onSend={handleSendPress}
-            onStop={() => void cancel()}
-            streaming={isBusy}
-          >
-            <ComposerAttachments />
-            <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
-              <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
-                <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
-                  <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
-                </View>
-              </Animated.View>
-              <Animated.View
-                className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
-                pointerEvents="box-none"
-                style={controlsRowStyle}
-              >
-                {/* The primary actions stay reachable before the field is focused. */}
-                <ComposerMenu />
-                <Animated.View
-                  accessibilityElementsHidden={!isInputActive}
-                  className="min-w-0 shrink"
-                  importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-                  pointerEvents={isInputActive ? 'auto' : 'none'}
-                  style={secondaryControlRevealStyle}
-                >
-                  <ComposerModelPill
-                    icon={
-                      selectedModelItem ? (
-                        <ModelPickerIcon
-                          model={selectedModelItem.model}
-                          provider={selectedModelItem.provider}
-                          providerIconSize={18}
-                          size={20}
-                        />
-                      ) : undefined
-                    }
-                    label={selectedModelLabel}
-                    onPress={openModelPicker}
-                  />
+        <ChatInputEffortOverlay
+          modelLabel={selectedModelLabel}
+          onChange={selectReasoningEffort}
+          reasoningEffort={reasoningEffort}
+          reasoningEfforts={reasoningEfforts}
+        >
+          {(effortGauge) => (
+            <ComposerSurface
+              dismissKeyboardOnSend={dismissKeyboardOnSend}
+              getSendErrorLabel={getSendErrorLabel}
+              onSend={handleSendPress}
+              onStop={() => void cancel()}
+              streaming={isBusy}
+            >
+              <ComposerAttachments />
+              <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
+                <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
+                  <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
+                    <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
+                  </View>
                 </Animated.View>
-                <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-                  {effortGauge ? (
-                    <Animated.View
-                      accessibilityElementsHidden={!isInputActive}
-                      importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-                      pointerEvents={isInputActive ? 'auto' : 'none'}
-                      style={secondaryControlRevealStyle}
-                    >
-                      {effortGauge}
-                    </Animated.View>
-                  ) : null}
-                  <Composer.Send />
-                </View>
+                <Animated.View
+                  className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+                  pointerEvents="box-none"
+                  style={controlsRowStyle}
+                >
+                  {/* The primary actions stay reachable before the field is focused. */}
+                  <ComposerMenu />
+                  <Animated.View
+                    accessibilityElementsHidden={!isInputActive}
+                    className="min-w-0 shrink"
+                    importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                    pointerEvents={isInputActive ? 'auto' : 'none'}
+                    style={secondaryControlRevealStyle}
+                  >
+                    <ComposerModelPill
+                      icon={
+                        selectedModelItem ? (
+                          <ModelPickerIcon
+                            model={selectedModelItem.model}
+                            provider={selectedModelItem.provider}
+                            providerIconSize={18}
+                            size={20}
+                          />
+                        ) : undefined
+                      }
+                      label={selectedModelLabel}
+                      onPress={openModelPicker}
+                    />
+                  </Animated.View>
+                  <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+                    {effortGauge ? (
+                      <Animated.View
+                        accessibilityElementsHidden={!isInputActive}
+                        importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                        pointerEvents={isInputActive ? 'auto' : 'none'}
+                        style={secondaryControlRevealStyle}
+                      >
+                        {effortGauge}
+                      </Animated.View>
+                    ) : null}
+                    <Composer.Send />
+                  </View>
+                </Animated.View>
               </Animated.View>
-            </Animated.View>
-          </ComposerSurface>
-        )}
-      </ChatInputEffortOverlay>
+            </ComposerSurface>
+          )}
+        </ChatInputEffortOverlay>
+      </View>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           modelType="text"

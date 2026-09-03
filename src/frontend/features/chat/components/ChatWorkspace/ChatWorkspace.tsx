@@ -158,6 +158,14 @@ export function ChatWorkspace({
     },
     [client, sessionId, t, toast],
   );
+  const handleApprovalCancel = useCallback(async () => {
+    try {
+      await client.cancelTurn(sessionId);
+    } catch (cancelError) {
+      logger.error('Turn cancellation from tool approval failed', cancelError as Error);
+      toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
+    }
+  }, [client, sessionId, t, toast]);
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
     isLoadingInitial,
@@ -207,6 +215,7 @@ export function ChatWorkspace({
         key={`tool-approval-${sessionId}`}
         approvals={pendingApprovals}
         isOpen={pendingApprovals.length > 0}
+        onCancel={handleApprovalCancel}
         onRespond={handleApprovalRespond}
       />
     </View>

@@ -168,6 +168,7 @@
   "chat.input.sendError.sessionNotFound": "该对话已不存在。",
   "chat.input.sendError.unsupported": "所选模型无法处理此请求，请检查模型、工具和附件。",
   "chat.input.sendFailed": "消息未发送，请重试。",
+  "chat.input.stopFailed": "未能停止回复，请重试。",
   "chat.inputPlaceholder": "与 Cherry Studio 聊天",
   "chat.history.loadFailed": "无法加载消息。",
   "chat.history.loading": "正在加载消息…",

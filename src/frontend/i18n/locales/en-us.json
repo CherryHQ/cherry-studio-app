@@ -169,6 +169,7 @@
   "chat.input.sendError.sessionNotFound": "This chat no longer exists.",
   "chat.input.sendError.unsupported": "The selected model can't run this request. Check the model, its tools, and any attachments.",
   "chat.input.sendFailed": "Message was not sent. Try again.",
+  "chat.input.stopFailed": "Couldn't stop the reply. Please try again.",
   "chat.inputPlaceholder": "Chat With Cherry Studio",
   "chat.history.loadFailed": "Messages could not be loaded.",
   "chat.history.loading": "Loading messages...",
