@@ -609,7 +609,10 @@ export class ProviderRegistryService {
     const profileProvider = this.findProfileProvider(provider);
     const effectiveEndpoint =
       endpointType ??
-      resolveReasoningEndpointType(model.endpointTypes, provider.defaultChatEndpoint ?? undefined);
+      resolveReasoningEndpointType(
+        model.endpointTypes,
+        provider.defaultChatEndpoint ?? profileProvider?.defaultChatEndpoint ?? undefined,
+      );
     if (!effectiveEndpoint) {
       return undefined;
     }

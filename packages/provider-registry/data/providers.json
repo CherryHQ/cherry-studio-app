@@ -767,30 +767,6 @@
                   {
                     "target": "reasoningSummary",
                     "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "assistant-summary"
-                    }
-                  }
-                ]
-              },
-              "default": {
-                "operations": [
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
                       "source": "assistant-summary"
                     }
                   }
@@ -802,13 +778,6 @@
                     "target": "reasoningEffort",
                     "value": {
                       "source": "effort"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
                     }
                   },
                   {
@@ -826,6 +795,12 @@
                     "value": {
                       "source": "literal",
                       "value": "none"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
                     }
                   }
                 ]
@@ -894,30 +869,6 @@
                   {
                     "target": "reasoningSummary",
                     "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "assistant-summary"
-                    }
-                  }
-                ]
-              },
-              "default": {
-                "operations": [
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
                       "source": "assistant-summary"
                     }
                   }
@@ -929,13 +880,6 @@
                     "target": "reasoningEffort",
                     "value": {
                       "source": "effort"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
                     }
                   },
                   {
@@ -953,6 +897,12 @@
                     "value": {
                       "source": "literal",
                       "value": "none"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
                     }
                   }
                 ]
@@ -1031,30 +981,6 @@
                   {
                     "target": "reasoningSummary",
                     "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "assistant-summary"
-                    }
-                  }
-                ]
-              },
-              "default": {
-                "operations": [
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
                       "source": "assistant-summary"
                     }
                   }
@@ -1066,13 +992,6 @@
                     "target": "reasoningEffort",
                     "value": {
                       "source": "effort"
-                    }
-                  },
-                  {
-                    "target": "reasoningSummary",
-                    "value": {
-                      "source": "literal",
-                      "value": "auto"
                     }
                   },
                   {
@@ -1090,6 +1009,12 @@
                     "value": {
                       "source": "literal",
                       "value": "none"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
                     }
                   }
                 ]
@@ -2203,5 +2128,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "d7616d32aa168126"
+  "version": "e5166ef2806754d1"
 }

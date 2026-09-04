@@ -59,10 +59,7 @@ const genericEffort = (summaryTarget?: ReasoningWireTarget): ReasoningWireProfil
   };
 };
 
-const REASONING_SUMMARY_OPERATIONS = [
-  literal('reasoningSummary', 'auto'),
-  summary('reasoningSummary'),
-] satisfies ReasoningWireOperation[];
+const REASONING_SUMMARY_OPERATION = summary('reasoningSummary') satisfies ReasoningWireOperation;
 
 function stripReasoningSummary(mode: ReasoningWireMode | undefined): ReasoningWireMode | undefined {
   if (!mode) return undefined;
@@ -78,12 +75,12 @@ export function configureOpenAIResponsesSummary(
   if (profile.disabled) return profile;
 
   const configured: ReasoningWireProfile = { ...profile };
-  for (const key of ['default', 'auto', 'effort'] as const) {
+  for (const key of ['default', 'off', 'auto', 'effort'] as const) {
     const strippedMode = stripReasoningSummary(configured[key]);
-    if (enabled) {
+    if (enabled && key !== 'default' && strippedMode) {
       configured[key] = {
         ...strippedMode,
-        operations: [...(strippedMode?.operations ?? []), ...REASONING_SUMMARY_OPERATIONS],
+        operations: [...strippedMode.operations, REASONING_SUMMARY_OPERATION],
       } as ReasoningWireMode;
     } else if (strippedMode) {
       configured[key] = strippedMode;

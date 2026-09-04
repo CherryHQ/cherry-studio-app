@@ -259,6 +259,15 @@ describe('provider-registry-service', () => {
 
     expect(targets(defaultWire)).not.toContain('reasoningSummary');
     expect(targets(enabledWire)).toContain('reasoningSummary');
+    expect(enabledWire.default).toBeUndefined();
+    for (const key of ['off', 'auto', 'effort'] as const) {
+      const summaryOperations = enabledWire[key]?.operations.filter(
+        (operation) => operation.target === 'reasoningSummary',
+      );
+      expect(summaryOperations).toEqual([
+        { target: 'reasoningSummary', value: { source: 'assistant-summary' } },
+      ]);
+    }
   });
 
   test('resolves endpoint service-tier wire with model-specific options', () => {
