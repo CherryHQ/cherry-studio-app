@@ -1,8 +1,8 @@
 # AI Runtime
 
 Provider adapters and AI SDK support for Cherry Mobile's non-conversation AI path: provider
-connection facts, per-vendor request and transport shaping, model listing, AI SDK loop plumbing,
-tool adapters, and usage capture.
+connection facts, per-vendor request and transport shaping, image generation, model listing, AI SDK
+loop plumbing, tool adapters, and usage capture.
 
 Despite the package name, this is not Cherry Mobile's Agent Runtime. Pi is the sole local
 conversation engine and lives in `src/backend/ai/agent/runtime/pi/`. What is here serves the AI SDK
@@ -24,8 +24,10 @@ not desktop's structure.
 
 ## Boundaries
 
-- Consumers use only the declared `provider`, `runtime`, `tools`, and `utils` subpaths. Anything
-  reached through a deep path is an accident, not an interface.
+- Consumers use only the declared `image`, `provider`, `runtime`, `tools`, and `utils` subpaths.
+  Anything reached through a deep path is an accident, not an interface. `image` is the portable
+  boundary for canonical image parameters, wire profiles, and submit/poll transports; application
+  jobs, storage, downloads, and presentation remain outside the package.
 - Expo, React Native, app services, storage, device APIs, and application logging stay in backend
   adapters. This package sees none of them.
 - Conversation behavior does not belong here. If a change serves the chat turn, it belongs behind

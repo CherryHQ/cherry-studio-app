@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "generate": "tsx scripts/generate-catalog.ts --write && oxfmt data/models.json data/provider-models.json data/providers.json src/patterns/reasoning-families.gen.ts",
+    "generate:providers": "tsx scripts/generate-catalog.ts --providers-only --write && oxfmt data/providers.json",
     "generate:check": "tsx scripts/generate-catalog.ts --report"
   },
   "author": "Cherry Studio",

@@ -210,4 +210,121 @@ describe('provider-registry-service', () => {
       }).wire,
     ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
   });
+
+  test('selects generation-specific native reasoning wires', () => {
+    const geminiBudgetWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      wireDialect: 'budget',
+    }).wire;
+    const anthropicBudgetWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      wireDialect: 'budget',
+    }).wire;
+
+    expect(geminiBudgetWire).toBe(REASONING_FORMAT_PROFILES.gemini.budgetWire);
+    expect(geminiBudgetWire.effort?.operations).toContainEqual({
+      target: 'thinkingConfig.thinkingBudget',
+      value: { source: 'budget' },
+    });
+    expect(anthropicBudgetWire).toBe(REASONING_FORMAT_PROFILES.anthropic.budgetWire);
+    expect(anthropicBudgetWire.auto?.operations).toContainEqual({
+      target: 'thinking.type',
+      value: { source: 'literal', value: 'enabled' },
+    });
+  });
+
+  test('ignores a budget dialect on single-dialect endpoint formats', () => {
+    expect(
+      resolveReasoningProfileFromRegistry({
+        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        wireDialect: 'budget',
+      }).wire,
+    ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
+  });
+
+  test('adds Responses summaries only for hosts that explicitly accept them', () => {
+    const defaultWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+    }).wire;
+    const enabledWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      reasoningSummary: true,
+    }).wire;
+    const targets = (wire: typeof defaultWire) =>
+      Object.values(wire).flatMap((mode) =>
+        mode && typeof mode === 'object' && 'operations' in mode
+          ? mode.operations.map((operation) => operation.target)
+          : [],
+      );
+
+    expect(targets(defaultWire)).not.toContain('reasoningSummary');
+    expect(targets(enabledWire)).toContain('reasoningSummary');
+    expect(enabledWire.default).toBeUndefined();
+    for (const key of ['off', 'auto', 'effort'] as const) {
+      const summaryOperations = enabledWire[key]?.operations.filter(
+        (operation) => operation.target === 'reasoningSummary',
+      );
+      expect(summaryOperations).toEqual([
+        { target: 'reasoningSummary', value: { source: 'assistant-summary' } },
+      ]);
+    }
+  });
+
+  test('resolves endpoint service-tier wire with model-specific options', () => {
+    const service = new ProviderRegistryService({
+      findOverride: () => ({
+        modelId: 'gpt-oss-120b',
+        providerId: 'groq',
+        requestControls: {
+          serviceTier: { options: ['standard', 'auto', 'fast', 'flex'] },
+        },
+      }),
+      findProvider: () => ({
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            requestControls: {
+              serviceTier: {
+                default: 'standard',
+                options: ['standard', 'auto', 'flex'],
+                wire: {
+                  delivery: { key: 'serviceTier', type: 'provider-option' },
+                  values: {
+                    standard: 'on_demand',
+                    auto: 'auto',
+                    fast: 'performance',
+                    flex: 'flex',
+                  },
+                },
+              },
+            },
+          },
+        },
+        id: 'groq',
+        metadata: { website: {} },
+        name: 'Groq',
+      }),
+    } as never);
+
+    expect(
+      service.resolveServiceTierControl(
+        { id: 'groq' },
+        {
+          apiModelId: 'gpt-oss-120b',
+          capabilities: [],
+          id: 'groq::gpt-oss-120b',
+          isEnabled: true,
+          isHidden: false,
+          modelId: 'gpt-oss-120b',
+          name: 'GPT OSS 120B',
+          providerId: 'groq',
+          supportsStreaming: true,
+        },
+      ),
+    ).toMatchObject({
+      default: 'standard',
+      options: ['standard', 'auto', 'fast', 'flex'],
+      wire: { delivery: { key: 'serviceTier', type: 'provider-option' } },
+    });
+  });
 });

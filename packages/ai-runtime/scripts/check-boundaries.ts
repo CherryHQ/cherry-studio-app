@@ -11,7 +11,7 @@ const FORBIDDEN_GLOBALS = new Set(['Buffer', '__dirname', '__filename', 'process
 const NODE_BUILTINS = new Set(
   builtinModules.flatMap((specifier) => [specifier, specifier.replace(/^node:/, '')]),
 );
-const EXPECTED_EXPORTS = ['./messages', './provider', './runtime', './tools', './utils'];
+const EXPECTED_EXPORTS = ['./image', './provider', './runtime', './tools', './utils'];
 
 async function sourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });

@@ -57,21 +57,21 @@
       ]
     },
     "ai-core": {
-      "strategy": "mirror",
-      "status": "aligned",
+      "strategy": "semantic-port",
+      "status": "unbaselined",
       "sourcePaths": ["packages/aiCore"],
       "targetPaths": ["packages/ai-core"],
-      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
-      "sourceSha256": "dc1f733dfa854485159ca13786c75cbe0a70788a1a1d6a99a21ced05fa91dddb",
-      "explicitExclusions": []
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": ["packages/aiCore/src/core/context/**"]
     },
     "ai-sdk-provider": {
-      "strategy": "mirror",
-      "status": "aligned",
+      "strategy": "semantic-port",
+      "status": "unbaselined",
       "sourcePaths": ["packages/ai-sdk-provider"],
       "targetPaths": ["packages/ai-sdk-provider"],
-      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
-      "sourceSha256": "36ab81e817c191119608b0bffc0339fe11da66bb28e5bbd556f01ff36b893af1",
+      "sourceCommit": null,
+      "sourceSha256": null,
       "explicitExclusions": []
     },
     "provider-registry": {

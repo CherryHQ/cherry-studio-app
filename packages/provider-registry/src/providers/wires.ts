@@ -14,6 +14,8 @@ import type {
   ReasoningWireValue,
 } from '../schemas/reasoningWire';
 
+export { openaiResponsesSummaryWire } from '../reasoningProfiles';
+
 /** Emit the user's selected effort instead of a fixed literal (`{ source: 'effort' }`). */
 export const EFFORT = { source: 'effort' } as const;
 

@@ -20,6 +20,7 @@ import type {
   Modality,
   ModelCapability,
   ReasoningEffort,
+  ServiceTierSelection,
   SupportSpec,
 } from '@cherrystudio/provider-registry';
 import {
@@ -34,6 +35,7 @@ import {
   objectValues,
   REASONING_EFFORT,
   ReasoningControlSchema,
+  ServiceTierSelectionSchema,
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 
@@ -61,6 +63,7 @@ export type {
   Modality,
   ModelCapability,
   ReasoningEffort,
+  ServiceTierSelection,
   SupportSpec,
 };
 
@@ -351,6 +354,21 @@ export const ModelSchema = z.object({
   reasoning: RuntimeReasoningSchema.optional(),
   /** Whether this exact provider-model pair supports the provider's Fast transport. */
   supportsFastMode: z.boolean().optional(),
+  /** Endpoint-projected request controls safe to expose to application code. */
+  requestControls: z
+    .object({
+      serviceTier: z
+        .object({
+          default: ServiceTierSelectionSchema,
+          options: z.array(ServiceTierSelectionSchema).min(1),
+        })
+        .refine((control) => control.options.includes(control.default), {
+          message: 'service tier default must be one of its options',
+          path: ['default'],
+        })
+        .optional(),
+    })
+    .optional(),
   /** Parameter support */
   parameterSupport: RuntimeParameterSupportSchema.optional(),
   /** Persisted parameter support compatibility name. */

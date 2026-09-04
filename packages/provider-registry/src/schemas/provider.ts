@@ -46,6 +46,51 @@ export const ApiFeaturesSchema = z.object({
  */
 export const FastModeTransportSchema = z.enum(['openai-priority', 'claude-code']);
 
+export const ServiceTierSelectionSchema = z.enum(['standard', 'auto', 'fast', 'flex']);
+
+export const ServiceTierOptionsSchema = z
+  .array(ServiceTierSelectionSchema)
+  .min(1)
+  .refine((options) => new Set(options).size === options.length, {
+    message: 'service tier options must be unique',
+  })
+  .refine((options) => options.includes('standard'), {
+    message: 'service tier options must include standard',
+  });
+
+export const ServiceTierDeliverySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('provider-option'), key: z.string().min(1) }),
+  z.object({ type: z.literal('request-body'), key: z.string().min(1) }),
+]);
+
+export const ServiceTierRequestControlSchema = z
+  .object({
+    default: ServiceTierSelectionSchema,
+    options: ServiceTierOptionsSchema,
+    wire: z.object({
+      delivery: ServiceTierDeliverySchema,
+      values: z.partialRecord(ServiceTierSelectionSchema, z.string().min(1)),
+    }),
+  })
+  .superRefine((control, context) => {
+    if (!control.options.includes(control.default)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'service tier default must be one of its options',
+        path: ['default'],
+      });
+    }
+    for (const option of control.options) {
+      if (!control.wire.values[option]) {
+        context.addIssue({
+          code: 'custom',
+          message: `service tier option '${option}' must have a wire value`,
+          path: ['wire', 'values', option],
+        });
+      }
+    }
+  });
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Provider Reasoning Format
 //
@@ -91,6 +136,16 @@ export const ProviderWebsiteSchema = z.object({
   }),
 });
 
+/** Provider-specific deviations from one endpoint protocol. */
+export const EndpointDialectSchema = z.object({
+  /** Accepts chat-completions stream_options for usage data. Absent means true. */
+  streamOptions: z.boolean().optional(),
+  /** Accepts messages with role developer. Absent means false. */
+  developerRole: z.boolean().optional(),
+  /** Accepts OpenAI Responses reasoning.summary. */
+  reasoningSummary: z.boolean().optional(),
+});
+
 /** Per-endpoint-type configuration in registry */
 export const RegistryEndpointConfigSchema = z.object({
   /** Base URL for this endpoint type's API */
@@ -116,6 +171,14 @@ export const RegistryEndpointConfigSchema = z.object({
    * heuristic id/baseUrl inference when present.
    */
   adapterFamily: z.string().optional(),
+  /** Dialect deviations of this host's implementation of the endpoint. */
+  dialect: EndpointDialectSchema.optional(),
+  /** User-selectable request controls supported by this endpoint. */
+  requestControls: z
+    .object({
+      serviceTier: ServiceTierRequestControlSchema.optional(),
+    })
+    .optional(),
 });
 
 export const ProviderConfigSchema = z
@@ -171,6 +234,8 @@ export const ProviderConfigSchema = z
     authOptional: z.boolean().default(false),
     /** API feature flags controlling request construction */
     apiFeatures: ApiFeaturesSchema.optional(),
+    /** Whether usage responses carry the actual billed amount. */
+    reportsActualCost: z.boolean().default(false),
     /**
      * Registry-owned currency for provider-reported costs whose wire payload
      * carries an amount but no currency. Absent means the amount stays
@@ -178,7 +243,9 @@ export const ProviderConfigSchema = z
      */
     reportedCostCurrency: ZodCurrencySchema,
     /** Provider-owned Fast request transport. Effective support is declared per provider-model pair. */
-    fastMode: z.object({ transport: FastModeTransportSchema }).optional(),
+    fastMode: z
+      .object({ transport: FastModeTransportSchema, serviceTier: z.string().optional() })
+      .optional(),
     /** Additional metadata including website URLs */
     metadata: MetadataSchema.and(ProviderWebsiteSchema),
   })
@@ -201,6 +268,11 @@ export const ProviderListSchema = z.object({
 
 export { ENDPOINT_TYPE } from './enums';
 export type ApiFeatures = z.infer<typeof ApiFeaturesSchema>;
+export type EndpointDialect = z.infer<typeof EndpointDialectSchema>;
+export type ServiceTierSelection = z.infer<typeof ServiceTierSelectionSchema>;
+export type ServiceTierOptions = z.infer<typeof ServiceTierOptionsSchema>;
+export type ServiceTierDelivery = z.infer<typeof ServiceTierDeliverySchema>;
+export type ServiceTierRequestControl = z.infer<typeof ServiceTierRequestControlSchema>;
 export type ProviderReasoningFormat = z.infer<typeof ProviderReasoningFormatSchema>;
 export type RegistryEndpointConfig = z.infer<typeof RegistryEndpointConfigSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;

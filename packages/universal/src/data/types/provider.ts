@@ -132,8 +132,15 @@ export type ModelsApiUrls = {
 export type EndpointConfig = {
   adapterFamily?: string;
   baseUrl?: string;
+  dialect?: EndpointDialect;
   modelsApiUrls?: ModelsApiUrls;
   reasoningFormatType?: string;
+};
+
+export type EndpointDialect = {
+  developerRole?: boolean;
+  reasoningSummary?: boolean;
+  streamOptions?: boolean;
 };
 
 export const EndpointConfigOverrideSchema = z.object({
@@ -169,7 +176,7 @@ export type Provider = {
   defaultChatEndpoint?: EndpointType;
   description?: string;
   endpointConfigs?: EndpointConfigs;
-  fastMode?: { transport: 'openai-priority' };
+  fastMode?: { serviceTier?: string; transport: 'openai-priority' };
   id: string;
   isEnabled: boolean;
   modelListSource?: ProviderModelListSource;
@@ -179,6 +186,19 @@ export type Provider = {
   settings: ProviderSettings;
   websites?: ProviderWebsites;
 };
+
+/** Resolve the effective protocol dialect while honoring legacy persisted flags. */
+export function resolveEndpointDialect(
+  provider: Pick<Provider, 'apiFeatures' | 'endpointConfigs'>,
+  endpointType: EndpointType | undefined,
+): Required<EndpointDialect> {
+  const declared = endpointType ? provider.endpointConfigs?.[endpointType]?.dialect : undefined;
+  return {
+    developerRole: declared?.developerRole ?? false,
+    reasoningSummary: declared?.reasoningSummary ?? false,
+    streamOptions: declared?.streamOptions ?? provider.apiFeatures.streamOptions,
+  };
+}
 
 type ProviderTypeSource = Pick<
   Provider,

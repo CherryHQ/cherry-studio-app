@@ -105,6 +105,32 @@ describe('image provider option routing', () => {
     });
   });
 
+  it('uses the shared MiniMax and Doubao wire registrations', () => {
+    expect(
+      build(
+        'minimax',
+        { addWatermark: true, outputFormat: 'png', promptEnhancement: true },
+        provider('custom-minimax', 'minimax'),
+      ),
+    ).toEqual({
+      minimax: {
+        aigc_watermark: true,
+        prompt_optimizer: true,
+        response_format: 'png',
+      },
+    });
+
+    expect(
+      build(
+        'doubao',
+        { addWatermark: false, imageResolution: '2K' },
+        provider('custom-doubao', 'doubao'),
+      ),
+    ).toEqual({
+      bytedance: { size: '2K', watermark: false },
+    });
+  });
+
   it('deep-merges image options into existing provider options', () => {
     expect(
       mergeImageProviderOptions(

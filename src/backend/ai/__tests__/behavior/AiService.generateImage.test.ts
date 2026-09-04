@@ -92,6 +92,47 @@ describe('AiService.generateImage AI SDK contract', () => {
     expect(jest.requireMock('expo/fetch').fetch).not.toHaveBeenCalled();
   });
 
+  test('projects registry transport routing into the portable image request', async () => {
+    const fixture = imageFixture();
+    const doGenerate = jest.fn(async (_options: ImageModelV3CallOptions) => imageResult(1));
+    const imageModel = new MockImageModelV3({
+      doGenerate,
+      modelId: fixture.model.modelId,
+      provider: 'contract-provider',
+    });
+    restoreProvider = installMockProvider({ image: imageModel });
+    fixture.services.providerRegistry.getImageGenerationSupport = jest.fn(() => ({
+      modes: {
+        generate: {
+          supports: {},
+          vendorTransport: { endpoint: '/v1/image/tasks', isSync: false },
+        },
+      },
+    }));
+
+    await new AiService(fixture.services).generateImage({
+      mode: 'generate',
+      paramValues: {},
+      prompt: 'Route this request.',
+      uniqueModelId: fixture.model.id,
+    });
+
+    expect(fixture.services.providerRegistry.getImageGenerationSupport).toHaveBeenCalledWith(
+      fixture.provider.id,
+      fixture.model.modelId,
+    );
+    expect(doGenerate.mock.calls[0][0].providerOptions).toMatchObject({
+      [fixture.provider.id]: {
+        modelDescriptor: {
+          endpoint: '/v1/image/tasks',
+          id: fixture.model.modelId,
+          isSync: false,
+          mode: 'generate',
+        },
+      },
+    });
+  });
+
   test('preserves image-model failures unchanged', async () => {
     const fixture = imageFixture();
     const modelError = new Error('image model failed');
