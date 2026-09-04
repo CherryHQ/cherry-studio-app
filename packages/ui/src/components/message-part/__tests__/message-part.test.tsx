@@ -271,7 +271,7 @@ describe('MessagePart', () => {
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
-      'text-destructive',
+      'text-error',
     );
   });
 
@@ -301,13 +301,13 @@ describe('MessagePart', () => {
     const warning = renderer!.root.findAllByProps({ testID: 'unknown' }).at(-1);
     expect(warning?.props.accessibilityLabel).toBe('Unknown Part');
     expect(warning?.props.className).toBe(
-      'flex-row items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3',
+      'flex-row items-center gap-2 rounded-lg border border-warning-border bg-warning-subtle p-3',
     );
     expect(renderer!.root.findByProps({ testID: 'unknown-warning-icon' }).props.className).toBe(
-      'size-4 shrink-0 text-warning',
+      'size-4 shrink-0 text-warning-subtle-foreground',
     );
     expect(renderer!.root.findByProps({ children: 'Unknown Part' }).props.className).toBe(
-      'text-base text-warning',
+      'text-base text-warning-subtle-foreground',
     );
   });
 
@@ -359,6 +359,17 @@ describe('MessagePart', () => {
       renderer = create(<MessagePart.Error message="Could not complete." title="Quota exceeded" />);
     });
     expect(renderer!.root.findAllByProps({ accessibilityRole: 'button' })).toHaveLength(0);
+    expect(
+      renderer!.root.findByProps({
+        className: 'gap-1.5 rounded-lg border border-error-border bg-error-subtle p-3',
+      }),
+    ).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Quota exceeded' }).props.className).toContain(
+      'text-error-subtle-foreground',
+    );
+    expect(renderer!.root.findByProps({ children: 'Could not complete.' }).props.className).toBe(
+      'text-base text-error-subtle-foreground',
+    );
 
     const onPress = jest.fn();
     act(() => {

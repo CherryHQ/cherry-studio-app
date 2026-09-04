@@ -113,7 +113,7 @@ export function ProviderFormTextEndpoints() {
         </Text>
       ) : null}
       {meta.hasEditedEndpointUrls && !hasConfiguredEndpoint ? (
-        <Text className="text-destructive text-xs">
+        <Text className="text-error text-xs">
           {t('settings.provider.apiService.textEndpointRequired')}
         </Text>
       ) : null}

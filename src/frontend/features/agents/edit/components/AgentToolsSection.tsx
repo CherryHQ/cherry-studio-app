@@ -228,7 +228,7 @@ function statusCaption(
     return undefined;
   }
   return (
-    <Text className="text-destructive text-sm" selectable>
+    <Text className="text-error text-sm" selectable>
       {t(`${translationPrefix}.${status}`)}
     </Text>
   );

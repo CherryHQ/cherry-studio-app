@@ -101,7 +101,9 @@ export function PaintingAssistantMessage({
     return (
       <View className="w-full">
         <View className="flex-row items-start gap-2 rounded-md border border-border bg-card p-3">
-          <CircleAlertIcon className="mt-0.5 size-5 text-destructive" />
+          <CircleAlertIcon
+            className={didFail ? 'mt-0.5 size-5 text-error' : 'mt-0.5 size-5 text-warning'}
+          />
           <View className="min-w-0 flex-1 items-start gap-2">
             <Text accessibilityRole="alert" className="font-medium text-foreground text-sm">
               {t(didFail ? 'painting.status.failed' : 'painting.status.interrupted')}

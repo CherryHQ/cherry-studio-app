@@ -222,7 +222,7 @@ describe('Button', () => {
       variant: 'ghost',
     },
     {
-      labelClassName: 'text-primary',
+      labelClassName: 'text-link',
       rootClassNames: ['bg-transparent', 'shadow-none', 'active:opacity-70'],
       variant: 'link',
     },
@@ -261,7 +261,7 @@ describe('Button', () => {
     expect(rootClassName).not.toContain('px-4');
     expect(rootClassName).not.toContain('py-2.5');
     expect(rootClassName).not.toContain('rounded-xl');
-    expect(labelClassName).toContain('text-primary');
+    expect(labelClassName).toContain('text-link');
     expect(labelClassName).toContain('underline');
   });
 

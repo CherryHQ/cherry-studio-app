@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import type { MessagePartErrorProps } from '../message-part.types';
 
-const errorClassName = 'gap-1.5 rounded-lg border border-destructive bg-danger-soft p-3';
+const errorClassName = 'gap-1.5 rounded-lg border border-error-border bg-error-subtle p-3';
 
 export function MessagePartError({
   accessibilityHint,
@@ -15,13 +15,15 @@ export function MessagePartError({
   const content = (
     <>
       <View className="flex-row items-center gap-2">
-        <TriangleAlertIcon className="text-destructive" size={15} />
-        <Text className="flex-1 font-semibold text-destructive text-base" selectable>
+        <TriangleAlertIcon className="text-error-subtle-foreground" size={15} />
+        <Text className="flex-1 font-semibold text-base text-error-subtle-foreground" selectable>
           {title}
         </Text>
-        {onPress ? <ChevronRightIcon className="size-4 shrink-0 text-destructive" /> : null}
+        {onPress ? (
+          <ChevronRightIcon className="size-4 shrink-0 text-error-subtle-foreground" />
+        ) : null}
       </View>
-      <Text className="text-destructive text-base" selectable>
+      <Text className="text-base text-error-subtle-foreground" selectable>
         {message}
       </Text>
     </>

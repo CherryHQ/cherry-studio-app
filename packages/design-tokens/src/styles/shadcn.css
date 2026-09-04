@@ -67,8 +67,8 @@
    * VBG：「Category series are monochrome by default. Reserve chromatic tokens
    * for meaning.」故改为灰阶。有意偏离之处：VBG 自己的 --vbg-chart-1..6 是
    * gray-1000/900/800 重复两轮，对 5 系列图表不可用，此处顺延到 700/600。
-   * 深色下 gray-700(0.65) 比 gray-800(0.59) 更亮，第 3/4 档亮度会反序 —— 目前
-   * 没有任何组件消费 chart-1..5（AiUsageWeeklyChart 用的是语义色），故不额外处理。 */
+   * 深色下 gray-700(0.65) 比 gray-800(0.59) 更亮，第 3/4 档亮度会反序；当前
+   * AiUsageWeeklyChart 只消费前三档，后两档保留给未来扩展。 */
   --chart-1: var(--gray-1000);
   --chart-2: var(--gray-900);
   --chart-3: var(--gray-800);

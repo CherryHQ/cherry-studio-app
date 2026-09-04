@@ -98,6 +98,9 @@ describe('AssistantMessageToolbar', () => {
     expect(
       renderer?.root.findByProps({ testID: 'assistant-message-copy' }).props.accessibilityLabel,
     ).toBe('chat.messageActions.copied');
+    expect(
+      renderer?.root.findByProps({ testID: 'assistant-message-copy' }).props.icon.props.className,
+    ).toBe('text-success');
   });
 
   test('keeps the direct branch action reachable on a message with nothing to copy', () => {

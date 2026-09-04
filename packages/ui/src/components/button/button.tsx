@@ -97,7 +97,7 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
     root: 'bg-transparent shadow-none active:bg-secondary',
   },
   link: {
-    label: 'text-primary underline',
+    label: 'text-link underline',
     root: 'bg-transparent shadow-none active:opacity-70',
   },
   outline: {

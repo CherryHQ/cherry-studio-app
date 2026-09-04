@@ -4,7 +4,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaintingAssistantMessage } from '../PaintingAssistantMessage';
 
-jest.mock('@cherrystudio/app-icons/icons/circle-alert', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/circle-alert', () => {
+  const { View } = jest.requireActual('react-native');
+  return function MockCircleAlertIcon(props: object) {
+    return <View {...props} testID="painting-status-icon" />;
+  };
+});
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
@@ -91,10 +96,33 @@ describe('PaintingAssistantMessage', () => {
     expect(text).toContain('painting.status.failed');
     expect(text).toContain('painting.status.failedHint');
     expect(text).not.toContain('Invalid JSON response from provider');
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-status-icon' }).props.className,
+    ).toContain('text-error');
 
     const retry = renderer?.root.findByProps({ accessibilityLabel: 'painting.status.retry' });
     act(() => retry?.props.onPress());
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses warning feedback for an interrupted generation', () => {
+    act(() => {
+      renderer = create(
+        <PaintingAssistantMessage
+          aspectRatio={1}
+          error={null}
+          interruption={{ reason: 'interrupted' }}
+          outputs={[]}
+          prompt="Draw a cherry"
+          resolution="Auto"
+          status="idle"
+        />,
+      );
+    });
+
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-status-icon' }).props.className,
+    ).toContain('text-warning');
   });
 
   it('distinguishes multiple generated outputs for assistive technology', () => {

@@ -33,7 +33,7 @@ const disclosureIconMotion = {
 } as const;
 
 const toneClassName = {
-  danger: 'text-destructive',
+  danger: 'text-error',
   default: 'text-foreground-tertiary',
   warning: 'text-warning',
 } as const satisfies Record<MessagePartTone, string>;

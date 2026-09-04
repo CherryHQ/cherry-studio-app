@@ -188,7 +188,8 @@ describe('ContentState', () => {
     const title = text.find((node) => node.props.children === 'Load failed');
     const description = text.find((node) => node.props.children === 'Request timed out');
 
-    expect(title?.props.className).toContain('text-destructive-foreground');
+    expect(title?.props.className).toContain('text-error');
+    expect(title?.props.className).not.toContain('text-destructive-foreground');
     expect(title?.props.selectable).toBe(true);
     expect(description?.props.selectable).toBe(true);
     expect(tree.root.findAll((node) => node.props.accessibilityRole === 'button')).toHaveLength(0);

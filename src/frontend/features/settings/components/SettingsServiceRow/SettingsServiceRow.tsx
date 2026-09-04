@@ -107,7 +107,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               <Text
                 className={cn(
                   'shrink-0 text-xs',
-                  statusTone === 'danger' ? 'text-destructive' : 'text-foreground',
+                  statusTone === 'danger' ? 'text-error' : 'text-foreground',
                 )}
                 numberOfLines={1}
               >

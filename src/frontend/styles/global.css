@@ -134,8 +134,8 @@
       --field-border: var(--input);
       --segment: var(--card);
       --segment-foreground: var(--card-foreground);
-      --danger: var(--destructive);
-      --danger-foreground: var(--destructive-foreground);
+      --danger: var(--error);
+      --danger-foreground: var(--constant-white);
       /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
       --success-foreground: oklch(0 0 0);
       --warning-foreground: oklch(0 0 0);
@@ -161,8 +161,8 @@
       --field-border: var(--input);
       --segment: var(--secondary);
       --segment-foreground: var(--secondary-foreground);
-      --danger: var(--destructive);
-      --danger-foreground: var(--destructive-foreground);
+      --danger: var(--error);
+      --danger-foreground: var(--constant-white);
       /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
       --success-foreground: oklch(0 0 0);
       --warning-foreground: oklch(0 0 0);

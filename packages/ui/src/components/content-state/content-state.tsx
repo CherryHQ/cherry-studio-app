@@ -84,7 +84,7 @@ function ContentStateFrame({
                 isCentered ? 'text-center' : 'text-left',
                 'font-semibold',
                 isProminent ? 'text-lg' : 'text-base',
-                kind === 'error' ? 'text-destructive-foreground' : 'text-foreground',
+                kind === 'error' ? 'text-error' : 'text-foreground',
               )}
               selectable={kind === 'error'}
             >
