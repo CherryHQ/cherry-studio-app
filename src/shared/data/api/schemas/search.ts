@@ -22,6 +22,8 @@ export const EntitySearchTypeSchema = z.enum(entitySearchTypes);
 export const ENTITY_SEARCH_MAX_LIMIT_PER_TYPE = 200;
 
 export const EntitySearchQuerySchema = z.strictObject({
+  // Agent scoping applies to Session results; Agent entity search remains global.
+  agentId: z.string().min(1).optional(),
   q: z.string().trim().min(1),
   types: z.array(EntitySearchTypeSchema).min(1).optional(),
   updatedAtFrom: z.iso.datetime().optional(),
@@ -67,6 +69,8 @@ export const CONTENT_SEARCH_MAX_LIMIT = 1000;
  * former multi-source shell described desktop surfaces mobile never had.
  */
 export const ContentSearchQuerySchema = z.strictObject({
+  // Limits message matches to Sessions owned by this Agent.
+  agentId: z.string().min(1).optional(),
   q: z.string().trim().min(1),
   cursor: z.string().min(1).optional(),
   sessionId: z.string().min(1).optional(),
