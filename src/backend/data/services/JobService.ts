@@ -1,5 +1,5 @@
 import { loggerService } from '@logger';
-import { and, asc, count, desc, eq, inArray, lte, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lte, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
