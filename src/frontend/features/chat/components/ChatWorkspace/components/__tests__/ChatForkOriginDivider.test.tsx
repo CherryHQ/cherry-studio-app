@@ -40,10 +40,12 @@ describe('ChatForkOriginDivider', () => {
     // title must land *inside* its own slot: that slot is what carries the link
     // affordance, and an unparsed one silently degrades to plain text.
     const row = renderer!.root.findByProps({ testID: 'chat-fork-origin' });
-    const slot = renderer!.root.findAllByProps({ className: 'text-foreground underline' })[0];
+    const slot = renderer!.root.findByProps({ testID: 'chat-fork-origin-title' });
 
     expect(collectText(row)).toBe('Branched from Arithmetic drills');
     expect(collectText(slot)).toBe('Arithmetic drills');
+    expect(slot.props.className).toContain('max-w-56');
+    expect(slot.props.numberOfLines).toBe(1);
   });
 
   test('returns to the source session by swapping route params', async () => {

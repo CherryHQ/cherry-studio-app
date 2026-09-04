@@ -172,7 +172,7 @@
   "chat.errorPart.retryable": "The reply could not be completed. You can try again.",
   "chat.errorPart.title": "Error",
   "chat.fork.openSource": "Open the source chat",
-  "chat.fork.origin": "Branched from <origin>{{title}}</origin>",
+  "chat.fork.origin": "<label>Branched from </label><origin>{{title}}</origin>",
   "chat.fork.sessionTitle": "Branch - {{title}}",
   "chat.input.action.sendMessage": "Send message",
   "chat.input.action.stopGenerating": "Stop generating",

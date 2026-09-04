@@ -43,18 +43,26 @@ export function ChatForkOriginDivider({ sourceSessionId }: ChatForkOriginDivider
       testID="chat-fork-origin"
     >
       <View className="h-px flex-1 bg-border" />
-      <Text className="shrink text-muted-foreground text-sm" numberOfLines={1}>
-        {/*
-          The slot tag must not collide with an HTML void element — Trans parses
-          the translated string as markup, and a void name such as `source`
-          would close the tag before the title ever reached it.
-        */}
+      <View className="min-w-0 shrink flex-row items-center" testID="chat-fork-origin-label">
+        {/* Every translated fragment is wrapped in Text so the title remains an
+            independently constrained flex item without fixing the locale's word order. */}
         <Trans
-          components={{ origin: <Text className="text-foreground underline" /> }}
+          components={{
+            label: <Text className="shrink-0 text-muted-foreground text-sm" numberOfLines={1} />,
+            origin: (
+              <Text
+                className="min-w-0 max-w-56 shrink text-foreground text-sm underline"
+                numberOfLines={1}
+                testID="chat-fork-origin-title"
+              />
+            ),
+            suffix: <Text className="shrink-0 text-muted-foreground text-sm" numberOfLines={1} />,
+          }}
           i18nKey="chat.fork.origin"
+          parent={null}
           values={{ title }}
         />
-      </Text>
+      </View>
       <View className="h-px flex-1 bg-border" />
     </Pressable>
   );
