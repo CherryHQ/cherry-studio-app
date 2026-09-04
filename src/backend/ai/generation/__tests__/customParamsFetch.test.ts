@@ -1,9 +1,9 @@
 import { createCustomParamsFetch } from '../customParamsFetch';
 
 function createInnerFetch() {
-  return jest.fn(async () => new Response(null, { status: 204 })) as jest.MockedFunction<
-    typeof globalThis.fetch
-  >;
+  return jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>(
+    async () => new Response(null, { status: 204 }),
+  );
 }
 
 describe('createCustomParamsFetch', () => {
