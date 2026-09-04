@@ -42,7 +42,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
           icon={
             isCopied ? (
-              <CheckIcon className="text-primary" size={15} />
+              <CheckIcon className="text-success" size={15} />
             ) : (
               <CopyIcon className="text-muted-foreground" size={15} />
             )

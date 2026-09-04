@@ -476,7 +476,7 @@ function ProviderModelAddForm({
                   ))}
                 </View>
                 {endpointTypeError ? (
-                  <Text className="text-destructive text-xs">{endpointTypeError}</Text>
+                  <Text className="text-error text-xs">{endpointTypeError}</Text>
                 ) : null}
               </ProviderModelAddSection>
             ) : null}

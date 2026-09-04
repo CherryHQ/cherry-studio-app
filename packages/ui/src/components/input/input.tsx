@@ -88,7 +88,7 @@ function NativeInput({
       ? 'min-h-10 rounded-lg border border-border py-2 text-base shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
       : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
     invalid &&
-      'border-destructive ios:outline-danger ios:focus:outline-danger android:border-destructive android:focus:border-destructive',
+      'border-error ios:outline-error ios:focus:outline-error android:border-error android:focus:border-error',
   );
 
   return (
@@ -215,7 +215,7 @@ function PasswordInput({
         'min-h-10 flex-row items-stretch overflow-hidden rounded-lg border border-border shadow-none',
         isOnSurface ? 'bg-default' : 'bg-field',
         isDisabled && 'opacity-disabled',
-        isInvalid && 'border-destructive',
+        isInvalid && 'border-error',
       )}
       style={[styles.root, style]}
     >

@@ -14,7 +14,12 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
 
-jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/check', () => {
+  const { View } = jest.requireActual('react-native');
+  return function MockCheckIcon(props: object) {
+    return <View {...props} testID="copy-success-icon" />;
+  };
+});
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);
 
@@ -98,6 +103,9 @@ describe('AssistantMessageToolbar', () => {
     expect(
       renderer?.root.findByProps({ testID: 'assistant-message-copy' }).props.accessibilityLabel,
     ).toBe('chat.messageActions.copied');
+    expect(renderer?.root.findByProps({ testID: 'copy-success-icon' }).props.className).toBe(
+      'text-success',
+    );
   });
 
   test('keeps the direct branch action reachable on a message with nothing to copy', () => {

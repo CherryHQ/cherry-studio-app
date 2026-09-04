@@ -125,6 +125,9 @@ describe('Input', () => {
 
     expect(input.props.isDisabled).toBe(true);
     expect(input.props.isInvalid).toBe(true);
+    expect(input.props.className).toContain('border-error');
+    expect(input.props.className).toContain('ios:outline-error');
+    expect(input.props.className).not.toContain('destructive');
   });
 
   test('uses a four-line adaptive viewport for multiline input', () => {

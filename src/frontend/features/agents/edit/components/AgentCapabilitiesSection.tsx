@@ -163,9 +163,7 @@ function permissionCaption(
           openSettings(scopes);
         }}
       >
-        <Text className="text-destructive text-sm">
-          {t('agent.capabilities.permission.denied')}
-        </Text>
+        <Text className="text-error text-sm">{t('agent.capabilities.permission.denied')}</Text>
       </Pressable>
     );
   }
