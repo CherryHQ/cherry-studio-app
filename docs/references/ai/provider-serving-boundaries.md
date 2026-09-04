@@ -43,10 +43,14 @@ The persisted Provider and Model rows remain authoritative for:
 - model wire id and endpoint declarations;
 - authentication method declarations;
 - Provider extra headers and endpoint dialect;
+- materialized request controls such as service-tier selection and available options;
+- Provider-level cost-reporting trust declarations;
 - model capability, modality, limits, and pricing facts.
 
-The Provider registry supplies catalog defaults. Runtime code must not create a second Provider-id
-catalog to repeat these facts.
+The Provider registry supplies catalog defaults and remains authoritative for request-only wire
+metadata that is deliberately not persisted, including reasoning dialects and service-tier delivery
+mappings. The Runtime rehydrates those facts at request time. Runtime code must not create a second
+Provider-id catalog to repeat them.
 
 ### `ResolvedProviderConnection`
 
@@ -137,6 +141,11 @@ adds lifecycle, authentication, protocol-conversion, and suspension costs that a
 different on iOS and Android. Any future in-process AI SDK bridge requires a separate design and
 must prove tool calls, reasoning, images, usage, cancellation, and error parity before adoption.
 
+Mobile's remote registry protocol is a model-data distribution mechanism, not a replacement for
+the shared control plane. Unsigned snapshots may update model metadata and provider-model
+overrides, but Provider definitions and routing remain bundled. Mobile may accept a Desktop
+snapshot only after its schemas and Runtime interpreters implement that snapshot's semantics.
+
 ## Migration
 
 ### Phase 1: shared connection facts — landed
@@ -169,6 +178,12 @@ hooks remain in the owning binding.
 
 Further policies should be added only after identifying Provider-specific header, credential, or
 payload transformations that multiple language bindings actually need.
+
+Endpoint-dialect, reasoning-wire, service-tier, and actual-cost facts are now declared in the
+registry and consumed by the Mobile request path. The compatibility projection into persisted
+`apiFeatures` is intentionally sparse: it projects only explicit declarations so schema defaults
+cannot silently replace newer local state. Full Desktop registry admission remains blocked on
+server-tool eligibility and compatibility/catalog reconciliation.
 
 ## Acceptance Criteria
 

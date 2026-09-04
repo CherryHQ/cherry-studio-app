@@ -1,9 +1,10 @@
 # Desktop AI Package Reuse
 
 Status: **the Mobile `ai-core` and `ai-sdk-provider` source trees mirror Cherry Desktop commit
-`246e46b6b04796696a9a4903f4604f5fe9d1ae4b`. Their recorded Manifest baseline must not advance
-until the required gates pass. The current registry drift and new Runtime packages remain
-unimplemented**.
+`246e46b6b04796696a9a4903f4604f5fe9d1ae4b`. Selected Provider registry semantics from that commit
+are implemented, but the complete registry domain has not passed its admission gates and Mobile's
+remote compatibility remains intentionally pinned to Desktop `2.0.8`. The proposed shared Runtime
+packages remain design-only**.
 
 This reference defines which Cherry Desktop AI packages Mobile can consume, which code must be
 ported rather than copied, and where a future shared package boundary belongs. Feature parity
@@ -20,7 +21,7 @@ source differences.
 | --- | --- | --- | --- |
 | `@cherrystudio/ai-core` | Published; React Native export declared | Source mirror copied; baseline validation pending | Exact tracked-file mirror |
 | `@cherrystudio/ai-sdk-provider` | Published | Source mirror copied; baseline validation pending | Exact tracked-file mirror |
-| `@cherrystudio/provider-registry` | Independent but private | Existing older semantic port; Desktop drift after its recorded baseline is not yet ported | Semantic port; never overwrite the Mobile adapter |
+| `@cherrystudio/provider-registry` | Independent but private | Semantic port in progress; request-control and endpoint-dialect slices are implemented, while server-tool and compatibility work remains | Semantic port; never overwrite the Mobile adapter |
 | Desktop custom providers and image transports | Still under `src/main/ai` | Mobile implementation remains in private `@cherrystudio/ai-runtime` | Future extraction below the application-service boundary |
 | Desktop Pi Runtime | Application source, not a portable package | Direct consumption rejected | Future platform-neutral Pi core only |
 | `@cherrystudio/dsh-bridge` | Private and desktop-specific | Not a Mobile dependency | Desktop-only |
@@ -82,6 +83,41 @@ loader and documented compatibility behavior. A future published package must ex
 | `src/index.ts`, `src/registry-utils.ts` | Merge shared exports while retaining `buildRuntimeEndpointConfigs` until persisted rows migrate |
 | `src/registry-loader.ts` | Keep as the `./node` entry; never expose it to Metro |
 | Mobile `src/mobile-loader.ts` | Retain as the `./mobile` static-JSON and remote-snapshot entry |
+
+### Current migration ledger
+
+Implementation does not mean admission. The rows marked implemented still require the repository's
+tests, type check, platform exports, and device acceptance before the synchronization Manifest can
+advance.
+
+| Registry concern | Mobile state | Admission consequence |
+| --- | --- | --- |
+| Remote manifest compatibility | Implemented with an independent Desktop-semantic compatibility version | Keep the accepted line at `2.0.8`; never compare a Desktop manifest to the unrelated Mobile app version |
+| Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Prevent aliases such as `gpt-oss-20b` and `gpt-oss-120b` from collapsing to the same fallback key |
+| Reasoning wire dialects | Implemented for effort- and budget-based protocols | Runtime rehydrates the catalog dialect because the persisted Model projection does not retain all wire metadata |
+| Service tiers | Implemented as endpoint-owned request controls with per-model option narrowing | Semantic values are normalized and delivered through either provider options or JSON request-body fields |
+| Endpoint dialect and actual-cost reporting | Implemented with a narrow legacy `apiFeatures` projection | `streamOptions`, developer-role, reasoning-summary, and cost-trust facts belong to registry endpoint/provider declarations rather than Provider-id branches |
+| Server tools and model eligibility | Outstanding | Blocks Desktop `2.0.9` admission because Desktop moved provider-native Web Search ownership out of model capabilities and into `serverTools` declarations plus generated eligibility tables |
+| Compatibility validator, scripts, fixtures, and full catalog reconciliation | Outstanding | Blocks the synchronization Manifest even where individual runtime semantics have already landed |
+| Mobile-only `github` preset | Retained as an explicit product extension | Must be accepted or removed by product decision; a Desktop copy must not delete it silently |
+
+### Remote catalog policy
+
+Mobile should retain its remote model-catalog protocol. It solves data freshness; it does not
+replace code or package synchronization. The Runtime must already understand every semantic field
+before it admits a newer Desktop snapshot.
+
+The remote payload is unsigned, so only `models.json` and `provider-models.json` may be downloaded.
+`providers.json` remains bundled and trusted: remote data may refine model descriptions,
+capabilities, and overrides, but it must not redirect API traffic, change credential behavior, or
+introduce a Provider endpoint. A new snapshot is downloaded and first activated only after explicit
+user action; an already approved cached snapshot may be reactivated during application startup.
+Incompatible manifests are rejected before download and activation.
+
+Desktop `2.0.9` must remain rejected until Mobile implements the complete `serverTools` consumer and
+eligibility semantics. Accepting its models first would be a functional regression: the current
+Desktop catalog no longer carries the old per-model `web-search` capability rows, while Mobile
+still relies on that representation.
 
 ## Pi Boundary
 
@@ -168,11 +204,16 @@ following:
 3. The root barrel does not re-export a Node entry.
 4. AI SDK and Pi dependencies use compatible peer ranges and resolve to Mobile-controlled patched
    versions.
-5. Catalog data uses a static Mobile loader rather than runtime filesystem access.
+5. Catalog data uses a static Mobile loader rather than runtime filesystem access. The package
+   exposes an explicit React Native-safe `./mobile` entry, and its root export graph remains pure.
 6. Provider request fixtures and error, cancellation, tool, stream, and image-result contracts
    agree across Desktop and Mobile.
 7. A packed artifact is consumed by a minimal Expo application before the local mirror is
    removed. Production iOS and Android export checks remain required before release adoption.
+
+The shared package should expose its own semantic Runtime compatibility constant. A consuming app
+version is not a valid substitute because Desktop publishes the remote registry lane and Mobile has
+an independent release cadence.
 
 A package that only passes an Electron build is not React Native compatible.
 
