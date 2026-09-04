@@ -85,7 +85,9 @@ function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) 
 function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
   const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
-  const [visibleSessionLimit, setVisibleSessionLimit] = useState(appSidebar.recentSessionLimit);
+  const [visibleSessionLimit, setVisibleSessionLimit] = useState<number>(
+    appSidebar.recentSessionLimit,
+  );
   const {
     hasMoreSessions,
     isLoadingMoreSessions,
