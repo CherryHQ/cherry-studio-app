@@ -32,8 +32,8 @@ export const agentSessionTable = sqliteTable(
       .$type<AgentExecutionTarget>()
       .notNull()
       .default({ kind: 'local' }),
-    // Dedicated conversation activity time: mirrors the relevant message's
-    // activityAt when a submission reserves, an assistant settles, or history forks.
+    // Dedicated conversation activity time: advances to reservation time or
+    // terminal stats.runtimeTiming.completedAt, and is inherited by history forks.
     // Administrative mutations such as renames and forks must not stamp "now".
     lastActivityAt: integer()
       .notNull()

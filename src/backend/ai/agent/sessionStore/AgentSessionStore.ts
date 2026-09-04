@@ -7,6 +7,7 @@ import type {
   AgentSessionView,
   AgentUsageView,
 } from '@/shared/contracts/agent';
+import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 
@@ -83,6 +84,10 @@ export type FinalizeAssistantMessageInput = {
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
   contextCheckpoint: RuntimeContextCheckpoint | null;
+  /** Runtime-owned message statistics; terminal timing is required at this persistence boundary. */
+  runtimeStats: MessageRuntimeStatsInput & {
+    runtimeTiming: MessageRuntimeTiming & { completedAt: number };
+  };
 };
 
 /**

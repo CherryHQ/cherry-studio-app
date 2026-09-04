@@ -142,7 +142,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           executionTarget: input.executionTarget,
         })
         .returning();
-      const { activityAt, ...reserved } = await insertSubmission(tx, {
+      const { reservedAt, ...reserved } = await insertSubmission(tx, {
         sessionId: sessionRow.id,
         userParts: input.userParts,
         modelId: input.modelId,
@@ -150,7 +150,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       });
       const [activeSessionRow] = await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: activityAt })
+        .set({ lastActivityAt: reservedAt })
         .where(eq(agentSessionTable.id, sessionRow.id))
         .returning();
       return { ...reserved, session: toAgentSessionView(activeSessionRow) };
@@ -167,10 +167,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (!session) {
         throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
       }
-      const { activityAt, ...reserved } = await insertSubmission(tx, input);
+      const { reservedAt, ...reserved } = await insertSubmission(tx, input);
       await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: activityAt })
+        .set({ lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})` })
         .where(eq(agentSessionTable.id, input.sessionId));
       return reserved;
     });
@@ -189,9 +189,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
       const [anchor] = await tx
         .select({
-          activityAt: agentSessionMessageTable.activityAt,
           createdAt: agentSessionMessageTable.createdAt,
           id: agentSessionMessageTable.id,
+          role: agentSessionMessageTable.role,
+          stats: agentSessionMessageTable.stats,
           status: agentSessionMessageTable.status,
         })
         .from(agentSessionMessageTable)
@@ -217,7 +218,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its
           // own. Keep the last included message's original activity time.
-          lastActivityAt: anchor.activityAt,
+          lastActivityAt:
+            anchor.role === 'assistant'
+              ? (anchor.stats?.runtimeTiming?.completedAt ?? anchor.createdAt)
+              : anchor.createdAt,
           // Falls back to the source's name. Auto-naming will not rewrite
           // either form later, because neither is empty nor matches the
           // first-user-message title the naming policy expects to overwrite.
@@ -264,7 +268,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // holds because createdAt is the major sort key and the reissued ids
           // break ties in the same direction as the source.
           createdAt: row.createdAt,
-          activityAt: row.activityAt,
           data: row.data,
           error: row.error,
           id: copiedMessageId,
@@ -272,6 +275,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           modelId: row.modelId,
           role: row.role,
           sessionId: forked.id,
+          stats: row.stats,
           status: row.status,
           // contextCheckpoint is deliberately dropped: it is a Runtime-private
           // artifact anchored to a turn id that this copy no longer carries, so
@@ -415,14 +419,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     return this.dbService.withWriteTx(async (tx) => {
-      const activityAt = Date.now();
+      const [existing] = await tx
+        .select({
+          sessionId: agentSessionMessageTable.sessionId,
+          stats: agentSessionMessageTable.stats,
+        })
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
+        .limit(1);
+      if (!existing) {
+        throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
+      }
       const [row] = await tx
         .update(agentSessionMessageTable)
         .set({
-          activityAt,
           status: input.status,
           data: { version: 1, parts: input.parts },
           usage: input.usage,
+          stats: { ...existing.stats, ...input.runtimeStats },
           error: input.error,
           contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
         })
@@ -433,8 +447,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       }
       await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: activityAt })
-        .where(eq(agentSessionTable.id, row.sessionId));
+        .set({
+          lastActivityAt: sql`max(
+            ${agentSessionTable.lastActivityAt},
+            ${input.runtimeStats.runtimeTiming.completedAt}
+          )`,
+        })
+        .where(eq(agentSessionTable.id, existing.sessionId));
       return toAgentMessageView(row);
     });
   }
@@ -508,13 +527,11 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
 async function insertSubmission(
   tx: Database,
   input: ReserveSubmissionInput,
-): Promise<ReserveSubmissionResult & { activityAt: number }> {
-  const activityAt = Date.now();
+): Promise<ReserveSubmissionResult & { reservedAt: number }> {
   const turnId = createOrderedUuid();
   const [userRow] = await tx
     .insert(agentSessionMessageTable)
     .values({
-      activityAt,
       sessionId: input.sessionId,
       turnId,
       role: 'user',
@@ -525,7 +542,6 @@ async function insertSubmission(
   const [assistantRow] = await tx
     .insert(agentSessionMessageTable)
     .values({
-      activityAt,
       sessionId: input.sessionId,
       turnId,
       role: 'assistant',
@@ -536,7 +552,7 @@ async function insertSubmission(
     })
     .returning();
   return {
-    activityAt,
+    reservedAt: assistantRow.createdAt,
     turnId,
     userMessage: toAgentMessageView(userRow),
     assistantMessage: toAgentMessageView(assistantRow),

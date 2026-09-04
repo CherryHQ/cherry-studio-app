@@ -19,6 +19,7 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
     usage: null,
+    stats: null,
     modelId: null,
     inferenceSnapshot: null,
     ...overrides,
@@ -45,6 +46,9 @@ describe('agentMessageProjection', () => {
           },
         },
         modelId,
+        stats: {
+          runtimeTiming: { startedAt: 1_000, completedAt: 2_000, spans: [] },
+        },
       }),
     );
 
@@ -56,8 +60,11 @@ describe('agentMessageProjection', () => {
         name: 'GPT-5',
         providerId: 'openai',
       },
-      updatedAt: '2026-08-25T00:00:00.000Z',
+      stats: {
+        runtimeTiming: { startedAt: 1_000, completedAt: 2_000, spans: [] },
+      },
     });
+    expect(item).not.toHaveProperty('updatedAt');
   });
 
   test('projects the provider error message into the shared error renderer', () => {

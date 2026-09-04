@@ -50,6 +50,10 @@ const INFERENCE_SNAPSHOT: AgentInferenceSnapshotV1 = {
 };
 const RESERVATION_FACTS = { modelId: MODEL_ID, inferenceSnapshot: INFERENCE_SNAPSHOT };
 
+function terminalTiming(completedAt = Date.now()) {
+  return { startedAt: completedAt, completedAt, spans: [] };
+}
+
 type StoreHarness = {
   store: AgentSessionStore;
   /** Seeds an empty legacy Session without exposing that operation on the production port. */
@@ -278,6 +282,7 @@ describe.each([
         usage: null,
         error: null,
         contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
       });
       expect((await store.getSession(session.id))?.updatedAt).toBe(
         new Date(finalizationTime).toISOString(),
@@ -309,6 +314,7 @@ describe.each([
         anchorTurnId: reserved.turnId,
         payload: { mustNotPersist: true },
       },
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     expect(finalized.status).toBe('error');
@@ -328,6 +334,7 @@ describe.each([
         usage: null,
         error: null,
         contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
       }),
     ).rejects.toThrow();
   });
@@ -347,6 +354,7 @@ describe.each([
         usage: null,
         error: null,
         contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
       });
     }
 
@@ -384,6 +392,7 @@ describe.each([
         usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
         error: null,
         contextCheckpoint: { version: 1, anchorTurnId: reserved.turnId, payload: 'ctx' },
+        runtimeStats: { runtimeTiming: terminalTiming() },
       });
     }
     const original = await store.listMessages(source.id);
@@ -453,6 +462,50 @@ describe.each([
     expect(await store.listMessages(source.id)).toEqual(original);
   });
 
+  test('forkSession preserves runtime timing without preserving row update time', async () => {
+    const reservationTime = 2_000_000_000_000;
+    const finalizationTime = 2_000_000_005_000;
+    const forkTime = 2_000_086_400_000;
+    jest.useFakeTimers({ now: reservationTime });
+    try {
+      const source = await harness.createEmptySession({ agentId });
+      const reserved = await store.reserveSubmission({
+        ...RESERVATION_FACTS,
+        sessionId: source.id,
+        userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+      });
+      jest.setSystemTime(finalizationTime);
+      await store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'success',
+        parts: [{ id: 'text-1', type: 'text', text: 'done', state: 'done' }],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      const sourceAssistant = (await store.listMessages(source.id)).at(-1);
+      expect(sourceAssistant?.stats?.runtimeTiming?.completedAt).toBe(finalizationTime);
+      expect(sourceAssistant?.updatedAt).toBe(new Date(finalizationTime).toISOString());
+
+      jest.setSystemTime(forkTime);
+      const result = await store.forkSession({
+        sessionId: source.id,
+        fromMessageId: reserved.assistantMessage.id,
+      });
+      expect(result.status).toBe('forked');
+      if (result.status !== 'forked') return;
+
+      const copiedAssistant = (await store.listMessages(result.session.id)).at(-1);
+      // Semantic completion time travels with the copied conversation, while
+      // updatedAt still records when the new database row was written.
+      expect(copiedAssistant?.stats?.runtimeTiming).toEqual(sourceAssistant?.stats?.runtimeTiming);
+      expect(copiedAssistant?.updatedAt).toBe(new Date(forkTime).toISOString());
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('nested forks record the direct source and their own copied boundary', async () => {
     const source = await harness.createEmptySession({ agentId, title: 'Source' });
     const sourceTurn = await store.reserveSubmission({
@@ -467,6 +520,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
     const firstResult = await store.forkSession({
       sessionId: source.id,
@@ -487,6 +541,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
     const secondResult = await store.forkSession({
       sessionId: firstResult.session.id,
@@ -544,6 +599,7 @@ describe.each([
         usage: null,
         error: null,
         contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
       });
       const result = await store.forkSession({
         sessionId: source.id,
@@ -626,6 +682,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
     const second = await store.reserveSubmission({
       ...RESERVATION_FACTS,
@@ -639,6 +696,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     const tail = await store.loadRuntimeTurnContext(session.id, first.turnId);
@@ -675,6 +733,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     expect(await store.getLatestContextCheckpoint(session.id)).toEqual({
@@ -790,6 +849,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
     await expect(
       store.reserveSubmission({
@@ -820,6 +880,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     const search = (term: string) =>
@@ -854,13 +915,17 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     // Model a historical fork point whose source Session has newer activity.
-    const anchorActivityAt = 10_000;
-    raw
-      .prepare('UPDATE agent_session_message SET activity_at = ? WHERE id = ?')
-      .run(anchorActivityAt, reserved.assistantMessage.id);
+    const anchorCompletedAt = 10_000;
+    raw.prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?').run(
+      JSON.stringify({
+        runtimeTiming: { startedAt: 5_000, completedAt: anchorCompletedAt, spans: [] },
+      }),
+      reserved.assistantMessage.id,
+    );
     raw
       .prepare('UPDATE agent_session SET last_activity_at = ? WHERE id = ?')
       .run(20_000, source.id);
@@ -877,8 +942,8 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         'SELECT last_activity_at AS lastActivityAt, updated_at AS updatedAt FROM agent_session WHERE id = ?',
       )
       .get(result.session.id) as { lastActivityAt: number; updatedAt: number };
-    expect(forkTimestamps.lastActivityAt).toBe(anchorActivityAt);
-    expect(forkTimestamps.updatedAt).toBeGreaterThan(anchorActivityAt);
+    expect(forkTimestamps.lastActivityAt).toBe(anchorCompletedAt);
+    expect(forkTimestamps.updatedAt).toBeGreaterThan(anchorCompletedAt);
 
     // The AFTER INSERT trigger has to run for every row the copy writes, not
     // just the first: fts_rowid is assigned as MAX+1 per insert.
@@ -914,7 +979,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const recursiveFork = raw
       .prepare('SELECT last_activity_at AS lastActivityAt FROM agent_session WHERE id = ?')
       .get(recursive.session.id) as { lastActivityAt: number };
-    expect(recursiveFork.lastActivityAt).toBe(anchorActivityAt);
+    expect(recursiveFork.lastActivityAt).toBe(anchorCompletedAt);
 
     // Deleting the source drops the lineage claim and never deletes the fork itself.
     expect(await store.deleteSession(source.id)).toBe(true);
@@ -940,23 +1005,20 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
     const beforeReconciliation = raw
       .prepare(
-        `SELECT session.last_activity_at AS lastActivityAt, message.activity_at AS messageActivityAt
+        `SELECT session.last_activity_at AS lastActivityAt,
+                message.created_at AS messageCreatedAt, message.stats
          FROM agent_session AS session
          JOIN agent_session_message AS message ON message.session_id = session.id
          WHERE session.id = ? AND message.id = ?`,
       )
       .get(session.id, reserved.assistantMessage.id) as {
       lastActivityAt: number;
-      messageActivityAt: number;
+      messageCreatedAt: number;
+      stats: string | null;
     };
-    // `createdAt` is a per-row insert default, a second clock read that can
-    // land a millisecond after the instant the reservation stamps on both
-    // rows. Read that stamp back instead of re-deriving it.
-    const reservationActivityAt = beforeReconciliation.messageActivityAt;
+    const reservationActivityAt = beforeReconciliation.messageCreatedAt;
     expect(beforeReconciliation.lastActivityAt).toBe(reservationActivityAt);
-    expect(reservationActivityAt).toBeLessThanOrEqual(
-      Date.parse(reserved.assistantMessage.createdAt),
-    );
+    expect(beforeReconciliation.stats).toBeNull();
 
     await store.reconcileInterrupted(INTERRUPTED);
 
@@ -967,17 +1029,17 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
     const afterReconciliation = raw
       .prepare(
-        `SELECT session.last_activity_at AS lastActivityAt, message.activity_at AS messageActivityAt
+        `SELECT session.last_activity_at AS lastActivityAt, message.stats
          FROM agent_session AS session
          JOIN agent_session_message AS message ON message.session_id = session.id
          WHERE session.id = ? AND message.id = ?`,
       )
       .get(session.id, reserved.assistantMessage.id) as {
       lastActivityAt: number;
-      messageActivityAt: number;
+      stats: string | null;
     };
     expect(afterReconciliation.lastActivityAt).toBe(reservationActivityAt);
-    expect(afterReconciliation.messageActivityAt).toBe(reservationActivityAt);
+    expect(afterReconciliation.stats).toBeNull();
   });
 
   test('normal finalization advances message and Session activity together', async () => {
@@ -991,6 +1053,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
     });
 
+    const runtimeTiming = terminalTiming();
     const finalized = await store.finalizeAssistantMessage({
       assistantMessageId: reserved.assistantMessage.id,
       status: 'success',
@@ -998,11 +1061,12 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming },
     });
 
     const activity = raw
       .prepare(
-        `SELECT session.last_activity_at AS lastActivityAt, message.activity_at AS messageActivityAt,
+        `SELECT session.last_activity_at AS lastActivityAt, message.stats,
                 message.updated_at AS messageUpdatedAt
          FROM agent_session AS session
          JOIN agent_session_message AS message ON message.session_id = session.id
@@ -1010,10 +1074,11 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       )
       .get(session.id, finalized.id) as {
       lastActivityAt: number;
-      messageActivityAt: number;
+      stats: string;
       messageUpdatedAt: number;
     };
-    expect(activity.lastActivityAt).toBe(activity.messageActivityAt);
+    expect(activity.lastActivityAt).toBe(runtimeTiming.completedAt);
+    expect(JSON.parse(activity.stats)).toEqual({ runtimeTiming });
     expect(activity.messageUpdatedAt).toBe(Date.parse(finalized.updatedAt));
   });
 
@@ -1038,21 +1103,22 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
     const forkRow = raw
       .prepare(
-        `SELECT fork.last_activity_at AS lastActivityAt, source.activity_at AS sourceActivityAt
+        `SELECT fork.last_activity_at AS lastActivityAt,
+                source.created_at AS sourceCreatedAt, source.stats
          FROM agent_session AS fork
          JOIN agent_session_message AS source ON source.id = ?
          WHERE fork.id = ?`,
       )
       .get(reserved.assistantMessage.id, result.session.id) as {
       lastActivityAt: number;
-      sourceActivityAt: number;
+      sourceCreatedAt: number;
+      stats: string | null;
     };
-    expect(forkRow.lastActivityAt).toBe(forkRow.sourceActivityAt);
+    expect(forkRow.lastActivityAt).toBe(forkRow.sourceCreatedAt);
+    expect(forkRow.stats).toBeNull();
     // Still the reservation stamp: recovery settlement would have advanced it
     // past the row's own insert time.
-    expect(forkRow.sourceActivityAt).toBeLessThanOrEqual(
-      Date.parse(reserved.assistantMessage.createdAt),
-    );
+    expect(forkRow.sourceCreatedAt).toBe(Date.parse(reserved.assistantMessage.createdAt));
   });
 
   test('returns a corrupt checkpoint candidate for Host-side classification', async () => {
@@ -1072,6 +1138,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       usage: null,
       error: null,
       contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
     raw
       .prepare('UPDATE agent_session_message SET context_checkpoint = ? WHERE id = ?')

@@ -6,6 +6,7 @@
 
 import * as z from 'zod';
 
+import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -365,6 +366,7 @@ export const AgentMessageViewSchema = z.strictObject({
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
   usage: AgentUsageViewSchema.nullable(),
+  stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
   createdAt: z.iso.datetime(),

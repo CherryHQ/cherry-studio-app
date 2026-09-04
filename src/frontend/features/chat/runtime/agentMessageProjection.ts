@@ -271,8 +271,8 @@ export function toAgentMessageListItem(
     id: message.id,
     ...(model ? { model } : {}),
     role: message.role,
+    ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
-    updatedAt: message.updatedAt,
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });
   return item;

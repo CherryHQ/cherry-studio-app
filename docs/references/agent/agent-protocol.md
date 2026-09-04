@@ -203,6 +203,7 @@ type AgentMessageView = {
   status: 'pending' | 'streaming' | 'success' | 'error' | 'cancelled' | 'interrupted'
   parts: AgentMessagePart[]
   usage: AgentUsageView | null
+  stats: MessageStats | null
   modelId: UniqueModelId | null
   inferenceSnapshot: AgentInferenceSnapshotView | null
   createdAt: string
