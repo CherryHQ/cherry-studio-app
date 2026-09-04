@@ -139,11 +139,13 @@ semantics fully implemented by this Mobile Runtime. This compatibility number is
 the Mobile application version.
 
 The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
-replaced remotely. This keeps endpoint routing and credential behavior inside the reviewed binary
-while still allowing model metadata to be refreshed. Remote protocol support is not a substitute
-for synchronizing schemas, interpreters, normalizers, or endpoint semantics: required behavior
-consumed by Mobile must be implemented and validated, while unsupported optional behavior must be
-explicitly classified, before the compatibility version advances.
+replaced remotely. Provider base URLs, adapter families, headers, and credential behavior remain
+inside the reviewed binary. A remote Provider-model override may still select an endpoint type from
+that bundled Provider definition and update an image model's `vendorTransport` relative path and
+sync/async behavior. Remote protocol support is not a substitute for synchronizing schemas,
+interpreters, normalizers, or endpoint semantics: required behavior consumed by Mobile must be
+implemented and validated, while unsupported optional behavior must be explicitly classified,
+before the compatibility version advances.
 
 The accepted semantic line is currently Desktop `2.0.8`. Desktop `2.0.9` remains gated on a full
 Mobile compatibility review of the downloaded model and override payloads. Mobile does not need to

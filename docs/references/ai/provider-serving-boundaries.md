@@ -142,9 +142,12 @@ different on iOS and Android. Any future in-process AI SDK bridge requires a sep
 must prove tool calls, reasoning, images, usage, cancellation, and error parity before adoption.
 
 Mobile's remote registry protocol is a model-data distribution mechanism, not a replacement for
-the shared control plane. Unsigned snapshots may update model metadata and provider-model
-overrides, but Provider definitions and routing remain bundled. Mobile may accept a Desktop
-snapshot only after its schemas and Runtime interpreters implement that snapshot's semantics.
+the shared control plane. Unsigned snapshots may update model metadata and Provider-model
+overrides, including selecting an endpoint type already declared by the bundled Provider and
+updating image-generation `vendorTransport` relative paths and sync/async behavior. Provider
+definitions, base URLs, adapter families, headers, and credential behavior remain bundled. Mobile
+may accept a Desktop snapshot only after its schemas and Runtime interpreters implement that
+snapshot's semantics.
 
 ## Migration
 

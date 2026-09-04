@@ -109,10 +109,13 @@ admits a newer Desktop snapshot, the Runtime must understand every required fiel
 explicitly classify unsupported optional fields as ignored product capabilities.
 
 The remote payload is unsigned, so `providers.json` stays bundled and trusted. Remote data may
-refine model descriptions, capabilities, and overrides, but it cannot redirect API traffic, change
-credential behavior, or introduce a Provider endpoint. Incompatible manifests are rejected before
-download and activation. The Mobile-owned `github` namespace is also authoritative: bundled GitHub
-overrides replace, rather than mix with, any `github` rows in a Desktop snapshot.
+refine model descriptions, capabilities, and Provider-model overrides. Those overrides may select
+an endpoint type already declared by the bundled Provider and may update image-generation
+`vendorTransport` relative paths and sync/async behavior. They cannot add or replace Provider
+definitions, base URLs, adapter families, headers, or credential behavior. Incompatible manifests
+are rejected before download and activation. The Mobile-owned `github` namespace is also
+authoritative: bundled GitHub overrides replace, rather than mix with, any `github` rows in a
+Desktop snapshot.
 
 Desktop `2.0.9` remains rejected while its complete model and override payload has not passed a
 Mobile compatibility review. Provider-native `serverTools` are not by themselves an admission
