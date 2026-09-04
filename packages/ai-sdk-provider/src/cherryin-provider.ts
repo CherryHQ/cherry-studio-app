@@ -24,7 +24,7 @@ import {
 import { type FetchFunction, loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils'
 
 import { OpenAICompatibleRerankingModel } from './openai-compatible-reranking-model'
-import { applyReasoningModelMaxTokensConversion } from './reasoningModelTransform'
+import { applyReasoningModelMaxTokensConversion } from './reasoning-model-transform'
 
 export const CHERRYIN_PROVIDER_NAME = 'cherryin' as const
 export const DEFAULT_CHERRYIN_BASE_URL = 'https://open.cherryin.net/v1'
