@@ -15,15 +15,9 @@ import {
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
-import {
-  AgentSessionList,
-  parseSessionViewMode,
-  SessionList,
-  sessionSelectionScope,
-  type SessionViewMode,
-} from '@/frontend/components/SessionList';
+import { SessionList, sessionSelectionScope } from '@/frontend/components/SessionList';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
-import { useAgentApiById } from '@/frontend/hooks/agent';
+import { useAgentApiById, useAgentsApi } from '@/frontend/hooks/agent';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type {
   EntitySearchItem,
@@ -37,18 +31,21 @@ import type {
 function SessionListScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { agentId: rawAgentId, view: rawView } = useLocalSearchParams<{
+  const { agentId: rawAgentId } = useLocalSearchParams<{
     agentId?: string | string[];
-    view?: string | string[];
   }>();
   const agentId = getSingleRouteParam(rawAgentId);
   const { agent } = useAgentApiById(agentId);
-  const view = agentId ? 'sessions' : parseSessionViewMode(rawView);
-  const isSessionView = view === 'sessions';
+  const { agents } = useAgentsApi();
   const apiClient = useApiClient();
   const { open: openAppSearch } = useAppSearch();
   const { enterEditing, exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
+  const selectedAgentLabel = agentId
+    ? (agent?.name ??
+      agents.find((availableAgent) => availableAgent.id === agentId)?.name ??
+      t('session.list.deletedAgent'))
+    : t('session.list.title');
   const handleEnterEditing = useCallback(() => {
     if (isDeletionPending) {
       return;
@@ -70,10 +67,10 @@ function SessionListScreenBody() {
           cursor
             ? undefined
             : apiClient.get('/search/entities', {
-                query: { limitPerType: 50, q: query, types: ['session'] },
+                query: { agentId, limitPerType: 50, q: query, types: ['session'] },
               }),
           apiClient.get('/search/contents', {
-            query: { cursor, limit: 50, q: query },
+            query: { agentId, cursor, limit: 50, q: query },
           }),
         ]);
         const groups: AppSearchGroup<SessionSearchResult>[] = [];
@@ -101,77 +98,78 @@ function SessionListScreenBody() {
 
       router.push(chatHref(getSearchResultTarget(outcome.item)));
     });
-  }, [apiClient, openAppSearch, router, t]);
-  const setView = useCallback(
-    (nextView: SessionViewMode) => {
-      router.setParams({ view: nextView });
+  }, [agentId, apiClient, openAppSearch, router, t]);
+  const setAgentFilter = useCallback(
+    (nextAgentId: string | undefined) => {
+      router.setParams({ agentId: nextAgentId, view: undefined });
     },
     [router],
   );
   const menuItems = useMemo<readonly MenuItem[]>(() => {
-    if (agentId) {
-      return [
-        {
-          disabled: isDeletionPending,
-          id: 'select-sessions',
-          label: t('session.selection.start'),
-          onPress: handleEnterEditing,
-        },
-      ];
-    }
-
-    const viewItems: MenuItem[] = [
+    const filterItems: MenuItem[] = [
       {
-        checked: view === 'sessions',
+        checked: !agentId,
         disabled: isDeletionPending,
-        id: 'view-recent-sessions',
-        label: t('navigation.recentSessions'),
-        onPress: () => setView('sessions'),
+        id: 'filter-all-sessions',
+        label: t('session.list.title'),
+        onPress: () => setAgentFilter(undefined),
       },
-      {
-        checked: view === 'agents',
+      ...agents.map((availableAgent) => ({
+        checked: availableAgent.id === agentId,
         disabled: isDeletionPending,
-        id: 'view-sessions-by-agent',
-        label: t('navigation.sessionsByAgent'),
-        onPress: () => setView('agents'),
-      },
+        id: `filter-agent-${availableAgent.id}`,
+        label: availableAgent.name,
+        onPress: () => setAgentFilter(availableAgent.id),
+      })),
     ];
 
-    return isSessionView
-      ? [
-          ...viewItems,
-          {
-            disabled: isDeletionPending,
-            id: 'select-sessions',
-            label: t('session.selection.start'),
-            onPress: handleEnterEditing,
-          },
-        ]
-      : viewItems;
-  }, [agentId, handleEnterEditing, isDeletionPending, isSessionView, setView, t, view]);
+    if (agentId && !agents.some((availableAgent) => availableAgent.id === agentId)) {
+      filterItems.push({
+        checked: true,
+        disabled: isDeletionPending,
+        id: `filter-agent-${agentId}`,
+        label: selectedAgentLabel,
+        onPress: () => setAgentFilter(agentId),
+      });
+    }
+
+    return [
+      ...filterItems,
+      {
+        disabled: isDeletionPending,
+        id: 'select-sessions',
+        label: t('session.selection.start'),
+        onPress: handleEnterEditing,
+      },
+    ];
+  }, [
+    agentId,
+    agents,
+    handleEnterEditing,
+    isDeletionPending,
+    selectedAgentLabel,
+    setAgentFilter,
+    t,
+  ]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
-      ...(agentId
-        ? []
-        : [
-            {
-              accessibilityLabel: t('navigation.search'),
-              disabled: isDeletionPending,
-              icon: SearchIcon,
-              key: 'search-sessions',
-              onPress: openSessionSearch,
-              type: 'icon' as const,
-            },
-          ]),
       {
-        accessibilityLabel: t('common.more'),
+        accessibilityLabel: t('navigation.search'),
+        disabled: isDeletionPending,
+        icon: SearchIcon,
+        key: 'search-sessions',
+        onPress: openSessionSearch,
+        type: 'icon',
+      },
+      {
+        accessibilityLabel: t('session.filter.label'),
         icon: ListFilterIcon,
         items: menuItems,
         key: 'session-actions',
         type: 'menu',
       },
     ],
-    [agentId, isDeletionPending, menuItems, openSessionSearch, t],
+    [isDeletionPending, menuItems, openSessionSearch, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -191,11 +189,11 @@ function SessionListScreenBody() {
     <>
       <RouteHeader
         rightActions={isEditing ? doneActions : rightActions}
-        title={agent?.name ?? t(isSessionView ? 'session.list.title' : 'session.list.titleByAgent')}
+        title={selectedAgentLabel}
       />
       <View className="flex-1">
-        {isSessionView ? <SessionList agentId={agentId} /> : <AgentSessionList />}
-        {isSessionView ? <SelectionControls scope={sessionSelectionScope} /> : null}
+        <SessionList agentId={agentId} />
+        <SelectionControls scope={sessionSelectionScope} />
       </View>
     </>
   );

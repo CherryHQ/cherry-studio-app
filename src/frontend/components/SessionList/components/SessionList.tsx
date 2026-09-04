@@ -208,7 +208,7 @@ export function SessionList({ agentId }: { agentId?: string }) {
   );
 }
 
-export const SessionRow = memo(function SessionRow({
+const SessionRow = memo(function SessionRow({
   agentName,
   isEditing,
   isSelected,
