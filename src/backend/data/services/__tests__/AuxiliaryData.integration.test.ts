@@ -98,7 +98,7 @@ describe('auxiliary Data API integration', () => {
       .run(agentId, 'Needle Agent', 'a0', now, now);
     sqlite
       .prepare(
-        'INSERT INTO agent_session (id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session (id, agent_id, name, is_name_manually_edited, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
       .run(sessionId, agentId, 'Needle Session', 1, now, now, now);
     sqlite

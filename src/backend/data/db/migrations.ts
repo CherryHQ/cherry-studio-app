@@ -15,6 +15,7 @@ import m0013 from '../../../../migrations/sqlite-drizzle/0013_agent-session-fork
 import m0014 from '../../../../migrations/sqlite-drizzle/0014_agent-disabled-capabilities.sql';
 import m0015 from '../../../../migrations/sqlite-drizzle/0015_agent-session-activity-and-fork-boundary.sql';
 import m0016 from '../../../../migrations/sqlite-drizzle/0016_agent-message-stats.sql';
+import m0017 from '../../../../migrations/sqlite-drizzle/0017_desktop-compatible-fields.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -41,5 +42,6 @@ export const migrations = {
     m0014,
     m0015,
     m0016,
+    m0017,
   },
 };

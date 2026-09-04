@@ -127,7 +127,10 @@ function applyStoredFields(baseline: Model, row: UserModelRow): Model {
     ...(row.endpointTypes !== null ? { endpointTypes: row.endpointTypes } : {}),
     ...(row.group !== null ? { group: row.group } : {}),
     id: createUniqueModelId(row.providerId, row.modelId),
-    ...(row.inputModalities !== null ? { inputModalities: row.inputModalities } : {}),
+    ...(row.inputModalities !== null &&
+    (row.inputModalitiesExplicit || row.inputModalities.length > 0)
+      ? { inputModalities: row.inputModalities }
+      : {}),
     isDeprecated: row.isDeprecated,
     isEnabled: row.isEnabled,
     isHidden: row.isHidden,
@@ -198,6 +201,7 @@ function customInputToInsert(input: CreateModelInput): ModelInputWithoutOrderKey
     group: input.group ?? null,
     id: createUniqueModelId(input.providerId, input.modelId),
     inputModalities: input.inputModalities ?? null,
+    inputModalitiesExplicit: input.inputModalities !== undefined,
     isDeprecated: input.isDeprecated ?? false,
     isEnabled: input.isEnabled ?? true,
     isHidden: input.isHidden ?? false,
@@ -232,6 +236,9 @@ function presetDeltaToInsert(
     group: delta(input.group, baseline.group),
     id: createUniqueModelId(input.providerId, input.modelId),
     inputModalities: delta(input.inputModalities, baseline.inputModalities),
+    inputModalitiesExplicit:
+      input.inputModalities !== undefined &&
+      !deepEqual(input.inputModalities, baseline.inputModalities),
     isDeprecated: input.isDeprecated ?? baseline.isDeprecated ?? false,
     isEnabled: input.isEnabled ?? baseline.isEnabled,
     isHidden: input.isHidden ?? baseline.isHidden,
@@ -688,6 +695,9 @@ export class ModelService {
             : value
           : value;
       (updates as Record<string, unknown>)[dbKey] = storedValue;
+    }
+    if (dto.inputModalities !== undefined) {
+      updates.inputModalitiesExplicit = true;
     }
     return updates;
   }

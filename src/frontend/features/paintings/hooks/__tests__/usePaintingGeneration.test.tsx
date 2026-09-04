@@ -30,6 +30,7 @@ function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
   return {
     attempt: 1,
     cancelRequested: false,
+    cancelRequestedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     error: null,
     finishedAt: null,

@@ -120,6 +120,13 @@
       "when": 1788503757336,
       "tag": "0016_agent-message-stats",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788511869009,
+      "tag": "0017_desktop-compatible-fields",
+      "breakpoints": true
     }
   ]
 }

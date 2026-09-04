@@ -98,7 +98,7 @@ export class ContentSearchService {
           SELECT
             message.id,
             message.session_id AS "sessionId",
-            session.title AS "sessionTitle",
+            session.name AS "sessionTitle",
             session.agent_id AS "agentId",
             agent.name AS "agentName",
             message.role,
