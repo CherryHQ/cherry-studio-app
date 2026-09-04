@@ -24,7 +24,7 @@ export function SidebarNavRow({ icon: Icon, label, onPress }: SidebarNavRowProps
       onPress={onPress}
     >
       <View className="flex-row items-center gap-4 px-5 py-3">
-        <Icon className="size-6 text-sidebar-foreground" />
+        <Icon className="size-[18px] text-sidebar-foreground" strokeWidth={1.6} />
         <Text className="text-base text-sidebar-foreground">{label}</Text>
       </View>
     </Pressable>

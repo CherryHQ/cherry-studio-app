@@ -1,4 +1,4 @@
-import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import type { MenuItem } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -165,7 +165,7 @@ function SessionListScreenBody() {
           ]),
       {
         accessibilityLabel: t('common.more'),
-        icon: EllipsisIcon,
+        icon: ListFilterIcon,
         items: menuItems,
         key: 'session-actions',
         type: 'menu',

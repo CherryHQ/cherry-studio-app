@@ -1,7 +1,6 @@
-import ArrowLeftRightIcon from '@cherrystudio/app-icons/icons/arrow-left-right';
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
 import { ContentState } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,7 +63,7 @@ function SidebarRecentsView() {
         >
           <View className="flex-row items-center gap-1.5">
             <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
-            <ArrowLeftRightIcon className="size-3.5 text-muted-foreground" />
+            <ListFilterIcon className="size-4 text-muted-foreground" />
           </View>
         </Pressable>
         <Pressable
@@ -268,11 +267,7 @@ function SidebarAgentGroupButton({
             size={28}
             uri={agent.avatarUri}
           />
-        ) : (
-          <View className="size-7 items-center justify-center rounded-full bg-secondary">
-            <BotIcon className="size-4 text-muted-foreground" />
-          </View>
-        )}
+        ) : null}
         <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
           {label}
         </Text>

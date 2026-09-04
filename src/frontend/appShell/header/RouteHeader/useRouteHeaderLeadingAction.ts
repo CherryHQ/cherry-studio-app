@@ -1,11 +1,11 @@
 import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
-import MenuIcon from '@cherrystudio/app-icons/icons/menu';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { useRouter } from 'expo-router';
 import { useNavigationState } from 'expo-router/react-navigation';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import SidebarExpandIcon from '../../icons/SidebarExpandIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useRouteHeaderRootAction } from './RouteHeaderProvider';
 import { useOpenDrawer } from './useOpenDrawer';
@@ -37,7 +37,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
       action === 'drawer'
         ? {
             accessibilityLabel: t('navigation.openMenu'),
-            icon: MenuIcon,
+            icon: SidebarExpandIcon,
             key: 'route-leading',
             onPress: openDrawer,
             type: 'icon',

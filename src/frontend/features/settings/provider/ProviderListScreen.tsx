@@ -160,6 +160,7 @@ export default function ProviderListScreen() {
         return {
           avatar: (
             <ProviderAvatar
+              displayContext="provider-list"
               presetProviderId={provider.presetProviderId}
               providerId={provider.id}
               providerName={provider.name}

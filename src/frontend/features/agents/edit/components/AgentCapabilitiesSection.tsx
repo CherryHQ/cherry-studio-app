@@ -1,10 +1,10 @@
 import type { LucideIconComponent } from '@cherrystudio/app-icons';
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { Section } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,7 @@ const CAPABILITY_ICONS = {
   image: ImageIcon,
   location: MapPinIcon,
   reminders: BellIcon,
-  web: SearchIcon,
+  web: GlobeIcon,
 } satisfies Record<AgentCapability, LucideIconComponent>;
 
 // Availability facts are static per build, so the visible rows and the scope

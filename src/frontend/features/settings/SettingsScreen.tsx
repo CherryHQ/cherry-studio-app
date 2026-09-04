@@ -1,11 +1,11 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
-import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
+import PackageIcon from '@cherrystudio/app-icons/icons/package';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
-import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
@@ -49,27 +49,27 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<CircleUserRoundIcon className="size-5 text-foreground" />}
+              leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}
-              leading={<CloudIcon className="size-5 text-foreground" />}
+              leading={<CloudIcon className="size-4 text-foreground" />}
               onPress={openProviderList}
               onPressIn={prepareProviderList}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}
-              leading={<SparklesIcon className="size-5 text-foreground" />}
+              leading={<PackageIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/model')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.webSearch')}
-              leading={<GlobeIcon className="size-5 text-foreground" />}
+              leading={<SearchIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/websearch')}
             />
             <Section.Item
@@ -78,7 +78,7 @@ export default function SettingsScreen() {
                 mcpIcon ? (
                   <Image
                     cachePolicy="memory-disk"
-                    className="size-5"
+                    className="size-4"
                     contentFit="contain"
                     source={mcpIcon}
                   />
@@ -91,27 +91,27 @@ export default function SettingsScreen() {
             {Platform.OS === 'ios' ? (
               <Section.Item
                 label={t('settings.items.notifications')}
-                leading={<BellIcon className="size-5 text-foreground" />}
+                leading={<BellIcon className="size-4 text-foreground" />}
                 onPress={() => router.push('/settings/notifications')}
               />
             ) : null}
             <Section.Item
               label={t('settings.items.permissions')}
-              leading={<LockIcon className="size-5 text-foreground" />}
+              leading={<LockIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<PaletteIcon className="size-5 text-foreground" />}
+              leading={<PaletteIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.aboutUs')}
-              leading={<InfoIcon className="size-5 text-foreground" />}
+              leading={<InfoIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/about')}
             />
           </Section>

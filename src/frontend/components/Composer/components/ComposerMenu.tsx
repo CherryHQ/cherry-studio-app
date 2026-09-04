@@ -1,6 +1,6 @@
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
-import FileIcon from '@cherrystudio/app-icons/icons/file';
 import ImagesIcon from '@cherrystudio/app-icons/icons/images';
+import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import { Composer } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -137,7 +137,7 @@ export function ComposerMenu({ children, media = 'all' }: ComposerMenuProps) {
       />
       {media === 'all' ? (
         <Composer.Menu.Item
-          icon={<FileIcon className="size-5 text-foreground" />}
+          icon={<PaperclipIcon className="size-5 text-foreground" />}
           label={t('chat.media.file')}
           onPress={() => present('document', openDocumentPicker)}
         />
