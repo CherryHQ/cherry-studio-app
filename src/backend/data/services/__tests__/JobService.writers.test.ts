@@ -151,10 +151,12 @@ describe('JobService runtime writers', () => {
 
   describe('setCancelRequestedTx', () => {
     it('stamps the first active cancel request once and leaves terminal rows unstamped', async () => {
-      const now = jest.spyOn(Date, 'now').mockReturnValueOnce(100).mockReturnValueOnce(200);
       const active = await insertJob({ status: 'running' });
+      const terminal = await insertJob({ status: 'completed' });
+      const now = jest.spyOn(Date, 'now').mockReturnValue(100);
 
       await service.setCancelRequestedTx(tx, active.id);
+      now.mockReturnValue(200);
       await service.setCancelRequestedTx(tx, active.id);
 
       expect(await service.getRowByIdTx(tx, active.id)).toMatchObject({
@@ -162,7 +164,6 @@ describe('JobService runtime writers', () => {
         cancelRequestedAt: 100,
       });
 
-      const terminal = await insertJob({ status: 'completed' });
       await service.setCancelRequestedTx(tx, terminal.id);
       expect(await service.getRowByIdTx(tx, terminal.id)).toMatchObject({
         cancelRequested: true,
