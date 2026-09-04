@@ -356,7 +356,6 @@ function AgentEditForm({
                 <ModelPickerIcon
                   model={selectedModel.model}
                   provider={selectedModel.provider}
-                  providerIconSize={18}
                   size={20}
                 />
               ) : null}

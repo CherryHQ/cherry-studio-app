@@ -107,7 +107,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           sessionId={sessionId}
         />
       ) : target.kind === 'draft' ? (
-        <ChatDraftState contentBottomInset={contentBottomInset} />
+        <ChatDraftState
+          assistantAvatarUri={agent.agent?.avatarUri}
+          assistantName={agent.agent?.name}
+          contentBottomInset={contentBottomInset}
+        />
       ) : (
         <ChatEmptyState contentBottomInset={contentBottomInset} />
       )}

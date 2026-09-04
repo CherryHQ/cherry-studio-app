@@ -8,7 +8,7 @@ export function MessagePartTranslation({ children }: MessagePartTranslationProps
     <View className="gap-2">
       <View className="flex-row items-center gap-3">
         <View className="h-px flex-1 bg-border" />
-        <LanguagesIcon className="size-4 text-foreground-tertiary" />
+        <LanguagesIcon className="size-3.5 text-muted-foreground" />
         <View className="h-px flex-1 bg-border" />
       </View>
       {children}

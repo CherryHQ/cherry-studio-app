@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 157
+ * Total icons: 158
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -450,6 +450,10 @@ export const PROVIDER_ICONS = {
   paddleocr: {
     light: require('./light/paddleocr.webp'),
     dark: require('./light/paddleocr.webp'),
+  },
+  parallel: {
+    light: require('./light/parallel.webp'),
+    dark: require('./dark/parallel.webp'),
   },
   perplexity: {
     light: require('./light/perplexity.webp'),

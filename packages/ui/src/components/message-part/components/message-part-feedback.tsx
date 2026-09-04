@@ -1,5 +1,5 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
+import TriangleAlertIcon from '@cherrystudio/app-icons/icons/triangle-alert';
 import { Pressable, Text, View } from 'react-native';
 
 import type { MessagePartErrorProps } from '../message-part.types';
@@ -15,7 +15,7 @@ export function MessagePartError({
   const content = (
     <>
       <View className="flex-row items-center gap-2">
-        <CircleAlertIcon className="size-4 text-destructive" />
+        <TriangleAlertIcon className="text-destructive" size={15} />
         <Text className="flex-1 font-semibold text-destructive text-base" selectable>
           {title}
         </Text>

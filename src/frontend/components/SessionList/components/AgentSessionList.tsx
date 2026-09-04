@@ -1,4 +1,3 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Button, ContentState } from '@cherrystudio/ui/components';
@@ -94,11 +93,6 @@ function AgentSessionListView() {
       ) : (
         <ContentState.Empty
           description={t('session.list.emptyDescription')}
-          icon={
-            <ContentState.Icon>
-              <BotIcon className="size-7 text-foreground" />
-            </ContentState.Icon>
-          }
           prominence="prominent"
           title={t('session.list.empty')}
         />
@@ -206,11 +200,7 @@ function AgentGroupButton({
       <View className="min-h-15 flex-row items-center gap-3 border-border border-b px-3 py-2">
         {agent ? (
           <AgentAvatar accessibilityLabel={label} name={agent.name} uri={agent.avatarUri} />
-        ) : (
-          <View className="size-10 items-center justify-center rounded-full bg-secondary">
-            <BotIcon className="size-5 text-muted-foreground" />
-          </View>
-        )}
+        ) : null}
         <Text className="min-w-0 flex-1 font-semibold text-base text-foreground" numberOfLines={1}>
           {label}
         </Text>

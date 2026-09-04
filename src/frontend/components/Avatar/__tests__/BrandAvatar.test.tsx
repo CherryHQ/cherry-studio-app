@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto, ProviderBrandAvatar } from '..';
+import { PROVIDER_BRAND_ICON_SCALE } from '../utils/brandAvatarStyles';
 
 const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
 const mockAvatarFallback = jest.fn((_props: unknown) => null);
@@ -82,7 +83,11 @@ describe('BrandAvatar', () => {
   it('scales an inset logo against the frame size it is nested in', () => {
     render(
       <BrandAvatar label="Anthropic" size={32}>
-        <BrandAvatarIcon iconId="anthropic" source="anthropic-light" />
+        <BrandAvatarIcon
+          displayContext="provider-list"
+          iconId="anthropic"
+          source="anthropic-light"
+        />
       </BrandAvatar>,
     );
 
@@ -95,7 +100,7 @@ describe('BrandAvatar', () => {
     expect(mockAvatarImage).toHaveBeenCalledWith(
       expect.objectContaining({
         contentFit: 'contain',
-        scale: 5 / 7,
+        scale: PROVIDER_BRAND_ICON_SCALE,
         source: 'anthropic-light',
         style: { borderRadius: 5 },
       }),
@@ -111,7 +116,7 @@ describe('BrandAvatar', () => {
 
     expect(mockAvatarImage).toHaveBeenCalledWith(
       expect.objectContaining({
-        scale: 0.8125,
+        scale: 1,
         style: { borderRadius: undefined },
       }),
     );
@@ -159,6 +164,7 @@ describe('BrandAvatar', () => {
     expect(mockAvatarImage).toHaveBeenCalledWith(
       expect.objectContaining({
         recyclingKey: 'custom-openai',
+        scale: PROVIDER_BRAND_ICON_SCALE,
         source: 'openai-light',
       }),
     );

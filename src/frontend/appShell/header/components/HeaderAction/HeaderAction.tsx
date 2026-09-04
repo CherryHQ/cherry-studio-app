@@ -34,7 +34,7 @@ export function HeaderAction({
             className={cn(iconActionClassName, action.disabled && 'opacity-50')}
             pointerEvents={action.disabled ? 'none' : 'auto'}
           >
-            <Icon className={cn('size-6', contentClassName)} />
+            <Icon className={cn('size-[18px]', contentClassName)} />
           </View>
         </ActionMenu>
       );
@@ -69,7 +69,7 @@ export function HeaderAction({
           onPress={action.onPress}
           targetSize={targetSize}
         >
-          <Icon className={cn('size-6', contentClassName)} />
+          <Icon className={cn('size-[18px]', contentClassName)} />
         </HeaderIconButton>
       );
     }

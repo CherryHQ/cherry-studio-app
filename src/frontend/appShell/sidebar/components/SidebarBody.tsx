@@ -1,6 +1,6 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
-import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
+import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,13 +68,17 @@ function SidebarBodyDefault() {
     <>
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
+        <SidebarNavRow icon={FolderIcon} label={t('navigation.library')} onPress={openLibrary} />
         <SidebarNavRow
-          icon={LibraryBigIcon}
-          label={t('navigation.library')}
-          onPress={openLibrary}
+          icon={MousePointerClickIcon}
+          label={t('navigation.agents')}
+          onPress={navigateAgents}
         />
-        <SidebarNavRow icon={BotIcon} label={t('navigation.agents')} onPress={navigateAgents} />
-        <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
+        <SidebarNavRow
+          icon={PaletteIcon}
+          label={t('navigation.paintings')}
+          onPress={openPaintings}
+        />
       </View>
 
       <SidebarRecents />

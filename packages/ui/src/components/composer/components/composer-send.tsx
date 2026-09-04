@@ -1,5 +1,5 @@
-import ArrowUpIcon from '@cherrystudio/app-icons/icons/arrow-up';
-import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import CirclePauseIcon from '@cherrystudio/app-icons/icons/circle-pause';
+import SendIcon from '@cherrystudio/app-icons/icons/send';
 
 import { cn } from '../../../utils';
 import type { ComposerSendProps } from '../composer.types';
@@ -19,7 +19,7 @@ export function ComposerSend({ testID }: ComposerSendProps) {
   const { send, stop } = useComposerActions('Composer.Send');
   const isStopping = streaming && stop !== undefined;
   const isActive = isStopping || canSend;
-  const Icon = isStopping ? SquareIcon : ArrowUpIcon;
+  const Icon = isStopping ? CirclePauseIcon : SendIcon;
 
   const handlePress = () => {
     if (isStopping) {
@@ -37,11 +37,9 @@ export function ComposerSend({ testID }: ComposerSendProps) {
   };
 
   return (
-    // Tinted glass rather than a second variant: on iOS 26 the active send
-    // button is the same material as the rest, just carrying the accent.
     <ComposerAction
       accessibilityLabel={isStopping ? labels.stop : labels.send}
-      className={isActive ? 'bg-primary' : undefined}
+      className="bg-transparent"
       disabled={!isActive}
       onPress={handlePress}
       style={sendStyle}
@@ -49,8 +47,11 @@ export function ComposerSend({ testID }: ComposerSendProps) {
     >
       <Icon
         className={cn(
-          isActive ? 'text-primary-foreground' : 'text-muted-foreground',
-          isStopping ? 'size-4' : 'size-6',
+          isStopping
+            ? 'size-5 text-destructive'
+            : isActive
+              ? 'size-[22px] text-primary'
+              : 'size-[22px] text-foreground-disabled',
         )}
       />
     </ComposerAction>

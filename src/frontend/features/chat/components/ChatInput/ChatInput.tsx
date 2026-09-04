@@ -277,7 +277,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                           <ModelPickerIcon
                             model={selectedModelItem.model}
                             provider={selectedModelItem.provider}
-                            providerIconSize={18}
                             size={20}
                           />
                         ) : undefined
