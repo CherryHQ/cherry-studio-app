@@ -349,6 +349,7 @@
   "session.list.loadFailed": "Sessions could not be loaded.",
   "session.list.loadMore": "Load more",
   "session.list.loading": "Loading sessions...",
+  "session.list.viewAll": "View all",
   "session.list.title": "Sessions",
   "session.list.untitled": "New session",
   "session.filter.label": "Filter sessions",

@@ -1,7 +1,7 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
 import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -12,6 +12,7 @@ import { AgentAvatar } from '@/frontend/components/Avatar';
 import {
   SessionListProvider,
   type SessionViewMode,
+  useSessionListActions,
   useSessionActionAlerts,
   useSessionListSessions,
 } from '@/frontend/components/SessionList';
@@ -22,15 +23,19 @@ import type { Agent } from '@/shared/data/types/agent';
 
 import { useSidebarActions } from '../context';
 
-export function SidebarRecents() {
+type SidebarRecentsProps = {
+  registerEndReachedHandler: (handler?: () => void) => void;
+};
+
+export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   return (
     <SessionListProvider>
-      <SidebarRecentsView />
+      <SidebarRecentsView registerEndReachedHandler={registerEndReachedHandler} />
     </SessionListProvider>
   );
 }
 
-function SidebarRecentsView() {
+function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<SessionViewMode>('sessions');
   const isSessionMode = mode === 'sessions';
@@ -68,17 +73,71 @@ function SidebarRecentsView() {
           </View>
         </ActionMenu>
       </View>
-      {isSessionMode ? <SidebarRecentSessionList /> : <SidebarAgentSessionList />}
+      {isSessionMode ? (
+        <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />
+      ) : (
+        <SidebarAgentSessionList />
+      )}
     </>
   );
 }
 
-function SidebarRecentSessionList() {
+function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const { isSessionListLoading, sessionQueryError, sessions } = useSessionListSessions();
+  const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
+  const [visibleSessionLimit, setVisibleSessionLimit] = useState(appSidebar.recentSessionLimit);
+  const {
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    isSessionListLoading,
+    sessionQueryError,
+    sessions,
+  } = useSessionListSessions();
+  const { loadMoreSessions } = useSessionListActions();
   const { requestDelete, requestRename } = useSessionActionAlerts();
   const { closeDrawer } = useSidebarActions('Sidebar recent sessions');
-  const visibleSessions = sessions.slice(0, appSidebar.recentSessionLimit);
+  const visibleSessions = sessions.slice(0, visibleSessionLimit);
+  const canShowAllSessions =
+    !isShowingAllSessions && (sessions.length > appSidebar.recentSessionLimit || hasMoreSessions);
+
+  const revealNextSessionBatch = useCallback(() => {
+    if (
+      isLoadingMoreSessions ||
+      sessionQueryError ||
+      (visibleSessionLimit >= sessions.length && !hasMoreSessions)
+    ) {
+      return;
+    }
+
+    const nextLimit = visibleSessionLimit + appSidebar.recentSessionLimit;
+    setVisibleSessionLimit(nextLimit);
+
+    if (nextLimit > sessions.length && hasMoreSessions) {
+      loadMoreSessions();
+    }
+  }, [
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    loadMoreSessions,
+    sessionQueryError,
+    sessions.length,
+    visibleSessionLimit,
+  ]);
+  const handleEndReached = useCallback(() => {
+    if (isShowingAllSessions) {
+      revealNextSessionBatch();
+    }
+  }, [isShowingAllSessions, revealNextSessionBatch]);
+
+  useEffect(() => {
+    registerEndReachedHandler(handleEndReached);
+    return () => registerEndReachedHandler();
+  }, [handleEndReached, registerEndReachedHandler]);
+
+  const handleViewAllPress = () => {
+    setIsShowingAllSessions(true);
+    revealNextSessionBatch();
+  };
 
   if (isSessionListLoading) {
     return (
@@ -104,15 +163,36 @@ function SidebarRecentSessionList() {
     );
   }
 
-  return visibleSessions.map((session) => (
-    <SidebarSessionRow
-      key={session.id}
-      onCloseDrawer={closeDrawer}
-      onDelete={requestDelete}
-      onRename={requestRename}
-      session={session}
-    />
-  ));
+  return (
+    <>
+      {visibleSessions.map((session) => (
+        <SidebarSessionRow
+          key={session.id}
+          onCloseDrawer={closeDrawer}
+          onDelete={requestDelete}
+          onRename={requestRename}
+          session={session}
+        />
+      ))}
+      {canShowAllSessions ? (
+        <Pressable
+          accessibilityLabel={t('session.list.viewAll')}
+          accessibilityRole="button"
+          className="w-full active:bg-sidebar-accent"
+          onPress={handleViewAllPress}
+        >
+          <Text className="px-5 py-2.5 text-muted-foreground text-sm">
+            {t('session.list.viewAll')}
+          </Text>
+        </Pressable>
+      ) : null}
+      {isShowingAllSessions && isLoadingMoreSessions ? (
+        <Text className="px-5 py-2.5 text-muted-foreground text-sm">
+          {t('session.list.loading')}
+        </Text>
+      ) : null}
+    </>
+  );
 }
 
 function SidebarAgentSessionList() {

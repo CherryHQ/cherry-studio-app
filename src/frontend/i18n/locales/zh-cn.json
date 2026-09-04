@@ -347,6 +347,7 @@
   "session.list.loadFailed": "无法加载会话。",
   "session.list.loadMore": "加载更多",
   "session.list.loading": "正在加载会话...",
+  "session.list.viewAll": "查看全部",
   "session.list.title": "全部会话",
   "session.list.untitled": "新会话",
   "session.filter.label": "筛选会话",
