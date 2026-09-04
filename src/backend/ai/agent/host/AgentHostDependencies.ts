@@ -92,6 +92,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   naming(signal: AbortSignal): MobileAgentHostNaming {
     return new AgentSessionNaming({
       ai: this.aiService,
+      appLanguage: () => this.appLanguage(),
       model: modelService,
       preference: this.preferenceService,
       provider: providerService,
