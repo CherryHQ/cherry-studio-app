@@ -1,8 +1,7 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
-import { ContentState } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { ActionMenu, ContentState, type MenuItem } from '@cherrystudio/ui/components';
+import { Link } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
@@ -13,80 +12,134 @@ import { AgentAvatar } from '@/frontend/components/Avatar';
 import {
   SessionListProvider,
   type SessionViewMode,
+  useSessionListActions,
   useSessionActionAlerts,
   useSessionListSessions,
 } from '@/frontend/components/SessionList';
-import { useAgentsApi } from '@/frontend/hooks/agent';
+import { useAgentsApi, useLatestAgentSession } from '@/frontend/hooks/agent';
 import { appSidebar } from '@/frontend/utils/constants';
 import type { AgentSessionEntity } from '@/shared/data/api/schemas/agentSessions';
 import type { Agent } from '@/shared/data/types/agent';
 
 import { useSidebarActions } from '../context';
 
-const DELETED_AGENT_GROUP_ID = 'deleted-agent-sessions';
+type SidebarRecentsProps = {
+  registerEndReachedHandler: (handler?: () => void) => void;
+};
 
-export function SidebarRecents() {
+export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   return (
     <SessionListProvider>
-      <SidebarRecentsView />
+      <SidebarRecentsView registerEndReachedHandler={registerEndReachedHandler} />
     </SessionListProvider>
   );
 }
 
-function SidebarRecentsView() {
+function SidebarRecentsView({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<SessionViewMode>('sessions');
-  const { openSessionList } = useSidebarActions('Sidebar recents');
   const isSessionMode = mode === 'sessions';
-  const modeLabel = t(isSessionMode ? 'navigation.recentSessions' : 'navigation.sessionsByAgent');
-  const nextModeLabel = t(
-    isSessionMode ? 'navigation.sessionsByAgent' : 'navigation.recentSessions',
+  const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        checked: isSessionMode,
+        id: 'show-sessions',
+        label: t('navigation.sessions'),
+        onPress: () => setMode('sessions'),
+      },
+      {
+        checked: !isSessionMode,
+        id: 'show-agents',
+        label: t('navigation.agents'),
+        onPress: () => setMode('agents'),
+      },
+    ],
+    [isSessionMode, t],
   );
-
-  const toggleMode = () => {
-    setMode((current) => (current === 'sessions' ? 'agents' : 'sessions'));
-  };
-  const viewAll = () => {
-    openSessionList(mode);
-  };
 
   return (
     <>
-      <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
-        <Pressable
-          accessibilityLabel={t('navigation.switchRecentView', { view: nextModeLabel })}
-          accessibilityRole="button"
-          className="active:opacity-60"
-          hitSlop={8}
-          onPress={toggleMode}
-          testID="sidebar-recents-mode-toggle"
-        >
-          <View className="flex-row items-center gap-1.5">
+      <View className="px-5 pt-4 pb-1">
+        <ActionMenu items={menuItems}>
+          <View
+            accessibilityLabel={t('navigation.chooseSidebarView')}
+            accessibilityRole="button"
+            className="min-h-10 flex-row items-center gap-1.5"
+            testID="sidebar-recents-mode-toggle"
+          >
             <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
-            <ListFilterIcon className="size-4 text-muted-foreground" />
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
           </View>
-        </Pressable>
-        <Pressable
-          accessibilityLabel={t('navigation.viewAll')}
-          accessibilityRole="button"
-          className="active:opacity-60"
-          hitSlop={8}
-          onPress={viewAll}
-        >
-          <Text className="text-muted-foreground text-sm">{t('navigation.viewAll')}</Text>
-        </Pressable>
+        </ActionMenu>
       </View>
-      {isSessionMode ? <SidebarRecentSessionList /> : <SidebarAgentSessionList />}
+      {isSessionMode ? (
+        <SidebarRecentSessionList registerEndReachedHandler={registerEndReachedHandler} />
+      ) : (
+        <SidebarAgentSessionList />
+      )}
     </>
   );
 }
 
-function SidebarRecentSessionList() {
+function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const { isSessionListLoading, sessionQueryError, sessions } = useSessionListSessions();
+  const [isShowingAllSessions, setIsShowingAllSessions] = useState(false);
+  const [visibleSessionLimit, setVisibleSessionLimit] = useState<number>(
+    appSidebar.recentSessionLimit,
+  );
+  const {
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    isSessionListLoading,
+    sessionQueryError,
+    sessions,
+  } = useSessionListSessions();
+  const { loadMoreSessions } = useSessionListActions();
   const { requestDelete, requestRename } = useSessionActionAlerts();
   const { closeDrawer } = useSidebarActions('Sidebar recent sessions');
-  const visibleSessions = sessions.slice(0, appSidebar.recentSessionLimit);
+  const visibleSessions = sessions.slice(0, visibleSessionLimit);
+  const canShowAllSessions =
+    !isShowingAllSessions && (sessions.length > appSidebar.recentSessionLimit || hasMoreSessions);
+
+  const revealNextSessionBatch = useCallback(() => {
+    if (
+      isLoadingMoreSessions ||
+      sessionQueryError ||
+      (visibleSessionLimit >= sessions.length && !hasMoreSessions)
+    ) {
+      return;
+    }
+
+    const nextLimit = visibleSessionLimit + appSidebar.recentSessionLimit;
+    setVisibleSessionLimit(nextLimit);
+
+    if (nextLimit > sessions.length && hasMoreSessions) {
+      loadMoreSessions();
+    }
+  }, [
+    hasMoreSessions,
+    isLoadingMoreSessions,
+    loadMoreSessions,
+    sessionQueryError,
+    sessions.length,
+    visibleSessionLimit,
+  ]);
+  const handleEndReached = useCallback(() => {
+    if (isShowingAllSessions) {
+      revealNextSessionBatch();
+    }
+  }, [isShowingAllSessions, revealNextSessionBatch]);
+
+  useEffect(() => {
+    registerEndReachedHandler(handleEndReached);
+    return () => registerEndReachedHandler();
+  }, [handleEndReached, registerEndReachedHandler]);
+
+  const handleViewAllPress = () => {
+    setIsShowingAllSessions(true);
+    revealNextSessionBatch();
+  };
 
   if (isSessionListLoading) {
     return (
@@ -112,30 +165,41 @@ function SidebarRecentSessionList() {
     );
   }
 
-  return visibleSessions.map((session) => (
-    <SidebarSessionRow
-      key={session.id}
-      onCloseDrawer={closeDrawer}
-      onDelete={requestDelete}
-      onRename={requestRename}
-      session={session}
-    />
-  ));
+  return (
+    <>
+      {visibleSessions.map((session) => (
+        <SidebarSessionRow
+          key={session.id}
+          onCloseDrawer={closeDrawer}
+          onDelete={requestDelete}
+          onRename={requestRename}
+          session={session}
+        />
+      ))}
+      {canShowAllSessions ? (
+        <Pressable
+          accessibilityLabel={t('session.list.viewAll')}
+          accessibilityRole="button"
+          className="w-full active:bg-sidebar-accent"
+          onPress={handleViewAllPress}
+        >
+          <Text className="px-5 py-2.5 text-muted-foreground text-sm">
+            {t('session.list.viewAll')}
+          </Text>
+        </Pressable>
+      ) : null}
+      {isShowingAllSessions && isLoadingMoreSessions ? (
+        <Text className="px-5 py-2.5 text-muted-foreground text-sm">
+          {t('session.list.loading')}
+        </Text>
+      ) : null}
+    </>
+  );
 }
 
 function SidebarAgentSessionList() {
   const { t } = useTranslation();
   const { agents, error, isLoading } = useAgentsApi();
-  const { sessions } = useSessionListSessions();
-  const [expandedGroupId, setExpandedGroupId] = useState<string>();
-  const activeAgentIds = new Set(agents.map((agent) => agent.id));
-  const deletedAgentSessions = sessions
-    .filter((session) => !activeAgentIds.has(session.agentId))
-    .slice(0, appSidebar.recentSessionLimit);
-
-  const toggleGroup = (groupId: string) => {
-    setExpandedGroupId((current) => (current === groupId ? undefined : groupId));
-  };
 
   if (isLoading) {
     return (
@@ -153,7 +217,7 @@ function SidebarAgentSessionList() {
     );
   }
 
-  if (agents.length === 0 && deletedAgentSessions.length === 0) {
+  if (agents.length === 0) {
     return (
       <View className="px-5 py-4">
         <ContentState.Empty description={t('agent.list.emptyTitle')} />
@@ -161,168 +225,43 @@ function SidebarAgentSessionList() {
     );
   }
 
-  return (
-    <>
-      {agents.map((agent) => (
-        <SidebarAgentGroup
-          key={agent.id}
-          agent={agent}
-          expanded={expandedGroupId === agent.id}
-          onToggle={toggleGroup}
-        />
-      ))}
-      {deletedAgentSessions.length > 0 ? (
-        <SidebarDeletedAgentGroup
-          expanded={expandedGroupId === DELETED_AGENT_GROUP_ID}
-          onToggle={toggleGroup}
-          sessions={deletedAgentSessions}
-        />
-      ) : null}
-    </>
-  );
+  return agents.map((agent) => <SidebarAgentRow key={agent.id} agent={agent} />);
 }
 
-function SidebarAgentGroup({
-  agent,
-  expanded,
-  onToggle,
-}: {
-  agent: Agent;
-  expanded: boolean;
-  onToggle: (groupId: string) => void;
-}) {
-  return (
-    <>
-      <SidebarAgentGroupButton
-        agent={agent}
-        expanded={expanded}
-        label={agent.name}
-        onPress={() => onToggle(agent.id)}
-      />
-      {expanded ? (
-        <View className="ml-9 border-border border-l">
-          <SessionListProvider agentId={agent.id}>
-            <SidebarExpandedSessionList />
-          </SessionListProvider>
-        </View>
-      ) : null}
-    </>
+function SidebarAgentRow({ agent }: { agent: Agent }) {
+  const { closeDrawer } = useSidebarActions('Sidebar agent row');
+  const latestSession = useLatestAgentSession({ agentId: agent.id });
+  const isResolvingSession = latestSession.isLoading || latestSession.isRefreshing;
+  const href = chatHref(
+    latestSession.session
+      ? { kind: 'session', sessionId: latestSession.session.id }
+      : { agentId: agent.id, kind: 'draft' },
   );
-}
-
-function SidebarDeletedAgentGroup({
-  expanded,
-  onToggle,
-  sessions,
-}: {
-  expanded: boolean;
-  onToggle: (groupId: string) => void;
-  sessions: readonly AgentSessionEntity[];
-}) {
-  const { t } = useTranslation();
-  const label = t('session.list.deletedAgent');
 
   return (
-    <>
-      <SidebarAgentGroupButton
-        expanded={expanded}
-        label={label}
-        onPress={() => onToggle(DELETED_AGENT_GROUP_ID)}
-      />
-      {expanded ? (
-        <View className="ml-9 border-border border-l">
-          <SidebarResolvedSessionList sessions={sessions} />
-        </View>
-      ) : null}
-    </>
-  );
-}
-
-function SidebarAgentGroupButton({
-  agent,
-  expanded,
-  label,
-  onPress,
-}: {
-  agent?: Agent;
-  expanded: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  const DisclosureIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
-
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ expanded }}
-      className="w-full active:bg-sidebar-accent"
-      onPress={onPress}
-    >
-      <View className="flex-row items-center gap-3 px-5 py-2.5">
-        {agent ? (
+    <Link asChild href={href}>
+      <Pressable
+        accessibilityLabel={agent.name}
+        accessibilityRole="link"
+        accessibilityState={{ disabled: isResolvingSession }}
+        className="w-full active:bg-sidebar-accent"
+        disabled={isResolvingSession}
+        onPress={closeDrawer}
+      >
+        <View className="flex-row items-center gap-3 px-5 py-2.5">
           <AgentAvatar
-            accessibilityLabel={label}
+            accessibilityLabel={agent.name}
             name={agent.name}
             size={28}
             uri={agent.avatarUri}
           />
-        ) : null}
-        <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
-          {label}
-        </Text>
-        <DisclosureIcon className="size-4 text-muted-foreground" />
-      </View>
-    </Pressable>
+          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+            {agent.name}
+          </Text>
+        </View>
+      </Pressable>
+    </Link>
   );
-}
-
-function SidebarExpandedSessionList() {
-  const { t } = useTranslation();
-  const { isSessionListLoading, sessionQueryError, sessions } = useSessionListSessions();
-
-  if (isSessionListLoading) {
-    return (
-      <View className="py-4">
-        <ContentState.Loading />
-      </View>
-    );
-  }
-
-  if (sessionQueryError) {
-    return (
-      <View className="px-4 py-4">
-        <ContentState.Error description={t('session.list.loadFailed')} />
-      </View>
-    );
-  }
-
-  if (sessions.length === 0) {
-    return (
-      <View className="px-4 py-4">
-        <ContentState.Empty description={t('session.list.empty')} />
-      </View>
-    );
-  }
-
-  return <SidebarResolvedSessionList sessions={sessions} />;
-}
-
-function SidebarResolvedSessionList({ sessions }: { sessions: readonly AgentSessionEntity[] }) {
-  const { requestDelete, requestRename } = useSessionActionAlerts();
-  const { closeDrawer } = useSidebarActions('Sidebar agent sessions');
-
-  return sessions
-    .slice(0, appSidebar.recentSessionLimit)
-    .map((session) => (
-      <SidebarSessionRow
-        key={session.id}
-        onCloseDrawer={closeDrawer}
-        onDelete={requestDelete}
-        onRename={requestRename}
-        session={session}
-      />
-    ));
 }
 
 type SidebarSessionRowProps = {

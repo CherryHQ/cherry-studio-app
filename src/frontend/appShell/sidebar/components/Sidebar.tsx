@@ -45,10 +45,6 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/settings');
       },
-      openSessionList: (view = 'sessions') => {
-        navigation.closeDrawer();
-        router.push({ pathname: '/sessions', params: { view } });
-      },
       startNewChat: () => {
         navigation.closeDrawer();
         void startNewChat();

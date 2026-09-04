@@ -1,9 +1,10 @@
-import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { Surface } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
+import { ProfileAvatarImage } from '@/frontend/components/Avatar';
+import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
@@ -20,11 +21,10 @@ type SidebarDockProps = {
 // padding that keeps its last row reachable.
 export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProps) {
   const { t } = useTranslation();
-  const [primaryForegroundColor, foregroundColor] = useThemeColor([
-    'sidebar-primary-foreground',
-    'sidebar-foreground',
-  ]);
+  const [userName] = usePreference('app.user.name');
+  const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
   const { bottomPadding, inset } = useDockMetrics();
+  const displayName = userName.trim() || t('settings.profile.userName');
 
   return (
     // Ends of the sidebar, not a huddle in the corner: the chat pill anchors the
@@ -54,22 +54,29 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
         </Pressable>
       </Surface>
 
-      <Surface interactive shape="circle" tone="sidebar-accent">
+      <View className="overflow-hidden rounded-full bg-card">
         <Pressable
           accessibilityLabel={t('navigation.settings')}
           accessibilityRole="button"
           onPress={onSettingsPress}
           style={({ pressed }) => ({
             alignItems: 'center',
+            flexDirection: 'row',
+            gap: 8,
             height: appSidebar.dockHeight,
-            justifyContent: 'center',
             opacity: pressed ? 0.6 : 1,
-            width: appSidebar.dockHeight,
+            paddingHorizontal: 10,
           })}
         >
-          <SettingsIcon color={foregroundColor} size={18} strokeWidth={1.6} />
+          <ProfileAvatarImage accessibilityLabel={displayName} size={32} />
+          <Text
+            className="min-w-0 max-w-20 shrink font-medium text-[15px] text-sidebar-foreground"
+            numberOfLines={1}
+          >
+            {displayName}
+          </Text>
         </Pressable>
-      </Surface>
+      </View>
     </View>
   );
 }
