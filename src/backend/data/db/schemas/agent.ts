@@ -33,7 +33,7 @@ export const agentTable = sqliteTable(
     avatar: text(),
     // Default model: FK to user_model(id) — UniqueModelId "providerId::modelId"
     // Legitimately nullable: NULL = "no model selected yet"
-    modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
+    modelId: text('model').references(() => userModelTable.id, { onDelete: 'set null' }),
     // Per-Agent interactive approval preference. This does not enable tools.
     toolApprovalMode: text({ enum: ['default', 'auto'] })
       .$type<AgentToolApprovalMode>()

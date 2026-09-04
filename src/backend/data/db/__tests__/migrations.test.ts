@@ -63,14 +63,15 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'mcp_server')).toEqual([
         'id',
         'name',
-        'endpoint_url',
-        'is_enabled',
+        'base_url',
+        'is_active',
         'created_at',
         'updated_at',
         'disabled_tools',
         'headers',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
+        'scope',
         'key',
         'value',
         'created_at',
@@ -105,7 +106,7 @@ describe('bundled SQLite migrations', () => {
         'name',
         'instructions',
         'avatar',
-        'model_id',
+        'model',
         'order_key',
         'created_at',
         'updated_at',
@@ -116,8 +117,8 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
         'agent_id',
-        'title',
-        'title_is_manual',
+        'name',
+        'is_name_manually_edited',
         'execution_target',
         'last_activity_at',
         'created_at',
@@ -157,7 +158,9 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
       ]);
 
-      expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);
+      expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_active_idx']);
+      expect(columnNames(database, 'job')).toContain('cancel_requested_at');
+      expect(columnNames(database, 'user_model')).toContain('input_modalities_explicit');
       expect(indexNames(database, 'user_model')).toEqual(
         expect.arrayContaining([
           'user_model_preset_idx',
@@ -425,6 +428,86 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test('preserves existing values while aligning desktop-compatible fields', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const alignmentMigrationIndex = entries.findIndex(
+        ({ tag }) => tag === '0017_desktop-compatible-fields',
+      );
+      expect(alignmentMigrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, alignmentMigrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+        VALUES ('provider', 'Provider', 'a0', 1, 1);
+        INSERT INTO user_model (
+          id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at
+        ) VALUES ('provider::model', 'provider', 'model', 'model', 'a0', 1, 1);
+        INSERT INTO agent (id, name, model_id, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'provider::model', 'a0', 1, 1);
+        INSERT INTO agent_session (
+          id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at
+        ) VALUES ('session-1', 'agent-1', 'Retained title', 1, 1, 1, 1);
+        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
+        VALUES ('server-1', 'Server', 'https://example.com/mcp', 1, 1, 1);
+        INSERT INTO preference (key, value, created_at, updated_at)
+        VALUES ('ui.theme_mode', '"dark"', 1, 1);
+        INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
+        VALUES ('job-1', 'test', 'running', 'test', 1, '{}', 1, 1);
+      `);
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(alignmentMigrationIndex));
+
+      expect(database.prepare("SELECT model FROM agent WHERE id = 'agent-1'").get()).toEqual({
+        model: 'provider::model',
+      });
+      expect(
+        database
+          .prepare("SELECT name, is_name_manually_edited FROM agent_session WHERE id = 'session-1'")
+          .get(),
+      ).toEqual({ is_name_manually_edited: 1, name: 'Retained title' });
+      expect(
+        database.prepare("SELECT base_url, is_active FROM mcp_server WHERE id = 'server-1'").get(),
+      ).toEqual({ base_url: 'https://example.com/mcp', is_active: 1 });
+      expect(
+        database.prepare("SELECT scope, value FROM preference WHERE key = 'ui.theme_mode'").get(),
+      ).toEqual({ scope: 'default', value: '"dark"' });
+      expect(
+        database.prepare("SELECT cancel_requested_at FROM job WHERE id = 'job-1'").get(),
+      ).toEqual({ cancel_requested_at: null });
+      expect(
+        database
+          .prepare("SELECT input_modalities_explicit FROM user_model WHERE id = 'provider::model'")
+          .get(),
+      ).toEqual({ input_modalities_explicit: 0 });
+
+      database.exec(`
+        INSERT INTO preference (scope, key, value, created_at, updated_at)
+        VALUES ('desktop', 'ui.theme_mode', '"light"', 2, 2);
+        INSERT INTO ai_usage_record (
+          id, request_id, record_kind, request_count, provider_id, model_id,
+          source_type, source_id, modality, api_key_attribution, created_at
+        ) VALUES (
+          'usage-1', 'request-1', 'invocation', 1, 'provider', 'model',
+          'mini-app', 'mini-app-1', 'language', 'unknown', 2
+        );
+      `);
+      expect(
+        database
+          .prepare("SELECT count(*) AS count FROM preference WHERE key = 'ui.theme_mode'")
+          .get(),
+      ).toEqual({ count: 2 });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('labels only provable origins and leaves the rest unknown', () => {
     const database = new DatabaseSync(':memory:');
 
@@ -535,10 +618,10 @@ describe('bundled SQLite migrations', () => {
       expect(
         database
           .prepare(
-            "SELECT title, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
+            "SELECT name, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
           )
           .get(),
-      ).toEqual({ forked_from_session_id: null, title: 'Arithmetic drills' });
+      ).toEqual({ forked_from_session_id: null, name: 'Arithmetic drills' });
       expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
         { count: 1 },
       );

@@ -26,7 +26,7 @@ export * from './userProvider';
 
 export { appStateTable } from './appState';
 export { fileEntryTable } from './file';
-export { preferenceTable } from './preference';
+export { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from './preference';
 
 export type AppStateRow = typeof appStateTable.$inferSelect;
 export type InsertAppStateRow = typeof appStateTable.$inferInsert;

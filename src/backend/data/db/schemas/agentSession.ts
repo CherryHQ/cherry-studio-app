@@ -24,9 +24,9 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
     // Protocol vocabulary (AgentSessionView.title), not a second synonym set
-    title: text().notNull().default(''),
+    title: text('name').notNull().default(''),
     // Whether the title was manually edited by user
-    titleIsManual: integer({ mode: 'boolean' }).notNull().default(false),
+    titleIsManual: integer('is_name_manually_edited', { mode: 'boolean' }).notNull().default(false),
     // Application intent (protocol AgentExecutionTarget), never a Runtime id
     executionTarget: text({ mode: 'json' })
       .$type<AgentExecutionTarget>()

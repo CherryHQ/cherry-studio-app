@@ -3,16 +3,21 @@ import { PreferenceService } from '@/backend/data/PreferenceService';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
 jest.mock('@/backend/data/db/schemas', () => ({
+  DEFAULT_PREFERENCE_SCOPE: 'default',
   preferenceTable: {
     key: 'key',
+    scope: 'scope',
     value: 'value',
   },
 }));
 
 type PreferenceRow = {
   key: string;
+  scope: string;
   value: unknown;
 };
+
+type PreferenceInputRow = Omit<PreferenceRow, 'scope'> & Partial<Pick<PreferenceRow, 'scope'>>;
 
 type FakeDbService = DbService & {
   failNextWrite: boolean;
@@ -76,6 +81,7 @@ describe('PreferenceService', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(dbService.rows.get('ui.font_size_step')).toMatchObject({
       key: 'ui.font_size_step',
+      scope: 'default',
       value: 1,
     });
   });
@@ -122,6 +128,7 @@ describe('PreferenceService', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(dbService.rows.get('agent.default_model_id')).toMatchObject({
       key: 'agent.default_model_id',
+      scope: 'default',
       value: 'provider:model',
     });
   });
@@ -206,8 +213,10 @@ describe('PreferenceService', () => {
   });
 });
 
-function createFakeDbService(rows: PreferenceRow[] = []) {
-  const rowMap = new Map(rows.map((row) => [row.key, row]));
+function createFakeDbService(rows: PreferenceInputRow[] = []) {
+  const rowMap = new Map(
+    rows.map((row) => [row.key, { ...row, scope: row.scope ?? 'default' } as PreferenceRow]),
+  );
   const writeWaiters: (() => void)[] = [];
 
   const db = {
@@ -224,7 +233,9 @@ function createFakeDbService(rows: PreferenceRow[] = []) {
       }),
     }),
     select: () => ({
-      from: () => Promise.resolve(Array.from(rowMap.values())),
+      from: () => ({
+        where: () => Promise.resolve(Array.from(rowMap.values())),
+      }),
     }),
   };
 

@@ -23,9 +23,9 @@ export const mcpServerTable = sqliteTable(
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    endpointUrl: text().notNull(),
+    endpointUrl: text('base_url').notNull(),
     headers: text({ mode: 'json' }).$type<Record<string, string>>(),
-    isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
+    isEnabled: integer('is_active', { mode: 'boolean' }).notNull().default(false),
     /**
      * Tool names this server may not offer, as the server reports them. The
      * server decides what exists; this is the user's say over what reaches the
@@ -36,7 +36,7 @@ export const mcpServerTable = sqliteTable(
 
     ...createUpdateTimestamps,
   },
-  (t) => [index('mcp_server_is_enabled_idx').on(t.isEnabled)],
+  (t) => [index('mcp_server_is_active_idx').on(t.isEnabled)],
 );
 
 export type InsertMcpServerRow = typeof mcpServerTable.$inferInsert;

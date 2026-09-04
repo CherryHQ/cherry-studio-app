@@ -72,7 +72,7 @@ export type ServingCredentialReceipt =
 export const AiUsageRecordModalitySchema = z.enum(['language', 'embedding', 'image', 'rerank']);
 export type AiUsageRecordModality = z.infer<typeof AiUsageRecordModalitySchema>;
 
-export const AiUsageRecordSourceTypeSchema = z.enum(['assistant', 'agent']);
+export const AiUsageRecordSourceTypeSchema = z.enum(['assistant', 'agent', 'mini-app']);
 export type AiUsageRecordSourceType = z.infer<typeof AiUsageRecordSourceTypeSchema>;
 
 export const AiUsageRecordEntrySchema = z.strictObject({

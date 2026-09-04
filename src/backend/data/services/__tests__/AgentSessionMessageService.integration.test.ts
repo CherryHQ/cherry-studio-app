@@ -81,7 +81,7 @@ function insertSession(database: DatabaseSync, id: string): void {
   database
     .prepare(
       `INSERT INTO agent_session (
-        id, agent_id, title, title_is_manual, execution_target,
+        id, agent_id, name, is_name_manually_edited, execution_target,
         last_activity_at, created_at, updated_at
       ) VALUES (?, 'agent-1', '', 0, '{"kind":"local"}', 1, 1, 1)`,
     )
