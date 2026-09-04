@@ -2,7 +2,7 @@
  * Auto-generated general icon registry
  * Do not edit manually.
  *
- * Total icons: 22
+ * Total icons: 24
  */
 
 import type { IconSource } from '../types';
@@ -27,6 +27,10 @@ export const GENERAL_ICONS = {
   'aicon-27': {
     light: require('./light/aicon-27.webp'),
     dark: require('./light/aicon-27.webp'),
+  },
+  'antigravity-cli': {
+    light: require('./light/antigravity-cli.webp'),
+    dark: require('./light/antigravity-cli.webp'),
   },
   'brain-circuit': {
     light: require('./light/brain-circuit.webp'),
@@ -83,6 +87,10 @@ export const GENERAL_ICONS = {
   'openai-codex': {
     light: require('./light/openai-codex.webp'),
     dark: require('./light/openai-codex.webp'),
+  },
+  'pi-cli': {
+    light: require('./light/pi-cli.webp'),
+    dark: require('./dark/pi-cli.webp'),
   },
   'qoder-cli': {
     light: require('./light/qoder-cli.webp'),

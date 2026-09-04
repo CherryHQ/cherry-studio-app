@@ -12,6 +12,7 @@ type ImageSource = ComponentProps<typeof Image>['source'];
 const BRAND_AVATAR_SIZE = 26;
 const BRAND_AVATAR_FRAME_RADIUS = 6;
 const BRAND_AVATAR_INITIAL_FONT_SIZE = 14;
+const BRAND_AVATAR_FALLBACK_SCALE = 0.8125;
 
 type BrandAvatarProps = {
   /**
@@ -60,7 +61,7 @@ export function BrandAvatar({
     >
       {fallback ? (
         <Avatar.Fallback
-          scale={DEFAULT_BRAND_ICON_SCALE}
+          scale={BRAND_AVATAR_FALLBACK_SCALE}
           style={{ backgroundColor: fallback.backgroundColor, borderRadius: frameRadius - 1 }}
           textProps={{
             style: {
@@ -83,14 +84,22 @@ type BrandAvatarIconProps = {
    * Provider or model id used to pick the inset — logos that already ship their
    * own colored tile are inset further so they do not read as a frame in a frame.
    */
+  displayContext?: 'provider' | 'provider-list';
   iconId?: string;
   recyclingKey?: string;
   source: ImageSource;
 };
 
 /** Built-in brand logo, inset within the frame. */
-export function BrandAvatarIcon({ iconId, recyclingKey, source }: BrandAvatarIconProps) {
-  const displayConfig = getBrandAvatarIconDisplayConfig(iconId);
+export function BrandAvatarIcon({
+  displayContext,
+  iconId,
+  recyclingKey,
+  source,
+}: BrandAvatarIconProps) {
+  const displayConfig = displayContext
+    ? getBrandAvatarIconDisplayConfig(iconId, displayContext)
+    : undefined;
 
   return (
     <Avatar.Image

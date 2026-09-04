@@ -1,5 +1,6 @@
 import BellRingIcon from '@cherrystudio/app-icons/icons/bell-ring';
-import FileIcon from '@cherrystudio/app-icons/icons/file';
+import FileEditIcon from '@cherrystudio/app-icons/icons/file-edit';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 
 import { getBuiltInToolDisplay } from '../builtInToolDisplay';
 import { getBuiltInToolIcon as getAndroidIcon } from '../builtInToolIcon/builtInToolIcon.android';
@@ -24,8 +25,10 @@ describe('built-in tool display', () => {
       titleKey: 'chat.builtinTool.file.edit',
     });
 
-    expect(getAndroidIcon('file')).toEqual({ icon: FileIcon });
-    expect(getIosIcon('file')).toEqual({ icon: FileIcon });
+    expect(getAndroidIcon('fileEdit')).toEqual({ icon: FileEditIcon });
+    expect(getIosIcon('fileEdit')).toEqual({ icon: FileEditIcon });
+    expect(getAndroidIcon('fileText')).toEqual({ icon: FileTextIcon });
+    expect(getIosIcon('fileText')).toEqual({ icon: FileTextIcon });
   });
 
   test('returns no display for a non-built-in tool', () => {

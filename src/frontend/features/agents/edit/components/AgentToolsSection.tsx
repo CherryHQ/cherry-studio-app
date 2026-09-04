@@ -1,4 +1,3 @@
-import MonitorCloudIcon from '@cherrystudio/app-icons/icons/monitor-cloud';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
 import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
@@ -119,7 +118,6 @@ export function AgentToolsSection({
                   density="compact"
                   description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
                   label={displayName}
-                  leading={<MonitorCloudIcon className="size-5 text-foreground" />}
                   trailing={
                     <View className="flex-row items-center gap-1">
                       {canEnable ? (

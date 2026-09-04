@@ -3,6 +3,7 @@ import { BrandAvatar, BrandAvatarPhoto, ProviderBrandAvatar } from '@/frontend/c
 import { useProviderAvatar } from '../hooks/useProviderAvatar';
 
 type ProviderAvatarProps = {
+  displayContext?: 'provider-list';
   presetProviderId?: string;
   providerId: string;
   providerName: string;
@@ -17,6 +18,7 @@ type ProviderAvatarProps = {
  * ③ first-character placeholder.
  */
 export function ProviderAvatar({
+  displayContext,
   presetProviderId,
   providerId,
   providerName,
@@ -35,6 +37,7 @@ export function ProviderAvatar({
 
   return (
     <ProviderBrandAvatar
+      displayContext={displayContext}
       presetProviderId={presetProviderId}
       providerId={providerId}
       providerName={providerName}

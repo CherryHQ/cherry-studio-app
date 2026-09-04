@@ -1,6 +1,5 @@
-import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import PlayIcon from '@cherrystudio/app-icons/icons/play';
 import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
+import { Switch } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,20 +23,15 @@ export function McpServerChrome({
     >
       <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
       <View className="flex-row self-start overflow-hidden rounded-full border border-border bg-field android:shadow-lg">
-        <Pressable
-          accessibilityLabel={toggleLabel}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isDisabled, selected: isEnabled }}
-          className="size-12 items-center justify-center active:opacity-60 disabled:opacity-35"
-          disabled={isDisabled}
-          onPress={onToggleEnabled}
-        >
-          {isEnabled ? (
-            <PauseIcon className="size-5 text-foreground" />
-          ) : (
-            <PlayIcon className="size-5 text-foreground" />
-          )}
-        </Pressable>
+        <View className="size-12 items-center justify-center">
+          <Switch
+            accessibilityLabel={toggleLabel}
+            disabled={isDisabled}
+            onValueChange={onToggleEnabled}
+            size="sm"
+            value={isEnabled}
+          />
+        </View>
 
         <Pressable
           accessibilityLabel={t('settings.mcp.deleteServer')}

@@ -3,15 +3,17 @@ export interface BrandAvatarDisplayConfig {
   scale: number;
 }
 
-export const DEFAULT_BRAND_ICON_SCALE = 0.8125;
+export const DEFAULT_BRAND_ICON_SCALE = 1;
+// Provider WebPs are cropped to their visible bounds during generation. This
+// shared inset restores breathing room after that asset-level normalization.
+export const PROVIDER_BRAND_ICON_SCALE = 0.8125;
 
 const CONTAINED_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
   borderRadius: 5,
-  scale: 5 / 7,
+  scale: PROVIDER_BRAND_ICON_SCALE,
 };
-const DEFAULT_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
-  // Native brand assets are trimmed during generation, unlike desktop SVGs.
-  scale: DEFAULT_BRAND_ICON_SCALE,
+const PROVIDER_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
+  scale: PROVIDER_BRAND_ICON_SCALE,
 };
 const CONTAINED_BRAND_ICON_IDS = new Set([
   'aihubmix',
@@ -25,14 +27,15 @@ const CONTAINED_BRAND_ICON_IDS = new Set([
 
 export function getBrandAvatarIconDisplayConfig(
   iconId: string | undefined,
+  displayContext: 'provider' | 'provider-list' = 'provider-list',
 ): BrandAvatarDisplayConfig | undefined {
   if (!iconId) {
     return undefined;
   }
 
-  return CONTAINED_BRAND_ICON_IDS.has(iconId.toLowerCase())
+  return displayContext === 'provider-list' && CONTAINED_BRAND_ICON_IDS.has(iconId.toLowerCase())
     ? CONTAINED_BRAND_ICON
-    : DEFAULT_BRAND_ICON;
+    : PROVIDER_BRAND_ICON;
 }
 
 export function getBrandAvatarFallback(label: string) {

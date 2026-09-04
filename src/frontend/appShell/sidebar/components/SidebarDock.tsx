@@ -1,5 +1,4 @@
 import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
-import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { Surface } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -8,6 +7,7 @@ import { Pressable } from 'react-native-gesture-handler';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
+import NewConversationIcon from '../../icons/NewConversationIcon';
 import { useDockMetrics } from '../hooks/useDockMetrics';
 
 type SidebarDockProps = {
@@ -47,7 +47,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             paddingHorizontal: 16,
           })}
         >
-          <SquarePenIcon color={primaryForegroundColor} size={18} />
+          <NewConversationIcon color={primaryForegroundColor} size={18} />
           <Text className="font-medium text-[15px] text-sidebar-primary-foreground">
             {t('navigation.newChat')}
           </Text>
@@ -67,7 +67,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             width: appSidebar.dockHeight,
           })}
         >
-          <SettingsIcon color={foregroundColor} size={24} />
+          <SettingsIcon color={foregroundColor} size={18} strokeWidth={1.6} />
         </Pressable>
       </Surface>
     </View>

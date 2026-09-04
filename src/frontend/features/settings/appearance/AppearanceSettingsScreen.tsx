@@ -1,6 +1,4 @@
-import ALargeSmallIcon from '@cherrystudio/app-icons/icons/a-large-small';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import { OptionPickerBottomSheet, Section } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
@@ -43,13 +41,11 @@ export default function AppearanceSettingsScreen() {
         <Section>
           <Section.SelectItem
             label={t('settings.items.appLanguage')}
-            leading={<GlobeIcon className="size-5 text-foreground" />}
             onPress={() => setIsLanguagePickerOpen(true)}
             value={languageLabel ?? t('settings.select.placeholder')}
           />
           <Section.Item
             label={t('settings.items.fontSize')}
-            leading={<ALargeSmallIcon className="size-5 text-foreground" />}
             onPress={() => router.push('/settings/font-size')}
             trailing={
               <View className="flex-row items-center gap-1">

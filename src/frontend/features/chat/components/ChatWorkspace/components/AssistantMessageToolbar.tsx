@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import GitForkIcon from '@cherrystudio/app-icons/icons/git-fork';
+import SplitIcon from '@cherrystudio/app-icons/icons/split';
 import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,9 +42,9 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
           icon={
             isCopied ? (
-              <CheckIcon className="text-muted-foreground" />
+              <CheckIcon className="text-primary" size={15} />
             ) : (
-              <CopyIcon className="text-muted-foreground" />
+              <CopyIcon className="text-muted-foreground" size={15} />
             )
           }
           onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
@@ -55,7 +55,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
       ) : null}
       <Button
         accessibilityLabel={t('chat.messageActions.fork')}
-        icon={<GitForkIcon className="text-muted-foreground" />}
+        icon={<SplitIcon className="text-muted-foreground" size={15} />}
         onPress={() => forkFromAssistantMessage({ messageId: message.id })}
         size="xs"
         testID="assistant-message-fork"

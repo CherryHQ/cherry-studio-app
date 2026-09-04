@@ -1,4 +1,4 @@
-import FileIcon from '@cherrystudio/app-icons/icons/file';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
@@ -38,7 +38,7 @@ export function FileAttachmentPreview({
             className="size-10 items-center justify-center rounded-lg border border-border bg-background"
             style={{ borderCurve: 'continuous', transform: [{ rotate: '-5deg' }] }}
           >
-            <FileIcon className="size-5 text-foreground" />
+            <FileTextIcon className="size-5 text-foreground" />
           </View>
         </View>
         <View className="min-w-0 flex-1 justify-center gap-0.5 pr-3">

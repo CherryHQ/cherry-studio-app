@@ -15,8 +15,8 @@
         "packages/ui/src/components/icons/providers"
       ],
       "targetPaths": ["packages/ui/icons", "packages/ui/src/icons", "packages/ui/src/icons-webp"],
-      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
-      "sourceSha256": "40d8b7c58f87db799768b3f9fe27bb79ef3d16e945f3064ab1575e4ec4bcdb85",
+      "sourceCommit": "9320c74569bc3cc536d94220ab597d8de0298d0c",
+      "sourceSha256": "2894b8120659a1ed889aa048ed57fcae432923881deaea8f26ab01ca062b0565",
       "explicitExclusions": [],
       "virtualIconAdapters": {
         "opencode": "general/open-code"

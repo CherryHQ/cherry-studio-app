@@ -1,4 +1,4 @@
-import { resolveIcon } from '@cherrystudio/ui/icons';
+import { resolveModelIcon, resolveModelProviderIcon } from '@cherrystudio/ui/icons';
 import { useUniwind } from 'uniwind';
 
 import type { Model } from '@/shared/data/types/model';
@@ -25,7 +25,8 @@ export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
-  const iconSource = resolveIcon(model.modelId, providerIconId);
+  const modelIconSource = resolveModelIcon(model.modelId);
+  const iconSource = modelIconSource ?? resolveModelProviderIcon(model.modelId, providerIconId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
 
   if (!iconSource) {
@@ -35,6 +36,7 @@ export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   return (
     <BrandAvatar {...frameProps}>
       <BrandAvatarIcon
+        displayContext={modelIconSource ? undefined : 'provider'}
         iconId={providerIconId}
         recyclingKey={model.id}
         source={iconSource[iconTheme]}

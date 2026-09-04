@@ -299,12 +299,7 @@ export function PaintingInput({
           <ComposerModelPill
             icon={
               selectedModel ? (
-                <ModelPickerIcon
-                  model={selectedModel}
-                  provider={selectedProvider}
-                  providerIconSize={18}
-                  size={20}
-                />
+                <ModelPickerIcon model={selectedModel} provider={selectedProvider} size={20} />
               ) : undefined
             }
             label={
