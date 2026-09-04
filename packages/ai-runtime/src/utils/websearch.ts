@@ -1,4 +1,4 @@
-import type { WebSearchToolConfigMap } from '@cherrystudio/ai-core';
+import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import {
@@ -7,22 +7,6 @@ import {
 } from '@cherrystudio/universal/utils/model';
 
 import type { AppProviderId } from '../types';
-
-type OpenRouterSearchConfig = {
-  plugins?: Array<{
-    id: 'web';
-    max_results?: number;
-    search_prompt?: string;
-  }>;
-  web_search_options?: {
-    max_results?: number;
-    search_prompt?: string;
-  };
-};
-
-export type WebSearchPluginConfig = WebSearchToolConfigMap & {
-  openrouter?: OpenRouterSearchConfig;
-};
 
 /** Inputs for provider-builtin web-search plugin configuration. */
 export interface CherryWebSearchConfig {

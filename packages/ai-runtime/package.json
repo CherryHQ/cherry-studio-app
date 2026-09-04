@@ -12,6 +12,12 @@
     "typecheck": "tsc --noEmit"
   },
   "exports": {
+    "./image": {
+      "types": "./src/image/index.ts",
+      "react-native": "./src/image/index.ts",
+      "import": "./src/image/index.ts",
+      "default": "./src/image/index.ts"
+    },
     "./provider": {
       "types": "./src/provider/index.ts",
       "react-native": "./src/provider/index.ts",

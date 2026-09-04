@@ -182,8 +182,9 @@ payload transformations that multiple language bindings actually need.
 Endpoint-dialect, reasoning-wire, service-tier, and actual-cost facts are now declared in the
 registry and consumed by the Mobile request path. The compatibility projection into persisted
 `apiFeatures` is intentionally sparse: it projects only explicit declarations so schema defaults
-cannot silently replace newer local state. Full Desktop registry admission remains blocked on
-server-tool eligibility and compatibility/catalog reconciliation.
+cannot silently replace newer local state. Full Desktop registry admission remains blocked on a
+catalog compatibility review; provider-native server tools stay outside the current Mobile product
+scope and do not need a Pi implementation merely to admit otherwise compatible model data.
 
 ## Acceptance Criteria
 

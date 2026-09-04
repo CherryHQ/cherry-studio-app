@@ -122,15 +122,26 @@ describe('createImageGenerationModel.doGenerate', () => {
     expect(cancel).toHaveBeenCalledWith('task-1');
   });
 
-  it('forwards the onProgress callback (by reference) and provider params to submit', async () => {
+  it('forwards native options, routing metadata, progress, and provider params to the transport', async () => {
     const onProgress = vi.fn();
     let polledOnProgress: ((p: number) => void) | undefined;
+    const modelDescriptor = {
+      endpoint: '/v1/tasks',
+      id: 'mid',
+      isSync: false,
+      mode: 'generate' as const,
+    };
     const transport: ImageGenerationTransport = {
       submit: vi.fn(async (input: ImageGenerationSubmitInput) => {
-        expect(input.providerParams).toMatchObject({ model: 'mid', onProgress });
+        expect(input).toMatchObject({
+          aspectRatio: '16:9',
+          modelDescriptor,
+          providerParams: { model: 'mid', modelDescriptor, onProgress },
+        });
         return { taskId: 'task-1' };
       }),
       poll: vi.fn(async (_taskId, opts) => {
+        expect(opts.modelDescriptor).toEqual(modelDescriptor);
         polledOnProgress = opts.onProgress;
         opts.onProgress?.(42);
         return ['https://img/1.png'];
@@ -139,7 +150,10 @@ describe('createImageGenerationModel.doGenerate', () => {
     const model = createImageGenerationModel('m', { provider: 'ppio', transport });
 
     await model.doGenerate(
-      makeOptions({ providerOptions: { ppio: { model: 'mid', onProgress } } as never }),
+      makeOptions({
+        aspectRatio: '16:9',
+        providerOptions: { ppio: { model: 'mid', modelDescriptor, onProgress } } as never,
+      }),
     );
 
     expect(polledOnProgress).toBe(onProgress);

@@ -106,6 +106,13 @@ const MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
   'openai-codex',
 ]);
 
+/**
+ * Provider namespaces owned by Mobile rather than the Desktop catalog lane.
+ * Bundled rows replace remote rows for these ids; mixing both sources would let
+ * an unsigned Desktop snapshot mutate a Mobile-only provider.
+ */
+const MOBILE_EXTENSION_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set(['github']);
+
 let parsedModels: ModelsBundle | null = null;
 let parsedProviderModels: ProviderModelsBundle | null = null;
 let parsedProviders: ProvidersBundle | null = null;
@@ -153,7 +160,12 @@ export class MobileRegistryLoader {
   }
 
   loadProviderModels(): ProviderModelOverride[] {
-    const overrides = (this.remoteProviderModels ?? loadProviderModelsBundle()).overrides ?? [];
+    const overrides = this.remoteProviderModels
+      ? mergeMobileExtensionOverrides(
+          this.remoteProviderModels.overrides ?? [],
+          loadProviderModelsBundle().overrides ?? [],
+        )
+      : (loadProviderModelsBundle().overrides ?? []);
     this.buildOverrideIndex(overrides);
     return overrides;
   }
@@ -376,6 +388,20 @@ export class MobileRegistryLoader {
       this.overridesByProvider.set(override.providerId, providerOverrides);
     }
   }
+}
+
+function mergeMobileExtensionOverrides(
+  remoteOverrides: ProviderModelOverride[],
+  bundledOverrides: ProviderModelOverride[],
+): ProviderModelOverride[] {
+  return [
+    ...remoteOverrides.filter(
+      (override) => !MOBILE_EXTENSION_PRESET_PROVIDER_IDS.has(override.providerId),
+    ),
+    ...bundledOverrides.filter((override) =>
+      MOBILE_EXTENSION_PRESET_PROVIDER_IDS.has(override.providerId),
+    ),
+  ];
 }
 
 let sharedLoader: MobileRegistryLoader | null = null;

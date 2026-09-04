@@ -124,4 +124,40 @@ describe('MobileRegistryLoader', () => {
       );
     }
   });
+
+  it('overlays Mobile-only provider overrides onto a remote Desktop snapshot', () => {
+    const loader = new MobileRegistryLoader();
+    const bundledGithubOverrides = loader.getOverridesForProvider('github');
+
+    expect(bundledGithubOverrides.length).toBeGreaterThan(0);
+
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: { models: [], version: 'remote-models' },
+        providerModels: {
+          overrides: [
+            {
+              apiModelId: 'remote-model',
+              modelId: 'remote-model',
+              providerId: 'openrouter',
+            },
+            {
+              apiModelId: 'remote-only-mobile-extension',
+              modelId: 'remote-only-mobile-extension',
+              providerId: 'github',
+            },
+          ],
+          version: 'remote-provider-models',
+        },
+      }),
+    );
+
+    expect(loader.getOverridesForProvider('github')).toEqual(bundledGithubOverrides);
+    expect(loader.findOverride('github', 'remote-only-mobile-extension')).toBeNull();
+    expect(loader.findOverride('openrouter', 'remote-model')).toMatchObject({
+      apiModelId: 'remote-model',
+      providerId: 'openrouter',
+    });
+    expect(loader.getProviderModelsVersion()).toBe('remote-provider-models');
+  });
 });

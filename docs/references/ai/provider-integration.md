@@ -141,13 +141,16 @@ the Mobile application version.
 The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
 replaced remotely. This keeps endpoint routing and credential behavior inside the reviewed binary
 while still allowing model metadata to be refreshed. Remote protocol support is not a substitute
-for synchronizing schemas, interpreters, normalizers, or endpoint semantics: unknown behavior must
-be implemented and validated before the compatibility version advances.
+for synchronizing schemas, interpreters, normalizers, or endpoint semantics: required behavior
+consumed by Mobile must be implemented and validated, while unsupported optional behavior must be
+explicitly classified, before the compatibility version advances.
 
-The accepted semantic line is currently Desktop `2.0.8`. Desktop `2.0.9` remains blocked until
-Mobile consumes its provider-native `serverTools` declarations and generated model-eligibility
-tables; otherwise a remote refresh could remove Web Search eligibility that Mobile still derives
-from the older per-model capability representation.
+The accepted semantic line is currently Desktop `2.0.8`. Desktop `2.0.9` remains gated on a full
+Mobile compatibility review of the downloaded model and override payloads. Mobile does not need to
+implement provider-native `serverTools` merely to consume newer model data: those optional fields
+may be explicitly ignored while application-owned Web Search remains the only conversation search
+path. The review must still prove that removal of the older per-model `web-search` capability does
+not affect any Mobile consumer before the compatibility number advances.
 
 ## Transport
 

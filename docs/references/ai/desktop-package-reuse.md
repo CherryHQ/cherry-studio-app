@@ -1,221 +1,187 @@
-# Desktop AI Package Reuse
+# Desktop AI Reuse
 
-Status: **the Mobile `ai-core` and `ai-sdk-provider` source trees mirror Cherry Desktop commit
-`246e46b6b04796696a9a4903f4604f5fe9d1ae4b`. Selected Provider registry semantics from that commit
-are implemented, but the complete registry domain has not passed its admission gates and Mobile's
-remote compatibility remains intentionally pinned to Desktop `2.0.8`. The proposed shared Runtime
-packages remain design-only**.
+Status: **selected provider and non-conversation AI SDK changes from Cherry Desktop commit
+`246e46b6b04796696a9a4903f4604f5fe9d1ae4b` are ported. Mobile does not mirror Desktop's
+conversation Runtime. Provider registry admission remains incomplete, and Mobile's remote registry
+compatibility stays pinned to Desktop `2.0.8` pending an explicit compatibility review.**
 
-This reference defines which Cherry Desktop AI packages Mobile can consume, which code must be
-ported rather than copied, and where a future shared package boundary belongs. Feature parity
-alone is not evidence that code is portable.
+This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
+source of behavior to assess, not a tree to copy. Every port needs a concrete Mobile consumer and
+must fit one of Mobile's existing execution boundaries.
 
 ## Decision
 
-Mobile accepts source changes needed to consume genuinely cross-platform packages. Shared code is
-preferred when it owns provider protocol, request shaping, or platform-neutral execution
-semantics. Electron application orchestration is not moved into Mobile merely to reduce visible
-source differences.
+Mobile has two AI execution paths:
 
-| Desktop surface | Package state | Mobile status | Synchronization rule |
-| --- | --- | --- | --- |
-| `@cherrystudio/ai-core` | Published; React Native export declared | Source mirror copied; baseline validation pending | Exact tracked-file mirror |
-| `@cherrystudio/ai-sdk-provider` | Published | Source mirror copied; baseline validation pending | Exact tracked-file mirror |
-| `@cherrystudio/provider-registry` | Independent but private | Semantic port in progress; request-control and endpoint-dialect slices are implemented, while server-tool and compatibility work remains | Semantic port; never overwrite the Mobile adapter |
-| Desktop custom providers and image transports | Still under `src/main/ai` | Mobile implementation remains in private `@cherrystudio/ai-runtime` | Future extraction below the application-service boundary |
-| Desktop Pi Runtime | Application source, not a portable package | Direct consumption rejected | Future platform-neutral Pi core only |
-| `@cherrystudio/dsh-bridge` | Private and desktop-specific | Not a Mobile dependency | Desktop-only |
+- Conversation turns run on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
+  `src/backend/ai/agent/runtime/pi`.
+- Non-conversation text generation, model checks, model listing, and image generation run through
+  `AiService` and the AI SDK.
+
+Desktop code is admitted only when all of the following are true:
+
+1. A current Mobile production path consumes the behavior.
+2. The behavior belongs to Pi, `AiService`, or the shared provider connection layer without moving
+   ownership between those paths.
+3. The dependency closure is React Native safe and does not expose Node or Electron code to Metro.
+4. The smallest useful implementation and its behavior tests can be ported without importing
+   unused Desktop Runtime infrastructure.
+5. Provider registry compatibility advances only after Mobile validates every semantic field it
+   consumes and explicitly classifies unsupported optional fields as ignored product capabilities.
+
+| Desktop surface | Mobile treatment |
+| --- | --- |
+| `@cherrystudio/ai-core` | Selectively port AI SDK provider, plugin, text, and image behavior consumed by `AiService`; do not copy Desktop context or conversation-loop modules without a Mobile consumer |
+| `@cherrystudio/ai-sdk-provider` | Selectively port CherryIN, embedding, reranking, and image transport behavior used by Mobile's AI SDK path |
+| `@cherrystudio/provider-registry` | Port platform-neutral catalog semantics while retaining Mobile's static JSON loader and persisted-data compatibility projection |
+| Desktop custom providers and image transports | Port reusable wire behavior into Mobile's private `@cherrystudio/ai-runtime` when an existing Mobile feature consumes it |
+| Desktop Pi Runtime | Do not consume it directly; Mobile owns its Pi host, adapters, persistence, tools, and lifecycle |
+| `@cherrystudio/dsh-bridge` | Desktop-only |
 
 Desktop UI and table packages are outside this AI Runtime decision and require separate React
 Native and ownership assessments.
 
-## Synchronized Packages
+## Selected AI SDK Reuse
 
 ### `@cherrystudio/ai-core`
 
-The complete Desktop `packages/aiCore` tracked tree is mirrored at `packages/ai-core`, including
-source, tests, metadata, changelog, and build configuration. Platform adaptations belong in the
-Mobile caller, not inside this package. The removed legacy `webSearchPlugin` type surface is now
-represented by Mobile's provider-tool configuration instead of a Mobile-only file in the exact
-mirror.
+Mobile imports `ai-core` through the private implementation behind `AiService`. Its production
+consumers use provider construction, non-conversation text generation, model probes, and image
+generation. This branch keeps relevant provider lazy loading, request-scoped provider cache
+identity, AI SDK compatibility, and image-result behavior.
 
-The synchronized version adds the context compaction primitives, provider lazy loading, model
-retry/fallback support, server-tool plumbing, and image URL response handling present at the
-recorded Desktop commit.
+Desktop context compaction, model-message adaptation, offloading, and independent fallback-model
+resolution have no Mobile consumer. Mobile conversation context is owned by
+`src/backend/ai/agent/runtime/pi/contextCompaction.ts`; those Desktop `ai-core` modules are therefore
+not ported.
 
-Known upstream documentation drift: the mirrored package README still advertises the deleted
-`webSearchPlugin` export. Current callers use `providerToolPlugin('webSearch', config)`. Fix that
-README in Desktop rather than reintroducing a Mobile-only file into the mirror.
+The package is not an exact Desktop mirror. Upstream changes must be reviewed against Mobile's
+imports and execution paths before they are applied.
 
 ### `@cherrystudio/ai-sdk-provider`
 
-The complete tracked tree is mirrored at the same package path. It includes the CherryIN
-reasoning-model token transformation and current embedding endpoint behavior.
+Mobile uses this package for CherryIN and OpenAI-compatible provider behavior. The selected update
+adds reasoning-model token conversion and the current embedding endpoint contract used by that
+provider path. Unrelated Desktop package changes are not admitted automatically.
 
 ### Dependency resolution
 
-An exact source mirror is incomplete when Mobile resolves incompatible AI SDK versions. The
-workspace therefore aligns the versions required by both packages and carries matching Desktop
-patches for Google, OpenAI, OpenAI-compatible, and `ai`. Former DeepSeek and XAI patches are
-removed because their behavior is present in the newly resolved upstream versions. Expo-specific
-dependency decisions and Pi patches remain Mobile-owned.
+When a selected provider change requires a newer AI SDK contract, Mobile aligns the affected SDK
+versions and carries the matching patches. Expo-specific dependency choices and Pi patches remain
+Mobile-owned. A Desktop version bump by itself is not a reason to change the Mobile graph.
 
-## Provider Registry Is Not A Direct Copy
+## Provider Registry Is A Semantic Port
 
-`@cherrystudio/provider-registry` is independent in Desktop, but its current package shape is not
-a Mobile replacement:
+`@cherrystudio/provider-registry` is independent in Desktop, but its Node package shape cannot
+replace the Mobile package:
 
-- Desktop marks it private.
-- Its Node loader reads catalog files through `node:fs`.
-- Mobile requires statically imported JSON so Metro can include the catalog.
-- Mobile retains a compatibility projection for persisted endpoint configuration.
-- Mobile product-specific provider and remote-catalog behavior must be reconciled explicitly.
+- Desktop's Node loader reads catalog files through `node:fs`.
+- Mobile statically imports JSON so Metro can include the catalog.
+- Mobile retains a compatibility projection for persisted Provider and Model rows.
+- Mobile product-specific providers and remote-catalog behavior require explicit reconciliation.
 
-Registry schemas, creators, generated catalogs, endpoint matrices, reasoning rules, and pure
-lookup utilities must be synchronized semantically. Mobile retains only the narrow `./mobile`
-loader and documented compatibility behavior. A future published package must expose separate
-`./mobile` and `./node` entries, and its root entry must not re-export Node code.
-
-| Desktop path | Mobile treatment |
-| --- | --- |
-| `src/schemas`, `src/creators`, `src/patterns`, `src/utils` | Port behavior to the same package paths |
-| `data/*.json` | Regenerate from reconciled sources; retain approved Mobile provider extensions |
-| `src/index.ts`, `src/registry-utils.ts` | Merge shared exports while retaining `buildRuntimeEndpointConfigs` until persisted rows migrate |
-| `src/registry-loader.ts` | Keep as the `./node` entry; never expose it to Metro |
-| Mobile `src/mobile-loader.ts` | Retain as the `./mobile` static-JSON and remote-snapshot entry |
+Schemas, generated catalogs, endpoint matrices, reasoning rules, and pure lookup utilities may be
+ported by behavior. Mobile retains the `./mobile` loader and must keep Node code outside the React
+Native export graph.
 
 ### Current migration ledger
 
-Implementation does not mean admission. The rows marked implemented still require the repository's
-tests, type check, platform exports, and device acceptance before the synchronization Manifest can
-advance.
+Implementation does not mean admission. Implemented rows still require the repository tests, type
+check, platform exports, and device acceptance before the registry compatibility version advances.
 
-| Registry concern | Mobile state | Admission consequence |
+| Registry concern | Mobile state | Runtime scope |
 | --- | --- | --- |
-| Remote manifest compatibility | Implemented with an independent Desktop-semantic compatibility version | Keep the accepted line at `2.0.8`; never compare a Desktop manifest to the unrelated Mobile app version |
-| Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Prevent aliases such as `gpt-oss-20b` and `gpt-oss-120b` from collapsing to the same fallback key |
-| Reasoning wire dialects | Implemented for effort- and budget-based protocols | Runtime rehydrates the catalog dialect because the persisted Model projection does not retain all wire metadata |
-| Service tiers | Implemented as endpoint-owned request controls with per-model option narrowing | Semantic values are normalized and delivered through either provider options or JSON request-body fields |
-| Endpoint dialect and actual-cost reporting | Implemented with a narrow legacy `apiFeatures` projection | `streamOptions`, developer-role, reasoning-summary, and cost-trust facts belong to registry endpoint/provider declarations rather than Provider-id branches |
-| Server tools and model eligibility | Outstanding | Blocks Desktop `2.0.9` admission because Desktop moved provider-native Web Search ownership out of model capabilities and into `serverTools` declarations plus generated eligibility tables |
-| Compatibility validator, scripts, fixtures, and full catalog reconciliation | Outstanding | Blocks the synchronization Manifest even where individual runtime semantics have already landed |
-| Mobile-only `github` preset | Retained as an explicit product extension | Must be accepted or removed by product decision; a Desktop copy must not delete it silently |
+| Remote manifest compatibility | Implemented with an independent registry compatibility version | Shared catalog loading; accepted line remains `2.0.8` |
+| Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
+| Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
+| Reasoning wire dialects | Implemented for the AI SDK request serializer | Does not change Pi's request serializer |
+| Service tiers | Implemented for the AI SDK request path | Does not add service-tier delivery to Pi conversation requests |
+| Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
+| Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
+| Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
+| Full catalog compatibility review | Outstanding | Blocks compatibility-version and synchronization-manifest advancement |
+| Mobile-only `github` preset | Retained as a product extension | Its bundled provider-model namespace replaces any remote `github` rows |
 
 ### Remote catalog policy
 
-Mobile should retain its remote model-catalog protocol. It solves data freshness; it does not
-replace code or package synchronization. The Runtime must already understand every semantic field
-before it admits a newer Desktop snapshot.
+Mobile may fetch `models.json` and `provider-models.json` after explicit user action. Before it
+admits a newer Desktop snapshot, the Runtime must understand every required field it consumes and
+explicitly classify unsupported optional fields as ignored product capabilities.
 
-The remote payload is unsigned, so only `models.json` and `provider-models.json` may be downloaded.
-`providers.json` remains bundled and trusted: remote data may refine model descriptions,
-capabilities, and overrides, but it must not redirect API traffic, change credential behavior, or
-introduce a Provider endpoint. A new snapshot is downloaded and first activated only after explicit
-user action; an already approved cached snapshot may be reactivated during application startup.
-Incompatible manifests are rejected before download and activation.
+The remote payload is unsigned, so `providers.json` stays bundled and trusted. Remote data may
+refine model descriptions, capabilities, and overrides, but it cannot redirect API traffic, change
+credential behavior, or introduce a Provider endpoint. Incompatible manifests are rejected before
+download and activation. The Mobile-owned `github` namespace is also authoritative: bundled GitHub
+overrides replace, rather than mix with, any `github` rows in a Desktop snapshot.
 
-Desktop `2.0.9` must remain rejected until Mobile implements the complete `serverTools` consumer and
-eligibility semantics. Accepting its models first would be a functional regression: the current
-Desktop catalog no longer carries the old per-model `web-search` capability rows, while Mobile
-still relies on that representation.
+Desktop `2.0.9` remains rejected while its complete model and override payload has not passed a
+Mobile compatibility review. Provider-native `serverTools` are not by themselves an admission
+requirement: Mobile may explicitly ignore those optional declarations while its application-owned
+Web Search remains the only conversation search path. Admission must still prove that removing the
+older per-model `web-search` capability does not alter any Mobile UI, model filtering, or request
+behavior that actually consumes it.
 
 ## Pi Boundary
 
 Mobile conversation execution remains based on `@earendil-works/pi-agent-core` and
-`@earendil-works/pi-ai`. Desktop's Pi implementation is built around
-`@earendil-works/pi-coding-agent` and owns filesystem sessions, workspaces, Shell tools, skills,
-approvals, MCP adaptation, and Desktop services. It is an Electron Agent host, not a portable Pi
-library.
+`@earendil-works/pi-ai`. Desktop application code owns different filesystem sessions, workspaces,
+Shell tools, skills, approvals, MCP adaptation, and Electron services. Mobile must not copy those
+owners into its local Runtime.
 
-Mobile must not consume Desktop `PiRuntimeConnection`, `PiRuntimeDriver`, approval extension, code
-mode, filesystem resource loader, or Shell integration. A future
-`@cherrystudio/pi-runtime-core` may own only:
+A reusable provider fact can cross the boundary only after a Pi adapter consumes it. For example,
+endpoint type, base URL, headers, model limits, capability flags, and cost metadata currently feed
+`piModelResolver.ts`. AI SDK request-body transforms, provider plugins, and context middleware do
+not become Pi behavior merely because both applications call the same provider.
 
-- endpoint-to-Pi API compatibility;
-- platform-neutral model configuration;
-- stream binding through narrow `pi-ai` subpath imports;
-- error and usage normalization;
-- neutral cancellation and message transformation helpers; and
-- injected credential and fetch callbacks.
-
-Pi packages must be peer dependencies so Desktop and Mobile cannot silently load incompatible Pi
-type universes. Node functionality belongs in a separate package or explicit `./node` entry that
-is unreachable from the React Native export graph. Mobile continues to own its Agent Host,
-Runtime service, provider/model resolver, persistence, device tools, managed files, and lifecycle.
-
-The current repository-wide Pi isolation rule permits Pi imports only under
-`src/backend/ai/agent/runtime/pi`. Creating a Mobile workspace `pi-runtime-core` package therefore
-requires an explicit architecture and lint-rule change that grants that package alone a narrow
-exception. This design does not authorize adding such imports elsewhere today.
+Mobile continues to own its Agent Host, Pi Runtime, provider/model resolver, persistence, device
+tools, managed files, and lifecycle.
 
 ## Image Generation Boundary
 
-Image generation has a larger reusable surface than Pi. A future
-`@cherrystudio/ai-provider-runtime` can be extracted from Desktop custom providers and Mobile's
-existing `@cherrystudio/ai-runtime`. It should own:
+Image generation has a reusable AI SDK surface because Mobile already executes it through
+`AiService`. The `@cherrystudio/ai-runtime/image` entry is the explicit consumption boundary for
+canonical parameter splitting, the shared wire-profile engine, model routing metadata, and
+submit/poll/cancel transport contracts. Provider factories and result normalization remain in the
+same package where the current Mobile path consumes them.
 
-- provider factories and pure endpoint configuration;
-- canonical image parameter splitting;
-- wire profiles and request-body construction;
-- custom AI SDK image models;
-- submit, poll, cancel, and result normalization protocols; and
-- provider error and usage normalization.
-
-It must not own Desktop `AiService`, `FileManager`, Node `Buffer`, Desktop jobs, or Mobile painting
-jobs. The applications share how a provider is called, but retain how a generation task is
-scheduled, persisted, downloaded, presented, and recovered. Fetch, credentials, OAuth, timeout,
-download, logging, and translation are supplied through narrow host ports.
-
-Until Desktop publishes this layer, Mobile's private `@cherrystudio/ai-runtime` remains the owner
-of cross-platform AI SDK vendor adaptation and image wire behavior. It is not the conversation
-Runtime.
+Desktop jobs, `AiService`, `FileManager`, Node `Buffer`, and persistence do not cross that boundary.
+Mobile retains scheduling, storage, download, presentation, and recovery. Fetch, credentials,
+OAuth, timeout, logging, and translation enter through Mobile-owned adapters.
 
 ## Synchronization Procedure
 
-1. Resolve a clean checkout of `https://github.com/CherryHQ/cherry-studio.git` through
-   `--desktop-root`; never record a local absolute path.
-2. Run `pnpm desktop:sync:audit --desktop-root <path>` for `ai-core`, `ai-sdk-provider`, and
-   `provider-registry`, and record the Desktop commit and source hashes.
-3. For the exact mirrors, copy the complete Git-tracked tree from Desktop `packages/aiCore` to
-   Mobile `packages/ai-core`, and the same-path `packages/ai-sdk-provider` tree. Do not retain
-   Mobile-only files inside either mirror.
-4. Put caller adaptations outside the exact packages. The current Web Search configuration adapter
-   lives in [`packages/ai-runtime/src/utils/websearch.ts`](../../../packages/ai-runtime/src/utils/websearch.ts).
-5. Do not edit either mirrored package manifest after copying it. Align only the Mobile root and
-   consumer dependency ranges, `pnpm-workspace.yaml` overrides and patched-dependency keys, then
-   regenerate `pnpm-lock.yaml` with `pnpm@12.2.1`.
-6. Port `provider-registry` separately using the mapping above. Do not advance any Manifest domain
-   while its drift is unclassified or a required gate is skipped.
-7. Run `pnpm test:ai-core`, `pnpm test:ai-sdk-provider`, `pnpm typecheck`, `pnpm lint`, and
-   `pnpm format:check`. Then run the production iOS and Android Expo exports and device acceptance
-   required by [Testing And CI](../../guides/testing-and-ci.md).
-8. Re-run the audit with `--check`. Record the approved Desktop commit and per-domain source hashes
-   in [`desktop-sync-manifest.json`](../../../desktop-sync-manifest.json) only after every required
-   gate passes.
+1. Record the Desktop commit being assessed; never record a local absolute checkout path.
+2. Inventory the candidate behavior's Mobile callers and classify it as Pi conversation behavior,
+   non-conversation `AiService` behavior, or shared provider data.
+3. Reject files and exports outside that consumer closure. In particular, do not copy Desktop
+   context, host, persistence, lifecycle, or tool-loop code into the Pi path.
+4. Port the smallest production change into the owning Mobile boundary and bring over only tests
+   that protect the selected behavior.
+5. Retain Mobile's static registry loader, Expo transport, persisted-data compatibility, and
+   product-specific providers.
+6. Change AI SDK dependencies and patches only when required by the selected behavior, then
+   regenerate the lockfile with `pnpm@12.2.1`.
+7. Run the owning package tests, `pnpm typecheck`, `pnpm lint`, and `pnpm format:check`, followed by
+   the required production platform exports and device acceptance.
+8. Advance a registry compatibility manifest only after all consumed required semantics are
+   implemented, unsupported optional semantics are explicitly classified, and every required gate
+   passes.
 
 ## Published Package Admission
 
-Changing a Mobile dependency from `workspace:*` to a registry version requires all of the
-following:
+Changing a Mobile dependency from `workspace:*` to a published package additionally requires:
 
-1. The tarball contains the documented entry points, declarations, and catalog data.
-2. Its React Native export graph contains no `node:*`, Electron, `@main`, `@application`, or
-   Desktop data-service imports.
-3. The root barrel does not re-export a Node entry.
+1. The tarball contains the entry points, declarations, and catalog data Mobile consumes.
+2. Its React Native export graph contains no `node:*`, Electron, `@main`, `@application`, or Desktop
+   data-service imports.
+3. The root barrel does not re-export a Node entry or unused Desktop Runtime surface into Metro.
 4. AI SDK and Pi dependencies use compatible peer ranges and resolve to Mobile-controlled patched
    versions.
-5. Catalog data uses a static Mobile loader rather than runtime filesystem access. The package
-   exposes an explicit React Native-safe `./mobile` entry, and its root export graph remains pure.
-6. Provider request fixtures and error, cancellation, tool, stream, and image-result contracts
-   agree across Desktop and Mobile.
-7. A packed artifact is consumed by a minimal Expo application before the local mirror is
-   removed. Production iOS and Android export checks remain required before release adoption.
+5. Provider request fixtures and error, cancellation, tool, stream, and image-result contracts
+   agree for the Mobile execution path that consumes them.
+6. A packed artifact is consumed by a minimal Expo application before the local package is removed.
 
-The shared package should expose its own semantic Runtime compatibility constant. A consuming app
-version is not a valid substitute because Desktop publishes the remote registry lane and Mobile has
-an independent release cadence.
-
-A package that only passes an Electron build is not React Native compatible.
+An Electron build does not demonstrate React Native compatibility.
 
 ## Related
 
