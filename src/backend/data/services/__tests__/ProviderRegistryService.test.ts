@@ -210,4 +210,35 @@ describe('provider-registry-service', () => {
       }).wire,
     ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
   });
+
+  test('selects generation-specific native reasoning wires', () => {
+    const geminiBudgetWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      wireDialect: 'budget',
+    }).wire;
+    const anthropicBudgetWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      wireDialect: 'budget',
+    }).wire;
+
+    expect(geminiBudgetWire).toBe(REASONING_FORMAT_PROFILES.gemini.budgetWire);
+    expect(geminiBudgetWire.effort?.operations).toContainEqual({
+      target: 'thinkingConfig.thinkingBudget',
+      value: { source: 'budget' },
+    });
+    expect(anthropicBudgetWire).toBe(REASONING_FORMAT_PROFILES.anthropic.budgetWire);
+    expect(anthropicBudgetWire.auto?.operations).toContainEqual({
+      target: 'thinking.type',
+      value: { source: 'literal', value: 'enabled' },
+    });
+  });
+
+  test('ignores a budget dialect on single-dialect endpoint formats', () => {
+    expect(
+      resolveReasoningProfileFromRegistry({
+        endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        wireDialect: 'budget',
+      }).wire,
+    ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
+  });
 });

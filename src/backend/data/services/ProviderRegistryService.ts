@@ -9,6 +9,7 @@ import type {
   ProviderReasoningFormat,
   ReasoningEffort,
   ReasoningFormatType,
+  ReasoningWireDialect,
   ReasoningWireProfile,
 } from '@cherrystudio/provider-registry';
 import {
@@ -20,6 +21,7 @@ import {
   MODEL_CAPABILITY,
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
+  selectFormatWire,
 } from '@cherrystudio/provider-registry';
 import {
   getMobileRegistryLoader,
@@ -122,6 +124,7 @@ export function resolveReasoningProfileFromRegistry(input: {
   contract?: ProviderModelReasoningContract;
   endpointType: EndpointType | undefined;
   format?: ProviderReasoningFormat;
+  wireDialect?: ReasoningWireDialect;
 }): ResolvedReasoningProfile {
   const endpointDefault = input.endpointType
     ? defaultFormatByEndpoint[input.endpointType]
@@ -131,7 +134,10 @@ export function resolveReasoningProfileFromRegistry(input: {
   return {
     format,
     support: input.contract?.support,
-    wire: input.contract?.wire ?? input.format?.wire ?? formatDefault.wire,
+    wire:
+      input.contract?.wire ??
+      input.format?.wire ??
+      selectFormatWire(formatDefault, input.wireDialect),
   };
 }
 
@@ -187,6 +193,7 @@ function mergeReasoningSupport(
     defaultEffort: override?.defaultEffort ?? preset?.defaultEffort,
     supportedEfforts: override?.supportedEfforts ?? preset?.supportedEfforts,
     thinkingTokenLimits: override?.thinkingTokenLimits ?? preset?.thinkingTokenLimits,
+    wireDialect: override?.wireDialect ?? preset?.wireDialect,
   };
 }
 
@@ -466,6 +473,7 @@ export class ProviderRegistryService {
         format: endpointType
           ? profileProvider?.endpointConfigs?.[endpointType]?.reasoningFormat
           : undefined,
+        wireDialect: support?.wireDialect,
       }),
       support,
     };
@@ -512,20 +520,24 @@ export class ProviderRegistryService {
       if (contract) break;
     }
 
+    const presetReasoning = this.loader.findModel(
+      matchedOverride?.modelId ?? model.presetModelId ?? '',
+    )?.reasoning;
+    const support = mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support);
+    const wireDialect =
+      support?.wireDialect ?? this.loader.findModel(model.apiModelId ?? '')?.reasoning?.wireDialect;
     const resolved = resolveReasoningProfileFromRegistry({
       contract,
       endpointType: effectiveEndpoint,
       format: effectiveEndpoint
         ? profileProvider?.endpointConfigs?.[effectiveEndpoint]?.reasoningFormat
         : undefined,
+      wireDialect,
     });
-    const presetReasoning = this.loader.findModel(
-      matchedOverride?.modelId ?? model.presetModelId ?? '',
-    )?.reasoning;
 
     return {
       ...resolved,
-      support: mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support),
+      support,
     };
   }
 

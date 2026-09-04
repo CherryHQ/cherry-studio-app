@@ -49,6 +49,13 @@ export const ThinkingTokenLimitsSchema = z
 export const ReasoningEffortSchema = z.enum(objectValues(REASONING_EFFORT));
 
 /**
+ * Which generation-specific variant of an endpoint's native reasoning protocol
+ * a model speaks. This does not select an endpoint or adapter family.
+ */
+export const ReasoningWireDialectSchema = z.enum(['effort', 'budget']);
+export type ReasoningWireDialect = z.infer<typeof ReasoningWireDialectSchema>;
+
+/**
  * Per-model reasoning control declaration — the SOURCE from which the legacy
  * pair (`supportedEfforts` / `thinkingTokenLimits`) is DERIVED at generation
  * time (`deriveLegacyReasoningFields`). Kinds align 1:1 with models.dev
@@ -109,7 +116,7 @@ export type ReasoningControl = z.infer<typeof ReasoningControlSchema>;
 const compilableRegexSource = z.string().refine(
   (source) => {
     try {
-      new RegExp(source, 'i');
+      RegExp(source, 'i');
       return true;
     } catch {
       return false;
@@ -140,13 +147,16 @@ export const ReasoningFamilyRuleSchema = z
       .optional(),
     /** Knob-shape template for a broad family — contributes NO membership. */
     template: z.literal(true).optional(),
+    /** Native-protocol dialect for this model generation. */
+    wireDialect: ReasoningWireDialectSchema.optional(),
   })
   .refine(
     (rule) =>
       rule.template !== true ||
       rule.effort !== undefined ||
       rule.toggle !== undefined ||
-      rule.budget !== undefined,
+      rule.budget !== undefined ||
+      rule.wireDialect !== undefined,
     { message: 'a template rule with no knobs declares nothing — drop it or make it a profile' },
   );
 export type ReasoningFamilyRule = z.infer<typeof ReasoningFamilyRuleSchema>;
@@ -161,6 +171,8 @@ export const CommonReasoningFieldsSchema = {
   supportedEfforts: z.array(ReasoningEffortSchema).optional(),
   /** What the API does when no reasoning param is sent. */
   defaultEffort: ReasoningEffortSchema.optional(),
+  /** Native-protocol dialect this model generation speaks. */
+  wireDialect: ReasoningWireDialectSchema.optional(),
 };
 
 /**

@@ -1,4 +1,5 @@
 import type { ReasoningEffort } from './schemas/enums';
+import type { ReasoningWireDialect } from './schemas/model';
 import type { ReasoningFormatType } from './schemas/provider';
 import type {
   ReasoningFormatWireProfile,
@@ -35,6 +36,11 @@ const summary = (target: ReasoningWireTarget): NonBudgetOperation => ({
   value: { source: 'assistant-summary' },
 });
 
+const budgetTokens = (target: ReasoningWireTarget): ReasoningWireOperation => ({
+  target,
+  value: { source: 'budget' },
+});
+
 const mode = (
   operations: NonBudgetOperation[],
   rest: Omit<NonBudgetMode, 'operations'> = {},
@@ -50,6 +56,41 @@ const genericEffort = (summaryTarget?: ReasoningWireTarget): ReasoningWireProfil
     auto: mode([effort('reasoningEffort'), ...suffix], { effortMap: { auto: 'medium' } }),
     effort: mode([effort('reasoningEffort'), ...suffix]),
   };
+};
+
+/** Gemini 2.x uses token budgets and rejects Gemini 3's thinking-level field. */
+const geminiBudgetWire: ReasoningWireProfile = {
+  off: mode([
+    literal('thinkingConfig.includeThoughts', false),
+    literal('thinkingConfig.thinkingBudget', 0),
+  ]),
+  auto: mode([
+    literal('thinkingConfig.includeThoughts', true),
+    literal('thinkingConfig.thinkingBudget', -1),
+  ]),
+  effort: {
+    operations: [
+      literal('thinkingConfig.includeThoughts', true),
+      budgetTokens('thinkingConfig.thinkingBudget'),
+    ],
+    budget: { missing: { type: 'fallback', value: -1 } },
+  },
+};
+
+/** Claude <=4.5 uses enabled + budget_tokens and rejects adaptive thinking. */
+const anthropicEnabledBudget = {
+  operations: [
+    literal('thinking.type', 'enabled'),
+    budgetTokens('thinking.budgetTokens'),
+    literal('sendReasoning', true),
+  ],
+  budget: { missing: { type: 'fallback' as const, value: 13_312 }, clampToMaxTokens: true },
+};
+
+const anthropicBudgetWire: ReasoningWireProfile = {
+  off: mode([literal('thinking.type', 'disabled')]),
+  auto: anthropicEnabledBudget,
+  effort: anthropicEnabledBudget,
 };
 
 const formatProfiles = {
@@ -72,6 +113,7 @@ const formatProfiles = {
         { effortMap: { minimal: 'low' } },
       ),
     },
+    budgetWire: anthropicBudgetWire,
   },
   gemini: {
     wire: {
@@ -85,6 +127,7 @@ const formatProfiles = {
         effort('thinkingConfig.thinkingLevel'),
       ]),
     },
+    budgetWire: geminiBudgetWire,
   },
   ollama: {
     wire: {
@@ -100,3 +143,11 @@ const formatProfiles = {
 
 export const REASONING_FORMAT_PROFILES: Record<ReasoningFormatType, ReasoningFormatWireProfile> =
   formatProfiles;
+
+/** Select the generation-specific wire while preserving single-dialect formats. */
+export function selectFormatWire(
+  profile: ReasoningFormatWireProfile,
+  dialect: ReasoningWireDialect | undefined,
+): ReasoningWireProfile {
+  return dialect === 'budget' && profile.budgetWire ? profile.budgetWire : profile.wire;
+}

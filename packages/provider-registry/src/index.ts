@@ -16,7 +16,7 @@ export {
 export type { VendorKey } from './patterns/vendor-patterns';
 export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patterns';
 // Schema-inferred types (replaces proto types)
-export { REASONING_FORMAT_PROFILES } from './reasoningProfiles';
+export { REASONING_FORMAT_PROFILES, selectFormatWire } from './reasoningProfiles';
 // Pure lookup and transformation utilities (no fs dependency)
 export type {
   ModelLookupResult,
@@ -71,6 +71,7 @@ export type {
   ReasoningControl,
   ReasoningSupport as ProtoReasoningSupport,
   ReasoningSupport,
+  ReasoningWireDialect,
   SupportSpec,
 } from './schemas/model';
 export {
