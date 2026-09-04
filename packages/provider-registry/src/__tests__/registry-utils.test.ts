@@ -11,6 +11,7 @@ import {
   endpointImpliedCapability,
   inferAdapterFamily,
   lookupRegistryModel,
+  projectLegacyApiFeatures,
 } from '../registry-utils';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '../schemas/enums';
 import type { ModelConfig } from '../schemas/model';
@@ -183,6 +184,7 @@ describe('buildPersistedEndpointConfigs', () => {
         baseUrl: 'https://api.example.com/v1',
         modelsApiUrls: urls,
         adapterFamily: 'openai',
+        dialect: { streamOptions: false },
       },
     } as Record<string, RegistryEndpointConfig>);
 
@@ -190,6 +192,7 @@ describe('buildPersistedEndpointConfigs', () => {
     expect(config.baseUrl).toBe('https://api.example.com/v1');
     expect(config.modelsApiUrls).toEqual(urls);
     expect(config.adapterFamily).toBe('openai');
+    expect(config.dialect).toEqual({ streamOptions: false });
   });
 
   it('multiple endpoints mapped independently', () => {
@@ -239,6 +242,39 @@ describe('buildPersistedEndpointConfigs', () => {
 
     expect(result!['openai-chat-completions'].adapterFamily).toBe('openai-compatible');
     expect(result!['openai-chat-completions'].baseUrl).toBeUndefined();
+  });
+});
+
+describe('projectLegacyApiFeatures', () => {
+  it('projects endpoint and provider-owned facts for existing Mobile rows', () => {
+    expect(
+      projectLegacyApiFeatures({
+        defaultChatEndpoint: 'openai-chat-completions',
+        endpointConfigs: {
+          'openai-chat-completions': {
+            dialect: { streamOptions: false },
+            requestControls: {
+              serviceTier: {
+                default: 'standard',
+                options: ['standard'],
+                wire: {
+                  delivery: { key: 'serviceTier', type: 'provider-option' },
+                  values: { standard: 'default' },
+                },
+              },
+            },
+          },
+        },
+        id: 'example',
+        metadata: { website: {} },
+        name: 'Example',
+        reportsActualCost: true,
+      } as never),
+    ).toMatchObject({
+      reportsActualCost: true,
+      serviceTier: true,
+      streamOptions: false,
+    });
   });
 });
 

@@ -611,7 +611,8 @@
         }
       },
       "name": "OpenRouter",
-      "reportedCostCurrency": "USD"
+      "reportedCostCurrency": "USD",
+      "reportsActualCost": true
     },
     {
       "authOptional": true,
@@ -748,7 +749,89 @@
       "endpointConfigs": {
         "openai-responses": {
           "adapterFamily": "openai",
-          "baseUrl": "https://chatgpt.com/backend-api/codex"
+          "baseUrl": "https://chatgpt.com/backend-api/codex",
+          "reasoningFormat": {
+            "type": "openai-responses",
+            "wire": {
+              "auto": {
+                "effortMap": {
+                  "auto": "medium"
+                },
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "default": {
+                "operations": [
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "effort": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "off": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "literal",
+                      "value": "none"
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       },
       "fastMode": {
@@ -793,7 +876,89 @@
       "endpointConfigs": {
         "openai-responses": {
           "adapterFamily": "openai",
-          "baseUrl": "https://api.openai.com"
+          "baseUrl": "https://api.openai.com",
+          "reasoningFormat": {
+            "type": "openai-responses",
+            "wire": {
+              "auto": {
+                "effortMap": {
+                  "auto": "medium"
+                },
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "default": {
+                "operations": [
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "effort": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "off": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "literal",
+                      "value": "none"
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       },
       "id": "openai",
@@ -848,7 +1013,89 @@
           "adapterFamily": "azure"
         },
         "openai-responses": {
-          "adapterFamily": "azure-responses"
+          "adapterFamily": "azure-responses",
+          "reasoningFormat": {
+            "type": "openai-responses",
+            "wire": {
+              "auto": {
+                "effortMap": {
+                  "auto": "medium"
+                },
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "default": {
+                "operations": [
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "effort": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "effort"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "literal",
+                      "value": "auto"
+                    }
+                  },
+                  {
+                    "target": "reasoningSummary",
+                    "value": {
+                      "source": "assistant-summary"
+                    }
+                  }
+                ]
+              },
+              "off": {
+                "operations": [
+                  {
+                    "target": "reasoningEffort",
+                    "value": {
+                      "source": "literal",
+                      "value": "none"
+                    }
+                  }
+                ]
+              }
+            }
+          }
         }
       },
       "id": "azure-openai",
@@ -1436,7 +1683,10 @@
       "endpointConfigs": {
         "openai-chat-completions": {
           "adapterFamily": "mistral",
-          "baseUrl": "https://api.mistral.ai"
+          "baseUrl": "https://api.mistral.ai",
+          "dialect": {
+            "streamOptions": false
+          }
         }
       },
       "id": "mistral",
@@ -1953,5 +2203,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "f78e7ded87e44e41"
+  "version": "d7616d32aa168126"
 }

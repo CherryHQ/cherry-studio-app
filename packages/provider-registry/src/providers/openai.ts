@@ -1,4 +1,5 @@
 import { defineProvider } from './types';
+import { openaiResponsesSummaryWire } from './wires';
 
 export default defineProvider({
   id: 'openai',
@@ -8,6 +9,7 @@ export default defineProvider({
     'openai-responses': {
       adapterFamily: 'openai',
       baseUrl: 'https://api.openai.com',
+      reasoningFormat: { type: 'openai-responses', wire: openaiResponsesSummaryWire },
     },
   },
   apiFeatures: {

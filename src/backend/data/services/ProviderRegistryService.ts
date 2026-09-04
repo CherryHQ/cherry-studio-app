@@ -14,12 +14,14 @@ import type {
   ServiceTierRequestControl,
 } from '@cherrystudio/provider-registry';
 import {
+  configureOpenAIResponsesSummary,
   deriveLegacyReasoningFields,
   ENDPOINT_TYPE,
   inferReasoningControls,
   inferReasoningMembership,
   inferReasoningOwnedBy,
   MODEL_CAPABILITY,
+  projectLegacyApiFeatures,
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
@@ -34,6 +36,7 @@ import {
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type {
   ApiFeatures,
+  EndpointConfigs,
   ProviderAuthMethod,
   ProviderModelListSource,
   ProviderWebsites,
@@ -73,7 +76,7 @@ export type ProviderDisplayMetadata = {
   authMethods?: ProviderAuthMethod[];
   authOptional?: boolean;
   description?: string;
-  fastMode?: { transport: 'openai-priority' };
+  fastMode?: { serviceTier?: string; transport: 'openai-priority' };
   modelListSource?: ProviderModelListSource;
   reportedCostCurrency?: Currency;
   websites?: ProviderWebsites;
@@ -98,6 +101,7 @@ export type ModelRegistryLookup = {
  */
 export type ReasoningProviderContext = {
   defaultChatEndpoint?: EndpointType | null;
+  endpointConfigs?: EndpointConfigs;
   id: string;
   presetProviderId?: string | null;
 };
@@ -129,6 +133,7 @@ export function resolveReasoningProfileFromRegistry(input: {
   contract?: ProviderModelReasoningContract;
   endpointType: EndpointType | undefined;
   format?: ProviderReasoningFormat;
+  reasoningSummary?: boolean;
   wireDialect?: ReasoningWireDialect;
 }): ResolvedReasoningProfile {
   const endpointDefault = input.endpointType
@@ -136,13 +141,18 @@ export function resolveReasoningProfileFromRegistry(input: {
     : undefined;
   const format = input.format?.type ?? endpointDefault ?? 'openai-chat';
   const formatDefault = REASONING_FORMAT_PROFILES[format];
+  const baseWire =
+    input.contract?.wire ??
+    input.format?.wire ??
+    selectFormatWire(formatDefault, input.wireDialect);
+  const wire =
+    format === 'openai-responses' && input.reasoningSummary !== undefined
+      ? configureOpenAIResponsesSummary(baseWire, input.reasoningSummary)
+      : baseWire;
   return {
     format,
     support: input.contract?.support,
-    wire:
-      input.contract?.wire ??
-      input.format?.wire ??
-      selectFormatWire(formatDefault, input.wireDialect),
+    wire,
   };
 }
 
@@ -421,7 +431,7 @@ export class ProviderRegistryService {
       (presetProviderId ? this.loader.findProvider(presetProviderId) : undefined);
 
     return {
-      apiFeatures: provider?.apiFeatures,
+      apiFeatures: provider ? (projectLegacyApiFeatures(provider) ?? undefined) : undefined,
       authMethods: provider?.authMethods,
       authOptional: provider?.authOptional,
       description: provider?.description,
@@ -429,7 +439,12 @@ export class ProviderRegistryService {
       // only the one the AI layer implements passes through.
       fastMode:
         provider?.fastMode?.transport === 'openai-priority'
-          ? { transport: 'openai-priority' }
+          ? {
+              transport: 'openai-priority',
+              ...(provider.fastMode.serviceTier
+                ? { serviceTier: provider.fastMode.serviceTier }
+                : {}),
+            }
           : undefined,
       modelListSource: provider?.modelListSource,
       reportedCostCurrency: provider?.reportedCostCurrency,
@@ -485,6 +500,10 @@ export class ProviderRegistryService {
         endpointType,
         format: endpointType
           ? profileProvider?.endpointConfigs?.[endpointType]?.reasoningFormat
+          : undefined,
+        reasoningSummary: endpointType
+          ? (context.endpointConfigs?.[endpointType]?.dialect?.reasoningSummary ??
+            profileProvider?.endpointConfigs?.[endpointType]?.dialect?.reasoningSummary)
           : undefined,
         wireDialect: support?.wireDialect,
       }),
@@ -567,6 +586,10 @@ export class ProviderRegistryService {
       endpointType: effectiveEndpoint,
       format: effectiveEndpoint
         ? profileProvider?.endpointConfigs?.[effectiveEndpoint]?.reasoningFormat
+        : undefined,
+      reasoningSummary: effectiveEndpoint
+        ? (provider.endpointConfigs?.[effectiveEndpoint]?.dialect?.reasoningSummary ??
+          profileProvider?.endpointConfigs?.[effectiveEndpoint]?.dialect?.reasoningSummary)
         : undefined,
       wireDialect,
     });

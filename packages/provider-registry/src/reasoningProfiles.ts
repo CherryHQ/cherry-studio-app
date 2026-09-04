@@ -3,6 +3,7 @@ import type { ReasoningWireDialect } from './schemas/model';
 import type { ReasoningFormatType } from './schemas/provider';
 import type {
   ReasoningFormatWireProfile,
+  ReasoningWireMode,
   ReasoningWireOperation,
   ReasoningWireProfile,
   ReasoningWireTarget,
@@ -58,6 +59,44 @@ const genericEffort = (summaryTarget?: ReasoningWireTarget): ReasoningWireProfil
   };
 };
 
+const REASONING_SUMMARY_OPERATIONS = [
+  literal('reasoningSummary', 'auto'),
+  summary('reasoningSummary'),
+] satisfies ReasoningWireOperation[];
+
+function stripReasoningSummary(mode: ReasoningWireMode | undefined): ReasoningWireMode | undefined {
+  if (!mode) return undefined;
+  const operations = mode.operations.filter((operation) => operation.target !== 'reasoningSummary');
+  return operations.length > 0 ? ({ ...mode, operations } as ReasoningWireMode) : undefined;
+}
+
+/** Apply an explicit host compatibility choice to an OpenAI Responses wire. */
+export function configureOpenAIResponsesSummary(
+  profile: ReasoningWireProfile,
+  enabled: boolean,
+): ReasoningWireProfile {
+  if (profile.disabled) return profile;
+
+  const configured: ReasoningWireProfile = { ...profile };
+  for (const key of ['default', 'auto', 'effort'] as const) {
+    const strippedMode = stripReasoningSummary(configured[key]);
+    if (enabled) {
+      configured[key] = {
+        ...strippedMode,
+        operations: [...(strippedMode?.operations ?? []), ...REASONING_SUMMARY_OPERATIONS],
+      } as ReasoningWireMode;
+    } else if (strippedMode) {
+      configured[key] = strippedMode;
+    } else {
+      delete configured[key];
+    }
+  }
+  return configured;
+}
+
+/** Official OpenAI-compatible Responses wire with reasoning summaries enabled. */
+export const openaiResponsesSummaryWire = configureOpenAIResponsesSummary(genericEffort(), true);
+
 /** Gemini 2.x uses token budgets and rejects Gemini 3's thinking-level field. */
 const geminiBudgetWire: ReasoningWireProfile = {
   off: mode([
@@ -98,7 +137,7 @@ const formatProfiles = {
     wire: genericEffort(),
   },
   'openai-responses': {
-    wire: genericEffort('reasoningSummary'),
+    wire: genericEffort(),
   },
   anthropic: {
     wire: {

@@ -10,7 +10,7 @@ import {
   type ModelCapability,
 } from './schemas/enums';
 import type { ModelConfig } from './schemas/model';
-import type { ProviderConfig, RegistryEndpointConfig } from './schemas/provider';
+import type { EndpointDialect, ProviderConfig, RegistryEndpointConfig } from './schemas/provider';
 import type { ProviderModelOverride } from './schemas/provider-models';
 import { normalizeModelId } from './utils/normalize';
 
@@ -63,6 +63,7 @@ export interface PersistedEndpointConfig {
   baseUrl?: string;
   modelsApiUrls?: { default?: string; embedding?: string; image?: string; reranker?: string };
   adapterFamily?: string;
+  dialect?: EndpointDialect;
 }
 
 /** Mobile's current persisted endpoint shape until its Data migration adopts registry-owned profiles. */
@@ -88,6 +89,7 @@ export function buildPersistedEndpointConfigs(
     if (regConfig.baseUrl) config.baseUrl = regConfig.baseUrl;
     if (regConfig.modelsApiUrls) config.modelsApiUrls = regConfig.modelsApiUrls;
     if (regConfig.adapterFamily) config.adapterFamily = regConfig.adapterFamily;
+    if (regConfig.dialect) config.dialect = regConfig.dialect;
 
     if (Object.keys(config).length > 0) configs[k] = config;
   }
@@ -114,10 +116,38 @@ export function buildRuntimeEndpointConfigs(
     if (registryConfig.reasoningFormat?.type)
       config.reasoningFormatType = registryConfig.reasoningFormat.type;
     if (registryConfig.adapterFamily) config.adapterFamily = registryConfig.adapterFamily;
+    if (registryConfig.dialect) config.dialect = registryConfig.dialect;
     if (Object.keys(config).length > 0) configs[key] = config;
   }
 
   return Object.keys(configs).length > 0 ? configs : null;
+}
+
+/**
+ * Bridge new registry ownership into Mobile's persisted legacy feature flags.
+ * Remove after user_provider no longer stores apiFeatures.
+ */
+export function projectLegacyApiFeatures(provider: ProviderConfig): {
+  arrayContent?: boolean;
+  reportsActualCost?: boolean;
+  serviceTier?: boolean;
+  streamOptions?: boolean;
+  verbosity?: boolean;
+} | null {
+  const defaultEndpoint = provider.defaultChatEndpoint
+    ? provider.endpointConfigs?.[provider.defaultChatEndpoint]
+    : undefined;
+
+  const features = {
+    ...provider.apiFeatures,
+    ...(provider.reportsActualCost ? { reportsActualCost: true } : {}),
+    ...(defaultEndpoint?.requestControls?.serviceTier ? { serviceTier: true } : {}),
+    ...(defaultEndpoint?.dialect?.streamOptions !== undefined
+      ? { streamOptions: defaultEndpoint.dialect.streamOptions }
+      : {}),
+  };
+
+  return Object.keys(features).length > 0 ? features : null;
 }
 
 /**

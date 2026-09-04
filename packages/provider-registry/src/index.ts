@@ -16,7 +16,12 @@ export {
 export type { VendorKey } from './patterns/vendor-patterns';
 export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patterns';
 // Schema-inferred types (replaces proto types)
-export { REASONING_FORMAT_PROFILES, selectFormatWire } from './reasoningProfiles';
+export {
+  configureOpenAIResponsesSummary,
+  openaiResponsesSummaryWire,
+  REASONING_FORMAT_PROFILES,
+  selectFormatWire,
+} from './reasoningProfiles';
 // Pure lookup and transformation utilities (no fs dependency)
 export type {
   ModelLookupResult,
@@ -30,6 +35,7 @@ export {
   inferAdapterFamily,
   lookupRegistryModel,
   lookupRegistryProvider,
+  projectLegacyApiFeatures,
 } from './registry-utils';
 // Enum types (PascalCase, derived from const objects)
 export type {
@@ -80,6 +86,7 @@ export {
   ReasoningControlSchema,
 } from './schemas/model';
 export type {
+  EndpointDialect,
   ProviderConfig as ProtoProviderConfig,
   ProviderConfig,
   ProviderReasoningFormat as ProtoProviderReasoningFormat,
@@ -92,6 +99,7 @@ export type {
   ServiceTierSelection,
 } from './schemas/provider';
 export {
+  EndpointDialectSchema,
   FastModeTransportSchema,
   REASONING_FORMAT_TYPES,
   ServiceTierDeliverySchema,

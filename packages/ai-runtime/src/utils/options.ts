@@ -52,12 +52,13 @@ export function applyFastModeToProviderOptions(
   if (!fastMode || !model.supportsFastMode || provider.fastMode?.transport !== 'openai-priority') {
     return providerOptions;
   }
+  const serviceTier = provider.fastMode.serviceTier ?? 'priority';
 
   return {
     ...providerOptions,
     openai: {
       ...providerOptions.openai,
-      serviceTier: 'priority',
+      serviceTier,
     },
   };
 }

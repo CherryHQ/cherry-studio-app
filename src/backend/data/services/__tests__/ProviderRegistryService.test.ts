@@ -242,6 +242,25 @@ describe('provider-registry-service', () => {
     ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
   });
 
+  test('adds Responses summaries only for hosts that explicitly accept them', () => {
+    const defaultWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+    }).wire;
+    const enabledWire = resolveReasoningProfileFromRegistry({
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      reasoningSummary: true,
+    }).wire;
+    const targets = (wire: typeof defaultWire) =>
+      Object.values(wire).flatMap((mode) =>
+        mode && typeof mode === 'object' && 'operations' in mode
+          ? mode.operations.map((operation) => operation.target)
+          : [],
+      );
+
+    expect(targets(defaultWire)).not.toContain('reasoningSummary');
+    expect(targets(enabledWire)).toContain('reasoningSummary');
+  });
+
   test('resolves endpoint service-tier wire with model-specific options', () => {
     const service = new ProviderRegistryService({
       findOverride: () => ({

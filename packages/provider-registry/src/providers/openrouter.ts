@@ -9,6 +9,7 @@ export default defineProvider({
   apiFeatures: {
     reportsActualCost: true,
   },
+  reportsActualCost: true,
   reportedCostCurrency: CURRENCY.USD,
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {

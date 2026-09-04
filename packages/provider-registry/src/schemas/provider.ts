@@ -136,6 +136,16 @@ export const ProviderWebsiteSchema = z.object({
   }),
 });
 
+/** Provider-specific deviations from one endpoint protocol. */
+export const EndpointDialectSchema = z.object({
+  /** Accepts chat-completions stream_options for usage data. Absent means true. */
+  streamOptions: z.boolean().optional(),
+  /** Accepts messages with role developer. Absent means false. */
+  developerRole: z.boolean().optional(),
+  /** Accepts OpenAI Responses reasoning.summary. */
+  reasoningSummary: z.boolean().optional(),
+});
+
 /** Per-endpoint-type configuration in registry */
 export const RegistryEndpointConfigSchema = z.object({
   /** Base URL for this endpoint type's API */
@@ -161,6 +171,8 @@ export const RegistryEndpointConfigSchema = z.object({
    * heuristic id/baseUrl inference when present.
    */
   adapterFamily: z.string().optional(),
+  /** Dialect deviations of this host's implementation of the endpoint. */
+  dialect: EndpointDialectSchema.optional(),
   /** User-selectable request controls supported by this endpoint. */
   requestControls: z
     .object({
@@ -222,6 +234,8 @@ export const ProviderConfigSchema = z
     authOptional: z.boolean().default(false),
     /** API feature flags controlling request construction */
     apiFeatures: ApiFeaturesSchema.optional(),
+    /** Whether usage responses carry the actual billed amount. */
+    reportsActualCost: z.boolean().default(false),
     /**
      * Registry-owned currency for provider-reported costs whose wire payload
      * carries an amount but no currency. Absent means the amount stays
@@ -229,7 +243,9 @@ export const ProviderConfigSchema = z
      */
     reportedCostCurrency: ZodCurrencySchema,
     /** Provider-owned Fast request transport. Effective support is declared per provider-model pair. */
-    fastMode: z.object({ transport: FastModeTransportSchema }).optional(),
+    fastMode: z
+      .object({ transport: FastModeTransportSchema, serviceTier: z.string().optional() })
+      .optional(),
     /** Additional metadata including website URLs */
     metadata: MetadataSchema.and(ProviderWebsiteSchema),
   })
@@ -252,6 +268,7 @@ export const ProviderListSchema = z.object({
 
 export { ENDPOINT_TYPE } from './enums';
 export type ApiFeatures = z.infer<typeof ApiFeaturesSchema>;
+export type EndpointDialect = z.infer<typeof EndpointDialectSchema>;
 export type ServiceTierSelection = z.infer<typeof ServiceTierSelectionSchema>;
 export type ServiceTierOptions = z.infer<typeof ServiceTierOptionsSchema>;
 export type ServiceTierDelivery = z.infer<typeof ServiceTierDeliverySchema>;
