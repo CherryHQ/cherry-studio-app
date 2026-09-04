@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
+import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
 import type { Model } from '@/shared/data/types/model';
 
 export type MessageListItem = Readonly<{
@@ -21,9 +21,9 @@ export type MessageListItem = Readonly<{
     type: 'fork-origin';
     sourceSessionId: string;
   }>;
+  /** Message-owned runtime timing and materialized provider statistics. */
+  stats?: MessageStats;
   status: MessageStatus;
-  /** Last persisted update; terminal assistant messages use it as their completion time. */
-  updatedAt?: string;
 }>;
 
 export type MessageListProps = {

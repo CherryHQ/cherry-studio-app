@@ -41,7 +41,7 @@ describe('ProcessGroupPart', () => {
     renderer = undefined;
   });
 
-  test('uses the persisted message lifetime as the total process duration', () => {
+  test('uses runtime timing and excludes overlapping approval waits', () => {
     const part = { state: 'done' as const, text: 'Reasoning', type: 'reasoning' as const };
     const message: MessageListItem = {
       createdAt: '2026-09-02T00:00:00.000Z',
@@ -49,7 +49,30 @@ describe('ProcessGroupPart', () => {
       id: 'assistant-1',
       role: 'assistant',
       status: 'success',
-      updatedAt: '2026-09-02T00:00:16.000Z',
+      stats: {
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 21_000,
+          spans: [
+            {
+              id: 'approval:one',
+              kind: 'approval-wait',
+              approvalId: 'one',
+              toolCallId: 'tool-one',
+              startedAt: 3_000,
+              completedAt: 6_000,
+            },
+            {
+              id: 'approval:two',
+              kind: 'approval-wait',
+              approvalId: 'two',
+              toolCallId: 'tool-two',
+              startedAt: 5_000,
+              completedAt: 9_000,
+            },
+          ],
+        },
+      },
     };
 
     act(() => {
@@ -67,7 +90,7 @@ describe('ProcessGroupPart', () => {
 
     expect(renderer!.root.findByType('MessagePartProcess').props).toMatchObject({
       state: 'complete',
-      title: '用时 16秒',
+      title: '用时 14秒',
     });
     expect(renderer!.root.findByType('MessagePartRenderer').props.isStreaming).toBe(false);
   });

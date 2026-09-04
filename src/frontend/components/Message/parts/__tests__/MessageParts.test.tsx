@@ -146,7 +146,9 @@ describe('MessageParts', () => {
         partKeys: ['reasoning-key', 'tool-key', 'text-key'],
         parts: [reasoningPart, toolPart, { text: 'Answer', type: 'text' }],
       },
-      updatedAt: '2026-09-02T00:00:16.000Z',
+      stats: {
+        runtimeTiming: { startedAt: 1_000, completedAt: 17_000, spans: [] },
+      },
     };
 
     const renderer = render(<MessageParts isTextSelectionEnabled message={message} />);

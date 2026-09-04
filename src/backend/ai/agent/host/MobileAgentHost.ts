@@ -97,6 +97,7 @@ import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
+import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import {
   toAgentApprovalView,
   toAgentErrorView,
@@ -181,6 +182,7 @@ type ActiveTurnState = {
   pendingApprovals: Map<string, AgentApprovalView>;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
+  runtimeTiming: MessageRuntimeTimingCollector;
   sessionTurnIds: Set<string>;
   usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
@@ -626,14 +628,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     runtimeSession: AgentRuntimeSession,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
-    // The Turn projection starts here: reservation time is the turn start.
+    // Match desktop timing ownership: execution starts when the Host launches
+    // the Runtime, independently from the placeholder row's creation time.
+    const runtimeStartedAt = Date.now();
+    const runtimeTiming = new MessageRuntimeTimingCollector(undefined, runtimeStartedAt);
     const turn: AgentTurnView = {
       id: reserved.turnId,
       sessionId,
       status: 'running',
       assistantMessageId: reserved.assistantMessage.id,
       error: null,
-      startedAt: reserved.assistantMessage.createdAt,
+      startedAt: new Date(runtimeStartedAt).toISOString(),
       endedAt: null,
     };
     const state: ActiveTurnState = {
@@ -654,6 +659,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       pendingApprovals: new Map(),
       pendingContextCheckpoint: null,
       resources: plan.resources,
+      runtimeTiming,
       sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
       usage: null,
       runtimeSession,
@@ -715,6 +721,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         tools: [...plan.tools],
         options: plan.agent.options,
+        runtimeTimingSink: state.runtimeTiming.sink,
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
@@ -829,6 +836,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         // Approvals and live turn status are Host state by design: they never
         // survive a restart (agent-persistence.md).
         const approval = toAgentApprovalView(event.approval, sessionId);
+        state.runtimeTiming.startApproval(approval.id, approval.toolCallId, approval.displayName);
         state.pendingApprovals.set(approval.id, approval);
         state.turn = { ...state.turn, status: 'awaiting-approval' };
         state.backgroundReply.awaitApproval(state.assistantMessage);
@@ -838,6 +846,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       case 'approval.resolved': {
         const approval = toAgentApprovalView(event.approval, sessionId);
+        state.runtimeTiming.finishApproval({ approvalId: approval.id });
         state.pendingApprovals.set(approval.id, approval);
         const hasPending = [...state.pendingApprovals.values()].some(
           (entry) => entry.status === 'pending',
@@ -891,6 +900,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
   ): Promise<void> {
+    const terminalAt = Date.now();
+    state.runtimeTiming.closeOpenSpans(terminalAt);
+    state.runtimeTiming.complete(terminalAt);
+    const timingSnapshot = state.runtimeTiming.snapshot();
+    const runtimeTiming = {
+      ...timingSnapshot,
+      completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
+    };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
       state.assistantMessage.parts.map((part) =>
         (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
@@ -915,12 +932,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
+      runtimeStats: { runtimeTiming },
     });
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,
       error,
-      endedAt: finalized.updatedAt,
+      endedAt: new Date(runtimeTiming.completedAt).toISOString(),
     };
 
     if (this.activeTurns.get(sessionId) === state) {
@@ -937,7 +955,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           : logger.error.bind(logger);
       logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
-        durationMs: Math.max(0, Date.parse(finalized.updatedAt) - Date.parse(state.turn.startedAt)),
+        durationMs: Math.max(0, runtimeTiming.completedAt - runtimeTiming.startedAt),
         hasUsage: state.usage !== null,
         modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
         providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,

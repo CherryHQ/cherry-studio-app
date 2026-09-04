@@ -26,6 +26,7 @@ import {
 import type {
   AgentRuntime,
   AgentRuntimeSession,
+  MessageRuntimeTimingSink,
   RuntimeDescriptor,
   RuntimeError,
   RuntimeEvent,
@@ -217,6 +218,7 @@ type ActiveTurn = {
   nextMessageOrdinal: number;
   nextPartIndex: number;
   phase: TurnPhase;
+  runtimeTimingSink?: MessageRuntimeTimingSink;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
@@ -611,6 +613,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
       phase: 'running',
+      runtimeTimingSink: request.runtimeTimingSink,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
       toolCallCount: 0,
@@ -1073,6 +1076,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
       return output;
     }
 
+    const toolStartedAt = performance.now();
+    turn.runtimeTimingSink?.onToolExecutionStart({
+      callId: toolCallId,
+      toolName: activity.providerName,
+    });
     try {
       const modelOutputCharacterLimit = Math.floor(
         Math.max(0, turn.modelContextHeadroomTokens) * PI_ESTIMATED_CHARACTERS_PER_TOKEN,
@@ -1109,6 +1117,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.settledToolCalls.add(toolCallId);
       this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
       return output;
+    } finally {
+      turn.runtimeTimingSink?.onToolExecutionEnd({
+        callId: toolCallId,
+        toolName: activity.providerName,
+        durationMs: Math.max(0, performance.now() - toolStartedAt),
+      });
     }
   }
 
@@ -1208,6 +1222,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     this.replaceToolPart(turn, part, { state: 'running' });
+    const toolStartedAt = performance.now();
+    turn.runtimeTimingSink?.onToolExecutionStart({
+      callId: toolCallId,
+      toolName: runtimeTool.providerName,
+    });
     try {
       const callbackSignal = signal
         ? AbortSignal.any([turn.abortController.signal, signal])
@@ -1240,6 +1259,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       return output;
+    } finally {
+      turn.runtimeTimingSink?.onToolExecutionEnd({
+        callId: toolCallId,
+        toolName: runtimeTool.providerName,
+        durationMs: Math.max(0, performance.now() - toolStartedAt),
+      });
     }
   }
 

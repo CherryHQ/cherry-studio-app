@@ -185,6 +185,11 @@ export type RuntimeTool = {
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 
+export interface MessageRuntimeTimingSink {
+  onToolExecutionStart(event: { callId: string; toolName?: string }): void;
+  onToolExecutionEnd(event: { callId: string; toolName?: string; durationMs: number }): void;
+}
+
 export type RuntimeExecutionRequest = {
   turnId: string;
   /** Host-prepared application prompt: mobile Runtime rules, App language, and Agent instructions. */
@@ -195,6 +200,7 @@ export type RuntimeExecutionRequest = {
   input: RuntimeInputPart[];
   tools: RuntimeTool[];
   options: RuntimeOptions;
+  runtimeTimingSink?: MessageRuntimeTimingSink;
 };
 
 export type RuntimeOutputPart =

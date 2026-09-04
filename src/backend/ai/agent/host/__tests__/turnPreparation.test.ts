@@ -336,6 +336,7 @@ function textMessage(id: string, turnId: string): AgentMessageView {
     status: 'success',
     parts: [{ id: `${id}-part`, type: 'text', text: 'Later message.', state: 'done' }],
     usage: null,
+    stats: null,
     modelId: null,
     inferenceSnapshot: null,
     createdAt: NOW,

@@ -141,7 +141,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'context_checkpoint',
-        'activity_at',
+        'stats',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',
@@ -261,10 +261,10 @@ describe('bundled SQLite migrations', () => {
         ) VALUES ('binding-tool', 'agent-1', 'mcp', 'server-1', 'write', 0, 'deny', 1, 1);
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
         VALUES ('session-1', 'agent-1', 1, 1, 1);
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1, 1);
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
       `);
       expect(
         database.prepare("SELECT tool_approval_mode FROM agent WHERE id = 'agent-1'").get(),
@@ -294,24 +294,24 @@ describe('bundled SQLite migrations', () => {
       // race the partial unique index exists to reject.
       expect(() =>
         database.exec(`
-          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2, 2);
+          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
         `),
       ).toThrow(/UNIQUE/);
       // Settling the first frees the slot for the next reservation.
       database.exec(`
         UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2, 2);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2);
       `);
       expect(() =>
         database.exec(
-          "INSERT INTO agent_session_message (id, session_id, role, data, status, activity_at, created_at, updated_at) VALUES ('m-bad', 'session-1', 'root', '{}', 'success', 3, 3, 3)",
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'root', '{}', 'success', 3, 3)",
         ),
       ).toThrow(/agent_session_message_role_check/);
       expect(() =>
         database.exec(
-          "INSERT INTO agent_session_message (id, session_id, role, data, status, activity_at, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3, 3)",
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3)",
         ),
       ).toThrow(/agent_session_message_status_check/);
       // A fork points back at its source. Deleting the source must clear the
@@ -555,7 +555,7 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test('backfills message activity independently from later row updates', () => {
+  test('converts message activity into desktop-aligned runtime timing', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
@@ -587,24 +587,31 @@ describe('bundled SQLite migrations', () => {
 
       applyMigrationsAsDrizzleWould(database, entries.slice(activityMigrationIndex));
 
-      expect(
-        database
-          .prepare('SELECT id, activity_at AS activityAt FROM agent_session_message ORDER BY id')
-          .all(),
-      ).toEqual([
-        { activityAt: 2, id: 'copied-terminal' },
-        { activityAt: 5, id: 'normal-terminal' },
-        { activityAt: 3, id: 'recovered-terminal' },
+      const migrated = database
+        .prepare('SELECT id, stats FROM agent_session_message ORDER BY id')
+        .all() as { id: string; stats: string }[];
+      expect(migrated.map(({ id, stats }) => ({ id, stats: JSON.parse(stats) }))).toEqual([
+        {
+          id: 'copied-terminal',
+          stats: { runtimeTiming: { startedAt: 2, completedAt: 2, spans: [] } },
+        },
+        {
+          id: 'normal-terminal',
+          stats: { runtimeTiming: { startedAt: 2, completedAt: 5, spans: [] } },
+        },
+        {
+          id: 'recovered-terminal',
+          stats: { runtimeTiming: { startedAt: 3, completedAt: 3, spans: [] } },
+        },
       ]);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(
-        (
-          database.prepare("PRAGMA table_info('agent_session_message')").all() as {
-            name: string;
-            notnull: number;
-          }[]
-        ).find(({ name }) => name === 'activity_at'),
-      ).toEqual(expect.objectContaining({ name: 'activity_at', notnull: 1 }));
+      const columns = database.prepare("PRAGMA table_info('agent_session_message')").all() as {
+        name: string;
+      }[];
+      expect(columns).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'stats' })]));
+      expect(columns).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'activity_at' })]),
+      );
     } finally {
       database.close();
     }

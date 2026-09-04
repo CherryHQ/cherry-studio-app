@@ -84,8 +84,8 @@ none of them needs a row of its own:
   interrupts everything unfinished, so persisting these states stores only dead values;
 - *terminal facts* — turn terminal statuses map one-to-one onto message statuses
   (`completed→success`, `failed→error`, `cancelled`, `interrupted`), usage already lives on the
-  assistant message, `startedAt`/`endedAt` are its `createdAt`/terminal `updatedAt`, and the
-  turn-level error gets an `error` column on the message row.
+  assistant message, `startedAt`/`endedAt` come from its `stats.runtimeTiming`, and the turn-level
+  error gets an `error` column on the message row.
 
 The Host synthesizes `AgentTurnView` from the assistant message row plus its live state; the
 protocol keeps Turn as a UI-facing concept unchanged.
@@ -204,7 +204,7 @@ specific MCP tools. Plain indexes cover Agent listing/cascade and MCP server del
 | `title` | text | NOT NULL DEFAULT `''` | |
 | `titleIsManual` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
-| `lastActivityAt` | integer | NOT NULL | Latest real conversation activity; mirrors the relevant message `activityAt` |
+| `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
 | `forkBoundaryMessageId` | text | NULL | Message inside the fork that closes the copied prefix; maintained atomically with lineage and not a cross-table FK |
@@ -223,13 +223,13 @@ recency; no `orderKey`).
 | `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `usage` | text (json) | NULL | Assistant messages only |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
 | `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
-| `activityAt` | integer | NOT NULL | Conversation-event time; initialized on reservation, copied with history, and advanced only by normal terminal settlement |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
 Indexes: `(sessionId, createdAt)`, `turnId`, `status` (backs boot reconciliation), unique
@@ -265,12 +265,13 @@ projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, usage, turn-level error, and an optional validated context checkpoint — in one
-  write (invariant 5). Failed, cancelled, and interrupted terminal rows force the checkpoint to
-  `NULL`. The error part and turn-level error column receive the same `AgentErrorView`; historical
-  rows without a failure snapshot remain valid. Reservation writes one `activityAt` across the
-  user/assistant pair and Session; normal finalization advances the assistant and Session activity
-  with one new value while their physical `updatedAt` fields remain row timestamps.
+  status, parts, usage, `stats.runtimeTiming`, turn-level error, and an optional validated context
+  checkpoint — in one write (invariant 5). Failed, cancelled, and interrupted terminal rows force
+  the checkpoint to `NULL`. The error part and turn-level error column receive the same
+  `AgentErrorView`; historical rows without a failure snapshot remain valid. Reservation advances
+  Session `lastActivityAt` to the assistant placeholder's `createdAt`; normal finalization advances
+  it to `stats.runtimeTiming.completedAt`. Message and Session `updatedAt` remain physical row
+  modification timestamps.
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
   cascading the source delete to its messages.
@@ -278,11 +279,12 @@ projection:
   It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
   or else from the source, sets
   `forkedFromSessionId`, records the reissued copied anchor as `forkBoundaryMessageId`, and copies
-  `lastActivityAt` from the source message's `activityAt` at the inclusive fork point. Creating the
-  fork is an administrative row mutation, not conversation
+  `lastActivityAt` from the source assistant's `stats.runtimeTiming.completedAt` at the inclusive
+  fork point, falling back to the anchor's `createdAt` when it has no completed runtime. Creating
+  the fork is an administrative row mutation, not conversation
   activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
   the original reservation activity because it is not new conversation activity. Copied rows keep
-  `createdAt`, `activityAt`, `role`, `data`, `status`, `usage`, `error`,
+  `createdAt`, `role`, `data`, `status`, `usage`, `stats`, `error`,
   `modelId`, and `messageSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the

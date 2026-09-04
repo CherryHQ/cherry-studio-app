@@ -261,6 +261,7 @@ function messageWithFile(file: ManagedFileFact): AgentMessageView {
       },
     ],
     usage: null,
+    stats: null,
     modelId: null,
     inferenceSnapshot: null,
     createdAt: NOW,
