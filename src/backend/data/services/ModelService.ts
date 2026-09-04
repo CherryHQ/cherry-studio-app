@@ -164,6 +164,7 @@ function enrichModelFromRegistry(row: UserModelRow): Model {
         row.providerId,
         registryData.reasoningProfile.wire,
         registryData.reasoningProfile.support,
+        registryData.serviceTierControl,
       )
     : undefined;
   const baseline = row.presetModelId
@@ -263,6 +264,7 @@ function buildCreateValues(input: CreateModelInput): ModelInputWithoutOrderKey {
     input.providerId,
     input.registryData.reasoningProfile.wire,
     input.registryData.reasoningProfile.support,
+    input.registryData.serviceTierControl,
   );
   return presetDeltaToInsert(input, baseline, input.registryData.presetModel.id);
 }

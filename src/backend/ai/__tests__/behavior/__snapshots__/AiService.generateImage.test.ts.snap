@@ -3,7 +3,7 @@
 exports[`AiService.generateImage AI SDK contract maps generation parameters into the image model call and records usage: generation call 1`] = `
 {
   "headers": {
-    "user-agent": "ai/6.0.183",
+    "user-agent": "ai/6.0.185",
     "x-contract": "image",
   },
   "n": 2,
@@ -59,7 +59,7 @@ exports[`AiService.generateImage AI SDK contract maps input data URLs into image
     },
   ],
   "headers": {
-    "user-agent": "ai/6.0.183",
+    "user-agent": "ai/6.0.185",
   },
   "n": 1,
   "prompt": "Add a leaf.",

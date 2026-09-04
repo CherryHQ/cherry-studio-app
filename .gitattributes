@@ -1,7 +1,9 @@
 * text=auto eol=lf
 packages/ui/nitrogen/generated/** whitespace=-blank-at-eol
 packages/ai-sdk-provider/README.md whitespace=-blank-at-eol
-patches/@ai-sdk__deepseek@2.0.30.patch whitespace=-blank-at-eol
-patches/@ai-sdk__openai-compatible@2.0.62.patch whitespace=-blank-at-eol
+patches/@ai-sdk__google@3.0.113.patch whitespace=-blank-at-eol
+patches/@ai-sdk__openai-compatible@2.0.72.patch whitespace=-blank-at-eol
+patches/@ai-sdk__openai@3.0.53.patch whitespace=-blank-at-eol
+patches/ai@6.0.185.patch whitespace=-blank-at-eol
 patches/@openrouter__ai-sdk-provider@2.10.0.patch whitespace=-blank-at-eol
 patches/ollama-ai-provider-v2@3.3.1.patch whitespace=-blank-at-eol

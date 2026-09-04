@@ -9,6 +9,16 @@ export default defineProvider({
       adapterFamily: 'groq',
       baseUrl: 'https://api.groq.com/openai',
       reasoningFormat: { type: 'none' },
+      requestControls: {
+        serviceTier: {
+          default: 'standard',
+          options: ['standard', 'auto', 'flex'],
+          wire: {
+            delivery: { type: 'provider-option', key: 'serviceTier' },
+            values: { standard: 'on_demand', auto: 'auto', fast: 'performance', flex: 'flex' },
+          },
+        },
+      },
     },
   },
   apiFeatures: {

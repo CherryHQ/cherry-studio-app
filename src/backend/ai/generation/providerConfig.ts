@@ -40,6 +40,7 @@ import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderSer
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
+import { resolveEndpointDialect } from '@/shared/data/types/provider';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 // Config dispatch reads the extension registry before Agent construction.
@@ -224,7 +225,10 @@ export async function resolveProviderAiSdkConfig(
         providerSettings: {
           ...builderContext.baseConfig,
           ...buildCommonOptions(builderContext),
-          includeUsage: builderContext.actualProvider.apiFeatures.streamOptions,
+          includeUsage: resolveEndpointDialect(
+            builderContext.actualProvider,
+            builderContext.endpointType,
+          ).streamOptions,
         },
       })),
     },
@@ -451,7 +455,7 @@ function buildOpenAICompatibleConfig(ctx: BuilderContext): ProviderConfig<'opena
       ...ctx.baseConfig,
       ...commonOptions,
       name: ctx.actualProvider.id,
-      includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
+      includeUsage: resolveEndpointDialect(ctx.actualProvider, ctx.endpointType).streamOptions,
     },
   };
 }
@@ -566,7 +570,7 @@ function buildGenericProviderConfig(ctx: BuilderContext): ProviderConfig {
     providerSettings: {
       ...ctx.baseConfig,
       ...commonOptions,
-      includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
+      includeUsage: resolveEndpointDialect(ctx.actualProvider, ctx.endpointType).streamOptions,
     },
   };
 }
@@ -613,7 +617,7 @@ function buildDashScopeConfig(ctx: BuilderContext): ProviderConfig<'dashscope'> 
     providerSettings: {
       ...ctx.baseConfig,
       headers: { ...ctx.connection.headers },
-      includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
+      includeUsage: resolveEndpointDialect(ctx.actualProvider, ctx.endpointType).streamOptions,
     },
   };
 }

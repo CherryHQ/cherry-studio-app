@@ -5,9 +5,10 @@ import { createAbortError } from './transportUtils';
 
 /**
  * Per-model transport routing — which endpoint to POST, whether to poll, and
- * which response family to parse. Derived in main from the registry's
- * `modes[mode].vendorTransport` (NOT a user param), so it travels on its own
- * typed channel (the job payload / submit input), not the `providerParams` bag.
+ * which response family to parse. Main derives it from the registry's
+ * `modes[mode].vendorTransport`, carries it through the AI SDK's internal
+ * provider-options envelope, and this adapter validates it before exposing the
+ * typed submit/poll channel. It is routing metadata, not a user parameter.
  */
 export interface ImageTransportDescriptor {
   id: string;
@@ -45,6 +46,7 @@ export interface ImageGenerationSubmitInput {
   prompt: string | undefined;
   n: number;
   size: `${number}x${number}` | undefined;
+  aspectRatio?: `${number}:${number}`;
   seed: number | undefined;
   files: ImageModelV3CallOptions['files'];
   mask: ImageModelV3CallOptions['mask'];
@@ -63,6 +65,22 @@ export interface ImageGenerationSubmitInput {
 export interface CreateImageGenerationModelOptions {
   provider: string;
   transport: ImageGenerationTransport;
+}
+
+function readModelDescriptor(value: unknown): ImageTransportDescriptor | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const descriptor = value as Partial<ImageTransportDescriptor>;
+  if (typeof descriptor.id !== 'string' || typeof descriptor.endpoint !== 'string') {
+    return undefined;
+  }
+
+  return {
+    id: descriptor.id,
+    endpoint: descriptor.endpoint,
+    ...(typeof descriptor.isSync === 'boolean' && { isSync: descriptor.isSync }),
+    ...(descriptor.mode && { mode: descriptor.mode }),
+  };
 }
 
 /**
@@ -93,6 +111,7 @@ export function createImageGenerationModel(
 
       const providerParams =
         (options.providerOptions?.[provider] as Record<string, unknown> | undefined) ?? {};
+      const modelDescriptor = readModelDescriptor(providerParams.modelDescriptor);
 
       const onProgress =
         typeof providerParams.onProgress === 'function'
@@ -104,9 +123,11 @@ export function createImageGenerationModel(
         prompt: options.prompt,
         n: options.n,
         size: options.size,
+        aspectRatio: options.aspectRatio,
         seed: options.seed,
         files: options.files,
         mask: options.mask,
+        modelDescriptor,
         providerParams,
         signal: abortSignal,
       });
@@ -133,7 +154,11 @@ export function createImageGenerationModel(
 
         abortSignal?.addEventListener('abort', cancelRemoteTask, { once: true });
         try {
-          urls = await transport.poll(submitResult.taskId, { signal: abortSignal, onProgress });
+          urls = await transport.poll(submitResult.taskId, {
+            signal: abortSignal,
+            onProgress,
+            modelDescriptor,
+          });
         } finally {
           abortSignal?.removeEventListener('abort', cancelRemoteTask);
         }

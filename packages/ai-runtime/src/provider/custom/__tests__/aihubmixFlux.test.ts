@@ -46,8 +46,9 @@ describe('AihubmixFluxTransport', () => {
       ...baseInput,
       modelId: 'flux-2-pro',
       prompt: 'a fox',
+      aspectRatio: '16:9',
       seed: 42,
-      providerParams: { aspect_ratio: '16:9', safetyTolerance: 3 },
+      providerParams: { safetyTolerance: 3 },
     });
 
     expect(result).toEqual({ taskId: 'task-1' });

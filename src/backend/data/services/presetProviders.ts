@@ -1,5 +1,9 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
-import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  buildRuntimeEndpointConfigs,
+  ENDPOINT_TYPE,
+  projectLegacyApiFeatures,
+} from '@cherrystudio/provider-registry';
 
 import type { ApiFeatures, AuthConfig } from '@/shared/data/types/provider';
 
@@ -59,17 +63,7 @@ function getAuthConfig(providerId: string): AuthConfig | null {
 }
 
 function toApiFeatures(provider: ProtoProviderConfig): ApiFeatures | null {
-  if (!provider.apiFeatures) {
-    return null;
-  }
-
-  return {
-    arrayContent: provider.apiFeatures.arrayContent,
-    reportsActualCost: provider.apiFeatures.reportsActualCost,
-    serviceTier: provider.apiFeatures.serviceTier,
-    streamOptions: provider.apiFeatures.streamOptions,
-    verbosity: provider.apiFeatures.verbosity,
-  };
+  return projectLegacyApiFeatures(provider);
 }
 
 export function createPresetProviderInput(provider: ProtoProviderConfig): CreateProviderInput {

@@ -9,17 +9,22 @@ import type {
   ProviderReasoningFormat,
   ReasoningEffort,
   ReasoningFormatType,
+  ReasoningWireDialect,
   ReasoningWireProfile,
+  ServiceTierRequestControl,
 } from '@cherrystudio/provider-registry';
 import {
+  configureOpenAIResponsesSummary,
   deriveLegacyReasoningFields,
   ENDPOINT_TYPE,
   inferReasoningControls,
   inferReasoningMembership,
   inferReasoningOwnedBy,
   MODEL_CAPABILITY,
+  projectLegacyApiFeatures,
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
+  selectFormatWire,
 } from '@cherrystudio/provider-registry';
 import {
   getMobileRegistryLoader,
@@ -31,6 +36,7 @@ import {
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type {
   ApiFeatures,
+  EndpointConfigs,
   ProviderAuthMethod,
   ProviderModelListSource,
   ProviderWebsites,
@@ -62,12 +68,15 @@ export type ResolvedReasoningProfile = {
   wire: ReasoningWireProfile;
 };
 
+export type ResolvedServiceTierControl = ServiceTierRequestControl;
+type RuntimeServiceTierControl = Pick<ServiceTierRequestControl, 'default' | 'options'>;
+
 export type ProviderDisplayMetadata = {
   apiFeatures?: ApiFeatures;
   authMethods?: ProviderAuthMethod[];
   authOptional?: boolean;
   description?: string;
-  fastMode?: { transport: 'openai-priority' };
+  fastMode?: { serviceTier?: string; transport: 'openai-priority' };
   modelListSource?: ProviderModelListSource;
   reportedCostCurrency?: Currency;
   websites?: ProviderWebsites;
@@ -83,6 +92,7 @@ export type ModelRegistryLookup = {
   presetModel: ProtoModelConfig | null;
   reasoningProfile: ResolvedReasoningProfile;
   registryOverride: ProtoProviderModelOverride | null;
+  serviceTierControl?: ResolvedServiceTierControl;
 };
 
 /**
@@ -91,6 +101,7 @@ export type ModelRegistryLookup = {
  */
 export type ReasoningProviderContext = {
   defaultChatEndpoint?: EndpointType | null;
+  endpointConfigs?: EndpointConfigs;
   id: string;
   presetProviderId?: string | null;
 };
@@ -122,16 +133,26 @@ export function resolveReasoningProfileFromRegistry(input: {
   contract?: ProviderModelReasoningContract;
   endpointType: EndpointType | undefined;
   format?: ProviderReasoningFormat;
+  reasoningSummary?: boolean;
+  wireDialect?: ReasoningWireDialect;
 }): ResolvedReasoningProfile {
   const endpointDefault = input.endpointType
     ? defaultFormatByEndpoint[input.endpointType]
     : undefined;
   const format = input.format?.type ?? endpointDefault ?? 'openai-chat';
   const formatDefault = REASONING_FORMAT_PROFILES[format];
+  const baseWire =
+    input.contract?.wire ??
+    input.format?.wire ??
+    selectFormatWire(formatDefault, input.wireDialect);
+  const wire =
+    format === 'openai-responses' && input.reasoningSummary !== undefined
+      ? configureOpenAIResponsesSummary(baseWire, input.reasoningSummary)
+      : baseWire;
   return {
     format,
     support: input.contract?.support,
-    wire: input.contract?.wire ?? input.format?.wire ?? formatDefault.wire,
+    wire,
   };
 }
 
@@ -187,7 +208,12 @@ function mergeReasoningSupport(
     defaultEffort: override?.defaultEffort ?? preset?.defaultEffort,
     supportedEfforts: override?.supportedEfforts ?? preset?.supportedEfforts,
     thinkingTokenLimits: override?.thinkingTokenLimits ?? preset?.thinkingTokenLimits,
+    wireDialect: override?.wireDialect ?? preset?.wireDialect,
   };
+}
+
+function projectServiceTierControl(control: ResolvedServiceTierControl): RuntimeServiceTierControl {
+  return { default: control.default, options: control.options };
 }
 
 export function projectRuntimeReasoning(
@@ -242,6 +268,7 @@ export function createCustomModel(
   providerId: string,
   modelId: string,
   profile: ReasoningWireProfile = REASONING_FORMAT_PROFILES['openai-chat'].wire,
+  serviceTierControl?: RuntimeServiceTierControl,
 ): Model {
   const reasoning = inferCustomModelReasoning(modelId, profile);
   return {
@@ -256,6 +283,7 @@ export function createCustomModel(
     ownedBy: inferReasoningOwnedBy(modelId),
     providerId,
     reasoning,
+    ...(serviceTierControl ? { requestControls: { serviceTier: serviceTierControl } } : {}),
     supportsStreaming: true,
   };
 }
@@ -285,6 +313,7 @@ export function mergePresetModel(
   providerId: string,
   profile: ReasoningWireProfile = REASONING_FORMAT_PROFILES['openai-chat'].wire,
   reasoningSupport?: ProtoReasoningSupport,
+  serviceTierControl?: RuntimeServiceTierControl,
 ): Model {
   const apiModelId = catalogOverride?.apiModelId ?? presetModel.id;
   const baseCapabilities = applyCapabilityOverride(
@@ -331,6 +360,7 @@ export function mergePresetModel(
     pricing,
     providerId,
     reasoning: reasoningSource ? projectRuntimeReasoning(reasoningSource, profile) : undefined,
+    ...(serviceTierControl ? { requestControls: { serviceTier: serviceTierControl } } : {}),
     replaceWith: catalogOverride?.replaceWith
       ? createUniqueModelId(providerId, catalogOverride.replaceWith)
       : undefined,
@@ -401,7 +431,7 @@ export class ProviderRegistryService {
       (presetProviderId ? this.loader.findProvider(presetProviderId) : undefined);
 
     return {
-      apiFeatures: provider?.apiFeatures,
+      apiFeatures: provider ? (projectLegacyApiFeatures(provider) ?? undefined) : undefined,
       authMethods: provider?.authMethods,
       authOptional: provider?.authOptional,
       description: provider?.description,
@@ -409,7 +439,12 @@ export class ProviderRegistryService {
       // only the one the AI layer implements passes through.
       fastMode:
         provider?.fastMode?.transport === 'openai-priority'
-          ? { transport: 'openai-priority' }
+          ? {
+              transport: 'openai-priority',
+              ...(provider.fastMode.serviceTier
+                ? { serviceTier: provider.fastMode.serviceTier }
+                : {}),
+            }
           : undefined,
       modelListSource: provider?.modelListSource,
       reportedCostCurrency: provider?.reportedCostCurrency,
@@ -466,8 +501,36 @@ export class ProviderRegistryService {
         format: endpointType
           ? profileProvider?.endpointConfigs?.[endpointType]?.reasoningFormat
           : undefined,
+        reasoningSummary: endpointType
+          ? (context.endpointConfigs?.[endpointType]?.dialect?.reasoningSummary ??
+            profileProvider?.endpointConfigs?.[endpointType]?.dialect?.reasoningSummary)
+          : undefined,
+        wireDialect: support?.wireDialect,
       }),
       support,
+    };
+  }
+
+  private resolveServiceTierControlForModelData(
+    context: ReasoningProviderContext,
+    registryOverride: ProtoProviderModelOverride | null,
+  ): ResolvedServiceTierControl | undefined {
+    const profileProvider = this.findProfileProvider(context);
+    const endpointType = resolveReasoningEndpointType(
+      registryOverride?.endpointTypes,
+      context.defaultChatEndpoint ?? profileProvider?.defaultChatEndpoint ?? undefined,
+    );
+    const endpointControl = endpointType
+      ? profileProvider?.endpointConfigs?.[endpointType]?.requestControls?.serviceTier
+      : undefined;
+    if (!endpointControl) {
+      return undefined;
+    }
+
+    return {
+      default: endpointControl.default,
+      options: registryOverride?.requestControls?.serviceTier?.options ?? endpointControl.options,
+      wire: endpointControl.wire,
     };
   }
 
@@ -512,20 +575,83 @@ export class ProviderRegistryService {
       if (contract) break;
     }
 
+    const presetReasoning = this.loader.findModel(
+      matchedOverride?.modelId ?? model.presetModelId ?? '',
+    )?.reasoning;
+    const support = mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support);
+    const wireDialect =
+      support?.wireDialect ?? this.loader.findModel(model.apiModelId ?? '')?.reasoning?.wireDialect;
     const resolved = resolveReasoningProfileFromRegistry({
       contract,
       endpointType: effectiveEndpoint,
       format: effectiveEndpoint
         ? profileProvider?.endpointConfigs?.[effectiveEndpoint]?.reasoningFormat
         : undefined,
+      reasoningSummary: effectiveEndpoint
+        ? (provider.endpointConfigs?.[effectiveEndpoint]?.dialect?.reasoningSummary ??
+          profileProvider?.endpointConfigs?.[effectiveEndpoint]?.dialect?.reasoningSummary)
+        : undefined,
+      wireDialect,
     });
-    const presetReasoning = this.loader.findModel(
-      matchedOverride?.modelId ?? model.presetModelId ?? '',
-    )?.reasoning;
 
     return {
       ...resolved,
-      support: mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support),
+      support,
+    };
+  }
+
+  /** Resolve the trusted endpoint declaration used to serialize a service-tier selection. */
+  resolveServiceTierControl(
+    provider: ReasoningProviderContext,
+    model: Model,
+    endpointType?: EndpointType,
+  ): ResolvedServiceTierControl | undefined {
+    const profileProvider = this.findProfileProvider(provider);
+    const effectiveEndpoint =
+      endpointType ??
+      resolveReasoningEndpointType(
+        model.endpointTypes,
+        provider.defaultChatEndpoint ?? profileProvider?.defaultChatEndpoint ?? undefined,
+      );
+    if (!effectiveEndpoint) {
+      return undefined;
+    }
+
+    const endpointControl =
+      profileProvider?.endpointConfigs?.[effectiveEndpoint]?.requestControls?.serviceTier;
+    if (!endpointControl) {
+      return undefined;
+    }
+
+    const providerIds = Array.from(
+      new Set(
+        [provider.id, profileProvider?.id, provider.presetProviderId].filter(
+          (value): value is string => Boolean(value),
+        ),
+      ),
+    );
+    const modelIds = Array.from(
+      new Set(
+        [model.apiModelId, model.presetModelId].filter((value): value is string => Boolean(value)),
+      ),
+    );
+    let override: ProtoProviderModelOverride | null = null;
+
+    for (const providerId of providerIds) {
+      for (const modelId of modelIds) {
+        const candidate = this.loader.findOverride(providerId, modelId);
+        if (candidate?.requestControls?.serviceTier) {
+          override = candidate;
+          break;
+        }
+      }
+      if (override) break;
+    }
+
+    return {
+      default: endpointControl.default,
+      options: override?.requestControls?.serviceTier?.options ?? endpointControl.options,
+      wire: endpointControl.wire,
     };
   }
 
@@ -548,6 +674,10 @@ export class ProviderRegistryService {
         modelId,
       ),
       registryOverride,
+      serviceTierControl: this.resolveServiceTierControlForModelData(
+        { ...providerConfig, id: providerId },
+        registryOverride,
+      ),
     };
   }
 
@@ -576,9 +706,20 @@ export class ProviderRegistryService {
         registryOverride,
         modelId,
       );
+      const serviceTierControl = this.resolveServiceTierControlForModelData(
+        context,
+        registryOverride,
+      );
 
       if (!presetModel) {
-        results.push(createCustomModel(providerId, modelId, reasoningProfile.wire));
+        results.push(
+          createCustomModel(
+            providerId,
+            modelId,
+            reasoningProfile.wire,
+            serviceTierControl ? projectServiceTierControl(serviceTierControl) : undefined,
+          ),
+        );
         continue;
       }
 
@@ -588,6 +729,7 @@ export class ProviderRegistryService {
         providerId,
         reasoningProfile.wire,
         reasoningProfile.support,
+        serviceTierControl ? projectServiceTierControl(serviceTierControl) : undefined,
       );
       const apiModelId = model.apiModelId ?? registryOverride?.apiModelId ?? modelId;
       results.push({
@@ -635,12 +777,21 @@ export class ProviderRegistryService {
         override,
         override.apiModelId ?? override.modelId,
       );
+      const serviceTierControl = this.resolveServiceTierControlForModelData(
+        {
+          defaultChatEndpoint: provider?.defaultChatEndpoint,
+          id: providerId,
+          presetProviderId: sourceProviderId ?? provider?.presetProviderId,
+        },
+        override,
+      );
       const model = mergePresetModel(
         presetModel,
         override,
         providerId,
         reasoningProfile.wire,
         reasoningProfile.support,
+        serviceTierControl ? projectServiceTierControl(serviceTierControl) : undefined,
       );
       const apiModelId = model.apiModelId ?? override.apiModelId ?? override.modelId;
       results.push({

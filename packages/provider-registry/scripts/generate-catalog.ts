@@ -56,6 +56,7 @@ const REASONING_FAMILIES_GEN_PATH = path.join(
 );
 const WRITE = process.argv.includes('--write');
 const REPORT = process.argv.includes('--report');
+const PROVIDERS_ONLY = process.argv.includes('--providers-only');
 // Each artifact's `version` is a hash of its own (version-less, key-sorted) content: equal content ⇒
 // equal version, ANY content change ⇒ new version. Seeders (`PresetProviderSeeder` via `SeedRunner`)
 // skip when the journal version matches, so a date stamp would let a same-day regeneration change
@@ -532,6 +533,18 @@ function buildProviderModels(
 }
 
 void (async () => {
+  if (PROVIDERS_ONLY) {
+    const providers = buildProviders();
+    if (!WRITE) {
+      console.log(`providers: ${providers.length}`);
+      console.log('\nDRY RUN — re-run with --write to generate providers.json.');
+      return;
+    }
+    fs.writeFileSync(PROVIDERS_PATH, stampAndSerialize({ providers }));
+    console.log(`WROTE ${PROVIDERS_PATH} (${providers.length} providers).`);
+    return;
+  }
+
   const md = await load('MODELSDEV_CACHE', 'https://models.dev/api.json', ModelsDevApiSchema);
   const [orModels, orImageModels] = await Promise.all([
     load('OPENROUTER_CACHE', 'https://openrouter.ai/api/v1/models', OpenRouterApiSchema),

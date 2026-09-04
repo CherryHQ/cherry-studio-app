@@ -4,14 +4,14 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
-import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
-import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import {
   buildImageProviderOptions,
-  createAiUsageCaptureContext,
   mergeImageProviderOptions,
   splitImageParamValues,
-} from '@cherrystudio/ai-runtime/utils';
+} from '@cherrystudio/ai-runtime/image';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
+import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
@@ -83,7 +83,10 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
-  providerRegistry: Pick<ProviderRegistryService, 'listProviderRegistryModels'>;
+  providerRegistry: Pick<
+    ProviderRegistryService,
+    'getImageGenerationSupport' | 'listProviderRegistryModels'
+  >;
   vertexAuth: Pick<VertexAuthClient, 'getAuthorizationHeaders'>;
 }
 
@@ -279,11 +282,27 @@ export class AiService extends BaseService {
     const { sdkConfig, credentialReceipt, model, options, provider } =
       await this.buildAgentParamsFor(request);
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
+    const registryProviderId = provider.presetProviderId ?? provider.id;
+    const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
+      registryProviderId,
+      model.apiModelId ?? model.modelId,
+    )?.modes?.[request.mode]?.vendorTransport;
+    const transportVendorBag = vendorTransport?.endpoint
+      ? {
+          ...vendorBag,
+          modelDescriptor: {
+            endpoint: vendorTransport.endpoint,
+            id: sdkConfig.modelId,
+            mode: request.mode,
+            ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
+          },
+        }
+      : vendorBag;
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
       paramValues: request.paramValues,
       provider,
-      vendorBag,
+      vendorBag: transportVendorBag,
     });
     const mergedProviderOptions = mergeImageProviderOptions(
       options.providerOptions,

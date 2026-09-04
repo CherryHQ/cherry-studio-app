@@ -26,6 +26,27 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerSettings.fetch).toBeUndefined();
   });
 
+  it('uses endpoint stream-options dialect instead of the legacy global flag', async () => {
+    const provider = createProvider({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          baseUrl: 'https://example.com/v1',
+          dialect: { streamOptions: false },
+        },
+      },
+      id: 'custom-openai',
+    });
+
+    const config = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'custom-model'),
+      createRuntime(),
+    );
+
+    expect(config.providerSettings).toMatchObject({ includeUsage: false });
+  });
+
   it('resolves registered adapter extensions before falling back to openai-compatible', async () => {
     const provider = createProvider({
       id: 'together',
