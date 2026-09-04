@@ -44,7 +44,7 @@ describe('providerToAiSdkConfig', () => {
       createRuntime(),
     );
 
-    expect(config.providerSettings.includeUsage).toBe(false);
+    expect(config.providerSettings).toMatchObject({ includeUsage: false });
   });
 
   it('resolves registered adapter extensions before falling back to openai-compatible', async () => {
