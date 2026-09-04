@@ -9,7 +9,7 @@ import type { ProviderConfig } from './schemas/provider';
 import { ProviderListSchema } from './schemas/provider';
 import type { ProviderModelOverride } from './schemas/provider-models';
 import { ProviderModelListSchema } from './schemas/provider-models';
-import { normalizeModelId } from './utils/normalize';
+import { colonVariantTagToHyphen, extractParameterSize, normalizeModelId } from './utils/normalize';
 
 type RegistryBundle = {
   models: { version: string; models: ModelConfig[] };
@@ -24,6 +24,16 @@ type ProvidersBundle = RegistryBundle['providers'];
 /** Schema lane shared with the desktop-published remote registry. */
 export const REGISTRY_SCHEMA_VERSION = 1;
 
+/**
+ * Latest Desktop registry semantic line this Mobile runtime fully interprets.
+ *
+ * This is deliberately not the Mobile application version. The remote manifest
+ * is published by Desktop, so its min/source range must be compared with the
+ * Desktop registry behavior implemented here until the shared package exposes
+ * a package-level runtime version.
+ */
+export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.0.8';
+
 /** Unsigned remote data may describe models, never provider routing or credentials. */
 export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
 export type RemoteRegistryFileName = (typeof REMOTE_REGISTRY_FILES)[number];
@@ -36,6 +46,47 @@ export const CatalogManifestSchema = z.object({
   sourceAppVersion: z.string().min(1),
 });
 export type CatalogManifest = z.infer<typeof CatalogManifestSchema>;
+
+type VersionParts = readonly [major: number, minor: number, patch: number];
+
+function coerceVersionParts(value: string): VersionParts | null {
+  const match = value.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) {
+    return null;
+  }
+
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compareVersionParts(left: VersionParts, right: VersionParts): number {
+  for (let index = 0; index < left.length; index += 1) {
+    const difference = left[index] - right[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return 0;
+}
+
+/** Whether this Mobile runtime implements the semantics required by a remote snapshot. */
+export function isCatalogManifestCompatible(
+  manifest: CatalogManifest,
+  runtimeVersion = REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+): boolean {
+  if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+    return false;
+  }
+
+  const runtime = coerceVersionParts(runtimeVersion);
+  const minimum = coerceVersionParts(manifest.minAppVersion);
+  const source = coerceVersionParts(manifest.sourceAppVersion);
+  if (!runtime || !minimum || !source) {
+    return false;
+  }
+
+  return compareVersionParts(runtime, minimum) >= 0 && compareVersionParts(runtime, source) <= 0;
+}
 
 export type MobileRemoteRegistrySnapshot = {
   models: ModelsBundle;
@@ -79,10 +130,13 @@ export class MobileRegistryLoader {
   private remoteProviderModels: ProviderModelsBundle | null = null;
   private modelById: Map<string, ModelConfig> | null = null;
   private modelByNormId: Map<string, ModelConfig> | null = null;
+  private modelBySizedNorm: Map<string, ModelConfig> | null = null;
   private overrideByKey: Map<string, ProviderModelOverride> | null = null;
   private overrideByNormKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideBySizedNormKey: Map<string, ProviderModelOverride> | null = null;
   private overrideByApiKey: Map<string, ProviderModelOverride> | null = null;
   private overrideByNormApiKey: Map<string, ProviderModelOverride> | null = null;
+  private overrideBySizedNormApiKey: Map<string, ProviderModelOverride> | null = null;
   private overridesByProvider: Map<string, ProviderModelOverride[]> | null = null;
   private providerById: Map<string, ProviderConfig> | null = null;
 
@@ -155,9 +209,27 @@ export class MobileRegistryLoader {
 
   findModel(modelId: string): ModelConfig | null {
     this.loadModels();
-    return (
-      this.modelById?.get(modelId) ?? this.modelByNormId?.get(normalizeModelId(modelId)) ?? null
-    );
+    const exact = this.modelById?.get(modelId);
+    if (exact) {
+      return exact;
+    }
+
+    if (colonVariantTagToHyphen(modelId) !== modelId) {
+      return (
+        this.modelBySizedNorm?.get(normalizeModelId(modelId, { keepParameterSize: true })) ?? null
+      );
+    }
+
+    const sizedModelId = normalizeModelId(modelId, { keepParameterSize: true });
+    const sizedHit = this.modelBySizedNorm?.get(sizedModelId);
+    if (sizedHit) {
+      return sizedHit;
+    }
+    if (extractParameterSize(sizedModelId)) {
+      return null;
+    }
+
+    return this.modelByNormId?.get(normalizeModelId(modelId)) ?? null;
   }
 
   findProvider(providerId: string): ProviderConfig | null {
@@ -168,15 +240,25 @@ export class MobileRegistryLoader {
   findOverride(providerId: string, modelId: string): ProviderModelOverride | null {
     this.loadProviderModels();
     const key = `${providerId}::${modelId}`;
-    const normKey = `${providerId}::${normalizeModelId(modelId)}`;
+    const exact = this.overrideByKey?.get(key) ?? this.overrideByApiKey?.get(key);
+    if (exact) {
+      return exact;
+    }
 
-    return (
-      this.overrideByKey?.get(key) ??
-      this.overrideByApiKey?.get(key) ??
-      this.overrideByNormKey?.get(normKey) ??
-      this.overrideByNormApiKey?.get(normKey) ??
-      null
-    );
+    const sizedModelId = normalizeModelId(modelId, { keepParameterSize: true });
+    const sizedNormKey = `${providerId}::${sizedModelId}`;
+    const sizedHit =
+      this.overrideBySizedNormKey?.get(sizedNormKey) ??
+      this.overrideBySizedNormApiKey?.get(sizedNormKey);
+    if (sizedHit) {
+      return sizedHit;
+    }
+    if (extractParameterSize(sizedModelId)) {
+      return null;
+    }
+
+    const normKey = `${providerId}::${normalizeModelId(modelId)}`;
+    return this.overrideByNormKey?.get(normKey) ?? this.overrideByNormApiKey?.get(normKey) ?? null;
   }
 
   getOverridesForProvider(providerId: string): ProviderModelOverride[] {
@@ -187,27 +269,36 @@ export class MobileRegistryLoader {
   invalidate(): void {
     this.modelById = null;
     this.modelByNormId = null;
+    this.modelBySizedNorm = null;
     this.overrideByKey = null;
     this.overrideByNormKey = null;
+    this.overrideBySizedNormKey = null;
     this.overrideByApiKey = null;
     this.overrideByNormApiKey = null;
+    this.overrideBySizedNormApiKey = null;
     this.overridesByProvider = null;
     this.providerById = null;
   }
 
   private buildModelIndex(models: ModelConfig[]): void {
-    if (this.modelById && this.modelByNormId) {
+    if (this.modelById && this.modelByNormId && this.modelBySizedNorm) {
       return;
     }
 
     this.modelById = new Map();
     this.modelByNormId = new Map();
+    this.modelBySizedNorm = new Map();
 
     for (const model of models) {
       this.modelById.set(model.id, model);
       const normalizedId = normalizeModelId(model.id);
       if (!this.modelByNormId.has(normalizedId)) {
         this.modelByNormId.set(normalizedId, model);
+      }
+
+      const sizedNormalizedId = normalizeModelId(model.id, { keepParameterSize: true });
+      if (!this.modelBySizedNorm.has(sizedNormalizedId)) {
+        this.modelBySizedNorm.set(sizedNormalizedId, model);
       }
     }
   }
@@ -224,8 +315,10 @@ export class MobileRegistryLoader {
     if (
       this.overrideByKey &&
       this.overrideByNormKey &&
+      this.overrideBySizedNormKey &&
       this.overrideByApiKey &&
       this.overrideByNormApiKey &&
+      this.overrideBySizedNormApiKey &&
       this.overridesByProvider
     ) {
       return;
@@ -233,8 +326,10 @@ export class MobileRegistryLoader {
 
     this.overrideByKey = new Map();
     this.overrideByNormKey = new Map();
+    this.overrideBySizedNormKey = new Map();
     this.overrideByApiKey = new Map();
     this.overrideByNormApiKey = new Map();
+    this.overrideBySizedNormApiKey = new Map();
     this.overridesByProvider = new Map();
 
     for (const override of overrides) {
@@ -248,6 +343,16 @@ export class MobileRegistryLoader {
         this.overrideByNormKey.set(normalizedKey, override);
       }
 
+      const sizedNormalizedKey = `${override.providerId}::${normalizeModelId(override.modelId, {
+        keepParameterSize: true,
+      })}`;
+      if (
+        !this.overrideBySizedNormKey.has(sizedNormalizedKey) ||
+        override.apiModelId === override.modelId
+      ) {
+        this.overrideBySizedNormKey.set(sizedNormalizedKey, override);
+      }
+
       if (override.apiModelId) {
         const apiKey = `${override.providerId}::${override.apiModelId}`;
         this.overrideByApiKey.set(apiKey, override);
@@ -255,6 +360,14 @@ export class MobileRegistryLoader {
         const normalizedApiKey = `${override.providerId}::${normalizeModelId(override.apiModelId)}`;
         if (!this.overrideByNormApiKey.has(normalizedApiKey)) {
           this.overrideByNormApiKey.set(normalizedApiKey, override);
+        }
+
+        const sizedNormalizedApiKey = `${override.providerId}::${normalizeModelId(
+          override.apiModelId,
+          { keepParameterSize: true },
+        )}`;
+        if (!this.overrideBySizedNormApiKey.has(sizedNormalizedApiKey)) {
+          this.overrideBySizedNormApiKey.set(sizedNormalizedApiKey, override);
         }
       }
 

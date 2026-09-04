@@ -1,6 +1,46 @@
 import { describe, expect, it } from 'vitest';
 
-import { MobileRegistryLoader } from '../mobile-loader';
+import {
+  isCatalogManifestCompatible,
+  MobileRegistryLoader,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+  REGISTRY_SCHEMA_VERSION,
+} from '../mobile-loader';
+
+const compatibleManifest = {
+  files: {
+    'models.json': 'models-version',
+    'provider-models.json': 'provider-models-version',
+  },
+  minAppVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+  revision: 1,
+  schemaVersion: REGISTRY_SCHEMA_VERSION,
+  sourceAppVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+};
+
+describe('remote catalog compatibility', () => {
+  it('accepts only the inclusive Desktop semantic range implemented by Mobile', () => {
+    expect(isCatalogManifestCompatible(compatibleManifest)).toBe(true);
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, minAppVersion: '2.0.9' })).toBe(
+      false,
+    );
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: '2.0.7' })).toBe(
+      false,
+    );
+  });
+
+  it('rejects another schema lane and malformed semantic versions', () => {
+    expect(
+      isCatalogManifestCompatible({
+        ...compatibleManifest,
+        schemaVersion: REGISTRY_SCHEMA_VERSION + 1,
+      }),
+    ).toBe(false);
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, minAppVersion: 'next' })).toBe(
+      false,
+    );
+  });
+});
 
 describe('MobileRegistryLoader', () => {
   it('parses the bundled desktop registry JSON', () => {
@@ -20,6 +60,22 @@ describe('MobileRegistryLoader', () => {
       modelId: 'gemma-3-27b-it',
       providerId: 'aws-bedrock',
     });
+  });
+
+  it('keeps parameter-size siblings distinct for prefixed provider ids', () => {
+    const loader = new MobileRegistryLoader();
+
+    expect(loader.findModel('nvidia/gpt-oss-20b')?.id).toBe('gpt-oss-20b');
+    expect(loader.findModel('nvidia/gpt-oss-120b')?.id).toBe('gpt-oss-120b');
+    expect(loader.findOverride('nvidia', 'nvidia/gpt-oss-20b')?.modelId).toBe('gpt-oss-20b');
+    expect(loader.findOverride('nvidia', 'nvidia/gpt-oss-120b')?.modelId).toBe('gpt-oss-120b');
+  });
+
+  it('does not resolve an unknown parameter size through a family sibling', () => {
+    const loader = new MobileRegistryLoader();
+
+    expect(loader.findModel('nvidia/gpt-oss-9b')).toBeNull();
+    expect(loader.findOverride('nvidia', 'nvidia/gpt-oss-9b')).toBeNull();
   });
 
   it('exposes standalone provider-model rows and image-generation metadata', () => {
