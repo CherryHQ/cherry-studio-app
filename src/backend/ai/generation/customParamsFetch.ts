@@ -1,0 +1,65 @@
+const CUSTOM_PARAMS_FETCH_CACHE_SIZE = 10;
+const customParamsFetchCache = new WeakMap<
+  typeof globalThis.fetch,
+  Map<string, typeof globalThis.fetch>
+>();
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Re-inject registry-owned parameters after an AI SDK provider has serialized
+ * its schema-filtered request body. SDK-produced fields keep precedence.
+ */
+export function createCustomParamsFetch(
+  innerFetch: typeof globalThis.fetch,
+  customParams: Record<string, unknown>,
+): typeof globalThis.fetch {
+  if (Object.keys(customParams).length === 0) return innerFetch;
+
+  const serializedCustomParams = JSON.stringify(customParams) ?? '{}';
+  let cachedByParams = customParamsFetchCache.get(innerFetch);
+  if (!cachedByParams) {
+    cachedByParams = new Map();
+    customParamsFetchCache.set(innerFetch, cachedByParams);
+  }
+
+  const cachedFetch = cachedByParams.get(serializedCustomParams);
+  if (cachedFetch) {
+    cachedByParams.delete(serializedCustomParams);
+    cachedByParams.set(serializedCustomParams, cachedFetch);
+    return cachedFetch;
+  }
+
+  const customParamsSnapshot = JSON.parse(serializedCustomParams) as Record<string, unknown>;
+  const wrappedFetch: typeof globalThis.fetch = async (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+  ) => {
+    if (init?.method?.toUpperCase() === 'POST' && typeof init.body === 'string') {
+      let body: unknown;
+      try {
+        body = JSON.parse(init.body);
+      } catch {
+        return innerFetch(input, init);
+      }
+
+      if (isRecord(body)) {
+        return innerFetch(input, {
+          ...init,
+          body: JSON.stringify({ ...customParamsSnapshot, ...body }),
+        });
+      }
+    }
+
+    return innerFetch(input, init);
+  };
+
+  if (cachedByParams.size >= CUSTOM_PARAMS_FETCH_CACHE_SIZE) {
+    const oldestKey = cachedByParams.keys().next().value;
+    if (oldestKey !== undefined) cachedByParams.delete(oldestKey);
+  }
+  cachedByParams.set(serializedCustomParams, wrappedFetch);
+  return wrappedFetch;
+}

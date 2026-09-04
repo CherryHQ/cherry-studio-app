@@ -15,6 +15,16 @@ export default defineProvider({
     'anthropic-messages': {
       adapterFamily: 'openrouter',
       baseUrl: 'https://openrouter.ai/api',
+      requestControls: {
+        serviceTier: {
+          default: 'standard',
+          options: ['standard', 'fast', 'flex'],
+          wire: {
+            delivery: { type: 'request-body', key: 'service_tier' },
+            values: { standard: 'default', fast: 'priority', flex: 'flex' },
+          },
+        },
+      },
     },
     'openai-chat-completions': {
       adapterFamily: 'openrouter',
@@ -33,6 +43,16 @@ export default defineProvider({
             ],
           },
           effort: { operations: [{ target: 'reasoning.effort', value: { source: 'effort' } }] },
+        },
+      },
+      requestControls: {
+        serviceTier: {
+          default: 'standard',
+          options: ['standard', 'fast', 'flex'],
+          wire: {
+            delivery: { type: 'provider-option', key: 'service_tier' },
+            values: { standard: 'default', fast: 'priority', flex: 'flex' },
+          },
         },
       },
       modelsApiUrls: {

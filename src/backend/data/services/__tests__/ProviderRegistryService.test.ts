@@ -241,4 +241,62 @@ describe('provider-registry-service', () => {
       }).wire,
     ).toBe(REASONING_FORMAT_PROFILES['openai-chat'].wire);
   });
+
+  test('resolves endpoint service-tier wire with model-specific options', () => {
+    const service = new ProviderRegistryService({
+      findOverride: () => ({
+        modelId: 'gpt-oss-120b',
+        providerId: 'groq',
+        requestControls: {
+          serviceTier: { options: ['standard', 'auto', 'fast', 'flex'] },
+        },
+      }),
+      findProvider: () => ({
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+            requestControls: {
+              serviceTier: {
+                default: 'standard',
+                options: ['standard', 'auto', 'flex'],
+                wire: {
+                  delivery: { key: 'serviceTier', type: 'provider-option' },
+                  values: {
+                    standard: 'on_demand',
+                    auto: 'auto',
+                    fast: 'performance',
+                    flex: 'flex',
+                  },
+                },
+              },
+            },
+          },
+        },
+        id: 'groq',
+        metadata: { website: {} },
+        name: 'Groq',
+      }),
+    } as never);
+
+    expect(
+      service.resolveServiceTierControl(
+        { id: 'groq' },
+        {
+          apiModelId: 'gpt-oss-120b',
+          capabilities: [],
+          id: 'groq::gpt-oss-120b',
+          isEnabled: true,
+          isHidden: false,
+          modelId: 'gpt-oss-120b',
+          name: 'GPT OSS 120B',
+          providerId: 'groq',
+          supportsStreaming: true,
+        },
+      ),
+    ).toMatchObject({
+      default: 'standard',
+      options: ['standard', 'auto', 'fast', 'flex'],
+      wire: { delivery: { key: 'serviceTier', type: 'provider-option' } },
+    });
+  });
 });
