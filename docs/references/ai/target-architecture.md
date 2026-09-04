@@ -1,21 +1,22 @@
 # Backend AI Target Architecture
 
-Status: **local target state landed 2026-08-28; future PC Agent Controller boundary planned but not
+Status: **local architecture as built; future PC Agent Controller boundary is design-only and not
 implemented** (see [Migration Status](#migration-status)).
 
-This reference records the approved target structure for `src/backend/ai`, the seam rules that keep
-the conversation Runtime replaceable, and the success criteria each migration pull request is
-reviewed against. As-built behavior stays documented in [Agent Architecture](../agent/README.md),
+This reference records the implemented local structure for `src/backend/ai`, the seam rules that
+keep the conversation Runtime replaceable, and the design-only PC Agent Controller boundary.
+Detailed as-built behavior is documented in [Agent Architecture](../agent/README.md),
 [AI Provider Integration](./provider-integration.md), and
-[Provider Serving Boundaries](./provider-serving-boundaries.md); this document governs where the
-implementation is heading and why.
+[Provider Serving Boundaries](./provider-serving-boundaries.md).
 
 ## Decisions And Constraints
 
-- **Desktop alignment is retired as an implementation constraint.** Serialized data — message part
-  JSON, the SQLite schema, checkpoint payload columns — stays desktop-aligned. Module layout, port
-  inventories, and the `packages/ai-runtime` desktop-sync trust workflow do not. Complexity that
-  exists only to mirror desktop structure is removable on sight.
+- **Whole-Runtime Desktop alignment is retired as an implementation constraint.** Serialized data
+  — message part JSON, the SQLite schema, checkpoint payload columns — stays desktop-aligned.
+  Application module layout, port inventories, and the former `packages/ai-runtime` trust workflow
+  do not. Independently published shared packages such as `ai-core` and `ai-sdk-provider` remain
+  exact mirrors; see [Desktop AI Package Reuse](./desktop-package-reuse.md). Complexity that exists
+  only to mirror Desktop application structure is removable on sight.
 - **Drivers, ranked:** comprehension cost, then Runtime replaceability, then desktop-legacy
   removal. When two moves conflict, the higher driver wins.
 - **Pi is the sole conversation trunk.** The AI SDK path serves non-conversation generation only:
@@ -34,13 +35,14 @@ implementation is heading and why.
   until that application extension is implemented.
 - **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent/`), its event
   delta semantics, and the frontend projection. Below: the SQLite schema. Everything between the
-  two boundaries may be redesigned.
+  two boundaries in application-owned orchestration may be redesigned; independently published
+  package contracts remain governed by their own compatibility rules.
 - The 13 protocol invariants in [Agent Protocol](../agent/agent-protocol.md#invariants) survive
   every phase. Terminal persistence before publication and side-effect ordering in finalization
   remain explicit calls; an event bus would make those ordering guarantees implicit and is
   rejected.
 
-## Target Structure
+## Local Structure
 
 ```text
 src/backend/ai/
@@ -77,16 +79,17 @@ src/backend/ai/
 └── mcp/                 Unchanged.
 ```
 
-New module and directory names are chosen at implementation time following
-[Naming Conventions](../naming-conventions.md); the roles above are the commitment, not the names.
+The tree records current owners. Future modules and directories follow
+[Naming Conventions](../naming-conventions.md) without changing those ownership boundaries.
 
 ## Seam Rules
 
-1. **Pi isolation.** Outside `agent/runtime/pi/`, no file imports Pi symbols or
+1. **Pi isolation.** In the current implementation, outside `agent/runtime/pi/`, no file imports Pi symbols or
    `@earendil-works/*`. Enforced by lint, not convention. Within the zone, only
    `piModelResolver.ts` may reach the Data API and Expo — it is the bridge from Provider and Model
    records to a Pi model, and lint scopes that exemption to the same file the conformance harness
-   leaves out of its purity list.
+   leaves out of its purity list. A future shared Pi package requires an explicit architecture and
+   lint-rule change; the package design alone is not an exception.
 2. **Contract purity.** `agent/runtime/types.ts` depends on no `packages/*` port. The usage report
    uses a neutral shape defined in the contract; the Pi resolver maps into it.
 3. **One binding point.** The composition root creates and registers the Runtime. Replacing the
@@ -140,9 +143,10 @@ product flow requires one.
 3. Swapping the Runtime touches one new directory plus one composition line.
 4. The orchestration core contains protocol orchestration and invariants only; turn preparation
    and attachment materialization are testable without a Host instance.
-5. The desktop-sync trust workflow is retired, `packages/ai-runtime` states an identity that
-   matches what it is, and it exports nothing without a consumer. (This criterion originally read
-   "the package is deleted"; see [Package Disposition](#package-disposition).)
+5. The former whole-`ai-runtime` desktop-sync trust workflow is retired, while independently
+   published package mirrors remain enforced. `packages/ai-runtime` states an identity that matches
+   what it is and exports nothing without a consumer. (This criterion originally read "the package
+   is deleted"; see [Package Disposition](#package-disposition).)
 6. Existing Host and Runtime conformance suites stay green through every phase; the invariant list
    in [Agent Protocol](../agent/agent-protocol.md#invariants) is the permanent baseline.
 
@@ -173,8 +177,8 @@ One deliberate exception: `custom/wire/` has no static consumer but carries the 
 pin our request shaping against upstream AI SDK packages for the image vendors. Deleting a tested
 guard to improve a dead-code number is the wrong trade; it stays, and the README says why.
 
-Phase 1 precedes 2 and 3; the contract shape must settle before code moves against it. Phases 2
-and 3 are independent of each other.
+The migration order was Phase 1 before Phases 2 and 3 so the contract settled before code moved;
+Phases 2 and 3 were independent of each other.
 
 ## Related
 
@@ -182,4 +186,6 @@ and 3 are independent of each other.
 - [Agent Runtime](../agent/agent-runtime.md) — as-built seam contract and conformance
 - [Provider Serving Boundaries](./provider-serving-boundaries.md) — provider control plane and
   serving planes; Phase 1 here continues its staged ownership migration
+- [Desktop AI Package Reuse](./desktop-package-reuse.md) — package-level reuse and publication
+  admission rules
 - [Code Organization](../code-organization.md) — placement rules for the moves above

@@ -20,14 +20,14 @@ overrides:
   '@valibot/to-json-schema': 1.5.0
   '@ai-sdk/anthropic': 3.0.103
   '@ai-sdk/azure': 3.0.54
-  '@ai-sdk/deepseek': 2.0.30
-  '@ai-sdk/google': 3.0.64
+  '@ai-sdk/deepseek': 2.0.57
+  '@ai-sdk/google': 3.0.113
   '@ai-sdk/openai': 3.0.53
-  '@ai-sdk/openai-compatible': 2.0.62
-  '@ai-sdk/provider': 3.0.14
-  '@ai-sdk/provider-utils': 4.0.40
-  '@ai-sdk/xai': 3.0.111
-  ai: 6.0.183
+  '@ai-sdk/openai-compatible': 2.0.72
+  '@ai-sdk/provider': 3.0.15
+  '@ai-sdk/provider-utils': 4.0.48
+  '@ai-sdk/xai': 3.0.126
+  ai: 6.0.185
   react-native-svg: 15.15.4
 
 allowBuilds:
@@ -54,14 +54,12 @@ patchedDependencies:
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
-  '@ai-sdk/deepseek@2.0.30': patches/@ai-sdk__deepseek@2.0.30.patch
-  '@ai-sdk/google@3.0.64': patches/@ai-sdk__google@3.0.64.patch
+  '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
   '@ai-sdk/openai@3.0.53': patches/@ai-sdk__openai@3.0.53.patch
-  '@ai-sdk/openai-compatible@2.0.62': patches/@ai-sdk__openai-compatible@2.0.62.patch
-  '@ai-sdk/xai@3.0.111': patches/@ai-sdk__xai@3.0.111.patch
+  '@ai-sdk/openai-compatible@2.0.72': patches/@ai-sdk__openai-compatible@2.0.72.patch
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
   ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
-  ai@6.0.183: patches/ai@6.0.183.patch
+  ai@6.0.185: patches/ai@6.0.185.patch
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   expo-widgets@57.0.8: patches/expo-widgets@57.0.8.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
