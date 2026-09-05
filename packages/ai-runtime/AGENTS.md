@@ -6,7 +6,8 @@ into `src/backend/ai`. Read [README.md](README.md) and
 source.
 
 Run `pnpm check` from this directory. Keep platform behavior behind backend adapters, and expose
-package behavior only through the four declared subpaths. New provider or transport adaptation
+package behavior only through the declared `image`, `provider`, `runtime`, `tools`, and `utils`
+subpaths. New provider or transport adaptation
 belongs here; anything that serves the conversation turn belongs behind the Agent Runtime contract
 in `src/backend/ai/agent/runtime/`. Other package changes use the relevant checks in
 [Testing And CI](../../docs/guides/testing-and-ci.md).

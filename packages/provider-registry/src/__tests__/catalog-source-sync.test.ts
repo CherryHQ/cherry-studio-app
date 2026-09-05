@@ -1,7 +1,6 @@
 /**
  * Source ↔ data sync guard — fails when `src/creators` or `src/providers` changed but `data/*.json` was
- * NOT regenerated. CI's `catalog-hand-edit-check` only catches the OTHER direction (data edited with no
- * source change); generation reads live upstream, so a full generate-and-diff would be flaky. This test
+ * NOT regenerated. Generation reads live upstream, so a full generate-and-diff would be flaky. This test
  * is deterministic instead: it re-derives the facts the generator controls from SOURCE ALONE and asserts
  * the committed JSON reflects them. Coverage is full-payload where the generator output is fully
  * source-derived — the entire provider object (buildProviders strips gen-only fields + templates
@@ -10,7 +9,7 @@
  * presence/`ownedBy`/`name`: their other fields (capabilities, modalities, limits) are unioned with
  * upstream-inferred metadata, so a full compare would be non-deterministic. Upstream-enriched fields
  * (pricing on md-derived rows, inferred metadata) remain out of scope. Runs in the network-free
- * `provider-registry` test project (CI: test:provider-registry).
+ * package Vitest suite and root Jest via vitestJestShim in PR CI. There is no separate hand-edit CI job.
  */
 import { describe, expect, it } from 'vitest';
 

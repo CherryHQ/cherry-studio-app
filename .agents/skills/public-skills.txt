@@ -9,6 +9,7 @@ expo-cicd-workflows
 expo-deployment
 expo-dev-client
 expo-tailwind-setup
+gh-stack
 improve-react
 legend-list-best-practices
 native-data-fetching
@@ -19,4 +20,5 @@ simplify
 sync-cherry-desktop
 uniwind
 upgrading-expo
+vercel-composition-patterns
 vercel-react-native-skills

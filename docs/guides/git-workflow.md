@@ -15,8 +15,8 @@ such as `main` are not valid. Older unscoped commits are not precedents.
 
 ## Stacked Pull Requests
 
-Use the project `gh-stack` skill before implementation when one coherent story contains multiple
-dependent concerns that can be reviewed in sequence. Plan the layers first, put foundations at the
+Use the project [gh-stack skill](../../.agents/skills/gh-stack/SKILL.md) before implementation when
+one coherent story contains multiple dependent concerns that can be reviewed in sequence. Plan the layers first, put foundations at the
 bottom, and keep Conventional Commit messages in every layer.
 
 Use one stack for one coherent story. Put unrelated features, bug fixes, or refactors in separate
@@ -34,7 +34,7 @@ own bottom PR and the feature integration in the PR above it. See
 3. After successful PR or stack creation, release the workspace's simulators or emulators and
    allocated port range using [Parallel Device Testing](./parallel-device-testing.md).
 4. Rerun local gates after later draft changes, then mark the final head ready for review.
-5. Treat the remote CI result as the complete-suite gate.
+5. Treat remote CI as the PR-suite gate, with local-only exceptions in [Testing And CI](./testing-and-ci.md).
 
 For a stack, release resources once after all layers have been submitted, not after each layer.
 

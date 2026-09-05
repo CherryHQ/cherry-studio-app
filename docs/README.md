@@ -43,7 +43,7 @@ They are the source of truth for how the repository works today.
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
 | [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the planned PC Agent Controller boundary |
-| [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Exact package mirrors, semantic ports, Pi boundaries, and image-runtime extraction rules |
+| [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Selective semantic ports, provider admission, Pi boundaries, and image-runtime reuse |
 | [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Agent Session streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |

@@ -309,6 +309,39 @@ describe('auditRepositories', () => {
     ).rejects.toThrow(/uncommitted|dirty/i);
   });
 
+  test.each(['semantic-port', 'mirror'] as const)(
+    'applies the createAgent mirror requirement only to an exact mirror (%s)',
+    async (strategy) => {
+      const desktopRoot = createRepository('CherryStudio', {
+        ...sharedPackageFiles('desktop'),
+        'packages/aiCore/src/index.ts': 'export const provider = true;\n',
+      });
+      const mobileRoot = createRepository('cherry-studio-app', {
+        ...sharedPackageFiles('mobile'),
+        'packages/ai-core/src/index.ts': 'export const provider = true;\n',
+      });
+      const sourceFiles = git(desktopRoot, 'ls-files', '--', 'packages/aiCore').split('\n');
+      const report = await auditRepositories({
+        desktopRoot,
+        mobileRoot,
+        manifest: manifestWithDomains({
+          'ai-core': mirrorDomain({
+            strategy,
+            status: 'aligned',
+            sourceCommit: git(desktopRoot, 'rev-parse', 'HEAD'),
+            sourceSha256: await hashTrackedFiles(desktopRoot, sourceFiles),
+          }),
+        }),
+        domains: ['ai-core'],
+      });
+
+      expect(report.check.ok).toBe(strategy === 'semantic-port');
+      expect(report.check.invariantFailures).toEqual(
+        strategy === 'mirror' ? ['ai-core-create-agent-mirrored'] : [],
+      );
+    },
+  );
+
   test('reports a verified mirror as aligned and preserves an unbaselined domain', async () => {
     const desktopRoot = createRepository('CherryStudio', {
       ...sharedPackageFiles('desktop'),
