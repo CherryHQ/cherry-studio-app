@@ -13,6 +13,7 @@ import {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   buildProviderPrimaryBaseUrlUpdates,
+  buildProviderTextEndpointUpdates,
   getEffectiveAuthConfig,
   normalizeApiKeyEntries,
   ProviderApiServiceSaveError,
@@ -23,6 +24,7 @@ import {
   buildCustomProviderCreationPayload,
   findInvalidCustomProviderEndpointUrl,
   hasConfiguredCustomProviderTextEndpoint,
+  isFullyCustomProvider,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
 import {
   createEmptyProviderFormValues,
@@ -162,10 +164,14 @@ export function useImportedProviderForm(providerId: string) {
   const baseUrlEndpoint = form.meta.baseUrlEndpoint;
   const baseUrl = baseUrlEndpoint ? (form.state.endpointUrls[baseUrlEndpoint] ?? '') : '';
   const requiresApiKey = showApiKey && !provider?.authOptional;
+  const isCustom = provider ? isFullyCustomProvider(provider) : false;
   const canSubmit =
     Boolean(provider) &&
     form.meta.canSubmit &&
-    (!baseUrlEndpoint || baseUrl.trim().length > 0) &&
+    (isCustom
+      ? hasConfiguredCustomProviderTextEndpoint(form.state.endpointUrls) &&
+        !findInvalidCustomProviderEndpointUrl(form.state.endpointUrls)
+      : !baseUrlEndpoint || baseUrl.trim().length > 0) &&
     (!requiresApiKey || form.state.apiKey.trim().length > 0);
   const handleSave = useCallback(async () => {
     if (!provider || !canSubmit) {
@@ -175,7 +181,16 @@ export function useImportedProviderForm(providerId: string) {
     const providerName = form.state.name.trim();
     let updates: UpdateProviderInput = { name: providerName };
 
-    if (baseUrlEndpoint) {
+    if (isCustom) {
+      updates = {
+        ...updates,
+        ...buildProviderTextEndpointUpdates({
+          provider,
+          endpointUrls: form.state.endpointUrls,
+          defaultChatEndpoint: form.state.defaultChatEndpoint,
+        }),
+      };
+    } else if (baseUrlEndpoint) {
       try {
         updates = {
           ...updates,
@@ -228,6 +243,7 @@ export function useImportedProviderForm(providerId: string) {
     baseUrlEndpoint,
     canSubmit,
     form.state,
+    isCustom,
     provider,
     providerAvatars,
     providerId,

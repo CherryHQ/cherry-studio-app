@@ -27,6 +27,7 @@ function model(modelId: string, overrides: Partial<Model> = {}): Model {
 
 function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
   const dependencies: ModelsModuleDependencies = {
+    checkChatModel: jest.fn(async () => ({ status: 'success' as const, latency: 10 })),
     ai: {
       checkModel: jest.fn(async () => ({ latency: 12 })),
       listModels: jest.fn(async () => []),

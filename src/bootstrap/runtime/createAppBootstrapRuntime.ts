@@ -1,6 +1,7 @@
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
+import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
@@ -60,7 +61,7 @@ export function createAppBootstrapRuntime(
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
-  const languageServing = host.container.get<LanguageServingSupport>('AgentRuntime');
+  const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(

@@ -189,15 +189,18 @@ function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType
   const value = state.endpointUrls[endpoint] ?? '';
 
   return (
-    <Input
-      accessibilityLabel={label}
-      autoCapitalize="none"
-      autoCorrect={false}
-      disabled={meta.isSubmitting}
-      keyboardType="url"
-      onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
-      placeholder={label}
-      value={value}
-    />
+    <TextField disabled={meta.isSubmitting}>
+      <TextField.Label>{label}</TextField.Label>
+      <Input
+        accessibilityLabel={label}
+        autoCapitalize="none"
+        autoCorrect={false}
+        disabled={meta.isSubmitting}
+        keyboardType="url"
+        onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
+        placeholder={label}
+        value={value}
+      />
+    </TextField>
   );
 }

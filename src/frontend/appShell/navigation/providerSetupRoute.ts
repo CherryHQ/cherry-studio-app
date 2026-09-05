@@ -6,6 +6,10 @@ export type ProviderSetupRouteParamsInput = {
   returnTo?: string | string[];
 };
 
+/** Opt-in for dedicated first-use route adapters, not an ordinary settings URL parameter. */
+export type ProviderSetupIntent = 'chat';
+
+/** Day-to-day provider setup never enters the first-use onboarding stack. */
 export function providerSetupHref(returnTo: string) {
   return {
     params: { returnTo },
