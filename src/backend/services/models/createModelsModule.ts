@@ -6,15 +6,15 @@ import type {
   ReconcileModelsInput,
   ReconcileModelsResult,
 } from '@/shared/contracts';
-import { ModelPullTimeoutError } from '@/shared/contracts';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
 import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+
+import { getProviderConfigurationIssue } from '../providers/providerConfiguration';
 
 const defaultPullTimeoutMs = 10_000;
 const defaultHealthTimeoutMs = 15_000;
-const logger = loggerService.withContext('ModelsModule');
 
 type RemoteModel = Partial<Model>;
 
@@ -30,7 +30,8 @@ type ModelWorkflowData = {
 
 type ProviderWorkflowData = {
   get(id: string): Promise<Provider>;
-  update(id: string, input: { isEnabled: boolean }): Promise<Provider>;
+  keys(id: string): Promise<ApiKeyEntry[]>;
+  auth(id: string): Promise<AuthConfig | null>;
 };
 
 type ModelsAi = {
@@ -63,28 +64,6 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
       throw new Error(`Model not found: ${id}`);
     }
     return model;
-  };
-
-  const enableProviderWhenModelsAvailable = async (
-    provider: Pick<Provider, 'id' | 'isEnabled'>,
-    modelCount: number,
-    source: string,
-  ): Promise<boolean> => {
-    if (provider.isEnabled || modelCount <= 0) {
-      return false;
-    }
-
-    try {
-      await dependencies.providers.update(provider.id, { isEnabled: true });
-      return true;
-    } catch (error) {
-      logger.error('Failed to enable provider when models are available', toError(error), {
-        modelCount,
-        providerId: provider.id,
-        source,
-      });
-      return false;
-    }
   };
 
   const runPullRequest = async <T>(
@@ -144,16 +123,20 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
       input.onResult?.(result, index);
     }
 
-    if (results.length > 0 && results.every((result) => result.status === 'success')) {
-      const provider = await dependencies.providers.get(input.providerId);
-      await enableProviderWhenModelsAvailable(provider, models.length, 'health-check');
-    }
-
     return results;
   };
 
   const pull = async (providerId: string, signal?: AbortSignal): Promise<ModelPullResult> => {
     const provider = await dependencies.providers.get(providerId);
+    if (provider.modelListSource !== 'registry') {
+      const [keys, auth] = await Promise.all([
+        dependencies.providers.keys(providerId),
+        dependencies.providers.auth(providerId),
+      ]);
+      const issue = getProviderConfigurationIssue(provider, keys, auth);
+      if (issue) throw new ProviderSetupError(issue);
+    }
+    throwIfAborted(signal);
     const [localModels, remoteModels] = await runPullRequest(signal, (requestSignal) =>
       Promise.all([
         dependencies.models.list({ providerId }),
@@ -163,7 +146,12 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
           throwOnError: true,
         }),
       ]),
-    );
+    ).catch((error: unknown) => {
+      throwIfAborted(signal);
+      if (error instanceof ModelPullTimeoutError) throw error;
+      throw new ModelPullError(classifyPullFailure(error));
+    });
+    throwIfAborted(signal);
     const supportedLocalModels = localModels.filter((model) =>
       dependencies.isSystemSupportedModel(provider, model),
     );
@@ -181,12 +169,7 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
       return { preview, status: 'changes' };
     }
 
-    const providerEnabled = await enableProviderWhenModelsAvailable(
-      provider,
-      supportedLocalModels.length,
-      'pull-up-to-date',
-    );
-    return { providerEnabled, status: 'up-to-date' };
+    return { status: 'up-to-date' };
   };
 
   const reconcile = async (
@@ -202,13 +185,7 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
       },
       provider,
     );
-    const providerEnabled = await enableProviderWhenModelsAvailable(
-      provider,
-      result.added.length,
-      'reconcile',
-    );
-
-    return { ...result, providerEnabled };
+    return result;
   };
 
   return { checkHealth, pull, reconcile };
@@ -271,6 +248,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim() ? error.message : String(error);
 }
 
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
+function classifyPullFailure(error: unknown): ModelPullError['reason'] {
+  if (error && typeof error === 'object') {
+    const status = 'statusCode' in error ? error.statusCode : undefined;
+    if (status === 401 || status === 403) return 'authentication';
+    if (status === 404 || status === 405 || status === 501) return 'unavailable';
+    if (status === 429) return 'rate-limited';
+    if (typeof status === 'number' && status >= 500) return 'unavailable';
+    if ('cause' in error && error.cause && error.cause !== error) {
+      const cause = error.cause;
+      if (cause instanceof TypeError) return 'network';
+    }
+  }
+  return error instanceof TypeError ? 'network' : 'failed';
 }

@@ -6,8 +6,22 @@ export type ModelPullPreview = {
 };
 
 export type ModelPullResult =
-  | { providerEnabled: boolean; status: 'up-to-date' }
+  | { status: 'up-to-date' }
   | { preview: ModelPullPreview; status: 'changes' };
+
+export class ModelPullError extends Error {
+  constructor(
+    public readonly reason:
+      | 'authentication'
+      | 'unavailable'
+      | 'rate-limited'
+      | 'network'
+      | 'failed',
+  ) {
+    super(`Model list request failed: ${reason}`);
+    this.name = 'ModelPullError';
+  }
+}
 
 export class ModelPullTimeoutError extends Error {
   constructor(timeoutMs: number) {
@@ -27,7 +41,6 @@ export type ReconcileModelsInput = {
 
 export type ReconcileModelsResult = {
   added: Model[];
-  providerEnabled: boolean;
   removedIds: UniqueModelId[];
 };
 

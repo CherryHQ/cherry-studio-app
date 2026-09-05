@@ -10,24 +10,26 @@ import {
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
+import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { useProviderApiServiceSheetClose } from '../apiService';
+import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
 import { providerFormAvatarSize } from '../components/ProviderForm';
-import {
-  ProviderNewFormContent,
-  useImportedProviderForm,
-  useNewProviderForm,
-} from './components/ProviderCreationForm';
+import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
+import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
 
 export default function ProviderCreationScreen() {
   const {
     providerId,
     providerName,
+    intent,
+    issue,
     returnTo: rawReturnTo,
   } = useLocalSearchParams<
     ProviderSetupRouteParamsInput & {
       providerId?: string;
       providerName?: string;
+      intent?: string;
+      issue?: ProviderConfigurationIssue;
     }
   >();
   const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
@@ -37,6 +39,8 @@ export default function ProviderCreationScreen() {
       providerId={providerId}
       providerName={providerName}
       returnTo={returnTo}
+      intent={intent === 'sync' ? 'sync' : 'enable'}
+      issue={issue}
     />
   ) : (
     <CustomProviderCreationScreen returnTo={returnTo} />
@@ -63,6 +67,7 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
         pathname: '/settings/provider/[providerId]/model-add',
         params: {
           mode: 'sync',
+          enableProvider: 'true',
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
           returnTo,
@@ -89,37 +94,28 @@ function ImportedProviderCreationScreen({
   providerId,
   providerName,
   returnTo,
+  intent,
+  issue,
 }: {
   providerId: string;
   providerName?: string;
   returnTo: string;
+  intent: ProviderSetupIntent;
+  issue?: ProviderConfigurationIssue;
 }) {
   const { t } = useTranslation();
-  const router = useRouter();
-  const importedProviderForm = useImportedProviderForm(providerId);
-  const saveImportedProvider = importedProviderForm.handleSave;
+  const { isPreparing, openSetup } = useProviderSetup();
+  const importedProviderForm = useProviderConfigurationForm(providerId);
+  const saveImportedProvider = importedProviderForm.requestSave;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: importedProviderForm.form.meta.isDirty,
-    isSaving: importedProviderForm.isSaving,
+    isSaving: importedProviderForm.isSaving || isPreparing,
   });
   const handleSave = useCallback(() => {
-    void saveImportedProvider().then((configuredProvider) => {
-      if (!configuredProvider) {
-        return;
-      }
-
-      allowNavigation();
-      router.replace({
-        pathname: '/settings/provider/[providerId]/model-add',
-        params: {
-          mode: 'sync',
-          providerId: configuredProvider.providerId,
-          providerName: configuredProvider.providerName,
-          returnTo,
-        },
-      });
+    saveImportedProvider((configuredProvider) => {
+      void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
     });
-  }, [allowNavigation, returnTo, router, saveImportedProvider]);
+  }, [allowNavigation, intent, openSetup, returnTo, saveImportedProvider]);
   const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
 
   return (
@@ -150,9 +146,18 @@ function ImportedProviderCreationScreen({
               size={providerFormAvatarSize}
             />
           }
-          canSave={importedProviderForm.canSubmit}
+          canSave={importedProviderForm.canCompleteSetup && !isPreparing}
+          issue={
+            issue ??
+            (importedProviderForm.requiresApiKey && !importedProviderForm.form.state.apiKey.trim()
+              ? 'missing-api-key'
+              : undefined)
+          }
+          disabledKeys={importedProviderForm.disabledKeys}
+          onEnableKeys={importedProviderForm.enableKeys}
+          endpointMode={importedProviderForm.isCustomProvider ? 'custom-text' : 'primary'}
           form={importedProviderForm.form}
-          isSaving={importedProviderForm.isSaving}
+          isSaving={importedProviderForm.isSaving || isPreparing}
           onSave={handleSave}
           showApiKey={importedProviderForm.showApiKey}
         />

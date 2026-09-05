@@ -16,6 +16,9 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `detail/` owns `/settings/provider/[providerId]`; its `edit/`, `modelAdd/`, and `modelPull/`
   directories own the dynamic route's child pages. Model synchronization and manual model creation
   are separate entry points and do not switch modes inside either task.
+- `detail/modelAdd/` dispatches to separate manual and synchronization components. Their shared
+  completion hook preserves activation intent, saved-model retries, and the return destination;
+  only the manual form owns keyboard behavior, and only synchronization owns pull selection.
 - `apiService/` owns API key, authentication, endpoint draft, dirty-state, and save behavior.
 - `components/` contains UI shared within the provider page branch. Page-specific UI stays in the
   child page's own `components/` directory.
@@ -34,15 +37,25 @@ returns to the requesting surface, or to the provider list when settings opened 
 ## Provider Form
 
 `ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-and `.ApiKey`. The draft lives in `useProviderFormDraft`, which the screen calls and passes down so
-the screen can drive its visible Save action from the same state. Creation and detail compose the
-same form with different slots instead of configuring it with screen flags.
+and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
+validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
+own initial persistence step. Each screen drives its actions from the same draft that its fields
+consume and composes the slots it needs.
 
 ## Connectivity And Models
 
 The connectivity check selects one provider-scoped model and uses the first enabled API key;
-neither choice is stored. New and newly enabled providers continue through synchronization before
-setup completes. The provider's model tab exposes synchronization and manual creation as two direct
-header actions; synchronization is the primary workflow, while manual creation remains an explicit
-separate task. Model grouping, selection, synchronization previews, and health-check logic remain
-private under `models/`.
+neither choice is stored. Checks and ordinary synchronization never change provider activation.
+
+`useProviderSetup` owns the explicit activation path: inspect persisted configuration, repair missing
+credentials or endpoints with the shared creation form, and enable directly when a supported enabled
+model already exists. Otherwise, continue through synchronization or its independent manual-add
+fallback. `returnTo` preserves the requesting surface; `enableProvider` explicitly identifies model
+tasks that must complete activation. Saving models and enabling a provider have separate outcomes,
+so an activation failure can be retried without adding the same models again.
+
+The model tab has separate synchronization and manual-add icon actions. It lists all installed
+provider models for management, labels unavailable models, and supports detail, edit, contextual
+menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
+`edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
+`models/`.
