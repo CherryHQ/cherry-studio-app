@@ -76,6 +76,49 @@ describe('public skill entry points', () => {
 });
 
 describe('public skill reference links', () => {
+  test('reports a required dependency missing from project skill usage rules', () => {
+    const root = createFixture({
+      '.agents/skills/README.md': '[Required diagnosis](diagnose/SKILL.md)\n',
+    });
+    expect(runCheck(root, 'check-doc-links.ts')).toEqual({
+      status: 1,
+      output: expect.stringContaining('.agents/skills/README.md:1'),
+    });
+  });
+
+  test.each([
+    {
+      name: 'allows the exact optional upstream reference',
+      file: 'native-platform-setup.md',
+      target: '../../upgrading-react-native/references/upgrading-react-native.md',
+      status: 0,
+    },
+    {
+      name: 'rejects another missing reference in the same upstream file',
+      file: 'native-platform-setup.md',
+      target: './missing.md',
+      status: 1,
+    },
+    {
+      name: 'rejects the optional target when referenced from another file',
+      file: 'another-guide.md',
+      target: '../../upgrading-react-native/references/upgrading-react-native.md',
+      status: 1,
+    },
+  ])('$name', ({ file, target, status }) => {
+    const root = createFixture({
+      '.agents/skills/public-skills.txt': 'example\nreact-native-best-practices\n',
+      [`.agents/skills/react-native-best-practices/references/${file}`]: `[Reference](${target})\n`,
+    });
+    const result = runCheck(root, 'check-doc-links.ts');
+    expect(result.status).toBe(status);
+    if (status !== 0) {
+      expect(result.output).toContain(
+        `.agents/skills/react-native-best-practices/references/${file}:1`,
+      );
+    }
+  });
+
   test('reports a missing linked dependency inside a public skill reference', () => {
     const root = createFixture({
       '.agents/skills/example/references/workflow.md': '[Required skill](../../missing/SKILL.md)\n',

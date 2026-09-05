@@ -10,6 +10,8 @@ not replace the custom development client, Uniwind styling, CherryUI ownership, 
 boundaries, or project naming and motion contracts. Keep personal agent preferences in user-level
 configuration, not in repository rules.
 
+- Before using a project skill, read [Project Skills](.agents/skills/README.md) for repository usage
+  rules and required dependencies. Keep upstream skill files unchanged.
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read

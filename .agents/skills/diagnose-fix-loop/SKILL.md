@@ -7,16 +7,17 @@ description: Iterative diagnose-and-fix workflow that repeatedly uses the diagno
 
 Use this skill to drive a complete improvement loop, not a single debugging pass.
 
-Before starting, load and follow the project [diagnose skill](../diagnose/SKILL.md). Activating
-this loop also activates that dependency for its evidence phases; do not substitute a same-named
-personal skill. This skill adds planning, implementation, re-diagnosis, and stop decisions.
+Before starting, load and follow `$diagnose`. Treat `$diagnose` as the evidence engine for each pass; this skill only adds the outer loop that plans, implements, re-runs diagnosis, and decides whether to continue.
 
 This skill owns planning and implementation after `$diagnose` proves the cause.
 
-The repository tracks both skills in its public whitelist. If the linked dependency is missing,
-stop before changes and report the broken repository installation; restore the project copy rather
-than installing a potentially different personal version. Activation does not expand the task's
-permissions or turn a read-only request into implementation authorization.
+Selected installs do not install dependencies automatically. If `$diagnose` is not installed or available, stop before making changes. Tell the user to install it with:
+
+```bash
+npx skills add LegendApp/legend-skills --skill diagnose
+```
+
+Then ask them to retry after installation.
 
 ## Loop
 

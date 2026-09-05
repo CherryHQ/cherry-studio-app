@@ -10,6 +10,15 @@ const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'build', 'coverage'
 // Public skills are versioned project guidance; ignored personal skills are not scanned.
 const MARKDOWN_LINK_RE = /!?\[[^\]]*\]\(([^)]+)\)/g;
 
+// Preserve this optional upstream reference verbatim. This Expo app uses upgrading-expo instead;
+// required dependencies are declared in .agents/skills/README.md and are never exempted.
+const OPTIONAL_UPSTREAM_LINKS = [
+  {
+    file: '.agents/skills/react-native-best-practices/references/native-platform-setup.md',
+    target: '../../upgrading-react-native/references/upgrading-react-native.md',
+  },
+];
+
 interface BrokenLink {
   file: string;
   line: number;
@@ -68,6 +77,7 @@ function parseRelativeTarget(rawLink: string): string | null {
 
 function checkFile(filePath: string): BrokenLink[] {
   const brokenLinks: BrokenLink[] = [];
+  const relativeFile = path.relative(ROOT, filePath);
   const lines = fs.readFileSync(filePath, 'utf8').split('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -80,9 +90,12 @@ function checkFile(filePath: string): BrokenLink[] {
       const relativeTarget = parseRelativeTarget(rawLink);
       if (relativeTarget) {
         const resolvedPath = path.resolve(path.dirname(filePath), relativeTarget);
-        if (!fs.existsSync(resolvedPath)) {
+        const isOptionalUpstreamLink = OPTIONAL_UPSTREAM_LINKS.some(
+          (entry) => entry.file === relativeFile && entry.target === relativeTarget,
+        );
+        if (!fs.existsSync(resolvedPath) && !isOptionalUpstreamLink) {
           brokenLinks.push({
-            file: path.relative(ROOT, filePath),
+            file: relativeFile,
             line: index + 1,
             link: rawLink,
             resolvedPath: path.relative(ROOT, resolvedPath),
@@ -102,6 +115,11 @@ function collectMarkdownFiles(): string[] {
     const absolutePath = path.join(ROOT, directory);
     return fs.existsSync(absolutePath) ? findMarkdownFiles(absolutePath) : [];
   });
+
+  const skillsReadme = path.join(AGENTS_SKILLS_DIR, 'README.md');
+  if (fs.existsSync(skillsReadme)) {
+    files.push(skillsReadme);
+  }
 
   for (const skillName of listSkillNames()) {
     const skillDirectory = path.join(AGENTS_SKILLS_DIR, skillName);

@@ -110,8 +110,11 @@ link checks for non-draft PRs targeting `v0.2`.
   fixtures and instruction-tooling regressions. Run the affected tooling suites locally without
   `PRCI` when changing those tools; remote success does not cover them.
 - `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
-  `docs:check-links` checks relative file links in project docs and public skill Markdown, including
-  linked skill prerequisites. It does not validate Markdown anchors, remote URLs, or dependencies
-  mentioned only as plain text. Required local skill references should be Markdown links.
+  `docs:check-links` checks relative file links in project docs, the
+  [Project Skills usage rules](../../.agents/skills/README.md), and public skill Markdown, including
+  linked skill prerequisites. One exact optional upstream reference is exempted as documented in
+  those usage rules; other missing links fail. The check does not validate Markdown anchors, remote
+  URLs, or dependencies mentioned only as plain text. Declare required local skill dependencies as
+  Markdown links in the project usage rules without editing upstream skill files.
 
 A PR is merge-ready only after its remote checks pass.
