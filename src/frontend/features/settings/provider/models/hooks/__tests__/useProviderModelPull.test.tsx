@@ -106,7 +106,7 @@ describe('useProviderModelPull', () => {
   });
 
   it('reports an up-to-date provider without a preview', async () => {
-    mockPull.mockResolvedValue({ providerEnabled: true, status: 'up-to-date' });
+    mockPull.mockResolvedValue({ status: 'up-to-date' });
     mount();
 
     expect(await load()).toBe('empty');
@@ -134,7 +134,7 @@ describe('useProviderModelPull', () => {
   // The screen a pull runs on renders the outcome itself, so a dialog or a
   // toast from here would put the same sentence on screen twice.
   it('says nothing on its own for any outcome', async () => {
-    mockPull.mockResolvedValue({ providerEnabled: true, status: 'up-to-date' });
+    mockPull.mockResolvedValue({ status: 'up-to-date' });
     mount();
     await load();
 

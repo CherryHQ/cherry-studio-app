@@ -48,6 +48,7 @@ jest.mock('@/frontend/components/Composer', () => ({
 jest.mock('expo-router', () => ({
   useIsPreview: () => false,
   useLocalSearchParams: () => mockRouteParams,
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));

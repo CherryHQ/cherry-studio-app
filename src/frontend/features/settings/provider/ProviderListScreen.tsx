@@ -14,6 +14,7 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsServiceRow, type SettingsServiceRowProps } from '../components/SettingsServiceRow';
 import { ProviderAvatar } from './components/ProviderAvatar';
+import { useProviderSetup } from './hooks/useProviderSetup';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;
@@ -39,6 +40,7 @@ export default function ProviderListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  const { isPreparing, openSetup } = useProviderSetup();
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
   const pendingProviderIdsRef = useRef(new Set<string>());
@@ -72,22 +74,7 @@ export default function ProviderListScreen() {
       }
 
       if (isEnabled) {
-        // Enabling is a setup flow: model synchronization turns the provider on
-        // only after it has confirmed that usable models are available.
-        if (isNavigatingRef.current) {
-          return;
-        }
-
-        isNavigatingRef.current = true;
-        router.push({
-          params: {
-            mode: 'sync',
-            providerId: provider.id,
-            providerName: provider.name,
-            returnTo: '/settings/provider',
-          },
-          pathname: '/settings/provider/[providerId]/model-add',
-        });
+        void openSetup(provider.id, '/settings/provider');
         return;
       }
 
@@ -116,7 +103,7 @@ export default function ProviderListScreen() {
           });
         });
     },
-    [router, t, toast, updateProviderEnabled],
+    [openSetup, t, toast, updateProviderEnabled],
   );
 
   const providersPageQuery = useInfiniteQuery('/providers/page', {
@@ -173,18 +160,19 @@ export default function ProviderListScreen() {
                 : 'settings.provider.enableProviderNamed',
               { name: provider.name },
             ),
-            disabled: pendingProviderStates.has(provider.id),
+            disabled: isPreparing || pendingProviderStates.has(provider.id),
             onValueChange: (isEnabled) => toggleProviderEnabled(provider, isEnabled),
             testID: `provider-enabled-switch-${provider.id}`,
             value: displayedEnabled,
           },
+          disabled: isPreparing,
           id: provider.id,
           isEnabled: provider.isEnabled,
           name: provider.name,
           onPress: () => openProvider(provider),
         };
       }),
-    [listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
+    [isPreparing, listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
   );
   const providerSections = useMemo<ProviderListSection[]>(() => {
     const enabledProviders = providerItems.filter(({ isEnabled }) => isEnabled);

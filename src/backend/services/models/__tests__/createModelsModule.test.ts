@@ -1,5 +1,5 @@
 import type { ModelsModule } from '@/shared/contracts';
-import { ModelPullTimeoutError } from '@/shared/contracts';
+import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -8,6 +8,9 @@ import { createModelsModule, type ModelsModuleDependencies } from '../createMode
 const provider = {
   id: 'openai',
   isEnabled: false,
+  authType: 'api-key',
+  defaultChatEndpoint: 'openai-chat-completions',
+  endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
 } as Provider;
 
 function model(modelId: string, overrides: Partial<Model> = {}): Model {
@@ -27,6 +30,7 @@ function model(modelId: string, overrides: Partial<Model> = {}): Model {
 
 function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
   const dependencies: ModelsModuleDependencies = {
+    checkChatModel: jest.fn(async () => ({ status: 'success' as const, latency: 10 })),
     ai: {
       checkModel: jest.fn(async () => ({ latency: 12 })),
       listModels: jest.fn(async () => []),
@@ -42,8 +46,9 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
       })),
     },
     providers: {
+      auth: async () => null,
       get: jest.fn(async () => provider),
-      update: jest.fn(async () => ({ ...provider, isEnabled: true })),
+      keys: jest.fn(async () => [{ id: 'key-1', key: 'configured', isEnabled: true }]),
     },
     ...overrides,
   };
@@ -90,25 +95,22 @@ describe('createModelsModule', () => {
     jest.mocked(dependencies.ai.listModels).mockResolvedValue([supported, unsupportedRemote]);
 
     await expect(backend.pull('openai')).resolves.toEqual({
-      providerEnabled: true,
       status: 'up-to-date',
     });
   });
 
-  it('enables a disabled provider after an up-to-date pull with local models', async () => {
+  it('returns an up-to-date result without an implicit enable result', async () => {
     const current = model('current');
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.list).mockResolvedValue([current]);
     jest.mocked(dependencies.ai.listModels).mockResolvedValue([current]);
 
     await expect(backend.pull('openai')).resolves.toEqual({
-      providerEnabled: true,
       status: 'up-to-date',
     });
-    expect(dependencies.providers.update).toHaveBeenCalledWith('openai', { isEnabled: true });
   });
 
-  it('reports model health sequentially and enables the provider after success', async () => {
+  it('reports model health sequentially', async () => {
     const first = model('first');
     const second = model('second');
     const onResult = jest.fn();
@@ -130,10 +132,9 @@ describe('createModelsModule', () => {
       2,
       expect.objectContaining({ uniqueModelId: second.id }),
     );
-    expect(dependencies.providers.update).toHaveBeenCalled();
   });
 
-  it('continues after a failed health check and does not enable the provider', async () => {
+  it('continues after a failed health check', async () => {
     const first = model('first');
     const second = model('second');
     const onResult = jest.fn();
@@ -155,7 +156,6 @@ describe('createModelsModule', () => {
       { latency: 18, model: second, status: 'success' },
     ]);
     expect(onResult).toHaveBeenCalledTimes(2);
-    expect(dependencies.providers.update).not.toHaveBeenCalled();
   });
 
   it('stops a health check when its external signal aborts', async () => {
@@ -177,7 +177,6 @@ describe('createModelsModule', () => {
       }),
     ).rejects.toThrow('cancelled');
     expect(dependencies.ai.checkModel).toHaveBeenCalledTimes(1);
-    expect(dependencies.providers.update).not.toHaveBeenCalled();
   });
 
   it('rejects a stalled pull with the stable contract error', async () => {
@@ -190,5 +189,34 @@ describe('createModelsModule', () => {
     });
 
     await expect(backend.pull('openai')).rejects.toBeInstanceOf(ModelPullTimeoutError);
+  });
+  it('blocks a missing required API key before dispatching a model request', async () => {
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.providers.keys).mockResolvedValue([]);
+    await expect(backend.pull('openai')).rejects.toEqual(new ProviderSetupError('missing-api-key'));
+    expect(dependencies.ai.listModels).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [401, 'authentication'],
+    [403, 'authentication'],
+    [404, 'unavailable'],
+    [429, 'rate-limited'],
+  ] as const)('maps HTTP %s to a recoverable model-list error', async (statusCode, reason) => {
+    const { backend, dependencies } = createSubject();
+    jest
+      .mocked(dependencies.ai.listModels)
+      .mockRejectedValue({ statusCode, message: 'private diagnostic' });
+    await expect(backend.pull('openai')).rejects.toEqual(new ModelPullError(reason));
+  });
+
+  it('does not publish a completed preview after cancellation', async () => {
+    const controller = new AbortController();
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.ai.listModels).mockImplementation(async () => {
+      controller.abort(new Error('cancelled'));
+      return [model('remote')];
+    });
+    await expect(backend.pull('openai', controller.signal)).rejects.toThrow('cancelled');
   });
 });

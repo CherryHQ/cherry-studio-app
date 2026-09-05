@@ -1,3 +1,5 @@
+import { checkChatModel } from '@/backend/ai/agent/modelCheck';
+import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -36,6 +38,7 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
@@ -51,7 +54,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
-    languageServing: LanguageServingSupport;
+    languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
   },
 ): BackendComposition {
@@ -65,6 +68,25 @@ export function createBackend(
   };
   const models = createModelsModule({
     ai: services.ai,
+    checkChatModel: (model, signal) =>
+      checkChatModel(infrastructure.languageServing, model, {
+        signal,
+        onUsage: async (report, requestId) => {
+          try {
+            await services.aiUsageRecord.recordInvocation({
+              completedAt: report.completedAt,
+              context: { ...report.context, messageRef: null, source: null },
+              modality: 'language',
+              requestId,
+              usage: report.usage,
+            });
+          } catch {
+            loggerService
+              .withContext('ModelsModule')
+              .warn('Failed to record chat model check usage');
+          }
+        },
+      }),
     isSystemSupportedModel: isModelSupportedBySystem,
     materializeRemoteModels,
     models: {
@@ -81,7 +103,8 @@ export function createBackend(
     },
     providers: {
       get: (id) => services.provider.getByProviderId(id),
-      update: (id, input) => services.provider.update(id, input),
+      keys: async (id) => (await services.provider.listApiKeys(id)).keys,
+      auth: (id) => services.provider.getAuthConfig(id),
     },
   });
   const paintings = createPaintingsModule({
@@ -104,6 +127,10 @@ export function createBackend(
     servers: services.mcpServer,
   });
   const providers = createProvidersModule({
+    hasAvailableModels: async (provider) =>
+      (await services.model.list({ providerId: provider.id, enabled: true })).some((model) =>
+        isModelSupportedBySystem(provider, model),
+      ),
     avatars: {
       persist: saveProviderAvatar,
       remove: deleteProviderAvatar,
@@ -114,6 +141,10 @@ export function createBackend(
       list: () => providerRegistryService.loadProviders(),
     },
     providers: {
+      get: (id) => services.provider.getByProviderId(id),
+      keys: async (id) => (await services.provider.listApiKeys(id)).keys,
+      auth: (id) => services.provider.getAuthConfig(id),
+      enable: (id) => services.provider.update(id, { isEnabled: true }),
       create: (input) => services.provider.create(input),
       find: async (providerId) => {
         const row = await services.provider.getRowByProviderId(providerId);
