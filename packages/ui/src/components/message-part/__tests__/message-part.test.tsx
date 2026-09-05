@@ -115,7 +115,7 @@ const findRenderedByTestId = (renderer: ReactTestRenderer, testID: string) =>
 
 const findPressableByTestId = (renderer: ReactTestRenderer, testID: string) => {
   const pressable = renderer.root.findAll(
-    (node) => node.props.accessibilityRole === 'button' && node.props.testID === testID,
+    (node) => node.props?.accessibilityRole === 'button' && node.props.testID === testID,
   )[0];
 
   if (!pressable) throw new Error(`Pressable ${testID} was not rendered.`);
