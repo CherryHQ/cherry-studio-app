@@ -3,16 +3,24 @@ import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 import type { ManagedFileFact } from '../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
-  createEditFileTool,
+  createEditFileTool as createTool,
   EDIT_FILE_MAX_CONTENT_BYTES,
+  EDIT_FILE_SNIPPET_MAX_CHARACTERS,
   type EditFileFiles,
+  type TurnDraftScope,
 } from '../editFileTool';
 
 const SOURCE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const EDITED_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
+const NO_DRAFTS: TurnDraftScope = { draftFileEntryIds: new Set() };
+const SOURCE_IS_DRAFT: TurnDraftScope = { draftFileEntryIds: new Set([SOURCE_ID]) };
+
+function createEditFileTool(files: EditFileFiles, drafts: TurnDraftScope = NO_DRAFTS) {
+  return createTool(files, drafts);
+}
 
 describe('editFileTool', () => {
-  test('creates a derived copy after one exact replacement', async () => {
+  test('saves a new version after one exact replacement of a historical file', async () => {
     const files = createFiles('Hello world\n');
     const output = await execute(createEditFileTool(files), {
       file_entry_id: SOURCE_ID,
@@ -23,26 +31,82 @@ describe('editFileTool', () => {
     expect(files.createTextEntry).toHaveBeenCalledWith({
       data: 'Hello Cherry\n',
       mediaType: 'text/markdown',
-      name: 'notes.md',
+      name: 'notes v2.md',
       provenance: 'generated',
     });
+    expect(files.rewriteTextEntry).not.toHaveBeenCalled();
     expect(output).toEqual({
       value: {
         status: 'edited',
         sourceFileEntryId: SOURCE_ID,
         fileEntryId: EDITED_ID,
-        filename: 'notes.md',
+        filename: 'notes v2.md',
         size: 13,
         replacements: 1,
+        snippet: 'Hello Cherry\n',
+        snippetStartLine: 1,
       },
       artifacts: [
         {
           ref: { kind: 'managed-file', fileEntryId: EDITED_ID },
           mediaType: 'text/markdown',
-          name: 'notes.md',
+          name: 'notes v2.md',
           kind: 'derived',
         },
       ],
+    });
+  });
+
+  test('rewrites a draft this turn produced in place and adds no artifact', async () => {
+    const files = createFiles('Hello world\n');
+    const output = await execute(createEditFileTool(files, SOURCE_IS_DRAFT), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'world',
+      new_string: 'Cherry',
+    });
+
+    expect(files.rewriteTextEntry).toHaveBeenCalledWith({ data: 'Hello Cherry\n', id: SOURCE_ID });
+    expect(files.createTextEntry).not.toHaveBeenCalled();
+    expect(output).toEqual({
+      value: {
+        status: 'edited',
+        sourceFileEntryId: SOURCE_ID,
+        fileEntryId: SOURCE_ID,
+        filename: 'notes.md',
+        size: 13,
+        replacements: 1,
+        snippet: 'Hello Cherry\n',
+        snippetStartLine: 1,
+      },
+      artifacts: [],
+    });
+  });
+
+  test('returns the edited region with two lines of context on each side', async () => {
+    const files = createFiles('l1\nl2\nl3\nl4 old\nl5\nl6\nl7\n');
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'old',
+      new_string: 'new',
+    });
+
+    expect(output.value).toMatchObject({
+      snippet: 'l2\nl3\nl4 new\nl5\nl6\n',
+      snippetStartLine: 2,
+    });
+  });
+
+  test('caps the snippet when the replacement itself is long', async () => {
+    const files = createFiles('x');
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'x',
+      new_string: 'y'.repeat(EDIT_FILE_SNIPPET_MAX_CHARACTERS + 10),
+    });
+
+    expect(output.value).toMatchObject({
+      snippet: `${'y'.repeat(EDIT_FILE_SNIPPET_MAX_CHARACTERS)}…`,
+      snippetStartLine: 1,
     });
   });
 
@@ -279,10 +343,28 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
       updatedAt: 2,
     }),
   );
-  return { createTextEntry, readAsBytes, resolveAvailable } satisfies EditFileFiles & {
+  const rewriteTextEntry = jest.fn(
+    async (input: Parameters<EditFileFiles['rewriteTextEntry']>[0]) =>
+      FileEntrySchema.parse({
+        createdAt: 2,
+        filename: source.name,
+        id: input.id,
+        mediaType: source.mediaType,
+        provenance: 'generated',
+        size: new TextEncoder().encode(input.data).byteLength,
+        updatedAt: 3,
+      }),
+  );
+  return {
+    createTextEntry,
+    readAsBytes,
+    resolveAvailable,
+    rewriteTextEntry,
+  } satisfies EditFileFiles & {
     createTextEntry: jest.Mock;
     readAsBytes: jest.Mock;
     resolveAvailable: jest.Mock;
+    rewriteTextEntry: jest.Mock;
   };
 }
 

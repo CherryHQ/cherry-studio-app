@@ -16,6 +16,7 @@ import type { ConfiguredPaintingModel } from '../painting';
 
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
 const TURN_RESOURCES: TurnToolResources = {
+  draftFileEntryIds: new Set<string>(),
   fileEntryIds: new Set<string>(),
   grantFile: () => undefined,
 };
@@ -31,7 +32,7 @@ describe('createSystemCapabilitySource', () => {
     // Every device tool needs a permission, web tools need a configured
     // provider, and generate_image needs a drawing model, so only the
     // unconditional file tools survive.
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'write_file']);
+    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
   });
 
   test('adds a device tool once every scope it needs is grantable', async () => {
@@ -40,6 +41,7 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
+      'read_file',
       'write_file',
     ]);
 
@@ -75,7 +77,7 @@ describe('createSystemCapabilitySource', () => {
       disabledCapabilities: ['calendar'],
     });
 
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'write_file']);
+    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
   });
 
   test('reads mutations as ask and lookups as auto', async () => {
@@ -171,7 +173,11 @@ describe('createSystemCapabilitySource', () => {
     });
     jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
-    const resources: TurnToolResources = { fileEntryIds: new Set(), grantFile };
+    const resources: TurnToolResources = {
+      draftFileEntryIds: new Set(),
+      fileEntryIds: new Set(),
+      grantFile,
+    };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
       disabledCapabilities: [],
@@ -227,7 +233,7 @@ describe('createSystemCapabilitySource', () => {
     const tools = await source.getTools({
       disabledCapabilities: [],
       model: MODEL,
-      resources: { fileEntryIds: new Set(), grantFile },
+      resources: { draftFileEntryIds: new Set(), fileEntryIds: new Set(), grantFile },
     });
     const editFile = tools.find((tool) => tool.providerName === 'edit_file');
     if (!editFile) throw new Error('edit_file was not available.');
@@ -243,6 +249,96 @@ describe('createSystemCapabilitySource', () => {
       ref: { kind: 'managed-file', fileEntryId: entry.id },
       kind: 'derived',
     });
+  });
+
+  test('rewrites a draft this turn produced instead of deriving a copy', async () => {
+    const draftId = '00000000-0000-7000-8000-000000000001';
+    const entry = FileEntrySchema.parse({
+      createdAt: 2,
+      filename: 'notes.txt',
+      id: draftId,
+      mediaType: 'text/plain',
+      provenance: 'generated',
+      size: 3,
+      updatedAt: 3,
+    });
+    jest
+      .spyOn(managedFileResolver, 'resolveAvailable')
+      .mockResolvedValueOnce(
+        new Map([
+          [draftId, { fileEntryId: draftId, mediaType: 'text/plain', name: 'notes.txt', size: 3 }],
+        ]) as Awaited<ReturnType<typeof managedFileResolver.resolveAvailable>>,
+      );
+    jest
+      .spyOn(managedFileResolver, 'readAsBytes')
+      .mockResolvedValueOnce(new TextEncoder().encode('old'));
+    const createTextEntry = jest.spyOn(fileContent, 'createTextEntry');
+    const rewriteTextEntry = jest
+      .spyOn(fileContent, 'rewriteTextEntry')
+      .mockResolvedValueOnce(entry);
+    const grantFile = jest.fn();
+    const source = createSystemCapabilitySource(SERVICES, dependencies({}));
+    const tools = await source.getTools({
+      disabledCapabilities: [],
+      model: MODEL,
+      resources: {
+        draftFileEntryIds: new Set([draftId]),
+        fileEntryIds: new Set([draftId]),
+        grantFile,
+      },
+    });
+    const editFile = tools.find((tool) => tool.providerName === 'edit_file');
+    if (!editFile) throw new Error('edit_file was not available.');
+
+    const result = await editFile.execute({
+      input: { file_entry_id: draftId, old_string: 'old', new_string: 'new' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-3',
+    });
+
+    expect(rewriteTextEntry).toHaveBeenCalledWith({ data: 'new', id: draftId });
+    expect(createTextEntry).not.toHaveBeenCalled();
+    expect(grantFile).not.toHaveBeenCalled();
+    expect(result.artifacts).toEqual([]);
+    expect(result.value).toMatchObject({ status: 'edited', fileEntryId: draftId });
+  });
+
+  test('scopes read_file to the turn ledger', async () => {
+    const knownId = '00000000-0000-7000-8000-000000000001';
+    const unknownId = '00000000-0000-7000-8000-000000000009';
+    jest
+      .spyOn(managedFileResolver, 'resolveAvailable')
+      .mockResolvedValue(
+        new Map([
+          [knownId, { fileEntryId: knownId, mediaType: 'text/plain', name: 'notes.txt', size: 3 }],
+        ]) as Awaited<ReturnType<typeof managedFileResolver.resolveAvailable>>,
+      );
+    jest
+      .spyOn(managedFileResolver, 'readAsBytes')
+      .mockResolvedValue(new TextEncoder().encode('a\nb'));
+    const source = createSystemCapabilitySource(SERVICES, dependencies({}));
+    const tools = await source.getTools({
+      disabledCapabilities: [],
+      model: MODEL,
+      resources: { ...TURN_RESOURCES, fileEntryIds: new Set([knownId]) },
+    });
+    const readFile = tools.find((tool) => tool.providerName === 'read_file');
+    if (!readFile) throw new Error('read_file was not available.');
+    const signal = new AbortController().signal;
+
+    const known = await readFile.execute({
+      input: { file_entry_id: knownId },
+      signal,
+      toolCallId: 'c4',
+    });
+    const unknown = await readFile.execute({
+      input: { file_entry_id: unknownId },
+      signal,
+      toolCallId: 'c5',
+    });
+
+    expect(known.value).toMatchObject({ status: 'ok', text: 'a\nb', totalLines: 2 });
+    expect(unknown.value).toMatchObject({ status: 'error' });
   });
 });
 

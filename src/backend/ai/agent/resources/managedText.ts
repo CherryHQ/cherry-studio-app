@@ -7,6 +7,20 @@ export class ManagedTextError extends Error {
   }
 }
 
+/** A model-facing explanation of why a managed file could not be read as text. */
+export function describeManagedTextFailure(failure: ManagedTextFailure, maxBytes: number): string {
+  switch (failure) {
+    case 'binary-content':
+      return 'The managed file contains binary control characters.';
+    case 'file-bytes':
+      return `The managed file exceeds the ${maxBytes}-byte limit.`;
+    case 'invalid-utf8':
+      return 'The managed file is not valid UTF-8 text.';
+    case 'nul-byte':
+      return 'The managed file contains NUL bytes and appears to be binary.';
+  }
+}
+
 export type DecodedManagedText = {
   hasBom: boolean;
   text: string;
