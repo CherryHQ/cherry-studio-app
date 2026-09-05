@@ -248,6 +248,34 @@ export async function discardInternalEntries(
 }
 
 /**
+ * Replace the bytes of a draft text entry in place and record the new size.
+ * The one content write in the file model: a turn may rewrite an entry it
+ * produced until the turn ends, so repeated edits leave one artifact rather
+ * than a chain of same-name copies. Bytes go first; a crash before the row
+ * update leaves a stale `size`, which the next read tolerates, while a row
+ * updated ahead of its bytes would misreport content the blob never held.
+ */
+export async function rewriteInternalTextEntry(
+  entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
+  input: { data: string; id: FileEntryId },
+): Promise<FileEntry> {
+  const entry = await entries.findById(input.id);
+  if (!entry) {
+    throw new Error(`Draft file entry does not exist: ${input.id}`);
+  }
+  const file = managedFileForEntry(entry);
+  if (!file.exists) {
+    throw new Error(`Draft file bytes are missing: ${input.id}`);
+  }
+  await file.write(input.data);
+  const size = file.size;
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+  }
+  return entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
+}
+
+/**
  * Hard-delete an entry and its bytes. The row is removed first; the unlink is
  * best-effort (a leftover blob is reclaimable by the future cache-cleanup
  * sweep, while a dangling row would not be).

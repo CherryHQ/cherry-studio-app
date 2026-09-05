@@ -132,6 +132,21 @@ export class FileEntryService {
     return rowToFileEntry(row);
   }
 
+  /**
+   * Records the size of a rewritten draft blob. The only content write the
+   * model allows: a draft is rewritable by the turn that produced it and
+   * immutable afterwards (docs/references/data/file-model.md).
+   */
+  async updateSizeTx(tx: Database, id: FileEntryId, size: number): Promise<FileEntry> {
+    const [row] = await tx
+      .update(fileEntryTable)
+      .set({ size: z.int().nonnegative().parse(size) })
+      .where(eq(fileEntryTable.id, id))
+      .returning();
+    if (!row) throw DataApiErrorFactory.notFound('FileEntry', id);
+    return rowToFileEntry(row);
+  }
+
   async delete(id: FileEntryId): Promise<void> {
     await this.dbService.withWriteTx((tx) => this.deleteTx(tx, id));
   }
