@@ -5,6 +5,11 @@ Cherry Mobile is Cherry Studio's Expo and React Native client.
 Use `pnpm@12.2.1`. This repository has no root application build script: build workspace packages
 with `pnpm packages:build`, and run the complete repository type check with `pnpm typecheck`.
 
+Project architecture and conventions govern how reusable skills apply here. Generic examples do
+not replace the custom development client, Uniwind styling, CherryUI ownership, public module
+boundaries, or project naming and motion contracts. Keep personal agent preferences in user-level
+configuration, not in repository rules.
+
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read

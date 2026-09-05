@@ -31,8 +31,9 @@ the eligible interactions and cancellation order before choosing a gesture imple
 
 ## Compose Component APIs
 
-Use the project `vercel-composition-patterns` skill when creating or substantially changing a
-reusable React component API. In particular:
+Use the project
+[vercel-composition-patterns skill](../../.agents/skills/vercel-composition-patterns/SKILL.md)
+when creating or substantially changing a reusable React component API. In particular:
 
 - compose explicit variants instead of accumulating boolean mode props;
 - use compound components and children for structural composition;

@@ -153,6 +153,10 @@ OAuth, timeout, logging, and translation enter through Mobile-owned adapters.
 
 ## Synchronization Procedure
 
+Use the project [sync-cherry-desktop skill](../../../.agents/skills/sync-cherry-desktop/SKILL.md)
+and `pnpm desktop:sync:audit` for scoped review. The legacy Port Bot workflow is retired; blanket
+copying into the former `src/aiCore` layout is not a supported synchronization path.
+
 1. Record the Desktop commit being assessed; never record a local absolute checkout path.
 2. Inventory the candidate behavior's Mobile callers and classify it as Pi conversation behavior,
    non-conversation `AiService` behavior, or shared provider data.

@@ -1,11 +1,15 @@
 ---
 name: diagnose
-description: Opt-in evidence-first causal diagnosis for bugs, browser or app/device failures, flaky behavior, and performance regressions. Activate only when the user explicitly invokes `$diagnose` or explicitly asks to use the named diagnose skill. Do not activate merely because the user mentions a bug, asks why something failed, requests debugging or a fix, or describes unexpected behavior. Once explicitly invoked, locate likely causes, instrument relevant boundaries with extensive structured logging, reproduce the issue, analyze the collected logs, rank causes with confidence scores, and pursue 100% operational confidence while probes can increase confidence.
+description: Opt-in evidence-first causal diagnosis for bugs, app/device failures, flaky behavior, and performance regressions. Activate when the user explicitly invokes `$diagnose` or names this skill, or as the evidence phase of an activated project diagnose-fix-loop. Ordinary bug reports and debugging requests alone do not activate this skill. Locate likely causes, instrument relevant boundaries, reproduce the symptom, analyze logs, rank causes, and pursue 100% operational confidence while distinct probes can increase confidence.
 ---
 
 # Diagnose
 
-Use this workflow only after the explicit opt-in described in the frontmatter. A normal bug report or debugging request does not opt in to this skill.
+Use this workflow only after the opt-in described in the frontmatter. An activated project
+[diagnose-fix-loop](../diagnose-fix-loop/SKILL.md) may invoke this project copy as its evidence
+phase without a second named invocation. A normal bug report or debugging request alone does not
+opt in. Dependency activation does not grant additional permission for tests, device actions, or
+external mutations; respect the active task's scope and report unavailable evidence as incomplete.
 
 Find and explain the cause of a symptom with 100% operational confidence.
 

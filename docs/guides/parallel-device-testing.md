@@ -117,8 +117,10 @@ Clean up Android with the same ownership guarantees:
 4. Remove the workspace emulator metadata after deletion succeeds or the recorded device is
    already absent.
 
-The local Conductor archive script repeats this cleanup as a fallback. Cleanup must be idempotent and
-must refuse to delete an unrecorded or name-mismatched simulator.
+The repository does not provide a Conductor archive hook that guarantees this cleanup. Perform the
+steps above explicitly; do not assume archiving a workspace releases its devices and processes.
+A locally configured archive hook may repeat the same cleanup as a fallback. That configuration
+belongs to the local environment, not to this guide's current-state guarantees.
 
-The same fallback and idempotency requirements apply to Android cleanup, which must also refuse to
-delete a physical device.
+All cleanup paths must be idempotent and refuse to delete unrecorded or name-mismatched devices.
+Android cleanup must also refuse to delete a physical device.

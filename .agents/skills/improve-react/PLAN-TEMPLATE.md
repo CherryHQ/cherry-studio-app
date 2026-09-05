@@ -59,7 +59,8 @@ a rule-backed finding. Never approximate the fix.
 - **Mechanical**:
   - `npx react-doctor@latest --scope changed` clears the targeted diagnostic and
     the score does not regress.
-  - Run the repository's typecheck, lint, and focused/full tests.
+  - Use the gates and focused suites in the repository's Testing And CI guide;
+    record unexecuted checks and their reasons instead of marking them passed.
 - **Behavior check**: Interact with `<specific route/control>` and confirm
   `<observable behavior>` is unchanged. For a performance plan, record the
   before/after in the React DevTools Profiler and confirm the unnecessary
@@ -78,5 +79,5 @@ a rule-backed finding. Never approximate the fix.
   `npx react-doctor@latest rules explain <rule>`.
 - The behavior check is not optional. For performance work, the Profiler and
   “Highlight updates” check are not optional either.
-- After writing plans, create or update `plans/README.md` with plan status,
+- After writing plans, create or update the artifact directory's `README.md` with plan status,
   recommended execution order, and dependencies.

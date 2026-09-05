@@ -1,11 +1,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { AGENTS_SKILLS_DIR, listSkillNames } from './skills-common';
+
 const ROOT = path.resolve(__dirname, '..');
 const SCAN_ROOTS = ['docs', 'src', 'packages', 'scripts', 'migrations'];
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'build', 'coverage', 'dist', 'out']);
 
-// Synced third-party skill documentation under .agents is intentionally outside project ownership.
+// Public skills are versioned project guidance; ignored personal skills are not scanned.
 const MARKDOWN_LINK_RE = /!?\[[^\]]*\]\(([^)]+)\)/g;
 
 interface BrokenLink {
@@ -100,6 +102,13 @@ function collectMarkdownFiles(): string[] {
     const absolutePath = path.join(ROOT, directory);
     return fs.existsSync(absolutePath) ? findMarkdownFiles(absolutePath) : [];
   });
+
+  for (const skillName of listSkillNames()) {
+    const skillDirectory = path.join(AGENTS_SKILLS_DIR, skillName);
+    if (fs.existsSync(skillDirectory)) {
+      files.push(...findMarkdownFiles(skillDirectory));
+    }
+  }
 
   for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
     if (entry.isFile() && entry.name.endsWith('.md')) {

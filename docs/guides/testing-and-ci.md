@@ -74,7 +74,8 @@ pnpm typecheck
 ```
 
 Also rerun the behavior-related fixed suites and specialized checks selected above. Do not run the
-full local `pnpm test`; the complete suite belongs to remote PR CI.
+full local `pnpm test`; remote PR CI owns the application/package suite. The local-only tooling
+suites described below still run as focused checks when their behavior changes.
 
 ### After Changing Dependencies
 
@@ -95,7 +96,22 @@ same commit as the change itself.
 ## Ready For Review
 
 Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
-final head before marking it ready. The existing GitHub workflow runs the complete tests, typecheck,
-lint, format check, package build, and documentation link check only after the PR is ready.
+final head before marking it ready. [PR CI](../../.github/workflows/pr-ci.yml) runs the configured
+application/package tests, typecheck, lint, format, package build, UI-boundary, skill, and documentation
+link checks for non-draft PRs targeting `v0.2`.
+
+### Remote Coverage And Local Exceptions
+
+- Root `pnpm test` builds workspace packages, runs the `ai-core`, `ai-runtime`, and
+  `ai-sdk-provider` package suites, then root Jest.
+- Root Jest includes `provider-registry` suites through `vitestJestShim.ts`. There is no root
+  `test:provider-registry` script; use the owning package filter for a focused local run.
+- With `PRCI` set, Jest excludes all `scripts/__tests__/` suites, including desktop-sync audit
+  fixtures and instruction-tooling regressions. Run the affected tooling suites locally without
+  `PRCI` when changing those tools; remote success does not cover them.
+- `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
+  `docs:check-links` checks relative file links in project docs and public skill Markdown, including
+  linked skill prerequisites. It does not validate Markdown anchors, remote URLs, or dependencies
+  mentioned only as plain text. Required local skill references should be Markdown links.
 
 A PR is merge-ready only after its remote checks pass.
