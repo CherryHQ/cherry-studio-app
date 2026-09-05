@@ -24,7 +24,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
   const [userName] = usePreference('app.user.name');
   const primaryForegroundColor = useThemeColor('sidebar-primary-foreground');
   const { bottomPadding, inset } = useDockMetrics();
-  const displayName = userName.trim() || t('settings.profile.userName');
+  const displayName = userName.trim();
 
   return (
     // Ends of the sidebar, not a huddle in the corner: the chat pill anchors the
@@ -68,13 +68,18 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             paddingHorizontal: 10,
           })}
         >
-          <ProfileAvatarImage accessibilityLabel={displayName} size={32} />
-          <Text
-            className="min-w-0 max-w-20 shrink font-medium text-[15px] text-sidebar-foreground"
-            numberOfLines={1}
-          >
-            {displayName}
-          </Text>
+          <ProfileAvatarImage
+            accessibilityLabel={displayName || t('settings.profile.avatar')}
+            size={32}
+          />
+          {displayName ? (
+            <Text
+              className="min-w-0 max-w-20 shrink font-medium text-[15px] text-sidebar-foreground"
+              numberOfLines={1}
+            >
+              {displayName}
+            </Text>
+          ) : null}
         </Pressable>
       </View>
     </View>
