@@ -24,6 +24,8 @@ let mockProvider: {
 };
 const mockLoadPullPreview = jest.fn(async () => mockPullResult);
 const mockDismissTo = jest.fn();
+const mockCancelPull = jest.fn();
+const mockCompleteSetup = jest.fn(async () => true);
 
 jest.mock('expo-router', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -151,6 +153,10 @@ jest.mock('@/frontend/appShell/header', () => {
   return { RouteHeader: () => <MockView testID="route-header" /> };
 });
 
+jest.mock('../../../hooks/useProviderSetup', () => ({
+  useProviderSetup: () => ({ completeSetup: mockCompleteSetup }),
+}));
+
 jest.mock('../../../apiService', () => ({
   useProviderApiServiceSheetClose: () => ({
     allowNavigation: jest.fn(),
@@ -204,6 +210,7 @@ jest.mock('../../../models/hooks/useProviderModelPull', () => ({
     applyModelChange: jest.fn(),
     isPreviewLoading: false,
     loadPullPreview: mockLoadPullPreview,
+    cancelPull: mockCancelPull,
     preview: null,
   }),
 }));
@@ -254,7 +261,12 @@ describe('provider setup flow when the sync has nothing to offer', () => {
       presetProviderId: 'openai',
       settings: {},
     };
-    mockSearchParams = { mode: 'sync', providerId: 'preset', returnTo: '/agents/new' };
+    mockSearchParams = {
+      mode: 'sync',
+      providerId: 'preset',
+      returnTo: '/agents/new',
+      enableProvider: 'true',
+    };
     mockPullResult = 'failed';
     mockHasConfiguredModels = false;
     mockDismissTo.mockReset();
@@ -272,7 +284,9 @@ describe('provider setup flow when the sync has nothing to offer', () => {
 
     expect(renderer?.root.findByProps({ testID: 'error' })).toBeDefined();
     expect(manualModelFields()).toHaveLength(0);
-    expect(renderer?.root.findByProps({ testID: 'error-secondary' }).props.onPress).toBeUndefined();
+    expect(renderer?.root.findByProps({ testID: 'error-secondary' }).props.onPress).toEqual(
+      expect.any(Function),
+    );
   });
 
   it('keeps an empty sync result on the sync screen', async () => {
@@ -281,7 +295,9 @@ describe('provider setup flow when the sync has nothing to offer', () => {
 
     expect(renderer?.root.findByProps({ testID: 'empty' })).toBeDefined();
     expect(manualModelFields()).toHaveLength(0);
-    expect(renderer?.root.findByProps({ testID: 'empty-secondary' }).props.onPress).toBeUndefined();
+    expect(renderer?.root.findByProps({ testID: 'empty-secondary' }).props.onPress).toEqual(
+      expect.any(Function),
+    );
   });
 
   it('returns to the requesting surface when setup finishes', async () => {
@@ -289,7 +305,8 @@ describe('provider setup flow when the sync has nothing to offer', () => {
     mockHasConfiguredModels = true;
     await mountSetupFlow();
 
-    act(() => renderer?.root.findByProps({ testID: 'empty-primary' }).props.onPress());
+    await act(async () => renderer?.root.findByProps({ testID: 'empty-primary' }).props.onPress());
+    expect(mockCompleteSetup).toHaveBeenCalledWith('preset');
 
     expect(mockDismissTo).toHaveBeenCalledWith('/agents/new');
   });

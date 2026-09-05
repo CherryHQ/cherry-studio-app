@@ -9,7 +9,7 @@ import {
   readProviderSetupReturnTo,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
-import { ModelSearchControls } from '@/frontend/components/ModelPicker';
+import { ModelSearchControls, useModelSettingSelections } from '@/frontend/components/ModelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -36,10 +36,12 @@ import {
 type PullSectionMap<T> = Record<ProviderModelPullSectionKey, T>;
 
 type PullListExtraData = {
+  protectedIds: ReadonlySet<string>;
   isApplying: boolean;
   onToggleAll: (ids: readonly UniqueModelId[]) => void;
   onToggleModel: (id: UniqueModelId) => void;
   provider: Provider | undefined;
+  sectionCounts: PullSectionMap<number>;
   sectionIds: PullSectionMap<readonly UniqueModelId[]>;
   sectionSelectedAll: PullSectionMap<boolean>;
   selectedIds: ReadonlySet<UniqueModelId>;
@@ -92,6 +94,11 @@ export function ProviderModelPullPreviewContent({
   toggleModel: (id: UniqueModelId) => void;
 }) {
   const { t } = useTranslation();
+  const { selections } = useModelSettingSelections();
+  const protectedIds = useMemo(
+    () => new Set(Object.values(selections).filter((id): id is UniqueModelId => id !== null)),
+    [selections],
+  );
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
@@ -128,9 +135,11 @@ export function ProviderModelPullPreviewContent({
   const sectionIds = useMemo<PullSectionMap<readonly UniqueModelId[]>>(
     () => ({
       added: displayedPreview.added.map((model) => model.id),
-      missing: displayedPreview.missing.map((model) => model.id),
+      missing: displayedPreview.missing
+        .filter((model) => !protectedIds.has(model.id))
+        .map((model) => model.id),
     }),
-    [displayedPreview],
+    [displayedPreview, protectedIds],
   );
   const sectionSelectedAll = useMemo<PullSectionMap<boolean>>(
     () => ({
@@ -141,15 +150,30 @@ export function ProviderModelPullPreviewContent({
   );
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
+      protectedIds,
       isApplying,
       onToggleAll: toggleAll,
       onToggleModel: toggleModel,
       provider,
+      sectionCounts: {
+        added: displayedPreview.added.length,
+        missing: displayedPreview.missing.length,
+      },
       sectionIds,
       sectionSelectedAll,
       selectedIds,
     }),
-    [isApplying, provider, sectionIds, sectionSelectedAll, selectedIds, toggleAll, toggleModel],
+    [
+      displayedPreview,
+      isApplying,
+      protectedIds,
+      provider,
+      sectionIds,
+      sectionSelectedAll,
+      selectedIds,
+      toggleAll,
+      toggleModel,
+    ],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
   return (
@@ -213,6 +237,7 @@ function renderPullListItem({
   if (item.type === 'section') {
     return (
       <PullSectionHeader
+        count={listData.sectionCounts[item.section]}
         ids={listData.sectionIds[item.section]}
         isFirstSection={item.isFirstSection}
         isSelected={listData.sectionSelectedAll[item.section]}
@@ -225,6 +250,7 @@ function renderPullListItem({
   return (
     <PullModelRow
       isApplying={listData.isApplying}
+      isProtected={item.section === 'missing' && listData.protectedIds.has(item.model.id)}
       isSelected={listData.selectedIds.has(item.model.id)}
       model={item.model}
       provider={listData.provider}
@@ -250,12 +276,14 @@ function isEverySelected(
  * the total selection and commit action.
  */
 const PullSectionHeader = memo(function PullSectionHeader({
+  count,
   ids,
   isFirstSection,
   isSelected,
   onToggleAll,
   section,
 }: {
+  count: number;
   ids: readonly UniqueModelId[];
   isFirstSection: boolean;
   isSelected: boolean;
@@ -286,7 +314,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
         )}
       </Text>
       <Text className="text-foreground-tertiary text-sm" style={styles.counter}>
-        {ids.length}
+        {count}
       </Text>
       <View className="flex-1" />
       <View className="shrink-0">
@@ -306,6 +334,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
 
 const PullModelRow = memo(function PullModelRow({
   isApplying,
+  isProtected,
   isSelected,
   model,
   onToggleModel,
@@ -313,12 +342,14 @@ const PullModelRow = memo(function PullModelRow({
   section,
 }: {
   isApplying: boolean;
+  isProtected: boolean;
   isSelected: boolean;
   model: Model;
   onToggleModel: (id: UniqueModelId) => void;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
 }) {
+  const { t } = useTranslation();
   const handleToggle = useCallback(() => {
     onToggleModel(model.id);
   }, [model.id, onToggleModel]);
@@ -327,11 +358,21 @@ const PullModelRow = memo(function PullModelRow({
     <ProviderModelRow
       model={model}
       provider={provider}
-      selection={{ isDisabled: isApplying, isSelected, onToggle: handleToggle }}
-      // The provider no longer serves it, whether or not the row is ticked.
-      tone={section === 'missing' ? 'struck' : 'default'}
+      selection={{
+        isDisabled: isApplying || isProtected,
+        isSelected: isSelected && !isProtected,
+        onToggle: handleToggle,
+      }}
+      // Absence from this response is only a proposed removal, not proof of retirement.
+      tone={section === 'missing' && !isProtected ? 'struck' : 'default'}
       variant="synchronization"
-    />
+    >
+      {isProtected ? (
+        <Text className="text-foreground-tertiary text-xs">
+          {t('settings.provider.models.management.defaultProtected')}
+        </Text>
+      ) : null}
+    </ProviderModelRow>
   );
 });
 

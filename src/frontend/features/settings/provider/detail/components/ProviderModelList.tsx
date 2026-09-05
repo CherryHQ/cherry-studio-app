@@ -12,6 +12,7 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderModelListContent } from '../../models/components/ProviderModelListContent';
 import { useProviderModelEndpointUpdate } from '../../models/hooks/useProviderModelEndpointUpdate';
+import type { useProviderModelManagement } from '../../models/hooks/useProviderModelManagement';
 import {
   getProviderChatEndpointTypes,
   getProviderModelEndpointLabelKey,
@@ -27,6 +28,8 @@ type ProviderModelListProps = {
   isEndpointSelectionDisabled?: boolean;
   isFiltered?: boolean;
   isLoading: boolean;
+  supportedModelIds?: ReadonlySet<string>;
+  management?: ReturnType<typeof useProviderModelManagement>;
   models: Model[];
   onAddModelManually?: () => void;
   onPullModels?: () => void;
@@ -38,6 +41,8 @@ export function ProviderModelList({
   isEndpointSelectionDisabled = false,
   isFiltered = false,
   isLoading,
+  management,
+  supportedModelIds,
   models,
   onAddModelManually,
   onPullModels,
@@ -83,6 +88,8 @@ export function ProviderModelList({
     <>
       <ProviderModelListContent
         groupByPurpose={groupByPurpose}
+        management={management}
+        supportedModelIds={supportedModelIds}
         isEndpointSelectionDisabled={isEndpointSelectionDisabled}
         ListEmptyComponent={
           hasNoVisibleModels && isFiltered ? (

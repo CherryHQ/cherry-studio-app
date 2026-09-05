@@ -3,12 +3,15 @@ import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/frontend/data';
 
 /**
- * The three lists a change to one provider's models can show up in: the
- * provider's own tab reads the enabled-only list, the pull preview reads the
- * unfiltered one, and the model picker reads every provider's.
+ * Refresh management/detail queries, enabled-model checks, and the cross-provider picker.
+ * Prefix predicates cover concrete detail paths, which do not share the list query key.
  */
 export async function refreshProviderModelQueries(queryClient: QueryClient, providerId: string) {
   await Promise.all([
+    queryClient.invalidateQueries({
+      predicate: ({ queryKey }) =>
+        typeof queryKey[0] === 'string' && queryKey[0].startsWith('/models/'),
+    }),
     queryClient.invalidateQueries({ queryKey: queryKeys.models.list({ providerId }) }),
     queryClient.invalidateQueries({
       queryKey: queryKeys.models.list({ enabled: true, providerId }),

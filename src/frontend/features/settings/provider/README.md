@@ -41,8 +41,17 @@ same form with different slots instead of configuring it with screen flags.
 ## Connectivity And Models
 
 The connectivity check selects one provider-scoped model and uses the first enabled API key;
-neither choice is stored. New and newly enabled providers continue through synchronization before
-setup completes. The provider's model tab exposes synchronization and manual creation as two direct
-header actions; synchronization is the primary workflow, while manual creation remains an explicit
-separate task. Model grouping, selection, synchronization previews, and health-check logic remain
-private under `models/`.
+neither choice is stored. Checks and ordinary synchronization never change provider activation.
+
+`useProviderSetup` owns the explicit activation path: inspect persisted configuration, repair missing
+credentials or endpoints with the shared creation form, and enable directly when a supported enabled
+model already exists. Otherwise, continue through synchronization or its independent manual-add
+fallback. `returnTo` preserves the requesting surface; `enableProvider` explicitly identifies model
+tasks that must complete activation. Saving models and enabling a provider have separate outcomes,
+so an activation failure can be retried without adding the same models again.
+
+The model tab has separate synchronization and manual-add icon actions. It lists all installed
+provider models for management, labels unavailable models, and supports detail, edit, contextual
+menus, and scoped multi-selection. The detail page's `model/` branch owns model inspection and its
+`edit/` child. Model grouping, deletion protection, selection, and synchronization remain under
+`models/`.

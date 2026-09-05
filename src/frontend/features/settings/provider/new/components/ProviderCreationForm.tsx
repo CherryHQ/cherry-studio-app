@@ -2,17 +2,20 @@ import { Button, useAlert, useToast } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
 import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useMutation } from '@/frontend/data';
+import { useMutation, useQuery } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import type { ProviderConfigurationIssue } from '@/shared/contracts';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 
 import {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   buildProviderPrimaryBaseUrlUpdates,
+  buildProviderTextEndpointUpdates,
+  isFullyCustomProvider,
   getEffectiveAuthConfig,
   normalizeApiKeyEntries,
   ProviderApiServiceSaveError,
@@ -21,6 +24,7 @@ import {
 } from '../../apiService';
 import {
   buildCustomProviderCreationPayload,
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   findInvalidCustomProviderEndpointUrl,
   hasConfiguredCustomProviderTextEndpoint,
 } from '../../apiService/utils/providerApiServiceEndpointRules';
@@ -132,6 +136,11 @@ export function useImportedProviderForm(providerId: string) {
     replaceApiKeysMutation,
     saveProviderMutation,
   } = useProviderApiServiceQueries(providerId);
+  const isCustomProvider = isFullyCustomProvider(provider);
+  const modelsQuery = useQuery('/models', {
+    enabled: isCustomProvider,
+    query: { providerId },
+  });
   const endpointTypes = useMemo(
     () => (provider ? resolveProviderFormEndpointTypes(provider) : []),
     [provider],
@@ -140,7 +149,11 @@ export function useImportedProviderForm(providerId: string) {
     () => buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? [])),
     [apiKeys],
   );
-  const isLoading = providerQuery.isPending || apiKeysQuery.isPending || authConfigQuery.isPending;
+  const isLoading =
+    providerQuery.isPending ||
+    apiKeysQuery.isPending ||
+    authConfigQuery.isPending ||
+    (isCustomProvider && modelsQuery.isPending);
   const createInitialValues = useCallback(
     () =>
       provider
@@ -156,17 +169,33 @@ export function useImportedProviderForm(providerId: string) {
     createInitialValues,
     endpointTypes,
     isSubmitting: isSaving,
+    normalizeCustomEndpoints: isCustomProvider,
     sourceKey: !isLoading && provider ? provider.id : '',
   });
   const showApiKey = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type, provider);
   const baseUrlEndpoint = form.meta.baseUrlEndpoint;
   const baseUrl = baseUrlEndpoint ? (form.state.endpointUrls[baseUrlEndpoint] ?? '') : '';
   const requiresApiKey = showApiKey && !provider?.authOptional;
+  const disabledKeys = Boolean(apiKeys?.length) && !apiKeys?.some((key) => key.isEnabled);
+  const enableKeys = () => {
+    void replaceApiKeysMutation
+      .mutateAsync((apiKeys ?? []).map((key) => ({ ...key, isEnabled: true })))
+      .catch(() =>
+        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' }),
+      );
+  };
   const canSubmit =
     Boolean(provider) &&
+    (!isCustomProvider || modelsQuery.isSuccess) &&
     form.meta.canSubmit &&
-    (!baseUrlEndpoint || baseUrl.trim().length > 0) &&
-    (!requiresApiKey || form.state.apiKey.trim().length > 0);
+    (!baseUrlEndpoint || baseUrl.trim().length > 0 || isCustomProvider) &&
+    (!isCustomProvider ||
+      (hasConfiguredCustomProviderTextEndpoint(form.state.endpointUrls) &&
+        !findInvalidCustomProviderEndpointUrl(form.state.endpointUrls))) &&
+    (!requiresApiKey ||
+      buildApiKeyEntriesFromInput(form.state.apiKey, apiKeys ?? []).some(
+        (key) => key.isEnabled && key.key.trim(),
+      ));
   const handleSave = useCallback(async () => {
     if (!provider || !canSubmit) {
       return undefined;
@@ -175,14 +204,17 @@ export function useImportedProviderForm(providerId: string) {
     const providerName = form.state.name.trim();
     let updates: UpdateProviderInput = { name: providerName };
 
-    if (baseUrlEndpoint) {
+    if (isCustomProvider || baseUrlEndpoint) {
       try {
         updates = {
           ...updates,
-          ...buildProviderPrimaryBaseUrlUpdates({
-            baseUrl,
-            provider,
-          }),
+          ...(isCustomProvider
+            ? buildProviderTextEndpointUpdates({
+                provider,
+                endpointUrls: form.state.endpointUrls,
+                defaultChatEndpoint: form.state.defaultChatEndpoint,
+              })
+            : buildProviderPrimaryBaseUrlUpdates({ baseUrl, provider })),
         };
       } catch (error) {
         alert.show(
@@ -200,6 +232,26 @@ export function useImportedProviderForm(providerId: string) {
     const nextApiKeys = buildApiKeyEntriesFromInput(form.state.apiKey, apiKeys ?? []);
     const shouldSaveApiKeys = showApiKey && form.state.apiKey !== apiKeysInput;
 
+    if (isCustomProvider) {
+      const removedEndpoints = CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.filter(
+        (type) =>
+          provider.endpointConfigs?.[type]?.baseUrl?.trim() &&
+          !updates.endpointConfigs?.[type]?.baseUrl?.trim(),
+      );
+      const referencedCount = (modelsQuery.data ?? []).filter((model) =>
+        removedEndpoints.some((type) => type === model.endpointTypes?.[0]),
+      ).length;
+      if (referencedCount > 0) {
+        alert.show({
+          title: t('settings.provider.apiService.endpointInUseTitle'),
+          description: t('settings.provider.apiService.endpointInUseMessage', {
+            count: referencedCount,
+          }),
+        });
+        return undefined;
+      }
+    }
+
     Keyboard.dismiss();
     try {
       await Promise.all([
@@ -215,6 +267,7 @@ export function useImportedProviderForm(providerId: string) {
         }
       }
 
+      form.actions.reset(form.state);
       return { providerId, providerName };
     } catch {
       toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
@@ -227,7 +280,9 @@ export function useImportedProviderForm(providerId: string) {
     baseUrl,
     baseUrlEndpoint,
     canSubmit,
-    form.state,
+    form,
+    isCustomProvider,
+    modelsQuery.data,
     provider,
     providerAvatars,
     providerId,
@@ -241,13 +296,21 @@ export function useImportedProviderForm(providerId: string) {
 
   return {
     canSubmit,
+    disabledKeys,
+    enableKeys,
+    isCustomProvider,
     form,
     handleSave,
-    isError: providerQuery.isError || apiKeysQuery.isError || authConfigQuery.isError,
+    isError:
+      providerQuery.isError ||
+      apiKeysQuery.isError ||
+      authConfigQuery.isError ||
+      (isCustomProvider && modelsQuery.isError),
     isLoading,
     isSaving,
     provider,
     showApiKey,
+    requiresApiKey,
   };
 }
 
@@ -259,6 +322,9 @@ export function ProviderNewFormContent({
   isSaving,
   onSave,
   showApiKey = true,
+  issue,
+  disabledKeys = false,
+  onEnableKeys,
 }: {
   avatar?: ReactElement;
   canSave: boolean;
@@ -267,6 +333,9 @@ export function ProviderNewFormContent({
   isSaving: boolean;
   onSave: () => void;
   showApiKey?: boolean;
+  issue?: ProviderConfigurationIssue;
+  disabledKeys?: boolean;
+  onEnableKeys?: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -282,18 +351,30 @@ export function ProviderNewFormContent({
       mode="layout"
       showsVerticalScrollIndicator={false}
     >
+      {issue || disabledKeys ? (
+        <View className="gap-3 px-4 py-3">
+          <Text className="text-foreground-secondary text-sm">
+            {t(`settings.provider.setup.issues.${disabledKeys ? 'disabled-api-keys' : issue}`)}
+          </Text>
+          {disabledKeys && onEnableKeys ? (
+            <Button disabled={isSaving} onPress={onEnableKeys} variant="secondary">
+              {t('settings.provider.setup.enableKeys')}
+            </Button>
+          ) : null}
+        </View>
+      ) : null}
       <ProviderForm value={form}>
         <ProviderForm.Avatar>{avatar}</ProviderForm.Avatar>
         <ProviderForm.Name />
         {endpointMode === 'custom-text' ? (
           <>
-            {showApiKey ? <ProviderForm.ApiKey /> : null}
+            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
             <ProviderForm.Endpoints />
           </>
         ) : (
           <>
             <ProviderForm.BaseUrl />
-            {showApiKey ? <ProviderForm.ApiKey /> : null}
+            {showApiKey ? <ProviderForm.ApiKey autoFocus={issue === 'missing-api-key'} /> : null}
           </>
         )}
       </ProviderForm>

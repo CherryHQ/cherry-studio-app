@@ -26,6 +26,7 @@ import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderApiServiceSheetClose } from '../../apiService';
+import { useProviderSetup } from '../../hooks/useProviderSetup';
 import { useProviderModelAdd } from '../../models/hooks/useProviderModelAdd';
 import {
   useProviderModelPull,
@@ -53,11 +54,13 @@ type ProviderModelTask = 'manual' | 'sync';
 export default function ProviderModelAddScreen() {
   const {
     mode,
+    enableProvider,
     providerId,
     returnTo: rawReturnTo,
   } = useLocalSearchParams<
     ProviderSetupRouteParamsInput & {
       mode?: string;
+      enableProvider?: string;
       providerId?: string;
     }
   >();
@@ -87,12 +90,13 @@ export default function ProviderModelAddScreen() {
 
   return (
     <ProviderModelAddForm
-      key={provider.id}
+      key={`${provider.id}:${task}`}
       hasConfiguredModels={models.length > 0}
       isConfiguredModelsLoading={modelsQuery.isPending}
       provider={provider}
       returnTo={returnTo}
       task={task}
+      shouldEnableProvider={enableProvider === 'true'}
     />
   );
 }
@@ -103,18 +107,23 @@ function ProviderModelAddForm({
   provider,
   returnTo,
   task,
+  shouldEnableProvider,
 }: {
   hasConfiguredModels: boolean;
   isConfiguredModelsLoading: boolean;
   provider: Provider;
   returnTo?: string;
   task: ProviderModelTask;
+  shouldEnableProvider: boolean;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const [syncLoadResult, setSyncLoadResult] = useState<ProviderModelPullLoadResult>();
-  const syncLoadStartedRef = useRef(false);
+  const { completeSetup } = useProviderSetup();
+  const [isEnabling, setIsEnabling] = useState(false);
+  const [hasSavedModels, setHasSavedModels] = useState(false);
+  const enablePending = useRef(false);
   const {
     canSubmit,
     chatEndpointTypes,
@@ -136,9 +145,10 @@ function ProviderModelAddForm({
     updateModelPurpose,
     updateName,
   } = useProviderModelAdd({ provider });
-  const { applyModelChange, isPreviewLoading, loadPullPreview, preview } = useProviderModelPull({
-    providerId: provider.id,
-  });
+  const { applyModelChange, cancelPull, isPreviewLoading, loadPullPreview, preview } =
+    useProviderModelPull({
+      providerId: provider.id,
+    });
   const {
     applySelection,
     isApplying,
@@ -151,9 +161,18 @@ function ProviderModelAddForm({
   });
   const { allowNavigation, closeWithoutPrompt, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: task === 'manual' && isDirty,
-    isSaving: isSubmitting || isApplying,
+    isSaving: isSubmitting || isApplying || isEnabling,
   });
-  const completeFlow = useCallback(() => {
+  const completeFlow = useCallback(async () => {
+    if (enablePending.current) return;
+    if (shouldEnableProvider) {
+      enablePending.current = true;
+      setIsEnabling(true);
+      const enabled = await completeSetup(provider.id);
+      enablePending.current = false;
+      setIsEnabling(false);
+      if (!enabled) return;
+    }
     if (returnTo) {
       allowNavigation();
       router.dismissTo(returnTo as Href);
@@ -161,7 +180,47 @@ function ProviderModelAddForm({
     }
 
     closeWithoutPrompt();
-  }, [allowNavigation, closeWithoutPrompt, returnTo, router]);
+  }, [
+    allowNavigation,
+    closeWithoutPrompt,
+    completeSetup,
+    provider.id,
+    returnTo,
+    router,
+    shouldEnableProvider,
+  ]);
+  const needsConfiguration =
+    syncLoadResult === 'authentication' ||
+    syncLoadResult === 'missing-api-key' ||
+    syncLoadResult === 'disabled-api-keys' ||
+    syncLoadResult === 'invalid-endpoint';
+  const detailReturnTo = `/settings/provider/${encodeURIComponent(provider.id)}?tab=models`;
+  const openConfiguration = () => {
+    cancelPull();
+    allowNavigation();
+    router.replace({
+      pathname: '/settings/provider/new',
+      params: {
+        providerId: provider.id,
+        providerName: provider.name,
+        intent: shouldEnableProvider ? 'enable' : 'sync',
+        returnTo: returnTo ?? detailReturnTo,
+      },
+    });
+  };
+  const openManualAdd = () => {
+    cancelPull();
+    allowNavigation();
+    router.replace({
+      pathname: '/settings/provider/[providerId]/model-add',
+      params: {
+        providerId: provider.id,
+        mode: 'manual',
+        returnTo: returnTo ?? detailReturnTo,
+        ...(shouldEnableProvider ? { enableProvider: 'true' } : {}),
+      },
+    });
+  };
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -234,20 +293,21 @@ function ProviderModelAddForm({
   const handleSubmit = useCallback(async () => {
     const didAdd = await submitAddModel();
     if (didAdd) {
-      completeFlow();
+      setHasSavedModels(true);
+      await completeFlow();
     }
   }, [completeFlow, submitAddModel]);
   const loadSyncPreview = useCallback(() => {
-    syncLoadStartedRef.current = true;
     setSyncLoadResult(undefined);
     void loadPullPreview().then((result) => {
-      setSyncLoadResult(result);
+      if (result !== 'cancelled') setSyncLoadResult(result);
     });
   }, [loadPullPreview]);
   const applySyncSelection = useCallback(() => {
     void applySelection().then((didApply) => {
       if (didApply) {
-        completeFlow();
+        setHasSavedModels(true);
+        void completeFlow();
       }
     });
   }, [applySelection, completeFlow]);
@@ -255,7 +315,7 @@ function ProviderModelAddForm({
     () => preview?.missing.filter((model) => selectedIds.has(model.id)).length ?? 0,
     [preview, selectedIds],
   );
-  const syncSubmitLabel = returnTo
+  const syncSubmitLabel = shouldEnableProvider
     ? t('settings.provider.models.completeSetup')
     : t(
         selectedIds.size === 0
@@ -282,11 +342,12 @@ function ProviderModelAddForm({
       title: t('settings.provider.models.syncRemoveTitle'),
     });
   }, [alert, applySyncSelection, selectedIds.size, selectedMissingCount, syncSubmitLabel, t]);
-  const isSaving = isSubmitting || isApplying;
+  const isSaving = isSubmitting || isApplying || isEnabling;
   const isManualSubmitDisabled = isSubmitting || !canSubmit;
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
+    if (hasSavedModels && shouldEnableProvider) return [];
     if (task === 'sync') {
-      if (!preview) {
+      if (hasSavedModels || !preview) {
         return [];
       }
 
@@ -315,22 +376,27 @@ function ProviderModelAddForm({
   }, [
     handleSubmit,
     handleSyncSubmit,
+    hasSavedModels,
     isApplying,
     isManualSubmitDisabled,
     isSaving,
     preview,
     selectedIds.size,
     syncSubmitLabel,
+    shouldEnableProvider,
     task,
     t,
   ]);
 
   useEffect(() => clearAdvancedFieldScrollTimer, [clearAdvancedFieldScrollTimer]);
   useEffect(() => {
-    if (task === 'sync' && !syncLoadStartedRef.current) {
-      loadSyncPreview();
+    if (task === 'sync') {
+      void loadPullPreview().then((result) => {
+        if (result !== 'cancelled') setSyncLoadResult(result);
+      });
     }
-  }, [loadSyncPreview, task]);
+    return cancelPull;
+  }, [cancelPull, loadPullPreview, task]);
 
   return (
     <>
@@ -340,7 +406,31 @@ function ProviderModelAddForm({
         title={t(getProviderModelScreenTitleKey(task))}
       />
       <View className="flex-1">
-        {task === 'sync' ? (
+        {hasSavedModels && shouldEnableProvider ? (
+          <View className="px-6 py-10">
+            <ContentState.Empty
+              title={t('settings.provider.setup.modelsSaved')}
+              description={t('settings.provider.setup.finishDescription')}
+              secondaryAction={{
+                children: t('settings.provider.models.syncRecovery.configure'),
+                disabled: isEnabling,
+                onPress: openConfiguration,
+              }}
+              primaryAction={{
+                children: t(
+                  isEnabling
+                    ? 'settings.provider.setup.preparing'
+                    : 'settings.provider.models.completeSetup',
+                ),
+                disabled: isEnabling,
+                onPress: () => void completeFlow(),
+              }}
+            />
+            <Button className="mt-4" disabled={isEnabling} onPress={openManualAdd} variant="ghost">
+              {t('settings.provider.models.addTitle')}
+            </Button>
+          </View>
+        ) : task === 'sync' ? (
           preview ? (
             <ProviderModelPullPreviewContent
               isApplying={isApplying}
@@ -356,26 +446,43 @@ function ProviderModelAddForm({
             <View className="px-6 py-10">
               <ContentState.Loading title={t('settings.provider.models.pulling')} />
             </View>
-          ) : syncLoadResult === 'failed' || syncLoadResult === 'timedOut' ? (
+          ) : syncLoadResult !== 'empty' && syncLoadResult !== 'ready' ? (
             // The hook reports how the pull ended and says nothing itself: an
             // alert on top of this state would carry the same sentence twice.
             <View className="px-6 py-10">
               <ContentState.Error
-                description={t('settings.provider.models.pullFailedDescription')}
-                primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
-                title={t(
-                  syncLoadResult === 'timedOut'
-                    ? 'settings.provider.models.pullTimedOut'
-                    : 'settings.provider.models.pullFailed',
-                )}
+                description={t('settings.provider.models.syncRecovery.description')}
+                primaryAction={
+                  needsConfiguration
+                    ? {
+                        children: t('settings.provider.models.syncRecovery.configure'),
+                        onPress: openConfiguration,
+                      }
+                    : { children: t('common.retry'), onPress: loadSyncPreview }
+                }
+                secondaryAction={
+                  needsConfiguration
+                    ? { children: t('common.retry'), onPress: loadSyncPreview }
+                    : {
+                        children: t('settings.provider.models.syncRecovery.configure'),
+                        onPress: openConfiguration,
+                      }
+                }
+                title={t(`settings.provider.models.syncRecovery.${syncLoadResult}`)}
               />
+              <Button className="mt-4" onPress={openManualAdd} variant="ghost">
+                {t('settings.provider.models.addTitle')}
+              </Button>
             </View>
           ) : hasConfiguredModels ? (
             <View className="px-6 py-10">
               <ContentState.Empty
                 primaryAction={{
-                  children: t(returnTo ? 'settings.provider.models.completeSetup' : 'common.done'),
-                  onPress: completeFlow,
+                  children: t(
+                    shouldEnableProvider ? 'settings.provider.models.completeSetup' : 'common.done',
+                  ),
+                  onPress: () => void completeFlow(),
+                  disabled: isEnabling,
                 }}
                 secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
                 title={t('settings.provider.models.pullUpToDate')}
@@ -385,7 +492,11 @@ function ProviderModelAddForm({
             <View className="px-6 py-10">
               <ContentState.Empty
                 description={t('settings.provider.models.pullEmptyDescription')}
-                primaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
+                primaryAction={{
+                  children: t('settings.provider.models.addTitle'),
+                  onPress: openManualAdd,
+                }}
+                secondaryAction={{ children: t('common.retry'), onPress: loadSyncPreview }}
                 title={t('settings.provider.models.pullEmpty')}
               />
             </View>
