@@ -96,6 +96,16 @@ describe('managedFileResolver', () => {
     expect([...ledger.fileEntryIds]).toEqual([AVAILABLE_ID, MISSING_BLOB_ID, GENERATED_ID]);
     expect(ledger.inputFiles).toBe(inputFiles);
   });
+
+  test("marks only granted artifacts as this turn's drafts", () => {
+    const ledger = createTurnResourceLedger(new Map(), [MISSING_BLOB_ID]);
+    expect(ledger.draftFileEntryIds.size).toBe(0);
+
+    ledger.grantFile(GENERATED_ID);
+
+    expect([...ledger.draftFileEntryIds]).toEqual([GENERATED_ID]);
+    expect(ledger.draftFileEntryIds.has(MISSING_BLOB_ID)).toBe(false);
+  });
 });
 
 function entry(id: string, filename: string) {

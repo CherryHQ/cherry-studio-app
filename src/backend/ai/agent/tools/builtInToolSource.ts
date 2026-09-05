@@ -51,6 +51,7 @@ import {
   type PaintingToolDependencies,
   resolveConfiguredPaintingModel,
 } from './painting';
+import { createReadFileTool } from './readFileTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
 
@@ -202,11 +203,16 @@ function createCatalog(
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
-    createEditFileTool({
-      createTextEntry: fileContent.createTextEntry,
-      readAsBytes: managedFileResolver.readAsBytes,
-      resolveAvailable: managedFileResolver.resolveAvailable,
-    }),
+    createEditFileTool(
+      {
+        createTextEntry: fileContent.createTextEntry,
+        readAsBytes: managedFileResolver.readAsBytes,
+        resolveAvailable: managedFileResolver.resolveAvailable,
+        rewriteTextEntry: fileContent.rewriteTextEntry,
+      },
+      resources,
+    ),
+    createReadFileTool(managedFileResolver, resources),
     createWriteFileTool(fileContent),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),

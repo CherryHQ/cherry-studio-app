@@ -22,8 +22,14 @@ import type { CreateInternalEntryInput } from '@/backend/services/file/fileStora
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { type FileEntry, type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
+import {
+  type FileEntry,
+  type FileEntryId,
+  FileEntryIdSchema,
+  readableFilename,
+} from '@/shared/data/types/file';
 import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 import type { TurnFileScope } from '../../resources/managedFileResolver';
 import { type GenerateImageToolInput, limitGenerateImageInputIds } from './generateImageSchema';
@@ -154,11 +160,17 @@ export async function generateImageFromPrompt(
     });
     throwIfAborted(signal);
 
-    for (const image of result.images) {
+    for (const [index, image] of result.images.entries()) {
       createdFiles.push(
         await dependencies.files.createInternalEntry({
           data: image.base64,
           mediaType: image.mediaType,
+          // Named after the prompt so the library reads as what was drawn.
+          name: readableFilename(input.prompt, {
+            extension: generatedImageExtension(image.mediaType),
+            fallback: 'Image',
+            ordinal: index + 1,
+          }),
           provenance: 'generated',
           source: 'base64',
         }),

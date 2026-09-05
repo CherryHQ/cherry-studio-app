@@ -70,6 +70,10 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     iconName: 'fileEdit',
     titleKey: 'chat.builtinTool.file.edit',
   },
+  read_file: {
+    iconName: 'fileText',
+    titleKey: 'chat.builtinTool.file.read',
+  },
   write_file: {
     iconName: 'fileText',
     titleKey: 'chat.builtinTool.file.write',

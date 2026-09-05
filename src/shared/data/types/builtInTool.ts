@@ -26,6 +26,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'health_get_summary',
   'health_list_workouts',
   'location_get_current',
+  'read_file',
   'reminder_create_item',
   'reminder_delete_item',
   'reminder_list_collections',
@@ -155,6 +156,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresPaintingModel: true,
   }),
   describe('edit_file', 'auto'),
+  describe('read_file', 'auto'),
   describe('write_file', 'auto'),
 ];
 

@@ -22,6 +22,7 @@ import {
   discardInternalEntries,
   getFileUri,
   resolveFileEntry,
+  rewriteInternalTextEntry,
 } from './fileStorage';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -86,6 +87,15 @@ export const fileContent = {
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
+  /**
+   * Replace a draft text entry's bytes in place. Only a turn's own artifact is
+   * a draft; the caller (the edit tool) proves that through its turn ledger.
+   */
+  rewriteTextEntry: (input: { data: string; id: FileEntryId }) =>
+    rewriteInternalTextEntry(fileEntryService, {
+      data: input.data,
+      id: FileEntryIdSchema.parse(input.id),
+    }),
   generatePreviewUri: generateFilePreviewUri,
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
   resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),

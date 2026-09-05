@@ -37,6 +37,10 @@ describe('createGenerateImageTool', () => {
     expect(deps.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ mode: 'generate', prompt: 'A cherry orchard at dawn' }),
     );
+    // The library entry is named after the prompt, not an id.
+    expect(deps.files.createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'A cherry orchard at dawn.png', source: 'base64' }),
+    );
     // The model gets refs, never bytes.
     expect(result.value).toEqual([{ id: ENTRY.id, name: 'image.png' }]);
     expect(result.artifacts).toEqual([

@@ -22,6 +22,13 @@ export type TurnResourceLedger = {
   /** Current and historical facts whose row and managed blob passed preflight. */
   availableFiles: ReadonlyMap<string, ManagedFileFact>;
   /**
+   * Entries this turn produced. They are the turn's drafts: `edit_file` rewrites
+   * one in place instead of deriving a copy, so a turn ends with one artifact
+   * per file no matter how many edits it took. The set is a subset of
+   * `fileEntryIds` and is empty until the first artifact is granted.
+   */
+  draftFileEntryIds: ReadonlySet<string>;
+  /**
    * Monotonic Host-side grant: an artifact produced during this turn joins the
    * ledger so the model may reference it later in the same turn. Only the Host
    * or its catalog wrapper calls this with validated ids; tools never widen
@@ -34,7 +41,10 @@ export type TurnResourceLedger = {
 export type TurnFileScope = Pick<TurnResourceLedger, 'fileEntryIds'>;
 
 /** Host-owned catalog capability: tools can consult membership; the wrapper grants outputs. */
-export type TurnToolResources = Pick<TurnResourceLedger, 'fileEntryIds' | 'grantFile'>;
+export type TurnToolResources = Pick<
+  TurnResourceLedger,
+  'availableFiles' | 'draftFileEntryIds' | 'fileEntryIds' | 'grantFile'
+>;
 
 /** Host-only managed-file boundary. It never exposes a device path to Pi. */
 export interface ManagedFileResolver {
@@ -118,6 +128,7 @@ export function createTurnResourceLedger(
   availableFiles: ReadonlyMap<string, ManagedFileFact> = inputFiles,
 ): TurnResourceLedger {
   const fileEntryIds = new Set<string>(inputFiles.keys());
+  const draftFileEntryIds = new Set<string>();
 
   for (const fileEntryId of authorizedFileEntryIds) {
     const parsed = FileEntryIdSchema.safeParse(fileEntryId);
@@ -128,10 +139,12 @@ export function createTurnResourceLedger(
 
   return {
     availableFiles,
+    draftFileEntryIds,
     fileEntryIds,
     inputFiles,
     grantFile(fileEntryId) {
       fileEntryIds.add(fileEntryId);
+      draftFileEntryIds.add(fileEntryId);
     },
   };
 }

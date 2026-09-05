@@ -14,6 +14,7 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
   resolveFileEntry,
+  rewriteInternalTextEntry,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -485,6 +486,46 @@ describe('fileStorage', () => {
 
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
+  });
+
+  test('rewrites a draft text blob in place and records the new size', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    const tx = {};
+    const entries = {
+      findById: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
+        ...entry,
+        id,
+        size,
+      })),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback(tx)),
+    };
+
+    const rewritten = await rewriteInternalTextEntry(entries as never, {
+      data: 'longer content',
+      id: entry.id,
+    });
+
+    expect(testState.writes).toEqual([{ content: 'longer content', options: undefined, uri }]);
+    expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
+    expect(rewritten.size).toBe(14);
+  });
+
+  test('refuses to rewrite a draft whose bytes are missing', async () => {
+    const entry = internalEntry();
+    const entries = {
+      findById: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(),
+      withWriteTx: jest.fn(),
+    };
+
+    await expect(
+      rewriteInternalTextEntry(entries as never, { data: 'x', id: entry.id }),
+    ).rejects.toThrow('Draft file bytes are missing');
+    expect(testState.writes).toEqual([]);
+    expect(entries.updateSizeTx).not.toHaveBeenCalled();
   });
 
   test('reports a missing entry row without deleting anything', async () => {

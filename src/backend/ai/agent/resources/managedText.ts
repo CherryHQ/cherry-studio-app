@@ -7,6 +7,47 @@ export class ManagedTextError extends Error {
   }
 }
 
+/** A model-facing explanation of why a managed file could not be read as text. */
+export function describeManagedTextFailure(failure: ManagedTextFailure, maxBytes: number): string {
+  switch (failure) {
+    case 'binary-content':
+      return 'The managed file contains binary control characters.';
+    case 'file-bytes':
+      return `The managed file exceeds the ${maxBytes}-byte limit.`;
+    case 'invalid-utf8':
+      return 'The managed file is not valid UTF-8 text.';
+    case 'nul-byte':
+      return 'The managed file contains NUL bytes and appears to be binary.';
+  }
+}
+
+/**
+ * At most `maxCharacters` code points. Character caps exist to bound what the
+ * model receives, so they cut on a code point: slicing by UTF-16 unit can split
+ * a surrogate pair and hand the model a lone half of an emoji.
+ */
+export function takeCodePoints(
+  value: string,
+  maxCharacters: number,
+): { characters: number; didTruncate: boolean; value: string } {
+  let characters = 0;
+  let end = 0;
+  for (const character of value) {
+    if (characters === maxCharacters) {
+      break;
+    }
+    end += character.length;
+    characters += 1;
+  }
+  return { characters, didTruncate: end < value.length, value: value.slice(0, end) };
+}
+
+/** Moves a slice start off the trailing half of a surrogate pair. */
+export function codePointStart(text: string, index: number): number {
+  const code = text.charCodeAt(index);
+  return code >= 0xdc00 && code <= 0xdfff ? index + 1 : index;
+}
+
 export type DecodedManagedText = {
   hasBom: boolean;
   text: string;
