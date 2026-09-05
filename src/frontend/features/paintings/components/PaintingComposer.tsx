@@ -179,7 +179,18 @@ export function PaintingComposer({
     useComposerDockLayout();
   const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
   const composerInitialAttachments = firstOutput
-    ? []
+    ? [
+        {
+          fileEntryId: firstOutput.fileEntryId,
+          id: `painting-file:${firstOutput.fileEntryId}`,
+          kind: 'image' as const,
+          mediaType: firstOutput.mediaType,
+          name: firstOutput.name,
+          size: firstOutput.size,
+          status: 'ready' as const,
+          uri: firstOutput.uri,
+        },
+      ]
     : initialAttachments.length > 0
       ? initialAttachments
       : receiptId

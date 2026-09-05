@@ -1,8 +1,28 @@
+import { createContext, type ReactNode, useContext } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import type { MessagePartStatusProps } from '../message-part.types';
 
-const statusClassName = '-mx-2 min-h-10 flex-row items-center gap-1.5 rounded-lg px-2 py-1';
+type MessagePartStatusDensity = 'compact' | 'default';
+
+const MessagePartStatusDensityContext = createContext<MessagePartStatusDensity>('default');
+const statusClassName = '-mx-2 flex-row items-center gap-1.5 rounded-lg px-2';
+const statusDensityClassName = {
+  compact: 'min-h-8 py-0.5',
+  default: 'min-h-10 py-1',
+} as const satisfies Record<MessagePartStatusDensity, string>;
+
+export function MessagePartStatusDensityScope({
+  children,
+  density,
+}: {
+  children: ReactNode;
+  density: MessagePartStatusDensity;
+}) {
+  return (
+    <MessagePartStatusDensityContext value={density}>{children}</MessagePartStatusDensityContext>
+  );
+}
 
 export function MessagePartStatus({
   accessibilityLabel,
@@ -11,14 +31,17 @@ export function MessagePartStatus({
   onPress,
   testID,
 }: MessagePartStatusProps) {
+  const density = useContext(MessagePartStatusDensityContext);
+  const densityClassName = statusDensityClassName[density];
+
   if (onPress) {
     return (
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
         accessibilityState={expanded === undefined ? undefined : { expanded }}
-        className={`${statusClassName} active:opacity-80`}
-        hitSlop={4}
+        className={`${statusClassName} ${densityClassName} active:opacity-80`}
+        hitSlop={density === 'compact' ? 6 : 4}
         onPress={onPress}
         testID={testID}
       >
@@ -28,7 +51,11 @@ export function MessagePartStatus({
   }
 
   return (
-    <View accessibilityLabel={accessibilityLabel} className={statusClassName} testID={testID}>
+    <View
+      accessibilityLabel={accessibilityLabel}
+      className={`${statusClassName} ${densityClassName}`}
+      testID={testID}
+    >
       {children}
     </View>
   );

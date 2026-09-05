@@ -51,6 +51,7 @@ export function useMcpServerRuntimeSummaries(servers: readonly McpServer[]) {
     enabled: servers.length > 0,
     queryFn: () => mcp.getRuntimeSummaries(servers),
     queryKey: queryKeys.mcpServers.runtimeSummaries(servers),
+    refetchOnMount: 'always',
     retry: false,
     staleTime: 5 * 60 * 1000,
   });

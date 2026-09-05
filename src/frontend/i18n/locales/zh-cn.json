@@ -181,6 +181,7 @@
   "chat.input.sendError.executionUnavailable": "该 Agent 的模型或工具不可用，请检查 Agent 设置。",
   "chat.input.sendError.sessionBusy": "该对话仍在回复中，请等待完成后重试。",
   "chat.input.sendError.sessionNotFound": "该对话已不存在。",
+  "chat.input.sendError.toolCallingUnsupported": "当前模型不支持工具调用，请切换到支持工具的模型后重试。",
   "chat.input.sendError.unsupported": "所选模型无法处理此请求，请检查模型、工具和附件。",
   "chat.input.sendFailed": "消息未发送，请重试。",
   "chat.input.stopFailed": "未能停止回复，请重试。",

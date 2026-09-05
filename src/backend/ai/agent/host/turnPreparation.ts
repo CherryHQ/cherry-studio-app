@@ -259,7 +259,7 @@ async function prepareResolvedTurn(
     );
   }
   if (tools.length > 0 && !modelPreflight.supportsTools) {
-    fail('CAPABILITY_UNSUPPORTED', 'The selected model does not support native tool calling.');
+    fail('TOOL_CALLING_UNSUPPORTED', 'The selected model does not support native tool calling.');
   }
   const inferenceSnapshot = createAgentInferenceSnapshot({
     model: inferenceModel,

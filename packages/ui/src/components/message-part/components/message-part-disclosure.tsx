@@ -22,7 +22,7 @@ import type {
   MessagePartToolProps,
 } from '../message-part.types';
 import { MessagePartCollapsible } from './message-part-collapsible';
-import { MessagePartStatus } from './message-part-status';
+import { MessagePartStatus, MessagePartStatusDensityScope } from './message-part-status';
 
 const SOURCE_LIST_DETAIL_SIZES = ['large'] as const;
 const TOOL_DETAIL_SIZES = ['compact', 'large'] as const;
@@ -75,8 +75,8 @@ export function MessagePartProcess({
           <MessagePartDisclosureIcon isOpen={isOpen} />
         </View>
       </MessagePartStatus>
-      <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-detail`}>
-        {children}
+      <MessagePartCollapsible className="gap-0.5" isOpen={isOpen} testID={`${testID}-detail`}>
+        <MessagePartStatusDensityScope density="compact">{children}</MessagePartStatusDensityScope>
       </MessagePartCollapsible>
     </View>
   );
