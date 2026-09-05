@@ -225,7 +225,7 @@ jest.mock('../../../models/hooks/useProviderModelPullSelection', () => ({
   }),
 }));
 
-jest.mock('../../modelPull/ProviderModelPullScreen', () => {
+jest.mock('../components/ProviderModelPullPreviewContent', () => {
   const { View: MockView } = jest.requireActual('react-native');
   return { ProviderModelPullPreviewContent: () => <MockView testID="pull-preview" /> };
 });

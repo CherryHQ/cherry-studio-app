@@ -16,6 +16,9 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `detail/` owns `/settings/provider/[providerId]`; its `edit/`, `modelAdd/`, and `modelPull/`
   directories own the dynamic route's child pages. Model synchronization and manual model creation
   are separate entry points and do not switch modes inside either task.
+- `detail/modelAdd/` dispatches to separate manual and synchronization components. Their shared
+  completion hook preserves activation intent, saved-model retries, and the return destination;
+  only the manual form owns keyboard behavior, and only synchronization owns pull selection.
 - `apiService/` owns API key, authentication, endpoint draft, dirty-state, and save behavior.
 - `components/` contains UI shared within the provider page branch. Page-specific UI stays in the
   child page's own `components/` directory.
@@ -34,9 +37,10 @@ returns to the requesting surface, or to the provider list when settings opened 
 ## Provider Form
 
 `ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
-and `.ApiKey`. The draft lives in `useProviderFormDraft`, which the screen calls and passes down so
-the screen can drive its visible Save action from the same state. Creation and detail compose the
-same form with different slots instead of configuring it with screen flags.
+and `.ApiKey`. `useProviderFormDraft` owns field state; `useProviderConfigurationForm` adds loading,
+validation, endpoint impact confirmation, and saving for existing providers. Creation keeps its
+own initial persistence step. Each screen drives its actions from the same draft that its fields
+consume and composes the slots it needs.
 
 ## Connectivity And Models
 

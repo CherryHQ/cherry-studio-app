@@ -12,14 +12,10 @@ import {
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { useProviderApiServiceSheetClose } from '../apiService';
+import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
 import { providerFormAvatarSize } from '../components/ProviderForm';
 import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
-import {
-  ProviderNewFormContent,
-  useImportedProviderForm,
-  useNewProviderForm,
-} from './components/ProviderCreationForm';
+import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
 
 export default function ProviderCreationScreen() {
   const {
@@ -109,18 +105,14 @@ function ImportedProviderCreationScreen({
 }) {
   const { t } = useTranslation();
   const { isPreparing, openSetup } = useProviderSetup();
-  const importedProviderForm = useImportedProviderForm(providerId);
-  const saveImportedProvider = importedProviderForm.handleSave;
+  const importedProviderForm = useProviderConfigurationForm(providerId);
+  const saveImportedProvider = importedProviderForm.requestSave;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: importedProviderForm.form.meta.isDirty,
     isSaving: importedProviderForm.isSaving || isPreparing,
   });
   const handleSave = useCallback(() => {
-    void saveImportedProvider().then((configuredProvider) => {
-      if (!configuredProvider) {
-        return;
-      }
-
+    saveImportedProvider((configuredProvider) => {
       void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
     });
   }, [allowNavigation, intent, openSetup, returnTo, saveImportedProvider]);
@@ -154,7 +146,7 @@ function ImportedProviderCreationScreen({
               size={providerFormAvatarSize}
             />
           }
-          canSave={importedProviderForm.canSubmit && !isPreparing}
+          canSave={importedProviderForm.canCompleteSetup && !isPreparing}
           issue={
             issue ??
             (importedProviderForm.requiresApiKey && !importedProviderForm.form.state.apiKey.trim()

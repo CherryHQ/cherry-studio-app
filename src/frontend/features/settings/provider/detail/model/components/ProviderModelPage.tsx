@@ -58,7 +58,9 @@ function LoadedProviderModel({
     retry: false,
   });
   const providerQuery = useQuery('/providers/:id', { params: { id: providerId }, retry: false });
-  if (modelQuery.isError || providerQuery.isError || !modelQuery.data || !providerQuery.data) {
+  // A failed background refresh must not unmount the editor and discard its draft.
+  // Only the initial load owns whether the page content can be mounted.
+  if (!modelQuery.data || !providerQuery.data) {
     return (
       <>
         <RouteHeader title={t('settings.provider.models.detail.title')} />

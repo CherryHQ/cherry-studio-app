@@ -2,6 +2,7 @@ import {
   Button,
   Input,
   OptionPickerBottomSheet,
+  SelectField,
   TextField,
   useToast,
 } from '@cherrystudio/ui/components';
@@ -19,12 +20,11 @@ import type { Provider } from '@/shared/data/types/provider';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { useProviderApiServiceSheetClose } from '../../../apiService';
-import {
-  getProviderChatEndpointTypes,
-  getProviderModelEndpointLabelKey,
-} from '../../../models/utils/providerModelAdd';
+import { ProviderModelNumberField } from '../../../models/components/ProviderModelNumberField';
+import { getProviderChatEndpointTypes } from '../../../models/utils/providerModelAdd';
 import {
   getProviderModelEndpointSelection,
+  getProviderModelEndpointOptions,
   PROVIDER_DEFAULT_ENDPOINT_SELECTION,
   type ProviderModelEndpointSelection,
 } from '../../../models/utils/providerModelEndpoint';
@@ -95,16 +95,7 @@ function ModelEditor({ model, provider }: { model: Model; provider: Provider }) 
       setIsSaving(false);
     }
   };
-  const endpointOptions = [
-    {
-      label: t('settings.provider.models.detail.defaultEndpoint'),
-      value: PROVIDER_DEFAULT_ENDPOINT_SELECTION,
-    },
-    ...getProviderChatEndpointTypes(provider).map((value) => ({
-      label: t(getProviderModelEndpointLabelKey(value)),
-      value,
-    })),
-  ];
+  const endpointOptions = getProviderModelEndpointOptions(provider, t);
   return (
     <>
       <RouteHeader
@@ -147,28 +138,37 @@ function ModelEditor({ model, provider }: { model: Model; provider: Provider }) 
             </TextField>
           ))}
           {isTextGenerationModel(model) && getProviderChatEndpointTypes(provider).length > 0 ? (
-            <Button variant="secondary" disabled={isSaving} onPress={() => setIsEndpointOpen(true)}>
-              {t('settings.provider.models.detail.endpoint')}:{' '}
-              {endpointOptions.find((option) => option.value === endpoint)?.label ??
-                t('settings.provider.models.endpoint.unavailable')}
-            </Button>
+            <SelectField
+              accessibilityLabel={t('settings.provider.models.detail.endpoint')}
+              disabled={isSaving}
+              onPress={() => setIsEndpointOpen(true)}
+            >
+              <SelectField.Label>{t('settings.provider.models.detail.endpoint')}</SelectField.Label>
+              <SelectField.Value>
+                <SelectField.ValueText>
+                  {endpointOptions.find((option) => option.value === endpoint)?.label ??
+                    t('settings.provider.models.endpoint.unavailable')}
+                </SelectField.ValueText>
+              </SelectField.Value>
+            </SelectField>
           ) : null}
-          <Button variant="ghost" onPress={() => setIsAdvancedOpen((value) => !value)}>
+          <Button
+            variant="ghost"
+            accessibilityState={{ expanded: isAdvancedOpen }}
+            onPress={() => setIsAdvancedOpen((value) => !value)}
+          >
             {t('settings.provider.models.detail.advanced')}
           </Button>
           {isAdvancedOpen
             ? modelLimitFields.map((field) => (
-                <TextField key={field}>
-                  <TextField.Label>{t(`settings.provider.models.detail.${field}`)}</TextField.Label>
-                  <Input
-                    accessibilityLabel={t(`settings.provider.models.detail.${field}`)}
-                    disabled={isSaving}
-                    inputMode="numeric"
-                    value={draft[field]}
-                    onChangeText={(value) => setField(field, value)}
-                    placeholder={t('settings.provider.models.detail.unknown')}
-                  />
-                </TextField>
+                <ProviderModelNumberField
+                  key={field}
+                  label={t(`settings.provider.models.detail.${field}`)}
+                  disabled={isSaving}
+                  value={draft[field]}
+                  onChangeText={(value) => setField(field, value)}
+                  placeholder={t('settings.provider.models.detail.unknown')}
+                />
               ))
             : null}
           {!patch ? (

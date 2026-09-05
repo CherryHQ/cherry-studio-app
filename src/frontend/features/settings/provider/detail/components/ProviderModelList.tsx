@@ -14,12 +14,8 @@ import { ProviderModelListContent } from '../../models/components/ProviderModelL
 import { useProviderModelEndpointUpdate } from '../../models/hooks/useProviderModelEndpointUpdate';
 import type { useProviderModelManagement } from '../../models/hooks/useProviderModelManagement';
 import {
-  getProviderChatEndpointTypes,
-  getProviderModelEndpointLabelKey,
-} from '../../models/utils/providerModelAdd';
-import {
   getProviderModelEndpointSelection,
-  PROVIDER_DEFAULT_ENDPOINT_SELECTION,
+  getProviderModelEndpointOptions,
   type ProviderModelEndpointSelection,
 } from '../../models/utils/providerModelEndpoint';
 
@@ -54,27 +50,10 @@ export function ProviderModelList({
   const hasNoVisibleModels = !isLoading && models.length === 0;
   const closeEndpointPicker = useCallback(() => setSelectedModel(undefined), []);
   const openEndpointPicker = useCallback((model: Model) => setSelectedModel(model), []);
-  const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(() => {
-    if (!provider) {
-      return [];
-    }
-
-    const defaultEndpointLabel = provider.defaultChatEndpoint
-      ? t(getProviderModelEndpointLabelKey(provider.defaultChatEndpoint))
-      : t('settings.provider.models.endpoint.unavailable');
-    return [
-      {
-        label: t('settings.provider.models.endpoint.followDefault', {
-          endpoint: defaultEndpointLabel,
-        }),
-        value: PROVIDER_DEFAULT_ENDPOINT_SELECTION,
-      },
-      ...getProviderChatEndpointTypes(provider).map((endpointType) => ({
-        label: t(getProviderModelEndpointLabelKey(endpointType)),
-        value: endpointType,
-      })),
-    ];
-  }, [provider, t]);
+  const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(
+    () => (provider ? getProviderModelEndpointOptions(provider, t) : []),
+    [provider, t],
+  );
   const handleEndpointChange = useCallback(
     (selection: ProviderModelEndpointSelection) => {
       if (selectedModel) {

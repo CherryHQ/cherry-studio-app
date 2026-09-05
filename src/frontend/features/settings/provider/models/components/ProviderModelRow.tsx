@@ -75,7 +75,9 @@ export function ProviderModelRow({
   const { t } = useTranslation();
   const badges = variant === 'management' ? getProviderModelBadges(model) : [];
   const accessibilityDetails = badges.map((badge) => t(providerModelBadgeLabelKeys[badge]));
-  const accessibilityLabel = [model.name, ...accessibilityDetails].join(', ');
+  const accessibilityLabel = [model.name, statusLabel, ...accessibilityDetails]
+    .filter(Boolean)
+    .join(', ');
   const rowClassName = [
     onPress && !selection
       ? 'min-h-11 flex-row items-center gap-3 px-4'
@@ -87,23 +89,25 @@ export function ProviderModelRow({
     .join(' ');
   const content = (
     <>
-      {selection ? (
-        <SelectionIndicator disabled={selection.isDisabled} selected={selection.isSelected} />
-      ) : null}
       {/* Unsized, so it is `BrandAvatar`'s own square — the one a provider row
           draws, and the one the picker sheet draws beside the same single line
           of text. */}
       <ModelAvatar model={model} provider={provider} />
-      <Text
-        className={
-          tone === 'struck'
-            ? 'min-w-0 flex-1 text-base text-foreground line-through'
-            : 'min-w-0 flex-1 text-base text-foreground'
-        }
-        numberOfLines={1}
-      >
-        {model.name}
-      </Text>
+      <View className="min-w-0 flex-1">
+        <Text
+          className={
+            tone === 'struck'
+              ? 'text-base text-foreground line-through'
+              : 'text-base text-foreground'
+          }
+          numberOfLines={1}
+        >
+          {model.name}
+        </Text>
+        {statusLabel ? (
+          <Text className="text-foreground-tertiary text-xs">{statusLabel}</Text>
+        ) : null}
+      </View>
       {badges.length > 0 ? (
         <View className="flex-row items-center gap-1">
           {badges.map((badge) => (
@@ -111,7 +115,6 @@ export function ProviderModelRow({
           ))}
         </View>
       ) : null}
-      {children}
     </>
   );
 
@@ -125,21 +128,10 @@ export function ProviderModelRow({
           accessibilityState={{ disabled }}
           accessibilityActions={accessibilityActions}
           onAccessibilityAction={onAccessibilityAction}
-          className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 active:opacity-60"
+          className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 py-1 active:opacity-60"
           onPress={onPress}
         >
-          <ModelAvatar model={model} provider={provider} />
-          <View className="min-w-0 flex-1 py-1">
-            <Text className="text-base text-foreground" numberOfLines={1}>
-              {model.name}
-            </Text>
-            {statusLabel ? (
-              <Text className="text-foreground-tertiary text-xs">{statusLabel}</Text>
-            ) : null}
-          </View>
-          {badges.map((badge) => (
-            <ProviderModelBadgeChip badge={badge} key={badge} />
-          ))}
+          {content}
         </Pressable>
         {children}
       </View>
@@ -154,6 +146,7 @@ export function ProviderModelRow({
         className={rowClassName}
       >
         {content}
+        {children}
       </View>
     );
   }
@@ -167,7 +160,9 @@ export function ProviderModelRow({
       disabled={selection.isDisabled}
       onPress={selection.onToggle}
     >
+      <SelectionIndicator disabled={selection.isDisabled} selected={selection.isSelected} />
       {content}
+      {children}
     </Pressable>
   );
 }

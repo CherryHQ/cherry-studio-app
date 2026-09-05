@@ -243,6 +243,7 @@ function ManagedModelRow({
         model={model}
         provider={provider}
         variant="management"
+        statusLabel={statusLabel}
         selection={{
           isDisabled: isDeleting,
           isSelected,
