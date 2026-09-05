@@ -1,5 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -92,15 +92,15 @@ describe('ProviderModelRow variants', () => {
         />,
       );
     });
-    const expectStatus = () => {
+    const expectStatus = (accessibilityRole: 'button' | 'checkbox') => {
       expect(
         renderer?.root.findAllByType(Text).some((node) => node.props.children === 'Unavailable'),
       ).toBe(true);
-      expect(renderer?.root.findByType(Pressable).props.accessibilityLabel).toContain(
+      expect(renderer?.root.findByProps({ accessibilityRole }).props.accessibilityLabel).toContain(
         'Unavailable',
       );
     };
-    expectStatus();
+    expectStatus('button');
     act(() => {
       renderer?.update(
         <ProviderModelRow
@@ -113,8 +113,8 @@ describe('ProviderModelRow variants', () => {
         />,
       );
     });
-    expectStatus();
-    act(() => renderer?.root.findByType(Pressable).props.onPress());
+    expectStatus('checkbox');
+    act(() => renderer?.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
     expect(onToggle).toHaveBeenCalledTimes(1);
     expect(onPress).not.toHaveBeenCalled();
   });

@@ -15,7 +15,7 @@ export function ProviderModelSetupCompletion({
 }) {
   const { t } = useTranslation();
   return (
-    <View className="px-6 py-10">
+    <View className="gap-4 px-6 py-10">
       <ContentState.Empty
         title={t('settings.provider.setup.modelsSaved')}
         description={t('settings.provider.setup.finishDescription')}
@@ -34,7 +34,7 @@ export function ProviderModelSetupCompletion({
           onPress: () => void onComplete(),
         }}
       />
-      <Button className="mt-4" disabled={isEnabling} onPress={onAddModel} variant="ghost">
+      <Button disabled={isEnabling} onPress={onAddModel} variant="ghost">
         {t('settings.provider.models.addTitle')}
       </Button>
     </View>

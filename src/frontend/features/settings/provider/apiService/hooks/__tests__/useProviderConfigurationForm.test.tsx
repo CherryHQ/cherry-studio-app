@@ -16,7 +16,18 @@ const mockProvider = {
     [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://example.com/anthropic' },
   },
 } as Provider;
-const followingModel = { id: createUniqueModelId('custom', 'model'), endpointTypes: [] } as Model;
+const followingModel: Model = {
+  capabilities: [],
+  endpointTypes: [],
+  id: createUniqueModelId('custom', 'model'),
+  isDeprecated: false,
+  isEnabled: true,
+  isHidden: false,
+  modelId: 'model',
+  name: 'Model',
+  providerId: 'custom',
+  supportsStreaming: true,
+};
 let mockModels: Model[] = [];
 const mockSave = jest.fn();
 const mockConfirm = jest.fn();

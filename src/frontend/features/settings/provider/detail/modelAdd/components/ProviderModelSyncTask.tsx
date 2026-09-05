@@ -146,7 +146,7 @@ export function ProviderModelSyncTask({
         ) : syncLoadResult !== 'empty' && syncLoadResult !== 'ready' ? (
           // The hook reports how the pull ended and says nothing itself: an
           // alert on top of this state would carry the same sentence twice.
-          <View className="px-6 py-10">
+          <View className="gap-4 px-6 py-10">
             <ContentState.Error
               description={t('settings.provider.models.syncRecovery.description')}
               primaryAction={
@@ -167,7 +167,7 @@ export function ProviderModelSyncTask({
               }
               title={t(`settings.provider.models.syncRecovery.${syncLoadResult}`)}
             />
-            <Button className="mt-4" onPress={openManualAdd} variant="ghost">
+            <Button onPress={openManualAdd} variant="ghost">
               {t('settings.provider.models.addTitle')}
             </Button>
           </View>
