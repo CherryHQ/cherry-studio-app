@@ -4,6 +4,7 @@ import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { GenericToolPart } from './GenericToolPart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
+import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
 import {
   isProviderWebSearchToolPart,
   isWebSearchToolPart,
@@ -40,6 +41,10 @@ export function ToolPartRenderer({ messageParts, part }: ToolPartRendererProps) 
 
   if (isEditFileToolPart(part)) {
     return <EditFileToolPart part={part} />;
+  }
+
+  if (isReadFileToolPart(part)) {
+    return <ReadFileToolPart part={part} />;
   }
 
   return <GenericToolPart part={part} />;

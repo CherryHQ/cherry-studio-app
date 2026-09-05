@@ -3,12 +3,11 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, `write_file`, and `edit_file`, all using the settled `ToolRef` and
-`{ value, artifacts }`
-contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
+image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
+`{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
 permission, app configuration, and the Agent's capability-group deny-list, then combines it with
 the Agent's persisted executable MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location) are enabled per Agent in the editor; both file tools belong to every turn. An
+health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -196,13 +195,20 @@ that managed id; raw `file://`, `content://`, sandbox, provider, and user-entere
 import sources, never authority.
 
 The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools receive only
-its membership view; `generate_image` rejects an `image_id` outside that view before touching the
-global managed-file service. A Host-owned catalog wrapper validates and grants every built-in
-artifact before returning the tool result to Pi, and Host event projection repeats the grant
-idempotently. `write_file` needs no read grant because it only creates entries. `edit_file` is the
-deliberate exception to ledger-scoped reads: knowing an active managed `fileEntryId` is sufficient
-for it to resolve that source anywhere in the application file library. It never lists or searches
-the library, accepts no path, and still creates its output through the Host artifact boundary.
+its membership view; `generate_image` rejects an `image_id` outside that view and `read_file`
+rejects a `file_entry_id` outside it, both before touching the global managed-file service. A
+Host-owned catalog wrapper validates and grants every built-in artifact before returning the tool
+result to Pi, and Host event projection repeats the grant idempotently. `write_file` needs no read
+grant because it only creates entries. `edit_file` is the deliberate exception to ledger-scoped
+reads: knowing an active managed `fileEntryId` is sufficient for it to resolve that source anywhere
+in the application file library. It never lists or searches the library, accepts no path, and
+never returns the source's content, so the exception widens what the model can change but not what
+it can see.
+
+The ledger also records which entries this turn produced: its **drafts**. Every grant that arrives
+during the turn is a draft, because only tool artifacts are granted after the ledger is frozen.
+`edit_file` consults that set to decide between rewriting a draft in place and saving a new version
+(see Managed File Write And Edit).
 
 For Version 1, the Host derives the initial ledger grants from:
 
@@ -241,9 +247,12 @@ history. If the managed entry still exists, a user may explicitly attach it agai
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 `write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
-under `artifacts`. `edit_file` additionally returns the source id and replacement count, and marks
-its copy-on-write output as `derived`. `generate_image` returns `{ id, name }` refs under `value` and
-each imported image under `artifacts`. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
+under `artifacts`. `edit_file` additionally returns the source id, replacement count, and a
+bounded snippet of the edited region; when it saves a new version it marks that entry as `derived`,
+and when it rewrites this turn's draft it returns no artifact because the draft's file part already
+exists. `read_file` returns a line window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
+each imported image under `artifacts`; each image is named after its prompt (`readableFilename`),
+never after an id. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
 persists both the result envelope and the file parts. Device and web capabilities return portable
 JSON with no artifacts.
 
@@ -309,14 +318,38 @@ model receives `{ status, fileEntryId, filename, size }`; a name it can correct 
 opaque failure.
 
 `edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
-It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and creates a same-name,
-same-media-type copy no larger than 1 MiB. Matching is exact and case-sensitive: a single edit
-requires exactly one non-overlapping match, while `replace_all` changes every non-overlapping match.
-It preserves a UTF-8 BOM and all untouched bytes represented by the decoded text. It never uses the
-desktop filesystem tool's fuzzy matching, empty-search overwrite, path, or in-place mutation
-semantics. The model receives
-`{ status, sourceFileEntryId, fileEntryId, filename, size, replacements }` and the new entry is a
-`derived` artifact.
+It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
+larger than 1 MiB. Matching is exact and case-sensitive: a single edit requires exactly one
+non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
+BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
+tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
+`{ status, sourceFileEntryId, fileEntryId, filename, size, replacements, snippet, snippetStartLine }`,
+where the snippet is the edited region with two lines of context on each side, capped at 1,200
+characters, so the model can confirm the change without reading the file back.
+
+Where the edit lands is a product rule, not a storage detail. A turn ends with one artifact per
+file however many edits it took, and across turns a file keeps its history as versions:
+
+- **Draft rewrite.** When the source is one of this turn's drafts, the edit rewrites that entry in
+  place. The id, name, and media type are unchanged, `fileEntryId` equals `sourceFileEntryId`, and
+  no artifact is returned. This is the only content write in the file model and it is legal only
+  because nothing outside the active turn can yet reference the draft.
+- **New version.** When the source is anything else — an attachment, or an artifact of an earlier
+  turn — the source is never changed and the edit is saved as a new `generated` entry with a
+  version in its name: `report.html` becomes `report v2.html`, and editing `report v2.html` in a
+  later turn produces `report v3.html`. The version is carried in the name because the name is
+  what both the file library and the model see; there is no lineage column. The new entry is a
+  `derived` artifact and immediately becomes a draft of the current turn, so further edits in the
+  same turn rewrite it.
+
+`read_file` takes `file_entry_id` plus optional zero-based `offset` and `limit` (default 500 lines,
+at most 2,000) and returns
+`{ status, fileEntryId, filename, size, offset, lineCount, totalLines, truncated, text }`. The
+window is cut on a line boundary at 100,000 characters, so `offset + lineCount` is always the next
+line to request. It reads only ledger members — attachments, earlier artifacts of the Session, and
+this turn's drafts — and applies the same strict UTF-8 decoding and 1 MiB source limit as
+`edit_file`. It exists so a model can revisit a file it wrote or edited in an earlier turn, whose
+content is deliberately not replayed as an attachment.
 
 Both tools run without approval because they have no destructive form, and the Host offers them only
 to models that support function calling. Handing tools to a model that cannot call them fails the

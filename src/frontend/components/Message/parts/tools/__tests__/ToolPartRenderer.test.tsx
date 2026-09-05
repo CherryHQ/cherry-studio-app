@@ -18,6 +18,10 @@ jest.mock('../metaTool/MetaToolPartRenderer', () => ({
   ...mockCreateToolPart('MetaToolPartRenderer'),
   isMetaToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'meta',
 }));
+jest.mock('../ReadFileToolPart', () => ({
+  ...mockCreateToolPart('ReadFileToolPart'),
+  isReadFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'read_file',
+}));
 jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
   ...mockCreateToolPart('WriteFileToolPart'),
@@ -30,6 +34,7 @@ describe('ToolPartRenderer', () => {
     ['meta', 'MetaToolPartRenderer'],
     ['mcp', 'McpToolPart'],
     ['edit_file', 'EditFileToolPart'],
+    ['read_file', 'ReadFileToolPart'],
     ['write_file', 'WriteFileToolPart'],
     ['other', 'GenericToolPart'],
   ])('routes %s tools to %s', (toolName, expectedType) => {
