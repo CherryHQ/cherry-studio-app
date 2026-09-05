@@ -88,7 +88,10 @@ import type {
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
-import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleStreamingTextParts,
+} from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -725,6 +728,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
+        if (
+          (event.type === 'part.add' || event.type === 'part.replace') &&
+          (event.part.type === 'tool' || event.part.type === 'file')
+        ) {
+          // The event loop serializes these snapshots with the terminal write.
+          await this.persistStreamingMessage(sessionId, state.assistantMessage);
+        }
         if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
           if (event.type === 'text.delta') {
             state.backgroundReply.update(state.assistantMessage, { deferPreview: true });
@@ -909,11 +919,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      state.assistantMessage.parts.map((part) =>
-        (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
-          ? { ...part, state: 'done' }
-          : part,
-      ),
+      settleStreamingTextParts(state.assistantMessage.parts),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -992,6 +998,24 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       outcome,
       initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
+  }
+
+  private async persistStreamingMessage(
+    sessionId: string,
+    assistantMessage: AgentMessageView,
+  ): Promise<void> {
+    try {
+      await this.store.updateStreamingAssistantMessage({
+        assistantMessageId: assistantMessage.id,
+        parts: assistantMessage.parts,
+      });
+    } catch (error) {
+      logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
+        assistantMessageId: assistantMessage.id,
+        error: error instanceof Error ? error.message : String(error),
+        sessionId,
+      });
+    }
   }
 
   private async persistTerminalState(
