@@ -10,7 +10,11 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FileEntrySkeleton, LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
+import {
+  fileEntryPreviewKind,
+  FileEntrySkeleton,
+  LoadedFileEntryPreview,
+} from '@/frontend/components/FileEntryPreview';
 
 import {
   type FileLibraryEntry,
@@ -155,7 +159,7 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
         paddingHorizontal: fileLibraryGrid.tileGap / 2,
       }}
     >
-      {item.entry.mediaType.startsWith('image/') && !item.previewUri ? (
+      {fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
         <FileEntrySkeleton size={size} />
       ) : (
         <LoadedFileEntryPreview

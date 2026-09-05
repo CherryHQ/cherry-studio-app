@@ -150,7 +150,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockAlertConfirm).toHaveBeenCalledWith({
       confirmLabel: 'settings.permissions.writeAccess',
-      description: 'painting.viewer.savePermissionDenied',
+      description: 'imageActions.savePermissionDenied',
       onConfirm: expect.any(Function),
       title: 'settings.permissions.accessRequired',
     });
@@ -172,7 +172,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockAlertConfirm).toHaveBeenCalledWith({
       confirmLabel: 'settings.permissions.openSystemSettings',
-      description: 'painting.viewer.savePermissionDenied',
+      description: 'imageActions.savePermissionDenied',
       onConfirm: expect.any(Function),
       title: 'settings.permissions.accessRequired',
     });
@@ -198,7 +198,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockAlertConfirm).toHaveBeenLastCalledWith({
       confirmLabel: 'settings.permissions.openSystemSettings',
-      description: 'painting.viewer.savePermissionDenied',
+      description: 'imageActions.savePermissionDenied',
       onConfirm: expect.any(Function),
       title: 'settings.permissions.accessRequired',
     });
@@ -216,7 +216,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockCreateAsset).not.toHaveBeenCalled();
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'painting.viewer.saveAccessDenied',
+      label: 'imageActions.saveAccessDenied',
       variant: 'danger',
     });
   });
@@ -232,7 +232,7 @@ describe('usePaintingViewerActions', () => {
     await act(onConfirm);
 
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'painting.viewer.openSettingsFailed',
+      label: 'imageActions.openSettingsFailed',
       variant: 'danger',
     });
   });
@@ -242,7 +242,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'painting.viewer.saved',
+      label: 'imageActions.saved',
       variant: 'success',
     });
   });
@@ -253,7 +253,7 @@ describe('usePaintingViewerActions', () => {
     await act(async () => actions?.download());
 
     expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'painting.viewer.saveFailed',
+      label: 'imageActions.saveFailed',
       variant: 'danger',
     });
   });

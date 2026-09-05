@@ -6,10 +6,12 @@ import { ZoomableImage } from './ZoomableImage';
 
 export function ArtifactImageViewer({
   accessibilityLabel,
+  onError,
   onZoomChange,
   uri,
 }: {
   accessibilityLabel: string;
+  onError?: () => void;
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
 }) {
@@ -23,6 +25,7 @@ export function ArtifactImageViewer({
           <ZoomableImage
             accessibilityLabel={accessibilityLabel}
             height={height}
+            onError={onError}
             onZoomChange={onZoomChange}
             uri={uri}
             width={width}

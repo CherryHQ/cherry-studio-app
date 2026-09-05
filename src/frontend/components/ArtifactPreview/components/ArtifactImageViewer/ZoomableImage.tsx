@@ -17,12 +17,14 @@ const DOUBLE_TAP_SCALE = 2.5;
 export function ZoomableImage({
   accessibilityLabel,
   height,
+  onError,
   onZoomChange,
   uri,
   width,
 }: {
   accessibilityLabel: string;
   height: number;
+  onError?: () => void;
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
   width: number;
@@ -136,6 +138,7 @@ export function ZoomableImage({
           accessibilityLabel={accessibilityLabel}
           cachePolicy="memory-disk"
           contentFit="contain"
+          onError={onError}
           source={uri}
           style={styles.image}
           transition={120}
