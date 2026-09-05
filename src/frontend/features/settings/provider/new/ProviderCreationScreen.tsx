@@ -7,7 +7,7 @@ import { View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   readProviderSetupReturnTo,
-  type ProviderSetupIntent as FirstUseSetupIntent,
+  type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';

@@ -6,7 +6,7 @@ export { resolveHeaderContentInset } from './headerContentInset/headerContentIns
 export {
   providerSetupHref,
   readProviderSetupReturnTo,
-  type ProviderSetupIntent,
+  type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from './providerSetupRoute';
 export {

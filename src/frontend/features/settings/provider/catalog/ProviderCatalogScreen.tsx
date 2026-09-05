@@ -10,7 +10,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   readProviderSetupReturnTo,
-  type ProviderSetupIntent,
+  type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
@@ -156,7 +156,7 @@ function ProviderRegistryUpdateNotice({
 
 export default function ProviderCatalogScreen({
   setupIntent,
-}: { setupIntent?: ProviderSetupIntent } = {}) {
+}: { setupIntent?: FirstUseSetupIntent } = {}) {
   const { t } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<ProviderSetupRouteParamsInput>();
