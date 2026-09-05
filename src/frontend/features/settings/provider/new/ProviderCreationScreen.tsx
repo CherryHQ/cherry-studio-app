@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   readProviderSetupReturnTo,
+  type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
@@ -16,8 +17,15 @@ import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '.
 import { providerFormAvatarSize } from '../components/ProviderForm';
 import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
 import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
+import {
+  ProviderSetupCustomFields,
+  ProviderSetupFormContent,
+  ProviderSetupPresetFields,
+} from './components/ProviderSetupFormContent';
 
-export default function ProviderCreationScreen() {
+export default function ProviderCreationScreen({
+  setupIntent,
+}: { setupIntent?: FirstUseSetupIntent } = {}) {
   const {
     providerId,
     providerName,
@@ -41,13 +49,20 @@ export default function ProviderCreationScreen() {
       returnTo={returnTo}
       intent={intent === 'sync' ? 'sync' : 'enable'}
       issue={issue}
+      setupIntent={setupIntent}
     />
   ) : (
-    <CustomProviderCreationScreen returnTo={returnTo} />
+    <CustomProviderCreationScreen returnTo={returnTo} setupIntent={setupIntent} />
   );
 }
 
-function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
+function CustomProviderCreationScreen({
+  returnTo,
+  setupIntent,
+}: {
+  returnTo: string;
+  setupIntent?: FirstUseSetupIntent;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const newProviderForm = useNewProviderForm();
@@ -59,6 +74,18 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
   const handleSave = useCallback(() => {
     void saveNewProvider().then((createdProvider) => {
       if (!createdProvider) {
+        return;
+      }
+
+      if (setupIntent === 'chat') {
+        router.setParams({
+          providerId: createdProvider.providerId,
+          providerName: createdProvider.providerName,
+        });
+        router.push({
+          pathname: '/onboarding/model',
+          params: { providerId: createdProvider.providerId },
+        });
         return;
       }
 
@@ -74,18 +101,28 @@ function CustomProviderCreationScreen({ returnTo }: { returnTo: string }) {
         },
       });
     });
-  }, [allowNavigation, returnTo, router, saveNewProvider]);
+  }, [allowNavigation, returnTo, router, saveNewProvider, setupIntent]);
 
   return (
     <>
       <RouteHeader onBack={requestClose} title={t('settings.provider.add.title')} />
-      <ProviderNewFormContent
-        canSave={newProviderForm.canSubmit}
-        endpointMode="custom-text"
-        form={newProviderForm.form}
-        isSaving={newProviderForm.isCreating}
-        onSave={handleSave}
-      />
+      {setupIntent === 'chat' ? (
+        <ProviderSetupFormContent
+          canSave={newProviderForm.canSubmit}
+          form={newProviderForm.form}
+          onSave={handleSave}
+        >
+          <ProviderSetupCustomFields />
+        </ProviderSetupFormContent>
+      ) : (
+        <ProviderNewFormContent
+          canSave={newProviderForm.canSubmit}
+          endpointMode="custom-text"
+          form={newProviderForm.form}
+          isSaving={newProviderForm.isCreating}
+          onSave={handleSave}
+        />
+      )}
     </>
   );
 }
@@ -96,14 +133,17 @@ function ImportedProviderCreationScreen({
   returnTo,
   intent,
   issue,
+  setupIntent,
 }: {
   providerId: string;
   providerName?: string;
   returnTo: string;
   intent: ProviderSetupIntent;
   issue?: ProviderConfigurationIssue;
+  setupIntent?: FirstUseSetupIntent;
 }) {
   const { t } = useTranslation();
+  const router = useRouter();
   const { isPreparing, openSetup } = useProviderSetup();
   const importedProviderForm = useProviderConfigurationForm(providerId);
   const saveImportedProvider = importedProviderForm.requestSave;
@@ -113,9 +153,17 @@ function ImportedProviderCreationScreen({
   });
   const handleSave = useCallback(() => {
     saveImportedProvider((configuredProvider) => {
+      if (setupIntent === 'chat') {
+        router.push({
+          pathname: '/onboarding/model',
+          params: { providerId: configuredProvider.providerId },
+        });
+        return;
+      }
+
       void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
     });
-  }, [allowNavigation, intent, openSetup, returnTo, saveImportedProvider]);
+  }, [allowNavigation, intent, openSetup, returnTo, router, saveImportedProvider, setupIntent]);
   const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
 
   return (
@@ -135,6 +183,21 @@ function ImportedProviderCreationScreen({
             title={t('settings.provider.setup.loadFailed')}
           />
         </View>
+      ) : setupIntent === 'chat' ? (
+        <ProviderSetupFormContent
+          canSave={importedProviderForm.canCompleteSetup}
+          form={importedProviderForm.form}
+          onSave={handleSave}
+        >
+          {importedProviderForm.isCustomProvider ? (
+            <ProviderSetupCustomFields />
+          ) : (
+            <ProviderSetupPresetFields
+              provider={importedProviderForm.provider}
+              showApiKey={importedProviderForm.showApiKey}
+            />
+          )}
+        </ProviderSetupFormContent>
       ) : (
         <ProviderNewFormContent
           avatar={

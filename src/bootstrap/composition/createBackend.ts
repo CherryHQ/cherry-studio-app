@@ -1,3 +1,5 @@
+import { checkChatModel } from '@/backend/ai/agent/modelCheck';
+import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -36,6 +38,7 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
@@ -51,7 +54,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
-    languageServing: LanguageServingSupport;
+    languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
   },
 ): BackendComposition {
@@ -65,6 +68,25 @@ export function createBackend(
   };
   const models = createModelsModule({
     ai: services.ai,
+    checkChatModel: (model, signal) =>
+      checkChatModel(infrastructure.languageServing, model, {
+        signal,
+        onUsage: async (report, requestId) => {
+          try {
+            await services.aiUsageRecord.recordInvocation({
+              completedAt: report.completedAt,
+              context: { ...report.context, messageRef: null, source: null },
+              modality: 'language',
+              requestId,
+              usage: report.usage,
+            });
+          } catch {
+            loggerService
+              .withContext('ModelsModule')
+              .warn('Failed to record chat model check usage');
+          }
+        },
+      }),
     isSystemSupportedModel: isModelSupportedBySystem,
     materializeRemoteModels,
     models: {

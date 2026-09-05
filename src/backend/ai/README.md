@@ -22,6 +22,9 @@ boundaries around it.
   (`@/shared/contracts/agent`) and the Runtime contract, plus Agent definition and protocol
   projection policy. The concrete Runtime enters through the composition root's `AgentRuntime`
   registration; the Host never constructs one.
+- `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound
+  Runtime, without a persisted Session, history, or tools. Bootstrap injects it into the models
+  workflow and records usage; only a closed failure category reaches the setup UI.
 - `agent/sessionStore/`, `agent/resources/`, and `agent/tools/` respectively own transcript
   persistence, managed turn resources, and executable Agent capabilities. The mobile provider/model
   adaptation required to construct Pi lives with Pi itself, in `agent/runtime/pi/`.

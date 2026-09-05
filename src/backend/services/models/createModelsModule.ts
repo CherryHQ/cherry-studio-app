@@ -1,4 +1,5 @@
 import type {
+  ChatModelCheckResult,
   CheckModelsHealthInput,
   ModelHealthResult,
   ModelPullResult,
@@ -10,6 +11,7 @@ import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/sha
 import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { getProviderConfigurationIssue } from '../providers/providerConfiguration';
 
@@ -50,6 +52,7 @@ type ModelsAi = {
 
 export type ModelsModuleDependencies = {
   ai: ModelsAi;
+  checkChatModel(model: Model, signal?: AbortSignal): Promise<ChatModelCheckResult>;
   isSystemSupportedModel(provider: Provider, model: Model): boolean;
   materializeRemoteModels(provider: Provider, models: readonly RemoteModel[]): Model[];
   models: ModelWorkflowData;
@@ -188,7 +191,18 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
     return result;
   };
 
-  return { checkHealth, pull, reconcile };
+  const checkChat: ModelsModule['checkChat'] = async ({ modelId, signal }) => {
+    throwIfAborted(signal);
+    const model = await requireModel(modelId);
+    const provider = await dependencies.providers.get(model.providerId);
+    throwIfAborted(signal);
+    if (!isTextGenerationModel(model) || !dependencies.isSystemSupportedModel(provider, model)) {
+      return { status: 'failed', reason: 'model' };
+    }
+    return dependencies.checkChatModel(model, signal);
+  };
+
+  return { checkChat, checkHealth, pull, reconcile };
 }
 
 function buildPullPreview(

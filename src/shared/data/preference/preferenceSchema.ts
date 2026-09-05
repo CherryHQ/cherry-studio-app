@@ -25,6 +25,7 @@ export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
 export interface PreferenceSchema {
   'app.language': LanguageVarious | null;
+  'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
   /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
   'app.user.avatar': string;
   'app.user.name': string;
@@ -52,6 +53,7 @@ export interface PreferenceSchema {
 
 export const PreferenceDefaults = {
   'app.language': null,
+  'app.onboarding.status': 'unseen',
   'app.user.avatar': '',
   'app.user.name': '',
 
