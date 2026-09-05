@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diagnose Fix Loop"
+  short_description: "Iterate fixes; requires diagnose"
+  default_prompt: "Use $diagnose-fix-loop to iterate diagnosis and fixes until evidence says to stop; requires $diagnose."

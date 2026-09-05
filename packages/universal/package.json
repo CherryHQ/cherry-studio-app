@@ -1,0 +1,26 @@
+{
+  "name": "@cherrystudio/universal",
+  "version": "0.0.1-alpha.1",
+  "description": "Cross-platform subset of desktop src/shared: data contracts, AI rules, portable types and utils",
+  "private": true,
+  "sideEffects": false,
+  "exports": {
+    "./data/types": {
+      "types": "./src/data/types/index.ts",
+      "react-native": "./src/data/types/index.ts",
+      "import": "./src/data/types/index.ts",
+      "default": "./src/data/types/index.ts"
+    },
+    "./*": {
+      "types": "./src/*.ts",
+      "react-native": "./src/*.ts",
+      "import": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "@cherrystudio/provider-registry": "workspace:*",
+    "ai": "^6.0.143",
+    "zod": "^4.4.3"
+  }
+}

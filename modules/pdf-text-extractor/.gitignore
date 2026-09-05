@@ -1,0 +1,5 @@
+android/build
+android/.gradle
+android/local.properties
+ios/Pods
+ios/build

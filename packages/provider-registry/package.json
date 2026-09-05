@@ -1,0 +1,67 @@
+{
+  "name": "@cherrystudio/provider-registry",
+  "version": "0.0.1-alpha.1",
+  "description": "Provider and Model Registry",
+  "private": true,
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsc -w",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate": "tsx scripts/generate-catalog.ts --write && oxfmt data/models.json data/provider-models.json data/providers.json src/patterns/reasoning-families.gen.ts",
+    "generate:providers": "tsx scripts/generate-catalog.ts --providers-only --write && oxfmt data/providers.json",
+    "generate:check": "tsx scripts/generate-catalog.ts --report"
+  },
+  "author": "Cherry Studio",
+  "license": "MIT",
+  "files": [
+    "data/**/*",
+    "dist/**/*",
+    "docs/**/*",
+    "scripts/**/*",
+    "src/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CherryHQ/cherry-studio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CherryHQ/cherry-studio/issues"
+  },
+  "homepage": "https://github.com/CherryHQ/cherry-studio#readme",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./mobile": {
+      "types": "./src/mobile-loader.ts",
+      "react-native": "./src/mobile-loader.ts",
+      "import": "./src/mobile-loader.ts",
+      "default": "./src/mobile-loader.ts"
+    },
+    "./node": {
+      "types": "./src/registry-loader.ts",
+      "import": "./src/registry-loader.ts",
+      "default": "./src/registry-loader.ts"
+    }
+  },
+  "devDependencies": {
+    "@ai-sdk/provider-utils": "^4.0.23",
+    "@types/json-schema": "^7.0.15",
+    "@types/node": "^24.10.2",
+    "tsdown": "^0.20.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "peerDependencies": {},
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

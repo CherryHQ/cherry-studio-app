@@ -1,0 +1,187 @@
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import { Text } from 'react-native';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto, ProviderBrandAvatar } from '..';
+import { PROVIDER_BRAND_ICON_SCALE } from '../utils/brandAvatarStyles';
+
+const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
+const mockAvatarFallback = jest.fn((_props: unknown) => null);
+const mockAvatarImage = jest.fn((_props: unknown) => null);
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const Avatar = Object.assign((props: { children?: React.ReactNode }) => mockAvatar(props), {
+    Fallback: (props: unknown) => mockAvatarFallback(props),
+    Image: (props: unknown) => mockAvatarImage(props),
+  });
+
+  return { Avatar, Image: () => null };
+});
+
+jest.mock('@/frontend/hooks/useAvatar', () => ({
+  useAvatar: () => 'profile-avatar-source',
+}));
+
+jest.mock('@cherrystudio/ui/icons', () => ({
+  resolveProviderIcon: jest.fn(),
+}));
+
+jest.mock('uniwind', () => ({
+  useUniwind: () => ({ theme: 'light' }),
+}));
+
+const mockResolveProviderIcon = jest.mocked(resolveProviderIcon);
+
+describe('BrandAvatar', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => jest.clearAllMocks());
+
+  afterEach(() => {
+    if (renderer) {
+      act(() => renderer?.unmount());
+      renderer = undefined;
+    }
+  });
+
+  it('falls back to the generated initial when given no content', () => {
+    render(<BrandAvatar label="codex" />);
+
+    // At the default size the ratios resolve to the plain constants they replaced.
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessibilityLabel: 'codex',
+        radius: 6,
+        shape: 'rounded',
+        size: 26,
+      }),
+    );
+    expect(mockAvatarFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        children: 'c',
+        scale: 0.8125,
+        style: { backgroundColor: '#46429b', borderRadius: 5 },
+        textProps: { style: { color: '#FFFFFF', fontSize: 14 } },
+      }),
+    );
+  });
+
+  it('leaves the frame unpainted when content is supplied', () => {
+    render(
+      <BrandAvatar label="codex">
+        <Text>{'…'}</Text>
+      </BrandAvatar>,
+    );
+
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({ accessibilityLabel: 'codex', shape: 'rounded', size: 26 }),
+    );
+    expect(mockAvatarFallback).not.toHaveBeenCalled();
+    expect(renderer?.root.findByType(Text).props.children).toBe('…');
+  });
+
+  it('scales an inset logo against the frame size it is nested in', () => {
+    render(
+      <BrandAvatar label="Anthropic" size={32}>
+        <BrandAvatarIcon
+          displayContext="provider-list"
+          iconId="anthropic"
+          source="anthropic-light"
+        />
+      </BrandAvatar>,
+    );
+
+    // The frame's own radius is a ratio of the default size, not a constant:
+    // the same avatar is rendered at 26 in lists and near 100 in the provider
+    // form, where a fixed 6 would read as a square.
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({ radius: 32 * (6 / 26), size: 32 }),
+    );
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentFit: 'contain',
+        scale: PROVIDER_BRAND_ICON_SCALE,
+        source: 'anthropic-light',
+        style: { borderRadius: 5 },
+      }),
+    );
+  });
+
+  it('uses the untrimmed default scale for logos without their own tile', () => {
+    render(
+      <BrandAvatar label="OpenAI">
+        <BrandAvatarIcon iconId="openai" source="openai-light" />
+      </BrandAvatar>,
+    );
+
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scale: 1,
+        style: { borderRadius: undefined },
+      }),
+    );
+  });
+
+  it('crops a user photo to fill the whole frame', () => {
+    render(
+      <BrandAvatar label="Custom" size={32}>
+        <BrandAvatarPhoto uri="file:///avatar.png" />
+      </BrandAvatar>,
+    );
+
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contentFit: 'cover',
+        source: { uri: 'file:///avatar.png' },
+      }),
+    );
+  });
+
+  it('resolves a preset provider logo through the shared provider adapter', () => {
+    mockResolveProviderIcon.mockReturnValue({
+      dark: 'openai-dark',
+      light: 'openai-light',
+    } as never);
+
+    render(
+      <ProviderBrandAvatar
+        presetProviderId="openai"
+        providerId="custom-openai"
+        providerName="Custom OpenAI"
+        size={32}
+        testID="provider-avatar"
+      />,
+    );
+
+    expect(mockResolveProviderIcon).toHaveBeenCalledWith('openai');
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessibilityLabel: 'Custom OpenAI',
+        size: 32,
+        testID: 'provider-avatar',
+      }),
+    );
+    expect(mockAvatarImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recyclingKey: 'custom-openai',
+        scale: PROVIDER_BRAND_ICON_SCALE,
+        source: 'openai-light',
+      }),
+    );
+  });
+
+  it('keeps the generated-initial fallback when a provider has no built-in logo', () => {
+    mockResolveProviderIcon.mockReturnValue(undefined);
+
+    render(<ProviderBrandAvatar providerId="custom-provider" providerName="Custom Provider" />);
+
+    expect(mockResolveProviderIcon).toHaveBeenCalledWith('custom-provider');
+    expect(mockAvatarFallback).toHaveBeenCalledWith(expect.objectContaining({ children: 'C' }));
+  });
+
+  function render(element: React.ReactElement) {
+    act(() => {
+      renderer = create(element);
+    });
+  }
+});

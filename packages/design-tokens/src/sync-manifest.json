@@ -1,0 +1,10 @@
+{
+  "commit": "9320c74569bc3cc536d94220ab597d8de0298d0c",
+  "repository": "git+https://github.com/CherryHQ/cherry-studio.git",
+  "schemaVersion": 1,
+  "sources": {
+    "iconRouting": "23db6112d6ad0614880273097bbb1c3c4ef05f15d956da654c1bfa7b3b557536",
+    "catalogOnlyIcons": "26951c96bec97816b89d9175274b2438f4524925c690f88103f2602ea6d27249",
+    "icons": "566391ccba2c3d37ee2e000081f8bce7dea5dd4a8c7ff96186dcc1a07380f32a"
+  }
+}

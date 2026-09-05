@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/CherryHQ/cherry-studio.git",
+  "delegatedManifests": {
+    "design": "packages/design-tokens/src/sync-manifest.json"
+  },
+  "domains": {
+    "design-catalog": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": [
+        "packages/ui/icons",
+        "packages/ui/src/components/icons/registry.ts",
+        "packages/ui/src/components/icons/models",
+        "packages/ui/src/components/icons/providers"
+      ],
+      "targetPaths": ["packages/ui/icons", "packages/ui/src/icons", "packages/ui/src/icons-webp"],
+      "sourceCommit": "9320c74569bc3cc536d94220ab597d8de0298d0c",
+      "sourceSha256": "2894b8120659a1ed889aa048ed57fcae432923881deaea8f26ab01ca062b0565",
+      "explicitExclusions": [],
+      "virtualIconAdapters": {
+        "opencode": "general/open-code"
+      }
+    },
+    "shared-portable": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": [
+        "src/shared/types/aiSdk.ts",
+        "src/shared/types/error.ts",
+        "src/shared/types/serializable.ts",
+        "src/shared/utils/conversationTitle.ts",
+        "src/shared/utils/keywordSearch.ts",
+        "src/shared/utils/model.ts",
+        "src/shared/utils/text.ts",
+        "src/shared/utils/url.ts"
+      ],
+      "targetPaths": [
+        "packages/universal/src/types/aiSdk.ts",
+        "packages/universal/src/types/error.ts",
+        "packages/universal/src/types/serializable.ts",
+        "packages/universal/src/utils/conversationTitle.ts",
+        "packages/universal/src/utils/keywordSearch.ts",
+        "packages/universal/src/utils/model.ts",
+        "packages/universal/src/utils/text.ts",
+        "packages/universal/src/utils/url.ts"
+      ],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/types/aiSdk.ts",
+          "keeps": "ReasoningEffortOption plus its Zod schema, and the AiSdkParam standard-parameter vocabulary with its isAiSdkParam guard",
+          "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
+        }
+      ]
+    },
+    "ai-core": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["packages/aiCore"],
+      "targetPaths": ["packages/ai-core"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": ["packages/aiCore/src/core/context/**"]
+    },
+    "ai-sdk-provider": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["packages/ai-sdk-provider"],
+      "targetPaths": ["packages/ai-sdk-provider"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    },
+    "provider-registry": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": ["packages/provider-registry"],
+      "targetPaths": ["packages/provider-registry"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "4114ac8750f47098cbac0ff8e37cae4dbb1b51840129fdda30125cfcd76d8d33",
+      "explicitExclusions": [],
+      "mobileExtensions": [
+        {
+          "path": "packages/provider-registry/vitestJestShim.ts",
+          "keeps": "every test file's `import { describe, expect, it } from 'vitest'` line verbatim",
+          "adds": "a jest.config.js moduleNameMapper target that re-exports jest's globals under vitest's names, so ten suites run on both runners without a single import diff"
+        },
+        {
+          "path": "packages/provider-registry/src/testing/catalogData.ts",
+          "keeps": "the readCatalogJson helper the catalog suites share",
+          "adds": "a `typeof __dirname === 'undefined'` branch, because vitest resolves the fixture directory from import.meta.url while jest-expo runs CJS and has no import.meta"
+        },
+        {
+          "path": "packages/provider-registry/src/mobile-loader.ts",
+          "keeps": "nothing, there is no desktop counterpart",
+          "adds": "a loader that static-imports data/*.json so Metro bundles the catalog; desktop's registry-loader reads it off disk, which React Native has no fs for"
+        },
+        {
+          "path": "packages/provider-registry/package.json",
+          "keeps": "the package identity, script names and public entry points",
+          "adds": "src-facing main/module/types/exports because Metro does not consume dist, a ./mobile subpath, src+docs+scripts in files, oxfmt instead of biome in generate, and zod promoted to dependencies since the app typechecks this package's source directly. Also drops desktop's class-variance-authority, lucide-react, json-schema and dotenv, which no code in this package imports, and pins vitest 3 and tsdown 0.20 against desktop's vitest 4 and tsdown 0.16"
+        },
+        {
+          "path": "packages/provider-registry/tsdown.config.ts",
+          "keeps": "the desktop build entries",
+          "adds": "the mobile-loader entry"
+        },
+        {
+          "path": "packages/provider-registry/src/registry-utils.ts",
+          "keeps": "every desktop export unchanged",
+          "adds": "RuntimeEndpointConfig and buildRuntimeEndpointConfigs, consumed by PresetProviderSeeder.ts:65 to seed provider rows; desktop builds the same shape inline in the renderer"
+        },
+        {
+          "path": "packages/provider-registry/src/utils/buildParamsSchema.ts",
+          "keeps": "the whole file semantically",
+          "adds": "one `as ImageGenerationMode | undefined` cast on Object.keys(modes)[0]; the app typechecks this package's source rather than its dist, so the widened key type surfaces here and not on desktop. This one gets clobbered on every sync"
+        }
+      ]
+    },
+    "shared-ai": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": ["src/shared/ai"],
+      "targetPaths": ["packages/universal/src/ai"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "bb816f1380b3ddd71b5a31f3906e77a55e529640dae90537de6d9640083eb698",
+      "explicitExclusions": [
+        "src/shared/ai/agentSessionApiRetry.ts",
+        "src/shared/ai/agentSessionBackgroundTasks.ts",
+        "src/shared/ai/agentSessionCompaction.ts",
+        "src/shared/ai/agentSessionContextUsage.ts",
+        "src/shared/ai/agentSessionFlowParts.ts",
+        "src/shared/ai/agentSessionSlashCommands.ts",
+        "src/shared/ai/agentSlashCommands.ts",
+        "src/shared/ai/claudecode/**",
+        "src/shared/ai/prompts.ts",
+        "src/shared/ai/slashCommands.ts",
+        "src/shared/ai/tool.ts",
+        "src/shared/ai/transport/applyApprovalDecisions.ts",
+        "src/shared/ai/transport/deferredToolResult.ts",
+        "src/shared/ai/transport/index.ts",
+        "src/shared/ai/transport/stream.ts",
+        "src/shared/ai/transport/turnState.ts"
+      ],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/ai/tools/__tests__/mcpToolName.test.ts",
+          "keeps": "the identity-critical regressions: the 63-character cap, the server hash suffix that stops two long server names from colliding after truncation, single-server attribution for truncated ids, collision suffixes staying inside maxLength, and the mcp__server__tool round-trip",
+          "drops": "desktop's buildMcpToolName and generateMcpToolFunctionName case matrices — both functions have only a test consumer on mobile, no product one, so the matrices would pin behaviour nothing depends on"
+        }
+      ],
+      "mobileExtensions": [
+        {
+          "path": "packages/universal/src/ai/tools/mcpResult.ts",
+          "keeps": "desktop's implementation verbatim",
+          "adds": "nothing; it only looks mobile-only in this domain because desktop keeps the same code in src/main/ai/tools/adapters/aiSdk/mcp/utils.ts, which the ai-runtime domain covers"
+        }
+      ]
+    },
+    "services": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/main/services"],
+      "targetPaths": ["src/backend/services", "src/backend/data/services", "src/backend/ai"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": ["src/main/services/oauth", "src/main/services/CopilotService.ts"]
+    },
+    "dependencies": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["package.json", "pnpm-lock.yaml", "patches"],
+      "targetPaths": ["package.json", "pnpm-lock.yaml", "patches"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    }
+  }
+}

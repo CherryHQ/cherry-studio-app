@@ -1,0 +1,4 @@
+interface:
+  display_name: "React Coding Style"
+  short_description: "Keep React rerenders leaf-local"
+  default_prompt: "Use $react-coding-style to implement this React or TypeScript UI change with leaf-local updates, stable callback boundaries, and minimal render fanout."

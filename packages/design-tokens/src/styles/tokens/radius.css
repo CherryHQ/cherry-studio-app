@@ -1,0 +1,27 @@
+/**
+ * Border Radius
+ * 圆角半径
+ *
+ * ⚠️ 取值已 fork：不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel Brand
+ * Guidelines，VBG 只有两档圆角：radius-small 6px 与 radius 8px。后者就是
+ * shadcn 的 `--radius`（authored 在 `shadcn.css`），`build-native-css.ts` 据此
+ * 用 calc 派生出整条 `rounded-sm…4xl`。
+ *
+ * 这里只剩四档亚像素发丝圆角：它们不在 VBG 的刻度上，也不是 `--radius` 的倍数，
+ * 所以必须逐个写死。名字直接就是 Tailwind 的 `--radius-*` 命名空间 ——
+ * 声明即生成 `rounded-4xs` 之类工具类，不需要再过一层适配。
+ *
+ * 此前这里还有 sm/md/xl/2xl/3xl 五档，它们从来没被消费过：适配层是用
+ * `calc(var(--radius) * n)` 生成同名工具类的，根本不读这五个值。更糟的是数值对
+ * 不上 —— 文件里写 `--cs-radius-3xl: 22px`，而 `rounded-3xl` 实际渲染
+ * 8px × 2.2 = 17.6px。写着一个数、画着另一个数，已删。
+ * `--cs-radius-round`（9999px）也删了：它只是 `--radius-full` 的别名，
+ * `rounded-round` 全仓只在 Storybook 的表格里出现过一次。
+ */
+
+:root {
+  --radius-4xs: 0.03125rem; /* 0.5px */
+  --radius-3xs: 0.0625rem; /* 1px */
+  --radius-2xs: 0.09375rem; /* 1.5px */
+  --radius-xs: 0.125rem; /* 2px */
+}

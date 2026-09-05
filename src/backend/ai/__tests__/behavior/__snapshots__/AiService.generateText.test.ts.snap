@@ -1,0 +1,83 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AiService.generateText AI SDK contract passes model messages when no prompt string is supplied: messages call 1`] = `
+{
+  "headers": {
+    "user-agent": "ai/6.0.185",
+  },
+  "prompt": [
+    {
+      "content": [
+        {
+          "text": "Question",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+    {
+      "content": [
+        {
+          "text": "Answer",
+          "type": "text",
+        },
+      ],
+      "role": "assistant",
+    },
+    {
+      "content": [
+        {
+          "text": "Summarize",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`AiService.generateText AI SDK contract uses the explicit system prompt and returns text with recorded usage: prompt call 1`] = `
+{
+  "headers": {
+    "user-agent": "ai/6.0.185",
+  },
+  "prompt": [
+    {
+      "content": "Return a short title.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Name this conversation.",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+}
+`;
+
+exports[`AiService.generateText AI SDK contract uses the explicit system prompt and returns text with recorded usage: prompt result 1`] = `
+{
+  "text": "Contract title",
+  "usage": {
+    "cachedInputTokens": 2,
+    "inputTokenDetails": {
+      "cacheReadTokens": 2,
+      "cacheWriteTokens": 1,
+      "noCacheTokens": 7,
+    },
+    "inputTokens": 10,
+    "outputTokenDetails": {
+      "reasoningTokens": 1,
+      "textTokens": 4,
+    },
+    "outputTokens": 5,
+    "reasoningTokens": 1,
+    "totalTokens": 15,
+  },
+}
+`;

@@ -1,0 +1,165 @@
+{
+  "expo": {
+    "name": "Cherry Studio",
+    "slug": "cherry-studio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "cherrystudio",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "icon": "./assets/icon.png",
+      "bundleIdentifier": "com.cherry-ai.cherry-studio-app",
+      "appleTeamId": "87242QY66T",
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.security.application-groups": ["group.com.cherry-ai.cherry-studio-app"]
+      },
+      "infoPlist": {
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add and update calendar events when you ask the assistant.",
+        "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
+        "UIBackgroundModes": ["audio"],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F65D5D"
+      },
+      "package": "com.cherry_ai.cherry_studio_app",
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.CAMERA",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_HEART_RATE_VARIABILITY",
+        "android.permission.health.READ_RESTING_HEART_RATE",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_STEPS"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-widgets",
+        {
+          "enablePushNotifications": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/icon.png",
+          "imageWidth": 96,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-localization",
+      "expo-sqlite",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Cherry Studio to access calendars when you ask the assistant.",
+          "remindersPermission": "Allow Cherry Studio to access reminders when you ask the assistant."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false,
+          "isIosBackgroundLocationEnabled": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false,
+          "motionUsagePermission": false,
+          "locationWhenInUsePermission": "Allow Cherry Studio to use your location when you ask the assistant."
+        }
+      ],
+      "expo-document-picker",
+      [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/GeistMono-Regular.ttf"]
+        }
+      ],
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
+          "cameraPermission": "Allow Cherry Studio to open the camera for drawings and chat messages.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Cherry Studio to preview photos for drawings and chat messages.",
+          "savePhotosPermission": "Allow Cherry Studio to save photos.",
+          "preventAutomaticLimitedAccessAlert": true,
+          "granularPermissions": ["photo"]
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "17.0",
+            "buildReactNativeFromSource": true
+          }
+        }
+      ],
+      "./scripts/with-health-connect",
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "80096eaf-3ad0-4b87-a466-15f04da1bacc",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ExpoWidgetsTarget",
+                  "bundleIdentifier": "com.cherry-ai.cherry-studio-app.ExpoWidgetsTarget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.cherry-ai.cherry-studio-app"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

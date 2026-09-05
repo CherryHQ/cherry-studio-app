@@ -1,0 +1,18 @@
+{
+  "name": "@cherrystudio/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    "./tokens.css": "./src/styles/tokens.css",
+    "./contract.css": "./src/styles/contract.css",
+    "./native.css": "./src/styles/native.css"
+  },
+  "scripts": {
+    "build": "tsx scripts/build-native-css.ts",
+    "check": "tsx scripts/check.ts && tsx scripts/check-app-theme.ts",
+    "sync": "tsx scripts/sync-desktop.ts"
+  }
+}

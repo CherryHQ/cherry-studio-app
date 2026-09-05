@@ -1,41 +1,30 @@
-import type { ThemeMode } from '@/types'
-
-export type PreferenceDefaultScopeType = PreferenceSchemas['default']
-export type PreferenceKeyType = keyof PreferenceDefaultScopeType
+/**
+ * Value types for the preference keys in `preferenceSchema.ts`. The web-search
+ * provider vocabulary some keys are written in lives in
+ * `@/shared/data/types/webSearch`, below this module in the layering.
+ */
 
 export type PreferenceUpdateOptions = {
-  optimistic: boolean
+  optimistic: boolean;
+};
+
+export enum ThemeMode {
+  light = 'light',
+  dark = 'dark',
+  system = 'system',
 }
 
-/**
- * Import PreferenceSchemas type from schemas file
- * This will be defined in preferenceSchemas.ts
- */
-export interface PreferenceSchemas {
-  default: {
-    // User Configuration
-    'user.avatar': string
-    'user.name': string
-    'user.id': string
-
-    // UI Configuration
-    'ui.theme_mode': ThemeMode
-
-    // Topic State
-    'topic.current_id': string
-
-    // Web Search Configuration
-    'websearch.search_with_time': boolean
-    'websearch.max_results': number
-    'websearch.override_search_service': boolean
-    'websearch.content_limit': number | undefined
-
-    // Chat Configuration
-    'chat.auto_scroll': boolean
-
-    // App State
-    'app.initialization_version': number
-    'app.dismissed_update_version': string
-    'app.developer_mode': boolean
-  }
-}
+/** 有限的UI语言 */
+export type LanguageVarious =
+  | 'zh-CN'
+  | 'zh-TW'
+  | 'de-DE'
+  | 'el-GR'
+  | 'en-US'
+  | 'es-ES'
+  | 'fr-FR'
+  | 'ja-JP'
+  | 'pt-PT'
+  | 'ro-RO'
+  | 'ru-RU'
+  | 'vi-VN';

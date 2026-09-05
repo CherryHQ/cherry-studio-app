@@ -7,6 +7,8 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "development"
       },
@@ -18,17 +20,22 @@
     },
     "preview": {
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "preview"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       },
       "ios": {}
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "node": "24.19.0",
+      "pnpm": "12.2.1",
       "env": {
         "PROFILE": "production"
       },

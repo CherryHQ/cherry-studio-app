@@ -1,0 +1,28 @@
+# Cherry Studio Mobile
+
+Cherry Mobile is Cherry Studio's Expo and React Native client.
+
+Use `pnpm@12.2.1`. This repository has no root application build script: build workspace packages
+with `pnpm packages:build`, and run the complete repository type check with `pnpm typecheck`.
+
+Project architecture and conventions govern how reusable skills apply here. Generic examples do
+not replace the custom development client, Uniwind styling, CherryUI ownership, public module
+boundaries, or project naming and motion contracts. Keep personal agent preferences in user-level
+configuration, not in repository rules.
+
+- Before using a project skill, read [Project Skills](.agents/skills/README.md) for repository usage
+  rules and required dependencies. Keep upstream skill files unchanged.
+- When naming or renaming files, directories, identifiers, or documentation, read
+  [Naming Conventions](docs/references/naming-conventions.md).
+- When adding, moving, or exposing modules, read
+  [Code Organization](docs/references/code-organization.md).
+- When adding, changing, removing, or running tests, read
+  [Testing And CI](docs/guides/testing-and-ci.md).
+- Before creating commits, splitting work, or opening a pull request, read
+  [Git Workflow](docs/guides/git-workflow.md).
+- When building or changing product UI, read
+  [UI Development](docs/guides/ui-development.md) and [Design Spec](DESIGN.md). The project motion
+  contract determines whether and how an interaction moves; generic skill guidance does not make
+  animation mandatory.
+- When running iOS device acceptance in a Conductor workspace, read
+  [Parallel Device Testing](docs/guides/parallel-device-testing.md).

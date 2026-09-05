@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import PDFKit
+import os
 
 public class PdfTextExtractorModule: Module {
   private let defaultMaxPages = 100
@@ -21,80 +22,96 @@ public class PdfTextExtractorModule: Module {
   // MARK: - PDF 文本提取核心逻辑
 
   private func extractTextFromPDF(filePath: String, options: ExtractOptions?) throws -> [String: Any] {
-    // 1. 解析文件路径
     let url = try parseFileURL(filePath)
+    let didAccess = url.startAccessingSecurityScopedResource()
+    defer {
+      if didAccess {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
 
-    // 2. 加载 PDF 文档
     guard let document = PDFDocument(url: url) else {
-      throw PdfExtractorError.failedToLoadDocument
+      throw FailedToLoadDocumentException()
+    }
+
+    if document.isEncrypted {
+      throw FailedToLoadDocumentException()
     }
 
     let totalPages = document.pageCount
 
-    // 3. 确定提取范围
     let maxPages = options?.maxPages ?? defaultMaxPages
     let endPage = min(maxPages, totalPages)
     let isTruncated = endPage < totalPages
 
-    // 4. 提取文本
     var extractedText = ""
-    var extractedPages = 0
     var extractionError = false
 
     for pageIndex in 0..<endPage {
-      guard let page = document.page(at: pageIndex) else {
-        extractionError = true
-        continue
-      }
-
-      if let pageText = page.string {
-        if !extractedText.isEmpty {
-          extractedText += "\n"
+      autoreleasepool {
+        if let page = document.page(at: pageIndex) {
+          if let pageText = page.string {
+            if !extractedText.isEmpty {
+              extractedText += "\n"
+            }
+            extractedText += pageText
+          }
+        } else {
+          extractionError = true
         }
-        extractedText += pageText
-        extractedPages += 1
       }
     }
 
-    // 5. 返回结果
     return [
       "text": extractedText,
       "totalPages": totalPages,
-      "extractedPages": extractedPages,
+      "extractedPages": endPage,
       "isTruncated": isTruncated,
       "extractionError": extractionError
     ]
   }
 
   private func getPageCount(filePath: String) -> Int {
-    guard let url = try? parseFileURL(filePath),
-          let document = PDFDocument(url: url) else {
+    do {
+      let url = try parseFileURL(filePath)
+      let didAccess = url.startAccessingSecurityScopedResource()
+      defer {
+        if didAccess {
+          url.stopAccessingSecurityScopedResource()
+        }
+      }
+      guard let document = PDFDocument(url: url) else {
+        os_log("PdfTextExtractor: failed to load PDF at %{public}@", log: .default, type: .error, filePath)
+        return 0
+      }
+      return document.pageCount
+    } catch {
+      os_log("PdfTextExtractor: getPageCount error for %{public}@: %{public}@", log: .default, type: .error, filePath, String(describing: error))
       return 0
     }
-    return document.pageCount
   }
 
   // MARK: - 辅助方法
 
   private func parseFileURL(_ filePath: String) throws -> URL {
-    // 处理 file:// 协议
+    let url: URL
+
     if filePath.hasPrefix("file://") {
-      guard let url = URL(string: filePath) else {
-        throw PdfExtractorError.invalidFilePath
+      guard let parsed = URL(string: filePath) else {
+        throw InvalidFilePathException()
       }
-      return url
+      url = parsed
+    } else {
+      url = URL(fileURLWithPath: filePath)
     }
 
-    // 处理普通路径
-    let url = URL(fileURLWithPath: filePath)
-
-    // 验证文件存在
     guard FileManager.default.fileExists(atPath: url.path) else {
-      throw PdfExtractorError.fileNotFound
+      throw FileNotFoundException()
     }
 
     return url
   }
+
 }
 
 // MARK: - 数据结构
@@ -106,21 +123,18 @@ struct ExtractOptions: Record {
 
 // MARK: - 错误定义
 
-enum PdfExtractorError: Error {
-  case invalidFilePath
-  case fileNotFound
-  case failedToLoadDocument
+
+internal class InvalidFilePathException: Exception {
+  override var code: String { "INVALID_FILE_PATH" }
+  override var reason: String { "Invalid file path provided" }
 }
 
-extension PdfExtractorError: LocalizedError {
-  var errorDescription: String? {
-    switch self {
-    case .invalidFilePath:
-      return "Invalid file path provided"
-    case .fileNotFound:
-      return "PDF file not found at the specified path"
-    case .failedToLoadDocument:
-      return "Failed to load PDF document. The file may be corrupted or password-protected"
-    }
-  }
+internal class FileNotFoundException: Exception {
+  override var code: String { "FILE_NOT_FOUND" }
+  override var reason: String { "PDF file not found at the specified path" }
+}
+
+internal class FailedToLoadDocumentException: Exception {
+  override var code: String { "FAILED_TO_LOAD_DOCUMENT" }
+  override var reason: String { "Failed to load PDF document. The file may be corrupted or password-protected" }
 }

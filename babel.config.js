@@ -1,27 +1,21 @@
 module.exports = function (api) {
-  api.cache(true)
+  api.cache(true);
+
   return {
-    presets: [
-      [
-        'babel-preset-expo',
-        {
-          'react-compiler': true
-        }
-      ]
-    ],
+    presets: ['babel-preset-expo'],
     plugins: [
+      // Must precede class-property transforms. Legacy mode matches the desktop
+      // lifecycle decorators, which pass every argument explicitly and therefore
+      // need neither the 2023-11 proposal nor emitDecoratorMetadata.
+      ['@babel/plugin-proposal-decorators', { version: 'legacy' }],
       ['inline-import', { extensions: ['.sql'] }],
-      '@babel/plugin-transform-class-static-block',
       [
-        'module-resolver',
+        'react-native-worklets/plugin',
         {
-          alias: {
-            '@db': './db',
-            '@/modules': './modules'
-          }
-        }
+          bundleMode: true,
+          importForwarding: { moduleNames: ['remend'] },
+        },
       ],
-      'react-native-worklets/plugin'
-    ]
-  }
-}
+    ],
+  };
+};

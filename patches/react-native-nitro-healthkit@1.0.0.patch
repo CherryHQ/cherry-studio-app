@@ -1,0 +1,1075 @@
+diff --git a/android/src/main/AndroidManifest.xml b/android/src/main/AndroidManifest.xml
+index f216728a40c8deda4bb5b74d8c665f9889a704f2..e3cf9d3607bfb4e3fc5a6ad693825faea1467e02 100644
+--- a/android/src/main/AndroidManifest.xml
++++ b/android/src/main/AndroidManifest.xml
+@@ -10,25 +10,10 @@
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+   <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+-  <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+-  <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+-  <uses-permission android:name="android.permission.health.WRITE_FLOORS_CLIMBED" />
+   <uses-permission android:name="android.permission.health.READ_STEPS" />
+-  <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+-  <uses-permission android:name="android.permission.health.WRITE_TOTAL_CALORIES_BURNED" />
+-  <uses-permission android:name="android.permission.health.WRITE_STEPS" />
+   <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+-  <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
+   <uses-permission android:name="android.permission.health.READ_SLEEP" />
+-  <uses-permission android:name="android.permission.health.WRITE_SLEEP" />
+   <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+-  <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+-  <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+-  <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+-  <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+-  <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+-  <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+-  <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+   <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+   <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+ 
+diff --git a/android/src/main/cpp/cpp-adapter.cpp b/android/src/main/cpp/cpp-adapter.cpp
+index d7d9d566a392df4574671a6271fa1758cd29ba3c..19695d326bba91c3611cadd75d46e111c5ea9300 100644
+--- a/android/src/main/cpp/cpp-adapter.cpp
++++ b/android/src/main/cpp/cpp-adapter.cpp
+@@ -5,13 +5,11 @@
+ //
+ // Two responsibilities:
+ //   1. Implement JNI_OnLoad so fbjni / the Nitrogen-generated JNI bridges
+-//      (JHybridHealthKitSpec::registerNatives, etc.) wire up correctly.
++//      wire up correctly.
+ //   2. Register the "HealthKit" HybridObject constructor with Nitro's
+ //      HybridObjectRegistry. The lambda is invoked every time JS calls
+-//      NitroModules.createHybridObject('HealthKit') — it constructs the
+-//      Kotlin `HealthKitModule()` (which triggers its own initHybrid() to
+-//      create the C++ counterpart) and returns a shared_ptr<HybridObject>
+-//      that aliases the C++ side of that Java instance.
++//      NitroModules.createHybridObject('HealthKit') — it constructs the Kotlin
++//      `HealthKitModule()` and asks its generated JavaPart for the C++ object.
+ //
+ 
+ #include <jni.h>
+@@ -20,7 +18,6 @@
+ #include <fbjni/fbjni.h>
+ 
+ #include <NitroModules/HybridObjectRegistry.hpp>
+-#include <NitroModules/JNISharedPtr.hpp>
+ 
+ #include "JHybridHealthKitSpec.hpp"
+ #include "NitroHealthkitOnLoad.hpp"
+@@ -31,45 +28,33 @@ using namespace margelo::nitro::healthkit;
+ 
+ namespace {
+ 
+-// JNI descriptor for the concrete Kotlin implementation that extends the
+-// Nitrogen-generated HybridHealthKitSpec abstract class.
+-constexpr const char* kHealthKitModuleClass = "io/github/n0ku/nitrohealthkit/HealthKitModule";
+-
+-// Construct a fresh HealthKitModule on the Kotlin side and bridge it to a
+-// std::shared_ptr<HybridObject> that points at its C++ counterpart.
+-std::shared_ptr<HybridObject> createHealthKit() {
+-  // The Kotlin class has a no-arg constructor. Its `init` block invokes
+-  // initHybrid() which in turn calls JHybridHealthKitSpec::initHybrid(jThis)
+-  // on the C++ side, populating mHybridData with our JHybridHealthKitSpec.
+-  auto cls = jni::findClassStatic(kHealthKitModuleClass);
+-  auto ctor = cls->getConstructor<JHybridHealthKitSpec::javaobject()>();
+-  auto localInstance = cls->newObject(ctor);
+-  auto globalInstance = jni::make_global(localInstance);
+-
+-  // Wrap the Java reference in a shared_ptr whose deleter holds onto the
+-  // global_ref (so the Kotlin object stays alive as long as the C++ shared_ptr
+-  // does). ref->cthis() returns the C++ part of the HybridClass.
+-  auto typedShared =
+-      JNISharedPtr::make_shared_from_jni<JHybridHealthKitSpec>(globalInstance);
+-  return std::static_pointer_cast<HybridObject>(typedShared);
+-}
++struct JHealthKitModule
++    : public jni::JavaClass<JHealthKitModule, JHybridHealthKitSpec::JavaPart> {
++  static constexpr auto kJavaDescriptor =
++      "Lio/github/n0ku/nitrohealthkit/HealthKitModule;";
++
++  static std::shared_ptr<JHybridHealthKitSpec> create() {
++    static const auto constructor =
++        javaClassStatic()->getConstructor<JHealthKitModule::javaobject()>();
++    jni::local_ref<JHybridHealthKitSpec::JavaPart> javaPart =
++        javaClassStatic()->newObject(constructor);
++    return javaPart->getJHybridHealthKitSpec();
++  }
++};
+ 
+ }  // namespace
+ 
+ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
+-  // Delegate to the Nitrogen-generated initialise() which registers JNI
+-  // natives for the Spec classes.
+   const jint nitroResult = margelo::nitro::healthkit::initialize(vm);
+   if (nitroResult != JNI_VERSION_1_6) {
+     return nitroResult;
+   }
+ 
+-  // Once JNI is set up, register the HybridObject constructor. We do it here
+-  // (rather than in a static initialiser) because findClassStatic /
+-  // make_global require a fully attached JNI environment.
+   HybridObjectRegistry::registerHybridObjectConstructor(
+       "HealthKit",
+-      []() -> std::shared_ptr<HybridObject> { return createHealthKit(); });
++      []() -> std::shared_ptr<HybridObject> {
++        return JHealthKitModule::create();
++      });
+ 
+   return JNI_VERSION_1_6;
+ }
+diff --git a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
+index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3f01393be 100644
+--- a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
++++ b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
+@@ -6,22 +6,14 @@ import android.util.Log
+ import androidx.health.connect.client.HealthConnectClient
+ import androidx.health.connect.client.aggregate.AggregateMetric
+ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+-import androidx.health.connect.client.records.BloodPressureRecord
+-import androidx.health.connect.client.records.BodyFatRecord
+ import androidx.health.connect.client.records.DistanceRecord
+ import androidx.health.connect.client.records.ExerciseSessionRecord
+-import androidx.health.connect.client.records.FloorsClimbedRecord
+ import androidx.health.connect.client.records.HeartRateRecord
+ import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+-import androidx.health.connect.client.records.HeightRecord
+-import androidx.health.connect.client.records.LeanBodyMassRecord
+-import androidx.health.connect.client.records.OxygenSaturationRecord
+ import androidx.health.connect.client.records.Record
+ import androidx.health.connect.client.records.RestingHeartRateRecord
+ import androidx.health.connect.client.records.SleepSessionRecord
+ import androidx.health.connect.client.records.StepsRecord
+-import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+-import androidx.health.connect.client.records.WeightRecord
+ import androidx.health.connect.client.request.AggregateGroupByDurationRequest
+ import androidx.health.connect.client.request.AggregateRequest
+ import androidx.health.connect.client.request.ReadRecordsRequest
+@@ -129,7 +121,12 @@ class HealthKitModule : HybridHealthKitSpec() {
+     override fun checkAuthorizationStatus(type: String): Promise<String> = Promise.async {
+         val quantityPerm = QuantityMapper.readPermissionFor(type)
+         val categoryPerm = CategoryMapper.readPermissionFor(type)
+-        val permission = quantityPerm ?: categoryPerm ?: return@async NOT_DETERMINED
++        val workoutPerm = if (type == "HKWorkoutTypeIdentifier") {
++            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class)
++        } else {
++            null
++        }
++        val permission = quantityPerm ?: categoryPerm ?: workoutPerm ?: return@async NOT_DETERMINED
+         val granted = client.permissionController.getGrantedPermissions()
+         if (granted.contains(permission)) AUTHORIZED else DENIED
+     }
+@@ -177,9 +174,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+             val response = readChunkWithRetry(recordType, chunkStart, chunkEnd)
+             if (response != null) {
+                 accumulated += response.records
+-                if (response.pageToken != null) {
+-                    Log.w(TAG, "readAllRecords ${recordType.simpleName}: chunk $chunkStart→$chunkEnd hit pageSize cap (${response.records.size}); window has more records that won't be returned")
+-                }
+             }
+             chunkStart = chunkEnd
+             chunks++
+@@ -258,7 +252,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+                     val isQuotaError = (t.message ?: "").contains("quota", ignoreCase = true) ||
+                         (t.cause?.message ?: "").contains("quota", ignoreCase = true)
+                     if (!isQuotaError || attempt >= QUOTA_RETRY_MAX_ATTEMPTS) {
+-                        Log.w(TAG, "readAllRecords ${recordType.simpleName} chunk failed [$start→$end] (attempt $attempt): ${t.javaClass.simpleName}: ${t.message}")
+                         return null
+                     }
+                     kotlinx.coroutines.delay(backoffMs)
+@@ -311,7 +304,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+ 
+         val records = readAllRecords(recordType, startDate, endDate)
+         val flattened = QuantityMapper.flatten(type, records).toTypedArray()
+-        Log.d(TAG, "getQuantityData $type [$startDate→$endDate]: ${records.size} raw records → ${flattened.size} samples")
+ 
+         if (useCacheValue) cache.set(key, flattened, ttl)
+         flattened
+@@ -414,7 +406,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+                 )
+             }
+         }
+-        Log.d(TAG, "readDailyAggregates $iosType [$alignedStart→$alignedEnd]: ${buckets.size} buckets → ${out.size} non-empty days")
+         out.toTypedArray()
+     }
+ 
+@@ -459,12 +450,10 @@ class HealthKitModule : HybridHealthKitSpec() {
+                         ),
+                     )
+                 } catch (t: Throwable) {
+-                    Log.w(TAG, "aggregate $iosType: failed [$startDate→$endDate]: ${t.javaClass.simpleName}: ${t.message}")
+                     null
+                 }
+             }
+             val v = if (response != null) QuantityMapper.coerceAggregateToDouble(iosType, response[metric]) else 0.0
+-            Log.d(TAG, "aggregate $iosType [$startDate→$endDate] sum=$v")
+             return v
+         }
+ 
+@@ -503,7 +492,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+         }
+         val records = readAllRecords(recordType, startDate, endDate)
+         val flattened = CategoryMapper.flatten(type, records).toTypedArray()
+-        Log.d(TAG, "getCategoryData $type [$startDate→$endDate]: ${records.size} raw records → ${flattened.size} samples")
+         if (useCacheValue) cache.set(key, flattened, ttl)
+         flattened
+     }
+@@ -754,23 +742,9 @@ class HealthKitModule : HybridHealthKitSpec() {
+         StepsRecord::class,
+         HeartRateRecord::class,
+         DistanceRecord::class,
+-        FloorsClimbedRecord::class,
+         ActiveCaloriesBurnedRecord::class,
+-        TotalCaloriesBurnedRecord::class,
+         SleepSessionRecord::class,
+         ExerciseSessionRecord::class,
+-        // Body composition — added in 5.1.0 so the BodyComposition
+-        // widget/screen works for users without a Withings account but
+-        // with a Samsung Health / Google Fit / Fitbit scale.
+-        WeightRecord::class,
+-        BodyFatRecord::class,
+-        LeanBodyMassRecord::class,
+-        HeightRecord::class,
+-        // Cardio vitals — same rationale. SpO2/HRV/BP/RestingHR are all
+-        // recorded by Galaxy Watches and similar wearables and exposed
+-        // via HC, no Withings required.
+-        BloodPressureRecord::class,
+-        OxygenSaturationRecord::class,
+         HeartRateVariabilityRmssdRecord::class,
+         RestingHeartRateRecord::class,
+     ).map { androidx.health.connect.client.permission.HealthPermission.getReadPermission(it) }.toSet()
+diff --git a/ios/HealthKitModule.swift b/ios/HealthKitModule.swift
+index 677ddcb4cd714e63d330d7540b50e5d896e6db42..79ca1fe445e272e01affd3ab5718f88684742e1b 100644
+--- a/ios/HealthKitModule.swift
++++ b/ios/HealthKitModule.swift
+@@ -1,6 +1,5 @@
+ import NitroModules
+ import HealthKit
+-import os.log
+ 
+ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   private let healthStore = HKHealthStore()
+@@ -10,7 +9,7 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   // Default cache configuration
+   private let defaultCacheTTL: TimeInterval = 60 // 1 minute
+   
+-  // Data types to authorize (extended)
++  // Read-only data types used by Cherry Studio's built-in health tools.
+   private let readTypes: Set<HKObjectType> = {
+     var types: Set<HKObjectType> = []
+     
+@@ -19,13 +18,8 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     
+     // Quantity types
+     let quantityIdentifiers: [HKQuantityTypeIdentifier] = [
+-      .stepCount, .heartRate, .activeEnergyBurned, .basalEnergyBurned,
+-      .distanceWalkingRunning, .distanceCycling, .distanceSwimming,
+-      .flightsClimbed, .restingHeartRate, .heartRateVariabilitySDNN,
+-      .oxygenSaturation, .bodyTemperature, .bloodPressureSystolic,
+-      .bloodPressureDiastolic, .respiratoryRate, .bodyMass, .height,
+-      .bodyMassIndex, .bodyFatPercentage, .leanBodyMass, .vo2Max,
+-      .walkingSpeed, .walkingStepLength
++      .stepCount, .heartRate, .activeEnergyBurned,
++      .distanceWalkingRunning, .restingHeartRate, .heartRateVariabilitySDNN
+     ]
+     
+     for identifier in quantityIdentifiers {
+@@ -36,9 +30,7 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     
+     // Category types
+     let categoryIdentifiers: [HKCategoryTypeIdentifier] = [
+-      .sleepAnalysis, .appleStandHour, .mindfulSession,
+-      .menstrualFlow, .sexualActivity, .lowHeartRateEvent,
+-      .highHeartRateEvent, .irregularHeartRhythmEvent
++      .sleepAnalysis
+     ]
+     
+     for identifier in categoryIdentifiers {
+@@ -58,10 +50,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return false }
+ 
+-      NSLog("🔍 [HealthKit] requestAuthorization - Start")
+-      os_log("🔍 [HealthKit] requestAuthorization - Start", log: .default, type: .info)
+-      
+-      
+       guard HKHealthStore.isHealthDataAvailable() else {
+         throw NSError(domain: "HealthKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "HealthKit not available"])
+       }
+@@ -82,12 +70,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return 0 }
+       
+-      // Log dates
+-      let formatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getSteps - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getSteps - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "stepCount type unavailable"])
+       }
+@@ -102,8 +84,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+           }
+           
+           let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
+-          NSLog("✅ [HealthKit] getSteps - Result: %.0f pas", steps)
+-          os_log("✅ [HealthKit] getSteps - Result: %.0f pas", log: .default, type: .info, steps)
+           continuation.resume(returning: steps)
+         }
+         
+@@ -116,12 +96,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return 0 }
+       
+-      // Log dates
+-      let formatter: DateFormatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getHeartRate - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getHeartRate - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       guard let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "heartRate type unavailable"])
+       }
+@@ -131,16 +105,11 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       return try await withCheckedThrowingContinuation { continuation in
+         let query = HKStatisticsQuery(quantityType: heartRateType, quantitySamplePredicate: predicate, options: .discreteAverage) { _, result, error in
+           if let error = error {
+-            NSLog("❌ [HealthKit] getHeartRate - Error: %@", error.localizedDescription)
+             continuation.resume(throwing: error)
+             return
+           }
+           
+-          NSLog("🔍 [HealthKit] getHeartRate - Query completed, result: %@", result?.description ?? "nil")
+-          
+           let bpm = result?.averageQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute())) ?? 0
+-          NSLog("✅ [HealthKit] getHeartRate - Result: %.1f bpm", bpm)
+-          os_log("✅ [HealthKit] getHeartRate - Result: %.1f bpm", log: .default, type: .info, bpm)
+           continuation.resume(returning: bpm)
+         }
+         
+@@ -155,12 +124,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         return HealthData(steps: nil, heartRate: nil, activeEnergy: nil, distance: nil, sleepAnalysis: nil)
+       }
+       
+-      // Log dates
+-      let formatter = DateFormatter()
+-      formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+-      NSLog("🔍 [HealthKit] getHealthData - Start: %@, End: %@", formatter.string(from: startDate), formatter.string(from: endDate))
+-      os_log("🔍 [HealthKit] getHealthData - Start: %{public}@, End: %{public}@", log: .default, type: .info, formatter.string(from: startDate), formatter.string(from: endDate))
+-      
+       // Fetch data in parallel with individual error handling
+       var steps: Double? = nil
+       var heartRate: Double? = nil
+@@ -170,7 +133,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         let stepsValue = try await self.getSteps(startDate: startDate, endDate: endDate).await()
+         steps = stepsValue > 0 ? stepsValue : nil
+       } catch {
+-        NSLog("⚠️ [HealthKit] getHealthData - Error getting steps: %@", error.localizedDescription)
+       }
+       
+       // Fetch heart rate (with error handling)
+@@ -178,13 +140,8 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+         let heartRateValue = try await self.getHeartRate(startDate: startDate, endDate: endDate).await()
+         heartRate = heartRateValue > 0 ? heartRateValue : nil
+       } catch {
+-        NSLog("⚠️ [HealthKit] getHealthData - Error getting heart rate: %@", error.localizedDescription)
+       }
+       
+-      NSLog("✅ [HealthKit] getHealthData - Steps: %@, HeartRate: %@", 
+-            steps != nil ? String(format: "%.0f", steps!) : "nil",
+-            heartRate != nil ? String(format: "%.1f", heartRate!) : "nil")
+-      
+       return HealthData(
+         steps: steps,
+         heartRate: heartRate,
+@@ -207,43 +164,30 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     cacheTTL: Double?
+   ) throws -> Promise<[QuantityDataPoint]> {
+     return Promise.async { [weak self] in
+-      guard let self = self else { 
+-        NSLog("❌ [HealthKit] getQuantityData - self is nil")
+-        return [] 
+-      }
++      guard let self = self else { return [] }
+       
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getQuantityData - Type: %@, Start: %@, End: %@, Cache: %@", type, startDate as CVarArg, endDate as CVarArg, useCacheValue ? "enabled" : "disabled")
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate, options: aggregationType ?? "")
+       if useCacheValue, let cached: [QuantityDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for %@", type)
+         return cached
+       }
+       
+       // Convert string type to HKQuantityTypeIdentifier
+-      NSLog("🔍 [HealthKit] Converting type identifier: %@", type)
+       guard let identifier = HKQuantityTypeIdentifier.from(type) else {
+-        NSLog("❌ [HealthKit] Failed to convert type identifier: %@", type)
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid quantity type identifier: \(type)"])
+       }
+       
+       guard let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] Failed to create quantity type for: %@", type)
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid quantity type: \(type)"])
+       }
+       
+-      NSLog("✅ [HealthKit] Created quantity type successfully")
+-      
+       let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: [])
+       let unit = identifier.defaultUnit()
+       let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+       
+-      NSLog("🔍 [HealthKit] Executing query...")
+-      
+       return try await withCheckedThrowingContinuation { continuation in
+         let query = HKSampleQuery(
+           sampleType: quantityType,
+@@ -252,19 +196,15 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+           sortDescriptors: [sortDescriptor]
+         ) { _, samples, error in
+           if let error = error {
+-            NSLog("❌ [HealthKit] Query error: %@", error.localizedDescription)
+             continuation.resume(throwing: error)
+             return
+           }
+           
+           guard let samples = samples as? [HKQuantitySample] else {
+-            NSLog("⚠️ [HealthKit] No samples found or wrong type")
+             continuation.resume(returning: [])
+             return
+           }
+           
+-          NSLog("📊 [HealthKit] Found %d samples", samples.count)
+-          
+           let dataPoints = samples.map { sample -> QuantityDataPoint in
+             let value = sample.quantity.doubleValue(for: unit)
+             // Convert metadata from [String: Any] to [String: String]
+@@ -278,8 +218,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d data points for %@", dataPoints.count, type)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -311,7 +249,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate, options: "agg_\(aggregationType)")
+       if useCacheValue, let cached: Double = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for aggregated %@", type)
+         return cached
+       }
+       
+@@ -369,8 +306,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             }
+           }
+           
+-          NSLog("✅ [HealthKit] Aggregated %@ for %@: %.2f", aggregationType, type, value)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: value, ttl: cacheTTLValue)
+@@ -400,12 +335,9 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getCategoryData - Type: %@", type)
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: type, startDate: startDate, endDate: endDate)
+       if useCacheValue, let cached: [CategoryDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for category %@", type)
+         return cached
+       }
+       
+@@ -445,8 +377,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d category data points for %@", dataPoints.count, type)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -479,8 +409,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       }
+       
+       let dates = TimeRangeHelper.getDates(for: range, customStart: customStartDate, customEnd: customEndDate)
+-      NSLog("🔍 [HealthKit] Time range: %@ (%@ to %@)", timeRange, dates.start.description, dates.end.description)
+-      
+       // Fetch data
+       return try await self.getHealthData(startDate: dates.start, endDate: dates.end).await()
+     }
+@@ -505,12 +433,9 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       let useCacheValue = useCache ?? true
+       let cacheTTLValue = cacheTTL ?? self.defaultCacheTTL
+       
+-      NSLog("🔍 [HealthKit] getWorkouts - Start")
+-      
+       // Check cache
+       let cacheKey = CacheManager.generateKey(type: "workouts", startDate: startDate, endDate: endDate)
+       if useCacheValue, let cached: [WorkoutDataPoint] = self.cacheManager.get(cacheKey) {
+-        NSLog("✅ [HealthKit] Cache hit for workouts")
+         return cached
+       }
+       
+@@ -563,8 +488,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+             )
+           }
+           
+-          NSLog("✅ [HealthKit] Retrieved %d workouts", dataPoints.count)
+-          
+           // Save to cache
+           if useCacheValue {
+             self.cacheManager.set(cacheKey, value: dataPoints, ttl: cacheTTLValue)
+@@ -637,7 +560,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+     return Promise.async { [weak self] in
+       guard let self = self else { return }
+       self.cacheManager.clear()
+-      NSLog("✅ [HealthKit] Cache cleared")
+     }
+   }
+   
+@@ -647,7 +569,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+   public func isHealthKitAvailable() throws -> Promise<Bool> {
+     return Promise.async {
+       let available = HKHealthStore.isHealthDataAvailable()
+-      NSLog("✅ [HealthKit] HealthKit available: %@", available ? "yes" : "no")
+       return available
+     }
+   }
+@@ -667,22 +588,25 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       else if let identifier = HKCategoryTypeIdentifier.from(type) {
+         objectType = HKObjectType.categoryType(forIdentifier: identifier)
+       }
++      else if type == "HKWorkoutTypeIdentifier" {
++        objectType = HKObjectType.workoutType()
++      }
+       
+       guard let type = objectType else {
+         throw NSError(domain: "HealthKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid type: \(type)"])
+       }
+       
+-      let status = self.healthStore.authorizationStatus(for: type)
+-      
+-      switch status {
+-      case .notDetermined:
+-        return "notDetermined"
+-      case .sharingDenied:
+-        return "sharingDenied"
+-      case .sharingAuthorized:
+-        return "sharingAuthorized"
+-      @unknown default:
+-        return "notDetermined"
++      return await withCheckedContinuation { continuation in
++        self.healthStore.getRequestStatusForAuthorization(toShare: [], read: [type]) { status, _ in
++          switch status {
++          case .unnecessary:
++            continuation.resume(returning: "sharingAuthorized")
++          case .shouldRequest, .unknown:
++            continuation.resume(returning: "notDetermined")
++          @unknown default:
++            continuation.resume(returning: "notDetermined")
++          }
++        }
+       }
+     }
+   }
+@@ -712,7 +636,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       guard let self = self else { return false }
+       guard let identifier = HKQuantityTypeIdentifier.from(type),
+             let quantityType = HKObjectType.quantityType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] writeQuantityData - unknown type %@", type)
+         return false
+       }
+       let hkUnit = HKUnit(from: unit.isEmpty ? identifier.defaultUnit().unitString : unit)
+@@ -741,7 +664,6 @@ public class HealthKitModule: HybridHealthKitSpec, @unchecked Sendable {
+       guard let self = self else { return false }
+       guard let identifier = HKCategoryTypeIdentifier.from(type),
+             let categoryType = HKObjectType.categoryType(forIdentifier: identifier) else {
+-        NSLog("❌ [HealthKit] writeCategoryData - unknown type %@", type)
+         return false
+       }
+       let sample = HKCategorySample(type: categoryType, value: Int(value), start: startDate, end: endDate, metadata: metadata)
+diff --git a/nitrogen/generated/android/NitroHealthkitOnLoad.cpp b/nitrogen/generated/android/NitroHealthkitOnLoad.cpp
+index b0e4a8d63b0eedc12491cd1a68d4651c73477dee..3c305ebc4dc05372b6e247f840dac4d84b557e29 100644
+--- a/nitrogen/generated/android/NitroHealthkitOnLoad.cpp
++++ b/nitrogen/generated/android/NitroHealthkitOnLoad.cpp
+@@ -27,7 +27,7 @@ int initialize(JavaVM* vm) {
+ 
+   return facebook::jni::initialize(vm, [] {
+     // Register native JNI methods
+-    margelo::nitro::healthkit::JHybridHealthKitSpec::registerNatives();
++    margelo::nitro::healthkit::JHybridHealthKitSpec::CxxPart::registerNatives();
+     margelo::nitro::healthkit::JFunc_void_std__string_cxx::registerNatives();
+ 
+     // Register Nitro Hybrid Objects
+diff --git a/nitrogen/generated/android/c++/JHybridHealthKitSpec.cpp b/nitrogen/generated/android/c++/JHybridHealthKitSpec.cpp
+index e625e7ecc1b3e495a83126c72fca03cecac2cdb2..0a4039ed109af07930577d0c1a732bf47d8ce80e 100644
+--- a/nitrogen/generated/android/c++/JHybridHealthKitSpec.cpp
++++ b/nitrogen/generated/android/c++/JHybridHealthKitSpec.cpp
+@@ -2,7 +2,7 @@
+ /// JHybridHealthKitSpec.cpp
+ /// This file was generated by nitrogen. DO NOT MODIFY THIS FILE.
+ /// https://github.com/mrousavy/nitro
+-/// Copyright © 2026 Marc Rousavy @ Margelo
++/// Copyright © Marc Rousavy @ Margelo
+ ///
+ 
+ #include "JHybridHealthKitSpec.hpp"
+@@ -32,33 +32,42 @@ namespace margelo::nitro::healthkit { struct BackgroundSyncConfig; }
+ #include "JCategoryDataPoint.hpp"
+ #include "HealthData.hpp"
+ #include "JHealthData.hpp"
++#include <NitroModules/JUnit.hpp>
+ #include "WorkoutDataPoint.hpp"
+ #include "JWorkoutDataPoint.hpp"
+ #include <functional>
+ #include "JFunc_void_std__string.hpp"
++#include <NitroModules/JNICallable.hpp>
+ #include "BackgroundSyncConfig.hpp"
+ #include "JBackgroundSyncConfig.hpp"
+ 
+ namespace margelo::nitro::healthkit {
+ 
+-  jni::local_ref<JHybridHealthKitSpec::jhybriddata> JHybridHealthKitSpec::initHybrid(jni::alias_ref<jhybridobject> jThis) {
+-    return makeCxxInstance(jThis);
++  std::shared_ptr<JHybridHealthKitSpec> JHybridHealthKitSpec::JavaPart::getJHybridHealthKitSpec() {
++    auto hybridObject = JHybridObject::JavaPart::getJHybridObject();
++    auto castHybridObject = std::dynamic_pointer_cast<JHybridHealthKitSpec>(hybridObject);
++    if (castHybridObject == nullptr) [[unlikely]] {
++      throw std::runtime_error("Failed to downcast JHybridObject to JHybridHealthKitSpec!");
++    }
++    return castHybridObject;
+   }
+ 
+-  void JHybridHealthKitSpec::registerNatives() {
+-    registerHybrid({
+-      makeNativeMethod("initHybrid", JHybridHealthKitSpec::initHybrid),
+-    });
++  jni::local_ref<JHybridHealthKitSpec::CxxPart::jhybriddata> JHybridHealthKitSpec::CxxPart::initHybrid(jni::alias_ref<jhybridobject> jThis) {
++    return makeCxxInstance(jThis);
+   }
+ 
+-  size_t JHybridHealthKitSpec::getExternalMemorySize() noexcept {
+-    static const auto method = javaClassStatic()->getMethod<jlong()>("getMemorySize");
+-    return method(_javaPart);
++  std::shared_ptr<JHybridObject> JHybridHealthKitSpec::CxxPart::createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) {
++    auto castJavaPart = jni::dynamic_ref_cast<JHybridHealthKitSpec::JavaPart>(javaPart);
++    if (castJavaPart == nullptr) [[unlikely]] {
++      throw std::runtime_error("Failed to cast JHybridObject::JavaPart to JHybridHealthKitSpec::JavaPart!");
++    }
++    return std::make_shared<JHybridHealthKitSpec>(castJavaPart);
+   }
+ 
+-  void JHybridHealthKitSpec::dispose() noexcept {
+-    static const auto method = javaClassStatic()->getMethod<void()>("dispose");
+-    method(_javaPart);
++  void JHybridHealthKitSpec::CxxPart::registerNatives() {
++    registerHybrid({
++      makeNativeMethod("initHybrid", JHybridHealthKitSpec::CxxPart::initHybrid),
++    });
+   }
+ 
+   // Properties
+@@ -66,7 +75,7 @@ namespace margelo::nitro::healthkit {
+ 
+   // Methods
+   std::shared_ptr<Promise<bool>> JHybridHealthKitSpec::requestAuthorization() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("requestAuthorization");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("requestAuthorization");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<bool>::create();
+@@ -82,22 +91,22 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::vector<QuantityDataPoint>>> JHybridHealthKitSpec::getQuantityData(const std::string& type, std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, const std::optional<std::string>& aggregationType, std::optional<bool> useCache, std::optional<double> cacheTTL) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JString> /* aggregationType */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getQuantityData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JString> /* aggregationType */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getQuantityData");
+     auto __result = method(_javaPart, jni::make_jstring(type), JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), aggregationType.has_value() ? jni::make_jstring(aggregationType.value()) : nullptr, useCache.has_value() ? jni::JBoolean::valueOf(useCache.value()) : nullptr, cacheTTL.has_value() ? jni::JDouble::valueOf(cacheTTL.value()) : nullptr);
+     return [&]() {
+       auto __promise = Promise<std::vector<QuantityDataPoint>>::create();
+       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& __boxedResult) {
+         auto __result = jni::static_ref_cast<jni::JArrayClass<JQuantityDataPoint>>(__boxedResult);
+-        __promise->resolve([&]() {
+-          size_t __size = __result->size();
++        __promise->resolve([&](auto&& __input) {
++          size_t __size = __input->size();
+           std::vector<QuantityDataPoint> __vector;
+           __vector.reserve(__size);
+           for (size_t __i = 0; __i < __size; __i++) {
+-            auto __element = __result->getElement(__i);
++            auto __element = __input->getElement(__i);
+             __vector.push_back(__element->toCpp());
+           }
+           return __vector;
+-        }());
++        }(__result));
+       });
+       __result->cthis()->addOnRejectedListener([=](const jni::alias_ref<jni::JThrowable>& __throwable) {
+         jni::JniException __jniError(__throwable);
+@@ -107,7 +116,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<double>> JHybridHealthKitSpec::getAggregatedQuantity(const std::string& type, std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, const std::string& aggregationType, std::optional<bool> useCache, std::optional<double> cacheTTL) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JString> /* aggregationType */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getAggregatedQuantity");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JString> /* aggregationType */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getAggregatedQuantity");
+     auto __result = method(_javaPart, jni::make_jstring(type), JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), jni::make_jstring(aggregationType), useCache.has_value() ? jni::JBoolean::valueOf(useCache.value()) : nullptr, cacheTTL.has_value() ? jni::JDouble::valueOf(cacheTTL.value()) : nullptr);
+     return [&]() {
+       auto __promise = Promise<double>::create();
+@@ -123,22 +132,22 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::vector<CategoryDataPoint>>> JHybridHealthKitSpec::getCategoryData(const std::string& type, std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, std::optional<bool> useCache, std::optional<double> cacheTTL) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getCategoryData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getCategoryData");
+     auto __result = method(_javaPart, jni::make_jstring(type), JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), useCache.has_value() ? jni::JBoolean::valueOf(useCache.value()) : nullptr, cacheTTL.has_value() ? jni::JDouble::valueOf(cacheTTL.value()) : nullptr);
+     return [&]() {
+       auto __promise = Promise<std::vector<CategoryDataPoint>>::create();
+       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& __boxedResult) {
+         auto __result = jni::static_ref_cast<jni::JArrayClass<JCategoryDataPoint>>(__boxedResult);
+-        __promise->resolve([&]() {
+-          size_t __size = __result->size();
++        __promise->resolve([&](auto&& __input) {
++          size_t __size = __input->size();
+           std::vector<CategoryDataPoint> __vector;
+           __vector.reserve(__size);
+           for (size_t __i = 0; __i < __size; __i++) {
+-            auto __element = __result->getElement(__i);
++            auto __element = __input->getElement(__i);
+             __vector.push_back(__element->toCpp());
+           }
+           return __vector;
+-        }());
++        }(__result));
+       });
+       __result->cthis()->addOnRejectedListener([=](const jni::alias_ref<jni::JThrowable>& __throwable) {
+         jni::JniException __jniError(__throwable);
+@@ -148,7 +157,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<HealthData>> JHybridHealthKitSpec::getHealthDataForTimeRange(const std::string& timeRange, std::optional<std::chrono::system_clock::time_point> customStartDate, std::optional<std::chrono::system_clock::time_point> customEndDate, std::optional<bool> useCache, std::optional<double> cacheTTL) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* timeRange */, jni::alias_ref<JInstant> /* customStartDate */, jni::alias_ref<JInstant> /* customEndDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getHealthDataForTimeRange");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* timeRange */, jni::alias_ref<JInstant> /* customStartDate */, jni::alias_ref<JInstant> /* customEndDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getHealthDataForTimeRange");
+     auto __result = method(_javaPart, jni::make_jstring(timeRange), customStartDate.has_value() ? JInstant::fromChrono(customStartDate.value()) : nullptr, customEndDate.has_value() ? JInstant::fromChrono(customEndDate.value()) : nullptr, useCache.has_value() ? jni::JBoolean::valueOf(useCache.value()) : nullptr, cacheTTL.has_value() ? jni::JDouble::valueOf(cacheTTL.value()) : nullptr);
+     return [&]() {
+       auto __promise = Promise<HealthData>::create();
+@@ -164,7 +173,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::clearCache() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("clearCache");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("clearCache");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -179,7 +188,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<bool>> JHybridHealthKitSpec::isHealthKitAvailable() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("isHealthKitAvailable");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("isHealthKitAvailable");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<bool>::create();
+@@ -195,7 +204,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::string>> JHybridHealthKitSpec::checkAuthorizationStatus(const std::string& type) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */)>("checkAuthorizationStatus");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */)>("checkAuthorizationStatus");
+     auto __result = method(_javaPart, jni::make_jstring(type));
+     return [&]() {
+       auto __promise = Promise<std::string>::create();
+@@ -211,22 +220,22 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::vector<WorkoutDataPoint>>> JHybridHealthKitSpec::getWorkouts(std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, std::optional<bool> useCache, std::optional<double> cacheTTL) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getWorkouts");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JBoolean> /* useCache */, jni::alias_ref<jni::JDouble> /* cacheTTL */)>("getWorkouts");
+     auto __result = method(_javaPart, JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), useCache.has_value() ? jni::JBoolean::valueOf(useCache.value()) : nullptr, cacheTTL.has_value() ? jni::JDouble::valueOf(cacheTTL.value()) : nullptr);
+     return [&]() {
+       auto __promise = Promise<std::vector<WorkoutDataPoint>>::create();
+       __result->cthis()->addOnResolvedListener([=](const jni::alias_ref<jni::JObject>& __boxedResult) {
+         auto __result = jni::static_ref_cast<jni::JArrayClass<JWorkoutDataPoint>>(__boxedResult);
+-        __promise->resolve([&]() {
+-          size_t __size = __result->size();
++        __promise->resolve([&](auto&& __input) {
++          size_t __size = __input->size();
+           std::vector<WorkoutDataPoint> __vector;
+           __vector.reserve(__size);
+           for (size_t __i = 0; __i < __size; __i++) {
+-            auto __element = __result->getElement(__i);
++            auto __element = __input->getElement(__i);
+             __vector.push_back(__element->toCpp());
+           }
+           return __vector;
+-        }());
++        }(__result));
+       });
+       __result->cthis()->addOnRejectedListener([=](const jni::alias_ref<jni::JThrowable>& __throwable) {
+         jni::JniException __jniError(__throwable);
+@@ -236,7 +245,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<double>> JHybridHealthKitSpec::getSteps(std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getSteps");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getSteps");
+     auto __result = method(_javaPart, JInstant::fromChrono(startDate), JInstant::fromChrono(endDate));
+     return [&]() {
+       auto __promise = Promise<double>::create();
+@@ -252,7 +261,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<double>> JHybridHealthKitSpec::getHeartRate(std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getHeartRate");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getHeartRate");
+     auto __result = method(_javaPart, JInstant::fromChrono(startDate), JInstant::fromChrono(endDate));
+     return [&]() {
+       auto __promise = Promise<double>::create();
+@@ -268,7 +277,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<HealthData>> JHybridHealthKitSpec::getHealthData(std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getHealthData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */)>("getHealthData");
+     auto __result = method(_javaPart, JInstant::fromChrono(startDate), JInstant::fromChrono(endDate));
+     return [&]() {
+       auto __promise = Promise<HealthData>::create();
+@@ -284,7 +293,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::seedTestHealthData() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("seedTestHealthData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("seedTestHealthData");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -299,7 +308,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<bool>> JHybridHealthKitSpec::writeQuantityData(const std::string& type, double value, const std::string& unit, std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, const std::optional<std::unordered_map<std::string, std::string>>& metadata) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, double /* value */, jni::alias_ref<jni::JString> /* unit */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JMap<jni::JString, jni::JString>> /* metadata */)>("writeQuantityData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, double /* value */, jni::alias_ref<jni::JString> /* unit */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JMap<jni::JString, jni::JString>> /* metadata */)>("writeQuantityData");
+     auto __result = method(_javaPart, jni::make_jstring(type), value, jni::make_jstring(unit), JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), metadata.has_value() ? [&]() -> jni::local_ref<jni::JMap<jni::JString, jni::JString>> {
+       auto __map = jni::JHashMap<jni::JString, jni::JString>::create(metadata.value().size());
+       for (const auto& __entry : metadata.value()) {
+@@ -321,7 +330,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<bool>> JHybridHealthKitSpec::writeCategoryData(const std::string& type, double value, std::chrono::system_clock::time_point startDate, std::chrono::system_clock::time_point endDate, const std::optional<std::unordered_map<std::string, std::string>>& metadata) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, double /* value */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JMap<jni::JString, jni::JString>> /* metadata */)>("writeCategoryData");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, double /* value */, jni::alias_ref<JInstant> /* startDate */, jni::alias_ref<JInstant> /* endDate */, jni::alias_ref<jni::JMap<jni::JString, jni::JString>> /* metadata */)>("writeCategoryData");
+     auto __result = method(_javaPart, jni::make_jstring(type), value, JInstant::fromChrono(startDate), JInstant::fromChrono(endDate), metadata.has_value() ? [&]() -> jni::local_ref<jni::JMap<jni::JString, jni::JString>> {
+       auto __map = jni::JHashMap<jni::JString, jni::JString>::create(metadata.value().size());
+       for (const auto& __entry : metadata.value()) {
+@@ -343,7 +352,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::string>> JHybridHealthKitSpec::observeQuantityChanges(const std::string& type, const std::function<void(const std::string& /* token */)>& callback) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JFunc_void_std__string::javaobject> /* callback */)>("observeQuantityChanges_cxx");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JFunc_void_std__string::javaobject> /* callback */)>("observeQuantityChanges_cxx");
+     auto __result = method(_javaPart, jni::make_jstring(type), JFunc_void_std__string_cxx::fromCpp(callback));
+     return [&]() {
+       auto __promise = Promise<std::string>::create();
+@@ -359,7 +368,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<std::string>> JHybridHealthKitSpec::observeCategoryChanges(const std::string& type, const std::function<void(const std::string& /* token */)>& callback) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JFunc_void_std__string::javaobject> /* callback */)>("observeCategoryChanges_cxx");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* type */, jni::alias_ref<JFunc_void_std__string::javaobject> /* callback */)>("observeCategoryChanges_cxx");
+     auto __result = method(_javaPart, jni::make_jstring(type), JFunc_void_std__string_cxx::fromCpp(callback));
+     return [&]() {
+       auto __promise = Promise<std::string>::create();
+@@ -375,7 +384,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::removeObserver(const std::string& subscriptionId) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* subscriptionId */)>("removeObserver");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<jni::JString> /* subscriptionId */)>("removeObserver");
+     auto __result = method(_javaPart, jni::make_jstring(subscriptionId));
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -390,7 +399,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::removeAllObservers() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("removeAllObservers");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("removeAllObservers");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -405,7 +414,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::registerBackgroundSync(const BackgroundSyncConfig& config) {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JBackgroundSyncConfig> /* config */)>("registerBackgroundSync");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>(jni::alias_ref<JBackgroundSyncConfig> /* config */)>("registerBackgroundSync");
+     auto __result = method(_javaPart, JBackgroundSyncConfig::fromCpp(config));
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -420,7 +429,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<void>> JHybridHealthKitSpec::unregisterBackgroundSync() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("unregisterBackgroundSync");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("unregisterBackgroundSync");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<void>::create();
+@@ -435,7 +444,7 @@ namespace margelo::nitro::healthkit {
+     }();
+   }
+   std::shared_ptr<Promise<bool>> JHybridHealthKitSpec::isBackgroundSyncRegistered() {
+-    static const auto method = javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("isBackgroundSyncRegistered");
++    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPromise::javaobject>()>("isBackgroundSyncRegistered");
+     auto __result = method(_javaPart);
+     return [&]() {
+       auto __promise = Promise<bool>::create();
+diff --git a/nitrogen/generated/android/c++/JHybridHealthKitSpec.hpp b/nitrogen/generated/android/c++/JHybridHealthKitSpec.hpp
+index e4ff896576d8ee4bbd0a6c31c2a810d5fb6250c3..96755f10323cde85c9e74cf3db5098d81c8534b9 100644
+--- a/nitrogen/generated/android/c++/JHybridHealthKitSpec.hpp
++++ b/nitrogen/generated/android/c++/JHybridHealthKitSpec.hpp
+@@ -2,7 +2,7 @@
+ /// HybridHealthKitSpec.hpp
+ /// This file was generated by nitrogen. DO NOT MODIFY THIS FILE.
+ /// https://github.com/mrousavy/nitro
+-/// Copyright © 2026 Marc Rousavy @ Margelo
++/// Copyright © Marc Rousavy @ Margelo
+ ///
+ 
+ #pragma once
+@@ -18,32 +18,33 @@ namespace margelo::nitro::healthkit {
+ 
+   using namespace facebook;
+ 
+-  class JHybridHealthKitSpec: public jni::HybridClass<JHybridHealthKitSpec, JHybridObject>,
+-                              public virtual HybridHealthKitSpec {
++  class JHybridHealthKitSpec: public virtual HybridHealthKitSpec, public virtual JHybridObject {
+   public:
+-    static auto constexpr kJavaDescriptor = "Lcom/margelo/nitro/healthkit/HybridHealthKitSpec;";
+-    static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
+-    static void registerNatives();
+-
+-  protected:
+-    // C++ constructor (called from Java via `initHybrid()`)
+-    explicit JHybridHealthKitSpec(jni::alias_ref<jhybridobject> jThis) :
+-      HybridObject(HybridHealthKitSpec::TAG),
+-      HybridBase(jThis),
+-      _javaPart(jni::make_global(jThis)) {}
++    struct JavaPart: public jni::JavaClass<JavaPart, JHybridObject::JavaPart> {
++      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/healthkit/HybridHealthKitSpec;";
++      std::shared_ptr<JHybridHealthKitSpec> getJHybridHealthKitSpec();
++    };
++    struct CxxPart: public jni::HybridClass<CxxPart, JHybridObject::CxxPart> {
++      static constexpr auto kJavaDescriptor = "Lcom/margelo/nitro/healthkit/HybridHealthKitSpec$CxxPart;";
++      static jni::local_ref<jhybriddata> initHybrid(jni::alias_ref<jhybridobject> jThis);
++      static void registerNatives();
++      using HybridBase::HybridBase;
++    protected:
++      std::shared_ptr<JHybridObject> createHybridObject(const jni::local_ref<JHybridObject::JavaPart>& javaPart) override;
++    };
+ 
+   public:
++    explicit JHybridHealthKitSpec(const jni::local_ref<JHybridHealthKitSpec::JavaPart>& javaPart):
++      HybridObject(HybridHealthKitSpec::TAG),
++      JHybridObject(javaPart),
++      _javaPart(jni::make_global(javaPart)) {}
+     ~JHybridHealthKitSpec() override {
+       // Hermes GC can destroy JS objects on a non-JNI Thread.
+       jni::ThreadScope::WithClassLoader([&] { _javaPart.reset(); });
+     }
+ 
+   public:
+-    size_t getExternalMemorySize() noexcept override;
+-    void dispose() noexcept override;
+-
+-  public:
+-    inline const jni::global_ref<JHybridHealthKitSpec::javaobject>& getJavaPart() const noexcept {
++    inline const jni::global_ref<JHybridHealthKitSpec::JavaPart>& getJavaPart() const noexcept {
+       return _javaPart;
+     }
+ 
+@@ -77,9 +78,7 @@ namespace margelo::nitro::healthkit {
+     std::shared_ptr<Promise<bool>> isBackgroundSyncRegistered() override;
+ 
+   private:
+-    friend HybridBase;
+-    using HybridBase::HybridBase;
+-    jni::global_ref<JHybridHealthKitSpec::javaobject> _javaPart;
++    jni::global_ref<JHybridHealthKitSpec::JavaPart> _javaPart;
+   };
+ 
+ } // namespace margelo::nitro::healthkit
+diff --git a/nitrogen/generated/android/kotlin/com/margelo/nitro/healthkit/HybridHealthKitSpec.kt b/nitrogen/generated/android/kotlin/com/margelo/nitro/healthkit/HybridHealthKitSpec.kt
+index 57f5612f61ccf0505443f47241de3131fdf28eba..865b6858dbb32705b668cb8f790604ff13f3e961 100644
+--- a/nitrogen/generated/android/kotlin/com/margelo/nitro/healthkit/HybridHealthKitSpec.kt
++++ b/nitrogen/generated/android/kotlin/com/margelo/nitro/healthkit/HybridHealthKitSpec.kt
+@@ -2,7 +2,7 @@
+ /// HybridHealthKitSpec.kt
+ /// This file was generated by nitrogen. DO NOT MODIFY THIS FILE.
+ /// https://github.com/mrousavy/nitro
+-/// Copyright © 2026 Marc Rousavy @ Margelo
++/// Copyright © Marc Rousavy @ Margelo
+ ///
+ 
+ package com.margelo.nitro.healthkit
+@@ -10,7 +10,8 @@ package com.margelo.nitro.healthkit
+ import androidx.annotation.Keep
+ import com.facebook.jni.HybridData
+ import com.facebook.proguard.annotations.DoNotStrip
+-import com.margelo.nitro.core.*
++import com.margelo.nitro.core.Promise
++import com.margelo.nitro.core.HybridObject
+ 
+ /**
+  * A Kotlin class representing the HealthKit HybridObject.
+@@ -24,18 +25,6 @@ import com.margelo.nitro.core.*
+   "LocalVariableName", "PropertyName", "PrivatePropertyName", "FunctionName"
+ )
+ abstract class HybridHealthKitSpec: HybridObject() {
+-  @DoNotStrip
+-  private var mHybridData: HybridData = initHybrid()
+-
+-  init {
+-    super.updateNative(mHybridData)
+-  }
+-
+-  override fun updateNative(hybridData: HybridData) {
+-    mHybridData = hybridData
+-    super.updateNative(hybridData)
+-  }
+-
+   // Properties
+   
+ 
+@@ -138,7 +127,21 @@ abstract class HybridHealthKitSpec: HybridObject() {
+   @Keep
+   abstract fun isBackgroundSyncRegistered(): Promise<Boolean>
+ 
+-  private external fun initHybrid(): HybridData
++  // Default implementation of `HybridObject.toString()`
++  override fun toString(): String {
++    return "[HybridObject HealthKit]"
++  }
++
++  // C++ backing class
++  @DoNotStrip
++  @Keep
++  protected open class CxxPart(javaPart: HybridHealthKitSpec): HybridObject.CxxPart(javaPart) {
++    // C++ JHybridHealthKitSpec::CxxPart::initHybrid(...)
++    external override fun initHybrid(): HybridData
++  }
++  override fun createCxxPart(): CxxPart {
++    return CxxPart(this)
++  }
+ 
+   companion object {
+     protected const val TAG = "HybridHealthKitSpec"

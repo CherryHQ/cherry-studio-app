@@ -1,1 +1,0 @@
-ALTER TABLE `topics` DROP COLUMN `messages`;

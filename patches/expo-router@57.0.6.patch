@@ -1,0 +1,35 @@
+diff --git a/build/native-tabs/utils/optionsIconConverter.android.js b/build/native-tabs/utils/optionsIconConverter.android.js
+index 10a8e182794b682210ef288a3c9be7f9649e5fa8..7c3eb85f0220a34c90b0c6321aa030cd34ec1c97 100644
+--- a/build/native-tabs/utils/optionsIconConverter.android.js
++++ b/build/native-tabs/utils/optionsIconConverter.android.js
+@@ -2,7 +2,6 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.appendIconOptions = appendIconOptions;
+ exports.convertOptionsIconToScreensPropsIcon = convertOptionsIconToScreensPropsIcon;
+-const materialIconConverter_1 = require("./materialIconConverter");
+ const optionsIconConverter_shared_1 = require("./optionsIconConverter.shared");
+ function appendIconOptions(options, props) {
+     if ('drawable' in props && props.drawable) {
+@@ -22,21 +21,7 @@ function appendIconOptions(options, props) {
+     }
+     else if ('md' in props && props.md) {
+         if (process.env.NODE_ENV !== 'production') {
+-            if ('drawable' in props) {
+-                console.warn('Both `md` and `drawable` props are provided to NativeTabs.Trigger.Icon. `drawable` will take precedence on Android platform.');
+-            }
+-        }
+-        if (typeof props.md === 'string') {
+-            options.icon = (0, materialIconConverter_1.convertMaterialIconNameToImageSource)(props.md);
+-            options.selectedIcon = undefined;
+-        }
+-        else {
+-            options.icon = props.md.default
+-                ? (0, materialIconConverter_1.convertMaterialIconNameToImageSource)(props.md.default)
+-                : undefined;
+-            options.selectedIcon = props.md.selected
+-                ? (0, materialIconConverter_1.convertMaterialIconNameToImageSource)(props.md.selected)
+-                : undefined;
++            console.warn('Material Symbol icons are disabled. Provide `drawable` or `src` to NativeTabs.Trigger.Icon.');
+         }
+     }
+     else if ('src' in props && props.src) {

@@ -1,0 +1,24 @@
+# Public skills tracked by skills:sync and skills:check.
+# One skill name per line.
+agent-device
+building-native-ui
+diagnose
+diagnose-fix-loop
+eas-update-insights
+expo-cicd-workflows
+expo-deployment
+expo-dev-client
+expo-tailwind-setup
+gh-stack
+improve-react
+legend-list-best-practices
+native-data-fetching
+react-coding-style
+react-devtools
+react-native-best-practices
+simplify
+sync-cherry-desktop
+uniwind
+upgrading-expo
+vercel-composition-patterns
+vercel-react-native-skills

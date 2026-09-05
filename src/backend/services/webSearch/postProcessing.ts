@@ -1,0 +1,52 @@
+import { sliceByTokens } from 'tokenx';
+
+import type {
+  WebSearchCompressionConfig,
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+  WebSearchResult,
+} from '@/shared/data/types/webSearch';
+
+export type WebSearchPostProcessingResult = {
+  response: WebSearchResponse;
+};
+
+export async function postProcessWebSearchResponse(
+  response: WebSearchResponse,
+  runtimeConfig: WebSearchExecutionConfig,
+): Promise<WebSearchPostProcessingResult> {
+  if (response.results.length <= 0) {
+    return { response };
+  }
+
+  if (runtimeConfig.compression.method === 'cutoff') {
+    return {
+      response: {
+        ...response,
+        results: applyCutoff(response.results, runtimeConfig.compression),
+      },
+    };
+  }
+
+  return { response };
+}
+
+function applyCutoff(
+  results: WebSearchResult[],
+  config: WebSearchCompressionConfig,
+): WebSearchResult[] {
+  if (!config.cutoffLimit) {
+    return results;
+  }
+
+  const perResultLimit = Math.max(1, Math.floor(config.cutoffLimit / results.length));
+
+  return results.map((result) => {
+    const sliced = sliceByTokens(result.content, 0, perResultLimit);
+
+    return {
+      ...result,
+      content: sliced.length < result.content.length ? `${sliced}...` : sliced,
+    };
+  });
+}

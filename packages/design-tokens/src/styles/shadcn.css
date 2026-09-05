@@ -1,0 +1,101 @@
+/**
+ * Canonical Shadcn theme contract.
+ *
+ * Official Shadcn variables remain unprefixed for ecosystem compatibility.
+ * Foundation providers and controlled runtime inputs are imported before this
+ * file. Cherry Studio product semantics are imported after it so they may
+ * intentionally follow official variables and third-party themes such as
+ * TweakCN.
+ *
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
+ * 现在只同步图标。
+ *
+ * 角色优先指向 `vercel.css` 的调色板档位，只在需要明确的半档或透明度时从档位派生。
+ * 此前中间还隔着一层同名的 `--cs-`
+ * provider（`--background: var(--cs-background)` → `--cs-background:
+ * var(--cs-background-100)`），那一层每个名字只有一个消费者，等于把「这个角色用
+ * 哪一档」这件事拆到两个文件里说，读的时候要跳一次才看得到答案。那个 `--cs-`
+ * 前缀现已整体退役，调色板与契约同在无前缀命名空间下，靠形状区分：调色板是
+ * 带档位号的色阶名（`--gray-100`），契约是角色名（`--background`）。
+ *
+ * `.dark` 只写真正换档的那几条：深色声明继承浅色，其余角色指向的调色板名本身
+ * 就按主题翻转，抄一遍是纯冗余。
+ */
+
+:root {
+  /* Core surfaces and content */
+  /* 浅色页面统一使用明确的中性灰；深色仍在下方回到纯黑。 */
+  --background: #f5f5f5;
+  --foreground: var(--gray-1000);
+  --card: var(--background-100);
+  --card-foreground: var(--gray-1000);
+  --popover: var(--background-100);
+  --popover-foreground: var(--gray-1000);
+  /* 直接就是 `--brand`。此前这两条读 `--theme-primary{,-foreground}`，一对由 app
+   * 在启动时按 `ui.theme_user.color_primary` 改写的运行时输入 —— 但移动端从来没有
+   * 过设置主题色的界面，那个 key 只在 bootstrap 被读一次、无人写入，所以整层间接
+   * 服务的是一个改不了的设置。偏好键本身留在 packages/universal（持久化数据、与桌
+   * 面共享），真做了主题色界面再把这层接回来。
+   *
+   * 前景恒为白。这对 token 的唯一消费者是发送/停止主按钮，白色是实心品牌填充上的
+   * 通行做法，也与紧邻的 `--destructive-foreground` 一致。#521 把品牌色从绿换成
+   * #ff5757 时一并改成过黑色，理由写的是「白字对比度不足」——那是按正文的 4.5:1 判
+   * 的，而这里画的是图标，适用的是非文本的 3:1，白对 #ff5757 为 3.1:1，达标。 */
+  --primary: var(--brand);
+  --primary-foreground: var(--constant-white);
+  --secondary: var(--gray-alpha-100);
+  --secondary-foreground: var(--gray-1000);
+  --muted: var(--gray-alpha-100);
+  --muted-foreground: var(--gray-900);
+  --accent: var(--gray-alpha-100);
+  --accent-foreground: var(--gray-1000);
+  --destructive: var(--red-700);
+  /* White in both themes: red-700 is a solid fill, not a tint. */
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Controls */
+  --border: var(--gray-alpha-200);
+  --input: var(--gray-alpha-200);
+  /* Follows the picked accent rather than the brand default: this used to mix
+   * against the static green, so choosing a custom theme colour left the focus
+   * ring green. No component of ours consumes `--ring`; HeroUI's `--focus`
+   * does. */
+  --ring: color-mix(in srgb, var(--primary) 40%, transparent);
+
+  /* Charts
+   * VBG：「Category series are monochrome by default. Reserve chromatic tokens
+   * for meaning.」故改为灰阶。有意偏离之处：VBG 自己的 --vbg-chart-1..6 是
+   * gray-1000/900/800 重复两轮，对 5 系列图表不可用，此处顺延到 700/600。
+   * 深色下 gray-700(0.65) 比 gray-800(0.59) 更亮，第 3/4 档亮度会反序；当前
+   * AiUsageWeeklyChart 只消费前三档，后两档保留给未来扩展。 */
+  --chart-1: var(--gray-1000);
+  --chart-2: var(--gray-900);
+  --chart-3: var(--gray-800);
+  --chart-4: var(--gray-700);
+  --chart-5: var(--gray-600);
+
+  /* Sidebar. Kept for contract completeness — the mobile app has no sidebar and
+   * consumes none of these. */
+  --sidebar: var(--background-200);
+  --sidebar-foreground: var(--gray-1000);
+  --sidebar-primary: var(--gray-1000);
+  --sidebar-primary-foreground: var(--background-100);
+  --sidebar-accent: var(--gray-100);
+  --sidebar-accent-foreground: var(--gray-1000);
+  --sidebar-border: var(--gray-alpha-200);
+  --sidebar-ring: var(--gray-800);
+
+  /* Shadcn radius input */
+  /* VBG 的 radius 档，8px。整条 rounded-sm…4xl 都是它的倍数。 */
+  --radius: 0.5rem;
+}
+
+.dark {
+  /* 深色页面回到纯黑，卡片与浮层提到 gray-100 以保留可见层级。 */
+  --background: var(--background-100);
+  --card: var(--gray-100);
+  --popover: var(--gray-100);
+  --sidebar: var(--gray-100);
+  --sidebar-accent: var(--gray-200);
+}

@@ -1,1 +1,0 @@
-ALTER TABLE `mcp` ADD `disabledTools` blob;

@@ -1,0 +1,1 @@
+export { checkChatModel } from './checkChatModel';

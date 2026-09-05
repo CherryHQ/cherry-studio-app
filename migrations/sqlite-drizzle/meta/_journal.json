@@ -1,0 +1,132 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787143523191,
+      "tag": "0000_release_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787198173970,
+      "tag": "0001_mcp-disabled-tools",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787284573970,
+      "tag": "0002_file-entry-mobile-model",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787229930835,
+      "tag": "0003_retire-oauth-provider-auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787569041503,
+      "tag": "0004_agent-sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1787679863379,
+      "tag": "0005_remove_legacy_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787716659144,
+      "tag": "0006_natural_blur",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787726636521,
+      "tag": "0007_agent-tool-bindings",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787740980175,
+      "tag": "0008_context-checkpoint",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787834308152,
+      "tag": "0009_agent-tool-approval-mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787895004379,
+      "tag": "0010_remove-agent-settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788141788204,
+      "tag": "0011_file-provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788156348036,
+      "tag": "0012_mcp-http-headers",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788234662321,
+      "tag": "0013_agent-session-fork-lineage",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788259032494,
+      "tag": "0014_agent-disabled-capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788336595250,
+      "tag": "0015_agent-session-activity-and-fork-boundary",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1788503757336,
+      "tag": "0016_agent-message-stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1788511869009,
+      "tag": "0017_desktop-compatible-fields",
+      "breakpoints": true
+    }
+  ]
+}

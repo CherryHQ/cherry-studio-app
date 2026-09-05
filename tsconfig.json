@@ -1,19 +1,44 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "noImplicitAny": false,
-    "esModuleInterop": true,
-    "jsx": "react",
     "strict": true,
-    "baseUrl": "src",
+    "experimentalDecorators": true,
+    "types": ["jest"],
     "paths": {
-      "@/*": ["./*"],
-      "@db/*": ["../db/*"],
-      "@db": ["../db/index"],
-      "@database/*": ["./database/*"],
-      "@database": ["./database/index"],
-      "@/modules/*": ["../modules/*"]
+      "@cherrystudio/provider-registry": ["./packages/provider-registry/src/index.ts"],
+      "@cherrystudio/provider-registry/mobile": [
+        "./packages/provider-registry/src/mobile-loader.ts"
+      ],
+      "@cherrystudio/provider-registry/*": ["./packages/provider-registry/src/*"],
+      "@cherrystudio/design-tokens/contract": [
+        "./packages/design-tokens/scripts/theme-contract.ts"
+      ],
+      "@cherrystudio/universal/*": ["./packages/universal/src/*"],
+      "@shared/*": ["./packages/universal/src/*"],
+      "@cherrystudio/ai-core/core": ["./packages/ai-core/src/core/index.ts"],
+      "@cherrystudio/ai-core/core/*": ["./packages/ai-core/src/core/*"],
+      "@cherrystudio/ai-runtime/image": ["./packages/ai-runtime/src/image/index.ts"],
+      "@cherrystudio/ai-runtime/provider": ["./packages/ai-runtime/src/provider/index.ts"],
+      "@cherrystudio/ai-runtime/runtime": ["./packages/ai-runtime/src/runtime/index.ts"],
+      "@cherrystudio/ai-runtime/tools": ["./packages/ai-runtime/src/tools/index.ts"],
+      "@cherrystudio/ai-runtime/utils": ["./packages/ai-runtime/src/utils/index.ts"],
+      "@cherrystudio/ui": ["./packages/ui/src/index.ts"],
+      "@cherrystudio/ui/*": ["./packages/ui/src/*"],
+      "@cherrystudio/app-icons": ["./packages/app-icons/src/index.ts"],
+      "@cherrystudio/app-icons/*": ["./packages/app-icons/src/*"],
+      "@src/*": ["./src/*"],
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"],
+      "@logger": ["./src/shared/core/logger/LoggerService.ts"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "nativewind-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    ".rnstorybook/**/*.ts",
+    ".rnstorybook/**/*.tsx",
+    "expo-env.d.ts"
+  ],
+  "exclude": ["packages/ai-core", "packages/ai-runtime", "packages/ai-sdk-provider"]
 }

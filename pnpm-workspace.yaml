@@ -1,2 +1,95 @@
 packages:
-  - 'packages/*'
+  - packages/*
+
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade
+
+# 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
+trustPolicyExclude:
+  - eslint-import-resolver-typescript@3.10.1
+  - react-native-chart-kit@7.0.2
+  - semver@6.3.1
+  - tinyexec@1.2.2
+  - ua-parser-js@0.7.41||1.0.41
+
+overrides:
+  '@storybook/react': 10.5.1
+  '@storybook/react-native-theming': 10.5.1
+  '@storybook/react-native-ui': 10.5.1
+  '@storybook/react-native-ui-common': 10.5.1
+  '@valibot/to-json-schema': 1.5.0
+  '@ai-sdk/anthropic': 3.0.103
+  '@ai-sdk/azure': 3.0.54
+  '@ai-sdk/deepseek': 2.0.57
+  '@ai-sdk/google': 3.0.113
+  '@ai-sdk/openai': 3.0.53
+  '@ai-sdk/openai-compatible': 2.0.72
+  '@ai-sdk/provider': 3.0.15
+  '@ai-sdk/provider-utils': 4.0.48
+  '@ai-sdk/xai': 3.0.126
+  ai: 6.0.185
+  react-native-svg: 15.15.4
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  sharp: true
+  unrs-resolver: true
+  core-js: true
+  '@j178/prek': true
+  '@shopify/react-native-skia': true
+  # 1.0.0 起把 tree-sitter 语法和 RaTeX XCFramework 挪到 postinstall 下载，
+  # 不放行就装不出代码高亮和数学公式所需的原生产物。
+  react-native-enriched-markdown: true
+  '@google/genai': false
+  protobufjs: false
+
+patchedDependencies:
+  '@earendil-works/pi-agent-core@0.84.2': patches/@earendil-works__pi-agent-core@0.84.2.patch
+  '@earendil-works/pi-ai@0.84.2': patches/@earendil-works__pi-ai@0.84.2.patch
+  '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
+  "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
+  metro@0.84.4: patches/metro@0.84.4.patch
+  metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
+  uniwind@1.6.5: patches/uniwind@1.6.5.patch
+  react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
+  '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
+  '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
+  '@ai-sdk/openai@3.0.53': patches/@ai-sdk__openai@3.0.53.patch
+  '@ai-sdk/openai-compatible@2.0.72': patches/@ai-sdk__openai-compatible@2.0.72.patch
+  '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
+  ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
+  ai@6.0.185: patches/ai@6.0.185.patch
+  react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
+  react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
+  expo-router@57.0.6: patches/expo-router@57.0.6.patch
+  react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
+
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.3'
+  - '@expo/fingerprint@0.20.1'
+  - '@expo/inline-modules@0.1.1'
+  - '@expo/local-build-cache-provider@57.0.1'
+  - '@expo/metro-config@57.0.2'
+  - '@expo/prebuild-config@57.0.3'
+  - '@expo/router-server@57.0.1'
+  - babel-preset-expo@57.0.1
+  - expo-asset@57.0.2
+  - expo-constants@57.0.2
+  - expo-modules-autolinking@57.0.3
+  - expo-modules-core@57.0.1
+  - expo@57.0.1
+  - expo-router@57.0.2
+  - '@expo/metro-runtime@57.0.2'
+  - '@expo/ui@57.0.2'
+  - expo-auth-session@57.0.1
+  - expo-build-properties@57.0.2
+  - expo-dev-client@57.0.4
+  - expo-dev-launcher@57.0.4
+  - expo-dev-menu@57.0.4
+  - expo-linking@57.0.1
+  - expo-splash-screen@57.0.1
+  - heroui-native@1.0.5
+  - react-native-enriched-markdown@1.0.1
+  - expo-camera@57.0.3
+  - '@legendapp/list@3.3.3'

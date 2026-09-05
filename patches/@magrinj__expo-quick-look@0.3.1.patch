@@ -1,0 +1,61 @@
+diff --git a/ios/ExpoQuickLook.podspec b/ios/ExpoQuickLook.podspec
+index e9aa0f2406f31514136d952aa140bd78de352055..915fb65d422dc05b0a78d31cea9038dc757a479e 100644
+--- a/ios/ExpoQuickLook.podspec
++++ b/ios/ExpoQuickLook.podspec
+@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
+   s.author         = package['author']
+   s.homepage       = package['homepage']
+   s.platforms      = {
+-    :ios => '15.1'
++    :ios => '16.4'
+   }
+   s.swift_version  = '5.9'
+   s.source         = { git: 'https://github.com/magrinj/expo-quick-look.git' }
+diff --git a/src/ExpoQuickLook.types.ts b/src/ExpoQuickLook.types.ts
+--- a/src/ExpoQuickLook.types.ts
++++ b/src/ExpoQuickLook.types.ts
+@@ -29,6 +29,11 @@
+    */
+   chooserTitle?: string;
+   /**
++   * Title shown above the Quick Look preview.
++   * @platform ios
++   */
++  title?: string;
++  /**
+    * Controls whether the user can edit the file during preview.
+    * @platform ios
+    */
+diff --git a/build/ExpoQuickLook.types.d.ts b/build/ExpoQuickLook.types.d.ts
+--- a/build/ExpoQuickLook.types.d.ts
++++ b/build/ExpoQuickLook.types.d.ts
+@@ -27,6 +27,11 @@
+      */
+     chooserTitle?: string;
+     /**
++     * Title shown above the Quick Look preview.
++     * @platform ios
++     */
++    title?: string;
++    /**
+      * Controls whether the user can edit the file during preview.
+      * @platform ios
+      */
+diff --git a/ios/ExpoQuickLookModule.swift b/ios/ExpoQuickLookModule.swift
+--- a/ios/ExpoQuickLookModule.swift
++++ b/ios/ExpoQuickLookModule.swift
+@@ -11,4 +11,5 @@
+     @Field var uri: String
+     @Field var requestOptions: RequestOptions?
+     @Field var editingMode: String?
++    @Field var title: String?
+ }
+@@ -49,7 +50,7 @@
+                         fileURL = try self.resolveFileURL(options.uri)
+                     }
+                     let editing = self.resolveEditingMode(options.editingMode)
+-                    let item = PreviewItem(url: fileURL)
++                    let item = PreviewItem(url: fileURL, title: options.title)
+                     try await self.presentPreview(items: [item], startIndex: 0, editingMode: editing)
+                     Self.cleanupFiles(localFiles)
+                     promise.resolve()

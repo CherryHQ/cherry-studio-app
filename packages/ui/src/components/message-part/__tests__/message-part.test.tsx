@@ -1,0 +1,439 @@
+import type { ReactNode } from 'react';
+import { Text, View } from 'react-native';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { MessagePart } from '..';
+import { formatMessagePartValue, hasMessagePartValue } from '../utils/message-part-value';
+
+let mockBottomSheetProps: Record<string, unknown> = {};
+
+jest.mock(
+  '@cherrystudio/app-icons/icons/chevron-down',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock(
+  '@cherrystudio/app-icons/icons/chevron-right',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock(
+  '@cherrystudio/app-icons/icons/circle-alert',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock('@cherrystudio/app-icons/icons/globe', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return function MockGlobeIcon(props: object) {
+    return <MockView {...props} testID="source-globe-icon" />;
+  };
+});
+jest.mock('@cherrystudio/app-icons/icons/languages', () => jest.requireActual('react-native').View);
+jest.mock('@cherrystudio/app-icons/icons/square-arrow-out-up-right', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return function MockExternalIcon(props: object) {
+    return <MockView {...props} testID="source-external-icon" />;
+  };
+});
+jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return function MockWarningIcon(props: object) {
+    return <MockView {...props} testID="unknown-warning-icon" />;
+  };
+});
+
+jest.mock('../../bottom-sheet', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    BottomSheet: ({ children, ...props }: { children: ReactNode }) => {
+      mockBottomSheetProps = props;
+      return <View {...props}>{children}</View>;
+    },
+  };
+});
+
+jest.mock('../../image', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return { Image: View };
+});
+
+jest.mock('../../loading', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return { DotMatrixSquare20: View, PrismSweep: View };
+});
+
+jest.mock('../../shimmer-text', () => {
+  const { Text: MockText } = jest.requireActual('react-native');
+
+  return {
+    ShimmerText: ({ children, ...props }: { children: string }) => (
+      <MockText {...props} accessibilityHint="shimmer">
+        {children}
+      </MockText>
+    ),
+  };
+});
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  const useSharedValue = (initialValue: number) => {
+    const ref = React.useRef({
+      get: () => ref.current.value,
+      set: (value: number) => {
+        ref.current.value = value;
+      },
+      value: initialValue,
+    });
+    return ref.current;
+  };
+
+  return {
+    __esModule: true,
+    cancelAnimation: jest.fn(),
+    default: { View },
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
+    ReduceMotion: { System: 'system' },
+    useAnimatedStyle: (factory: () => object) => factory(),
+    useReducedMotion: () => false,
+    useSharedValue,
+    withRepeat: (value: number) => value,
+    withTiming: (value: number) => value,
+  };
+});
+
+jest.mock('react-native-worklets', () => ({
+  scheduleOnRN: (callback: () => void) => callback(),
+}));
+
+const findRenderedByTestId = (renderer: ReactTestRenderer, testID: string) =>
+  renderer.root.findAllByType(View).filter((node) => node.props.testID === testID);
+
+const findPressableByTestId = (renderer: ReactTestRenderer, testID: string) => {
+  const pressable = renderer.root.findAll(
+    (node) => node.props?.accessibilityRole === 'button' && node.props.testID === testID,
+  )[0];
+
+  if (!pressable) throw new Error(`Pressable ${testID} was not rendered.`);
+  return pressable;
+};
+
+describe('MessagePart', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockBottomSheetProps = {};
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+  });
+
+  it('opens and closes tool details through the disclosure interface', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Tool
+          state="complete"
+          statusText="3 results"
+          testID="search"
+          title="Web search"
+        >
+          <Text>Result details</Text>
+        </MessagePart.Tool>,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
+    const trigger = renderer!.root.findByProps({ testID: 'search-trigger' });
+    act(() => trigger.props.onPress());
+
+    const detail = renderer!.root.findByProps({ testID: 'search-detail' });
+    expect(mockBottomSheetProps.sizes).toEqual(['compact', 'large']);
+    expect(renderer!.root.findByProps({ children: 'Result details' })).toBeDefined();
+
+    act(() => detail.props.onClose());
+    expect(renderer!.root.findAllByProps({ testID: 'search-detail' })).toHaveLength(0);
+  });
+
+  it('expands running reasoning inline instead of opening a sheet', () => {
+    const onDisclosureToggle = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessagePart.Reasoning
+          onDisclosureToggle={onDisclosureToggle}
+          state="running"
+          statusText="Thinking for 1.2s"
+          testID="thinking"
+        >
+          <Text>Live reasoning</Text>
+        </MessagePart.Reasoning>,
+      );
+    });
+
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    expect(mockBottomSheetProps).toEqual({});
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
+
+    act(() => renderer!.root.findByProps({ testID: 'thinking-trigger' }).props.onPress());
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(2);
+    expect(findRenderedByTestId(renderer!, 'thinking-detail')).toHaveLength(0);
+  });
+
+  it('keeps the total process duration folded until the reader expands it', () => {
+    const onDisclosureToggle = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessagePart.Process
+          onDisclosureToggle={onDisclosureToggle}
+          state="complete"
+          testID="process"
+          title="Took 16s"
+        >
+          <Text>Reasoning and tools</Text>
+        </MessagePart.Process>,
+      );
+    });
+
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'process-trigger' }).props.onPress());
+    expect(onDisclosureToggle).toHaveBeenCalledTimes(1);
+    expect(findRenderedByTestId(renderer!, 'process-detail')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
+  });
+
+  it('uses compact status rows only inside an expanded process', () => {
+    act(() => {
+      renderer = create(
+        <>
+          <MessagePart.Tool state="complete" testID="standalone-tool" title="Standalone tool">
+            <Text>Standalone details</Text>
+          </MessagePart.Tool>
+          <MessagePart.Process state="complete" testID="process" title="Took 16s">
+            <MessagePart.Tool state="complete" testID="nested-tool" title="Nested tool">
+              <Text>Nested details</Text>
+            </MessagePart.Tool>
+          </MessagePart.Process>
+        </>,
+      );
+    });
+
+    const standaloneTrigger = findPressableByTestId(renderer!, 'standalone-tool-trigger');
+    const processTrigger = findPressableByTestId(renderer!, 'process-trigger');
+    expect(standaloneTrigger.props.className).toContain('min-h-10');
+    expect(standaloneTrigger.props.hitSlop).toBe(4);
+    expect(processTrigger.props.className).toContain('min-h-10');
+
+    act(() => processTrigger.props.onPress());
+
+    const nestedTrigger = findPressableByTestId(renderer!, 'nested-tool-trigger');
+    expect(nestedTrigger.props.className).toContain('min-h-8');
+    expect(nestedTrigger.props.hitSlop).toBe(6);
+  });
+
+  it('shimmers the running tool title without removing its status text', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Tool
+          state="running"
+          statusText="Searching"
+          testID="searching"
+          title="Cherry Studio"
+        >
+          <Text>Waiting for results</Text>
+        </MessagePart.Tool>,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'searching-running-title' })).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Searching' })).toBeDefined();
+  });
+
+  it('keeps a running tool group expanded and folds it once complete', () => {
+    const steps = (
+      <>
+        <Text>step one</Text>
+        <Text>step two</Text>
+      </>
+    );
+    act(() => {
+      renderer = create(
+        <MessagePart.ToolGroup state="running" testID="group" title="Working with tools…">
+          {steps}
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    // Live run: steps visible without any press, title shimmering.
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ accessibilityHint: 'shimmer' }).props.children).toBe(
+      'Working with tools…',
+    );
+
+    act(() => {
+      renderer!.update(
+        <MessagePart.ToolGroup state="complete" testID="group" title="Used 2 tools">
+          {steps}
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    // Settled run folds to its summary until the reader asks for the steps.
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(1);
+  });
+
+  it('lets a manual toggle override the running default of a tool group', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.ToolGroup
+          state="running"
+          statusText="1 failed"
+          statusTone="danger"
+          testID="group"
+          title="Working with tools…"
+        >
+          <Text>step</Text>
+        </MessagePart.ToolGroup>,
+      );
+    });
+
+    act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
+    expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
+    expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
+      'text-error',
+    );
+  });
+
+  it('renders the pending response as an active, accessible status row', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Pending accessibilityLabel="Waiting for response" testID="pending" />,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'pending' })).toBeDefined();
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: 'Waiting for response',
+        active: true,
+        size: 20,
+      }),
+    ).toBeDefined();
+    expect(renderer!.root.findByProps({ children: '\u00A0' })).toBeDefined();
+  });
+
+  it('renders an unknown part as a compact warning without exposing its type', () => {
+    act(() => {
+      renderer = create(<MessagePart.Unknown label="Unknown Part" testID="unknown" />);
+    });
+
+    const warning = renderer!.root.findAllByProps({ testID: 'unknown' }).at(-1);
+    expect(warning?.props.accessibilityLabel).toBe('Unknown Part');
+    expect(warning?.props.className).toBe(
+      'flex-row items-center gap-2 rounded-lg border border-warning-border bg-warning-subtle p-3',
+    );
+    expect(renderer!.root.findByProps({ testID: 'unknown-warning-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-warning-subtle-foreground',
+    );
+    expect(renderer!.root.findByProps({ children: 'Unknown Part' }).props.className).toBe(
+      'text-base text-warning-subtle-foreground',
+    );
+  });
+
+  it('keeps the source URL hidden while passing it to the caller', () => {
+    const onPress = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <MessagePart.Source
+          label="Cherry Studio"
+          onPress={onPress}
+          url="https://www.cherry-ai.com/docs"
+        />,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({ children: 'cherry-ai.com' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ children: 'Cherry Studio' })).toBeDefined();
+    expect(renderer!.root.findByProps({ testID: 'source-globe-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-foreground',
+    );
+    expect(renderer!.root.findByProps({ testID: 'source-external-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-foreground',
+    );
+    act(() => renderer!.root.findByProps({ accessibilityRole: 'link' }).props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onPress).toHaveBeenCalledWith('https://www.cherry-ai.com/docs');
+  });
+
+  it('keeps status rows accessible and invokes their action once', () => {
+    const onPress = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <MessagePart.Status accessibilityLabel="Thinking" onPress={onPress}>
+          <Text>Thinking</Text>
+        </MessagePart.Status>,
+      );
+    });
+
+    const status = renderer!.root.findByProps({ accessibilityRole: 'button' });
+    expect(status.props.accessibilityLabel).toBe('Thinking');
+    act(() => status.props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns the error block into a button only when it opens details', () => {
+    act(() => {
+      renderer = create(<MessagePart.Error message="Could not complete." title="Quota exceeded" />);
+    });
+    expect(renderer!.root.findAllByProps({ accessibilityRole: 'button' })).toHaveLength(0);
+    expect(
+      renderer!.root.findByProps({
+        className: 'gap-1.5 rounded-lg border border-error-border bg-error-subtle p-3',
+      }),
+    ).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Quota exceeded' }).props.className).toContain(
+      'text-error-subtle-foreground',
+    );
+    expect(renderer!.root.findByProps({ children: 'Could not complete.' }).props.className).toBe(
+      'text-base text-error-subtle-foreground',
+    );
+
+    const onPress = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessagePart.Error
+          accessibilityHint="Opens the error details."
+          message="Could not complete."
+          onPress={onPress}
+          title="Quota exceeded"
+        />,
+      );
+    });
+
+    const block = renderer!.root.findByProps({ accessibilityRole: 'button' });
+    expect(block.props.accessibilityLabel).toBe('Quota exceeded, Could not complete.');
+    expect(block.props.accessibilityHint).toBe('Opens the error details.');
+    act(() => block.props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('message part values', () => {
+  it('formats structured values and reports empty values', () => {
+    expect(formatMessagePartValue({ answer: 42 })).toBe('{\n  "answer": 42\n}');
+    expect(formatMessagePartValue('abcdef', 3)).toBe('abc\n... truncated (6 chars)');
+    expect(hasMessagePartValue(undefined)).toBe(false);
+    expect(hasMessagePartValue({ answer: 42 })).toBe(true);
+  });
+});
