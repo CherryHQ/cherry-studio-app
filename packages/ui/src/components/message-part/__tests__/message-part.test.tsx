@@ -200,6 +200,35 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
   });
 
+  it('uses compact status rows only inside an expanded process', () => {
+    act(() => {
+      renderer = create(
+        <>
+          <MessagePart.Tool state="complete" testID="standalone-tool" title="Standalone tool">
+            <Text>Standalone details</Text>
+          </MessagePart.Tool>
+          <MessagePart.Process state="complete" testID="process" title="Took 16s">
+            <MessagePart.Tool state="complete" testID="nested-tool" title="Nested tool">
+              <Text>Nested details</Text>
+            </MessagePart.Tool>
+          </MessagePart.Process>
+        </>,
+      );
+    });
+
+    const standaloneTrigger = renderer!.root.findByProps({ testID: 'standalone-tool-trigger' });
+    const processTrigger = renderer!.root.findByProps({ testID: 'process-trigger' });
+    expect(standaloneTrigger.props.className).toContain('min-h-10');
+    expect(standaloneTrigger.props.hitSlop).toBe(4);
+    expect(processTrigger.props.className).toContain('min-h-10');
+
+    act(() => processTrigger.props.onPress());
+
+    const nestedTrigger = renderer!.root.findByProps({ testID: 'nested-tool-trigger' });
+    expect(nestedTrigger.props.className).toContain('min-h-8');
+    expect(nestedTrigger.props.hitSlop).toBe(6);
+  });
+
   it('shimmers the running tool title without removing its status text', () => {
     act(() => {
       renderer = create(
