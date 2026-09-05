@@ -1,13 +1,10 @@
 import { MessagePart } from '@cherrystudio/ui/components';
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import { PartMarkdown } from './PartMarkdown';
-import { useThinkingTimerMs } from './useThinkingTimerMs';
 
 type ReasoningPartProps = {
   isStreaming: boolean;
@@ -18,19 +15,9 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
   const isThinking = part.state === 'streaming';
-  const cherryMeta = readCherryMeta(part);
-  const displayMs = useThinkingTimerMs(isThinking, cherryMeta?.startedAt, cherryMeta?.thinkingMs);
-
-  const statusText = useMemo(() => {
-    const seconds = (Math.max(displayMs, 100) / 1000).toFixed(1);
-    if (isThinking) {
-      return t('chat.reasoningStatus.thinking', { seconds });
-    }
-    // A sub-second duration is noise, not information — drop the number.
-    return displayMs < 1000
-      ? t('chat.reasoningStatus.thoughtBrief')
-      : t('chat.reasoningStatus.thought', { seconds });
-  }, [displayMs, isThinking, t]);
+  const statusText = t(
+    isThinking ? 'chat.reasoningStatus.thinking' : 'chat.reasoningStatus.thought',
+  );
 
   // 思考中（流式）即使文本尚未流入也要显示「思考中」状态行：否则从待生成占位切到
   // reasoning part 的那一帧会因 text 为空而 return null，助手消息塌成空壳再回弹，
