@@ -12,6 +12,7 @@ describe('getSendErrorLabelKey', () => {
     ['SESSION_NOT_FOUND', 'chat.input.sendError.sessionNotFound'],
     ['SESSION_BUSY', 'chat.input.sendError.sessionBusy'],
     ['CAPABILITY_UNSUPPORTED', 'chat.input.sendError.unsupported'],
+    ['TOOL_CALLING_UNSUPPORTED', 'chat.input.sendError.toolCallingUnsupported'],
     ['EXECUTION_UNAVAILABLE', 'chat.input.sendError.executionUnavailable'],
     ['ATTACHMENT_INVALID', 'chat.input.attachmentsRejected'],
     ['ATTACHMENT_UNAVAILABLE', 'chat.input.attachmentUnavailable'],

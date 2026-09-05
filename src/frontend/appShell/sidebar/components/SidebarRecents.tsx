@@ -289,7 +289,7 @@ function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: Sideb
   ];
 
   return (
-    <ContextMenuLink href={href} items={menuItems} preview={false}>
+    <ContextMenuLink href={href} items={menuItems}>
       <Pressable
         accessibilityLabel={session.title || t('session.list.untitled')}
         accessibilityRole="link"

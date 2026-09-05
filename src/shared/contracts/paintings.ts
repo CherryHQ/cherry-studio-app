@@ -32,6 +32,9 @@ export type PaintingGenerationInput = {
 
 export type PaintingGenerationOutput = {
   fileEntryId: FileEntryId;
+  mediaType: string;
+  name: string;
+  size?: number;
   uri: string;
 };
 

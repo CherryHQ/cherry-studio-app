@@ -63,8 +63,20 @@ const files: ResolvedPaintingFiles = {
 };
 const result: PaintingGenerationResult = {
   outputs: [
-    { fileEntryId: 'output-2', uri: 'file:///output-2.png' },
-    { fileEntryId: 'output-3', uri: 'file:///output-3.png' },
+    {
+      fileEntryId: 'output-2',
+      mediaType: 'image/png',
+      name: 'output-2.png',
+      size: 2,
+      uri: 'file:///output-2.png',
+    },
+    {
+      fileEntryId: 'output-3',
+      mediaType: 'image/png',
+      name: 'output-3.png',
+      size: 3,
+      uri: 'file:///output-3.png',
+    },
   ],
   painting: {
     ...painting,
@@ -213,7 +225,7 @@ describe('PaintingComposer', () => {
     });
   }
 
-  it('projects a completed painting while keeping the composer empty', () => {
+  it('projects a completed painting and seeds its first output for follow-up editing', () => {
     renderComposer();
 
     expect(mockMessageListProps?.messages.map((message) => message.role)).toEqual([
@@ -235,7 +247,10 @@ describe('PaintingComposer', () => {
       paintingId: painting.id,
       status: 'idle',
     });
-    expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: [files.outputs[0]],
+      initialDraft: '',
+    });
   });
 
   it('passes one-shot handoff params into the painting input', () => {

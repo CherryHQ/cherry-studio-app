@@ -170,7 +170,13 @@ export function createPaintingGenerateJobHandler(
             if (!uri) {
               throw new Error(`Generated painting file is unavailable: ${entry.id}`);
             }
-            return { fileEntryId: entry.id, uri };
+            return {
+              fileEntryId: entry.id,
+              mediaType: entry.mediaType,
+              name: entry.filename,
+              size: entry.size,
+              uri,
+            };
           });
 
           session?.finish(

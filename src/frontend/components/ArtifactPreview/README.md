@@ -11,8 +11,9 @@ This shared component family connects an artifact preview surface to its viewer 
   source.
 - `ArtifactPreviewTarget` marks the corresponding viewer content as the transition target.
 
-On iOS the gateway uses the native Apple zoom transition. Android and fallback platforms retain
-the same navigation contract with a normal link.
+All platforms use a normal link so the preview pressable remains the accessibility owner. Expo
+Router's native Apple zoom source is intentionally not used because it flattens that pressable out
+of the iOS accessibility tree.
 
 ## Ownership
 

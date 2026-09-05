@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import type { FilePreviewFile } from '../file-preview.types';
 import { openFilePreview as openOnAndroid } from '../utils/open-file/open-file.android';
 import { openFilePreview as openOnIos } from '../utils/open-file/open-file.ios';
@@ -30,6 +32,7 @@ describe('openFilePreview', () => {
 
     expect(mockPreviewFile).toHaveBeenCalledWith({
       editingMode: 'disabled',
+      title: 'brief.pdf',
       uri: 'file:///documents/brief.pdf',
     });
   });
@@ -48,5 +51,16 @@ describe('openFilePreview', () => {
     mockPreviewFile.mockRejectedValue(error);
 
     await expect(openOnIos({ file, labels })).rejects.toBe(error);
+  });
+
+  it('keeps the iOS display-title bridge in the upstream Quick Look patch', () => {
+    const patch = readFileSync(
+      `${process.cwd()}/patches/@magrinj__expo-quick-look@0.3.1.patch`,
+      'utf8',
+    );
+
+    expect(patch).toContain('@Field var title: String?');
+    expect(patch).toContain('PreviewItem(url: fileURL, title: options.title)');
+    expect(patch).toContain('title?: string;');
   });
 });

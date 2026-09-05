@@ -182,6 +182,7 @@
   "chat.input.sendError.executionUnavailable": "This Agent's model or tools are unavailable. Check the Agent settings.",
   "chat.input.sendError.sessionBusy": "This chat is still replying. Wait for it to finish, then try again.",
   "chat.input.sendError.sessionNotFound": "This chat no longer exists.",
+  "chat.input.sendError.toolCallingUnsupported": "This model doesn't support tool calls. Choose a model with tool support and try again.",
   "chat.input.sendError.unsupported": "The selected model can't run this request. Check the model, its tools, and any attachments.",
   "chat.input.sendFailed": "Message was not sent. Try again.",
   "chat.input.stopFailed": "Couldn't stop the reply. Please try again.",

@@ -100,7 +100,15 @@ describe('createPaintingGenerateJobHandler', () => {
     const handler = createPaintingGenerateJobHandler(dependencies);
 
     await expect(handler.execute(createContext())).resolves.toEqual({
-      outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
+      outputs: [
+        {
+          fileEntryId: outputFileId,
+          mediaType: 'image/png',
+          name: 'image.png',
+          size: 1,
+          uri: 'file:///output.png',
+        },
+      ],
       painting: painting('painting-1', [outputFileId]),
     });
 
@@ -293,7 +301,15 @@ describe('createPaintingGenerateJobHandler', () => {
       expect(snapshot.status).toBe('completed');
       expect(snapshot.queue).toBe('painting');
       expect(snapshot.output).toEqual({
-        outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
+        outputs: [
+          {
+            fileEntryId: outputFileId,
+            mediaType: 'image/png',
+            name: 'image.png',
+            size: 1,
+            uri: 'file:///output.png',
+          },
+        ],
         painting: painting('painting-1', [outputFileId]),
       });
     });

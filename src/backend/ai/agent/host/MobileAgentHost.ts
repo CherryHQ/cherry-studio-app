@@ -979,19 +979,18 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });
-    const namingPromises = state.autoNamePromise ? [state.autoNamePromise] : [];
+    const initialNamePromise = state.autoNamePromise;
     if (outcome === 'completed' && state.autoNameUserParts) {
       const summaryNamePromise = this.naming.maybeRenameFromConversationSummary({
         assistantParts: finalized.parts,
         sessionId,
         userParts: state.autoNameUserParts,
       });
-      namingPromises.push(summaryNamePromise);
       this.publishSessionRename(summaryNamePromise);
     }
     state.backgroundReply.finish(
       outcome,
-      namingPromises.length > 0 ? { waitFor: Promise.allSettled(namingPromises) } : undefined,
+      initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
   }
 

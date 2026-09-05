@@ -1015,7 +1015,7 @@ describe('MobileAgentHost', () => {
       }),
     ).rejects.toMatchObject({
       view: {
-        code: 'CAPABILITY_UNSUPPORTED',
+        code: 'TOOL_CALLING_UNSUPPORTED',
         message: 'The selected model does not support native tool calling.',
       },
     });
@@ -1188,6 +1188,8 @@ describe('MobileAgentHost', () => {
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+    const finishOptions = backgroundReplyTurn.finish.mock.calls[0]?.[1];
+    await expect(finishOptions?.waitFor).resolves.toBeNull();
     const renamed = await store.autoRenameSession(session.id, '', 'Summary title');
     resolveSummary(renamed);
     await waitFor(
