@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+
 import type { FilePreviewProps } from '../file-preview.types';
 import { useFilePreviewPlugins } from '../hooks/use-file-preview-plugins';
 import { FilePreviewUnavailable } from './fallback-preview';
@@ -37,4 +39,3 @@ export function FilePreview({
     </FilePreviewFrame>
   );
 }
-import { createElement } from 'react';
