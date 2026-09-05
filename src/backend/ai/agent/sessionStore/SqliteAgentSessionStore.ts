@@ -30,6 +30,7 @@ import type {
   ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
+  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -415,6 +416,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       // Return the raw value so the Host can classify it and fall back to full history.
     }
     return { assistantMessageId: row.assistantMessageId, checkpoint };
+  }
+
+  async updateStreamingAssistantMessage(
+    input: UpdateStreamingAssistantMessageInput,
+  ): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      // Guarded by status so a late streaming write can never reopen a row the
+      // terminal write has already settled.
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ status: 'streaming', data: { version: 1, parts: input.parts } })
+        .where(
+          and(
+            eq(agentSessionMessageTable.id, input.assistantMessageId),
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+          ),
+        );
+    });
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
