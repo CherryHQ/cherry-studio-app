@@ -89,22 +89,22 @@ export class LoggerService {
 
     switch (level) {
       case LEVEL.ERROR:
-        console.error('%c<error>', 'color: red; font-weight: bold', logMessage, ...logData);
+        console.error(logMessage, ...logData);
         break;
       case LEVEL.WARN:
-        console.warn('%c<warn>', 'color: #FFA500; font-weight: bold', logMessage, ...logData);
+        console.warn(logMessage, ...logData);
         break;
       case LEVEL.INFO:
-        console.info('%c<info>', 'color: #32CD32; font-weight: bold', logMessage, ...logData);
+        console.info(logMessage, ...logData);
         break;
       case LEVEL.DEBUG:
-        console.debug('%c<debug>', 'color: #7B68EE', logMessage, ...logData);
+        console.debug(logMessage, ...logData);
         break;
       case LEVEL.VERBOSE:
-        console.debug('%c<verbose>', 'color: #808080', logMessage, ...logData);
+        console.debug(logMessage, ...logData);
         break;
       case LEVEL.SILLY:
-        console.debug('%c<silly>', 'color: #808080', logMessage, ...logData);
+        console.debug(logMessage, ...logData);
         break;
     }
   }
