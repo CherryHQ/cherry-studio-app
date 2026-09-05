@@ -1,4 +1,5 @@
-import { ModelPullTimeoutError } from '@/shared/contracts/models';
+import { ModelPullError, ModelPullTimeoutError } from '@/shared/contracts/models';
+import { ProviderSetupError } from '@/shared/contracts/providers';
 
 import { getOnboardingModelError } from '../onboardingModelError';
 
@@ -22,6 +23,25 @@ test.each([
       requestHeaders: { Authorization: 'private credential' },
     }),
   ).toEqual({ reason, action });
+});
+
+test.each([
+  ['authentication', 'authentication', 'editConnection'],
+  ['unavailable', 'endpoint', 'editConnection'],
+  ['rate-limited', 'rateLimit', 'retry'],
+  ['network', 'network', 'retry'],
+  ['failed', 'unknown', 'retry'],
+] as const)('maps the workflow pull reason %s', (pullReason, reason, action) => {
+  expect(getOnboardingModelError(new ModelPullError(pullReason))).toEqual({ reason, action });
+});
+
+test.each([
+  ['missing-api-key', 'authentication', 'editConnection'],
+  ['disabled-api-keys', 'authentication', 'editConnection'],
+  ['invalid-endpoint', 'endpoint', 'editConnection'],
+  ['unsupported-auth', 'unknown', 'retry'],
+] as const)('maps the provider setup issue %s', (issue, reason, action) => {
+  expect(getOnboardingModelError(new ProviderSetupError(issue))).toEqual({ reason, action });
 });
 
 test('recognizes the workflow timeout and wrapped transport failures', () => {

@@ -27,7 +27,7 @@ export function ProviderFormName() {
 ProviderFormName.displayName = 'ProviderForm.Name';
 
 /** One or more comma-separated API keys edited as part of the provider draft. */
-export function ProviderFormApiKey() {
+export function ProviderFormApiKey({ autoFocus = false }: { autoFocus?: boolean }) {
   const { t } = useTranslation();
   const { actions, meta, state } = useProviderForm('ProviderForm.ApiKey');
 
@@ -36,6 +36,7 @@ export function ProviderFormApiKey() {
       <TextField.Label>{t('settings.provider.apiService.apiKey')}</TextField.Label>
       <Input
         accessibilityLabel={t('settings.provider.apiService.apiKey')}
+        autoFocus={autoFocus}
         disabled={meta.isSubmitting}
         lineBreakModeIOS="clip"
         numberOfLines={1}

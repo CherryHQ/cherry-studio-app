@@ -7,19 +7,16 @@ import { View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   readProviderSetupReturnTo,
-  type ProviderSetupIntent,
+  type ProviderSetupIntent as FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
+import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
-import { useProviderApiServiceSheetClose } from '../apiService';
-import { isFullyCustomProvider } from '../apiService/utils/providerApiServiceEndpointRules';
+import { useProviderApiServiceSheetClose, useProviderConfigurationForm } from '../apiService';
 import { providerFormAvatarSize } from '../components/ProviderForm';
-import {
-  ProviderNewFormContent,
-  useImportedProviderForm,
-  useNewProviderForm,
-} from './components/ProviderCreationForm';
+import { useProviderSetup, type ProviderSetupIntent } from '../hooks/useProviderSetup';
+import { ProviderNewFormContent, useNewProviderForm } from './components/ProviderCreationForm';
 import {
   ProviderSetupCustomFields,
   ProviderSetupFormContent,
@@ -28,38 +25,43 @@ import {
 
 export default function ProviderCreationScreen({
   setupIntent,
-}: { setupIntent?: ProviderSetupIntent } = {}) {
+}: { setupIntent?: FirstUseSetupIntent } = {}) {
   const {
     providerId,
     providerName,
+    intent,
+    issue,
     returnTo: rawReturnTo,
   } = useLocalSearchParams<
     ProviderSetupRouteParamsInput & {
       providerId?: string;
       providerName?: string;
+      intent?: string;
+      issue?: ProviderConfigurationIssue;
     }
   >();
   const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
-  const intent = setupIntent;
 
   return providerId ? (
     <ImportedProviderCreationScreen
-      intent={intent}
       providerId={providerId}
       providerName={providerName}
       returnTo={returnTo}
+      intent={intent === 'sync' ? 'sync' : 'enable'}
+      issue={issue}
+      setupIntent={setupIntent}
     />
   ) : (
-    <CustomProviderCreationScreen intent={intent} returnTo={returnTo} />
+    <CustomProviderCreationScreen returnTo={returnTo} setupIntent={setupIntent} />
   );
 }
 
 function CustomProviderCreationScreen({
-  intent,
   returnTo,
+  setupIntent,
 }: {
-  intent?: ProviderSetupIntent;
   returnTo: string;
+  setupIntent?: FirstUseSetupIntent;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -75,7 +77,7 @@ function CustomProviderCreationScreen({
         return;
       }
 
-      if (intent === 'chat') {
+      if (setupIntent === 'chat') {
         router.setParams({
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
@@ -92,18 +94,19 @@ function CustomProviderCreationScreen({
         pathname: '/settings/provider/[providerId]/model-add',
         params: {
           mode: 'sync',
+          enableProvider: 'true',
           providerId: createdProvider.providerId,
           providerName: createdProvider.providerName,
           returnTo,
         },
       });
     });
-  }, [allowNavigation, intent, returnTo, router, saveNewProvider]);
+  }, [allowNavigation, returnTo, router, saveNewProvider, setupIntent]);
 
   return (
     <>
       <RouteHeader onBack={requestClose} title={t('settings.provider.add.title')} />
-      {intent === 'chat' ? (
+      {setupIntent === 'chat' ? (
         <ProviderSetupFormContent
           canSave={newProviderForm.canSubmit}
           form={newProviderForm.form}
@@ -125,32 +128,32 @@ function CustomProviderCreationScreen({
 }
 
 function ImportedProviderCreationScreen({
-  intent,
   providerId,
   providerName,
   returnTo,
+  intent,
+  issue,
+  setupIntent,
 }: {
-  intent?: ProviderSetupIntent;
   providerId: string;
   providerName?: string;
   returnTo: string;
+  intent: ProviderSetupIntent;
+  issue?: ProviderConfigurationIssue;
+  setupIntent?: FirstUseSetupIntent;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const importedProviderForm = useImportedProviderForm(providerId);
-  const saveImportedProvider = importedProviderForm.handleSave;
+  const { isPreparing, openSetup } = useProviderSetup();
+  const importedProviderForm = useProviderConfigurationForm(providerId);
+  const saveImportedProvider = importedProviderForm.requestSave;
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: importedProviderForm.form.meta.isDirty,
-    isSaving: importedProviderForm.isSaving,
+    isSaving: importedProviderForm.isSaving || isPreparing,
   });
   const handleSave = useCallback(() => {
-    void saveImportedProvider().then((configuredProvider) => {
-      if (!configuredProvider) {
-        return;
-      }
-
-      if (intent === 'chat') {
-        importedProviderForm.form.actions.reset(importedProviderForm.form.state);
+    saveImportedProvider((configuredProvider) => {
+      if (setupIntent === 'chat') {
         router.push({
           pathname: '/onboarding/model',
           params: { providerId: configuredProvider.providerId },
@@ -158,18 +161,9 @@ function ImportedProviderCreationScreen({
         return;
       }
 
-      allowNavigation();
-      router.replace({
-        pathname: '/settings/provider/[providerId]/model-add',
-        params: {
-          mode: 'sync',
-          providerId: configuredProvider.providerId,
-          providerName: configuredProvider.providerName,
-          returnTo,
-        },
-      });
+      void openSetup(configuredProvider.providerId, returnTo, intent, true, allowNavigation);
     });
-  }, [allowNavigation, importedProviderForm.form, intent, returnTo, router, saveImportedProvider]);
+  }, [allowNavigation, intent, openSetup, returnTo, router, saveImportedProvider, setupIntent]);
   const displayedProviderName = importedProviderForm.provider?.name ?? providerName ?? '';
 
   return (
@@ -189,13 +183,13 @@ function ImportedProviderCreationScreen({
             title={t('settings.provider.setup.loadFailed')}
           />
         </View>
-      ) : intent === 'chat' ? (
+      ) : setupIntent === 'chat' ? (
         <ProviderSetupFormContent
-          canSave={importedProviderForm.canSubmit}
+          canSave={importedProviderForm.canCompleteSetup}
           form={importedProviderForm.form}
           onSave={handleSave}
         >
-          {isFullyCustomProvider(importedProviderForm.provider) ? (
+          {importedProviderForm.isCustomProvider ? (
             <ProviderSetupCustomFields />
           ) : (
             <ProviderSetupPresetFields
@@ -215,9 +209,18 @@ function ImportedProviderCreationScreen({
               size={providerFormAvatarSize}
             />
           }
-          canSave={importedProviderForm.canSubmit}
+          canSave={importedProviderForm.canCompleteSetup && !isPreparing}
+          issue={
+            issue ??
+            (importedProviderForm.requiresApiKey && !importedProviderForm.form.state.apiKey.trim()
+              ? 'missing-api-key'
+              : undefined)
+          }
+          disabledKeys={importedProviderForm.disabledKeys}
+          onEnableKeys={importedProviderForm.enableKeys}
+          endpointMode={importedProviderForm.isCustomProvider ? 'custom-text' : 'primary'}
           form={importedProviderForm.form}
-          isSaving={importedProviderForm.isSaving}
+          isSaving={importedProviderForm.isSaving || isPreparing}
           onSave={handleSave}
           showApiKey={importedProviderForm.showApiKey}
         />

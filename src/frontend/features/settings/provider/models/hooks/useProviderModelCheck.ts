@@ -1,9 +1,8 @@
 import { useAlert, useToast } from '@cherrystudio/ui/components';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useBackendModule } from '@/frontend/data';
 import type { Model } from '@/shared/data/types/model';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
@@ -39,7 +38,6 @@ export function useProviderModelCheck({
   const { toast } = useToast();
   const { alert } = useAlert();
   const modelsBackend = useBackendModule('models');
-  const queryClient = useQueryClient();
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
     createProviderModelCheckState(providerId),
   );
@@ -108,11 +106,6 @@ export function useProviderModelCheck({
       setCheckState({ isChecking: false, modelStatus: result, providerId, selectionKey });
 
       if (result?.status === 'success') {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.providers.page() }),
-        ]);
         toast.show({
           label: t('settings.provider.models.checkSuccess'),
           variant: 'success',
@@ -153,7 +146,6 @@ export function useProviderModelCheck({
     isChecking,
     modelsBackend,
     providerId,
-    queryClient,
     selectedApiKey,
     selectedModel,
     selectionKey,

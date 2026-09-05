@@ -22,7 +22,7 @@ import { SettingsServiceRow } from '../../components/SettingsServiceRow';
 import { ProviderAvatar } from '../components/ProviderAvatar';
 
 const CATALOG_ROW_ESTIMATED_HEIGHT = 68;
-const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider';
+const CUSTOM_PROVIDER_ITEM_ID = 'custom-provider' as const;
 
 type ProviderCatalogItem =
   | { id: typeof CUSTOM_PROVIDER_ITEM_ID; type: 'custom' }

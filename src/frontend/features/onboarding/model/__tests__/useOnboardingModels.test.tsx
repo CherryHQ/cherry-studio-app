@@ -99,7 +99,7 @@ describe('onboarding model loading feedback', () => {
   });
 
   test('only presents a successful empty result as empty', () => {
-    mockRemote.data = { status: 'up-to-date', providerEnabled: false };
+    mockRemote.data = { status: 'up-to-date' };
     render();
     expect(data.loadError).toBeNull();
     expect(data.pullError).toBeNull();

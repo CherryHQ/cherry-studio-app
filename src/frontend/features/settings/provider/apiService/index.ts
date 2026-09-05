@@ -1,5 +1,6 @@
 export { useProviderApiServiceQueries } from './hooks/useProviderApiServiceQueries';
 export { useProviderApiServiceSheetClose } from './hooks/useProviderApiServiceSheetClose';
+export { useProviderConfigurationForm } from './hooks/useProviderConfigurationForm';
 export {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,

@@ -1,4 +1,5 @@
-import { isModelPullTimeoutError } from '@/shared/contracts/models';
+import { ModelPullError, isModelPullTimeoutError } from '@/shared/contracts/models';
+import { ProviderSetupError } from '@/shared/contracts/providers';
 
 type ModelListFailureReason =
   | 'authentication'
@@ -28,6 +29,20 @@ const RESPONSE_ERROR_NAMES = new Set([
   'AI_JSONParseError',
   'AI_NoResponseBodyError',
 ]);
+const PULL_FAILURE_REASONS: Record<ModelPullError['reason'], ModelListFailureReason> = {
+  authentication: 'authentication',
+  failed: 'unknown',
+  network: 'network',
+  'rate-limited': 'rateLimit',
+  unavailable: 'endpoint',
+};
+const SETUP_FAILURE_REASONS: Record<ProviderSetupError['reason'], ModelListFailureReason> = {
+  'disabled-api-keys': 'authentication',
+  'invalid-endpoint': 'endpoint',
+  'missing-api-key': 'authentication',
+  'no-models': 'unknown',
+  'unsupported-auth': 'unknown',
+};
 
 /** Only closed reasons reach the UI; provider messages, response bodies and credentials stay private. */
 export function getOnboardingModelError(error: unknown) {
@@ -43,6 +58,9 @@ export function getOnboardingModelError(error: unknown) {
 }
 
 function classifyFailure(error: unknown): ModelListFailureReason {
+  // The models workflow already reduces provider responses to closed reasons.
+  if (error instanceof ModelPullError) return PULL_FAILURE_REASONS[error.reason];
+  if (error instanceof ProviderSetupError) return SETUP_FAILURE_REASONS[error.reason];
   // AI SDK request errors can wrap a parsing or native network error in `cause`.
   let current = error;
   for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth++) {
