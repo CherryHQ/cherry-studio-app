@@ -123,6 +123,9 @@ describe('createPaintingGenerateJobHandler', () => {
         uniqueModelId: modelId,
       }),
     );
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'draw.png', provenance: 'generated', source: 'base64' }),
+    );
     expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
       outputFileId,
     ]);

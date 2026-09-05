@@ -12,9 +12,10 @@ import type {
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
 import type { PaintingGenerationResult } from '@/shared/contracts';
-import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import { type FileEntry, type FileEntryId, readableFilename } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';
 
@@ -145,11 +146,16 @@ export function createPaintingGenerateJobHandler(
         const createdOutputs: FileEntry[] = [];
         let outputRefsCommitted = false;
         try {
-          for (const image of result.images) {
+          for (const [index, image] of result.images.entries()) {
             createdOutputs.push(
               await storage.createInternalEntry({
                 data: image.base64,
                 mediaType: image.mediaType,
+                name: readableFilename(prompt, {
+                  extension: generatedImageExtension(image.mediaType),
+                  fallback: 'Image',
+                  ordinal: index + 1,
+                }),
                 provenance: 'generated',
                 source: 'base64',
               }),
