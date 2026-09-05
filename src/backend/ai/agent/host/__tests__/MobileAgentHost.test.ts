@@ -14,6 +14,9 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { ManagedFileResolver } from '../../resources/managedFileResolver';
 import {
+  createDeniedToolResult,
+  createErrorToolResult,
+  createInterruptedToolResult,
   FakeRuntime,
   type RuntimeDescriptor,
   type RuntimeExecutionRequest,
@@ -766,97 +769,146 @@ describe('MobileAgentHost', () => {
     expect([...(resources?.fileEntryIds ?? [])]).toEqual([SECOND_FILE_ENTRY_ID]);
   });
 
-  test('saves tool results mid-turn while text-only updates wait for finalization', async () => {
-    const releaseTool = createDeferred();
-    const releaseTerminal = createDeferred();
-    const toolPart = {
-      id: 'tool-1',
-      type: 'tool',
-      toolCallId: 'call-1',
-      toolRef: TOOL_REF,
-      providerName: TOOL_PROVIDER_NAME,
-      displayName: TOOL_DISPLAY_NAME,
-      state: 'running',
-      input: { fileEntryId: FILE_ENTRY_ID },
-    } as const;
-    const toolResult = {
-      ...toolPart,
-      state: 'output-available' as const,
-      output: { value: { deleted: true }, artifacts: [] },
-    };
-    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
-      controller.emit({
-        type: 'part.add',
-        index: 0,
-        part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+  test.each(['output-available', 'denied', 'error', 'interrupted'] as const)(
+    'saves %s tool results without writes for text or intermediate tool states',
+    async (state) => {
+      const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+      const releaseTool = createDeferred();
+      const releaseResult = createDeferred();
+      const releaseTerminal = createDeferred();
+      const toolPart = {
+        id: 'tool-1',
+        type: 'tool',
+        toolCallId: 'call-1',
+        toolRef: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        state: 'running',
+        input: { fileEntryId: FILE_ENTRY_ID },
+      } as const;
+      const toolResult = {
+        ...toolPart,
+        state,
+        output: {
+          'output-available': { value: { deleted: true }, artifacts: [] },
+          denied: createDeniedToolResult('Denied by the user.'),
+          error: createErrorToolResult({
+            code: 'tool_failed',
+            message: 'Failed.',
+            retryable: false,
+          }),
+          interrupted: createInterruptedToolResult('The tool was interrupted.'),
+        }[state],
+      };
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(
+        async (controller) => {
+          controller.emit({
+            type: 'part.add',
+            index: 0,
+            part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+          });
+          controller.emit({ type: 'text.delta', partId: 'text-1', text: 'Deleting.' });
+          controller.emit({
+            type: 'part.replace',
+            part: { id: 'text-1', type: 'text', text: 'Deleting.', state: 'done' },
+          });
+          await releaseTool.promise;
+          controller.emit({
+            type: 'part.add',
+            index: 1,
+            part: { ...toolPart, state: 'input-streaming' },
+          });
+          controller.emit({
+            type: 'part.replace',
+            part: { ...toolPart, state: 'input-available' },
+          });
+          controller.emit({
+            type: 'part.replace',
+            part: { ...toolPart, state: 'awaiting-approval', approvalId: 'approval-1' },
+          });
+          controller.emit({ type: 'part.replace', part: toolPart });
+          await releaseResult.promise;
+          controller.emit({ type: 'part.replace', part: toolResult });
+          controller.emit({
+            type: 'part.add',
+            index: 2,
+            part: { id: 'text-2', type: 'text', text: '', state: 'streaming' },
+          });
+          controller.emit({ type: 'text.delta', partId: 'text-2', text: 'Finished.' });
+          await releaseTerminal.promise;
+          controller.emit({ type: 'completed' });
+        },
+      );
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Delete it.' }],
       });
-      controller.emit({ type: 'text.delta', partId: 'text-1', text: 'Deleting.' });
-      controller.emit({
-        type: 'part.replace',
-        part: { id: 'text-1', type: 'text', text: 'Deleting.', state: 'done' },
-      });
-      await releaseTool.promise;
-      controller.emit({ type: 'part.add', index: 1, part: toolPart });
-      controller.emit({ type: 'part.replace', part: toolResult });
-      controller.emit({
-        type: 'part.add',
-        index: 2,
-        part: { id: 'text-2', type: 'text', text: '', state: 'streaming' },
-      });
-      controller.emit({ type: 'text.delta', partId: 'text-2', text: 'Deleted.' });
-      await releaseTerminal.promise;
-      controller.emit({ type: 'completed' });
-    });
-    const host = createHost(runtime);
-    const session = await createStoredSession();
-    const events: AgentEvent[] = [];
-    await host.observeSession(session.id, (event) => events.push(event));
-    await host.submitMessage({
-      sessionId: session.id,
-      parts: [{ type: 'text', text: 'Delete it.' }],
-    });
 
-    try {
-      await waitFor(
-        () =>
-          events.some(
-            (event) => event.type === 'message.delta' && event.delta.op === 'part.replace',
-          ),
-        'the initial text to finish streaming',
-      );
+      try {
+        await waitFor(
+          () =>
+            events.some(
+              (event) => event.type === 'message.delta' && event.delta.op === 'part.replace',
+            ),
+          'the initial text to finish streaming',
+        );
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'pending',
+          parts: [],
+        });
+        releaseTool.resolve();
+        await waitFor(
+          () =>
+            events.some(
+              (event) =>
+                event.type === 'message.delta' &&
+                event.delta.op === 'part.replace' &&
+                event.delta.part.type === 'tool' &&
+                event.delta.part.state === 'running',
+            ),
+          'the intermediate tool states to be processed',
+        );
+        expect(saveSnapshot).not.toHaveBeenCalled();
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'pending',
+          parts: [],
+        });
+        releaseResult.resolve();
+        await waitFor(
+          () =>
+            events.some(
+              (event) =>
+                event.type === 'message.delta' &&
+                event.delta.op === 'text.append' &&
+                event.delta.partId === 'text-2',
+            ),
+          'the text after the tool result',
+        );
+        expect(saveSnapshot).toHaveBeenCalledTimes(1);
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'streaming',
+          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, toolResult],
+        });
+      } finally {
+        releaseTool.resolve();
+        releaseResult.resolve();
+        releaseTerminal.resolve();
+      }
+      await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool turn to settle');
       expect((await store.listMessages(session.id))[1]).toMatchObject({
-        status: 'pending',
-        parts: [],
+        status: 'success',
+        parts: [
+          { id: 'text-1', text: 'Deleting.', state: 'done' },
+          toolResult,
+          { id: 'text-2', text: 'Finished.', state: 'done' },
+        ],
       });
-      releaseTool.resolve();
-      await waitFor(
-        () =>
-          events.some(
-            (event) =>
-              event.type === 'message.delta' &&
-              event.delta.op === 'text.append' &&
-              event.delta.partId === 'text-2',
-          ),
-        'the text after the tool result',
-      );
-      expect((await store.listMessages(session.id))[1]).toMatchObject({
-        status: 'streaming',
-        parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, toolResult],
-      });
-    } finally {
-      releaseTool.resolve();
-      releaseTerminal.resolve();
-    }
-    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool turn to settle');
-    expect((await store.listMessages(session.id))[1]).toMatchObject({
-      status: 'success',
-      parts: [
-        { id: 'text-1', text: 'Deleting.', state: 'done' },
-        toolResult,
-        { id: 'text-2', text: 'Deleted.', state: 'done' },
-      ],
-    });
-  });
+    },
+  );
 
   test('still finalizes the complete message when a mid-turn snapshot write fails', async () => {
     jest

@@ -730,7 +730,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
         if (
           (event.type === 'part.add' || event.type === 'part.replace') &&
-          (event.part.type === 'tool' || event.part.type === 'file')
+          (event.part.type === 'file' ||
+            (event.part.type === 'tool' &&
+              (event.part.state === 'output-available' ||
+                event.part.state === 'denied' ||
+                event.part.state === 'error' ||
+                event.part.state === 'interrupted')))
         ) {
           // The event loop serializes these snapshots with the terminal write.
           await this.persistStreamingMessage(sessionId, state.assistantMessage);

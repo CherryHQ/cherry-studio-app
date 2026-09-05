@@ -275,10 +275,13 @@ projection:
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
   cascading the source delete to its messages.
-- Tool and file part additions or replacements save the current assistant `data.parts` snapshot
-  while the message is `streaming`, including any text already produced. The Host awaits each
+- File part additions or replacements and terminal tool parts (`output-available`, `denied`,
+  `error`, `interrupted`) save the current assistant `data.parts` snapshot while the message is
+  `streaming`, including any text already produced. The Host awaits each
   write in its serial event loop; a failed snapshot write is logged and execution continues.
-  Text-only events do not trigger writes, and there is no periodic flush. Finalization remains
+  Text-only events and non-terminal tool states do not trigger writes, and there is no periodic
+  flush. A pending tool may be included in another tool or file's snapshot, but its intermediate
+  states are not guaranteed to survive a restart. Finalization remains
   authoritative; snapshot updates cannot reopen a settled row. On restart, reconciliation keeps
   saved parts, closes streaming text, and interrupts unfinished tools. This preserves recorded
   artifacts for later turns without resuming execution or persisting a draft-file state.
