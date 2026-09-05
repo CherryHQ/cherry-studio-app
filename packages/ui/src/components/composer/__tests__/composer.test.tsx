@@ -14,6 +14,7 @@ jest.mock('heroui-native/utils', () => {
 });
 
 jest.mock('uniwind', () => ({
+  withUniwind: (component: unknown) => component,
   useResolveClassNames: jest.fn((className: string) =>
     className.includes('text-foreground')
       ? { color: '#111827', fontSize: 16 }
