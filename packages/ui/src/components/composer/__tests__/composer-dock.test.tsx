@@ -7,6 +7,10 @@ import { useComposerDockLayout } from '../hooks/use-composer-dock-layout';
 
 let mockBottomInset = 34;
 
+jest.mock('uniwind', () => ({
+  withUniwind: (component: unknown) => component,
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: mockBottomInset, left: 0, right: 0, top: 0 }),
 }));
@@ -76,6 +80,8 @@ describe('Composer.Dock', () => {
     const stickyView = renderer!.root.findByProps({ testID: 'keyboard-sticky-view' });
     const layoutEvent = { nativeEvent: { layout: { height: 126 } } };
 
+    // A stationary native wrapper would clip the lifted input under Android's blur target.
+    expect(renderer!.toJSON()).toMatchObject({ props: { testID: 'keyboard-sticky-view' } });
     expect(container.props.style).toEqual({ paddingBottom: 38, paddingHorizontal: 16 });
     expect(stickyView.props.offset).toEqual({ opened: 26 });
 
