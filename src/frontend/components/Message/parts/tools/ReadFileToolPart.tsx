@@ -62,7 +62,7 @@ export function isReadFileToolPart(part: ToolMessagePart) {
 type ReadFile = {
   filename: string;
   lineCount: number;
-  offset: number;
+  startLine: number;
   totalLines: number;
 };
 
@@ -72,7 +72,7 @@ function parseRead(output: unknown): ReadFile | null {
     output.status !== 'ok' ||
     typeof output.filename !== 'string' ||
     !isCount(output.lineCount) ||
-    !isCount(output.offset) ||
+    !isCount(output.startLine) ||
     !isCount(output.totalLines)
   ) {
     return null;
@@ -82,7 +82,7 @@ function parseRead(output: unknown): ReadFile | null {
   return {
     filename,
     lineCount: output.lineCount,
-    offset: output.offset,
+    startLine: output.startLine,
     totalLines: output.totalLines,
   };
 }
@@ -96,7 +96,7 @@ function formatLineRange(read: ReadFile): string {
   if (read.lineCount === 0) {
     return `0 / ${read.totalLines}`;
   }
-  return `${read.offset + 1}-${read.offset + read.lineCount} / ${read.totalLines}`;
+  return `${read.startLine}-${read.startLine + read.lineCount - 1} / ${read.totalLines}`;
 }
 
 function parseRejection(output: unknown): string | null {

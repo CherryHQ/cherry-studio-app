@@ -91,14 +91,23 @@ const FILENAME_MAX_CHARACTERS = 255;
 const VERSION_SUFFIX_PATTERN = /^(.*) v(\d+)$/;
 const READABLE_NAME_MAX_CHARACTERS = 40;
 
-/** `report.html` → `report v2.html` → `report v3.html`. */
-export function nextVersionFilename(filename: string): string {
+/**
+ * `report.html` → `report v2.html` → `report v3.html`. `taken` are names already
+ * in use, so a second edit of the same source does not produce a twin of an
+ * existing version; the number, not the id, is what tells the two apart.
+ */
+export function nextVersionFilename(filename: string, taken?: ReadonlySet<string>): string {
   const extension = filenameExtension(filename);
   const stem = extension ? filename.slice(0, -(extension.length + 1)) : filename;
   const versioned = VERSION_SUFFIX_PATTERN.exec(stem);
   const base = versioned?.[1] ?? stem;
-  const version = versioned ? Number(versioned[2]) + 1 : 2;
-  return withFilenameTail(base, ` v${version}`, extension);
+  let version = versioned ? Number(versioned[2]) + 1 : 2;
+  let candidate = withFilenameTail(base, ` v${version}`, extension);
+  while (taken?.has(candidate)) {
+    version += 1;
+    candidate = withFilenameTail(base, ` v${version}`, extension);
+  }
+  return candidate;
 }
 
 /**

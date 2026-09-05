@@ -68,6 +68,11 @@ describe('nextVersionFilename', () => {
     expect(nextVersionFilename(source)).toBe(expected);
   });
 
+  it('skips names already in use', () => {
+    const taken = new Set(['report v2.html', 'report v3.html']);
+    expect(nextVersionFilename('report.html', taken)).toBe('report v4.html');
+  });
+
   it('keeps the result within the filename limit', () => {
     const name = nextVersionFilename(`${'a'.repeat(252)}.md`);
     expect(name).toHaveLength(255);

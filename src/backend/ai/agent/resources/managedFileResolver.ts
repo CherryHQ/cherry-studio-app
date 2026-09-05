@@ -43,7 +43,7 @@ export type TurnFileScope = Pick<TurnResourceLedger, 'fileEntryIds'>;
 /** Host-owned catalog capability: tools can consult membership; the wrapper grants outputs. */
 export type TurnToolResources = Pick<
   TurnResourceLedger,
-  'draftFileEntryIds' | 'fileEntryIds' | 'grantFile'
+  'availableFiles' | 'draftFileEntryIds' | 'fileEntryIds' | 'grantFile'
 >;
 
 /** Host-only managed-file boundary. It never exposes a device path to Pi. */

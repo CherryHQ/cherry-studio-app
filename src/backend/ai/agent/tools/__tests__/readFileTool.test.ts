@@ -26,26 +26,26 @@ describe('readFileTool', () => {
         fileEntryId: FILE_ID,
         filename: 'notes.md',
         size: 14,
-        offset: 0,
-        lineCount: 3,
-        totalLines: 3,
+        startLine: 1,
+        lineCount: 2,
+        totalLines: 2,
         truncated: false,
-        text: 'line 1\nline 2\n',
+        text: 'line 1\nline 2',
       },
       artifacts: [],
     });
   });
 
-  test('pages by line offset and limit', async () => {
+  test('pages by start line and limit', async () => {
     const files = createFiles('a\nb\nc\nd');
     const output = await execute(createReadFileTool(files, IN_SCOPE), {
       file_entry_id: FILE_ID,
-      offset: 1,
+      start_line: 2,
       limit: 2,
     });
 
     expect(output.value).toMatchObject({
-      offset: 1,
+      startLine: 2,
       lineCount: 2,
       totalLines: 4,
       truncated: true,
@@ -72,7 +72,7 @@ describe('readFileTool', () => {
 
   test.each([
     ['an invalid id', { file_entry_id: 'nope' }],
-    ['a negative offset', { file_entry_id: FILE_ID, offset: -1 }],
+    ['a start line below one', { file_entry_id: FILE_ID, start_line: 0 }],
     ['a zero limit', { file_entry_id: FILE_ID, limit: 0 }],
   ])('rejects %s', async (_case, input) => {
     const output = await execute(createReadFileTool(createFiles('x'), IN_SCOPE), input);
@@ -124,7 +124,7 @@ describe('readFileTool', () => {
       type: 'object',
       properties: {
         file_entry_id: expect.objectContaining({ type: 'string' }),
-        offset: expect.objectContaining({ type: 'integer' }),
+        start_line: expect.objectContaining({ type: 'integer' }),
         limit: expect.objectContaining({ type: 'integer' }),
       },
       required: ['file_entry_id'],
@@ -141,29 +141,54 @@ describe('lineWindow', () => {
     const text = Array.from({ length: READ_FILE_DEFAULT_LINE_LIMIT + 5 }, (_, i) => `${i}`).join(
       '\n',
     );
-    const window = lineWindow(text, 0, READ_FILE_DEFAULT_LINE_LIMIT);
+    const window = lineWindow(text, 1, READ_FILE_DEFAULT_LINE_LIMIT);
     expect(window.lineCount).toBe(READ_FILE_DEFAULT_LINE_LIMIT);
     expect(window.truncated).toBe(true);
   });
 
   test('cuts on a line boundary at the character budget', () => {
     const line = 'x'.repeat(READ_FILE_MAX_CHARACTERS / 2);
-    const window = lineWindow([line, line, line].join('\n'), 0, 10);
+    const window = lineWindow([line, line, line].join('\n'), 1, 10);
 
     // Two half-budget lines plus their separator exceed the budget, so one fits.
-    expect(window).toEqual({ lineCount: 1, text: line, totalLines: 3, truncated: true });
+    expect(window).toEqual({
+      lineCount: 1,
+      lineTruncated: false,
+      text: line,
+      totalLines: 3,
+      truncated: true,
+    });
   });
 
-  test('returns the head of a single line that alone exceeds the budget', () => {
-    const window = lineWindow('y'.repeat(READ_FILE_MAX_CHARACTERS + 1), 0, 10);
+  test('flags the head of a single line that alone exceeds the budget', () => {
+    const window = lineWindow('y'.repeat(READ_FILE_MAX_CHARACTERS + 1), 1, 10);
     expect(window.lineCount).toBe(1);
     expect(window.text).toHaveLength(READ_FILE_MAX_CHARACTERS);
-    expect(window.truncated).toBe(false);
+    // The rest of the line is unreachable by paging, so the read is not complete.
+    expect(window.lineTruncated).toBe(true);
+    expect(window.truncated).toBe(true);
   });
 
-  test('reports an offset past the end as empty and complete', () => {
-    expect(lineWindow('a\nb', 5, 10)).toEqual({
+  test('cuts a long line on a code point', () => {
+    const window = lineWindow('🍒'.repeat(READ_FILE_MAX_CHARACTERS), 1, 10);
+    expect([...window.text]).toHaveLength(READ_FILE_MAX_CHARACTERS);
+    expect(window.text.endsWith('🍒')).toBe(true);
+  });
+
+  test('does not count the empty tail of a newline-terminated file', () => {
+    expect(lineWindow('a\nb\n', 1, 10)).toEqual({
+      lineCount: 2,
+      lineTruncated: false,
+      text: 'a\nb',
+      totalLines: 2,
+      truncated: false,
+    });
+  });
+
+  test('reports a start line past the end as empty and complete', () => {
+    expect(lineWindow('a\nb', 6, 10)).toEqual({
       lineCount: 0,
+      lineTruncated: false,
       text: '',
       totalLines: 2,
       truncated: false,

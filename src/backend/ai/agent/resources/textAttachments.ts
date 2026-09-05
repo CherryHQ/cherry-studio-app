@@ -2,7 +2,7 @@ import { filenameExtension } from '@/shared/data/types/file';
 
 import type { RuntimeTextAttachmentPart } from '../runtime';
 import type { ManagedFileFact } from './managedFileResolver';
-import { decodeManagedUtf8, ManagedTextError } from './managedText';
+import { decodeManagedUtf8, ManagedTextError, takeCodePoints } from './managedText';
 
 export const MAX_TEXT_ATTACHMENT_BYTES = 1024 * 1024;
 export const MAX_TEXT_ATTACHMENT_CHARACTERS = 200_000;
@@ -202,22 +202,6 @@ function projectTextAttachment(
     includedCharacters: truncated.characters,
     part,
   };
-}
-
-function takeCodePoints(
-  value: string,
-  maxCharacters: number,
-): { characters: number; didTruncate: boolean; value: string } {
-  let characters = 0;
-  let end = 0;
-  for (const character of value) {
-    if (characters === maxCharacters) {
-      break;
-    }
-    end += character.length;
-    characters += 1;
-  }
-  return { characters, didTruncate: end < value.length, value: value.slice(0, end) };
 }
 
 function normalizeMediaType(mediaType: string): string {

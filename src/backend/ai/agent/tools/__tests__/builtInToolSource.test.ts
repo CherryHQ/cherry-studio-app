@@ -16,6 +16,7 @@ import type { ConfiguredPaintingModel } from '../painting';
 
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
 const TURN_RESOURCES: TurnToolResources = {
+  availableFiles: new Map(),
   draftFileEntryIds: new Set<string>(),
   fileEntryIds: new Set<string>(),
   grantFile: () => undefined,
@@ -174,6 +175,7 @@ describe('createSystemCapabilitySource', () => {
     jest.spyOn(fileContent, 'createTextEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
     const resources: TurnToolResources = {
+      availableFiles: new Map(),
       draftFileEntryIds: new Set(),
       fileEntryIds: new Set(),
       grantFile,
@@ -233,7 +235,12 @@ describe('createSystemCapabilitySource', () => {
     const tools = await source.getTools({
       disabledCapabilities: [],
       model: MODEL,
-      resources: { draftFileEntryIds: new Set(), fileEntryIds: new Set(), grantFile },
+      resources: {
+        availableFiles: new Map(),
+        draftFileEntryIds: new Set(),
+        fileEntryIds: new Set(),
+        grantFile,
+      },
     });
     const editFile = tools.find((tool) => tool.providerName === 'edit_file');
     if (!editFile) throw new Error('edit_file was not available.');
@@ -282,6 +289,7 @@ describe('createSystemCapabilitySource', () => {
       disabledCapabilities: [],
       model: MODEL,
       resources: {
+        availableFiles: new Map(),
         draftFileEntryIds: new Set([draftId]),
         fileEntryIds: new Set([draftId]),
         grantFile,

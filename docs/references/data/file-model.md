@@ -119,7 +119,8 @@ sweep.
 **Rewrite** — `rewriteInternalTextEntry` overwrites a draft's bytes at the same path, then records
 the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
-held. Only the turn that produced the draft may call it.
+held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
+calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
 
 **Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
 bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. The composer

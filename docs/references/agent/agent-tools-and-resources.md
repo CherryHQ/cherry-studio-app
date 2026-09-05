@@ -325,7 +325,11 @@ BOM and all untouched bytes represented by the decoded text. It never uses the d
 tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
 `{ status, sourceFileEntryId, fileEntryId, filename, size, replacements, snippet, snippetStartLine }`,
 where the snippet is the edited region with two lines of context on each side, capped at 1,200
-characters, so the model can confirm the change without reading the file back.
+characters, so the model can confirm the change without reading the file back. When those context
+lines are longer than the cap — minified HTML, one paragraph per line — the cut keeps the change and
+spends the rest of the budget around it, marking each trimmed side with an ellipsis; a snippet that
+ended before the change would confirm nothing. `snippetStartLine` is one-based, like `read_file`'s
+`start_line`.
 
 Where the edit lands is a product rule, not a storage detail. A turn ends with one artifact per
 file however many edits it took, and across turns a file keeps its history as versions:
@@ -337,16 +341,27 @@ file however many edits it took, and across turns a file keeps its history as ve
 - **New version.** When the source is anything else — an attachment, or an artifact of an earlier
   turn — the source is never changed and the edit is saved as a new `generated` entry with a
   version in its name: `report.html` becomes `report v2.html`, and editing `report v2.html` in a
-  later turn produces `report v3.html`. The version is carried in the name because the name is
-  what both the file library and the model see; there is no lineage column. The new entry is a
-  `derived` artifact and immediately becomes a draft of the current turn, so further edits in the
-  same turn rewrite it.
+  later turn produces `report v3.html`. A number already taken by a file the Session can see is
+  skipped, so two versions of one source never share a name. The version is carried in the name
+  because the name is what both the file library and the model see; there is no lineage column. The
+  new entry is a `derived` artifact and immediately becomes a draft of the current turn, so further
+  edits in the same turn rewrite it — including edits that name the original source again, which
+  continue that version rather than forking a second one.
 
-`read_file` takes `file_entry_id` plus optional zero-based `offset` and `limit` (default 500 lines,
-at most 2,000) and returns
-`{ status, fileEntryId, filename, size, offset, lineCount, totalLines, truncated, text }`. The
-window is cut on a line boundary at 100,000 characters, so `offset + lineCount` is always the next
-line to request. It reads only ledger members — attachments, earlier artifacts of the Session, and
+Both rules assume one writer at a time, and a message's tool calls run in parallel, so `edit_file`
+serializes calls that name the same file: each edit reads what the previous one wrote, in the order
+the model listed them. Without it two edits of one draft would both read the pre-edit bytes and the
+second write would drop the first — harmless while every edit created its own entry, silent data
+loss once a draft is rewritten in place. Edits of different files stay concurrent.
+
+`read_file` takes `file_entry_id` plus optional one-based `start_line` and `limit` (default 500
+lines, at most 2,000) and returns
+`{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
+window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
+next line to request. A single line larger than the whole budget is the one case that cannot be cut
+on a boundary: the head is returned with `lineTruncated: true` and the read reports itself
+truncated, because the rest of that line is unreachable by asking for a later line and silence would
+present a fraction of a minified file as the whole of it. It reads only ledger members — attachments, earlier artifacts of the Session, and
 this turn's drafts — and applies the same strict UTF-8 decoding and 1 MiB source limit as
 `edit_file`. It exists so a model can revisit a file it wrote or edited in an earlier turn, whose
 content is deliberately not replayed as an attachment.

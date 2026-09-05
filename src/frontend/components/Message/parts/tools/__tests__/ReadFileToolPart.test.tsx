@@ -37,7 +37,7 @@ describe('ReadFileToolPart', () => {
         output: {
           status: 'ok',
           filename: 'notes.md',
-          offset: 100,
+          startLine: 101,
           lineCount: 20,
           totalLines: 480,
           text: 'x'.repeat(5000),
@@ -64,7 +64,7 @@ describe('ReadFileToolPart', () => {
 
   it.each([
     ['a non-object output', 'ok'],
-    ['a missing line count', { status: 'ok', filename: 'notes.md', offset: 0, totalLines: 1 }],
+    ['a missing line count', { status: 'ok', filename: 'notes.md', startLine: 1, totalLines: 1 }],
   ])('falls back to generic rendering for %s', (_case, output) => {
     expect(render(toolPart({ output })).root.findByType('GenericToolPart')).toBeDefined();
   });
