@@ -113,6 +113,15 @@ jest.mock('react-native-worklets', () => ({
 const findRenderedByTestId = (renderer: ReactTestRenderer, testID: string) =>
   renderer.root.findAllByType(View).filter((node) => node.props.testID === testID);
 
+const findPressableByTestId = (renderer: ReactTestRenderer, testID: string) => {
+  const pressable = renderer.root.findAll(
+    (node) => node.props.accessibilityRole === 'button' && node.props.testID === testID,
+  )[0];
+
+  if (!pressable) throw new Error(`Pressable ${testID} was not rendered.`);
+  return pressable;
+};
+
 describe('MessagePart', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -216,15 +225,15 @@ describe('MessagePart', () => {
       );
     });
 
-    const standaloneTrigger = renderer!.root.findByProps({ testID: 'standalone-tool-trigger' });
-    const processTrigger = renderer!.root.findByProps({ testID: 'process-trigger' });
+    const standaloneTrigger = findPressableByTestId(renderer!, 'standalone-tool-trigger');
+    const processTrigger = findPressableByTestId(renderer!, 'process-trigger');
     expect(standaloneTrigger.props.className).toContain('min-h-10');
     expect(standaloneTrigger.props.hitSlop).toBe(4);
     expect(processTrigger.props.className).toContain('min-h-10');
 
     act(() => processTrigger.props.onPress());
 
-    const nestedTrigger = renderer!.root.findByProps({ testID: 'nested-tool-trigger' });
+    const nestedTrigger = findPressableByTestId(renderer!, 'nested-tool-trigger');
     expect(nestedTrigger.props.className).toContain('min-h-8');
     expect(nestedTrigger.props.hitSlop).toBe(6);
   });
