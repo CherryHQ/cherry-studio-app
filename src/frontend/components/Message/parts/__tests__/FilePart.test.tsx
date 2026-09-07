@@ -22,9 +22,10 @@ describe('FilePart', () => {
     };
     const renderer = render(<FilePart part={part} />);
 
-    expect(renderer.root.findByType('FileEntryPreview').props.entryId).toBe(
-      '00000000-0000-7000-8000-000000000001',
-    );
+    expect(renderer.root.findByType('FileEntryPreview').props).toMatchObject({
+      entryId: '00000000-0000-7000-8000-000000000001',
+      variant: 'attachment',
+    });
   });
 
   test('does not render unmanaged attachments', () => {
