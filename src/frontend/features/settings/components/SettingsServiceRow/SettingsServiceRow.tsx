@@ -26,6 +26,7 @@ export type SettingsServiceRowProps = {
   statusLabel?: string;
   statusTone?: 'danger' | 'default' | 'success';
   subtitle?: string;
+  testID?: string;
   trailingAction?: ReactNode;
 };
 
@@ -45,6 +46,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   statusLabel,
   statusTone = 'default',
   subtitle,
+  testID,
   trailingAction,
 }: SettingsServiceRowProps) {
   const accessibilityLabel = [name, statusLabel, subtitle].filter(Boolean).join(', ');
@@ -92,6 +94,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           onPressedChange?.(id, false);
         }}
         showChevron={false}
+        testID={testID}
         trailing={
           <View className="flex-row items-center gap-2">
             {statusLabel && statusTone === 'success' ? (

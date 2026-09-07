@@ -131,9 +131,21 @@ describe('turn preparation', () => {
         mediaType: 'text/plain',
         name: 'notes.txt',
         purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
       },
     ]);
     expect(plan.runtimeTextAttachments.get(FILE_ENTRY_ID)).toEqual({
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: false,
+        includedCharacters: expect.any(Number),
+      },
       fileEntryId: FILE_ENTRY_ID,
       type: 'text-attachment',
       mediaType: 'text/plain',

@@ -235,7 +235,7 @@ describe('turn attachments', () => {
     ).toMatchObject({
       view: {
         code: 'CAPABILITY_UNSUPPORTED',
-        message: 'The selected model does not accept image attachments.',
+        attachmentIssue: { code: 'model-unsupported' },
       },
     });
   });

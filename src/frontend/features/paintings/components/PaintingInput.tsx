@@ -28,12 +28,12 @@ import {
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
-  supportsPaintingGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
+import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 import type {
   PaintingGenerationInput,
@@ -102,9 +102,8 @@ export function PaintingInput({
     ? enabledProviders.find((provider) => provider.id === selectedModel.providerId)
     : undefined;
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
-  const imageAttachmentCount =
-    attachments?.filter((attachment) => attachment.kind === 'image').length ?? 0;
-  const requestedMode = imageAttachmentCount > 0 ? 'edit' : 'generate';
+  const attachmentCount = attachments.length;
+  const requestedMode = attachmentCount > 0 ? 'edit' : 'generate';
   const isSelectedModelModeCompatible = supportsPaintingGenerationMode(
     selectedModel,
     requestedMode,
@@ -112,9 +111,9 @@ export function PaintingInput({
   const resolvedMode = useMemo(
     () =>
       isSelectedModelModeCompatible
-        ? resolveImageGenerationMode(selectedModel?.imageGeneration, imageAttachmentCount > 0)
+        ? resolveImageGenerationMode(selectedModel?.imageGeneration, attachmentCount > 0)
         : undefined,
-    [imageAttachmentCount, isSelectedModelModeCompatible, selectedModel?.imageGeneration],
+    [attachmentCount, isSelectedModelModeCompatible, selectedModel?.imageGeneration],
   );
   const generationMode = resolvedMode?.mode ?? requestedMode;
   const paramValues = reconcileImageParamDraft(paramState?.values ?? {}, resolvedMode);
@@ -189,26 +188,13 @@ export function PaintingInput({
       if (!selectedModelId || !selectedModel || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
-      const submittedImageCount = attachments.filter(
-        (attachment) => attachment.kind === 'image',
-      ).length;
-      const requestedSubmittedMode = submittedImageCount > 0 ? 'edit' : 'generate';
-      if (!supportsPaintingGenerationMode(selectedModel, requestedSubmittedMode)) {
-        throw new PaintingInputValidationError('painting.input.incompatibleModel', {});
-      }
+      const submittedAttachmentCount = attachments.length;
+      const requestedSubmittedMode = submittedAttachmentCount > 0 ? 'edit' : 'generate';
       const submittedMode = resolveImageGenerationMode(
         selectedModel?.imageGeneration,
-        submittedImageCount > 0,
+        submittedAttachmentCount > 0,
       );
       const mode = submittedMode?.mode ?? requestedSubmittedMode;
-      if (
-        submittedMode?.definition.maxInputImages !== undefined &&
-        submittedImageCount > submittedMode.definition.maxInputImages
-      ) {
-        throw new PaintingInputValidationError('painting.input.tooManyImages', {
-          count: submittedMode.definition.maxInputImages,
-        });
-      }
       if (submittedMode?.definition.requirePrompt !== false && text.trim().length === 0) {
         throw new Error('Image prompt is required');
       }
@@ -260,14 +246,10 @@ export function PaintingInput({
   return (
     <>
       <ComposerSurface
-        // `isPromptValid` already carries the promptless case, so this is the
-        // whole gate: a model that can run, valid params, nothing in flight.
+        // Submission owns attachment compatibility; the button checks only
+        // model selection, prompt readiness, and in-flight work.
         canSend={
-          Boolean(selectedModelId) &&
-          isSelectedModelAvailable &&
-          isPromptValid &&
-          status === 'idle' &&
-          isSelectedModelModeCompatible
+          Boolean(selectedModelId) && isSelectedModelAvailable && isPromptValid && status === 'idle'
         }
         getSendErrorLabel={getSendErrorLabel}
         labels={{

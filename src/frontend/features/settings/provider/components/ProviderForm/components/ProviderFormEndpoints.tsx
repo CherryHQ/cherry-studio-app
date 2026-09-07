@@ -162,6 +162,7 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
         keyboardType="url"
         onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
         placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+        testID={`provider-endpoint-${endpoint}-input`}
         value={value}
       />
       {requestUrl ? (
@@ -199,6 +200,7 @@ function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType
         keyboardType="url"
         onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
         placeholder={label}
+        testID="provider-base-url-input"
         value={value}
       />
     </TextField>

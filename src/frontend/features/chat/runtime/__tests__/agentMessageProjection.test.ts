@@ -45,6 +45,32 @@ describe('agentMessageProjection', () => {
     ]);
   });
 
+  test('keeps attachment reports keyed by persisted part identity and leaves old reports unknown', () => {
+    const report = {
+      mode: 'document-text' as const,
+      sourceTruncated: true,
+      requestTruncated: false,
+      includedCharacters: 3,
+    };
+    const part = {
+      id: 'input-document',
+      type: 'file' as const,
+      fileEntryId: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'application/pdf',
+      name: 'report.pdf',
+      purpose: 'input-attachment' as const,
+    };
+    const projected = toAgentMessageListItem(
+      message('with-report', { role: 'user', parts: [{ ...part, attachmentReport: report }] }),
+    );
+    expect(projected?.data.attachmentReports).toEqual({ 'input-document': report });
+    expect(projected?.data.partKeys).toEqual(['input-document']);
+    expect(projected?.data.parts?.[0]).not.toHaveProperty('attachmentReport');
+    expect(
+      toAgentMessageListItem(message('old', { role: 'user', parts: [part] }))?.data,
+    ).not.toHaveProperty('attachmentReports');
+  });
+
   test('projects presentation metadata captured for the individual message', () => {
     const modelId = createUniqueModelId('openai', 'gpt-5');
     const item = toAgentMessageListItem(

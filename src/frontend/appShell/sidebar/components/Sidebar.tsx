@@ -55,7 +55,7 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
 
   return (
     <SidebarActionsContext value={actions}>
-      <View className="flex-1">
+      <View className="flex-1" testID="sidebar">
         {children ?? (
           <>
             <SidebarBody />

@@ -182,6 +182,7 @@ function SidebarRecentSessionList({ registerEndReachedHandler }: SidebarRecentsP
           accessibilityRole="button"
           className="w-full active:bg-sidebar-accent"
           onPress={handleViewAllPress}
+          testID="sidebar-sessions-view-all"
         >
           <Text className="px-5 py-2.5 text-muted-foreground text-sm">
             {t('session.list.viewAll')}
@@ -247,6 +248,7 @@ function SidebarAgentRow({ agent }: { agent: Agent }) {
         className="w-full active:bg-sidebar-accent"
         disabled={isResolvingSession}
         onPress={closeDrawer}
+        testID={`sidebar-agent-${agent.id}`}
       >
         <View className="flex-row items-center gap-3 px-5 py-2.5">
           <AgentAvatar
@@ -295,6 +297,7 @@ function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: Sideb
         accessibilityRole="link"
         className="w-full active:bg-sidebar-accent"
         onPress={onCloseDrawer}
+        testID={`sidebar-session-${session.id}`}
       >
         <Text className="px-5 py-2.5 text-base text-sidebar-foreground" numberOfLines={1}>
           {session.title || t('session.list.untitled')}

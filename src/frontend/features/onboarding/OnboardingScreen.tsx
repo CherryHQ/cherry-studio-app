@@ -61,6 +61,7 @@ export function OnboardingScreen() {
     <View
       className="flex-1 bg-background"
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
+      testID="onboarding-welcome"
     >
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
@@ -82,10 +83,22 @@ export function OnboardingScreen() {
         </View>
       </ScrollView>
       <View className="gap-3 px-6 pb-4">
-        <Button disabled={isSkipping} loading={isStarting} onPress={connect} size="lg">
+        <Button
+          disabled={isSkipping}
+          loading={isStarting}
+          onPress={connect}
+          size="lg"
+          testID="onboarding-connect"
+        >
           {t('onboarding.welcome.connect')}
         </Button>
-        <Button disabled={isStarting} loading={isSkipping} onPress={skip} variant="ghost">
+        <Button
+          disabled={isStarting}
+          loading={isSkipping}
+          onPress={skip}
+          testID="onboarding-skip"
+          variant="ghost"
+        >
           {t('onboarding.welcome.skip')}
         </Button>
         <Text className="text-center text-xs text-muted-foreground">

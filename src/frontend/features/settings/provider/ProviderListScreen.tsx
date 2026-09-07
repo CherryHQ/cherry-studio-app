@@ -170,6 +170,7 @@ export default function ProviderListScreen() {
           isEnabled: provider.isEnabled,
           name: provider.name,
           onPress: () => openProvider(provider),
+          testID: `provider-row-${provider.id}`,
         };
       }),
     [isPreparing, listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
@@ -228,6 +229,7 @@ export default function ProviderListScreen() {
         icon: PlusIcon,
         key: 'open-provider-catalog',
         onPress: openProviderCatalog,
+        testID: 'provider-catalog-open',
         type: 'icon',
       },
     ],
@@ -260,6 +262,7 @@ export default function ProviderListScreen() {
                 showsVerticalScrollIndicator={false}
                 stickySectionHeadersEnabled={false}
                 style={styles.list}
+                testID="provider-list"
               />
             </View>
           </View>

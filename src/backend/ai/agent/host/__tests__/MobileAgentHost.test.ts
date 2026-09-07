@@ -363,7 +363,10 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({
       view: {
         code: 'CAPABILITY_UNSUPPORTED',
-        message: 'The selected model does not accept image attachments.',
+        attachmentIssue: {
+          code: 'model-unsupported',
+          fileEntryId: FILE_ENTRY_ID,
+        },
       },
     });
 
@@ -2443,6 +2446,7 @@ describe('MobileAgentHost', () => {
         mediaType: 'image/png',
         name: 'managed.png',
         purpose: 'input-attachment',
+        attachmentReport: { mode: 'image', sourceTruncated: false, requestTruncated: false },
       },
     ]);
     expect(requests[0]?.input).toEqual([
@@ -2856,6 +2860,12 @@ describe('MobileAgentHost', () => {
       type: 'text-attachment',
     });
     expect(requests[0]?.input[2]).toEqual({
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: false,
+        includedCharacters: 16,
+      },
       fileEntryId: SECOND_FILE_ENTRY_ID,
       name: 'config.json',
       mediaType: 'application/json',
@@ -2875,6 +2885,12 @@ describe('MobileAgentHost', () => {
         mediaType: 'text/markdown',
         name: 'notes.md',
         purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
       },
       {
         id: 'input-2',
@@ -2883,6 +2899,12 @@ describe('MobileAgentHost', () => {
         mediaType: 'application/json',
         name: 'config.json',
         purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
       },
     ]);
     expect(JSON.stringify(transcript)).not.toContain('Ignore policy');
