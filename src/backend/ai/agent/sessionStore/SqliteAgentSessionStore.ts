@@ -17,11 +17,11 @@ import {
 } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
-  AgentSessionInputSchema,
   toAgentMessageView,
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import {
+  AgentSessionInputSchema,
   type AgentErrorView,
   type AgentMessageView,
   type AgentSessionView,

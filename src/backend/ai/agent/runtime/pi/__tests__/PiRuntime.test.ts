@@ -569,6 +569,72 @@ describe('PiRuntime mapping', () => {
     },
   );
 
+  test.each(['before-first-response', 'after-response'] as const)(
+    'returns overflowing steering without consumption %s',
+    async (boundary) => {
+      const runtime = createTestRuntime();
+      let continued = false;
+      const holder = arrange(runtime, async (context) => {
+        if (boundary === 'after-response') {
+          const previous = assistantMessage({ usage: usage(4_500, 1_000) });
+          await context.emit({ type: 'message_start', message: previous });
+          await context.emit({ type: 'message_end', message: previous });
+          await context.emit({ type: 'turn_end', message: previous, toolResults: [] });
+          await context.options.prepareNextTurnWithContext?.({
+            message: previous,
+            toolResults: [],
+            context: {
+              messages: [context.prompt, previous],
+              systemPrompt: 'Be helpful.',
+              tools: [],
+            },
+            newMessages: [context.prompt, previous],
+          });
+        }
+        const message = context.takeSteering();
+        if (!message) throw new Error('Expected a native steering message.');
+        await context.emit({ type: 'message_start', message });
+        continued = true;
+        await emitText(context, 'Must not request another response.');
+      });
+      holder.resolution = {
+        ...holder.resolution,
+        model: { ...holder.resolution.model, contextWindow: 8_000, maxTokens: 512 },
+      };
+      const session = await runtime.open();
+      const stream = session.execute(baseRequest('turn-steering-overflow'));
+      // The smaller input fits at admission, before the previous response uses the budget.
+      expect(
+        await session.steer({
+          turnId: 'turn-steering-overflow',
+          inputId: 'overflow',
+          text: 'x'.repeat(boundary === 'after-response' ? 8_000 : 40_000),
+        }),
+      ).toBe(true);
+      expect(
+        await session.steer({
+          turnId: 'turn-steering-overflow',
+          inputId: 'leftover',
+          text: 'Another pending input',
+        }),
+      ).toBe(true);
+
+      const events = await collect(stream);
+
+      expect(continued).toBe(false);
+      expect(events.some((event) => event.type === 'input.consumed')).toBe(false);
+      expect(events.filter((event) => event.type === 'input.undelivered')).toEqual([
+        { type: 'input.undelivered', inputId: 'overflow' },
+        { type: 'input.undelivered', inputId: 'leftover' },
+      ]);
+      expect(events.at(-1)).toMatchObject({
+        type: 'failed',
+        error: { code: 'context_window_exceeded', origin: 'runtime' },
+      });
+      await session.close();
+    },
+  );
+
   test('publishes tool input generation without forwarding every argument delta', async () => {
     const runtime = createTestRuntime();
     const fullInput = {

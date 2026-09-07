@@ -137,6 +137,12 @@ const TOOL_LOOP_CONTEXT_ERROR: RuntimeError = {
   retryable: false,
   origin: 'runtime',
 };
+const STEERING_CONTEXT_ERROR: RuntimeError = {
+  code: 'context_window_exceeded',
+  message: 'The steering input exceeds the remaining model context window.',
+  retryable: false,
+  origin: 'runtime',
+};
 const OUTPUT_LIMIT_ERROR: RuntimeError = {
   code: 'output_token_limit',
   message: 'The response reached its output token limit.',
@@ -966,6 +972,17 @@ class PiRuntimeSession implements AgentRuntimeSession {
         if (event.message.role === 'user') {
           const inputId = turn.pendingSteering.get(event.message);
           if (inputId !== undefined) {
+            turn.abortController.signal.throwIfAborted();
+            // Admission can precede more output/tool results. Check the live budget at
+            // consumption, retaining this id so terminal settlement returns it to the queue.
+            if (estimatePiMessagesTokens([event.message]) > turn.modelContextHeadroomTokens) {
+              const error = new Error(STEERING_CONTEXT_ERROR.message);
+              turn.limitError = STEERING_CONTEXT_ERROR;
+              this.abortExecution(turn, error);
+              this.emit(turn, { type: 'failed', error: STEERING_CONTEXT_ERROR });
+              // Pi awaits this listener before appending the input or calling the provider.
+              throw error;
+            }
             turn.pendingSteering.delete(event.message);
             const consumedAt = Date.now();
             if (turn.hasUsage && turn.usageContext) {

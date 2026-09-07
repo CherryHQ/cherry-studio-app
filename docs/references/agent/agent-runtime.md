@@ -551,6 +551,11 @@ Every accepted id emits exactly one `input.consumed` or `input.undelivered` befo
 segment's output. Usage accumulation and output indexes restart at that boundary, while turn id,
 tool budgets, timeout, and the execution's frozen model/tools remain unchanged.
 
+Before consumption, Pi checks the steering text against the live context headroom, including any
+output and tool results produced after acceptance. Overflow fails with `context_window_exceeded`
+before the input is consumed or another provider request starts; pending inputs return as
+undelivered and the Host pauses the queue for editing or removal.
+
 Pi uses native `Agent.steer` in one-at-a-time mode and correlates the injected user message by
 object identity. At its `message_start`, the async event subscriber waits until the Host consumes
 the boundary and requests the next event. The Host commits the old segment and reserves the new

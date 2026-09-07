@@ -1761,6 +1761,52 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'steered completion');
   });
 
+  test('keeps rejected steering editable in a paused queue after context overflow', async () => {
+    const finish = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      await finish.promise;
+      controller.emit({
+        type: 'failed',
+        error: {
+          code: 'context_window_exceeded',
+          message: 'The steering input exceeds the remaining model context window.',
+          retryable: false,
+        },
+      });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const started = await host.submitMessage({
+      inputId: 'initial',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Start' }],
+    });
+    const parts = [{ type: 'text' as const, text: 'x'.repeat(40_000) }];
+    expect(
+      await host.submitMessage({
+        inputId: 'overflow',
+        sessionId: session.id,
+        mode: 'steer',
+        targetTurnId: started.turnId,
+        parts,
+      }),
+    ).toMatchObject({ disposition: 'redirected' });
+    finish.resolve();
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'context overflow');
+
+    expect(await store.listMessages(session.id)).toHaveLength(2);
+    expect(await store.getInputQueue(session.id)).toMatchObject({
+      isPaused: true,
+      inputs: [{ id: 'overflow', status: 'queued', reason: 'undelivered', parts }],
+    });
+    const editedParts = [{ type: 'text' as const, text: 'A shorter instruction' }];
+    await host.editQueuedInput({ sessionId: session.id, inputId: 'overflow', parts: editedParts });
+    expect((await store.getInput('overflow'))?.parts).toEqual(editedParts);
+    await host._doStop();
+  });
+
   test('Stop then immediate Send waits for the cancelled transcript write before starting again', async () => {
     const firstStarted = createDeferred();
     const writingTerminal = createDeferred();
