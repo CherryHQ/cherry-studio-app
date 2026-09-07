@@ -159,7 +159,10 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
 }
 
 function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
-  if (part.state !== 'output-available' || part.toolRef.source !== 'builtin') {
+  if (
+    (part.state !== 'output-available' && part.state !== 'error') ||
+    part.toolRef.source !== 'builtin'
+  ) {
     return [];
   }
 
@@ -173,7 +176,16 @@ function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): So
     return [];
   }
 
-  const output = webSearchOutputSchema.safeParse(result.data.value);
+  const value = result.data.value;
+  const details =
+    part.state === 'error' && value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? value.details
+      : undefined;
+  const sources =
+    details !== null && typeof details === 'object' && !Array.isArray(details)
+      ? details.results
+      : value;
+  const output = webSearchOutputSchema.safeParse(sources);
   if (!output.success) {
     return [];
   }

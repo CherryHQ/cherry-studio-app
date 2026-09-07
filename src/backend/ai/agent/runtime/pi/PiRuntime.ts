@@ -212,6 +212,7 @@ type ActiveTurn = {
   currentMessageOrdinal?: number;
   dispatchCalls: Map<string, RuntimeJsonValue>;
   failedToolCalls: Set<string>;
+  unavailableTools: Map<string, RuntimeToolResult>;
   hasUsage: boolean;
   limitError?: RuntimeError;
   modelContextHeadroomTokens: number;
@@ -226,6 +227,7 @@ type ActiveTurn = {
   toolCallCount: number;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
   toolParts: Map<string, ToolPartBase>;
+  tools: readonly RuntimeTool[];
   toolStepCount: number;
   turnId: string;
   usage: RuntimeUsage;
@@ -379,7 +381,7 @@ function isRetryableProviderFailure(
   }
   if (RETRYABLE_PROVIDER_ERROR_CODES.has(code.toUpperCase())) return true;
 
-  return /(?:connection (?:failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
+  return /(?:connection (?:error|failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
     message,
   );
 }
@@ -608,6 +610,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       channel,
       dispatchCalls: new Map(),
       failedToolCalls: new Set(),
+      unavailableTools: new Map(),
       hasUsage: false,
       modelContextHeadroomTokens: 0,
       nextMessageOrdinal: 0,
@@ -619,6 +622,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
+      tools: request.tools,
       toolStepCount: 0,
       turnId: request.turnId,
       usage: {
@@ -818,6 +822,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
           updateModelContextHeadroom(context.messages);
           if (toolResults.length > 0 && turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
             turn.limitError = TOOL_LOOP_CONTEXT_ERROR;
+          }
+          if (turn.unavailableTools.size > 0) {
+            return {
+              context: {
+                ...context,
+                tools: context.tools?.filter((tool) => !turn.unavailableTools.has(tool.name)),
+              },
+            };
           }
           return undefined;
         },
@@ -1160,6 +1172,18 @@ class PiRuntimeSession implements AgentRuntimeSession {
       return output;
     }
 
+    const unavailable = turn.unavailableTools.get(runtimeTool.providerName);
+    if (unavailable) {
+      this.replaceToolPart(turn, part, {
+        state: 'error',
+        error: unavailable.failure?.error,
+        output: unavailable,
+      });
+      turn.failedToolCalls.add(toolCallId);
+      turn.settledToolCalls.add(toolCallId);
+      return unavailable;
+    }
+
     if (runtimeTool.approval === 'deny') {
       this.replaceToolPart(turn, part, { state: 'denied', output: DENIED_TOOL_RESULT });
       turn.settledToolCalls.add(toolCallId);
@@ -1239,7 +1263,22 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (turn.phase !== 'running' || callbackSignal.aborted) {
         return this.interruptToolCall(turn, part);
       }
-      this.replaceToolPart(turn, part, { state: 'output-available', output });
+      if (output.failure) {
+        this.replaceToolPart(turn, part, { state: 'error', error: output.failure.error, output });
+        turn.failedToolCalls.add(toolCallId);
+        if (output.failure.scope === 'tool') {
+          turn.unavailableTools.set(runtimeTool.providerName, output);
+          if (runtimeTool.failureGroup) {
+            for (const tool of turn.tools) {
+              if (tool.failureGroup === runtimeTool.failureGroup) {
+                turn.unavailableTools.set(tool.providerName, output);
+              }
+            }
+          }
+        }
+      } else {
+        this.replaceToolPart(turn, part, { state: 'output-available', output });
+      }
       turn.settledToolCalls.add(toolCallId);
       this.emitArtifacts(turn, toolCallId, output);
       return output;

@@ -6,6 +6,7 @@ import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { requestWebSearchJson } from '../requestWebSearchJson';
 
 jest.mock('@/backend/services/http', () => ({
+  ...jest.requireActual('@/backend/services/http'),
   createHttpClient: jest.fn(),
 }));
 jest.mock('@/backend/utils/defaultAppHeaders', () => ({
@@ -23,6 +24,24 @@ beforeEach(() => {
 });
 
 describe('requestWebSearchJson', () => {
+  it('preserves the provider deadline and caller cancellation', async () => {
+    requestMock.mockResolvedValue({ data: { content: 'Page' }, headers: {}, status: 200 });
+    const signal = new AbortController().signal;
+
+    await requestWebSearchJson({
+      method: 'GET',
+      operation: 'reader',
+      providerId: 'jina',
+      responseSchema: z.object({ content: z.string() }),
+      signal,
+      timeoutMs: 60_000,
+      url: 'https://r.jina.ai/https://example.com',
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({ signal, timeoutMs: 60_000 }),
+    );
+  });
   it('binds the origin as the route and moves path and repeated query values into the request', async () => {
     requestMock.mockResolvedValue({ data: { results: [] }, headers: {}, status: 200 });
 
@@ -94,7 +113,10 @@ describe('requestWebSearchJson', () => {
         responseSchema: z.object({ results: z.array(z.unknown()) }),
         url: 'https://api.exa.ai/search',
       }),
-    ).rejects.toThrow('exa search returned invalid JSON');
+    ).rejects.toMatchObject({
+      kind: 'invalid_response',
+      message: 'exa search returned invalid JSON',
+    });
 
     requestMock.mockResolvedValueOnce({ data: { unexpected: true }, headers: {}, status: 200 });
 
@@ -106,6 +128,9 @@ describe('requestWebSearchJson', () => {
         responseSchema: z.object({ results: z.array(z.unknown()) }),
         url: 'https://api.exa.ai/search',
       }),
-    ).rejects.toThrow('exa search response validation failed');
+    ).rejects.toMatchObject({
+      kind: 'invalid_response',
+      message: 'exa search response validation failed',
+    });
   });
 });

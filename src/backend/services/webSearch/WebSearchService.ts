@@ -16,7 +16,7 @@ import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
 import { createWebSearchProvider } from './providers/factory';
 import { getProviderForCapability, getRuntimeConfig } from './utils/config';
-import { isAbortError } from './utils/errors';
+import { toWebSearchFailure } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
 import { ApiKeyRotationState } from './utils/provider';
 import { WebSearchConfigError } from './WebSearchConfigError';
@@ -92,34 +92,21 @@ export class WebSearchService extends BaseService {
     searchResults: PromiseSettledResult<WebSearchResponse>[],
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
-    const abortedSearch = searchResults.find(
-      (item): item is PromiseRejectedResult =>
-        item.status === 'rejected' && isAbortError(item.reason),
+    httpOptions?.signal?.throwIfAborted();
+    const failures = searchResults.flatMap((item, index) =>
+      item.status === 'rejected' ? [toWebSearchFailure(context.inputs[index], item.reason)] : [],
     );
-
-    if (abortedSearch && httpOptions?.signal?.aborted) {
-      throw abortedSearch.reason;
-    }
-
-    searchResults.forEach((item, index) => {
-      if (item.status === 'rejected') {
-        logger.warn('Partial web search input failed', {
-          providerId: context.provider.id,
-          capability: context.capability,
-          input: context.inputs[index],
-          error: item.reason instanceof Error ? item.reason.message : String(item.reason),
-        });
-      }
+    failures.forEach((failure) => {
+      logger.warn('Web search input failed', {
+        providerId: context.provider.id,
+        capability: context.capability,
+        ...failure,
+      });
     });
 
     const successfulSearches = searchResults.filter(
       (item): item is PromiseFulfilledResult<WebSearchResponse> => item.status === 'fulfilled',
     );
-
-    if (successfulSearches.length === 0) {
-      const firstRejected = searchResults.find((item) => item.status === 'rejected');
-      throw firstRejected?.reason ?? new Error('Web search failed with no successful results');
-    }
 
     const mergedResponse: WebSearchResponse = {
       query: context.inputs.join(' | '),
@@ -127,10 +114,11 @@ export class WebSearchService extends BaseService {
       capability: context.capability,
       inputs: context.inputs,
       results: successfulSearches.flatMap((item) => item.value.results),
+      ...(failures.length > 0 ? { failures } : {}),
     };
 
     const postProcessed = await postProcessWebSearchResponse(mergedResponse, context.runtimeConfig);
-
+    httpOptions?.signal?.throwIfAborted();
     return postProcessed.response;
   }
 
@@ -139,6 +127,7 @@ export class WebSearchService extends BaseService {
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
     const context = await this.prepareContext(request);
+    httpOptions?.signal?.throwIfAborted();
     const searchResults = await this.executeCapability(context, httpOptions);
     return this.buildFinalResponse(context, searchResults, httpOptions);
   }

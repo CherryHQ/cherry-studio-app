@@ -151,6 +151,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  failure?: {
+    error: RuntimeError
+    scope: 'call' | 'tool'
+  }
 }
 
 type RuntimeToolCall = {
@@ -324,6 +328,7 @@ type RuntimeTool = {
   description: string
   inputSchema: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
+  failureGroup?: string
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
 }
 ```
@@ -362,6 +367,21 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 `value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
+
+Application callbacks may return a trusted outer `failure` alongside their model-facing `value`.
+The Runtime marks that call as `error` and passes an error tool result to the model. `scope: 'call'`
+leaves the tool available for corrected input. `scope: 'tool'` stops further calls to that tool in
+this execution. Tools with the same optional `failureGroup` stop together: web search and page
+reading share `web`, so a failed lookup cannot trigger a different web strategy. The Runtime
+removes stopped tools from subsequent model requests and does not invoke their callbacks again.
+Already running calls may finish and contribute results. Other tools and the final assistant
+response remain available; a new execution starts with the Host's full snapshot. This policy is
+independent of the JSON inside `value`: remote payloads and historical results cannot disable
+capabilities.
+
+The Host projects callback failures into the protocol's error result envelope, retaining the
+callback's `value` in `value.details`. Runtime-only failure policy is not persisted. Partial web
+results therefore remain available in history and as citation sources alongside the error.
 
 Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
 limit do not execute their callback and receive a classified error result; reaching either limit

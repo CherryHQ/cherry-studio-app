@@ -37,6 +37,8 @@ module.exports = {
     // These patched Pi subpaths intentionally expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
+    '^@earendil-works/pi-agent-core/agent$':
+      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
     '^@earendil-works/pi-agent-core/compaction$':
       '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
     '^@earendil-works/pi-ai/utils/(.*)$':
@@ -62,9 +64,10 @@ module.exports = {
     // `fractional-indexing`, `standard-navigation`, and `uuid` are ESM-only, so
     // they need transforming for any suite that reaches them. `standard-navigation`
     // arrives transitively through Expo Router's public exports.
+    // `typebox` is Pi's ESM-only tool argument validator, exercised by real-loop tests.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|uuid|voyage-ai-provider|@opeoginni|@earendil-works)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|uuid|voyage-ai-provider|@opeoginni|@earendil-works)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };
