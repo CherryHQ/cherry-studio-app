@@ -70,6 +70,7 @@ export const paintingViewer = {
 } as const;
 
 export const appSidebar = {
+  sceneRevealWidth: 64, // chat strip left visible beside the open drawer (as in ChatGPT); tap to close
   fallbackCornerRadius: 55, // surface radius when the device is missing from expo-screen-corner-radius' table
   dockHeight: 48, // floating bottom dock's button height, shared by both buttons
   dockMinInset: 16, // floor for the dock's concentric inset (see SidebarDock)

@@ -88,6 +88,34 @@ describe('WebSearchService', () => {
     });
   });
 
+  test('caps provider page content before returning it even with stored compression disabled', async () => {
+    requestWebSearchJsonMock.mockResolvedValue({
+      data: {
+        title: 'Long article',
+        content: '文'.repeat(5_000),
+        url: 'https://example.com/article',
+      },
+    });
+    const service = new WebSearchService(
+      createPreferenceService({
+        'chat.web_search.default_fetch_urls_provider': 'jina',
+        'chat.web_search.compression.method': 'none',
+      }),
+    );
+
+    const response = await service.fetchUrls({ urls: ['https://example.com/article'] });
+
+    expect(response.results).toEqual([
+      {
+        title: 'Long article',
+        content: '文'.repeat(4_000),
+        url: 'https://example.com/article',
+        sourceInput: 'https://example.com/article',
+        truncated: true,
+      },
+    ]);
+  });
+
   test('reports the fetch provider as unsupported during checks', async () => {
     const service = new WebSearchService(createPreferenceService());
 

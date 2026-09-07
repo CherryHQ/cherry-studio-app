@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
 import Animated, {
@@ -22,6 +22,7 @@ import {
   type ComposerSendPayload,
   ComposerSurface,
   useComposerMeta,
+  useComposerState,
 } from '@/frontend/components/Composer';
 import {
   ModelPickerDrawer,
@@ -53,7 +54,7 @@ const restingInputHeight = 32;
 const restingActionSlotWidth = restingInputHeight + 8;
 const restingSecondaryControlScale = 0.92;
 const activeToolbarGap = 16;
-const focusTransitionMotion = {
+const activeTransitionMotion = {
   duration: duration.base,
   easing: easing.settle,
   reduceMotion: ReduceMotion.System,
@@ -101,22 +102,34 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
     useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
-  const [isInputActive, setIsInputActive] = useState(false);
-  const isInputActiveRef = useRef(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const { attachments, draft } = useComposerState();
+  const isInputActive = isInputFocused || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
   useBlurComposerOnVisibleKeyboardHide(inputRef);
-  const focusProgress = useSharedValue(0);
+  const activeProgress = useSharedValue(isInputActive ? 1 : 0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
+
+  useEffect(() => {
+    activeProgress.set(withTiming(isInputActive ? 1 : 0, activeTransitionMotion));
+    fieldFrameHeight.set(
+      withTiming(
+        isInputActive ? naturalFieldHeight.current : restingInputHeight,
+        activeTransitionMotion,
+      ),
+    );
+  }, [activeProgress, fieldFrameHeight, isInputActive]);
+
   const morphFrameStyle = useAnimatedStyle(() => {
-    const progress = focusProgress.get();
+    const progress = activeProgress.get();
 
     return {
       height: fieldFrameHeight.get() + progress * (activeToolbarGap + restingInputHeight),
     };
   });
   const fieldFrameStyle = useAnimatedStyle(() => {
-    const progress = focusProgress.get();
+    const progress = activeProgress.get();
 
     return {
       height: fieldFrameHeight.get(),
@@ -125,7 +138,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     };
   });
   const controlsRowStyle = useAnimatedStyle(() => {
-    const progress = focusProgress.get();
+    const progress = activeProgress.get();
 
     return {
       transform: [
@@ -139,7 +152,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   // ancestor writes a layer alpha that permanently strips the tools' fill.
   // The closed frame clips these controls after translation instead.
   const secondaryControlRevealStyle = useAnimatedStyle(() => {
-    const progress = focusProgress.get();
+    const progress = activeProgress.get();
 
     return {
       transform: [
@@ -165,28 +178,18 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
       }
 
       naturalFieldHeight.current = nextHeight;
-      if (isInputActiveRef.current) {
+      if (isInputActive) {
         fieldFrameHeight.set(nextHeight);
       }
     },
-    [fieldFrameHeight],
+    [fieldFrameHeight, isInputActive],
   );
   const handleInputBlur = useCallback(() => {
-    if (!isInputActiveRef.current) {
-      return;
-    }
-
-    isInputActiveRef.current = false;
-    setIsInputActive(false);
-    focusProgress.set(withTiming(0, focusTransitionMotion));
-    fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
-  }, [fieldFrameHeight, focusProgress]);
+    setIsInputFocused(false);
+  }, []);
   const handleInputFocus = useCallback(() => {
-    isInputActiveRef.current = true;
-    setIsInputActive(true);
-    focusProgress.set(withTiming(1, focusTransitionMotion));
-    fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
-  }, [fieldFrameHeight, focusProgress]);
+    setIsInputFocused(true);
+  }, []);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setIsModelPickerOpen(false);
@@ -262,7 +265,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                   pointerEvents="box-none"
                   style={controlsRowStyle}
                 >
-                  {/* The primary actions stay reachable before the field is focused. */}
+                  {/* The primary actions stay reachable while the field is empty and unfocused. */}
                   <ComposerMenu />
                   <Animated.View
                     accessibilityElementsHidden={!isInputActive}

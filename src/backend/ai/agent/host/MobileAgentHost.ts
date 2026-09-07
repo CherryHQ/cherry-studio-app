@@ -88,7 +88,10 @@ import type {
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
-import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleStreamingTextParts,
+} from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -184,6 +187,10 @@ type ActiveTurnState = {
   resources: TurnResourceLedger;
   runtimeTiming: MessageRuntimeTimingCollector;
   sessionTurnIds: Set<string>;
+  /** Set by a durable-value event; cleared when a snapshot write picks it up. */
+  snapshotDirty: boolean;
+  /** The single in-flight snapshot writer, or null when none is running. */
+  snapshotFlush: Promise<void> | null;
   usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
 };
@@ -208,6 +215,23 @@ function fail(code: AgentErrorView['code'], message: string, retryable = false):
 /** Boundary clone: enforces JSON-safety and detaches listeners from live state. */
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * True when the event adds value a restart could not regenerate: a tool
+ * result or a file reference. Text and non-terminal tool states ride along in
+ * the next snapshot; `interrupted` parts only ever precede the terminal write.
+ */
+function isDurableValueEvent(event: RuntimeEvent): boolean {
+  if (event.type !== 'part.add' && event.type !== 'part.replace') {
+    return false;
+  }
+  const { part } = event;
+  return (
+    part.type === 'file' ||
+    (part.type === 'tool' &&
+      (part.state === 'output-available' || part.state === 'denied' || part.state === 'error'))
+  );
 }
 
 function createCompletionSignal(): { promise: Promise<void>; resolve: () => void } {
@@ -661,6 +685,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       resources: plan.resources,
       runtimeTiming,
       sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
+      snapshotDirty: false,
+      snapshotFlush: null,
       usage: null,
       runtimeSession,
     };
@@ -725,6 +751,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
+        if (isDurableValueEvent(event)) {
+          this.requestSnapshot(sessionId, state);
+        }
         if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
           if (event.type === 'text.delta') {
             state.backgroundReply.update(state.assistantMessage, { deferPreview: true });
@@ -909,11 +938,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      state.assistantMessage.parts.map((part) =>
-        (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
-          ? { ...part, state: 'done' }
-          : part,
-      ),
+      settleStreamingTextParts(state.assistantMessage.parts),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -922,6 +947,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const messageStatus =
       outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
 
+    // No event follows a terminal one, so nothing can request another snapshot
+    // once this wait ends: the terminal write is the last write to the row.
+    await state.snapshotFlush;
     // Invariant 5: the terminal message state (including the turn-level error)
     // commits before the terminal events publish. The terminal turn view is a
     // projection of that committed message.
@@ -992,6 +1020,45 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       outcome,
       initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
+  }
+
+  /**
+   * Coalesces snapshot writes: the event loop never waits on the store, one
+   * write is in flight at a time, and a burst of durable-value events collapses
+   * into the single write that starts after the in-flight one settles.
+   */
+  private requestSnapshot(sessionId: string, state: ActiveTurnState): void {
+    state.snapshotDirty = true;
+    state.snapshotFlush ??= this.flushSnapshots(sessionId, state);
+  }
+
+  private async flushSnapshots(sessionId: string, state: ActiveTurnState): Promise<void> {
+    try {
+      while (state.snapshotDirty) {
+        state.snapshotDirty = false;
+        await this.persistStreamingMessage(sessionId, state.assistantMessage);
+      }
+    } finally {
+      state.snapshotFlush = null;
+    }
+  }
+
+  private async persistStreamingMessage(
+    sessionId: string,
+    assistantMessage: AgentMessageView,
+  ): Promise<void> {
+    try {
+      await this.store.updateStreamingAssistantMessage({
+        assistantMessageId: assistantMessage.id,
+        parts: assistantMessage.parts,
+      });
+    } catch (error) {
+      logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
+        assistantMessageId: assistantMessage.id,
+        error: error instanceof Error ? error.message : String(error),
+        sessionId,
+      });
+    }
   }
 
   private async persistTerminalState(

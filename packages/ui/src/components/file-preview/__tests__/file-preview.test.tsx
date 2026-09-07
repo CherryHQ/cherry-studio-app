@@ -5,11 +5,8 @@ import { FilePreview } from '../components/file-preview';
 import { FilePreviewPluginProvider } from '../components/file-preview-plugin-provider';
 import type { FilePreviewFile, FilePreviewKind, FilePreviewPlugin } from '../file-preview.types';
 
-const mockOpenFilePreview = jest.fn();
+const onPress = jest.fn();
 
-jest.mock('../utils/open-file/open-file', () => ({
-  openFilePreview: (input: unknown) => mockOpenFilePreview(input),
-}));
 jest.mock('../default-plugins/default-plugins', () => {
   const React = jest.requireActual<typeof import('react')>('react');
   return {
@@ -41,18 +38,17 @@ const compactPdfPlugins: readonly FilePreviewPlugin[] = [
 
 describe('FilePreview', () => {
   beforeEach(() => {
-    mockOpenFilePreview.mockReset();
-    mockOpenFilePreview.mockResolvedValue(undefined);
+    onPress.mockReset();
   });
 
   it('renders the plugin registered for the file kind', () => {
-    const renderer = render(<FilePreview file={file('image')} labels={labels} />);
+    const renderer = render(<FilePreview file={file('image')} labels={labels} onPress={onPress} />);
 
     expect(renderer.root.findAllByType('BuiltInImage')).toHaveLength(1);
   });
 
   it('falls back to the platform renderer for a kind no plugin claims', () => {
-    const renderer = render(<FilePreview file={file('pdf')} labels={labels} />);
+    const renderer = render(<FilePreview file={file('pdf')} labels={labels} onPress={onPress} />);
 
     expect(renderer.root.findAllByType('DefaultFallback')).toHaveLength(1);
   });
@@ -60,7 +56,13 @@ describe('FilePreview', () => {
   it('passes the resolved size and error reporter to the plugin', () => {
     const onError = jest.fn();
     const renderer = render(
-      <FilePreview file={file('pdf')} labels={labels} onError={onError} size={0} />,
+      <FilePreview
+        file={file('pdf')}
+        labels={labels}
+        onPress={onPress}
+        onError={onError}
+        size={0}
+      />,
     );
 
     expect(renderer.root.findByType('DefaultFallback').props).toMatchObject({ onError, size: 1 });
@@ -69,9 +71,9 @@ describe('FilePreview', () => {
   it('lets a provider claim a kind and inherit the rest', () => {
     const renderer = render(
       <FilePreviewPluginProvider plugins={pdfPlugins}>
-        <FilePreview file={file('pdf')} labels={labels} />
-        <FilePreview file={file('image')} labels={labels} />
-        <FilePreview file={file('text')} labels={labels} />
+        <FilePreview file={file('pdf')} labels={labels} onPress={onPress} />
+        <FilePreview file={file('image')} labels={labels} onPress={onPress} />
+        <FilePreview file={file('text')} labels={labels} onPress={onPress} />
       </FilePreviewPluginProvider>,
     );
 
@@ -84,7 +86,7 @@ describe('FilePreview', () => {
     const renderer = render(
       <FilePreviewPluginProvider plugins={pdfPlugins}>
         <FilePreviewPluginProvider plugins={compactPdfPlugins}>
-          <FilePreview file={file('pdf')} labels={labels} />
+          <FilePreview file={file('pdf')} labels={labels} onPress={onPress} />
         </FilePreviewPluginProvider>
       </FilePreviewPluginProvider>,
     );
@@ -93,23 +95,21 @@ describe('FilePreview', () => {
     expect(renderer.root.findAllByType('PdfPreview')).toHaveLength(0);
   });
 
-  it('opens the file through the platform module and reports failures', async () => {
-    const error = new Error('open failed');
-    const onError = jest.fn();
-    mockOpenFilePreview.mockRejectedValue(error);
-    const renderer = render(<FilePreview file={file('pdf')} labels={labels} onError={onError} />);
+  it('delegates a valid press to the caller', () => {
+    const renderer = render(<FilePreview file={file('pdf')} labels={labels} onPress={onPress} />);
 
-    await act(async () => renderer.root.findByType('FilePreviewFrame').props.onPress());
+    act(() => renderer.root.findByType('FilePreviewFrame').props.onPress());
 
-    expect(mockOpenFilePreview).toHaveBeenCalledWith({ file: file('pdf'), labels });
-    expect(onError).toHaveBeenCalledWith(error, 'open');
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('disables the frame when no file resolved', () => {
-    const renderer = render(<FilePreview labels={labels} />);
+    const renderer = render(<FilePreview labels={labels} onPress={onPress} />);
 
     expect(renderer.root.findAllByType('FilePreviewUnavailable')).toHaveLength(1);
     expect(renderer.root.findByType('FilePreviewFrame').props.disabled).toBe(true);
+    act(() => renderer.root.findByType('FilePreviewFrame').props.onPress());
+    expect(onPress).not.toHaveBeenCalled();
   });
 });
 

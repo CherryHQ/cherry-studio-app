@@ -3,11 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { FileAttachmentPreview } from '../components/file-attachment-preview';
 import type { FilePreviewFile } from '../file-preview.types';
 
-const mockOpenFilePreview = jest.fn();
-
-jest.mock('../utils/open-file/open-file', () => ({
-  openFilePreview: (input: unknown) => mockOpenFilePreview(input),
-}));
+const onPress = jest.fn();
 
 const file: FilePreviewFile = {
   displayName: 'release-notes.md',
@@ -21,45 +17,48 @@ const labels = { openWith: 'Open with', unavailable: 'Unavailable' };
 
 describe('FileAttachmentPreview', () => {
   beforeEach(() => {
-    mockOpenFilePreview.mockReset();
-    mockOpenFilePreview.mockResolvedValue(undefined);
+    onPress.mockReset();
   });
 
   it('shows the filename stem and document metadata', () => {
     const renderer = render(
-      <FileAttachmentPreview categoryLabel="Document" file={file} labels={labels} />,
+      <FileAttachmentPreview
+        categoryLabel="Document"
+        file={file}
+        labels={labels}
+        onPress={onPress}
+      />,
     );
     const text = renderer.root.findAllByType('Text').flatMap((node) => node.props.children);
 
     expect(text).toEqual(['release-notes', 'Document · MD']);
   });
 
-  it('opens the original file and reports failures', async () => {
-    const error = new Error('open failed');
-    const onError = jest.fn();
-    mockOpenFilePreview.mockRejectedValue(error);
+  it('delegates a valid press to the caller', () => {
     const renderer = render(
       <FileAttachmentPreview
         categoryLabel="Document"
         file={file}
         labels={labels}
-        onError={onError}
+        onPress={onPress}
       />,
     );
-
     const pressable = renderer.root.findByProps({ accessibilityRole: 'button' });
-    await act(async () => pressable.props.onPress());
+    act(() => pressable.props.onPress());
 
-    expect(mockOpenFilePreview).toHaveBeenCalledWith({ file, labels });
-    expect(onError).toHaveBeenCalledWith(error, 'open');
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('renders a disabled unavailable state without opening', () => {
-    const renderer = render(<FileAttachmentPreview categoryLabel="Document" labels={labels} />);
+    const renderer = render(
+      <FileAttachmentPreview categoryLabel="Document" labels={labels} onPress={onPress} />,
+    );
     const pressable = renderer.root.findByProps({ accessibilityRole: 'button' });
 
     expect(pressable.props.disabled).toBe(true);
     expect(pressable.props.accessibilityLabel).toBe('Unavailable');
+    act(() => pressable.props.onPress());
+    expect(onPress).not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,7 @@ export type ToolMessagePart = Extract<
 
 const WEB_SEARCH_TOOL_NAMES = new Set([
   'web_search',
+  'web_fetch',
   'builtin_web_search',
   'builtin_web_search_preview',
 ]);
@@ -49,7 +50,11 @@ export function isWebSearchToolPart(part: ToolMessagePart) {
 
 /** A provider-executed web search; its renderer suppresses it entirely. */
 export function isProviderWebSearchToolPart(part: ToolMessagePart) {
-  return isWebSearchToolPart(part) && getCherryToolType(part) === 'provider';
+  return (
+    getToolName(part) !== 'web_fetch' &&
+    isWebSearchToolPart(part) &&
+    getCherryToolType(part) === 'provider'
+  );
 }
 
 function getCherryToolType(part: ToolMessagePart) {

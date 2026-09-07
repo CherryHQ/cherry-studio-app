@@ -7,7 +7,7 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 
-/** Assistant-produced files shown as full-width result cards below the answer. */
+/** Assistant deliverables: images themselves, and file rows for other kinds. */
 export function GeneratedFileStrip({ parts }: { parts: readonly MessageFilePart[] }) {
   return (
     <View className="w-full gap-2">

@@ -31,6 +31,7 @@ jest.mock('../WriteFileToolPart', () => ({
 describe('ToolPartRenderer', () => {
   it.each([
     ['web_search', 'WebSearchToolPart'],
+    ['web_fetch', 'WebSearchToolPart'],
     ['meta', 'MetaToolPartRenderer'],
     ['mcp', 'McpToolPart'],
     ['edit_file', 'EditFileToolPart'],

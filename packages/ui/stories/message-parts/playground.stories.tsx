@@ -9,6 +9,7 @@ import { MessagePartStoryFrame } from './story-frame';
 const onLinkPress = fn();
 const onSourcePress = fn();
 const onFileError = fn();
+const onFilePress = fn();
 
 const fileLabels = {
   openWith: 'Open with',
@@ -148,6 +149,7 @@ export const AllStates: Story = {
                 <FilePreview
                   file={imageFile}
                   labels={fileLabels}
+                  onPress={onFilePress}
                   onError={onFileError}
                   size={104}
                 />
@@ -156,12 +158,13 @@ export const AllStates: Story = {
                 <FilePreview
                   file={documentFile}
                   labels={fileLabels}
+                  onPress={onFilePress}
                   onError={onFileError}
                   size={104}
                 />
               </StoryExample>
               <StoryExample title="Unavailable">
-                <FilePreview labels={fileLabels} size={104} />
+                <FilePreview labels={fileLabels} onPress={onFilePress} size={104} />
               </StoryExample>
             </View>
           </StoryGroup>
