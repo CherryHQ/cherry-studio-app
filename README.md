@@ -52,8 +52,10 @@ The base IDs remain `com.cherry-ai.cherry-studio-app` (iOS) and
 variant. Each variant has independent app data; existing installations retain the original identity
 and their data is not automatically migrated to the new development or preview app.
 
-The `dev`, `start`, Storybook, `ios`, and `android` scripts select `PROFILE=development`. Direct Expo
-commands must set the intended `PROFILE` explicitly. When switching variants with existing generated
+The `dev`, `start`, Storybook, `ios`, and `android` scripts select `PROFILE=development`. The `prebuild`
+script also defaults to development, while preserving an explicitly set `PROFILE` (for example,
+`PROFILE=preview pnpm prebuild --clean`). For preview or production, use direct Expo commands with the
+same explicit `PROFILE` when building or starting Metro. When switching variants with existing generated
 `ios` or `android` directories, regenerate them with `PROFILE=<profile> pnpm exec expo prebuild --clean`
 before building; this replaces generated native projects, including any manual native edits.
 

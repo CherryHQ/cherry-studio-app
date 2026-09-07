@@ -17,7 +17,7 @@
     "android": "pnpm packages:build && PROFILE=development expo run:android",
     "ios": "pnpm packages:build && PROFILE=development expo run:ios",
     "ios:dev": "pnpm packages:build && PROFILE=development expo run:ios",
-    "prebuild": "expo prebuild",
+    "prebuild": "PROFILE=\"${PROFILE-development}\" expo prebuild",
     "db:generate": "drizzle-kit generate",
     "ui:icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts",
     "ui:icons:generate:webp": "tsx packages/ui/src/scripts/generate-icons.ts",
