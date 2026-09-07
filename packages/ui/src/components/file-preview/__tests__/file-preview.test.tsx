@@ -7,6 +7,14 @@ import type { FilePreviewFile, FilePreviewKind, FilePreviewPlugin } from '../fil
 
 const onPress = jest.fn();
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 jest.mock('../default-plugins/default-plugins', () => {
   const React = jest.requireActual<typeof import('react')>('react');
   return {

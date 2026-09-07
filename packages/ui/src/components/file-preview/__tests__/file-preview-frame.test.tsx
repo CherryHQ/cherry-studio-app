@@ -2,6 +2,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FilePreviewFrame } from '../components/file-preview-frame';
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 describe('FilePreviewFrame', () => {
   it('clips previews to continuous rounded corners', () => {
     let renderer: ReactTestRenderer | undefined;
