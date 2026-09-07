@@ -10,7 +10,8 @@ import { appSidebar } from '@/frontend/utils/constants';
  * `inset` makes the dock's corners concentric with the display's: a rounded
  * rect nested in another only looks right when the two share a center, which
  * means the gap has to equal the difference of their radii. Anything less and
- * the pill's corner visibly tightens against the screen's.
+ * the pill's corner visibly tightens against the screen's. The drawer's right
+ * edge is straight, so there the same inset is plain symmetry.
  */
 export function useDockMetrics() {
   const insets = useSafeAreaInsets();
