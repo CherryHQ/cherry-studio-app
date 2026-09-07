@@ -1,3 +1,4 @@
+import { DocumentTextError } from '@/backend/services/file/documentText';
 import {
   AgentProtocolError,
   type AgentInputPart,
@@ -36,6 +37,69 @@ const TEXT_MODEL: RuntimeModelPreflight = {
 };
 
 describe('turn attachments', () => {
+  test.each([
+    ['report.pdf', 'application/pdf'],
+    ['report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['report.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    ['report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ])(
+    'admits %s to a text-only model and materializes extracted content',
+    async (name, mediaType) => {
+      const document = fact(FIRST_ID, name, mediaType);
+      const facts = new Map([[FIRST_ID, document]]);
+      const resources = createTurnResourceLedger(facts, []);
+      const input: AgentInputPart[] = [{ type: 'file', fileEntryId: FIRST_ID, name, mediaType }];
+      const files = resolver(facts, {
+        readDocumentText: async () => ({ text: 'Document content', truncated: false }),
+      });
+      assertAttachmentRequestSupported(new FakeRuntime(), input, [], resources, TEXT_MODEL);
+      const textAttachments = await resolveRuntimeTextAttachments(
+        files,
+        input,
+        [],
+        resources,
+        new AbortController().signal,
+      );
+      const attachments = await materializeRuntimeAttachments({
+        files,
+        history: [],
+        inputParts: input,
+        modelPreflight: TEXT_MODEL,
+        resources,
+        signal: new AbortController().signal,
+        textAttachments,
+      });
+      expect(attachments.get(FIRST_ID)).toMatchObject({
+        type: 'text-attachment',
+        fileEntryId: FIRST_ID,
+        name,
+        mediaType,
+        text: 'Document content',
+        truncated: false,
+        trust: 'untrusted-user-content',
+      });
+      expect(files.readAsDataUrl).not.toHaveBeenCalled();
+      expect(files.readAsBytes).not.toHaveBeenCalled();
+    },
+  );
+
+  test('gives image-only documents a distinct user-facing rejection', async () => {
+    const document = fact(FIRST_ID, 'scan.pdf', 'application/pdf');
+    const facts = new Map([[FIRST_ID, document]]);
+    await expect(
+      resolveRuntimeTextAttachments(
+        resolver(facts, {
+          readDocumentText: async () => {
+            throw new DocumentTextError('empty');
+          },
+        }),
+        [{ type: 'file', fileEntryId: FIRST_ID, mediaType: document.mediaType }],
+        [],
+        createTurnResourceLedger(facts, []),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'ATTACHMENT_NO_TEXT' } });
+  });
   test('resolves current and historical managed facts while canonicalizing current input', async () => {
     const current = fact(FIRST_ID, 'managed.png', 'image/png');
     const historical = fact(SECOND_ID, 'history.txt', 'text/plain');
@@ -129,7 +193,7 @@ describe('turn attachments', () => {
       ),
     ).toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
 
-    const unsupported = fact(SECOND_ID, 'report.pdf', 'application/pdf');
+    const unsupported = fact(SECOND_ID, 'archive.zip', 'application/zip');
     const unsupportedResources = createTurnResourceLedger(new Map([[SECOND_ID, unsupported]]), []);
     expect(
       captureProtocolError(() =>
@@ -271,7 +335,9 @@ function messageWithFile(file: ManagedFileFact): AgentMessageView {
 
 function resolver(
   facts: ReadonlyMap<string, ManagedFileFact>,
-  overrides: Partial<Pick<ManagedFileResolver, 'readAsBytes' | 'readAsDataUrl'>> = {},
+  overrides: Partial<
+    Pick<ManagedFileResolver, 'readAsBytes' | 'readAsDataUrl' | 'readDocumentText'>
+  > = {},
 ): ManagedFileResolver {
   return {
     resolveAvailable: jest.fn(
@@ -279,6 +345,7 @@ function resolver(
         new Map([...facts].filter(([fileEntryId]) => fileEntryIds.includes(fileEntryId))),
     ),
     readAsBytes: jest.fn(overrides.readAsBytes ?? (async () => undefined)),
+    readDocumentText: jest.fn(overrides.readDocumentText ?? (async () => undefined)),
     readAsDataUrl: jest.fn(overrides.readAsDataUrl ?? (async () => undefined)),
   };
 }

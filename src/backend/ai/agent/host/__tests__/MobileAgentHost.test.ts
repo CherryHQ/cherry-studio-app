@@ -107,6 +107,7 @@ const inferenceModel = async (model: { providerId: string; modelId: string }) =>
 const noFiles: ManagedFileResolver = {
   resolveAvailable: jest.fn(async () => new Map()),
   readAsBytes: jest.fn(async () => undefined),
+  readDocumentText: jest.fn(async () => undefined),
   readAsDataUrl: jest.fn(async () => undefined),
 };
 
@@ -346,6 +347,7 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(runtime, noOpNaming, {
       readAsBytes: jest.fn(async () => undefined),
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
       resolveAvailable: jest.fn(async () => new Map([[FILE_ENTRY_ID, imageFact]])),
     });
@@ -1976,6 +1978,7 @@ describe('MobileAgentHost', () => {
     const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
     const host = createHost(fake, noOpNaming, {
       readAsBytes: jest.fn(async () => undefined),
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl,
       resolveAvailable,
     });
@@ -2057,6 +2060,7 @@ describe('MobileAgentHost', () => {
     };
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
@@ -2196,6 +2200,7 @@ describe('MobileAgentHost', () => {
     const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl,
       resolveAvailable: async (ids) =>
         new Map([...facts].filter(([fileEntryId]) => ids.includes(fileEntryId))),
@@ -2260,6 +2265,7 @@ describe('MobileAgentHost', () => {
     };
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
@@ -2298,6 +2304,7 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(runtime, noOpNaming, {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async (_file, signal) => {
         readSignal = signal;
         return read;
@@ -2360,6 +2367,7 @@ describe('MobileAgentHost', () => {
     );
     const host = createHost(runtime, noOpNaming, {
       readAsBytes,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => undefined,
       resolveAvailable,
     });
@@ -2440,8 +2448,8 @@ describe('MobileAgentHost', () => {
     const readAsBytes = jest.fn(async () => Uint8Array.from([65, 0, 66]));
     const unsupportedFact = {
       fileEntryId: FILE_ENTRY_ID,
-      mediaType: 'application/pdf',
-      name: 'report.pdf',
+      mediaType: 'application/zip',
+      name: 'archive.zip',
       size: 3,
     };
     const unsupportedHost = createHost(
@@ -2449,6 +2457,7 @@ describe('MobileAgentHost', () => {
       noOpNaming,
       {
         readAsBytes,
+        readDocumentText: jest.fn(async () => undefined),
         readAsDataUrl: async () => undefined,
         resolveAvailable: async () => new Map([[FILE_ENTRY_ID, unsupportedFact]]),
       },
@@ -2462,13 +2471,13 @@ describe('MobileAgentHost', () => {
           {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
-            mediaType: 'application/pdf',
-            name: 'report.pdf',
+            mediaType: 'application/zip',
+            name: 'archive.zip',
           },
         ],
       }),
     ).rejects.toMatchObject({
-      view: { code: 'ATTACHMENT_INVALID', message: expect.stringContaining('report.pdf') },
+      view: { code: 'ATTACHMENT_INVALID', message: expect.stringContaining('archive.zip') },
     });
     expect(readAsBytes).not.toHaveBeenCalled();
     expect(await store.listMessages(unsupportedSession.id)).toEqual([]);
@@ -2476,6 +2485,7 @@ describe('MobileAgentHost', () => {
     const textFact = { ...unsupportedFact, mediaType: 'text/plain', name: 'spoofed.txt' };
     const binaryHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
       readAsBytes,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => undefined,
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, textFact]]),
     });
@@ -2515,6 +2525,7 @@ describe('MobileAgentHost', () => {
     ]);
     const availableHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => facts,
     });

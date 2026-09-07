@@ -250,6 +250,7 @@ function createHarness() {
   const files: ManagedFileResolver = {
     resolveAvailable,
     readAsBytes,
+    readDocumentText: jest.fn(async () => undefined),
     readAsDataUrl: jest.fn(async () => undefined),
   };
   const systemTool = tool('system_tool', 'ask');

@@ -3,6 +3,7 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
+import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import {
   AI_IMAGE_INPUT_MAX_COUNT,
   imageMediaTypeFromExtension,
@@ -138,7 +139,7 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAt
 export function createDocumentAttachmentDraft(
   asset: DocumentPickerAsset,
 ): ComposerAttachmentSource {
-  const mediaType = asset.mimeType ?? fallbackFileMediaType;
+  const mediaType = resolveDocumentImportMediaType(asset.name, asset.mimeType);
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
   const extension = asset.name.trim().split('.').pop()?.toLowerCase();
   const resolvedMediaType =
