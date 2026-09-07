@@ -46,6 +46,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             opacity: pressed ? 0.6 : 1,
             paddingHorizontal: 16,
           })}
+          testID="sidebar-new-chat"
         >
           <NewConversationIcon color={primaryForegroundColor} size={18} />
           <Text className="font-medium text-[15px] text-sidebar-primary-foreground">
@@ -67,6 +68,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             opacity: pressed ? 0.6 : 1,
             paddingHorizontal: 10,
           })}
+          testID="sidebar-settings"
         >
           <ProfileAvatarImage
             accessibilityLabel={displayName || t('settings.profile.avatar')}

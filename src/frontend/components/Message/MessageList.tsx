@@ -134,7 +134,7 @@ export function MessageList({
 
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
-      <View className="flex-1">
+      <View className="flex-1" testID="chat-message-list">
         <ContextMenuScrollBoundary
           onMomentumScrollBegin={handleMomentumScrollBegin}
           onMomentumScrollEnd={handleMomentumScrollEnd}

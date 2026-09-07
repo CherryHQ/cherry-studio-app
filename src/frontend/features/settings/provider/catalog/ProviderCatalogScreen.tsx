@@ -75,6 +75,7 @@ function ProviderCatalogRow({
       statusLabel={entry.isInstalled ? t('settings.provider.catalog.installed') : undefined}
       statusTone="success"
       subtitle={onChoose ? entry.description : entry.id}
+      testID={`provider-catalog-entry-${entry.id}`}
       trailingAction={
         onChoose ? (
           isPendingEntry ? (
@@ -110,8 +111,9 @@ function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
       id={CUSTOM_PROVIDER_ITEM_ID}
       name={name}
       subtitle={t('settings.provider.catalog.customDescription')}
+      testID="provider-catalog-entry-custom"
       trailingAction={
-        <Button onPress={onCreate} size="xs" variant="secondary">
+        <Button onPress={onCreate} size="xs" testID="provider-catalog-custom" variant="secondary">
           {t('settings.provider.catalog.create')}
         </Button>
       }
@@ -331,6 +333,7 @@ export default function ProviderCatalogScreen({
           name={item.name}
           onPress={() => openProviderSetup(item)}
           subtitle={t('onboarding.provider.continue')}
+          testID={`provider-catalog-entry-${item.id}`}
         />
       ) : (
         <ProviderCatalogRow
@@ -372,7 +375,10 @@ export default function ProviderCatalogScreen({
           <Text className="text-base text-foreground">{t('onboarding.provider.description')}</Text>
         </View>
       ) : null}
-      <View className="min-h-0 flex-1 gap-3 px-4 pb-5">
+      <View
+        className="min-h-0 flex-1 gap-3 px-4 pb-5"
+        testID={intent === 'chat' ? 'onboarding-provider' : 'provider-catalog'}
+      >
         {intent !== 'chat' && registryUpdateQuery.data?.status === 'available' ? (
           <ProviderRegistryUpdateNotice
             isUpdating={applyRegistryUpdateMutation.isPending}
@@ -408,11 +414,20 @@ export default function ProviderCatalogScreen({
                 intent === 'chat' ? (
                   <View className="gap-3 px-4 py-5">
                     {!query && !showsAllProviders ? (
-                      <Button variant="ghost" onPress={() => setShowsAllProviders(true)}>
+                      <Button
+                        onPress={() => setShowsAllProviders(true)}
+                        testID="onboarding-provider-show-all"
+                        variant="ghost"
+                      >
                         {t('onboarding.provider.showAll')}
                       </Button>
                     ) : null}
-                    <Button disabled={importPending} onPress={openCustomProvider} variant="outline">
+                    <Button
+                      disabled={importPending}
+                      onPress={openCustomProvider}
+                      testID="onboarding-provider-custom"
+                      variant="outline"
+                    >
                       {t('settings.provider.catalog.custom')}
                     </Button>
                   </View>
@@ -426,6 +441,7 @@ export default function ProviderCatalogScreen({
               showsVerticalScrollIndicator={false}
               stickySectionHeadersEnabled={false}
               style={styles.list}
+              testID={intent === 'chat' ? 'onboarding-provider-list' : 'provider-catalog-list'}
             />
           </View>
         )}
