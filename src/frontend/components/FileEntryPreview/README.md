@@ -20,6 +20,12 @@ logging, and the single opening policy shared by the composer, messages, and fil
 Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
 The image thumbnail query uses the same resolved-entry shape and query key as the file library.
 
+The adapters forward CherryUI's `variant`: the composer uses `attachment` (icon above the file
+title), and the library uses `card` (title above the icon). Images keep their thumbnails. Both
+variants share the file icon/color presets in CherryUI, while the default `thumbnail` retains
+plugin and platform preview rendering. `LoadedFileEntryPreview` also forwards a caller-owned
+`badge`, used for the library's generated-file provenance without reserving empty metadata rows.
+
 ## Renderer Boundary
 
 CherryUI requires `onPress` and owns the frame, press target, unavailable state, plugin registry,
@@ -31,8 +37,10 @@ Product-specific parsing or backend calls remain in this adapter family. Add a n
 only with explicit card and opening behavior; the CherryUI plugin vocabulary itself stays open.
 Do not infer a second classification from filenames at individual surfaces.
 
-Cards keep the current platform fallback for text and unsupported documents. Text excerpts are a
-separate follow-up; this implementation prioritizes opening and using the file.
+The default `thumbnail` variant keeps the platform fallback for text and unsupported documents.
+The composer's `attachment` and library's `card` variants use the shared file icon/title layout.
+Extension-based icon routing changes artwork only; it never changes product classification or
+opening. Text excerpts remain a separate follow-up.
 
 The viewer and export behavior are documented in
 [File Preview And Viewer](../../../../docs/references/file-preview-and-viewer.md).

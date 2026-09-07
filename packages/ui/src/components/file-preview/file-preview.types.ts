@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 /**
  * The kinds CherryUI classifies for callers that want a shared vocabulary. Only
@@ -15,6 +15,9 @@ export type BuiltInFilePreviewKind = 'document' | 'image' | 'pdf' | 'text';
 export type FilePreviewKind = BuiltInFilePreviewKind | (string & {});
 
 export type FilePreviewOperation = 'open' | 'thumbnail';
+
+/** Native/content thumbnail, compact attachment, or title-first library card. */
+export type FilePreviewVariant = 'thumbnail' | 'attachment' | 'card';
 
 export type FilePreviewFile = {
   displayName: string;
@@ -50,13 +53,15 @@ export type FilePreviewPlugin = {
 };
 
 export type FilePreviewProps = {
+  badge?: ReactNode;
   file?: FilePreviewFile | null;
   labels: FilePreviewLabels;
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   onPress: () => void;
   size?: number;
+  variant?: FilePreviewVariant;
 };
 
-export type FileAttachmentPreviewProps = Omit<FilePreviewProps, 'size'> & {
+export type FileAttachmentPreviewProps = Omit<FilePreviewProps, 'badge' | 'size' | 'variant'> & {
   categoryLabel: string;
 };

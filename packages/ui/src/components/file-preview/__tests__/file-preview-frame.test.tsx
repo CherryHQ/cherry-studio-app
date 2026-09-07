@@ -16,9 +16,9 @@ describe('FilePreviewFrame', () => {
 
     expect(renderer?.toJSON()).toMatchObject({
       props: {
+        className: expect.stringContaining('rounded-2xl'),
         style: {
           borderCurve: 'continuous',
-          borderRadius: 16,
           height: 112,
           overflow: 'hidden',
           width: 112,

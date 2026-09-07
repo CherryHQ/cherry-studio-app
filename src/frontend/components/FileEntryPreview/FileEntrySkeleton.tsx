@@ -1,14 +1,20 @@
-import { Skeleton } from '@cherrystudio/ui/components';
+import { type FilePreviewVariant, Skeleton } from '@cherrystudio/ui/components';
 
 const defaultSize = 112;
 
-export function FileEntrySkeleton({ size = defaultSize }: { size?: number }) {
+export function FileEntrySkeleton({
+  size = defaultSize,
+  variant = 'thumbnail',
+}: {
+  size?: number;
+  variant?: FilePreviewVariant;
+}) {
   const resolvedSize = Math.max(1, size);
 
   return (
     <Skeleton
+      className={variant === 'card' ? 'rounded-4xl' : 'rounded-2xl'}
       style={{
-        borderRadius: 16,
         height: resolvedSize,
         width: resolvedSize,
       }}

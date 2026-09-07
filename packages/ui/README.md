@@ -75,6 +75,19 @@ logging, or translation dependency.
 callback while showing a filename and caller-supplied category label; square
 thumbnail callers continue to use `FilePreview`.
 
+`FilePreview` has three explicit visual variants. The default `thumbnail` uses the plugin and
+platform rendering described above. `attachment` puts a file-type icon above a multiline filename
+on a compact neutral tile; `card` puts the filename first and the icon at the bottom on a roomier
+surface. Both card variants retain image thumbnails and caller-controlled opening. An
+optional `badge` slot sits beside the document icon or over an image; callers own its meaning and
+localized content. The complete filename remains the accessible label when its extension is
+omitted from the visible title.
+
+`file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
+colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
+file-specific adapters in `@cherrystudio/app-icons` retain the desktop Lucide 0.525.0 vector paths
+where the current native Lucide version has renamed or redrawn them. They need no raster assets.
+
 `MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
 native renderer. A part that has streamed keeps the streaming renderer for its full mounted
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
