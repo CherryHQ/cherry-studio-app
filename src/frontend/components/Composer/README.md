@@ -47,7 +47,10 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
-  appended below a separator.
+  appended below a separator. `onPickFiles` can replace the files destination;
+  the menu still settles input dismissal before calling it.
+- `useComposerDocumentPicker` — opens the system document picker through the
+  shared input-replacement action and stages the chosen files as library uploads.
 - `ComposerModelPill` — the model button. Its `icon` is a composed `ModelPickerIcon`, and
   `children` trail the label inside the pill.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
@@ -81,9 +84,9 @@ walk to verify it.
 - `components/ComposerSurface.tsx`: the root and the send protocol.
 - `components/ComposerField.tsx`, `components/ComposerAttachments.tsx`,
   `components/ComposerModelPill.tsx`: the parts.
-- `components/ComposerMenu.tsx`: the ＋ menu. Camera, photos and files hand off
-  to the system pickers (`expo-image-picker`, `expo-document-picker`) rather
-  than drawing anything in-app.
+- `components/ComposerMenu.tsx`: the ＋ menu. Camera and photos hand off to
+  `expo-image-picker`. Files use the caller's destination when supplied and
+  otherwise open the system document picker.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
   shows import progress, then delegates ready files to `FileEntryPreview`.
 - `components/ComposerSessionProvider.tsx` and
@@ -93,7 +96,10 @@ walk to verify it.
   removing them detaches them without deleting their source file. A successful
   send transfers a newly imported entry out of temporary Composer ownership;
   failed-send restoration restores that ownership with the draft. Unmounting a
-  composer deletes any newly imported entries it still owns.
+  composer deletes any newly imported entries it still owns. A source marked
+  `ownership: 'library'` — every document upload — is borrowed as soon as its
+  import lands: removing it later or unmounting leaves the library file in
+  place, and only removing its tile mid-import cancels the upload.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.

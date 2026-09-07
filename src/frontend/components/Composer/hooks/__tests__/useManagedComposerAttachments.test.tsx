@@ -168,6 +168,66 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000021');
   });
 
+  it('keeps a library upload when the user removes it after it lands', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000031', 'upload.pdf'),
+    );
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([librarySource('upload.pdf')]));
+    await act(flushPromises);
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000031',
+        status: 'ready',
+      }),
+    ]);
+
+    await act(async () => snapshot?.removeAttachment('source:upload.pdf'));
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('keeps a library upload when its Draft unmounts, even mid-upload', async () => {
+    const pending = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockImplementation(({ name }: { name: string }) =>
+      name === 'landed.pdf'
+        ? Promise.resolve(resolvedFile('00000000-0000-7000-8000-000000000032', name))
+        : pending.promise,
+    );
+    await renderHook();
+
+    await act(async () =>
+      snapshot?.addAttachments([librarySource('landed.pdf'), librarySource('in-flight.pdf')]),
+    );
+    await act(flushPromises);
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => {
+      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000033', 'in-flight.pdf'));
+      await pending.promise;
+    });
+
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
+  });
+
+  it('cancels a library upload when its tile is removed before it lands', async () => {
+    const pending = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockReturnValue(pending.promise);
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([librarySource('cancelled.pdf')]));
+    await act(async () => snapshot?.removeAttachment('source:cancelled.pdf'));
+    await act(async () => {
+      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000034', 'cancelled.pdf'));
+      await pending.promise;
+    });
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000034');
+  });
+
   it('hands attachments to the sender without deleting them when cleared', async () => {
     const ready = readyAttachment('00000000-0000-7000-8000-000000000014', 'sent.pdf');
     await renderHook([ready]);
@@ -310,6 +370,10 @@ function source(name: string): ComposerAttachmentSource {
     name,
     uri: `file:///source/${name}`,
   };
+}
+
+function librarySource(name: string): ComposerAttachmentSource {
+  return { ...source(name), ownership: 'library' };
 }
 
 function imageSource(name: string, mediaType: string): ComposerAttachmentSource {
