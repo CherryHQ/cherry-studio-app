@@ -23,6 +23,7 @@ import {
   prepareTurn,
   type TurnPreparationDependencies,
 } from '../turnPreparation';
+import { toRuntimeHistory } from '../turnRuntimeInput';
 
 const AGENT_ID = 'agent-1';
 const SESSION_ID = 'session-1';
@@ -123,9 +124,18 @@ describe('turn preparation', () => {
         text: JSON.stringify(ir),
       });
 
+      const history = [{ ...textMessage('old-input', 'old-turn'), parts: plan.userParts }];
+      const originalHistory = JSON.parse(JSON.stringify(history));
+      harness.loadRuntimeTurnContext.mockResolvedValue({
+        anchorFound: true,
+        hasMessages: true,
+        history,
+        referencedFileEntryIds: [FILE_ENTRY_ID],
+        sessionTurnIds: ['old-turn'],
+      });
       const next = await prepareTurn(
         harness.dependencies,
-        { sessionId: SESSION_ID, parts },
+        textInput(),
         new AbortController().signal,
       );
       expect(next.documentParserMode).toBe('builtin');
@@ -133,6 +143,17 @@ describe('turn preparation', () => {
         type: 'text-attachment',
         text: 'built-in result',
       });
+      expect(
+        toRuntimeHistory(next.history, next.runtimeContentAttachments)[0]?.messages[0]?.parts,
+      ).toEqual([
+        expect.objectContaining({
+          type: 'text-attachment',
+          text: 'built-in result',
+          attachmentReport: expect.objectContaining({ parser: 'builtin' }),
+        }),
+      ]);
+      expect(history).toEqual(originalHistory);
+      expect(history[0]?.parts[0]).toMatchObject({ attachmentReport: { parser: 'anydoc' } });
       expect(
         (
           await next.tools[0]!.execute({
