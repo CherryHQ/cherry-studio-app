@@ -42,6 +42,7 @@ import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelS
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
+import { getChatInputPresentation } from './utils/chatInputPresentation';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 import { createChatInputSubmission } from './utils/chatInputSubmission';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
@@ -110,6 +111,12 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const { attachments, draft } = useComposerState();
+  const { sendAction, shouldShowSubmissionOptions } = getChatInputPresentation({
+    attachments,
+    draft,
+    isBusy,
+    steeringTarget,
+  });
   const isInputActive = isInputFocused || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
   const { inputRef } = useComposerMeta();
@@ -267,12 +274,17 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     },
     [t],
   );
+  const handleStopPress = useCallback(() => {
+    void cancel().catch(() => {
+      toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
+    });
+  }, [cancel, t, toast]);
 
   return (
     <>
       <View className="gap-2">
         <ChatInputQueue sessionId={sessionId} targetTurnId={activeTurnId} />
-        {isBusy || steeringTarget ? (
+        {shouldShowSubmissionOptions ? (
           <View className="flex-row flex-wrap items-center justify-between gap-2">
             <ActionMenu
               items={[
@@ -302,18 +314,14 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                 size="sm"
                 variant="ghost"
                 testID="chat-composer-stop"
-                onPress={() =>
-                  void cancel().catch(() => {
-                    toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
-                  })
-                }
+                onPress={handleStopPress}
               >
                 <Button.Label>{t('chat.input.action.stopGenerating')}</Button.Label>
               </Button>
             ) : null}
           </View>
         ) : null}
-        {steeringTarget ? (
+        {shouldShowSubmissionOptions && steeringTarget ? (
           <Text className="text-muted-foreground text-xs">
             {t(
               steeringTarget === activeTurnId
@@ -333,7 +341,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               dismissKeyboardOnSend={dismissKeyboardOnSend}
               getSendErrorLabel={getSendErrorLabel}
               onSend={handleSendPress}
-              onStop={() => void cancel()}
+              onStop={handleStopPress}
               streaming={isBusy}
               testID="chat-composer"
             >
@@ -387,7 +395,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                         {effortGauge}
                       </Animated.View>
                     ) : null}
-                    <Composer.Send action="send" testID="chat-composer-send" />
+                    <Composer.Send action={sendAction} testID="chat-composer-send" />
                   </View>
                 </Animated.View>
               </Animated.View>

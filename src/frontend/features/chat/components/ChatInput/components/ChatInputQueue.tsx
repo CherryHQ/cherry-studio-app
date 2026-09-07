@@ -17,6 +17,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 
 import { useAgentChatActions, useAgentInputQueue } from '../../../runtime';
+import { shouldShowChatInputQueue } from '../utils/chatInputPresentation';
 
 const logger = loggerService.withContext('ChatInputQueue');
 const REASON_KEYS = {
@@ -41,24 +42,27 @@ export function ChatInputQueue({
   const queue = useAgentInputQueue(sessionId);
   const { runInputReplacement } = useComposerPresentationActions();
   const [isOpen, setIsOpen] = useState(false);
+  const shouldShowEntry = shouldShowChatInputQueue(queue);
 
-  if (!sessionId || (!queue.inputs.length && !queue.isPaused && !isOpen)) return null;
+  if (!sessionId || (!shouldShowEntry && !isOpen)) return null;
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="ghost"
-        onPress={() => {
-          void runInputReplacement(() => setIsOpen(true));
-        }}
-      >
-        <Button.Label>
-          {t(queue.isPaused ? 'chat.input.queue.pausedCount' : 'chat.input.queue.count', {
-            count: queue.inputs.length,
-          })}
-        </Button.Label>
-      </Button>
+      {shouldShowEntry ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          onPress={() => {
+            void runInputReplacement(() => setIsOpen(true));
+          }}
+        >
+          <Button.Label>
+            {t(queue.isPaused ? 'chat.input.queue.pausedCount' : 'chat.input.queue.count', {
+              count: queue.inputs.length,
+            })}
+          </Button.Label>
+        </Button>
+      ) : null}
       {isOpen ? (
         <BottomSheet
           open
