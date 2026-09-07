@@ -7,10 +7,18 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
+import type {
+  AgentErrorView,
+  AgentMessageView,
+  AgentSessionView,
+  AgentSessionInput,
+} from '@/shared/contracts/agent';
 
 import type {
   AgentSessionStore,
+  ConsumeSessionInput,
+  ConsumeSessionInputResult,
+  EnqueueSessionInput,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
@@ -19,6 +27,7 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
+  UpdateSessionInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -86,10 +95,11 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
 function reserveInTranscript(
   transcript: StoredMessage[],
   input: ReserveSubmissionInput,
+  existingTurnId?: string,
 ): ReserveSubmissionResult {
   // Synchronous section: both message writes commit together or not at all.
   const timestamp = nowIso();
-  const turnId = uuidv7();
+  const turnId = existingTurnId ?? uuidv7();
   const userMessage: AgentMessageView = {
     id: uuidv7(),
     sessionId: input.sessionId,
@@ -145,10 +155,159 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   private readonly sessions = new Map<string, AgentSessionView>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
+  private readonly inputs = new Map<string, AgentSessionInput>();
+  private readonly pausedQueues = new Set<string>();
+
+  async enqueueInput(input: EnqueueSessionInput) {
+    const existing = this.inputs.get(input.id);
+    if (existing) {
+      return { input: cloneJson(existing), created: false };
+    }
+    if (!this.sessions.has(input.sessionId)) {
+      throw new Error(`Unknown Session: ${input.sessionId}`);
+    }
+    const position =
+      [...this.inputs.values()].reduce(
+        (last, item) => (item.sessionId === input.sessionId ? Math.max(last, item.position) : last),
+        -1,
+      ) + 1;
+    const timestamp = nowIso();
+    const queued: AgentSessionInput = {
+      ...cloneJson(input),
+      position,
+      status: 'queued',
+      reason: null,
+      turnId: null,
+      userMessageId: null,
+      assistantMessageId: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    this.inputs.set(input.id, queued);
+    return { input: cloneJson(queued), created: true };
+  }
+
+  async getInput(inputId: string) {
+    const input = this.inputs.get(inputId);
+    return input ? cloneJson(input) : null;
+  }
+
+  async getInputQueue(sessionId: string) {
+    return {
+      isPaused: !this.sessions.has(sessionId) || this.pausedQueues.has(sessionId),
+      inputs: cloneJson(
+        [...this.inputs.values()]
+          .filter(
+            (input) =>
+              input.sessionId === sessionId &&
+              input.status !== 'consumed' &&
+              input.status !== 'removed',
+          )
+          .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id)),
+      ),
+    };
+  }
+
+  async setInputQueuePaused(sessionId: string, isPaused: boolean): Promise<void> {
+    if (isPaused) {
+      this.pausedQueues.add(sessionId);
+    } else {
+      this.pausedQueues.delete(sessionId);
+    }
+  }
+
+  async updateInput(input: UpdateSessionInput) {
+    const existing = this.inputs.get(input.id);
+    if (
+      !existing ||
+      existing.sessionId !== input.sessionId ||
+      !input.expectedStatus.includes(existing.status)
+    ) {
+      return null;
+    }
+    const updated = { ...existing, ...cloneJson(input.patch), updatedAt: nowIso() };
+    this.inputs.set(input.id, updated);
+    return cloneJson(updated);
+  }
+
+  async reorderInputs(sessionId: string, inputIds: string[]): Promise<boolean> {
+    const queued = [...this.inputs.values()].filter(
+      (input) =>
+        input.sessionId === sessionId &&
+        (input.status === 'queued' || input.status === 'interrupted'),
+    );
+    const requested = new Set(inputIds);
+    if (
+      requested.size !== inputIds.length ||
+      queued.length !== inputIds.length ||
+      queued.some(({ id }) => !requested.has(id))
+    ) {
+      return false;
+    }
+    for (const [position, id] of inputIds.entries()) {
+      const input = this.inputs.get(id)!;
+      this.inputs.set(id, { ...input, position, updatedAt: nowIso() });
+    }
+    return true;
+  }
+
+  async consumeInput(input: ConsumeSessionInput): Promise<ConsumeSessionInputResult> {
+    const queued = this.inputs.get(input.inputId);
+    const transcript = this.messages.get(input.sessionId);
+    if (
+      !queued ||
+      !transcript ||
+      queued.sessionId !== input.sessionId ||
+      queued.status !== (input.continuation ? 'steering' : 'dispatching')
+    ) {
+      throw new Error(`Input is no longer available for consumption: ${input.inputId}`);
+    }
+    let previousAssistantMessage: AgentMessageView | null = null;
+    if (input.continuation) {
+      const previous = transcript.find(
+        ({ view }) => view.id === input.continuation!.previousAssistant.assistantMessageId,
+      );
+      if (
+        !previous ||
+        previous.view.turnId !== input.continuation.turnId ||
+        !UNSETTLED_MESSAGE_STATUSES.has(previous.view.status)
+      ) {
+        throw new Error('Steering requires the active assistant segment.');
+      }
+      previousAssistantMessage = this.finalizeStoredMessage({
+        ...input.continuation.previousAssistant,
+        contextCheckpoint: null,
+      });
+    } else if (
+      transcript.some(
+        ({ view }) => view.role === 'assistant' && UNSETTLED_MESSAGE_STATUSES.has(view.status),
+      )
+    ) {
+      throw new Error('Session already has an active assistant segment.');
+    }
+    const reserved = reserveInTranscript(transcript, input, input.continuation?.turnId);
+    this.inputs.set(input.inputId, {
+      ...queued,
+      status: 'consumed',
+      reason: null,
+      turnId: reserved.turnId,
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      updatedAt: nowIso(),
+    });
+    const session = this.sessions.get(input.sessionId)!;
+    this.sessions.set(input.sessionId, {
+      ...session,
+      updatedAt: reserved.assistantMessage.createdAt,
+    });
+    return cloneJson({ ...reserved, previousAssistantMessage });
+  }
 
   protected override onDestroy(): void {
     this.sessions.clear();
     this.messages.clear();
+    this.inputs.clear();
+    this.pausedQueues.clear();
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -203,6 +362,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    this.pausedQueues.delete(sessionId);
+    for (const [id, input] of this.inputs) {
+      if (input.sessionId === sessionId) this.inputs.delete(id);
+    }
     // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
@@ -230,6 +393,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return { status: 'message-not-found' };
     }
     if (UNSETTLED_MESSAGE_STATUSES.has(transcript[anchorIndex].view.status)) {
+      return { status: 'fork-point-unsettled' };
+    }
+    const anchorTurnId = transcript[anchorIndex].view.turnId;
+    if (
+      anchorTurnId !== null &&
+      transcript.some(
+        ({ view }) => view.turnId === anchorTurnId && UNSETTLED_MESSAGE_STATUSES.has(view.status),
+      )
+    ) {
       return { status: 'fork-point-unsettled' };
     }
 
@@ -381,6 +553,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
+    return this.finalizeStoredMessage(input);
+  }
+
+  private finalizeStoredMessage(input: FinalizeAssistantMessageInput): AgentMessageView {
     for (const [sessionId, transcript] of this.messages) {
       const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
       if (!stored) {
@@ -412,6 +588,22 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+    for (const [sessionId, transcript] of this.messages) {
+      if (transcript.some(({ view }) => UNSETTLED_MESSAGE_STATUSES.has(view.status)))
+        this.pausedQueues.add(sessionId);
+    }
+    for (const [id, input] of this.inputs) {
+      if (input.status !== 'consumed' && input.status !== 'removed')
+        this.pausedQueues.add(input.sessionId);
+      if (input.status === 'dispatching' || input.status === 'steering') {
+        this.inputs.set(id, {
+          ...input,
+          status: 'interrupted',
+          reason: 'interrupted',
+          updatedAt: nowIso(),
+        });
+      }
+    }
     const reconciled: AgentMessageView[] = [];
     for (const transcript of this.messages.values()) {
       for (const stored of transcript) {

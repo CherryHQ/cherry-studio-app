@@ -4,6 +4,8 @@ import {
   AgentFailureSnapshotSchema,
   AgentInferenceSnapshotV1Schema,
   AgentInputPartSchema,
+  AgentInputQueueSchema,
+  AgentSubmitMessageResultSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
   AgentSessionSnapshotSchema,
@@ -20,6 +22,37 @@ function roundTrip<T>(value: T): unknown {
 }
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips durable input identity and distinguishes acceptance from consumption', () => {
+    const queue = {
+      isPaused: true,
+      inputs: [
+        {
+          id: 'input-1',
+          sessionId: 'session-1',
+          parts: [{ type: 'text', text: 'Change direction' }],
+          mode: 'steer',
+          targetTurnId: 'turn-1',
+          position: 0,
+          status: 'interrupted',
+          reason: 'interrupted',
+          turnId: null,
+          userMessageId: null,
+          assistantMessageId: null,
+          createdAt: '2026-09-07T00:00:00.000Z',
+          updatedAt: '2026-09-07T00:00:00.000Z',
+        },
+      ],
+    };
+    expect(AgentInputQueueSchema.parse(roundTrip(queue))).toEqual(queue);
+    const redirected = { inputId: 'input-1', disposition: 'redirected', turnId: 'turn-1' };
+    expect(AgentSubmitMessageResultSchema.parse(roundTrip(redirected))).toEqual(redirected);
+    expect(
+      AgentInputQueueSchema.safeParse({
+        ...queue,
+        inputs: [{ ...queue.inputs[0], status: 'running' }],
+      }).success,
+    ).toBe(false);
+  });
   test('rejects the retired turn-only capability field', () => {
     // Capability enablement moved to the Agent record; a stale caller still
     // sending the composer-era field must fail loudly, not silently no-op.

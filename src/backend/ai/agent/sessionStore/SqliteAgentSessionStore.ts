@@ -9,9 +9,15 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { Database, DbService } from '@/backend/data/db/DbService';
-import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
+import {
+  agentSessionInputTable,
+  agentSessionMessageTable,
+  agentSessionTable,
+  type AgentSessionInputRow,
+} from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
+  AgentSessionInputSchema,
   toAgentMessageView,
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
@@ -23,6 +29,9 @@ import {
 
 import type {
   AgentSessionStore,
+  ConsumeSessionInput,
+  ConsumeSessionInputResult,
+  EnqueueSessionInput,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
@@ -31,6 +40,7 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
+  UpdateSessionInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -55,6 +65,174 @@ const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 export class SqliteAgentSessionStore extends BaseService implements AgentSessionStore {
   constructor(private readonly dbService: DbService) {
     super();
+  }
+
+  async enqueueInput(input: EnqueueSessionInput) {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(agentSessionInputTable)
+        .where(eq(agentSessionInputTable.id, input.id));
+      if (existing) {
+        return { input: toInputView(existing), created: false };
+      }
+      const [last] = await tx
+        .select({ position: sql<number>`coalesce(max(${agentSessionInputTable.position}), -1)` })
+        .from(agentSessionInputTable)
+        .where(eq(agentSessionInputTable.sessionId, input.sessionId));
+      const [row] = await tx
+        .insert(agentSessionInputTable)
+        .values({ ...input, position: last.position + 1 })
+        .returning();
+      return { input: toInputView(row), created: true };
+    });
+  }
+
+  async getInput(inputId: string) {
+    const [row] = await this.dbService
+      .getDb()
+      .select()
+      .from(agentSessionInputTable)
+      .where(eq(agentSessionInputTable.id, inputId));
+    return row ? toInputView(row) : null;
+  }
+
+  async getInputQueue(sessionId: string) {
+    const db = this.dbService.getDb();
+    const [sessions, rows] = await Promise.all([
+      db
+        .select({ isPaused: agentSessionTable.inputQueuePaused })
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, sessionId)),
+      db
+        .select()
+        .from(agentSessionInputTable)
+        .where(
+          and(
+            eq(agentSessionInputTable.sessionId, sessionId),
+            notInArray(agentSessionInputTable.status, ['consumed', 'removed']),
+          ),
+        )
+        .orderBy(agentSessionInputTable.position, agentSessionInputTable.id),
+    ]);
+    return { isPaused: sessions[0]?.isPaused ?? true, inputs: rows.map(toInputView) };
+  }
+
+  async setInputQueuePaused(sessionId: string, isPaused: boolean): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      await tx
+        .update(agentSessionTable)
+        .set({ inputQueuePaused: isPaused })
+        .where(eq(agentSessionTable.id, sessionId));
+    });
+  }
+
+  async updateInput(input: UpdateSessionInput) {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(agentSessionInputTable)
+        .set(input.patch)
+        .where(
+          and(
+            eq(agentSessionInputTable.id, input.id),
+            eq(agentSessionInputTable.sessionId, input.sessionId),
+            inArray(agentSessionInputTable.status, input.expectedStatus),
+          ),
+        )
+        .returning();
+      return row ? toInputView(row) : null;
+    });
+  }
+
+  async reorderInputs(sessionId: string, inputIds: string[]): Promise<boolean> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const rows = await tx
+        .select({ id: agentSessionInputTable.id })
+        .from(agentSessionInputTable)
+        .where(
+          and(
+            eq(agentSessionInputTable.sessionId, sessionId),
+            inArray(agentSessionInputTable.status, ['queued', 'interrupted']),
+          ),
+        );
+      const requested = new Set(inputIds);
+      if (
+        requested.size !== inputIds.length ||
+        rows.length !== inputIds.length ||
+        rows.some(({ id }) => !requested.has(id))
+      ) {
+        return false;
+      }
+      for (const [position, id] of inputIds.entries()) {
+        await tx
+          .update(agentSessionInputTable)
+          .set({ position })
+          .where(eq(agentSessionInputTable.id, id));
+      }
+      return true;
+    });
+  }
+
+  async consumeInput(input: ConsumeSessionInput): Promise<ConsumeSessionInputResult> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [queued] = await tx
+        .select()
+        .from(agentSessionInputTable)
+        .where(
+          and(
+            eq(agentSessionInputTable.id, input.inputId),
+            eq(agentSessionInputTable.sessionId, input.sessionId),
+            eq(agentSessionInputTable.status, input.continuation ? 'steering' : 'dispatching'),
+          ),
+        );
+      if (!queued) {
+        throw new Error(`Input is no longer available for consumption: ${input.inputId}`);
+      }
+      let previousAssistantMessage: AgentMessageView | null = null;
+      if (input.continuation) {
+        const [previous] = await tx
+          .select()
+          .from(agentSessionMessageTable)
+          .where(
+            and(
+              eq(
+                agentSessionMessageTable.id,
+                input.continuation.previousAssistant.assistantMessageId,
+              ),
+              eq(agentSessionMessageTable.sessionId, input.sessionId),
+              eq(agentSessionMessageTable.turnId, input.continuation.turnId),
+              inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            ),
+          );
+        if (!previous) {
+          throw new Error('Steering requires the active assistant segment.');
+        }
+        previousAssistantMessage = await finalizeInTransaction(tx, {
+          ...input.continuation.previousAssistant,
+          contextCheckpoint: null,
+        });
+      }
+      const { reservedAt, ...reserved } = await insertSubmission(
+        tx,
+        input,
+        input.continuation?.turnId,
+      );
+      await tx
+        .update(agentSessionInputTable)
+        .set({
+          status: 'consumed',
+          reason: null,
+          turnId: reserved.turnId,
+          userMessageId: reserved.userMessage.id,
+          assistantMessageId: reserved.assistantMessage.id,
+        })
+        .where(eq(agentSessionInputTable.id, input.inputId));
+      await tx
+        .update(agentSessionTable)
+        .set({ lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})` })
+        .where(eq(agentSessionTable.id, input.sessionId));
+      return { ...reserved, previousAssistantMessage };
+    });
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -195,6 +373,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           role: agentSessionMessageTable.role,
           stats: agentSessionMessageTable.stats,
           status: agentSessionMessageTable.status,
+          turnId: agentSessionMessageTable.turnId,
         })
         .from(agentSessionMessageTable)
         .where(
@@ -209,6 +388,20 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       }
       if ((UNSETTLED_MESSAGE_STATUSES as readonly string[]).includes(anchor.status)) {
         return { status: 'fork-point-unsettled' };
+      }
+      if (anchor.turnId !== null) {
+        const [activeSegment] = await tx
+          .select({ id: agentSessionMessageTable.id })
+          .from(agentSessionMessageTable)
+          .where(
+            and(
+              eq(agentSessionMessageTable.sessionId, input.sessionId),
+              eq(agentSessionMessageTable.turnId, anchor.turnId),
+              inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            ),
+          )
+          .limit(1);
+        if (activeSegment) return { status: 'fork-point-unsettled' };
       }
 
       const [forked] = await tx
@@ -437,48 +630,19 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
-    return this.dbService.withWriteTx(async (tx) => {
-      const [existing] = await tx
-        .select({
-          sessionId: agentSessionMessageTable.sessionId,
-          stats: agentSessionMessageTable.stats,
-        })
-        .from(agentSessionMessageTable)
-        .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
-        .limit(1);
-      if (!existing) {
-        throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
-      }
-      const [row] = await tx
-        .update(agentSessionMessageTable)
-        .set({
-          status: input.status,
-          data: { version: 1, parts: input.parts },
-          usage: input.usage,
-          stats: { ...existing.stats, ...input.runtimeStats },
-          error: input.error,
-          contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
-        })
-        .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
-        .returning();
-      if (!row) {
-        throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
-      }
-      await tx
-        .update(agentSessionTable)
-        .set({
-          lastActivityAt: sql`max(
-            ${agentSessionTable.lastActivityAt},
-            ${input.runtimeStats.runtimeTiming.completedAt}
-          )`,
-        })
-        .where(eq(agentSessionTable.id, existing.sessionId));
-      return toAgentMessageView(row);
-    });
+    return this.dbService.withWriteTx((tx) => finalizeInTransaction(tx, input));
   }
 
   async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
     return this.dbService.withWriteTx(async (tx) => {
+      await tx.update(agentSessionTable).set({ inputQueuePaused: true }).where(sql`
+        ${agentSessionTable.id} IN (SELECT session_id FROM agent_session_input WHERE status NOT IN ('consumed', 'removed'))
+        OR ${agentSessionTable.id} IN (SELECT session_id FROM agent_session_message WHERE status IN ('pending', 'streaming'))
+      `);
+      await tx
+        .update(agentSessionInputTable)
+        .set({ status: 'interrupted', reason: 'interrupted' })
+        .where(inArray(agentSessionInputTable.status, ['dispatching', 'steering']));
       const rows = await tx
         .select()
         .from(agentSessionMessageTable)
@@ -546,8 +710,9 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
 async function insertSubmission(
   tx: Database,
   input: ReserveSubmissionInput,
+  existingTurnId?: string,
 ): Promise<ReserveSubmissionResult & { reservedAt: number }> {
-  const turnId = createOrderedUuid();
+  const turnId = existingTurnId ?? createOrderedUuid();
   const [userRow] = await tx
     .insert(agentSessionMessageTable)
     .values({
@@ -576,4 +741,57 @@ async function insertSubmission(
     userMessage: toAgentMessageView(userRow),
     assistantMessage: toAgentMessageView(assistantRow),
   };
+}
+
+function toInputView(row: AgentSessionInputRow) {
+  return AgentSessionInputSchema.parse({
+    ...row,
+    modelId: row.modelId ?? undefined,
+    reasoningEffort: row.reasoningEffort ?? undefined,
+    targetTurnId: row.targetTurnId ?? undefined,
+    createdAt: new Date(row.createdAt).toISOString(),
+    updatedAt: new Date(row.updatedAt).toISOString(),
+  });
+}
+
+async function finalizeInTransaction(
+  tx: Database,
+  input: FinalizeAssistantMessageInput,
+): Promise<AgentMessageView> {
+  const [existing] = await tx
+    .select({
+      sessionId: agentSessionMessageTable.sessionId,
+      stats: agentSessionMessageTable.stats,
+    })
+    .from(agentSessionMessageTable)
+    .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
+    .limit(1);
+  if (!existing) {
+    throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
+  }
+  const [row] = await tx
+    .update(agentSessionMessageTable)
+    .set({
+      status: input.status,
+      data: { version: 1, parts: input.parts },
+      usage: input.usage,
+      stats: { ...existing.stats, ...input.runtimeStats },
+      error: input.error,
+      contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
+    })
+    .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
+    .returning();
+  if (!row) {
+    throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
+  }
+  await tx
+    .update(agentSessionTable)
+    .set({
+      lastActivityAt: sql`max(
+        ${agentSessionTable.lastActivityAt},
+        ${input.runtimeStats.runtimeTiming.completedAt}
+      )`,
+    })
+    .where(eq(agentSessionTable.id, existing.sessionId));
+  return toAgentMessageView(row);
 }

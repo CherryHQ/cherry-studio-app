@@ -1,5 +1,6 @@
 import { agentTable } from './agent';
 import { agentSessionTable } from './agentSession';
+import { agentSessionInputTable } from './agentSessionInput';
 import { agentSessionMessageTable } from './agentSessionMessage';
 import { agentToolBindingTable } from './agentToolBinding';
 import { aiUsageRecordTable } from './aiUsageRecord';
@@ -15,6 +16,7 @@ import { userProviderTable } from './userProvider';
 export * from './agent';
 export * from './agentToolBinding';
 export * from './agentSession';
+export * from './agentSessionInput';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
 export { monotonicUpdateTimestamp } from './_columnHelpers';
@@ -39,6 +41,7 @@ export const schema = {
   agentTable,
   agentToolBindingTable,
   agentSessionTable,
+  agentSessionInputTable,
   agentSessionMessageTable,
   aiUsageRecordTable,
   appStateTable,

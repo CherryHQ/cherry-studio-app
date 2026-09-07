@@ -51,6 +51,8 @@ export const agentSessionTable = sqliteTable(
     // circular Session ↔ Message schema dependency; fork/delete transactions
     // maintain it together with forkedFromSessionId.
     forkBoundaryMessageId: text(),
+    // Stop/recovery pause automatic follow-ups independently from live turns.
+    inputQueuePaused: integer({ mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),

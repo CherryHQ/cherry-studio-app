@@ -42,6 +42,17 @@ export {
 } from './inputs';
 export { AgentProtocolError, type AgentProtocol } from './protocol';
 export {
+  AgentInputModeSchema,
+  AgentInputQueueReasonSchema,
+  AgentInputQueueSchema,
+  AgentSessionInputSchema,
+  AgentSubmitMessageResultSchema,
+  type AgentInputQueue,
+  type AgentInputQueueReason,
+  type AgentSessionInput,
+  type AgentSubmitMessageResult,
+} from './queue';
+export {
   AgentApprovalViewSchema,
   AgentCapabilitiesSchema,
   AgentErrorViewSchema,

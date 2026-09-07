@@ -168,7 +168,9 @@ in this mobile app. The client does not duplicate configuration or select an imp
 
 ### Turn
 
-One submitted user input creates one turn and one assistant response.
+One Runtime execution creates one turn. Its first input reserves one user/assistant pair; each
+consumed steering input adds another pair to the same turn. `assistantMessageId` identifies the
+current segment. Finishing a segment does not finish the turn or release its approvals and resources.
 
 ```ts
 type AgentTurnView = {
@@ -189,8 +191,9 @@ type AgentTurnView = {
 }
 ```
 
-Version 1 has one execution per turn and at most one active turn per Session. It has no execution
-entity, follow-up queue, steering, autonomous turn, or background task.
+There is one execution per turn and at most one active turn per Session. Follow-ups are durable
+Host-owned inputs waiting for another turn; steering is text injected at a safe boundary of the
+current execution. There is no separate execution entity, autonomous turn, or background task.
 
 ### Message
 

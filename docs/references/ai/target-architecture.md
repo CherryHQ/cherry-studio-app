@@ -34,7 +34,9 @@ implementation is heading and why.
   until that application extension is implemented.
 - **Frozen boundaries.** Above: the Agent Protocol (`src/shared/contracts/agent/`), its event
   delta semantics, and the frontend projection. Below: the SQLite schema. Everything between the
-  two boundaries may be redesigned.
+  two boundaries may be redesigned. The approved follow-up/steering extension explicitly evolves
+  these boundaries: durable input identities and queue state, consumption events, and multiple
+  message segments per single Runtime execution. See [Agent Persistence](../agent/agent-persistence.md#durable-input-queue).
 - The 13 protocol invariants in [Agent Protocol](../agent/agent-protocol.md#invariants) survive
   every phase. Terminal persistence before publication and side-effect ordering in finalization
   remain explicit calls; an event bus would make those ordering guarantees implicit and is

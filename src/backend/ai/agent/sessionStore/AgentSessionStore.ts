@@ -2,9 +2,11 @@ import type {
   AgentErrorView,
   AgentExecutionTarget,
   AgentInferenceSnapshotV1,
+  AgentInputQueue,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
+  AgentSessionInput,
   AgentUsageView,
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
@@ -41,6 +43,28 @@ export type ReserveSubmissionInput = {
   userParts: AgentMessagePart[];
   modelId: AgentInferenceSnapshotV1['model']['uniqueModelId'];
   inferenceSnapshot: AgentInferenceSnapshotV1;
+};
+
+export type EnqueueSessionInput = Pick<
+  AgentSessionInput,
+  'id' | 'sessionId' | 'parts' | 'mode' | 'modelId' | 'reasoningEffort' | 'targetTurnId'
+>;
+
+export type UpdateSessionInput = {
+  id: string;
+  sessionId: string;
+  expectedStatus: AgentSessionInput['status'][];
+  patch: Partial<Pick<AgentSessionInput, 'parts' | 'mode' | 'targetTurnId' | 'status' | 'reason'>>;
+};
+
+export type ConsumeSessionInput = ReserveSubmissionInput & {
+  inputId: string;
+  /** Present together only at a native steering consumption boundary. */
+  continuation?: { turnId: string; previousAssistant: FinalizeAssistantMessageInput };
+};
+
+export type ConsumeSessionInputResult = ReserveSubmissionResult & {
+  previousAssistantMessage: AgentMessageView | null;
 };
 
 export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'sessionId'> & {
@@ -100,13 +124,24 @@ export type FinalizeAssistantMessageInput = {
  * Host-owned storage port for Agent Sessions and their linear transcripts
  * (docs/references/agent/agent-persistence.md).
  *
- * The store persists messages only. The Turn is a Host projection: live turn
+ * Pending inputs and their idempotency receipts are separate from messages. The Turn is a Host projection: live turn
  * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
  * process-local Host state by design, and terminal turn facts live on the
  * assistant message row. Multi-record operations are atomic at this boundary,
  * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
+  /** Duplicate identities return the existing receipt without changing queue order. */
+  enqueueInput(input: EnqueueSessionInput): Promise<{ input: AgentSessionInput; created: boolean }>;
+  getInput(inputId: string): Promise<AgentSessionInput | null>;
+  getInputQueue(sessionId: string): Promise<AgentInputQueue>;
+  setInputQueuePaused(sessionId: string, isPaused: boolean): Promise<void>;
+  /** Compare-and-set protects consumed inputs from late edit/delete/promote commands. */
+  updateInput(input: UpdateSessionInput): Promise<AgentSessionInput | null>;
+  /** Requires an exact permutation of the queued/interrupted identities. */
+  reorderInputs(sessionId: string, inputIds: string[]): Promise<boolean>;
+  /** Atomically consumes an input, settles an optional prior segment, and reserves U/A. */
+  consumeInput(input: ConsumeSessionInput): Promise<ConsumeSessionInputResult>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
   /** Renames only when the current title still matches the caller's auto-title snapshot. */
