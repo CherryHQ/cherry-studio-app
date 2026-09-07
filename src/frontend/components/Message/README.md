@@ -221,8 +221,9 @@ bootstrap once, and the controller adopts following mode without issuing a secon
 
 Keyboard lift remains `whenAtEnd`: focusing the composer must not move a viewport that is reading
 history. The keyboard controller is a platform geometry adapter; it never transitions the product
-following/reading state. A local send uses its keyboard-aware scroll helper once so keyboard
-dismissal and the animated return to the live edge share one operation.
+following/reading state. A local send keeps keyboard geometry updates active while awaiting
+dismissal, then scrolls to the live edge after the keyboard inset clears. A dataset switch or
+committed drag during dismissal cancels that pending scroll.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 horizontally scrollable attachment strip sits above the optional bubble. This is a presentation
