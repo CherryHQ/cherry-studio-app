@@ -67,12 +67,23 @@ export function appendComposerAttachments(
   next: readonly ComposerAttachmentDraft[],
 ) {
   const seenIds = new Set(current.map((attachment) => attachment.id));
+  // Picker imports and library selections can give the same file different draft ids.
+  const seenFileEntryIds = new Set(
+    current.flatMap((attachment) =>
+      isComposerAttachmentReady(attachment) ? [attachment.fileEntryId] : [],
+    ),
+  );
   const additions = next.filter((attachment) => {
-    if (seenIds.has(attachment.id)) {
+    const fileEntryId = isComposerAttachmentReady(attachment) ? attachment.fileEntryId : undefined;
+    if (
+      seenIds.has(attachment.id) ||
+      (fileEntryId !== undefined && seenFileEntryIds.has(fileEntryId))
+    ) {
       return false;
     }
 
     seenIds.add(attachment.id);
+    if (fileEntryId !== undefined) seenFileEntryIds.add(fileEntryId);
     return true;
   });
 

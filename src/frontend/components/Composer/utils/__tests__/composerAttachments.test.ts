@@ -40,6 +40,22 @@ describe('composer attachments', () => {
     ).toEqual([imageAttachment, transientFileAttachment]);
   });
 
+  test('deduplicates library references within a batch without dropping distinct files', () => {
+    const libraryAttachment = {
+      ...readyFileAttachment,
+      id: `file-entry:${readyFileAttachment.fileEntryId}`,
+    };
+    const otherFile: ComposerAttachmentReady = {
+      ...readyFileAttachment,
+      id: 'file:other',
+      fileEntryId: '00000000-0000-7000-8000-000000000002',
+    };
+
+    expect(
+      appendComposerAttachments([], [libraryAttachment, readyFileAttachment, otherFile]),
+    ).toEqual([libraryAttachment, otherFile]);
+  });
+
   test('removes an attachment by id', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 

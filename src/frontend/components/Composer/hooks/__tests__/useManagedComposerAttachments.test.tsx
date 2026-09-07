@@ -195,7 +195,7 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('keeps the library file after a failed-send draft is restored and removed', async () => {
+  it('restores a failed-send reference only once when the same file was reselected from the library', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000020', 'retry.pdf'),
     );
@@ -204,11 +204,16 @@ describe('useManagedComposerAttachments', () => {
     await act(flushPromises);
     const restored = snapshot?.attachments[0];
     if (!restored || restored.status !== 'ready') throw new Error('missing ready attachment');
+    const reselected = { ...restored, id: `file-entry:${restored.fileEntryId}` };
 
     await act(async () => snapshot?.clearAttachments());
-    await act(async () => snapshot?.setAttachments([restored]));
-    await act(async () => snapshot?.removeAttachment(restored.id));
+    await act(async () => snapshot?.addAttachments([reselected]));
+    await act(async () => snapshot?.addAttachments([restored]));
 
+    expect(snapshot?.attachments).toEqual([reselected]);
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(1);
+    await act(async () => snapshot?.removeAttachment(reselected.id));
+    expect(snapshot?.attachments).toEqual([]);
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 

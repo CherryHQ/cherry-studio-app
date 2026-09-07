@@ -115,26 +115,20 @@ export function useManagedComposerAttachments(
 
   const addAttachments = useCallback(
     (next: ComposerAttachmentDraft[]) => {
-      const seenIds = new Set(attachmentsRef.current.map((attachment) => attachment.id));
-      const accepted = next.filter((attachment) => {
-        if (seenIds.has(attachment.id)) return false;
-        seenIds.add(attachment.id);
-        return true;
-      });
+      const current = attachmentsRef.current;
+      const accepted = appendComposerAttachments(current, next).slice(current.length);
       if (accepted.length === 0) return;
       const sources = accepted.filter(
         (attachment): attachment is ComposerAttachmentSource => attachment.status === undefined,
       );
-      commitAttachments(
-        appendComposerAttachments(
-          attachmentsRef.current,
-          accepted.map((attachment) =>
-            isComposerAttachmentReady(attachment)
-              ? attachment
-              : { ...attachment, status: 'importing' },
-          ),
+      commitAttachments([
+        ...current,
+        ...accepted.map((attachment) =>
+          isComposerAttachmentReady(attachment)
+            ? attachment
+            : { ...attachment, status: 'importing' as const },
         ),
-      );
+      ]);
       if (sources.length > 0) void importAttachments(sources);
     },
     [commitAttachments, importAttachments],
