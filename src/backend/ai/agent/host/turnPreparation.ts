@@ -19,6 +19,7 @@ import {
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
@@ -50,7 +51,7 @@ import {
 import {
   assertAttachmentRequestSupported,
   resolveManagedInput,
-  resolveRuntimeTextAttachments,
+  resolveRuntimeContentAttachments,
 } from './turnAttachments';
 import type { RuntimeAttachmentContents } from './turnRuntimeInput';
 
@@ -62,6 +63,7 @@ function fail(code: AgentErrorView['code'], message: string, retryable = false):
 
 export type TurnPreparationDependencies = {
   agents: AgentDefinitionSource;
+  documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
@@ -77,6 +79,7 @@ export type TurnPreparationDependencies = {
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
 export type TurnPlan = {
   agent: AgentDefinition;
+  documentParserMode: DocumentParserMode;
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
   history: AgentMessageView[];
@@ -87,7 +90,7 @@ export type TurnPlan = {
   resources: TurnResourceLedger;
   runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
-  runtimeTextAttachments: RuntimeAttachmentContents;
+  runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
   sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
@@ -100,6 +103,7 @@ export async function prepareTurn(
   parsed: AgentSubmitMessageInput,
   signal: AbortSignal,
 ): Promise<TurnPlan> {
+  const documentParserMode = dependencies.documentParserMode();
   const { sessionId } = parsed;
   const session = await raceAbort(dependencies.store.getSession(sessionId), signal);
   if (!session) {
@@ -144,6 +148,7 @@ export async function prepareTurn(
     configuredAgent,
     storedTurnContext,
     runtimeContextCheckpoint,
+    documentParserMode,
     signal,
   );
 }
@@ -153,6 +158,7 @@ export async function prepareInitialTurn(
   parsed: AgentStartSessionInput,
   signal: AbortSignal,
 ): Promise<TurnPlan> {
+  const documentParserMode = dependencies.documentParserMode();
   const configuredAgent = await raceAbort(dependencies.agents.getAgent(parsed.agentId), signal);
   if (!configuredAgent) {
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
@@ -177,6 +183,7 @@ export async function prepareInitialTurn(
     configuredAgent,
     emptyContext,
     null,
+    documentParserMode,
     signal,
   );
 }
@@ -188,6 +195,7 @@ async function prepareResolvedTurn(
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
+  documentParserMode: DocumentParserMode,
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
@@ -223,6 +231,7 @@ async function prepareResolvedTurn(
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
+          documentParserMode,
         }),
         signal,
       );
@@ -274,18 +283,20 @@ async function prepareResolvedTurn(
     resources,
     modelPreflight,
   );
-  const runtimeTextAttachments = await resolveRuntimeTextAttachments(
+  const runtimeContentAttachments = await resolveRuntimeContentAttachments(
     dependencies.files,
     parts,
     storedTurnContext.history,
     resources,
     signal,
+    modelPreflight,
+    documentParserMode,
   );
 
   const userParts: AgentMessagePart[] = parts.map((part, index) => {
     if (part.type === 'text')
       return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
-    const content = runtimeTextAttachments.get(part.fileEntryId);
+    const content = runtimeContentAttachments.get(part.fileEntryId);
     return {
       id: `input-${index}`,
       type: 'file',
@@ -294,7 +305,7 @@ async function prepareResolvedTurn(
       ...(part.name !== undefined ? { name: part.name } : {}),
       purpose: 'input-attachment',
       attachmentReport:
-        content?.type === 'text-attachment'
+        content?.type === 'text-attachment' || content?.type === 'document-attachment'
           ? content.attachmentReport
           : { mode: 'image', sourceTruncated: false, requestTruncated: false },
     };
@@ -302,6 +313,7 @@ async function prepareResolvedTurn(
 
   return {
     agent,
+    documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,
     inferenceSnapshot,
@@ -310,7 +322,7 @@ async function prepareResolvedTurn(
     resources,
     runtime,
     runtimeContextCheckpoint,
-    runtimeTextAttachments,
+    runtimeContentAttachments,
     sessionTitle: session.title,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,

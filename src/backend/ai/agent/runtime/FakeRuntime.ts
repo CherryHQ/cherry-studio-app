@@ -144,10 +144,20 @@ function validateRequest(
   }
   if (!capabilities.attachments) {
     if (
-      request.input.some((part) => part.type === 'file' || part.type === 'text-attachment') ||
+      request.input.some(
+        (part) =>
+          part.type === 'file' ||
+          part.type === 'text-attachment' ||
+          part.type === 'document-attachment',
+      ) ||
       request.history.some((turn) =>
         turn.messages.some((message) =>
-          message.parts.some((part) => part.type === 'file' || part.type === 'text-attachment'),
+          message.parts.some(
+            (part) =>
+              part.type === 'file' ||
+              part.type === 'text-attachment' ||
+              part.type === 'document-attachment',
+          ),
         ),
       )
     ) {

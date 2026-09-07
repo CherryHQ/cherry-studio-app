@@ -361,40 +361,64 @@ describe('FakeRuntime scripting', () => {
     await session.close();
   });
 
-  test('rejects structured text attachments when attachment capability is disabled', async () => {
-    const runtime = new FakeRuntime({ descriptor: CONFORMANCE_CAPABILITIES });
-    const session = await runtime.open();
+  test.each(['text', 'document'] as const)(
+    'rejects structured %s attachments when attachment capability is disabled',
+    async (kind) => {
+      const runtime = new FakeRuntime({ descriptor: CONFORMANCE_CAPABILITIES });
+      const session = await runtime.open();
 
-    await expect(
-      collect(
-        session.execute(
-          baseRequest('turn-text-attachment', {
-            input: [
-              {
-                fileEntryId: '00000000-0000-7000-8000-000000000001',
-                type: 'text-attachment',
-                mediaType: 'text/plain',
-                name: 'notes.txt',
-                text: 'notes',
-                truncated: false,
-                trust: 'untrusted-user-content',
-              },
-            ],
-          }),
+      await expect(
+        collect(
+          session.execute(
+            baseRequest('turn-text-attachment', {
+              input: [
+                ...(kind === 'document'
+                  ? [
+                      {
+                        fileEntryId: '00000000-0000-7000-8000-000000000001',
+                        type: 'document-attachment' as const,
+                        mediaType: 'application/rtf',
+                        name: 'notes.rtf',
+                        trust: 'untrusted-user-content' as const,
+                        parser: 'anydoc' as const,
+                        parserVersion: '0.4.1',
+                        totalCharacters: 2,
+                        document: {
+                          delivery: 'complete' as const,
+                          result: { status: 'ok' as const, ir: {}, warnings: [] },
+                        },
+                        images: [],
+                        assetDelivery: [],
+                      },
+                    ]
+                  : [
+                      {
+                        fileEntryId: '00000000-0000-7000-8000-000000000001',
+                        type: 'text-attachment' as const,
+                        mediaType: 'text/plain',
+                        name: 'notes.txt',
+                        text: 'notes',
+                        truncated: false,
+                        trust: 'untrusted-user-content' as const,
+                      },
+                    ]),
+              ],
+            }),
+          ),
         ),
-      ),
-    ).resolves.toEqual([
-      {
-        type: 'failed',
-        error: {
-          code: 'unsupported_input',
-          message: 'This runtime does not support file attachments.',
-          retryable: false,
+      ).resolves.toEqual([
+        {
+          type: 'failed',
+          error: {
+            code: 'unsupported_input',
+            message: 'This runtime does not support file attachments.',
+            retryable: false,
+          },
         },
-      },
-    ]);
-    await session.close();
-  });
+      ]);
+      await session.close();
+    },
+  );
 
   test('emits an opaque context checkpoint fixture before completion', async () => {
     const runtime = new FakeRuntime();

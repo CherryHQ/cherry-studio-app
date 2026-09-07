@@ -1,3 +1,4 @@
+import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ManagedFileFact, TurnFileScope } from '../../resources/managedFileResolver';
@@ -5,6 +6,7 @@ import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
   createReadFileTool,
   lineWindow,
+  jsonCharacterWindow,
   READ_FILE_DEFAULT_LINE_LIMIT,
   READ_FILE_MAX_CHARACTERS,
   READ_FILE_MAX_SOURCE_BYTES,
@@ -14,6 +16,166 @@ import {
 const FILE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const OTHER_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
 const IN_SCOPE: TurnFileScope = { fileEntryIds: new Set([FILE_ID]) };
+
+jest.mock('@/backend/services/file/anydocParser', () => ({
+  ANYDOC_PARSER_VERSION: '0.4.1',
+  parseAnydocDocument: jest.fn(),
+}));
+
+describe('AnyDoc raw JSON reads', () => {
+  function documentFiles() {
+    const files = createFiles('document');
+    files.resolveAvailable.mockResolvedValue(
+      new Map([
+        [
+          FILE_ID,
+          { fileEntryId: FILE_ID, mediaType: 'application/rtf', name: 'report.rtf', size: 8 },
+        ],
+      ]),
+    );
+    return files;
+  }
+
+  test('recovers an original long JSON string, unknown fields, and emoji through nextOffset', async () => {
+    const ir = { future: { text: '中文🍒\\"\n'.repeat(25_000) }, styles: ['italic', null, 3] };
+    jest.mocked(parseAnydocDocument).mockResolvedValue({
+      status: 'ok',
+      ir,
+      warnings: ['original'],
+      assets: [
+        {
+          assetRef: 'image-ref',
+          contentType: 'image/png',
+          bytes: new Uint8Array([1, 2, 3]).buffer,
+        },
+      ],
+    });
+    const tool = createReadFileTool(documentFiles(), IN_SCOPE, 'anydoc');
+    const fragments: string[] = [];
+    let offset = 0;
+    for (;;) {
+      const result = await execute(tool, {
+        file_entry_id: FILE_ID,
+        offset,
+        max_characters: READ_FILE_MAX_CHARACTERS,
+      });
+      expect(result.artifacts).toEqual([]);
+      expect(result.value).toMatchObject({
+        status: 'ok',
+        format: 'json-fragment',
+        parser: 'anydoc',
+        parserVersion: '0.4.1',
+        offset,
+        warnings: ['original'],
+        assets: [
+          { assetRef: 'image-ref', contentType: 'image/png', size: 3, delivery: 'reference-only' },
+        ],
+      });
+      const value = result.value as {
+        text: string;
+        characterCount: number;
+        nextOffset: number | null;
+        complete: boolean;
+      };
+      fragments.push(value.text);
+      expect([...value.text].length).toBe(value.characterCount);
+      expect(value.characterCount).toBeLessThanOrEqual(READ_FILE_MAX_CHARACTERS);
+      expect(JSON.stringify(result)).not.toContain('base64');
+      if (value.nextOffset === null) {
+        expect(value.complete).toBe(true);
+        break;
+      }
+      expect(value.nextOffset).toBe(offset + value.characterCount);
+      offset = value.nextOffset;
+    }
+    expect(fragments.length).toBeGreaterThan(1);
+    expect(fragments.join('')).toBe(JSON.stringify(ir));
+    expect(JSON.parse(fragments.join(''))).toEqual(ir);
+  });
+
+  test('rejects mixed or format-inapplicable pagination rather than ignoring parameters', async () => {
+    jest
+      .mocked(parseAnydocDocument)
+      .mockResolvedValue({ status: 'ok', ir: { text: 'body' }, warnings: [], assets: [] });
+    const files = documentFiles();
+    const tool = createReadFileTool(files, IN_SCOPE, 'anydoc');
+    expectError(
+      await execute(tool, { file_entry_id: FILE_ID, offset: 0, start_line: 1 }),
+      'cannot be combined',
+    );
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+    expectError(await execute(tool, { file_entry_id: FILE_ID, limit: 2 }), 'requires offset');
+    expectError(
+      await execute(createReadFileTool(createFiles('text'), IN_SCOPE), {
+        file_entry_id: FILE_ID,
+        max_characters: 2,
+      }),
+      'requires start_line',
+    );
+    for (const params of [
+      { offset: -1 },
+      { max_characters: 0 },
+      { max_characters: READ_FILE_MAX_CHARACTERS + 1 },
+    ]) {
+      expectError(await execute(tool, { file_entry_id: FILE_ID, ...params }), 'Invalid input');
+    }
+  });
+
+  test('returns the original parser failure without invoking the built-in parser', async () => {
+    const failure = {
+      status: 'fallback' as const,
+      reason: 'parse-error',
+      detail: 'original failure detail',
+    };
+    jest.mocked(parseAnydocDocument).mockResolvedValue(failure);
+    const files = documentFiles();
+    const result = await execute(createReadFileTool(files, IN_SCOPE, 'anydoc'), {
+      file_entry_id: FILE_ID,
+    });
+    expect(result.value).toMatchObject({ status: 'error', parser: 'anydoc', result: failure });
+    expect(files.readDocumentText).not.toHaveBeenCalled();
+  });
+
+  test('keeps out-of-scope AnyDoc bytes unreadable and exposes only references, never new grants', async () => {
+    const files = documentFiles();
+    expectError(
+      await execute(createReadFileTool(files, IN_SCOPE, 'anydoc'), {
+        file_entry_id: OTHER_ID,
+        offset: 0,
+      }),
+      'not part of this conversation',
+    );
+    expect(files.resolveAvailable).not.toHaveBeenCalled();
+    expect(IN_SCOPE.fileEntryIds).toEqual(new Set([FILE_ID]));
+  });
+});
+
+describe('JSON character windows', () => {
+  test('addresses Unicode code points without splitting a surrogate pair at either edge', () => {
+    expect(jsonCharacterWindow('中🍒文🙂尾', 1, 3)).toEqual({
+      offset: 1,
+      characterCount: 3,
+      totalCharacters: 5,
+      nextOffset: 4,
+      complete: false,
+      text: '🍒文🙂',
+    });
+    expect(jsonCharacterWindow('中🍒文🙂尾', 4, 3)).toEqual({
+      offset: 4,
+      characterCount: 1,
+      totalCharacters: 5,
+      nextOffset: null,
+      complete: true,
+      text: '尾',
+    });
+    expect(jsonCharacterWindow('中🍒', 9, 3)).toMatchObject({
+      characterCount: 0,
+      complete: true,
+      text: '',
+      nextOffset: null,
+    });
+  });
+});
 
 describe('readFileTool', () => {
   test('returns the whole file when it fits the default window', async () => {

@@ -143,6 +143,7 @@ function createHost(
     {
       agents: overrides.agents ?? agents,
       appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
+      documentParserMode: () => 'builtin',
       files,
       inferenceModel: resolveInferenceModel,
       naming: () => naming,

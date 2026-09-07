@@ -4,15 +4,20 @@
  *
  * Reads expose content, so unlike `edit_file` this tool is ledger-scoped: only
  * an entry attached to the Session, produced by an earlier turn, or created in
- * this turn can be read. Output is a bounded line window so a large file is
+ * this turn can be read. Output is a bounded text-line or raw JSON window so a large file is
  * paged rather than dumped into the context.
  */
 
 import * as z from 'zod';
 
+import type { ParsedDocument } from '@/backend/services/file/documentParser';
 import { readAttachmentContent } from '@/backend/services/file/readAttachmentContent';
 import { takeCodePoints } from '@/backend/services/file/utf8Text';
-import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
+import {
+  DEFAULT_DOCUMENT_PARSER_MODE,
+  FileAttachmentError,
+  type DocumentParserMode,
+} from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -43,6 +48,21 @@ export const readFileInputSchema = z.strictObject({
     .max(READ_FILE_MAX_LINE_LIMIT)
     .optional()
     .describe(`Maximum lines to return. Defaults to ${READ_FILE_DEFAULT_LINE_LIMIT}.`),
+  offset: z
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      'AnyDoc JSON only: zero-based Unicode code-point offset. Defaults to 0; continue with nextOffset.',
+    ),
+  max_characters: z
+    .int()
+    .min(1)
+    .max(READ_FILE_MAX_CHARACTERS)
+    .optional()
+    .describe(
+      `AnyDoc JSON only: maximum Unicode code points. Defaults to ${READ_FILE_MAX_CHARACTERS}. Do not combine with start_line or limit.`,
+    ),
 });
 
 export type ReadFileFiles = {
@@ -51,13 +71,20 @@ export type ReadFileFiles = {
   readDocumentText: ManagedFileResolver['readDocumentText'];
 };
 
-export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): RuntimeTool {
+export function createReadFileTool(
+  files: ReadFileFiles,
+  scope: TurnFileScope,
+  documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: READ_FILE_TOOL_NAME },
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
-    description:
-      'Read a window of lines from a Cherry-managed text, PDF, DOCX, PPTX, or XLSX file referenced in this conversation. Documents are read as extracted text; embedded images are not included. Use file_entry_id from an attachment or an earlier file tool result. Lines are numbered from 1; when truncated is true, use startLine + lineCount as the next start_line. A line too long for one window is cut and flagged with lineTruncated. sourceTruncated means document extraction reached its own limit and further lines are unavailable.',
+    description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. This turn uses the ${documentParserMode} document parser. ${
+      documentParserMode === 'anydoc'
+        ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Asset descriptors are references only: this tool sends no image pixels.'
+        : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
+    } PDF and ordinary text always use start_line and limit, never JSON offsets. Lines start at 1; when truncated, use startLine + lineCount. A line larger than one window is cut and flagged with lineTruncated. sourceTruncated means the extractor reached its own limit. No image pixels are returned by this tool.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal }) {
@@ -65,7 +92,19 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
       if (!parsed.success) {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
       }
-      const { file_entry_id, limit = READ_FILE_DEFAULT_LINE_LIMIT, start_line = 1 } = parsed.data;
+      const {
+        file_entry_id,
+        limit = READ_FILE_DEFAULT_LINE_LIMIT,
+        start_line = 1,
+        offset = 0,
+        max_characters = READ_FILE_MAX_CHARACTERS,
+      } = parsed.data;
+      const hasLineParameters =
+        parsed.data.start_line !== undefined || parsed.data.limit !== undefined;
+      const hasJsonParameters =
+        parsed.data.offset !== undefined || parsed.data.max_characters !== undefined;
+      if (hasLineParameters && hasJsonParameters)
+        return invalid('Line parameters and JSON offset parameters cannot be combined.');
       const fileEntryId = FileEntryIdSchema.parse(file_entry_id);
       if (!scope.fileEntryIds.has(fileEntryId)) {
         return invalid('The file is not part of this conversation.');
@@ -78,6 +117,7 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
       }
       let text: string;
       let sourceTruncated: boolean;
+      let parser: 'builtin' | 'native-pdf' | undefined;
       try {
         const content = await readAttachmentContent(
           source,
@@ -87,14 +127,59 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
           },
           signal,
           READ_FILE_MAX_SOURCE_BYTES,
-          'builtin',
+          documentParserMode,
         );
-        if (content.kind !== 'text')
-          throw new Error('Document reading requires a parser-aware tool.');
-        ({ text, sourceTruncated } = content);
+        if (content.kind === 'document') {
+          if (hasLineParameters)
+            return invalid('AnyDoc JSON requires offset/max_characters, not start_line/limit.');
+          const { parsed: document } = content;
+          const window = jsonCharacterWindow(
+            JSON.stringify(document.output.ir),
+            offset,
+            max_characters,
+          );
+          return {
+            value: {
+              status: 'ok',
+              fileEntryId,
+              filename: source.name,
+              size: source.size,
+              parser: document.parser,
+              parserVersion: document.parserVersion,
+              format: 'json-fragment',
+              ...window,
+              warnings: document.output.warnings,
+              assets: document.output.assets.map((asset) => ({
+                assetRef: asset.assetRef,
+                contentType: asset.contentType,
+                size: asset.bytes.byteLength,
+                delivery: 'reference-only',
+              })),
+            },
+            artifacts: [],
+          };
+        }
+        if (hasJsonParameters)
+          return invalid(
+            'Text and PDF output requires start_line/limit, not offset/max_characters.',
+          );
+        ({ text, sourceTruncated, parser } = content);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof FileAttachmentError) {
+          const cause = error.cause as ParsedDocument | undefined;
+          if (cause?.parser === 'anydoc' && cause.output?.status === 'fallback') {
+            return {
+              value: {
+                status: 'error',
+                message: error.message,
+                parser: cause.parser,
+                parserVersion: cause.parserVersion,
+                result: cause.output,
+              },
+              artifacts: [],
+            };
+          }
           return invalid(
             error.issue.code === 'document-empty'
               ? 'The document has no extractable text. Scanned or image-only documents require OCR.'
@@ -112,6 +197,7 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
           fileEntryId,
           filename: source.name,
           size: source.size,
+          ...(parser ? { parser } : {}),
           startLine: start_line,
           lineCount: window.lineCount,
           totalLines: window.totalLines,
@@ -123,6 +209,30 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
         artifacts: [],
       };
     },
+  };
+}
+
+/** One linear scan; windows concatenate losslessly even through long strings and surrogate pairs. */
+export function jsonCharacterWindow(text: string, offset: number, maxCharacters: number) {
+  let totalCharacters = 0;
+  let utf16Offset = 0;
+  let start = text.length;
+  let end = text.length;
+  for (const character of text) {
+    if (totalCharacters === offset) start = utf16Offset;
+    if (totalCharacters === offset + maxCharacters) end = utf16Offset;
+    totalCharacters += 1;
+    utf16Offset += character.length;
+  }
+  const characterCount = Math.min(maxCharacters, Math.max(0, totalCharacters - offset));
+  const complete = offset + characterCount >= totalCharacters;
+  return {
+    offset,
+    characterCount,
+    totalCharacters,
+    nextOffset: complete ? null : offset + characterCount,
+    complete,
+    text: text.slice(start, end),
   };
 }
 

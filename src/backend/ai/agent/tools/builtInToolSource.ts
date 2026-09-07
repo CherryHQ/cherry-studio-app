@@ -24,6 +24,7 @@ import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import {
@@ -89,6 +90,7 @@ export type { TurnFileScope, TurnToolResources } from '../resources/managedFileR
 export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
+    documentParserMode: DocumentParserMode;
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     resources: TurnToolResources;
@@ -121,7 +123,7 @@ export function createSystemCapabilitySource(
   overrides: Partial<SystemCapabilitySourceDependencies> = {},
 ): SystemCapabilitySource {
   return {
-    async getTools({ disabledCapabilities, model, resources }) {
+    async getTools({ disabledCapabilities, model, resources, documentParserMode }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
@@ -129,7 +131,7 @@ export function createSystemCapabilitySource(
       }
 
       const scope = await resolveScope(deps, new Set(disabledCapabilities));
-      const catalog = createCatalog(deps, scope, resources);
+      const catalog = createCatalog(deps, scope, resources, documentParserMode);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
@@ -200,6 +202,7 @@ function createCatalog(
   deps: SystemCapabilitySourceDependencies,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
+  documentParserMode: DocumentParserMode,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -212,7 +215,7 @@ function createCatalog(
       },
       resources,
     ),
-    createReadFileTool(managedFileResolver, resources),
+    createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
