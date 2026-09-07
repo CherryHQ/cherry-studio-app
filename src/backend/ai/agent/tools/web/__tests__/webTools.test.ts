@@ -88,6 +88,28 @@ describe('createWebTools', () => {
     expect(result.value).toMatchObject({ status: 'error' });
   });
 
+  test('passes the truncated content and marker to the model and persisted tool output', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => ({
+        ...RESPONSE,
+        results: [{ ...RESPONSE.results[0], content: 'Article prefix', truncated: true }],
+      }),
+    });
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com/a'],
+    });
+
+    expect(result.value).toEqual([
+      {
+        id: expect.any(String),
+        title: 'Cherry Studio',
+        url: 'https://example.com/a',
+        content: 'Article prefix',
+        truncated: true,
+      },
+    ]);
+  });
+
   test('describes both tools with stable built-in refs', () => {
     const tools = createWebTools({ webSearch: createWebSearch({}) });
 

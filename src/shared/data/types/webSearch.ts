@@ -95,6 +95,8 @@ export type WebSearchResult = {
   content: string;
   url: string;
   sourceInput: string;
+  /** The returned content is only a prefix of the provider's result. */
+  truncated?: boolean;
 };
 
 export type WebSearchResponse = {
@@ -126,6 +128,7 @@ export type WebSearchCheckProviderResponse = {
 };
 
 export type WebSearchCompressionConfig = {
+  /** Keyword-search policy; page fetches have independent mandatory limits. */
   method: WebSearchCompressionMethod;
   cutoffLimit: number;
 };

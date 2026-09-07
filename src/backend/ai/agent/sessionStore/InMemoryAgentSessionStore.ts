@@ -18,6 +18,7 @@ import type {
   ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
+  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -356,6 +357,27 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
     }
     return null;
+  }
+
+  async updateStreamingAssistantMessage(
+    input: UpdateStreamingAssistantMessageInput,
+  ): Promise<void> {
+    for (const transcript of this.messages.values()) {
+      const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
+      if (!stored) {
+        continue;
+      }
+      if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
+        return;
+      }
+      stored.view = {
+        ...stored.view,
+        status: 'streaming',
+        parts: cloneJson(input.parts),
+        updatedAt: nowIso(),
+      };
+      return;
+    }
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {

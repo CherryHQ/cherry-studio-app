@@ -1,11 +1,19 @@
-import { Image } from '@cherrystudio/ui/components';
+import { Button, Image, useToast } from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
+import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
 
 import { SourceLink } from '../SourceLink';
-import { formatToolResultJson, type ToolResultContent } from './toolResultContent';
+import {
+  createToolResultPreview,
+  formatToolResultJson,
+  getToolResultCopyText,
+  TOOL_RESULT_PREVIEW_LIMIT,
+  type ToolResultContent,
+} from './toolResultContent';
 
 type ToolResultContentRendererProps = {
   contents: readonly ToolResultContent[];
@@ -16,15 +24,47 @@ export function ToolResultContentRenderer({
   contents,
   imageAccessibilityLabel,
 }: ToolResultContentRendererProps) {
+  const preview = createToolResultPreview(contents);
+
   return (
     <View className="gap-2">
-      {contents.map((content, index) => (
+      {preview.contents.map((content, index) => (
         <ToolResultContentItem
           content={content}
           imageAccessibilityLabel={imageAccessibilityLabel}
           key={createContentKey(content, index)}
         />
       ))}
+      {preview.isTruncated ? <ToolResultOverflow contents={contents} /> : null}
+    </View>
+  );
+}
+
+function ToolResultOverflow({ contents }: { contents: readonly ToolResultContent[] }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const copy = async () => {
+    try {
+      await Clipboard.setStringAsync(getToolResultCopyText(contents));
+      toast.show({ label: t('chat.tool.copied'), variant: 'success' });
+    } catch {
+      toast.show({ label: t('chat.tool.copyFailed'), variant: 'danger' });
+    }
+  };
+
+  return (
+    <View className="items-start gap-1">
+      <Text className="text-muted-foreground text-xs">
+        {t('chat.tool.previewTruncated', { count: TOOL_RESULT_PREVIEW_LIMIT })}
+      </Text>
+      <Button
+        onPress={() => void copy()}
+        size="sm"
+        testID="tool-result-copy-full-text"
+        variant="ghost"
+      >
+        {t('chat.tool.copyFullText')}
+      </Button>
     </View>
   );
 }
