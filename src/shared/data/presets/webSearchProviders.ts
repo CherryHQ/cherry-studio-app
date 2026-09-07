@@ -72,7 +72,10 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   'exa-mcp': {
     name: 'ExaMCP',
     type: 'mcp',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' }],
+    capabilities: [
+      { feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' },
+      { feature: 'fetchUrls', apiHost: 'https://mcp.exa.ai/mcp' },
+    ],
   },
   bocha: {
     name: 'Bocha',

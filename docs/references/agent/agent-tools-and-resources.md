@@ -73,8 +73,13 @@ and auto-approval eligibility. The Agent editor enables or disables capability g
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
 auto-approval eligible: enabling the image group is not consent to spend provider quota.
 
-`web_search` and `web_fetch` additionally require their default web search provider to be chosen in
-settings. `generate_image` additionally requires a configured drawing model. An OS permission scope
+`web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
+installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
+requires a user API key.
+Calls use only the configured provider. A failed web lookup stops both tools for the current turn,
+retains successful content and failure details, and directs the model to answer from existing
+content. See [Web Search](../web-search.md) for the request and partial-result policy.
+`generate_image` additionally requires a configured drawing model. An OS permission scope
 that was never requested does not hide a device tool: it is offered as `ask`, and execution
 triggers the one-shot system permission prompt after the user approves the call in-app. A denied or
 unavailable scope removes the tool for the turn. The inference snapshot records the tools that
@@ -278,10 +283,9 @@ a separate hard execution limit.
 The turn-local web tools reuse identical pending and completed requests, including citation ids.
 Search keys normalize whitespace; page reads cache each URL independently, including across
 overlapping batches, and reset with the next turn's catalog. A partially successful batch keeps its
-successful pages and retries only failed URLs when requested again. Combining cached pages still
-applies the shared page and batch content limits. Transient failures permit one retry per query or
-URL. HTTP 4xx rejections other than request timeout (408), including rate limits (429), are
-non-retryable within the turn; cancellation still propagates without becoming a cached failure.
+successful pages alongside all failed inputs and stops both web tools for the turn. Combining cached
+pages still applies the shared page and batch content limits. Failed requests are cached without
+retry; cancellation still propagates without becoming a cached failure.
 
 ### Streamable HTTP MCP
 

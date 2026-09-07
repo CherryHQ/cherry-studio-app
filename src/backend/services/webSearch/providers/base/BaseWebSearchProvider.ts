@@ -47,6 +47,7 @@ export abstract class BaseWebSearchProvider {
     operation: string;
     responseSchema: z.ZodType<TResponse>;
     signal?: AbortSignal;
+    timeoutMs?: number;
     url: string;
   }): Promise<TResponse> {
     return this.jsonRequester<TResponse, TBody>({
@@ -62,6 +63,7 @@ export abstract class BaseWebSearchProvider {
       throw new HttpError(`${message}: HTTP ${response.status}`, {
         kind: 'http',
         status: response.status,
+        retryAfter: response.headers.get('retry-after') ?? undefined,
       });
     }
 
@@ -73,6 +75,7 @@ export abstract class BaseWebSearchProvider {
     throw new HttpError(`${message}: HTTP ${response.status} ${truncatedErrorText}`, {
       kind: 'http',
       status: response.status,
+      retryAfter: response.headers.get('retry-after') ?? undefined,
     });
   }
 }

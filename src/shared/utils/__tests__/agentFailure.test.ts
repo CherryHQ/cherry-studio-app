@@ -16,6 +16,8 @@ describe('classifyAgentFailureReason', () => {
     ],
     [{ message: 'maximum context length exceeded' }, 'context_length'],
     [{ message: 'stream ended unexpectedly' }, 'stream_interrupted'],
+    [{ message: 'Connection error.' }, 'network'],
+    [{ name: 'APIConnectionError', message: 'Connection error.' }, 'network'],
     [{ message: 'self-signed certificate' }, 'proxy_tls'],
     [{ message: 'MCP transport timed out' }, 'mcp'],
     [{ message: 'request failed', statusCode: 503 }, 'provider_unavailable'],

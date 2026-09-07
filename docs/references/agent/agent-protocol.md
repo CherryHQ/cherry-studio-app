@@ -286,6 +286,11 @@ Part ids are stable within a message. The protocol owns these normalized parts; 
 provider SDK shape leaks through the boundary. Text parts may contain Markdown, but tool calls and
 results remain structured protocol parts and are not flattened into display Markdown.
 
+Application tool failures use the ordinary error result envelope:
+`{ value: { status: 'error', error: { code, message, retryable }, details? }, artifacts: [] }`.
+Optional `details` retains the application's result, including successful sources and per-input
+lookup failures. Runtime-only stop policy is not persisted or replayed as execution authority.
+
 Every file part records a managed `fileEntryId` that existed when the part was written, together
 with stable display metadata such as name and media type; protocol values never use absolute device
 paths or transient import URIs as authority. The managed entry may later be deleted, in which case

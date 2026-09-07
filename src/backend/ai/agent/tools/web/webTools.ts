@@ -1,8 +1,8 @@
 /**
  * Web search and fetch.
  *
- * The system catalog creates fresh tools for each turn. Keep request reuse and
- * retry accounting here so they cannot outlive that turn. Provider resolution,
+ * The system catalog creates fresh tools for each turn. Keep request reuse
+ * here so it cannot outlive that turn. Provider resolution,
  * mapping, and error classification live in `webLookup`.
  */
 
@@ -21,6 +21,7 @@ import type { RuntimeTool, RuntimeToolResult } from '../../runtime';
 import { raceAbort } from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import {
+  createWebLookupError,
   fetchWeb,
   isWebLookupError,
   searchWeb,
@@ -50,6 +51,7 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_SEARCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webSearchInputSchema),
       approval: 'auto',
+      failureGroup: 'web',
       execute: async ({ input, signal }) => {
         const parsed = webSearchInputSchema.safeParse(input);
         if (!parsed.success) {
@@ -68,29 +70,39 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_FETCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webFetchInputSchema),
       approval: 'auto',
+      failureGroup: 'web',
       execute: async ({ input, signal }) => {
         const parsed = webFetchInputSchema.safeParse(input);
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
         const urls = [...new Set(parsed.data.urls)].sort();
-        // A service batch can silently omit failed pages. Request/cache each URL
-        // separately so its error classification and one retry remain intact.
+        // Cache each URL so overlapping batches reuse sources and citation ids.
         const outputs = await Promise.all(
           urls.map((url) => runFetch(url, () => fetchWeb(deps.webSearch, [url], signal), signal)),
         );
-        const successful = outputs.filter((output) => !isWebLookupError(output));
+        const failures = outputs.filter(isWebLookupError);
+        const results = boundWebFetchResults(
+          outputs.flatMap((output) => (isWebLookupError(output) ? output.results : output)),
+        );
         return webLookupToolResult(
-          successful.length > 0 ? boundWebFetchResults(successful.flat()) : outputs[0],
+          failures.length > 0
+            ? createWebLookupError(
+                failures.flatMap((output) => output.failures),
+                'fetchUrls',
+                results,
+                failures[0].providerId,
+              )
+            : results,
         );
       },
     },
   ];
 }
 
-/** Share pending/successful lookups and allow only one retry of the same failed request. */
+/** Share pending/completed lookups, including failures that must not be retried this turn. */
 function createLookupRunner() {
-  const lookups = new Map<string, { attempts: number; result?: Promise<WebLookupResult> }>();
+  const lookups = new Map<string, Promise<WebLookupResult>>();
 
   return async (
     key: string,
@@ -98,41 +110,29 @@ function createLookupRunner() {
     signal: AbortSignal,
   ): Promise<WebLookupResult> => {
     signal.throwIfAborted();
-    const entry = lookups.get(key) ?? { attempts: 0, result: undefined };
-    lookups.set(key, entry);
-    if (entry.result) return raceAbort(entry.result, signal);
+    const cached = lookups.get(key);
+    if (cached) return raceAbort(cached, signal);
 
-    entry.attempts += 1;
-    entry.result = lookup()
-      .then((output) => {
-        if (isWebLookupError(output) && output.retryable) {
-          if (entry.attempts < 2) {
-            entry.result = undefined;
-          } else {
-            return {
-              ...output,
-              userMessage:
-                'This web lookup failed again after one retry. Do not retry it; answer from available sources and state the limitation.',
-              retryable: false,
-            };
-          }
-        }
-        return output;
-      })
-      .catch((error: unknown) => {
-        lookups.delete(key);
-        throw error;
-      });
-    return raceAbort(entry.result, signal);
+    const result = lookup().catch((error: unknown) => {
+      lookups.delete(key);
+      throw error;
+    });
+    lookups.set(key, result);
+    return raceAbort(result, signal);
   };
 }
 
 /** A malformed call is the model's to fix, so it settles as a value it can read. */
 function invalidInput(error: z.ZodError): RuntimeToolResult {
+  const message = `Invalid input: ${z.prettifyError(error)}`;
   return {
+    failure: {
+      scope: 'call',
+      error: { code: 'invalid_tool_input', message, retryable: true, origin: 'tool' },
+    },
     value: {
       status: 'error',
-      message: `Invalid input: ${z.prettifyError(error)}`,
+      message,
       retryable: true,
     },
     artifacts: [],

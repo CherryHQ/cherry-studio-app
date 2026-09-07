@@ -280,6 +280,7 @@ const ErrorToolResultSchema = z.strictObject({
   value: z.strictObject({
     status: z.literal('error'),
     error: z.strictObject({ code: z.string(), message: z.string(), retryable: z.boolean() }),
+    details: JsonValueSchema.optional(),
   }),
   artifacts: z.tuple([]),
 });

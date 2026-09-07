@@ -44,16 +44,172 @@ describe('createWebTools', () => {
     expect(String((result.value as { message: string }).message)).toContain('do not retry');
   });
 
-  test('keeps a provider hiccup retryable', async () => {
+  test('stops after an unclassified failure and asks for an answer from existing content', async () => {
     const webSearch = createWebSearch({
       searchKeywords: async () => {
-        throw new Error('socket hang up');
+        throw new Error('The requested page could not be read');
       },
     });
 
     const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
 
-    expect(result.value).toMatchObject({ status: 'error', retryable: true });
+    expect(result.value).toMatchObject({ status: 'error', retryable: false });
+    expect(result.failure?.scope).toBe('tool');
+    expect((result.value as { message: string }).message).toContain('content already obtained');
+  });
+
+  test('preserves provider and input diagnostics when a lookup fails', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => ({
+        ...RESPONSE,
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        results: [],
+        failures: [
+          { input: 'https://example.com', kind: 'http', status: 429, message: 'Too many requests' },
+        ],
+      }),
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com'],
+    });
+
+    expect(result).toMatchObject({
+      failure: { scope: 'tool', error: { code: 'web_lookup_failed', retryable: false } },
+      value: {
+        status: 'error',
+        retryable: false,
+        providerId: 'jina',
+        failures: [{ input: 'https://example.com', kind: 'http', status: 429 }],
+      },
+    });
+    expect(result.failure?.error.message).toContain('jina: https://example.com');
+    expect((result.value as { message: string }).message).toContain('Do not retry');
+  });
+
+  test('stops network-failed lookups for this turn and explains the connection problem', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw new HttpError('Jina: Network request failed', { kind: 'network' });
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com'],
+    });
+
+    expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
+    expect(result.value).toMatchObject({
+      error: expect.stringContaining('Jina: Network request failed'),
+      message: expect.stringContaining('check their network connection'),
+    });
+    expect((result.value as { message: string }).message).toContain('do not retry automatically');
+  });
+
+  test.each(['MCP_INVALID_RESPONSE', 'MCP_TOOL_ERROR'])(
+    'stops a provider failure with code %s without changing the query',
+    async (code) => {
+      const webSearch = createWebSearch({
+        searchKeywords: async () => {
+          throw new HttpError('Exa MCP failed', { kind: 'invalid_response', code });
+        },
+      });
+
+      const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
+
+      expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
+    },
+  );
+
+  test('stops after a target-page failure instead of trying another URL', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw new HttpError('Page not found', { kind: 'http', status: 404 });
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com/missing'],
+    });
+
+    expect(result.failure).toMatchObject({
+      scope: 'tool',
+      error: { message: expect.stringContaining('Page not found') },
+    });
+  });
+
+  test('keeps citable content and failed inputs together when only part of a lookup succeeds', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async ({ urls }) => ({
+        ...pageResponse(urls[0]),
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        results: urls[0].endsWith('/a') ? RESPONSE.results : [],
+        failures: urls[0].endsWith('/a')
+          ? []
+          : [{ input: urls[0], kind: 'http', status: 404, message: 'Not found' }],
+      }),
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com/a', 'https://example.com/b', 'https://example.com/c'],
+    });
+
+    expect(result.value).toMatchObject({
+      status: 'partial',
+      results: [{ id: expect.any(String), content: 'Body', url: 'https://example.com/a' }],
+      failures: [
+        { input: 'https://example.com/b', status: 404 },
+        { input: 'https://example.com/c', status: 404 },
+      ],
+      retryable: false,
+    });
+    expect(result.failure?.scope).toBe('tool');
+  });
+
+  test('retains sources inside an individual partial provider response', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => ({
+        ...RESPONSE,
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        failures: [
+          { input: 'https://example.com/a', kind: 'invalid_response', message: 'Incomplete page' },
+        ],
+      }),
+    });
+    const tool = toolNamed(webSearch, 'web_fetch');
+    const result = await execute(tool, { urls: ['https://example.com/a'] });
+    const repeated = await execute(tool, { urls: ['https://example.com/a'] });
+
+    expect(result.value).toMatchObject({
+      status: 'partial',
+      results: [{ id: expect.any(String), content: 'Body', url: 'https://example.com/a' }],
+      failures: [{ input: 'https://example.com/a', kind: 'invalid_response' }],
+    });
+    expect(result.failure?.scope).toBe('tool');
+    expect(repeated).toEqual(result);
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(1);
+  });
+
+  test('propagates cancellation without manufacturing a provider failure', async () => {
+    const controller = new AbortController();
+    const abort = new DOMException('Cancelled', 'AbortError');
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        controller.abort();
+        throw abort;
+      },
+    });
+
+    await expect(
+      toolNamed(webSearch, 'web_fetch').execute({
+        input: { urls: ['https://example.com'] },
+        signal: controller.signal,
+        toolCallId: 'cancelled',
+      }),
+    ).rejects.toBe(abort);
   });
 
   test('reuses concurrent and completed searches, including their citation ids', async () => {
@@ -94,14 +250,14 @@ describe('createWebTools', () => {
 
       expect(first.value).toMatchObject({ status: 'error', retryable: false });
       expect(first.value).toMatchObject({
-        message: expect.stringContaining(status === 429 ? 'rate limited' : `HTTP ${status}`),
+        failures: [expect.objectContaining({ kind: 'http', status })],
       });
       expect(repeated).toEqual(first);
       expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
     },
   );
 
-  test('stops retrying a transient failure after one retry', async () => {
+  test('does not retry a transient failure within the turn', async () => {
     const webSearch = createWebSearch({
       searchKeywords: async () => {
         throw new HttpError('Provider unavailable', { kind: 'http', status: 503 });
@@ -109,16 +265,15 @@ describe('createWebTools', () => {
     });
     const tool = toolNamed(webSearch, 'web_search');
     const first = await execute(tool, { query: 'cherry studio' });
-    const retry = await execute(tool, { query: 'cherry studio' });
     const repeated = await execute(tool, { query: 'cherry studio' });
 
-    expect(first.value).toMatchObject({ status: 'error', retryable: true });
-    expect(retry.value).toMatchObject({ status: 'error', retryable: false });
-    expect(repeated).toEqual(retry);
-    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(2);
+    expect(first.value).toMatchObject({ status: 'error', retryable: false });
+    expect(first.failure?.scope).toBe('tool');
+    expect(repeated).toEqual(first);
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
   });
 
-  test('caches the result of a successful retry', async () => {
+  test('allows a failed lookup in the next turn and caches its successful result', async () => {
     let attempts = 0;
     const webSearch = createWebSearch({
       searchKeywords: async () => {
@@ -130,9 +285,11 @@ describe('createWebTools', () => {
       },
     });
     const tool = toolNamed(webSearch, 'web_search');
-    await execute(tool, { query: 'cherry studio' });
-    const retry = await execute(tool, { query: 'cherry studio' });
-    const repeated = await execute(tool, { query: 'cherry studio' });
+    const failed = await execute(tool, { query: 'cherry studio' });
+    expect(await execute(tool, { query: 'cherry studio' })).toEqual(failed);
+    const nextTurnTool = toolNamed(webSearch, 'web_search');
+    const retry = await execute(nextTurnTool, { query: 'cherry studio' });
+    const repeated = await execute(nextTurnTool, { query: 'cherry studio' });
 
     expect(retry.value).toEqual([expect.objectContaining({ content: 'Body' })]);
     expect(repeated).toEqual(retry);
@@ -163,6 +320,7 @@ describe('createWebTools', () => {
 
     expect(webSearch.searchKeywords).not.toHaveBeenCalled();
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
+    expect(result.failure?.scope).toBe('call');
   });
 
   test('fetches known page URLs', async () => {
@@ -198,11 +356,10 @@ describe('createWebTools', () => {
     expect(repeated).toEqual(first);
   });
 
-  test('retries only the failed page in a partially successful batch', async () => {
-    let failedPageAttempts = 0;
+  test('retains successful pages and cached failures without retrying a partial batch', async () => {
     const webSearch = createWebSearch({
       fetchUrls: async ({ urls }) => {
-        if (urls[0].endsWith('/b') && ++failedPageAttempts === 1) {
+        if (urls[0].endsWith('/b')) {
           throw new HttpError('Temporarily unavailable', { kind: 'http', status: 503 });
         }
         return pageResponse(urls[0]);
@@ -211,28 +368,25 @@ describe('createWebTools', () => {
     const tool = toolNamed(webSearch, 'web_fetch');
     const input = { urls: ['https://example.com/a', 'https://example.com/b'] };
     const first = await execute(tool, input);
-    const retry = await execute(tool, input);
     const repeated = await execute(tool, input);
 
-    expect(first.value).toEqual([expect.objectContaining({ url: input.urls[0] })]);
-    expect(retry.value).toEqual([
-      ...(first.value as unknown[]),
-      expect.objectContaining({ url: input.urls[1] }),
-    ]);
-    expect(repeated).toEqual(retry);
+    expect(first.value).toMatchObject({
+      status: 'partial',
+      results: [expect.objectContaining({ url: input.urls[0] })],
+      failures: [expect.objectContaining({ input: input.urls[1], status: 503 })],
+      retryable: false,
+    });
+    expect(first.failure?.scope).toBe('tool');
+    expect(repeated).toEqual(first);
     expect(webSearch.fetchUrls.mock.calls.map(([request]) => request.urls)).toEqual([
       [input.urls[0]],
-      [input.urls[1]],
       [input.urls[1]],
     ]);
   });
 
-  test.each([
-    { status: 503, attempts: 2 },
-    { status: 429, attempts: 1 },
-  ])(
-    'bounds retries for an HTTP $status page even in overlapping batches',
-    async ({ status, attempts }) => {
+  test.each([503, 429])(
+    'does not retry an HTTP %i page even in overlapping batches',
+    async (status) => {
       const webSearch = createWebSearch({
         fetchUrls: async ({ urls }) => {
           if (urls[0].endsWith('/b')) {
@@ -255,8 +409,8 @@ describe('createWebTools', () => {
       expect(failed.value).toMatchObject({ status: 'error', retryable: false });
       expect(
         webSearch.fetchUrls.mock.calls.filter(([request]) => request.urls[0].endsWith('/b')),
-      ).toHaveLength(attempts);
-      expect(webSearch.fetchUrls).toHaveBeenCalledTimes(2 + attempts);
+      ).toHaveLength(1);
+      expect(webSearch.fetchUrls).toHaveBeenCalledTimes(3);
     },
   );
 

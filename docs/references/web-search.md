@@ -34,17 +34,43 @@ Runtime behavior:
 
 - selects a provider by requested capability;
 - builds runtime configuration from preferences;
-- executes one request per normalized keyword or URL;
-- merges successful results and logs partial failures;
+- executes one request per normalized keyword or URL using only the selected provider;
+- returns successful results alongside failed inputs, retaining error kind, message, and available
+  status/code even when every input fails;
+- logs failures with their provider and capability; it never retries or switches providers;
 - bounds fetched page content and applies configured search-result compression;
 - propagates caller aborts.
 
 ## Provider Registry
 
-Current mobile provider ids are `zhipu`, `tavily`, `searxng`, `exa`, `bocha`, `querit`, and `jina`.
-`exa-mcp`, `fetch`, and `firecrawl` remain explicit unsupported entries. They are hidden from mobile
-settings and selectors, while old stored ids fail with an unsupported-provider error rather than
-being silently rewritten.
+Current mobile provider ids are `zhipu`, `tavily`, `exa`, `exa-mcp`, `bocha`, `querit`, `jina`,
+and `firecrawl`. SearXNG remains data-compatible but hidden from mobile settings and selectors.
+The direct `fetch` provider is unsupported on mobile; old stored selections fail with an
+unsupported-provider error rather than being silently rewritten.
+
+Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
+for page reading, both without requiring a user API key. Exa MCP also supports page reading
+(`web_fetch_exa`) when explicitly selected; its optional configured key uses `x-api-key`.
+Both services handle page extraction remotely; mobile does not parse arbitrary HTML. The Exa adapter
+accepts MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
+protocol/tool errors as failures rather than empty successful searches.
+
+Stored provider selections remain unchanged. A selected provider is the only request destination,
+including when it uses a custom host. Exa and Jina reader calls allow 60 seconds each; Exa keyword
+search retains its 25-second limit. Caller cancellation propagates without becoming a lookup error.
+
+Any lookup failure, including a failed URL in an otherwise successful batch, stops new calls to
+both `web_search` and `web_fetch` for the current turn. The tools share the Runtime's `web` failure
+group. Already running requests may finish and contribute content; no retry, alternate query, or
+provider switch is started after failure. Invalid tool arguments remain correctable before a
+network request is made. A new user turn starts with both configured capabilities available again.
+
+The failed tool result retains citable successful content and per-input diagnostics. The model is
+instructed to answer from content already obtained and explain missing sources, or explain the
+failure if no content was obtained. The Host persists these details in the ordinary error envelope;
+the frontend retains successful sources for citation even when the tool part reports an error.
+Network failures ask the user to check connectivity without drawing conclusions about a provider's
+pricing or extraction capability. Other, non-web tools remain available.
 
 ## Preferences
 

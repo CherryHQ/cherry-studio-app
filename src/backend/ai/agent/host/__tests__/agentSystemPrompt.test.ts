@@ -82,6 +82,7 @@ describe('buildAgentSystemPrompt', () => {
       'fetch the relevant known URLs to obtain citation IDs for the current turn',
     );
     expect(withWeb).toContain('never reuse citation IDs from earlier turns');
+    expect(withWeb).toContain('After any lookup failure, stop using both web tools for this turn');
     expect(withMcp).not.toContain('## Web Research');
     expect(withMcp).not.toContain('## Web Citations');
   });
