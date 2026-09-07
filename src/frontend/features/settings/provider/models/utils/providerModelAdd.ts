@@ -1,17 +1,25 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
-import type { CreateModelDto } from '@/shared/data/api/schemas/models';
+import { type CreateModelDto, MODELS_BATCH_MAX_ITEMS } from '@/shared/data/api/schemas/models';
 import {
   createUniqueModelId,
   type EndpointType,
   type Model,
-  type UniqueModelId,
+  UniqueModelIdSchema,
 } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
 
+export type ProviderModelAddCapability = 'vision' | 'drawing';
+export type ProviderModelAddEndpoint = 'auto' | EndpointType;
 export type ProviderModelAddFormState = {
+  capabilities: Partial<Record<ProviderModelAddCapability, boolean>>;
   contextWindow: string;
-  endpointTypes: EndpointType[];
+  endpointType: ProviderModelAddEndpoint;
   group: string;
   maxInputTokens: string;
   maxOutputTokens: string;
@@ -19,27 +27,14 @@ export type ProviderModelAddFormState = {
   name: string;
 };
 
+type NumberField = 'contextWindow' | 'maxInputTokens' | 'maxOutputTokens';
 export type ProviderModelAddBuildResult = {
   duplicateIds: string[];
+  invalidIds: string[];
+  endpointErrorIds: string[];
+  errors: Partial<Record<NumberField | 'modelId' | 'endpointType', string>>;
   inputs: CreateModelDto[];
 };
-
-export type ProviderModelAddMode = 'endpoint-types' | 'legacy' | 'purpose';
-export type ProviderModelPurpose = 'chat' | 'image-edit' | 'image-generation';
-
-export const PROVIDER_MODEL_PURPOSE_OPTIONS = [
-  { id: 'chat', labelKey: 'settings.provider.models.addPurpose.chat' },
-  {
-    id: 'image-generation',
-    labelKey: 'settings.provider.models.addPurpose.imageGeneration',
-  },
-  { id: 'image-edit', labelKey: 'settings.provider.models.addPurpose.imageEdit' },
-] as const satisfies readonly { id: ProviderModelPurpose; labelKey: string }[];
-
-const OPENAI_COMPATIBLE_TEXT_ENDPOINT_TYPES = new Set<EndpointType>([
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
-]);
 
 export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
@@ -47,10 +42,7 @@ export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
 ] as const satisfies readonly EndpointType[];
-
 export type ProviderModelChatEndpointType = (typeof PROVIDER_MODEL_CHAT_ENDPOINT_TYPES)[number];
-
-export const providerModelAddDefaultEndpointType = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
 
 export const providerModelAddEndpointOptions = [
   { id: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, labelKey: 'endpoint_type.openai' },
@@ -61,14 +53,11 @@ export const providerModelAddEndpointOptions = [
   { id: ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, labelKey: 'endpoint_type.image-edit' },
 ] as const satisfies readonly { id: EndpointType; labelKey: string }[];
 
-const GATEWAY_PROVIDER_IDS = ['new-api', 'newapi', 'cherryin', 'aionly'] as const;
-
-export function createInitialProviderModelAddFormState(
-  endpointType: EndpointType = providerModelAddDefaultEndpointType,
-): ProviderModelAddFormState {
+export function createInitialProviderModelAddFormState(): ProviderModelAddFormState {
   return {
+    capabilities: {},
     contextWindow: '',
-    endpointTypes: [endpointType],
+    endpointType: 'auto',
     group: '',
     maxInputTokens: '',
     maxOutputTokens: '',
@@ -89,20 +78,15 @@ export function getDefaultProviderModelGroupName(id: string, providerId?: string
     firstDelimiters = ['/', ' ', '-', '_', ':'];
     secondDelimiters = [];
   }
-
   for (const delimiter of firstDelimiters) {
-    if (str.includes(delimiter)) {
-      return str.split(delimiter)[0] ?? str;
-    }
+    if (str.includes(delimiter)) return str.split(delimiter)[0] ?? str;
   }
-
   for (const delimiter of secondDelimiters) {
     if (str.includes(delimiter)) {
       const parts = str.split(delimiter);
       return parts.length > 1 ? `${parts[0]}-${parts[1]}` : (parts[0] ?? str);
     }
   }
-
   return str;
 }
 
@@ -114,86 +98,24 @@ export function splitProviderModelIds(rawModelId: string): string[] {
     .filter(Boolean);
 }
 
-export function isNewApiLikeProvider(provider: Provider | undefined): boolean {
-  if (!provider) {
-    return false;
-  }
-
-  return (
-    GATEWAY_PROVIDER_IDS.includes(provider.id as (typeof GATEWAY_PROVIDER_IDS)[number]) ||
-    GATEWAY_PROVIDER_IDS.includes(
-      provider.presetProviderId as (typeof GATEWAY_PROVIDER_IDS)[number],
-    )
-  );
-}
-
-export function getProviderModelAddMode(provider: Provider | undefined): ProviderModelAddMode {
-  if (!provider) {
-    return 'legacy';
-  }
-  if (isNewApiLikeProvider(provider)) {
-    return 'endpoint-types';
-  }
-  return provider.presetProviderId == null ? 'purpose' : 'legacy';
+export function isProviderModelAddIdValid(providerId: string, modelId: string): boolean {
+  return UniqueModelIdSchema.safeParse(`${providerId}::${modelId}`).success;
 }
 
 export function getProviderChatEndpointTypes(
   provider: Pick<Provider, 'defaultChatEndpoint' | 'endpointConfigs'>,
 ): ProviderModelChatEndpointType[] {
   const endpointTypes: ProviderModelChatEndpointType[] = [];
-
-  if (
-    isProviderModelChatEndpointType(provider.defaultChatEndpoint) &&
-    provider.endpointConfigs?.[provider.defaultChatEndpoint]?.baseUrl?.trim()
-  ) {
-    endpointTypes.push(provider.defaultChatEndpoint);
+  const defaultType = PROVIDER_MODEL_CHAT_ENDPOINT_TYPES.find(
+    (type) => type === provider.defaultChatEndpoint,
+  );
+  if (defaultType && provider.endpointConfigs?.[defaultType]?.baseUrl?.trim())
+    endpointTypes.push(defaultType);
+  for (const type of PROVIDER_MODEL_CHAT_ENDPOINT_TYPES) {
+    if (provider.endpointConfigs?.[type]?.baseUrl?.trim() && !endpointTypes.includes(type))
+      endpointTypes.push(type);
   }
-
-  for (const endpointType of PROVIDER_MODEL_CHAT_ENDPOINT_TYPES) {
-    if (
-      provider.endpointConfigs?.[endpointType]?.baseUrl?.trim() &&
-      !endpointTypes.includes(endpointType)
-    ) {
-      endpointTypes.push(endpointType);
-    }
-  }
-
   return endpointTypes;
-}
-
-export function getProviderModelPurposeOptions(provider: Provider) {
-  return PROVIDER_MODEL_PURPOSE_OPTIONS.filter(({ id }) => {
-    if (id === 'chat') {
-      return true;
-    }
-
-    const endpointType = getProviderModelPurposeEndpointType(
-      id,
-      providerModelAddDefaultEndpointType,
-    );
-    if (provider.endpointConfigs?.[endpointType]?.baseUrl?.trim()) {
-      return true;
-    }
-
-    const defaultEndpointType = provider.defaultChatEndpoint;
-    return (
-      defaultEndpointType != null &&
-      OPENAI_COMPATIBLE_TEXT_ENDPOINT_TYPES.has(defaultEndpointType) &&
-      Boolean(provider.endpointConfigs?.[defaultEndpointType]?.baseUrl?.trim())
-    );
-  });
-}
-
-export function inferProviderModelPurpose(
-  endpointTypes: readonly EndpointType[],
-): ProviderModelPurpose {
-  if (endpointTypes[0] === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT) {
-    return 'image-edit';
-  }
-  if (endpointTypes[0] === ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION) {
-    return 'image-generation';
-  }
-  return 'chat';
 }
 
 export function getProviderModelEndpointLabelKey(endpointType: EndpointType): string {
@@ -203,167 +125,206 @@ export function getProviderModelEndpointLabelKey(endpointType: EndpointType): st
   );
 }
 
-export function getProviderModelPurposeEndpointType(
-  purpose: ProviderModelPurpose,
-  chatEndpointType: ProviderModelChatEndpointType,
-): EndpointType {
-  if (purpose === 'image-edit') {
-    return ENDPOINT_TYPE.OPENAI_IMAGE_EDIT;
-  }
-  if (purpose === 'image-generation') {
-    return ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION;
-  }
-  return chatEndpointType;
+export function isProviderModelImageEndpoint(
+  endpointType: ProviderModelAddEndpoint | undefined,
+): boolean {
+  return (
+    endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION ||
+    endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT
+  );
+}
+
+/** Only the existing OpenAI-compatible fallback may supply a generic image URL. */
+export function getProviderModelAddEndpointOptions(provider: Provider) {
+  return providerModelAddEndpointOptions.filter(({ id }) => {
+    if (provider.endpointConfigs?.[id]?.baseUrl?.trim()) return true;
+    const fallback = provider.defaultChatEndpoint;
+    return (
+      isProviderModelImageEndpoint(id) &&
+      (fallback === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS ||
+        fallback === ENDPOINT_TYPE.OPENAI_RESPONSES) &&
+      Boolean(provider.endpointConfigs?.[fallback]?.baseUrl?.trim())
+    );
+  });
+}
+
+export function getProviderModelAddCapabilities(
+  form: ProviderModelAddFormState,
+  baseline?: Model,
+  isBatch = false,
+) {
+  return {
+    vision: isBatch
+      ? form.capabilities.vision === true
+      : (form.capabilities.vision ??
+        baseline?.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ??
+        false),
+    drawing:
+      isProviderModelImageEndpoint(form.endpointType) ||
+      (!isBatch &&
+        form.endpointType === 'auto' &&
+        baseline?.endpointTypes?.some(isProviderModelImageEndpoint)) ||
+      (isBatch
+        ? form.capabilities.drawing === true
+        : (form.capabilities.drawing ?? (baseline ? isImageGenerationModel(baseline) : false))),
+  };
 }
 
 export function buildProviderModelAddInputs({
   existingModels,
   formState,
   provider,
-  providerId,
+  resolvedModels,
 }: {
   existingModels: readonly Model[];
   formState: ProviderModelAddFormState;
-  provider: Provider | undefined;
-  providerId: string;
+  provider: Provider;
+  resolvedModels: readonly Model[];
 }): ProviderModelAddBuildResult {
+  const result: ProviderModelAddBuildResult = {
+    duplicateIds: [],
+    invalidIds: [],
+    endpointErrorIds: [],
+    errors: {},
+    inputs: [],
+  };
   const modelIds = splitProviderModelIds(formState.modelId);
-  const existingIds = new Set(existingModels.map((model) => model.id));
-  const seenIds = new Set<UniqueModelId>();
-  const duplicateIds: string[] = [];
-  const inputs: CreateModelDto[] = [];
   const isBatch = modelIds.length > 1;
-  const modelFields = buildProviderModelAddFields(provider, formState);
+  const seenIds = new Set(existingModels.map((model) => model.id));
+  const baselines = new Map(resolvedModels.map((model) => [model.modelId, model]));
 
   for (const modelId of modelIds) {
-    const uniqueId = createUniqueModelId(providerId, modelId);
-    if (existingIds.has(uniqueId) || seenIds.has(uniqueId)) {
-      duplicateIds.push(modelId);
+    if (!isProviderModelAddIdValid(provider.id, modelId)) {
+      result.invalidIds.push(modelId);
       continue;
     }
-
-    seenIds.add(uniqueId);
-    inputs.push(
-      isBatch
-        ? buildBatchProviderModelAddInput({
-            modelFields,
-            modelId,
-            providerId,
-          })
-        : buildSingleProviderModelAddInput({
-            formState,
-            modelFields,
-            modelId,
-            providerId,
-          }),
+    const id = createUniqueModelId(provider.id, modelId);
+    if (seenIds.has(id)) {
+      result.duplicateIds.push(modelId);
+      continue;
+    }
+    seenIds.add(id);
+    const baseline = baselines.get(modelId);
+    const { fields, endpointError, drawing } = buildCapabilityFields(
+      formState,
+      provider,
+      baseline,
+      isBatch,
     );
+    if (endpointError) {
+      result.endpointErrorIds.push(modelId);
+      result.errors.endpointType = endpointError;
+    }
+    const input: CreateModelDto = { modelId, providerId: provider.id, ...fields };
+    // Omitting catalog metadata keeps it live; custom models retain useful local defaults.
+    if (!isBatch && formState.name.trim()) input.name = formState.name.trim();
+    if (!isBatch && formState.group.trim()) input.group = formState.group.trim();
+    if (!baseline?.presetModelId) {
+      input.name ??= modelId;
+      input.group ??= getDefaultProviderModelGroupName(modelId, provider.id);
+    }
+    if (!isBatch && !drawing) {
+      for (const field of ['contextWindow', 'maxInputTokens', 'maxOutputTokens'] as const) {
+        const value = formState[field].trim();
+        if (!value) continue;
+        if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) {
+          result.errors[field] = 'settings.provider.models.addPositiveInteger';
+        } else input[field] = Number(value);
+      }
+      const context =
+        input.contextWindow ?? baseline?.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
+      const output =
+        input.maxOutputTokens ?? baseline?.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
+      const maxInput = input.maxInputTokens ?? baseline?.maxInputTokens;
+      if (output >= context)
+        result.errors.maxOutputTokens = 'settings.provider.models.addOutputLimitError';
+      if (maxInput !== undefined && maxInput > context)
+        result.errors.maxInputTokens = 'settings.provider.models.addInputLimitError';
+    }
+    result.inputs.push(input);
+  }
+  if (modelIds.length === 0) result.errors.modelId = 'settings.provider.models.addModelIdRequired';
+  else if (result.invalidIds.length > 0)
+    result.errors.modelId = 'settings.provider.models.addInvalidIds';
+  else if (result.inputs.length > MODELS_BATCH_MAX_ITEMS)
+    result.errors.modelId = 'settings.provider.models.addBatchLimit';
+  return result;
+}
+
+function buildCapabilityFields(
+  form: ProviderModelAddFormState,
+  provider: Provider,
+  baseline: Model | undefined,
+  isBatch: boolean,
+) {
+  const fields: Pick<
+    CreateModelDto,
+    'capabilities' | 'endpointTypes' | 'inputModalities' | 'outputModalities'
+  > = {};
+  const visionOverride =
+    isBatch && form.capabilities.vision !== true ? undefined : form.capabilities.vision;
+  const drawingOverride =
+    isBatch && form.capabilities.drawing !== true ? undefined : form.capabilities.drawing;
+  const inheritedDrawing = baseline ? isImageGenerationModel(baseline) : false;
+  const explicitEndpoint = form.endpointType === 'auto' ? undefined : form.endpointType;
+  const endpoints = explicitEndpoint ? [explicitEndpoint] : baseline?.endpointTypes;
+  const imageEndpoint = endpoints?.some(isProviderModelImageEndpoint) ?? false;
+  const drawing = imageEndpoint || (drawingOverride ?? inheritedDrawing);
+  const vision =
+    visionOverride ?? baseline?.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ?? false;
+  let endpointError: string | undefined;
+
+  if (explicitEndpoint) fields.endpointTypes = [explicitEndpoint];
+  if (drawingOverride === false && imageEndpoint)
+    endpointError = 'settings.provider.models.addImageEndpointConflict';
+  if (drawing && !imageEndpoint) {
+    // Registered native image routes (including language protocols) remain owned by the catalog.
+    const keepsNativeRoute =
+      inheritedDrawing && (!explicitEndpoint || explicitEndpoint === baseline?.endpointTypes?.[0]);
+    if (!keepsNativeRoute) {
+      const fallback = getProviderModelAddEndpointOptions(provider).find(({ id }) =>
+        isProviderModelImageEndpoint(id),
+      );
+      if (!explicitEndpoint && fallback) fields.endpointTypes = [fallback.id];
+      else endpointError = 'settings.provider.models.addImageEndpointRequired';
+    }
   }
 
-  return { duplicateIds, inputs };
-}
-
-function buildSingleProviderModelAddInput({
-  formState,
-  modelFields,
-  modelId,
-  providerId,
-}: {
-  formState: ProviderModelAddFormState;
-  modelFields: ProviderModelAddFields;
-  modelId: string;
-  providerId: string;
-}): CreateModelDto {
-  return removeUndefinedCreateModelFields({
-    contextWindow: parseOptionalNumber(formState.contextWindow),
-    group: formState.group.trim() || getDefaultProviderModelGroupName(modelId),
-    maxInputTokens: parseOptionalNumber(formState.maxInputTokens),
-    maxOutputTokens: parseOptionalNumber(formState.maxOutputTokens),
-    ...modelFields,
-    modelId,
-    name: formState.name.trim() || modelId.toUpperCase(),
-    providerId,
-  });
-}
-
-function buildBatchProviderModelAddInput({
-  modelFields,
-  modelId,
-  providerId,
-}: {
-  modelFields: ProviderModelAddFields;
-  modelId: string;
-  providerId: string;
-}): CreateModelDto {
-  return removeUndefinedCreateModelFields({
-    group: getDefaultProviderModelGroupName(modelId),
-    ...modelFields,
-    modelId,
-    name: modelId,
-    providerId,
-  });
-}
-
-type ProviderModelAddFields = Pick<
-  CreateModelDto,
-  'capabilities' | 'endpointTypes' | 'inputModalities' | 'outputModalities'
->;
-
-function buildProviderModelAddFields(
-  provider: Provider | undefined,
-  formState: ProviderModelAddFormState,
-): ProviderModelAddFields {
-  const mode = getProviderModelAddMode(provider);
-  if (mode === 'legacy') {
-    return {};
+  const capabilities = new Set(baseline?.capabilities ?? []);
+  if (visionOverride !== undefined) {
+    if (vision) capabilities.add(MODEL_CAPABILITY.IMAGE_RECOGNITION);
+    else capabilities.delete(MODEL_CAPABILITY.IMAGE_RECOGNITION);
+  }
+  if (drawingOverride !== undefined || (explicitEndpoint && imageEndpoint)) {
+    if (drawing) capabilities.add(MODEL_CAPABILITY.IMAGE_GENERATION);
+    else capabilities.delete(MODEL_CAPABILITY.IMAGE_GENERATION);
+  }
+  if (
+    capabilities.size !== baseline?.capabilities.length ||
+    [...capabilities].some((capability) => !baseline?.capabilities.includes(capability))
+  ) {
+    if (baseline || capabilities.size > 0) fields.capabilities = [...capabilities];
   }
 
-  const fallbackChatEndpoint = provider
-    ? (getProviderChatEndpointTypes(provider)[0] ?? providerModelAddDefaultEndpointType)
-    : providerModelAddDefaultEndpointType;
-  const primaryEndpoint = formState.endpointTypes[0] ?? fallbackChatEndpoint;
-  const endpointTypes =
-    mode === 'purpose'
-      ? [primaryEndpoint]
-      : formState.endpointTypes.length
-        ? [...formState.endpointTypes]
-        : [fallbackChatEndpoint];
-
-  if (endpointTypes[0] === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT) {
-    return {
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      endpointTypes,
-      inputModalities: [MODALITY.IMAGE],
-      outputModalities: [MODALITY.IMAGE],
-    };
+  const needsImageInput =
+    vision || (fields.endpointTypes ?? endpoints)?.includes(ENDPOINT_TYPE.OPENAI_IMAGE_EDIT);
+  if (
+    visionOverride !== undefined ||
+    drawingOverride === false ||
+    fields.endpointTypes?.includes(ENDPOINT_TYPE.OPENAI_IMAGE_EDIT)
+  ) {
+    const modalities = new Set(baseline?.inputModalities ?? [MODALITY.TEXT]);
+    if (needsImageInput) modalities.add(MODALITY.IMAGE);
+    else if (!drawing) modalities.delete(MODALITY.IMAGE);
+    if (modalities.size === 0) modalities.add(MODALITY.TEXT);
+    fields.inputModalities = [...modalities];
   }
-  if (endpointTypes[0] === ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION) {
-    return {
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      endpointTypes,
-      outputModalities: [MODALITY.IMAGE],
-    };
+  if (drawingOverride !== undefined || (explicitEndpoint && imageEndpoint)) {
+    const modalities = new Set(baseline?.outputModalities ?? []);
+    if (drawing) modalities.add(MODALITY.IMAGE);
+    else modalities.delete(MODALITY.IMAGE);
+    if (modalities.size === 0) modalities.add(MODALITY.TEXT);
+    fields.outputModalities = [...modalities];
   }
-  return { endpointTypes };
-}
-
-function isProviderModelChatEndpointType(
-  endpointType: string | undefined,
-): endpointType is ProviderModelChatEndpointType {
-  return PROVIDER_MODEL_CHAT_ENDPOINT_TYPES.some((candidate) => candidate === endpointType);
-}
-
-function parseOptionalNumber(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  const parsed = Number(trimmed);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function removeUndefinedCreateModelFields(input: CreateModelDto): CreateModelDto {
-  return Object.fromEntries(
-    Object.entries(input).filter((entry) => entry[1] !== undefined),
-  ) as CreateModelDto;
+  return { fields, drawing, endpointError };
 }

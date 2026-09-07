@@ -4,6 +4,7 @@ import type { TextInputProps } from 'react-native';
 /** Shared input for model token limits; each task owns validation and persistence. */
 export function ProviderModelNumberField({
   disabled,
+  errorMessage,
   label,
   onChangeText,
   onFocus,
@@ -11,6 +12,7 @@ export function ProviderModelNumberField({
   value,
 }: {
   disabled: boolean;
+  errorMessage?: string;
   label: string;
   onChangeText: (value: string) => void;
   onFocus?: TextInputProps['onFocus'];
@@ -18,7 +20,7 @@ export function ProviderModelNumberField({
   value: string;
 }) {
   return (
-    <TextField disabled={disabled}>
+    <TextField disabled={disabled} invalid={Boolean(errorMessage)}>
       <TextField.Label>{label}</TextField.Label>
       <Input
         accessibilityLabel={label}
@@ -26,12 +28,13 @@ export function ProviderModelNumberField({
         autoCorrect={false}
         inputMode="numeric"
         keyboardType="number-pad"
-        onChangeText={(text) => onChangeText(text.replaceAll(/\D/g, ''))}
+        onChangeText={onChangeText}
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
         value={value}
       />
+      <TextField.Error>{errorMessage}</TextField.Error>
     </TextField>
   );
 }
