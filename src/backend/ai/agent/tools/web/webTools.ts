@@ -14,6 +14,7 @@ import {
 } from '@cherrystudio/universal/ai/builtinTools';
 import * as z from 'zod';
 
+import { boundWebFetchResults } from '@/backend/services/webSearch/postProcessing';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { RuntimeTool, RuntimeToolResult } from '../../runtime';
@@ -55,7 +56,9 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
           return invalidInput(parsed.error);
         }
         const query = parsed.data.query.replace(/\s+/gu, ' ');
-        return runSearch(query, () => searchWeb(deps.webSearch, query, signal), signal);
+        return webLookupToolResult(
+          await runSearch(query, () => searchWeb(deps.webSearch, query, signal), signal),
+        );
       },
     },
     {
@@ -70,11 +73,15 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
-        const urls = [...new Set(parsed.data.urls)];
-        return runFetch(
-          JSON.stringify([...urls].sort()),
-          () => fetchWeb(deps.webSearch, urls, signal),
-          signal,
+        const urls = [...new Set(parsed.data.urls)].sort();
+        // A service batch can silently omit failed pages. Request/cache each URL
+        // separately so its error classification and one retry remain intact.
+        const outputs = await Promise.all(
+          urls.map((url) => runFetch(url, () => fetchWeb(deps.webSearch, [url], signal), signal)),
+        );
+        const successful = outputs.filter((output) => !isWebLookupError(output));
+        return webLookupToolResult(
+          successful.length > 0 ? boundWebFetchResults(successful.flat()) : outputs[0],
         );
       },
     },
@@ -83,13 +90,13 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
 
 /** Share pending/successful lookups and allow only one retry of the same failed request. */
 function createLookupRunner() {
-  const lookups = new Map<string, { attempts: number; result?: Promise<RuntimeToolResult> }>();
+  const lookups = new Map<string, { attempts: number; result?: Promise<WebLookupResult> }>();
 
   return async (
     key: string,
     lookup: () => Promise<WebLookupResult>,
     signal: AbortSignal,
-  ): Promise<RuntimeToolResult> => {
+  ): Promise<WebLookupResult> => {
     signal.throwIfAborted();
     const entry = lookups.get(key) ?? { attempts: 0, result: undefined };
     lookups.set(key, entry);
@@ -103,17 +110,14 @@ function createLookupRunner() {
             entry.result = undefined;
           } else {
             return {
-              value: {
-                status: 'error',
-                message:
-                  'This web lookup failed again after one retry. Do not retry it; answer from available sources and state the limitation.',
-                retryable: false,
-              },
-              artifacts: [],
-            } satisfies RuntimeToolResult;
+              ...output,
+              userMessage:
+                'This web lookup failed again after one retry. Do not retry it; answer from available sources and state the limitation.',
+              retryable: false,
+            };
           }
         }
-        return webLookupToolResult(output);
+        return output;
       })
       .catch((error: unknown) => {
         lookups.delete(key);

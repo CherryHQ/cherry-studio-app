@@ -1,5 +1,6 @@
 import { HttpError } from '@/backend/services/http';
 import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
+import type { WebSearchFetchUrlsRequest } from '@/shared/data/types/webSearch';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../../runtime';
 import { createWebTools } from '../webTools';
@@ -179,7 +180,9 @@ describe('createWebTools', () => {
   });
 
   test('deduplicates URLs and reuses an already fetched batch regardless of order', async () => {
-    const webSearch = createWebSearch({});
+    const webSearch = createWebSearch({
+      fetchUrls: async ({ urls }) => pageResponse(urls[0]),
+    });
     const tool = toolNamed(webSearch, 'web_fetch');
     const first = await execute(tool, {
       urls: ['https://example.com/a', 'https://example.com/a', 'https://example.com/b'],
@@ -188,12 +191,111 @@ describe('createWebTools', () => {
       urls: ['https://example.com/b', 'https://example.com/a'],
     });
 
-    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(1);
-    expect(webSearch.fetchUrls).toHaveBeenCalledWith(
-      { urls: ['https://example.com/a', 'https://example.com/b'] },
-      { signal: expect.any(AbortSignal) },
-    );
+    expect(webSearch.fetchUrls.mock.calls.map(([request]) => request.urls)).toEqual([
+      ['https://example.com/a'],
+      ['https://example.com/b'],
+    ]);
     expect(repeated).toEqual(first);
+  });
+
+  test('retries only the failed page in a partially successful batch', async () => {
+    let failedPageAttempts = 0;
+    const webSearch = createWebSearch({
+      fetchUrls: async ({ urls }) => {
+        if (urls[0].endsWith('/b') && ++failedPageAttempts === 1) {
+          throw new HttpError('Temporarily unavailable', { kind: 'http', status: 503 });
+        }
+        return pageResponse(urls[0]);
+      },
+    });
+    const tool = toolNamed(webSearch, 'web_fetch');
+    const input = { urls: ['https://example.com/a', 'https://example.com/b'] };
+    const first = await execute(tool, input);
+    const retry = await execute(tool, input);
+    const repeated = await execute(tool, input);
+
+    expect(first.value).toEqual([expect.objectContaining({ url: input.urls[0] })]);
+    expect(retry.value).toEqual([
+      ...(first.value as unknown[]),
+      expect.objectContaining({ url: input.urls[1] }),
+    ]);
+    expect(repeated).toEqual(retry);
+    expect(webSearch.fetchUrls.mock.calls.map(([request]) => request.urls)).toEqual([
+      [input.urls[0]],
+      [input.urls[1]],
+      [input.urls[1]],
+    ]);
+  });
+
+  test.each([
+    { status: 503, attempts: 2 },
+    { status: 429, attempts: 1 },
+  ])(
+    'bounds retries for an HTTP $status page even in overlapping batches',
+    async ({ status, attempts }) => {
+      const webSearch = createWebSearch({
+        fetchUrls: async ({ urls }) => {
+          if (urls[0].endsWith('/b')) {
+            throw new HttpError('Page failed', { kind: 'http', status });
+          }
+          return pageResponse(urls[0]);
+        },
+      });
+      const tool = toolNamed(webSearch, 'web_fetch');
+      const first = await execute(tool, {
+        urls: ['https://example.com/a', 'https://example.com/b'],
+      });
+      await execute(tool, { urls: ['https://example.com/b', 'https://example.com/c'] });
+      const repeated = await execute(tool, {
+        urls: ['https://example.com/a', 'https://example.com/b'],
+      });
+      const failed = await execute(tool, { urls: ['https://example.com/b'] });
+
+      expect(repeated).toEqual(first);
+      expect(failed.value).toMatchObject({ status: 'error', retryable: false });
+      expect(
+        webSearch.fetchUrls.mock.calls.filter(([request]) => request.urls[0].endsWith('/b')),
+      ).toHaveLength(attempts);
+      expect(webSearch.fetchUrls).toHaveBeenCalledTimes(2 + attempts);
+    },
+  );
+
+  test('shares pending page reads across overlapping batches', async () => {
+    const webSearch = createWebSearch({ fetchUrls: async ({ urls }) => pageResponse(urls[0]) });
+    const tool = toolNamed(webSearch, 'web_fetch');
+    const [first, second] = await Promise.all([
+      execute(tool, { urls: ['https://example.com/a', 'https://example.com/b'] }),
+      execute(tool, { urls: ['https://example.com/b', 'https://example.com/c'] }),
+    ]);
+
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(3);
+    expect((first.value as unknown[])[1]).toEqual((second.value as unknown[])[0]);
+  });
+
+  test('bounds combined cached pages without truncating their stored content', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async ({ urls }) => pageResponse(urls[0], '文'.repeat(4_000)),
+    });
+    const tool = toolNamed(webSearch, 'web_fetch');
+    const urls = Array.from({ length: 20 }, (_, index) => `https://example.com/${index}`);
+    const batch = await execute(tool, { urls });
+    const results = batch.value as {
+      content: string;
+      id: string;
+      url: string;
+      truncated: boolean;
+    }[];
+    expect(results).toHaveLength(20);
+    expect(results.every((result) => result.content.length === 800 && result.truncated)).toBe(true);
+
+    const single = await execute(tool, { urls: [urls[0]] });
+    expect(single.value).toEqual([
+      expect.objectContaining({
+        content: '文'.repeat(4_000),
+        id: results.find((result) => result.url === urls[0])?.id,
+      }),
+    ]);
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(20);
   });
 
   test('rejects a non-http target before any request', async () => {
@@ -240,7 +342,7 @@ describe('createWebTools', () => {
 });
 
 function createWebSearch(overrides: {
-  fetchUrls?: () => Promise<typeof RESPONSE>;
+  fetchUrls?: (request: WebSearchFetchUrlsRequest) => Promise<typeof RESPONSE>;
   searchKeywords?: () => Promise<typeof RESPONSE>;
 }) {
   return {
@@ -250,6 +352,10 @@ function createWebSearch(overrides: {
     fetchUrls: jest.Mock;
     searchKeywords: jest.Mock;
   };
+}
+
+function pageResponse(url: string, content = 'Body'): typeof RESPONSE {
+  return { results: [{ content, title: url, url }], query: url };
 }
 
 function toolNamed(

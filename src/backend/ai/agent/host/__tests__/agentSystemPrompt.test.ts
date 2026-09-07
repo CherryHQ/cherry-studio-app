@@ -77,6 +77,11 @@ describe('buildAgentSystemPrompt', () => {
     expect(withWeb).toContain('one search round');
     expect(withWeb).toContain('Run independent searches in the same round');
     expect(withWeb).toContain('Stop as soon as the available evidence supports');
+    expect(withWeb).toContain('Reuse relevant results already collected in the current turn');
+    expect(withWeb).toContain(
+      'fetch the relevant known URLs to obtain citation IDs for the current turn',
+    );
+    expect(withWeb).toContain('never reuse citation IDs from earlier turns');
     expect(withMcp).not.toContain('## Web Research');
     expect(withMcp).not.toContain('## Web Citations');
   });

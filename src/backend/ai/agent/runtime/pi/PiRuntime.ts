@@ -59,6 +59,7 @@ import {
   type PiMetaToolActivity,
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
+import { disablePiToolCalls } from './piToolChoice';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -748,6 +749,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const streamFn: PiModelResolution['streamFn'] = (model, context, options) =>
         resolution.streamFn(model, context, {
           ...options,
+          onPayload: turn.toolBudgetError
+            ? async (payload, model) =>
+                disablePiToolCalls(
+                  (await options?.onPayload?.(payload, model)) ?? payload,
+                  model.api,
+                )
+            : options?.onPayload,
           signal: options?.signal
             ? AbortSignal.any([options.signal, turn.abortController.signal])
             : turn.abortController.signal,
@@ -843,8 +851,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
           const nextContext: PiAgentContext = turn.toolBudgetError
             ? {
                 ...context,
+                // Tool history still needs its definitions (notably on Anthropic).
+                // streamFn disables selection; the runtime guard rejects extra calls.
                 systemPrompt: `${context.systemPrompt}\n\n${TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS}`,
-                tools: [],
               }
             : context;
           modelContext = nextContext;

@@ -48,10 +48,10 @@ export function buildAgentSystemPrompt({
     sections.push(`## Web Research
 
 - Use the fewest web calls needed to answer the user's actual question. For an ordinary lookup, aim for one search round and, only if necessary, one round of page reads, then answer.
-- Reuse relevant results and URLs already in the conversation. Run independent searches in the same round and read known URLs together instead of alternating a separate search and read for every item.
+- Reuse relevant results already collected in the current turn. URLs from earlier turns may be read again for a sourced follow-up: fetch the relevant known URLs to obtain citation IDs for the current turn, and never reuse citation IDs from earlier turns. Run independent searches in the same round and read known URLs together instead of alternating a separate search and read for every item.
 - Search again only to resolve a specific missing fact or conflicting source that materially affects the answer. Do not automatically expand into other languages, synonyms, or related topics to make the answer more comprehensive.
 - Stop as soon as the available evidence supports the requested answer. If a source is unavailable or incomplete, state that limitation; do not keep searching to fill every gap. Broader research is appropriate when the user explicitly requests it.
-- Do not repeat successful queries or page reads. Retry a transient lookup failure at most once; do not retry a non-retryable failure or change keywords merely to work around an unavailable service.`);
+- Do not repeat successful queries or page reads within the current turn. Retry a transient lookup failure at most once; do not retry a non-retryable failure or change keywords merely to work around an unavailable service.`);
     sections.push(buildCitationsSection(citableTools));
   }
 

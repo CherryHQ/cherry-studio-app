@@ -2397,6 +2397,7 @@ describe('PiRuntime mapping', () => {
       const runtime = createTestRuntime(
         maxToolCalls === undefined ? undefined : { ...DEFAULT_PI_RUNTIME_LIMITS, maxToolCalls },
       );
+      const providerStream = jest.fn();
       const allowedCalls = maxToolCalls ?? 64;
       let executionCount = 0;
       const tool: RuntimeTool = {
@@ -2411,9 +2412,16 @@ describe('PiRuntime mapping', () => {
           return { value: { executionCount }, artifacts: [] };
         },
       };
-      arrange(runtime, async (context) => {
+      const holder = arrange(runtime, async (context) => {
         const piTool = context.options.initialState?.tools?.[0];
         if (!piTool) throw new Error('Tool limit program requires one tool.');
+        const model = holder.resolution.model;
+        const onPayload = jest.fn(async (payload: unknown) => ({
+          ...(payload as Record<string, unknown>),
+          metadata: { trace: 'preserved' },
+        }));
+        context.options.streamFn?.(model, { messages: [] }, { onPayload });
+        expect(providerStream.mock.lastCall?.[2].onPayload).toBe(onPayload);
         const calls = Array.from({ length: requests }, (_, index) => ({
           type: 'toolCall' as const,
           id: `call-${index + 1}`,
@@ -2441,14 +2449,28 @@ describe('PiRuntime mapping', () => {
         await context.emit({ type: 'turn_end', message, toolResults });
         const next = await prepareTestNextTurn(context, message, toolResults);
         expect(next.shouldStop).toBe(false);
-        expect(next.context.tools).toEqual([]);
+        expect(next.context.tools).toEqual([piTool]);
         expect(next.context.messages).toEqual([context.prompt, message, ...toolResults]);
         expect(next.context.systemPrompt).toContain('remaining uncertainty or unfinished work');
         expect(context.options.initialState?.tools).toHaveLength(1);
+        context.options.streamFn?.(
+          model,
+          { ...next.context, messages: next.context.messages as PiMessage[] },
+          { onPayload },
+        );
+        const payload = { tools: [{ name: piTool.name }], input: ['collected results'] };
+        const finalPayload = await providerStream.mock.lastCall?.[2].onPayload(payload, model);
+        expect(finalPayload).toEqual({
+          ...payload,
+          metadata: { trace: 'preserved' },
+          tool_choice: 'none',
+        });
+        expect(onPayload).toHaveBeenCalledWith(payload, model);
         await emitText(context, 'Answer from the collected result.');
         const finished = await prepareTestNextTurn(context, assistantMessage(), [], next.context);
         expect(finished.shouldStop).toBe(true);
       });
+      holder.resolution = { ...holder.resolution, streamFn: providerStream };
       const session = await runtime.open();
 
       const events = await collect(
@@ -2503,7 +2525,7 @@ describe('PiRuntime mapping', () => {
         await context.emit({ type: 'turn_end', message, toolResults: [result] });
         const next = await prepareTestNextTurn(context, message, [result], nextContext);
         expect(next.shouldStop).toBe(false);
-        expect(next.context.tools).toHaveLength(step < 20 ? 1 : 0);
+        expect(next.context.tools).toEqual([piTool]);
         nextContext = next.context;
       }
       await emitText(context, 'Final answer after twenty rounds.');
@@ -2546,7 +2568,7 @@ describe('PiRuntime mapping', () => {
         };
         await context.emit({ type: 'turn_end', message, toolResults: [result] });
         const next = await prepareTestNextTurn(context, message, [result]);
-        expect(next.context.tools).toEqual([]);
+        expect(next.context.tools).toEqual([piTool]);
         expect(next.shouldStop).toBe(false);
 
         const final = assistantMessage({
@@ -2559,7 +2581,7 @@ describe('PiRuntime mapping', () => {
         });
         const finalResults: ToolResultMessage[] = [];
         if (stopReason === 'toolUse') {
-          // Even a retained tool callback cannot bypass the disabled tool catalog.
+          // Retained definitions do not let a provider bypass the exhausted budget.
           const rejected = await piTool.execute('extra-call', {}, context.signal);
           expect(rejected.details).toMatchObject({
             value: { error: { code: 'tool_step_limit_exceeded' } },

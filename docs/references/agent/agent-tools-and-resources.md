@@ -270,15 +270,18 @@ OS-sanctioned continuation mechanisms described in
 The Host's web guidance targets one search round and, when source text is needed, one page-read
 round for ordinary lookups. Independent queries and page reads should run together. Further
 research must address a material evidence gap or an explicit request for broader research; the
-model should otherwise answer from the available sources and state limitations. This is model
-guidance, not a separate hard execution limit.
+model should otherwise answer from the available sources and state limitations. Citation ids resolve
+within the message that collected them. Sourced follow-ups read relevant known URLs again to obtain
+ids for the current turn; they do not reuse earlier turns' citation ids. This is model guidance, not
+a separate hard execution limit.
 
 The turn-local web tools reuse identical pending and completed requests, including citation ids.
-Search keys normalize whitespace; page-read keys deduplicate URLs and ignore their order. The
-cache covers the same URL set, not overlapping batches, and resets with the next turn's catalog.
-Transient failures permit one retry per request. HTTP 4xx rejections other than request timeout
-(408), including rate limits (429), are non-retryable within the turn; cancellation still propagates
-without becoming a cached failure.
+Search keys normalize whitespace; page reads cache each URL independently, including across
+overlapping batches, and reset with the next turn's catalog. A partially successful batch keeps its
+successful pages and retries only failed URLs when requested again. Combining cached pages still
+applies the shared page and batch content limits. Transient failures permit one retry per query or
+URL. HTTP 4xx rejections other than request timeout (408), including rate limits (429), are
+non-retryable within the turn; cancellation still propagates without becoming a cached failure.
 
 ### Streamable HTTP MCP
 

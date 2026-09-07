@@ -365,12 +365,14 @@ enter these envelopes.
 
 Pi permits at most twenty tool-loop steps and sixty-four tool calls per turn. Calls beyond the limit
 do not execute their callback and receive a classified error result. After the current batch settles,
-reaching either limit disables all tools and allows one final model response using the collected
+reaching either limit disables tool selection and allows one final model response using the collected
 results, with instructions to disclose uncertainty and unfinished work. A successful final response
-completes the turn; further tool requests fail with the budget error. Context exhaustion still stops
-before another provider request, and the final response shares the whole turn's ten-minute deadline.
-Cancellation and timeout abort the model, approval waiters, and the callback signal before
-terminalizing live tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
+request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
+`NONE`). Context exhaustion still stops before another provider request, and the final response shares
+the whole turn's ten-minute deadline. Cancellation and timeout abort the model, approval waiters, and
+the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
+60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.

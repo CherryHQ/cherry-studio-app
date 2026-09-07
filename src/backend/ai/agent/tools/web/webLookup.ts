@@ -42,7 +42,7 @@ Don't use for:
 - Well-known facts unlikely to have changed
 
 Choose a focused query in the language most likely to have authoritative sources.
-Reuse results already available in the conversation. If several independent queries are necessary,
+Reuse results already collected in the current turn. If several independent queries are necessary,
 call them in the same round. Search again only for a specific missing fact or conflicting source
 needed to answer the user; do not automatically repeat searches in other languages or synonyms.
 Once the results support the requested answer, answer without further searches.`;
@@ -56,10 +56,12 @@ Use this when:
 
 Don't use this when you only have a topic or question; call web_search first.
 
-Read the relevant known URLs together, and reuse pages already read in this conversation.
+Read the relevant known URLs together, and reuse pages already read in the current turn.
+For a sourced follow-up, read relevant URLs from earlier turns again to obtain current-turn citation IDs.
 Only fetch pages whose content is needed for the answer; search results may already be sufficient.
 Page content is bounded. A result with truncated: true contains only the beginning of the page,
-not its full text. Repeating the same page read cannot retrieve its missing tail.
+not its full text. A smaller URL batch can expose more cached content, up to the per-page limit;
+repeating an identical batch cannot retrieve its missing tail.
 If the available text is sufficient, answer; otherwise state what could not be verified.`;
 
 /**
