@@ -11,6 +11,7 @@ import {
   type AgentMessageView,
 } from '@/shared/contracts/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 import { isAiSupportedImageMediaType } from '@/shared/utils/imageFileTypes';
 
 import { findImageAttachmentLimit, type ImageAttachmentLimit } from '../resources/imageAttachments';
@@ -139,7 +140,7 @@ export function assertAttachmentRequestSupported(
     if (isAiSupportedImageMediaType(fact.mediaType)) {
       return [fact];
     }
-    if (isSupportedTextAttachment(fact)) {
+    if (isSupportedTextAttachment(fact) || documentFileTypeFromMediaType(fact.mediaType)) {
       return [];
     }
     fail('ATTACHMENT_INVALID', unsupportedAttachmentMessage(fact));
@@ -155,7 +156,10 @@ export function assertAttachmentRequestSupported(
       if (fact && isAiSupportedImageMediaType(fact.mediaType)) {
         hasAttachments = true;
         images.push(fact);
-      } else if (fact && isSupportedTextAttachment(fact)) {
+      } else if (
+        fact &&
+        (isSupportedTextAttachment(fact) || documentFileTypeFromMediaType(fact.mediaType))
+      ) {
         hasAttachments = true;
       }
     }
@@ -213,13 +217,18 @@ export async function resolveRuntimeTextAttachments(
       currentFileEntryIds,
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
+      readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
       signal,
     });
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof TextAttachmentError) {
       fail(
-        error.failure === 'unavailable' ? 'ATTACHMENT_UNAVAILABLE' : 'ATTACHMENT_INVALID',
+        error.failure === 'unavailable'
+          ? 'ATTACHMENT_UNAVAILABLE'
+          : error.failure === 'document-empty'
+            ? 'ATTACHMENT_NO_TEXT'
+            : 'ATTACHMENT_INVALID',
         error.message,
       );
     }
