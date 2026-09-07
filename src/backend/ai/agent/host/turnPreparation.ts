@@ -282,18 +282,23 @@ async function prepareResolvedTurn(
     signal,
   );
 
-  const userParts: AgentMessagePart[] = parts.map((part, index) =>
-    part.type === 'text'
-      ? { id: `input-${index}`, type: 'text', text: part.text, state: 'done' }
-      : {
-          id: `input-${index}`,
-          type: 'file',
-          fileEntryId: part.fileEntryId,
-          mediaType: part.mediaType,
-          ...(part.name !== undefined ? { name: part.name } : {}),
-          purpose: 'input-attachment',
-        },
-  );
+  const userParts: AgentMessagePart[] = parts.map((part, index) => {
+    if (part.type === 'text')
+      return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
+    const content = runtimeTextAttachments.get(part.fileEntryId);
+    return {
+      id: `input-${index}`,
+      type: 'file',
+      fileEntryId: part.fileEntryId,
+      mediaType: part.mediaType,
+      ...(part.name !== undefined ? { name: part.name } : {}),
+      purpose: 'input-attachment',
+      attachmentReport:
+        content?.type === 'text-attachment'
+          ? content.attachmentReport
+          : { mode: 'image', sourceTruncated: false, requestTruncated: false },
+    };
+  });
 
   return {
     agent,

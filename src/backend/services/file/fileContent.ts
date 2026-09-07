@@ -1,6 +1,9 @@
+import { File } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import type { PrepareFileAttachmentsInput, PreparedFile } from '@/shared/contracts/file';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import {
   type FileEntry,
   type FileEntryId,
@@ -11,6 +14,7 @@ import {
   SafeNameSchema,
 } from '@/shared/data/types/file';
 
+import { readDocumentUriText } from './documentText';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
@@ -21,10 +25,12 @@ import {
   deleteInternalEntry,
   discardInternalEntries,
   getFileUri,
+  readFileUriBytes,
   resolveFileEntry,
   rewriteInternalTextEntry,
   subscribeFileChanges,
 } from './fileStorage';
+import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema.optional(),
@@ -87,6 +93,45 @@ export const fileContent = {
   }) => {
     const validated = createTextEntryInputSchema.parse(input);
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
+  },
+  prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
+    const signal = input.signal ?? new AbortController().signal;
+    const resolved = new Map<string, NonNullable<Awaited<ReturnType<typeof resolveFileEntry>>>>();
+    for (const id of input.fileEntryIds) {
+      signal.throwIfAborted();
+      if (resolved.has(id)) continue;
+      const parsed = FileEntryIdSchema.safeParse(id);
+      if (!parsed.success) throw new FileAttachmentError({ code: 'unavailable' });
+      const file = await resolveFileEntry(fileEntryService, parsed.data);
+      if (!file) throw new FileAttachmentError({ code: 'unavailable', fileEntryId: parsed.data });
+      resolved.set(id, file);
+    }
+    const facts = new Map(
+      [...resolved].map(([id, file]) => [
+        id,
+        {
+          fileEntryId: file.entry.id,
+          mediaType: file.entry.mediaType,
+          name: file.entry.filename,
+          size: new File(file.uri).size,
+        },
+      ]),
+    );
+    const prepared = await prepareFileAttachments({
+      availableFiles: facts,
+      currentFileEntryIds: input.fileEntryIds,
+      readBytes: (file, readSignal) =>
+        readFileUriBytes(resolved.get(file.fileEntryId)!.uri, readSignal),
+      readDocumentText: (file, readSignal) =>
+        readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
+      signal,
+      target: input.target,
+    });
+    return input.fileEntryIds.map((id) => ({
+      ...resolved.get(id)!,
+      report: prepared.get(id)!.report,
+      ...(prepared.get(id)!.text !== undefined ? { text: prepared.get(id)!.text } : {}),
+    }));
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   /**

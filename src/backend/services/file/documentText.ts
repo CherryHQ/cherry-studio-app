@@ -1,15 +1,16 @@
 import { File } from 'expo-file-system';
 
 import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
+import {
+  MAX_DOCUMENT_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_PAGES,
+} from '@/shared/utils/fileAttachmentPolicy';
 
 import { extractPdfText } from '../../../../modules/pdf-text-extractor';
 import { readFileUriBytes } from './fileStorage';
 import type { ExtractedDocumentText } from './officeText';
 
 export type { ExtractedDocumentText } from './officeText';
-
-export const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-export const MAX_PDF_ATTACHMENT_PAGES = 100;
 
 export class DocumentTextError extends Error {
   constructor(readonly failure: 'empty' | 'invalid' | 'file-bytes') {

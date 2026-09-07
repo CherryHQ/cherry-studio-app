@@ -6,6 +6,7 @@ import {
 } from '@cherrystudio/provider-registry';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 import {
   imageParamsAspectRatio,
@@ -14,7 +15,6 @@ import {
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
-  supportsPaintingGenerationMode,
 } from '../imageGenerationParams';
 
 const support = {

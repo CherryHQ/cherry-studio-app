@@ -1,3 +1,4 @@
+import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 /**
  * Agent Runtime contract types.
  *
@@ -14,7 +15,6 @@
  * Shapes mirror the design document exactly. Do not add, rename, or "improve"
  * fields without updating the spec first.
  */
-
 import type {
   AiUsagePricingSnapshot,
   ServingCredentialReceipt,
@@ -114,6 +114,7 @@ export type RuntimeTextAttachmentPart = {
   text: string;
   truncated: boolean;
   trust: 'untrusted-user-content';
+  attachmentReport?: FileAttachmentReport;
 };
 
 export type RuntimeInputPart =

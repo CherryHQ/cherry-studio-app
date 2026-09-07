@@ -28,12 +28,12 @@ import {
   prepareImageParamValues,
   reconcileImageParamDraft,
   resolveImageGenerationMode,
-  supportsPaintingGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
+import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 import type {
   PaintingGenerationInput,

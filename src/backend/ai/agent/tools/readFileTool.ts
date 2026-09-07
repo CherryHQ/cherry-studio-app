@@ -10,25 +10,17 @@
 
 import * as z from 'zod';
 
-import {
-  DocumentTextError,
-  MAX_DOCUMENT_ATTACHMENT_BYTES,
-} from '@/backend/services/file/documentText';
+import { readAttachmentText } from '@/backend/services/file/readAttachmentText';
+import { takeCodePoints } from '@/backend/services/file/utf8Text';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
-import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 
 import type {
   ManagedFileFact,
   ManagedFileResolver,
   TurnFileScope,
 } from '../resources/managedFileResolver';
-import {
-  decodeManagedUtf8,
-  describeManagedTextFailure,
-  ManagedTextError,
-  takeCodePoints,
-} from '../resources/managedText';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
@@ -84,38 +76,28 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
-      const isDocument = !!documentFileTypeFromMediaType(source.mediaType);
-      const maxBytes = isDocument ? MAX_DOCUMENT_ATTACHMENT_BYTES : READ_FILE_MAX_SOURCE_BYTES;
-      if (source.size > maxBytes) {
-        return invalid(`The file exceeds the ${maxBytes}-byte limit.`);
-      }
-
       let text: string;
-      let sourceTruncated = false;
+      let sourceTruncated: boolean;
       try {
-        if (isDocument) {
-          const extracted = await files.readDocumentText(source, signal);
-          if (!extracted) return invalid('The managed file is unavailable.');
-          text = extracted.text;
-          sourceTruncated = extracted.truncated;
-        } else {
-          const bytes = await files.readAsBytes(source, signal);
-          if (!bytes) return invalid('The managed file is unavailable.');
-          text = decodeManagedUtf8(bytes, READ_FILE_MAX_SOURCE_BYTES).text;
-        }
+        ({ text, sourceTruncated } = await readAttachmentText(
+          source,
+          {
+            readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
+            readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+          },
+          signal,
+          READ_FILE_MAX_SOURCE_BYTES,
+        ));
       } catch (error) {
         signal.throwIfAborted();
-        if (error instanceof ManagedTextError) {
-          return invalid(describeManagedTextFailure(error.failure, READ_FILE_MAX_SOURCE_BYTES));
-        }
-        if (error instanceof DocumentTextError && error.failure === 'empty') {
+        if (error instanceof FileAttachmentError) {
           return invalid(
-            'The document has no extractable text. Scanned or image-only documents require OCR.',
+            error.issue.code === 'document-empty'
+              ? 'The document has no extractable text. Scanned or image-only documents require OCR.'
+              : error.message,
           );
         }
-        return invalid(
-          'The managed file could not be read. It may be damaged or password-protected.',
-        );
+        return invalid('The managed file could not be read.');
       }
       signal.throwIfAborted();
 

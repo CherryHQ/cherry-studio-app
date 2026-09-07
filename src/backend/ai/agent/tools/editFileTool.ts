@@ -10,17 +10,17 @@
 
 import * as z from 'zod';
 
-import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
-import { FileEntryIdSchema, nextVersionFilename } from '@/shared/data/types/file';
-
-import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import {
   codePointStart,
   decodeManagedUtf8,
   describeManagedTextFailure,
   ManagedTextError,
   takeCodePoints,
-} from '../resources/managedText';
+} from '@/backend/services/file/utf8Text';
+import type { FileEntry, FileEntryId, FileEntryProvenance } from '@/shared/data/types/file';
+import { FileEntryIdSchema, nextVersionFilename } from '@/shared/data/types/file';
+
+import type { ManagedFileFact, TurnResourceLedger } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
