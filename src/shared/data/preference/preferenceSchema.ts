@@ -11,6 +11,10 @@
  * shape is asserted in `__tests__/preferenceUtils.test.ts` instead.
  */
 
+import {
+  DEFAULT_DOCUMENT_PARSER_MODE,
+  type DocumentParserMode,
+} from '@/shared/contracts/fileAttachment';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -43,6 +47,8 @@ export interface PreferenceSchema {
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
 
+  'file.document_parser.mode': DocumentParserMode;
+
   'agent.session_naming.enabled': boolean;
   'agent.session_naming.model_id': string | null;
   'agent.session_naming.prompt': string;
@@ -70,6 +76,8 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+
+  'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
 
   'agent.session_naming.enabled': true,
   'agent.session_naming.model_id': null,

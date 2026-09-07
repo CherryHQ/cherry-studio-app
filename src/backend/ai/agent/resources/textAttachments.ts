@@ -13,17 +13,18 @@ export async function resolveManagedTextAttachments(
   const isText = (id: string) => {
     const file = input.availableFiles.get(id);
     const mode = file && fileAttachmentMode(file);
-    return mode === 'text' || mode === 'document-text';
+    return mode === 'text' || mode === 'document';
   };
   const prepared = await prepareFileAttachments({
     ...input,
     currentFileEntryIds: input.currentFileEntryIds.filter(isText),
     historicalFileEntryIds: input.historicalFileEntryIds?.filter(isText),
     target: { purpose: 'chat', acceptsImages: true },
+    documentParserMode: 'builtin',
   });
   return new Map(
     [...prepared].flatMap(([id, attachment]) =>
-      attachment.text === undefined
+      attachment.content?.kind !== 'text'
         ? []
         : [
             [
@@ -33,7 +34,7 @@ export async function resolveManagedTextAttachments(
                 type: 'text-attachment' as const,
                 mediaType: attachment.file.mediaType,
                 name: attachment.file.name,
-                text: attachment.text,
+                text: attachment.content.text,
                 truncated: attachment.report.sourceTruncated || attachment.report.requestTruncated,
                 trust: 'untrusted-user-content' as const,
                 attachmentReport: attachment.report,

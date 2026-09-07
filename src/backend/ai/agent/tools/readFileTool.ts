@@ -10,7 +10,7 @@
 
 import * as z from 'zod';
 
-import { readAttachmentText } from '@/backend/services/file/readAttachmentText';
+import { readAttachmentContent } from '@/backend/services/file/readAttachmentContent';
 import { takeCodePoints } from '@/backend/services/file/utf8Text';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { FileEntryId } from '@/shared/data/types/file';
@@ -79,7 +79,7 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
       let text: string;
       let sourceTruncated: boolean;
       try {
-        ({ text, sourceTruncated } = await readAttachmentText(
+        const content = await readAttachmentContent(
           source,
           {
             readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
@@ -87,7 +87,11 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
           },
           signal,
           READ_FILE_MAX_SOURCE_BYTES,
-        ));
+          'builtin',
+        );
+        if (content.kind !== 'text')
+          throw new Error('Document reading requires a parser-aware tool.');
+        ({ text, sourceTruncated } = content);
       } catch (error) {
         signal.throwIfAborted();
         if (error instanceof FileAttachmentError) {

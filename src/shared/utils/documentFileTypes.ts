@@ -5,12 +5,26 @@ const documentMediaTypes = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  doc: 'application/msword',
+  ppt: 'application/vnd.ms-powerpoint',
+  xls: 'application/vnd.ms-excel',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  rtf: 'application/rtf',
+  epub: 'application/epub+zip',
 } as const;
 
 export type DocumentFileType = keyof typeof documentMediaTypes;
+export type BuiltinOfficeFileType = 'docx' | 'pptx' | 'xlsx';
+
+export function isBuiltinOfficeFileType(type: DocumentFileType): type is BuiltinOfficeFileType {
+  return type === 'docx' || type === 'pptx' || type === 'xlsx';
+}
 
 export function documentFileTypeFromMediaType(mediaType: string): DocumentFileType | undefined {
   const normalized = mediaType.toLowerCase();
+  if (normalized === 'text/rtf') return 'rtf';
   return (Object.keys(documentMediaTypes) as DocumentFileType[]).find(
     (type) => documentMediaTypes[type] === normalized,
   );

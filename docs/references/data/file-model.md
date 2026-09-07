@@ -43,7 +43,7 @@ here. Terms follow [Domain Language](../domain-language.md).
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
   extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
-  generic document type from the PDF/DOCX/PPTX/XLSX filename before persisting it. The stored type is
+  generic document type from the PDF, Office, ODF, RTF, or EPUB filename before persisting it. The stored type is
   authoritative for every consumer; readers do not re-infer it from the extension. It is also the filter key for the
   library's category tabs (`image/%`, `application/pdf`, …), which is why extensions are not stored
   separately.
@@ -94,6 +94,41 @@ for paintings), which catches the mistake that actually happens: pointing at an 
 never created.
 
 ## Agent Attachment Persistence
+
+### Shared send-time preparation
+
+`FileModule.prepareAttachments` and the Agent's session-scoped adapter share
+`services/file/prepareFileAttachments`. It owns metadata admission, content budgets, and
+`FileAttachmentReport`; importing a file does not parse it, and failed submission does not delete
+the imported entry. Painting still admits images only.
+
+`readAttachmentContent` is the common controlled reader for attachments and file tools. Its
+document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
+the native text extractor. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
+accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
+CSV stays on the text path. Format admission follows the published mobile entry point's
+[content detection](https://github.com/tulaafrica/anydoc/blob/rn-v0.4.1/src/formats/detect.rs),
+not every extension supported elsewhere in the engine.
+
+The AnyDoc adapter dynamically loads the community module and retains its original `ir`,
+`warnings`, asset references, media types, and byte buffers. JSON validation does not project a
+fixed IR schema. A community `fallback` result is a parse failure, preserved as the backend error's
+cause; it never triggers a second parser. Native module failure is separately classified as
+`parser-unavailable`. No parsed document or derived asset gets a database table or library entry.
+
+Prepared content is text or a document with complete/deferred delivery. Complete documents retain
+the original JSON object. Oversized documents carry continuation metadata instead of a JSON
+prefix. Embedded images share count, byte, and context reserves with directly attached images,
+including repeated historical occurrences. Unsupported image formats are not converted. Asset
+delivery descriptors state whether pixels were sent, unsupported by the model/type, or omitted
+for budget. Reports persist only delivery facts and omission reasons, never IR or image bytes.
+
+AnyDoc uses published native libraries with Nitro/Nitrogen 0.36.4. A new development client is
+required; installing JavaScript dependencies alone does not register the native module. The
+package's permitted postinstall downloads the iOS XCFramework; Android obtains its library during
+the native build. Native conversion has no hard cancellation; aborted reads discard late results.
+
+### Agent projection
 
 A persisted Agent file part stores `fileEntryId` plus Host-validated display metadata such as name
 and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The

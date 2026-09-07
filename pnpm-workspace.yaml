@@ -41,6 +41,8 @@ allowBuilds:
   # 1.0.0 起把 tree-sitter 语法和 RaTeX XCFramework 挪到 postinstall 下载，
   # 不放行就装不出代码高亮和数学公式所需的原生产物。
   react-native-enriched-markdown: true
+  # Downloads the published iOS AnyDoc XCFramework; Android downloads at native build time.
+  react-native-anydoc: true
   '@google/genai': false
   protobufjs: false
 
