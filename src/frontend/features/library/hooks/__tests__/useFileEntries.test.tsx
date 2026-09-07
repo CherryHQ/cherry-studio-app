@@ -12,6 +12,11 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { useFileEntries } from '../useFileEntries';
 
+// Exercise the real classifier without loading native preview components.
+jest.mock('@/frontend/components/FileEntryPreview', () =>
+  jest.requireActual('@/frontend/components/FileEntryPreview/utils/fileEntryPresentation'),
+);
+
 const entry = FileEntrySchema.parse({
   createdAt: 1,
   filename: 'photo.png',
@@ -175,6 +180,32 @@ describe('useFileEntries', () => {
     expect(latestResult?.entries[1]).toBe(stableDocument);
   });
 
+  test('generates previews for image media types with casing and parameters', async () => {
+    const parameterizedImage = FileEntrySchema.parse({
+      ...entry,
+      mediaType: 'Image/PNG;charset=binary',
+    });
+    dataApi.get.mockResolvedValueOnce({ items: [parameterizedImage] });
+    resolveUris.mockResolvedValueOnce([
+      { previewUri: undefined, uri: 'file:///documents/photo.png' },
+    ]);
+
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    await flushQueryNotifications();
+
+    expect(generatePreviewUri).toHaveBeenCalledWith(parameterizedImage);
+    await act(async () => completePreview?.(`file:///cache/${entry.id}.webp`));
+    await flushQueryNotifications();
+    expect(latestResult?.entries[0].previewUri).toBe(`file:///cache/${entry.id}.webp`);
+  });
+
   test('reuses fresh shared pages until a file write invalidates them', async () => {
     await act(async () => {
       renderer = create(
@@ -243,10 +274,16 @@ describe('useFileEntries', () => {
     const otherPageSizeKey = ['/files/entries', { limit: 10 }] as const;
     queryClient.setQueryData(otherPageSizeKey, { items: [entry, documentEntry] });
     queryClient.setQueryData(queryKeys.files.uri(entry.id), `file:///documents/${entry.filename}`);
+    const viewerTextKey = queryKeys.files.viewerText(
+      documentEntry,
+      `file:///documents/${documentEntry.filename}`,
+    );
+    queryClient.setQueryData(viewerTextKey, 'cached viewer text');
     const previewKeys = [
       queryKeys.files.uri(entry.id),
       queryKeys.files.previewUri(entry),
       queryKeys.files.previewUriPage([entry, documentEntry]),
+      viewerTextKey,
     ];
     const previews = previewKeys.map((key) => queryClient.getQueryData(key));
 

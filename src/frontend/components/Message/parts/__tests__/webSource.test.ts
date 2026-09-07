@@ -8,6 +8,16 @@ import {
 } from '../webSource';
 
 describe('webSource', () => {
+  test('bounds a fetched page summary to 300 characters while retaining the original link', () => {
+    const source = parseWebSources([
+      { title: 'Article', content: '文'.repeat(5_000), url: 'https://example.com/article' },
+    ])[0];
+
+    expect(source.content).toBe(`${'文'.repeat(299)}…`);
+    expect(source.url).toBe('https://example.com/article');
+    expect(source.title).toBe('Article');
+  });
+
   test('keeps result metadata without ever promoting an address to the page title', () => {
     expect(
       parseWebSources({

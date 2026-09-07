@@ -773,6 +773,118 @@ describe.each([
     expect(await store.reconcileInterrupted(INTERRUPTED)).toEqual([]);
   });
 
+  test('updateStreamingAssistantMessage records produced parts until the row settles', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Write a note.', state: 'done' }],
+    });
+    const filePart = {
+      id: 'file-1',
+      type: 'file',
+      fileEntryId: '11111111-1111-7111-8111-111111111111',
+      purpose: 'artifact',
+      name: 'note.md',
+      mediaType: 'text/markdown',
+    } as const;
+
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts: [{ id: 'text-1', type: 'text', text: 'Draft', state: 'streaming' }],
+    });
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts: [{ id: 'text-1', type: 'text', text: 'Drafting', state: 'streaming' }, filePart],
+    });
+
+    const streaming = (await store.listMessages(session.id))[1];
+    expect(streaming).toMatchObject({
+      status: 'streaming',
+      parts: [{ id: 'text-1', text: 'Drafting', state: 'streaming' }, filePart],
+    });
+    const context = await store.loadRuntimeTurnContext(session.id, null);
+    expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
+
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'text-1', type: 'text', text: 'Drafting done.', state: 'done' }, filePart],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    // A late streaming write cannot reopen a settled row.
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts: [{ id: 'text-1', type: 'text', text: 'stale', state: 'streaming' }],
+    });
+    await store.updateStreamingAssistantMessage({ assistantMessageId: 'missing', parts: [] });
+
+    const settled = (await store.listMessages(session.id))[1];
+    expect(settled).toMatchObject({
+      status: 'success',
+      parts: [{ id: 'text-1', text: 'Drafting done.', state: 'done' }, filePart],
+    });
+  });
+
+  test('reconcileInterrupted keeps streamed parts and closes open text', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Search.', state: 'done' }],
+    });
+    const filePart = {
+      id: 'file-1',
+      type: 'file',
+      fileEntryId: '11111111-1111-7111-8111-111111111111',
+      purpose: 'artifact',
+      name: 'note.md',
+      mediaType: 'text/markdown',
+    } as const;
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      parts: [
+        { id: 'reasoning-1', type: 'reasoning', text: 'Thinking', state: 'streaming' },
+        filePart,
+        {
+          id: 'tool-1',
+          type: 'tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
+          providerName: 'mcp_server_1_search_a1b2',
+          displayName: 'Search',
+          state: 'running',
+          input: { query: 'Cherry Studio' },
+        },
+      ],
+    });
+
+    expect(await store.reconcileInterrupted(INTERRUPTED)).toHaveLength(1);
+
+    const assistant = (await store.listMessages(session.id))[1];
+    expect(assistant).toMatchObject({
+      status: 'interrupted',
+      parts: [
+        { id: 'reasoning-1', text: 'Thinking', state: 'done' },
+        filePart,
+        {
+          id: 'tool-1',
+          state: 'interrupted',
+          output: {
+            value: { status: 'interrupted', reason: INTERRUPTED.message },
+            artifacts: [],
+          },
+        },
+        { id: expect.stringMatching(/^error-/), type: 'error', error: INTERRUPTED },
+      ],
+    });
+    const context = await store.loadRuntimeTurnContext(session.id, null);
+    expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
+  });
+
   test('deleteSession removes the transcript with the session', async () => {
     const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
@@ -896,6 +1008,62 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(search('harbor').map((row) => row.id)).toEqual([reserved.assistantMessage.id]);
     // Reasoning stays out of the search index by design.
     expect(search('hidden')).toEqual([]);
+  });
+
+  test('FTS indexes streamed text once, when the row settles', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const search = (term: string) =>
+      raw
+        .prepare(
+          `SELECT m.id FROM agent_session_message m
+           JOIN agent_session_message_fts fts ON m.fts_rowid = fts.rowid
+           WHERE agent_session_message_fts MATCH ?`,
+        )
+        .all(term) as { id: string }[];
+    const streamingParts = [
+      { id: 't-1', type: 'text', text: 'emerald harbor', state: 'streaming' },
+    ] as const;
+
+    const finalized = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'first', state: 'done' }],
+    });
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: finalized.assistantMessage.id,
+      parts: [...streamingParts],
+    });
+    // A mid-stream snapshot is skipped by the update trigger.
+    expect(search('harbor')).toEqual([]);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: finalized.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 't-1', type: 'text', text: 'emerald harbor', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
+
+    // Boot reconciliation is the other settling write and indexes the same way.
+    const interrupted = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-1', type: 'text', text: 'second', state: 'done' }],
+    });
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: interrupted.assistantMessage.id,
+      parts: [{ id: 't-2', type: 'text', text: 'violet lantern', state: 'streaming' }],
+    });
+    expect(search('lantern')).toEqual([]);
+    await store.reconcileInterrupted(INTERRUPTED);
+    expect(search('lantern').map((row) => row.id)).toEqual([interrupted.assistantMessage.id]);
+    // The earlier settled row keeps a single index entry.
+    expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
   });
 
   test('a fork indexes its copied rows and outlives the source it cites', async () => {

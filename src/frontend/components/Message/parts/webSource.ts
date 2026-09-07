@@ -2,6 +2,9 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 type SourceUrlPart = Extract<CherryMessagePart, { type: 'source-url' }>;
 
+const SOURCE_PREVIEW_LENGTH = 300;
+const SOURCE_CONTENT_SCAN_LIMIT = 8_000;
+
 export type WebSource = {
   aliases?: string[];
   citationNumber?: number;
@@ -121,7 +124,7 @@ function toWebSource(value: unknown, fallbackId: number | string): WebSource | n
     'text',
     'pageContent',
     'summary',
-  ]);
+  ])?.slice(0, SOURCE_CONTENT_SCAN_LIMIT);
   const id = value.id;
   const alias = getHttpUrl(getFirstString(value, ['sourceInput', 'sourceUrl', 'source_url']));
 
@@ -225,7 +228,12 @@ function normalizeCitationContext(value: string) {
     .trim();
 
   if (!normalized) return undefined;
-  return normalized.length > 300 ? `${normalized.slice(0, 300).trimEnd()}…` : normalized;
+  return normalized.length > SOURCE_PREVIEW_LENGTH
+    ? `${normalized
+        .slice(0, SOURCE_PREVIEW_LENGTH - 1)
+        .replace(/[\uD800-\uDBFF]$/, '')
+        .trimEnd()}…`
+    : normalized;
 }
 
 function mergeWebSources(primary: WebSource, secondary: WebSource): WebSource {
@@ -411,8 +419,11 @@ function normalizeContent(value: string | undefined, title?: string) {
   const readableContent = stripPageNavigation(normalized, title);
 
   if (!readableContent) return undefined;
-  return readableContent.length > 600
-    ? `${readableContent.slice(0, 600).trimEnd()}…`
+  return readableContent.length > SOURCE_PREVIEW_LENGTH
+    ? `${readableContent
+        .slice(0, SOURCE_PREVIEW_LENGTH - 1)
+        .replace(/[\uD800-\uDBFF]$/, '')
+        .trimEnd()}…`
     : readableContent;
 }
 

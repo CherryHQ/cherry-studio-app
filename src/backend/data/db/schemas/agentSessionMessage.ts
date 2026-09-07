@@ -151,8 +151,12 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   END`,
 
   // Trigger: update searchable_text and sync FTS on UPDATE OF data. fts_rowid
-  // is stable across data edits — only re-keyed delete + re-insert.
-  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF data ON agent_session_message BEGIN
+  // is stable across data edits — only re-keyed delete + re-insert. Unsettled
+  // rows are skipped: a turn's mid-stream snapshots are not worth re-tokenizing,
+  // and searchable_text only changes here, so the settling update still finds
+  // the OLD value it must delete from the index.
+  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF data ON agent_session_message
+  WHEN NEW.status NOT IN ('pending', 'streaming') BEGIN
     INSERT INTO agent_session_message_fts(agent_session_message_fts, rowid, searchable_text)
     VALUES ('delete', OLD.fts_rowid, OLD.searchable_text);
     UPDATE agent_session_message SET searchable_text = ${searchableTextExpression('NEW.data')} WHERE id = NEW.id;

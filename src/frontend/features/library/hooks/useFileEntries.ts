@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 
+import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { type ResolvedFileEntry, useFileEntryPages } from '@/frontend/hooks/file';
 import type { FileEntry } from '@/shared/data/types/file';
 
@@ -51,7 +52,7 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
 
 /** Image is the only positive class; a document is everything else. */
 function entryKind(entry: FileEntry): FileLibraryFilter {
-  return entry.mediaType.startsWith('image/') ? 'image' : 'document';
+  return fileEntryPreviewKind(entry) === 'image' ? 'image' : 'document';
 }
 
 /**

@@ -1,6 +1,7 @@
 import { queryOptions, useQueries } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
+import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { queryKeys, useBackendModule, useInfiniteQuery } from '@/frontend/data';
 import type { FileEntry } from '@/shared/data/types/file';
 
@@ -62,7 +63,7 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
     () =>
       uriPages.entries.map((item) => {
         const needsPreview =
-          Boolean(item.uri) && item.entry.mediaType.startsWith('image/') && !item.previewUri;
+          Boolean(item.uri) && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri;
         return queryOptions({
           enabled: enabled && needsPreview,
           initialData: needsPreview ? undefined : item,

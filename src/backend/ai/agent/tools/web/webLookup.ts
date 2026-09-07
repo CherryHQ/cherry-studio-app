@@ -54,7 +54,11 @@ Use this when:
 - You need page content from an article, documentation page, or reference URL
 - Search snippets are not enough and you need the source page text
 
-Don't use this when you only have a topic or question; call web_search first.`;
+Don't use this when you only have a topic or question; call web_search first.
+
+Page content is bounded. A result with truncated: true contains only the beginning of the page,
+not its full text. Fetch fewer URLs per call for more detail; do not repeat an identical call
+expecting the missing tail.`;
 
 /**
  * A failed lookup must be distinguishable from "ran fine, found nothing": both
@@ -218,6 +222,7 @@ function mapResponse(response: WebSearchResponse): WebSearchOutput {
     title: result.title,
     url: result.url,
     content: result.content,
+    ...(result.truncated ? { truncated: true } : {}),
   }));
 }
 
