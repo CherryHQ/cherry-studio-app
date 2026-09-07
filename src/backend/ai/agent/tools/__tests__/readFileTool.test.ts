@@ -53,6 +53,41 @@ describe('readFileTool', () => {
     });
   });
 
+  test('pages extracted documents and distinguishes extraction limits from remaining lines', async () => {
+    const files = createFiles('binary');
+    files.resolveAvailable.mockResolvedValueOnce(
+      new Map([
+        [
+          FILE_ID,
+          {
+            fileEntryId: FILE_ID,
+            mediaType: 'application/pdf',
+            name: 'report.pdf',
+            size: 2 * 1024 * 1024,
+          },
+        ],
+      ]),
+    );
+    files.readDocumentText.mockResolvedValueOnce({ text: 'first\nsecond\nthird', truncated: true });
+
+    const output = await execute(createReadFileTool(files, IN_SCOPE), {
+      file_entry_id: FILE_ID,
+      start_line: 2,
+      limit: 2,
+    });
+
+    expect(output.value).toMatchObject({
+      filename: 'report.pdf',
+      text: 'second\nthird',
+      startLine: 2,
+      lineCount: 2,
+      totalLines: 3,
+      truncated: false,
+      sourceTruncated: true,
+    });
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+
   test('refuses a file outside the turn ledger before touching storage', async () => {
     const files = createFiles('secret');
     const output = await execute(createReadFileTool(files, IN_SCOPE), { file_entry_id: OTHER_ID });
@@ -206,7 +241,11 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
   };
   const resolveAvailable = jest.fn(async () => new Map([[FILE_ID, source]]));
   const readAsBytes = jest.fn(async () => bytes);
-  return { readAsBytes, resolveAvailable } satisfies ReadFileFiles & {
+  const readDocumentText = jest.fn<
+    ReturnType<ReadFileFiles['readDocumentText']>,
+    Parameters<ReadFileFiles['readDocumentText']>
+  >(async () => undefined);
+  return { readAsBytes, readDocumentText, resolveAvailable } satisfies ReadFileFiles & {
     readAsBytes: jest.Mock;
     resolveAvailable: jest.Mock;
   };

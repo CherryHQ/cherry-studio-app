@@ -161,7 +161,7 @@ describe('fileStorage', () => {
         createdAt: 1,
         filename: 'Quarterly Brief.pdf',
         id: '00000000-0000-7000-8000-000000000001',
-        mediaType: 'application/octet-stream',
+        mediaType: 'application/pdf',
         provenance: 'imported',
         size: 42,
         updatedAt: 1,
@@ -170,7 +170,7 @@ describe('fileStorage', () => {
     expect(entries.create).toHaveBeenCalledWith({
       filename: 'Quarterly Brief.pdf',
       id: '00000000-0000-7000-8000-000000000001',
-      mediaType: 'application/octet-stream',
+      mediaType: 'application/pdf',
       provenance: 'imported',
       size: 42,
     });
@@ -184,7 +184,7 @@ describe('fileStorage', () => {
     }
     expect(managedPart.url).toBe(fileEntryUrl(managed.entries[0].id));
     expect(managedPart.url).toBe('cherry://file/00000000-0000-7000-8000-000000000001');
-    expect(managedPart.mediaType).toBe('application/octet-stream');
+    expect(managedPart.mediaType).toBe('application/pdf');
     expect(readCherryMeta(managedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
   });
 

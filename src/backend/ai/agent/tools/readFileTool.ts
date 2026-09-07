@@ -1,5 +1,5 @@
 /**
- * `read_file`: the model reads a managed UTF-8 file it already holds a
+ * `read_file`: the model reads a managed text or document file it already holds a
  * reference to.
  *
  * Reads expose content, so unlike `edit_file` this tool is ledger-scoped: only
@@ -10,10 +10,19 @@
 
 import * as z from 'zod';
 
+import {
+  DocumentTextError,
+  MAX_DOCUMENT_ATTACHMENT_BYTES,
+} from '@/backend/services/file/documentText';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 
-import type { ManagedFileFact, TurnFileScope } from '../resources/managedFileResolver';
+import type {
+  ManagedFileFact,
+  ManagedFileResolver,
+  TurnFileScope,
+} from '../resources/managedFileResolver';
 import {
   decodeManagedUtf8,
   describeManagedTextFailure,
@@ -47,6 +56,7 @@ export const readFileInputSchema = z.strictObject({
 export type ReadFileFiles = {
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
+  readDocumentText: ManagedFileResolver['readDocumentText'];
 };
 
 export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): RuntimeTool {
@@ -55,7 +65,7 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
     providerName: READ_FILE_TOOL_NAME,
     displayName: 'Read file',
     description:
-      'Read a window of lines from a Cherry-managed UTF-8 text file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. Lines are numbered from 1; when the result reports truncated: true, read on from start_line + line_count. A line too long for one window is returned cut and flagged with line_truncated.',
+      'Read a window of lines from a Cherry-managed text, PDF, DOCX, PPTX, or XLSX file referenced in this conversation. Documents are read as extracted text; embedded images are not included. Use file_entry_id from an attachment or an earlier file tool result. Lines are numbered from 1; when truncated is true, use startLine + lineCount as the next start_line. A line too long for one window is cut and flagged with lineTruncated. sourceTruncated means document extraction reached its own limit and further lines are unavailable.',
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal }) {
@@ -74,31 +84,40 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
       if (!source) {
         return invalid('The managed file is unavailable.');
       }
-      if (source.size > READ_FILE_MAX_SOURCE_BYTES) {
-        return invalid(`The file exceeds the ${READ_FILE_MAX_SOURCE_BYTES}-byte limit.`);
-      }
-
-      let bytes: Uint8Array | undefined;
-      try {
-        bytes = await files.readAsBytes(source, signal);
-      } catch {
-        signal.throwIfAborted();
-        return invalid('The managed file could not be read.');
-      }
-      signal.throwIfAborted();
-      if (!bytes) {
-        return invalid('The managed file is unavailable.');
+      const isDocument = !!documentFileTypeFromMediaType(source.mediaType);
+      const maxBytes = isDocument ? MAX_DOCUMENT_ATTACHMENT_BYTES : READ_FILE_MAX_SOURCE_BYTES;
+      if (source.size > maxBytes) {
+        return invalid(`The file exceeds the ${maxBytes}-byte limit.`);
       }
 
       let text: string;
+      let sourceTruncated = false;
       try {
-        text = decodeManagedUtf8(bytes, READ_FILE_MAX_SOURCE_BYTES).text;
+        if (isDocument) {
+          const extracted = await files.readDocumentText(source, signal);
+          if (!extracted) return invalid('The managed file is unavailable.');
+          text = extracted.text;
+          sourceTruncated = extracted.truncated;
+        } else {
+          const bytes = await files.readAsBytes(source, signal);
+          if (!bytes) return invalid('The managed file is unavailable.');
+          text = decodeManagedUtf8(bytes, READ_FILE_MAX_SOURCE_BYTES).text;
+        }
       } catch (error) {
+        signal.throwIfAborted();
         if (error instanceof ManagedTextError) {
           return invalid(describeManagedTextFailure(error.failure, READ_FILE_MAX_SOURCE_BYTES));
         }
-        throw error;
+        if (error instanceof DocumentTextError && error.failure === 'empty') {
+          return invalid(
+            'The document has no extractable text. Scanned or image-only documents require OCR.',
+          );
+        }
+        return invalid(
+          'The managed file could not be read. It may be damaged or password-protected.',
+        );
       }
+      signal.throwIfAborted();
 
       const window = lineWindow(text, start_line, limit);
       return {
@@ -111,6 +130,7 @@ export function createReadFileTool(files: ReadFileFiles, scope: TurnFileScope): 
           lineCount: window.lineCount,
           totalLines: window.totalLines,
           truncated: window.truncated,
+          ...(sourceTruncated ? { sourceTruncated: true } : {}),
           ...(window.lineTruncated ? { lineTruncated: true } : {}),
           text: window.text,
         },

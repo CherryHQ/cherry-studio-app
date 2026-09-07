@@ -42,8 +42,9 @@ here. Terms follow [Domain Language](../domain-language.md).
 `updatedAt`, `deletedAt`, `provenance`.
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
-  extension-derived `File.type` second, `application/octet-stream` last. It is authoritative for
-  every consumer; nothing re-infers a type from the extension. It is also the filter key for the
+  extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
+  generic document type from the PDF/DOCX/PPTX/XLSX filename before persisting it. The stored type is
+  authoritative for every consumer; readers do not re-infer it from the extension. It is also the filter key for the
   library's category tabs (`image/%`, `application/pdf`, …), which is why extensions are not stored
   separately.
 - `updatedAt` equals `createdAt` on insert. Its one writer today is the draft rewrite
@@ -103,10 +104,29 @@ reservation, and converts managed bytes to a bounded temporary Data URL for the 
 text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
 UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
-unsupported binary media types fail closed before reservation. Extracted text remains request-local
-and is never persisted.
+unsupported binary media types fail closed before reservation. PDF, DOCX, PPTX, and XLSX inputs are
+also admitted through local text extraction, with a 20 MiB source limit. PDFs use the existing Expo
+native extractor (at most 100 pages); Office files use bounded in-memory ZIP/XML parsing and SheetJS
+for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
+part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office
+text is capped at one million UTF-16 units. Parser truncation is retained in the Runtime part.
+XLSX extraction checks local entry metadata against the ZIP directory and bounds actual XML output
+while decompressing. SheetJS receives a new uncompressed archive containing only the validated XML
+and relationship parts, so original headers and embedded binary entries cannot bypass those limits.
+All extracted documents share the text attachment budget (200,000 code points per file, 400,000
+per request, including repeated historical references). Word includes paragraphs and ancillary text,
+PowerPoint follows slide relationships and includes speaker notes while excluding notes-page layout
+fields such as slide numbers, dates, headers, and footers. These fields do not make an otherwise
+textless document readable. Excel includes sheet names,
+cell addresses, formatted values, and stored formulas without evaluating them. Embedded images,
+charts as images, scanned-document OCR, and legacy DOC/PPT/XLS inputs are not supported by this path.
+DOCX/PPTX XML decoding remains UTF-8 only.
+Empty documents fail with `ATTACHMENT_NO_TEXT`; damaged, encrypted, or over-limit documents fail
+before reservation. Unreadable historical documents are omitted without failing a new turn.
+Extracted text remains request-local, is encoded as untrusted user content, and is never persisted.
 
-Attachments are sent to providers as inlined base64 data URLs. The provider upload cache is deferred
+Image attachments are sent to providers as inlined base64 data URLs; documents are sent as extracted
+text and work with text-only models. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
 not to `file_entry`.
 
@@ -163,7 +183,9 @@ text boundary, and the source is history. New entries persist with `provenance: 
 envelope; `generate_image` likewise imports generated image bytes with generated provenance.
 `write_file` reads no entry and does not consult the turn resource ledger. Knowledge of a valid id
 is sufficient for `edit_file` even outside that ledger, but it exposes no file listing or search.
-`read_file` returns a bounded line window of a ledger member and creates nothing. Versions are
+`read_file` returns a bounded line window of a ledger member's UTF-8 text or locally extracted
+document content and creates nothing. Its `sourceTruncated` flag distinguishes an extraction cap
+from the pageable line window's `truncated` flag. Versions are
 carried in the filename rather than a lineage column; folding a version chain in the library is a
 future library concern and needs no schema change to start.
 

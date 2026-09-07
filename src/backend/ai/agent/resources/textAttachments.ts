@@ -1,4 +1,10 @@
+import {
+  DocumentTextError,
+  type ExtractedDocumentText,
+  MAX_DOCUMENT_ATTACHMENT_BYTES,
+} from '@/backend/services/file/documentText';
 import { filenameExtension } from '@/shared/data/types/file';
+import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 
 import type { RuntimeTextAttachmentPart } from '../runtime';
 import type { ManagedFileFact } from './managedFileResolver';
@@ -50,6 +56,8 @@ export const DEFAULT_TEXT_ATTACHMENT_LIMITS: TextAttachmentLimits = {
 
 export type TextAttachmentFailure =
   | 'binary-content'
+  | 'document-empty'
+  | 'document-invalid'
   | 'file-bytes'
   | 'invalid-utf8'
   | 'nul-byte'
@@ -71,6 +79,10 @@ type ResolveTextAttachmentsInput = {
   historicalFileEntryIds: readonly string[];
   limits?: TextAttachmentLimits;
   readBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
+  readDocumentText?(
+    file: ManagedFileFact,
+    signal: AbortSignal,
+  ): Promise<ExtractedDocumentText | undefined>;
   signal: AbortSignal;
 };
 
@@ -109,7 +121,9 @@ export async function resolveManagedTextAttachments(
   const occurrences = [...input.currentFileEntryIds, ...input.historicalFileEntryIds].filter(
     (fileEntryId) => {
       const fact = input.availableFiles.get(fileEntryId);
-      return fact ? isSupportedTextAttachment(fact) : false;
+      return fact
+        ? isSupportedTextAttachment(fact) || !!documentFileTypeFromMediaType(fact.mediaType)
+        : false;
     },
   );
   const occurrenceCounts = new Map<string, number>();
@@ -135,47 +149,53 @@ export async function resolveManagedTextAttachments(
     if (!isCurrent && characterBudget === 0) {
       continue;
     }
-    if (fact.size > limits.maxBytesPerFile) {
+    const isDocument = !!documentFileTypeFromMediaType(fact.mediaType);
+    const maxBytes = isDocument ? MAX_DOCUMENT_ATTACHMENT_BYTES : limits.maxBytesPerFile;
+    if (fact.size > maxBytes) {
       if (isCurrent) {
         throw new TextAttachmentError(fact, 'file-bytes');
       }
       continue;
     }
 
-    let bytes: Uint8Array | undefined;
+    let text: string;
+    let extractionTruncated = false;
     try {
-      bytes = await input.readBytes(fact, input.signal);
+      if (isDocument) {
+        const extracted = await input.readDocumentText?.(fact, input.signal);
+        if (!extracted) throw new TextAttachmentError(fact, 'unavailable');
+        text = extracted.text;
+        extractionTruncated = extracted.truncated;
+      } else {
+        const bytes = await input.readBytes(fact, input.signal);
+        if (!bytes) throw new TextAttachmentError(fact, 'unavailable');
+        text = decodeManagedUtf8(bytes, maxBytes).text;
+      }
       input.signal.throwIfAborted();
-    } catch {
+    } catch (error) {
       if (input.signal.aborted) {
         throw input.signal.reason ?? new Error('Managed text resolution was aborted.');
       }
-      if (isCurrent) {
-        throw new TextAttachmentError(fact, 'unavailable');
-      }
-      continue;
-    }
-    if (!bytes) {
-      if (isCurrent) {
-        throw new TextAttachmentError(fact, 'unavailable');
-      }
-      continue;
-    }
-
-    let text: string;
-    try {
-      text = decodeManagedUtf8(bytes, limits.maxBytesPerFile).text;
-    } catch (error) {
+      if (!isCurrent) continue;
+      if (error instanceof TextAttachmentError) throw error;
       if (error instanceof ManagedTextError) {
         throw new TextAttachmentError(fact, error.failure);
       }
-      if (isCurrent) {
-        throw error;
+      if (error instanceof DocumentTextError) {
+        throw new TextAttachmentError(
+          fact,
+          error.failure === 'file-bytes'
+            ? 'file-bytes'
+            : error.failure === 'empty'
+              ? 'document-empty'
+              : 'document-invalid',
+        );
       }
-      continue;
+      throw new TextAttachmentError(fact, 'unavailable');
     }
 
     const projected = projectTextAttachment(fact, text, characterBudget);
+    projected.part.truncated ||= extractionTruncated;
     contents.set(fileEntryId, projected.part);
     remainingCharacters -= projected.includedCharacters * occurrenceCount;
   }
@@ -214,10 +234,14 @@ function textAttachmentFailureMessage(
 ): string {
   const name = JSON.stringify(file.name);
   switch (failure) {
+    case 'document-empty':
+      return `Attachment ${name} has no extractable text. Scanned or image-only documents require OCR.`;
+    case 'document-invalid':
+      return `Attachment ${name} could not be parsed. It may be damaged, password-protected, or unsupported.`;
     case 'binary-content':
       return `Attachment ${name} contains binary control characters.`;
     case 'file-bytes':
-      return `Attachment ${name} exceeds the ${MAX_TEXT_ATTACHMENT_BYTES}-byte text file limit.`;
+      return `Attachment ${name} exceeds the ${documentFileTypeFromMediaType(file.mediaType) ? MAX_DOCUMENT_ATTACHMENT_BYTES : MAX_TEXT_ATTACHMENT_BYTES}-byte file limit.`;
     case 'invalid-utf8':
       return `Attachment ${name} is not valid UTF-8 text.`;
     case 'nul-byte':

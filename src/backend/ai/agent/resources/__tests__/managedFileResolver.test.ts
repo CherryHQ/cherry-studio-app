@@ -77,6 +77,32 @@ describe('managedFileResolver', () => {
     resolveRead('data:image/png;base64,LATE');
   });
 
+  test('keeps document paths behind the managed boundary and cancels a pending extraction', async () => {
+    const file = { ...availableFact(), mediaType: 'application/pdf', name: 'report.pdf' };
+    const controller = new AbortController();
+    let resolveRead!: (value: { text: string; truncated: boolean }) => void;
+    const pendingRead = new Promise<{ text: string; truncated: boolean }>((resolve) => {
+      resolveRead = resolve;
+    });
+    const readDocument = jest.fn(async () => pendingRead);
+    const resolver = createManagedFileResolver(
+      { findAvailableByIds: async () => [] },
+      () => 'file:///private/managed/report.pdf',
+      async () => '',
+      async () => new Uint8Array(),
+      readDocument,
+    );
+    const pending = resolver.readDocumentText(file, controller.signal);
+    controller.abort(new Error('cancelled'));
+    await expect(pending).rejects.toThrow('cancelled');
+    expect(readDocument).toHaveBeenCalledWith(
+      'file:///private/managed/report.pdf',
+      'application/pdf',
+      controller.signal,
+    );
+    resolveRead({ text: 'late content', truncated: false });
+  });
+
   test('keeps historical managed ids in the ledger without requiring them to resolve', () => {
     const inputFiles = new Map([
       [

@@ -362,9 +362,12 @@ next line to request. A single line larger than the whole budget is the one case
 on a boundary: the head is returned with `lineTruncated: true` and the read reports itself
 truncated, because the rest of that line is unreachable by asking for a later line and silence would
 present a fraction of a minified file as the whole of it. It reads only ledger members — attachments, earlier artifacts of the Session, and
-this turn's drafts — and applies the same strict UTF-8 decoding and 1 MiB source limit as
-`edit_file`. It exists so a model can revisit a file it wrote or edited in an earlier turn, whose
-content is deliberately not replayed as an attachment.
+this turn's drafts. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
+`edit_file`. PDF, DOCX, PPTX, and XLSX sources instead use the local document extractor and 20 MiB
+source ceiling described in [File Model](../data/file-model.md). `sourceTruncated: true` means the
+document extractor reached its own page/row/text limit; it is independent of the pageable window's
+`truncated` flag. This lets a model continue reading an attached document or revisit a file it wrote
+in an earlier turn, whose content is deliberately not replayed as an attachment.
 
 Both tools run without approval because they have no destructive form, and the Host offers them only
 to models that support function calling. Handing tools to a model that cannot call them fails the
