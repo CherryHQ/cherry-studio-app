@@ -103,6 +103,7 @@ describe('turn preparation', () => {
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
+      usageAttribution: plan.usageAttribution,
     });
     expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID);
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);

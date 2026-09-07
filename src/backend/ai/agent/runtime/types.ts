@@ -276,7 +276,9 @@ export type RuntimeUsageContext = {
   credentialReceipt: ServingCredentialReceipt;
 };
 
+/** One completed provider invocation, including context compaction; never a turn aggregate. */
 export type RuntimeUsageReport = {
+  requestId: string;
   usage: RuntimeUsage;
   context: RuntimeUsageContext;
   completedAt: number;

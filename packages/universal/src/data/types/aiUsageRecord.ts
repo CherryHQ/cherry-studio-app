@@ -10,6 +10,7 @@ import * as z from 'zod';
 import { CURRENCY, objectValues } from './model';
 
 const FiniteNonnegativeNumberSchema = z.number().nonnegative().refine(Number.isFinite);
+const FinitePositiveIntegerSchema = z.number().int().positive().refine(Number.isSafeInteger);
 const FiniteNonnegativeIntegerSchema = z.number().int().nonnegative().refine(Number.isSafeInteger);
 
 export const AiUsageRecordKindSchema = z.enum(['invocation', 'legacy-aggregate']);
@@ -36,6 +37,28 @@ export const AiUsagePricingSnapshotSchema = z.strictObject({
   outputPerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
   cacheReadPerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
   cacheWritePerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
+  inputTokenTiers: z
+    .array(
+      z.strictObject({
+        minInputTokens: FinitePositiveIntegerSchema,
+        inputPerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
+        outputPerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
+        cacheReadPerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
+        cacheWritePerMillionTokens: FiniteNonnegativeNumberSchema.optional(),
+      }),
+    )
+    .superRefine((tiers, ctx) => {
+      for (let index = 1; index < tiers.length; index++) {
+        if (tiers[index].minInputTokens <= tiers[index - 1].minInputTokens) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [index, 'minInputTokens'],
+            message: 'minInputTokens must be strictly increasing',
+          });
+        }
+      }
+    })
+    .optional(),
   perImage: z
     .strictObject({
       price: FiniteNonnegativeNumberSchema,

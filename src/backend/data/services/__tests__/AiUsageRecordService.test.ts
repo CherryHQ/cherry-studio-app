@@ -61,6 +61,47 @@ describe('AiUsageRecordService', () => {
     });
   });
 
+  it.each([199, 200, 250])(
+    'selects the whole-call tier using all-in input tokens (%i)',
+    async (inputTokens) => {
+      const database = await createDatabase();
+      const service = new AiUsageRecordService();
+      const context = captureContext();
+      context.pricingSnapshot = {
+        ...context.pricingSnapshot!,
+        inputTokenTiers: [
+          {
+            minInputTokens: 200,
+            inputPerMillionTokens: 4,
+            outputPerMillionTokens: 8,
+            cacheReadPerMillionTokens: 1,
+          },
+        ],
+      };
+      await service.recordInvocation(
+        invocation({ context, usage: { inputTokens, outputTokens: 10, cacheReadTokens: 50 } }),
+      );
+      const expected =
+        inputTokens < 200
+          ? (inputTokens - 50 + 50 * 0.5 + 10 * 2) / 1_000_000
+          : ((inputTokens - 50) * 4 + 50 + 10 * 8) / 1_000_000;
+      expect(database.rows[0].cost).toBeCloseTo(expected, 10);
+    },
+  );
+
+  it('keeps a tiered response unpriced when its input count cannot be determined', async () => {
+    const database = await createDatabase();
+    const context = captureContext();
+    context.pricingSnapshot = {
+      ...context.pricingSnapshot!,
+      inputTokenTiers: [{ minInputTokens: 200, outputPerMillionTokens: 8 }],
+    };
+    await new AiUsageRecordService().recordInvocation(
+      invocation({ context, usage: { outputTokens: 10 } }),
+    );
+    expect(database.rows[0]).toMatchObject({ cost: null, costCurrency: null, costSource: null });
+  });
+
   it('trusts provider cost only when the frozen provider capability allows it', async () => {
     const trustedDatabase = await createDatabase();
     const trustedService = new AiUsageRecordService();

@@ -84,7 +84,7 @@ import type {
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
-  RuntimeUsageReport,
+  RuntimeUsage,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
@@ -191,7 +191,8 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
-  usage: RuntimeUsageReport | null;
+  usage: RuntimeUsage | null;
+  recordedInvocations: Set<string>;
   runtimeSession: AgentRuntimeSession;
 };
 
@@ -652,6 +653,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     runtimeSession: AgentRuntimeSession,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
+    plan.usageAttribution.messageRef = { kind: 'agent-session', id: reserved.assistantMessage.id };
+    Object.freeze(plan.usageAttribution.source);
+    Object.freeze(plan.usageAttribution.messageRef);
+    Object.freeze(plan.usageAttribution);
     // Match desktop timing ownership: execution starts when the Host launches
     // the Runtime, independently from the placeholder row's creation time.
     const runtimeStartedAt = Date.now();
@@ -688,6 +693,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       snapshotDirty: false,
       snapshotFlush: null,
       usage: null,
+      recordedInvocations: new Set(),
       runtimeSession,
     };
     this.activeTurns.set(sessionId, state);
@@ -888,12 +894,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'usage': {
-        // Cumulative; the last report before the terminal event is authoritative.
-        state.usage = {
-          completedAt: event.completedAt,
-          context: event.context,
-          usage: event.usage,
-        };
+        if (state.recordedInvocations.has(event.requestId)) return false;
+        state.recordedInvocations.add(event.requestId);
+        const usage = { ...state.usage };
+        for (const key of Object.keys(event.usage) as (keyof RuntimeUsage)[]) {
+          const value = event.usage[key];
+          if (value !== undefined) usage[key] = (usage[key] ?? 0) + value;
+        }
+        state.usage = usage;
+        await this.usage.record({
+          agent: state.agent,
+          assistantMessageId: state.assistantMessage.id,
+          report: {
+            requestId: event.requestId,
+            completedAt: event.completedAt,
+            context: event.context,
+            usage: event.usage,
+          },
+          turnId: state.turn.id,
+        });
         return false;
       }
       case 'context.checkpoint': {
@@ -957,7 +976,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
+      usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
       runtimeStats: { runtimeTiming },
@@ -993,15 +1012,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sourceCode: error.failure?.source.code,
         sourceLayer: error.failure?.source.layer,
         statusCode: error.failure?.context?.statusCode,
-        totalTokens: state.usage?.usage.totalTokens,
-        turnId: state.turn.id,
-      });
-    }
-    if (state.usage) {
-      this.usage.record({
-        agent: state.agent,
-        assistantMessageId: finalized.id,
-        report: state.usage,
+        totalTokens: state.usage?.totalTokens,
         turnId: state.turn.id,
       });
     }

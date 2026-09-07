@@ -134,6 +134,24 @@ MCP, file, painting, job, and AI usage tables. Agent Session messages are linear
 protocol message ids. The retired `assistant`, `topic`, `message`, and `assistant_mcp_server`
 tables, plus message FTS triggers and indexes, are removed by migration `0005_remove_legacy_chat`.
 
+Usage behavior was compared against Desktop commit `ea2f6bc3befd7a028c2e2b2a4310e5cceba1b676`
+on 2026-09-07. AI usage keeps Desktop's 37-column `ai_usage_record` contract, including immutable pricing and
+credential snapshots, per-currency cost, cache/reasoning counts, and optional provider metrics.
+Each successful provider call is one `invocation`; tool loops and context compaction contribute
+separate records. Input-token tiers select one rate set for the entire request using all-in input
+(including cached tokens). Missing rates remain unpriced, and trusted provider-reported cost takes
+precedence. Migration `0018_usage-invocation-semantics` marks older `agent-session-turn:*` rows as
+`legacy-aggregate`; original counts, costs, and snapshots are retained because their provider
+boundaries cannot be recovered.
+
+New usage facts and their Agent message projections commit together. Message `stats` includes token
+details, request/estimated/unpriced counts, costs grouped by currency, and measured provider
+performance; the Session store owns runtime timing. Agent image tools carry the same source/message
+attribution. Committed writes notify `DataApiService` subscribers; `DataApiProvider` coalesces affected
+endpoint invalidation for 300 ms so background execution refreshes mounted statistics. Table shape
+and existing list/stats/timeline query contracts remain unchanged. No Desktop compatibility baseline
+is advanced by this selective port.
+
 `MobileAgentHost` persists Agent Session reservations and terminal messages through
 `AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to
 the frontend. Live deltas are protocol events and do not write every token to SQLite.

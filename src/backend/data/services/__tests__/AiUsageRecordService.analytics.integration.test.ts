@@ -69,6 +69,99 @@ describe('AI usage analytics', () => {
     sqlite.close();
   });
 
+  test('commits message projections with usage and notifies only new facts', async () => {
+    sqlite.exec(`
+      INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
+      INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
+      INSERT INTO agent_session_message (id, session_id, role, data, status, stats, created_at, updated_at)
+      VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
+    `);
+    const ref = { kind: 'agent-session' as const, id: 'message-1' };
+    const first = invocation(
+      'call-1',
+      1000,
+      { inputTokens: 100, outputTokens: 20, reasoningTokens: 5 },
+      context('a', { messageRef: ref }),
+    );
+    const second = invocation(
+      'call-2',
+      2000,
+      { inputTokens: 10, outputTokens: 2 },
+      context('a', { messageRef: ref }),
+      { amount: 0.25, currency: 'CNY' },
+    );
+    const image = {
+      ...invocation(
+        'image-1',
+        3000,
+        undefined,
+        context('a', { messageRef: ref, pricingSnapshot: null }),
+      ),
+      modality: 'image' as const,
+      imageCount: 1,
+      metrics: undefined,
+    };
+    const listener = jest.fn((paths: readonly string[]) => {
+      const row = sqlite
+        .prepare('SELECT stats FROM agent_session_message WHERE id = ?')
+        .get('message-1') as { stats: string };
+      return {
+        paths,
+        inTransaction: sqlite.isTransaction,
+        requestCount: JSON.parse(row.stats).requestCount,
+      };
+    });
+    const unsubscribe = service.subscribeChanges(listener);
+    await service.recordInvocations([first, second, image]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        '/ai-usage-records',
+        '/ai-usage-records/stats',
+        '/ai-usage-records/timeline',
+        '/agent-sessions/session-1/messages',
+      ]),
+    );
+    expect(listener.mock.results[0]?.value).toMatchObject({
+      inTransaction: false,
+      requestCount: 3,
+    });
+    const projection = await service.getMessageUsageProjection(ref);
+    expect(projection).toMatchObject({
+      inputTokens: 110,
+      outputTokens: 22,
+      totalTokens: 132,
+      outputTokenDetails: { reasoningTokens: 5, textTokens: 17 },
+      requestCount: 3,
+      estimatedRequestCount: 0,
+      unpricedRequestCount: 1,
+      providerPerformance: { measuredOutputTokens: 22, generationDurationMs: 1000 },
+      costs: [
+        { currency: 'CNY', amount: 0.25, providerReportedRequestCount: 1, computedRequestCount: 0 },
+        {
+          currency: 'USD',
+          amount: expect.closeTo(0.00014, 10),
+          providerReportedRequestCount: 0,
+          computedRequestCount: 1,
+        },
+      ],
+    });
+    const row = sqlite
+      .prepare('SELECT stats, usage FROM agent_session_message WHERE id = ?')
+      .get('message-1') as { stats: string; usage: string };
+    expect(JSON.parse(row.stats)).toEqual({
+      ...projection,
+      contextTokens: 42,
+      runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
+    });
+    expect(JSON.parse(row.usage)).toEqual({ inputTokens: 110, outputTokens: 22, totalTokens: 132 });
+    await service.recordInvocations([first, second, image]);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    await service.refreshMessageProjection(ref);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   test('uses stable keyset pagination for derived token and performance metrics', async () => {
     await service.recordInvocations([
       invocation('tokens-120', 1_001, { inputTokens: 100, outputTokens: 20 }),

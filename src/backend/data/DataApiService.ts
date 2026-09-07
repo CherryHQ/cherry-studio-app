@@ -22,7 +22,10 @@ type CompiledRoute = {
 export class DataApiService implements ApiClient {
   private readonly routes: CompiledRoute[];
 
-  constructor(handlers: ApiImplementation) {
+  constructor(
+    handlers: ApiImplementation,
+    readonly subscribeChanges?: ApiClient['subscribeChanges'],
+  ) {
     this.routes = compileRoutes(handlers);
   }
 

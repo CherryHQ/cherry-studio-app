@@ -180,6 +180,7 @@ function hostWithText(
       });
       controller.emit({
         type: 'usage',
+        requestId: `invocation:${controller.request.turnId}`,
         completedAt: 1_500,
         context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -461,6 +462,7 @@ describe('MobileAgentHost', () => {
         agent: expect.objectContaining({ id: AGENT_ID }),
         assistantMessageId: submitted.assistantMessageId,
         report: {
+          requestId: `invocation:${submitted.turnId}`,
           completedAt: 1_500,
           context: USAGE_CONTEXT,
           usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -507,6 +509,50 @@ describe('MobileAgentHost', () => {
     expect(
       requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
     ).toEqual(['user', 'assistant']);
+  });
+
+  test('records unique invocations before a failed terminal and sums their message usage', async () => {
+    const runtime = new FakeRuntime();
+    runtime.script((controller) => {
+      const report = {
+        type: 'usage' as const,
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      };
+      controller.emit(report);
+      controller.emit(report);
+      controller.emit({
+        ...report,
+        requestId: 'call-2',
+        usage: { inputTokens: 10, outputTokens: 1, totalTokens: 11 },
+      });
+      controller.emit({
+        type: 'failed',
+        error: {
+          code: 'provider_error',
+          message: 'Later call failed',
+          retryable: true,
+          origin: 'provider',
+        },
+      });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the failed turn to settle');
+    expect(usage.record).toHaveBeenCalledTimes(2);
+    expect(usage.record.mock.calls.map(([input]) => input.report.requestId)).toEqual([
+      'call-1',
+      'call-2',
+    ]);
+    const finalized = events.find((event) => event.type === 'message.finalized');
+    expect(finalized).toMatchObject({
+      message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
+    });
   });
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
@@ -700,6 +746,10 @@ describe('MobileAgentHost', () => {
       disabledCapabilities: ['health'],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
+      usageAttribution: {
+        source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
+        messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
+      },
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);

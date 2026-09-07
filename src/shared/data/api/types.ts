@@ -45,6 +45,9 @@ export type InferPaginationMode<R> =
       : never;
 
 export interface ApiClient {
+  /** Committed background writes that invalidate endpoint query caches. */
+  subscribeChanges?(listener: (paths: readonly string[]) => void): () => void;
+
   delete<TPath extends ConcreteApiPaths>(
     path: TPath,
     options?: { query?: QueryParamsForPath<TPath, 'DELETE'> },

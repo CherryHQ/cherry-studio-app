@@ -1,6 +1,8 @@
 import { GENERATE_IMAGE_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
 import * as z from 'zod';
 
+import type { AiUsageAttribution } from '@/backend/ai/AiService';
+
 import type { TurnFileScope } from '../../resources/managedFileResolver';
 import type { RuntimeTool } from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
@@ -25,6 +27,7 @@ export function createGenerateImageTool(
   dependencies: PaintingToolDependencies,
   configuredModel: ConfiguredPaintingModel | null,
   turnFiles: TurnFileScope,
+  usageAttribution?: AiUsageAttribution,
 ): RuntimeTool {
   const inputSchema = buildGenerateImageToolSchema(configuredModel?.support);
 
@@ -56,6 +59,7 @@ export function createGenerateImageTool(
         signal,
         configuredModel,
         turnFiles,
+        usageAttribution,
       );
       if (isPaintingError(result)) {
         return {

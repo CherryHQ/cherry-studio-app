@@ -212,7 +212,9 @@ type ActiveTurn = {
   currentMessageOrdinal?: number;
   dispatchCalls: Map<string, RuntimeJsonValue>;
   failedToolCalls: Set<string>;
-  hasUsage: boolean;
+  recordedInvocations: Set<string>;
+  recordedResponses: WeakSet<AssistantMessage>;
+  nextInvocationOrdinal: number;
   limitError?: RuntimeError;
   modelContextHeadroomTokens: number;
   nextMessageOrdinal: number;
@@ -228,9 +230,7 @@ type ActiveTurn = {
   toolParts: Map<string, ToolPartBase>;
   toolStepCount: number;
   turnId: string;
-  usage: RuntimeUsage;
   usageContext?: RuntimeUsageContext;
-  usageReported: boolean;
 };
 
 async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent> {
@@ -539,21 +539,6 @@ function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   };
 }
 
-function mergeRuntimeUsage(current: RuntimeUsage, next: RuntimeUsage): RuntimeUsage {
-  const merged: RuntimeUsage = {
-    cacheReadTokens: (current.cacheReadTokens ?? 0) + (next.cacheReadTokens ?? 0),
-    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + (next.cacheWriteTokens ?? 0),
-    inputTokens: (current.inputTokens ?? 0) + (next.inputTokens ?? 0),
-    noCacheTokens: (current.noCacheTokens ?? 0) + (next.noCacheTokens ?? 0),
-    outputTokens: (current.outputTokens ?? 0) + (next.outputTokens ?? 0),
-    totalTokens: (current.totalTokens ?? 0) + (next.totalTokens ?? 0),
-  };
-  if (current.reasoningTokens !== undefined || next.reasoningTokens !== undefined) {
-    merged.reasoningTokens = (current.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0);
-  }
-  return merged;
-}
-
 function resolveThinkingLevel(
   request: RuntimeExecutionRequest,
   resolution: PiModelResolution,
@@ -608,7 +593,9 @@ class PiRuntimeSession implements AgentRuntimeSession {
       channel,
       dispatchCalls: new Map(),
       failedToolCalls: new Set(),
-      hasUsage: false,
+      recordedInvocations: new Set(),
+      recordedResponses: new WeakSet(),
+      nextInvocationOrdinal: 0,
       modelContextHeadroomTokens: 0,
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
@@ -621,15 +608,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolParts: new Map(),
       toolStepCount: 0,
       turnId: request.turnId,
-      usage: {
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        inputTokens: 0,
-        noCacheTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-      },
-      usageReported: false,
     };
     this.activeTurn = turn;
     turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), this.limits.turnTimeoutMs);
@@ -746,12 +724,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
             : turn.abortController.signal,
         });
       const models: Pick<Models, 'completeSimple'> = {
-        completeSimple:
-          this.contextOptions.completeSimple ??
-          (async (model, context, options) => {
-            const stream = await streamFn(model, context, options);
-            return stream.result();
-          }),
+        completeSimple: async (model, context, options) => {
+          const response = this.contextOptions.completeSimple
+            ? await this.contextOptions.completeSimple(model, context, options)
+            : await (await streamFn(model, context, options)).result();
+          this.recordInvocation(turn, response);
+          return response;
+        },
       };
       const compactionRedactions = [
         ...secrets,
@@ -785,10 +764,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
           },
         });
         return;
-      }
-      if (contextPlan.usage) {
-        turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(contextPlan.usage));
-        turn.hasUsage = true;
       }
       if (contextPlan.checkpoint) {
         this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
@@ -866,12 +841,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
 
-      this.emit(turn, {
-        type: 'usage',
-        completedAt: Date.now(),
-        context: resolution.usageContext,
-        usage: turn.usage,
-      });
       if (turn.limitError) {
         this.emit(turn, { type: 'failed', error: turn.limitError });
         return;
@@ -934,6 +903,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         break;
       case 'message_end':
         if (event.message.role === 'assistant') {
+          this.recordInvocation(turn, event.message);
           turn.currentMessageOrdinal = undefined;
           turn.modelContextHeadroomTokens -= estimatePiMessagesTokens([event.message]);
         }
@@ -941,8 +911,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
-          turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
-          turn.hasUsage = true;
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;
@@ -1543,23 +1511,36 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.abortExecution(turn, new Error('The Agent turn timed out.'));
   }
 
+  private recordInvocation(turn: ActiveTurn, message: AssistantMessage): void {
+    if (
+      !turn.usageContext ||
+      turn.phase === 'terminated' ||
+      message.stopReason === 'error' ||
+      message.stopReason === 'aborted'
+    )
+      return;
+    if (turn.recordedResponses.has(message)) return;
+    turn.recordedResponses.add(message);
+    const modelId = message.responseModel ?? message.model;
+    const requestId = `pi-agent:${turn.turnId}:${message.responseId ?? `call-${turn.nextInvocationOrdinal++}`}:${modelId}`;
+    if (turn.recordedInvocations.has(requestId)) return;
+    turn.recordedInvocations.add(requestId);
+    this.emit(turn, {
+      type: 'usage',
+      requestId,
+      completedAt: Date.now(),
+      context: { ...turn.usageContext, modelId },
+      usage: toRuntimeUsage(message.usage),
+    });
+  }
+
   private emit(turn: ActiveTurn, event: RuntimeEvent): void {
     if (turn.phase === 'terminated') return;
-    if (event.type === 'usage') turn.usageReported = true;
     const isTerminal =
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
       turn.abortController.abort();
-      if (turn.hasUsage && !turn.usageReported && turn.usageContext) {
-        turn.usageReported = true;
-        turn.channel.push({
-          type: 'usage',
-          completedAt: Date.now(),
-          context: turn.usageContext,
-          usage: turn.usage,
-        });
-      }
       this.interruptUnsettledToolParts(turn);
       turn.phase = 'terminated';
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));

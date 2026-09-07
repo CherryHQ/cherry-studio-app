@@ -8,6 +8,7 @@
  * and the stage is testable without a Host instance.
  */
 
+import type { AiUsageAttribution } from '@/backend/ai/AiService';
 import {
   AgentProtocolError,
   type AgentErrorView,
@@ -93,6 +94,8 @@ export type TurnPlan = {
   tools: readonly RuntimeTool[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
+  /** Source captured at admission; Host binds messageRef after reservation, before execution. */
+  usageAttribution: AiUsageAttribution;
 };
 
 export async function prepareTurn(
@@ -191,6 +194,10 @@ async function prepareResolvedTurn(
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
+  const usageAttribution: AiUsageAttribution = {
+    source: { type: 'agent', id: agent.id, name: agent.name, icon: null },
+    messageRef: null,
+  };
   const runtime = dependencies.routeExecutionTarget(session.executionTarget);
   if (
     !runtime.descriptor.capabilities.attachments &&
@@ -223,6 +230,7 @@ async function prepareResolvedTurn(
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
+          usageAttribution,
         }),
         signal,
       );
@@ -310,6 +318,7 @@ async function prepareResolvedTurn(
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     userParts,
+    usageAttribution,
   };
 }
 

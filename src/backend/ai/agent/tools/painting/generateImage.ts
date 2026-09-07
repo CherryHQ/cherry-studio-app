@@ -15,7 +15,7 @@ import {
 } from '@cherrystudio/provider-registry';
 import type { GenerateImageOutput } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { AiService } from '@/backend/ai/AiService';
+import type { AiService, AiUsageAttribution } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ProviderRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import type { CreateInternalEntryInput } from '@/backend/services/file/fileStorage';
@@ -109,6 +109,7 @@ export async function generateImageFromPrompt(
   signal: AbortSignal,
   configuredModel: ConfiguredPaintingModel | null,
   turnFiles: TurnFileScope,
+  usageAttribution?: AiUsageAttribution,
 ): Promise<PaintingResult> {
   throwIfAborted(signal);
   const resolvedModel = configuredModel ?? (await resolveConfiguredPaintingModel(dependencies));
@@ -157,6 +158,7 @@ export async function generateImageFromPrompt(
       prompt: input.prompt,
       requestOptions: { signal },
       uniqueModelId,
+      usageAttribution,
     });
     throwIfAborted(signal);
 

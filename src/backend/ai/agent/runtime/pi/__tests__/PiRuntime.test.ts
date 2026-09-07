@@ -454,6 +454,60 @@ const harness: RuntimeConformanceHarness = {
   ],
 };
 
+describe('Pi invocation capture', () => {
+  test('retains a completed provider call when approval is cancelled before turn_end', async () => {
+    const runtime = createTestRuntime();
+    const { request } = await harness.arrangeApproval(runtime, 'cancel-after-response');
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    for await (const event of session.execute(request)) {
+      events.push(event);
+      if (event.type === 'approval.requested') await session.cancel(request.turnId);
+    }
+    expect(events.filter((event) => event.type === 'usage')).toHaveLength(1);
+    expect(events.findIndex((event) => event.type === 'usage')).toBeLessThan(
+      events.findIndex((event) => event.type === 'approval.requested'),
+    );
+    expect(events.at(-1)?.type).toBe('cancelled');
+    await session.close();
+  });
+
+  test('deduplicates responses while preserving distinct calls with the same timestamp', async () => {
+    const runtime = createTestRuntime();
+    arrange(runtime, async (context) => {
+      const first = assistantMessage({ timestamp: 1 });
+      const second = assistantMessage({ timestamp: 1, responseModel: 'served-model' });
+      await context.emit({ type: 'message_end', message: first });
+      await context.emit({ type: 'message_end', message: first });
+      await context.emit({ type: 'message_end', message: second });
+      await context.emit({ type: 'turn_end', message: second, toolResults: [] });
+    });
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('same-timestamp')));
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(reports[0]?.requestId).not.toBe(reports[1]?.requestId);
+    expect(reports[1]?.context.modelId).toBe('served-model');
+    await session.close();
+  });
+
+  test.each(['error', 'aborted'] as const)(
+    'does not record an unsuccessful %s response',
+    async (stopReason) => {
+      const runtime = createTestRuntime();
+      arrange(runtime, async (context) => {
+        const response = assistantMessage({ stopReason });
+        await context.emit({ type: 'message_end', message: response });
+        await context.emit({ type: 'turn_end', message: response, toolResults: [] });
+      });
+      const session = await runtime.open();
+      const events = await collect(session.execute(baseRequest(`failed-${stopReason}`)));
+      expect(events.some((event) => event.type === 'usage')).toBe(false);
+      await session.close();
+    },
+  );
+});
+
 describe('PiRuntime conformance', () => {
   describeRuntimeConformance(harness);
 });
@@ -971,9 +1025,14 @@ describe('PiRuntime mapping', () => {
       'user',
       'assistant',
     ]);
-    expect(events.find((event) => event.type === 'usage')).toMatchObject({
-      usage: { inputTokens: 13, outputTokens: 5, totalTokens: 18 },
-    });
+    expect(events.filter((event) => event.type === 'usage')).toEqual([
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
+      }),
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 3, outputTokens: 2, totalTokens: 5 }),
+      }),
+    ]);
     await session.close();
 
     let restartSummaryCalls = 0;
@@ -1427,18 +1486,16 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('maps complete context, Agent options, stream parts, and usage', async () => {
+  test('maps context and preserves the cache breakdown of each provider invocation', async () => {
     const runtime = createTestRuntime();
     const holder = arrange(runtime, async (context) => {
-      await context.emit({
-        type: 'turn_end',
-        message: assistantMessage({
-          content: [],
-          stopReason: 'toolUse',
-          usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
-        }),
-        toolResults: [],
+      const response = assistantMessage({
+        content: [],
+        stopReason: 'toolUse',
+        usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
       });
+      await context.emit({ type: 'message_end', message: response });
+      await context.emit({ type: 'turn_end', message: response, toolResults: [] });
       await emitText(context, 'Pi answer.');
     });
     const session = await runtime.open();
@@ -1478,26 +1535,32 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
 
     expect(events.map((event) => event.type)).toEqual([
+      'usage',
       'part.add',
       'text.delta',
       'part.replace',
       'usage',
       'completed',
     ]);
-    expect(events.at(-2)).toEqual({
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(new Set(reports.map((report) => report.requestId)).size).toBe(2);
+    expect(reports[0]).toEqual({
       type: 'usage',
+      requestId: expect.any(String),
       completedAt: expect.any(Number),
       context: holder.resolution.usageContext,
       usage: {
         cacheReadTokens: 3,
         cacheWriteTokens: 1,
-        inputTokens: 9,
-        noCacheTokens: 5,
-        outputTokens: 3,
+        inputTokens: 6,
+        noCacheTokens: 2,
+        outputTokens: 1,
         reasoningTokens: 1,
-        totalTokens: 12,
+        totalTokens: 7,
       },
     });
+    expect(reports[1]?.usage).toMatchObject({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
     expect(holder.lastOptions?.initialState).toMatchObject({
       messages: [
         { role: 'user', content: 'Earlier question.' },

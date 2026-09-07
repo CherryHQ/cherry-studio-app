@@ -1,4 +1,5 @@
-import { createContext, type PropsWithChildren, use } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { createContext, type PropsWithChildren, use, useEffect } from 'react';
 
 import type { ApiClient } from '@/shared/data/api/types';
 
@@ -9,6 +10,27 @@ type DataApiProviderProps = PropsWithChildren<{
 }>;
 
 export function DataApiProvider({ children, dataApi }: DataApiProviderProps) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const paths = new Set<string>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = dataApi.subscribeChanges?.((changedPaths) => {
+      for (const path of changedPaths) paths.add(path);
+      // Coalesce a burst without postponing refresh indefinitely during long tool loops.
+      timer ??= setTimeout(() => {
+        const changed = new Set(paths);
+        paths.clear();
+        timer = undefined;
+        void queryClient.invalidateQueries({
+          predicate: (query) => changed.has(String(query.queryKey[0])),
+        });
+      }, 300);
+    });
+    return () => {
+      unsubscribe?.();
+      if (timer) clearTimeout(timer);
+    };
+  }, [dataApi, queryClient]);
   return <DataApiContext value={dataApi}>{children}</DataApiContext>;
 }
 

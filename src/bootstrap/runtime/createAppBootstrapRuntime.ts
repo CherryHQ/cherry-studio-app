@@ -103,6 +103,7 @@ export function createAppBootstrapRuntime(
       providers: services.provider,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
+    services.aiUsageRecord.subscribeChanges,
   );
 
   return {

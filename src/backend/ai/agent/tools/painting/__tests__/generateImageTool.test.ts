@@ -53,6 +53,20 @@ describe('createGenerateImageTool', () => {
     ]);
   });
 
+  test('carries the reserved Agent message into the image usage capture', async () => {
+    const deps = createDependencies();
+    const usageAttribution = {
+      source: { type: 'agent' as const, id: 'agent-1', name: 'Agent One', icon: null },
+      messageRef: { kind: 'agent-session' as const, id: 'message-1' },
+    };
+    await execute(createGenerateImageTool(deps, MODEL, TURN_FILES, usageAttribution), {
+      prompt: 'A cherry',
+    });
+    expect(deps.ai.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ usageAttribution }),
+    );
+  });
+
   test('tells the model to stop when no drawing model is configured', async () => {
     const deps = createDependencies();
     const tool = createGenerateImageTool(deps, null, TURN_FILES);
