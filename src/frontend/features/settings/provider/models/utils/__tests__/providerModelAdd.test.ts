@@ -120,7 +120,14 @@ describe('provider model add helpers', () => {
       if (endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT)
         expect(result.input?.inputModalities).toContain(MODALITY.IMAGE);
       expect(result.input?.capabilities).not.toContain(MODEL_CAPABILITY.IMAGE_RECOGNITION);
-      expect(isImageGenerationModel({ ...model('custom-model'), ...result.input })).toBe(true);
+      expect(
+        isImageGenerationModel({
+          ...model('custom-model'),
+          capabilities: result.input?.capabilities ?? [],
+          endpointTypes: result.input?.endpointTypes,
+          outputModalities: result.input?.outputModalities,
+        }),
+      ).toBe(true);
     },
   );
 
