@@ -151,6 +151,7 @@ function RootStack() {
           // in both themes. `PaintingViewerChrome` paints the same pair.
           contentStyle: { backgroundColor: constantBlack },
           headerShown: paintingViewerHeaderShown,
+          headerStyle: { backgroundColor: constantBlack },
           headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',

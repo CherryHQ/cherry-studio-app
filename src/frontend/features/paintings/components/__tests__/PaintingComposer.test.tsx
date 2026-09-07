@@ -115,6 +115,7 @@ let mockMessageListProps: MessageListProps | undefined;
 let mockProviderProps:
   | { initialAttachments?: readonly unknown[]; initialDraft?: string }
   | undefined;
+let mockProviderMounts = 0;
 let mockUuid = 0;
 
 jest.mock('expo-crypto', () => ({
@@ -144,6 +145,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(() => {
+      mockProviderMounts += 1;
+    }, []);
     mockProviderProps = props;
     return children;
   },
@@ -201,6 +206,7 @@ describe('PaintingComposer', () => {
     mockMessageListUnmounts = 0;
     mockMessageListProps = undefined;
     mockProviderProps = undefined;
+    mockProviderMounts = 0;
     mockUuid = 0;
     mockGeneration.aspectRatio = 16 / 9;
     mockGeneration.error = null;
@@ -228,7 +234,7 @@ describe('PaintingComposer', () => {
     });
   }
 
-  it('projects a completed painting and seeds its first output for follow-up editing', () => {
+  it('shows completed outputs in the message list without attaching them to the draft', () => {
     renderComposer();
 
     expect(mockMessageListProps?.messages.map((message) => message.role)).toEqual([
@@ -251,16 +257,16 @@ describe('PaintingComposer', () => {
       status: 'idle',
     });
     expect(mockProviderProps).toMatchObject({
-      initialAttachments: [files.outputs[0]],
+      initialAttachments: [],
       initialDraft: '',
     });
   });
 
-  it('passes one-shot handoff params into the painting input', () => {
+  it('seeds the input image and params when explicitly handed off for editing', () => {
     act(() => {
       renderer = create(
         <PaintingComposer
-          initialAttachments={[]}
+          initialAttachments={[files.outputs[0]]}
           initialDraft="Change the aspect ratio"
           initialFiles={{ inputs: [], outputAspectRatio: 1, outputs: [] }}
           initialParamValues={{ aspectRatio: '16:9' }}
@@ -271,6 +277,10 @@ describe('PaintingComposer', () => {
     });
 
     expect(mockInputProps?.initialParamValues).toEqual({ aspectRatio: '16:9' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: [files.outputs[0]],
+      initialDraft: 'Change the aspect ratio',
+    });
   });
 
   it('replaces the persisted turn with a pending request and then its result', async () => {
@@ -312,6 +322,8 @@ describe('PaintingComposer', () => {
     });
     expect(mockMessageListMounts).toBe(1);
     expect(mockMessageListUnmounts).toBe(0);
+    expect(mockProviderMounts).toBe(1);
+    expect(mockProviderProps?.initialAttachments).toEqual([]);
   });
 
   it('restores the previous painting after attachment rejection and lets the submit surface explain it', async () => {
