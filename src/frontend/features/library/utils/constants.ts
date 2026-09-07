@@ -1,3 +1,7 @@
+import type { PreferenceSchema } from '@/shared/data/preference';
+
+export type FileLibraryViewMode = PreferenceSchema['ui.library.view_mode'];
+
 /** Grid geometry and paging thresholds shared by the library's screen parts. */
 export const fileLibraryGrid = {
   columns: 2,
