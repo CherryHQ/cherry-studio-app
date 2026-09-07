@@ -88,7 +88,9 @@ export async function resolveManagedInput(
       );
     } catch {
       signal.throwIfAborted();
-      fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.');
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.', {
+        code: 'unavailable',
+      });
     }
   }
 
@@ -231,7 +233,9 @@ export async function resolveRuntimeTextAttachments(
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof FileAttachmentError) failAttachment(error);
-    fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.');
+    fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.', {
+      code: 'unavailable',
+    });
   }
 }
 

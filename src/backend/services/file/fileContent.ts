@@ -2,8 +2,12 @@ import { File } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
-import type { PrepareFileAttachmentsInput, PreparedFile } from '@/shared/contracts/file';
-import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
+import type {
+  PrepareFileAttachmentsInput,
+  PreparedFile,
+  ResolvedFile,
+} from '@/shared/contracts/file';
+import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import {
   type FileEntry,
   type FileEntryId,
@@ -96,27 +100,33 @@ export const fileContent = {
   },
   prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
     const signal = input.signal ?? new AbortController().signal;
-    const resolved = new Map<string, NonNullable<Awaited<ReturnType<typeof resolveFileEntry>>>>();
+    const resolved = new Map<string, ResolvedFile>();
+    const facts = new Map<string, FileAttachmentFact>();
     for (const id of input.fileEntryIds) {
       signal.throwIfAborted();
       if (resolved.has(id)) continue;
       const parsed = FileEntryIdSchema.safeParse(id);
       if (!parsed.success) throw new FileAttachmentError({ code: 'unavailable' });
-      const file = await resolveFileEntry(fileEntryService, parsed.data);
-      if (!file) throw new FileAttachmentError({ code: 'unavailable', fileEntryId: parsed.data });
-      resolved.set(id, file);
-    }
-    const facts = new Map(
-      [...resolved].map(([id, file]) => [
-        id,
-        {
+      const unavailable = new FileAttachmentError({
+        code: 'unavailable',
+        fileEntryId: parsed.data,
+      });
+      try {
+        const file = await resolveFileEntry(fileEntryService, parsed.data);
+        if (!file) throw unavailable;
+        facts.set(id, {
           fileEntryId: file.entry.id,
           mediaType: file.entry.mediaType,
           name: file.entry.filename,
           size: new File(file.uri).size,
-        },
-      ]),
-    );
+        });
+        resolved.set(id, file);
+      } catch {
+        signal.throwIfAborted();
+        // Native errors may contain private paths; expose only the managed reference.
+        throw unavailable;
+      }
+    }
     const prepared = await prepareFileAttachments({
       availableFiles: facts,
       currentFileEntryIds: input.fileEntryIds,
@@ -127,11 +137,14 @@ export const fileContent = {
       signal,
       target: input.target,
     });
-    return input.fileEntryIds.map((id) => ({
-      ...resolved.get(id)!,
-      report: prepared.get(id)!.report,
-      ...(prepared.get(id)!.text !== undefined ? { text: prepared.get(id)!.text } : {}),
-    }));
+    return input.fileEntryIds.map((id) => {
+      const attachment = prepared.get(id)!;
+      return {
+        ...resolved.get(id)!,
+        report: attachment.report,
+        ...(attachment.text !== undefined ? { text: attachment.text } : {}),
+      };
+    });
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   /**

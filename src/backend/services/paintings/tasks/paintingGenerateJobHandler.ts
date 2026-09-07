@@ -25,9 +25,9 @@ export const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
 export const PAINTING_JOB_QUEUE = 'painting';
 
 /**
- * Input images always carry a fileEntryId: `startGeneration` materializes
- * draft-only images into internal entries before the job is enqueued, and the
- * receipt's `files.input` records them for the job's lifetime. The uri is
+ * Input images always carry a fileEntryId: `startGeneration` validates library
+ * references before the job is enqueued, and the receipt's `files.input`
+ * records them for the job's lifetime. The uri is
  * a same-process convenience for readDataUrl — an abandoned job never re-runs
  * (recovery `'abandon'`, maxAttempts 1), so it is never read across restarts.
  */

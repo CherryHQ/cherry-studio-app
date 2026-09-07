@@ -51,7 +51,6 @@ export async function prepareFileAttachments(
     if (!file) throw new FileAttachmentError({ code: 'unavailable' });
     return file;
   });
-  validateFileAttachments(currentFiles, input.target);
   const historicalIds = (input.historicalFileEntryIds ?? []).filter((id) => {
     const file = input.availableFiles.get(id);
     const mode = file && fileAttachmentMode(file);
