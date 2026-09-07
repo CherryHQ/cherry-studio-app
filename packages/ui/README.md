@@ -75,10 +75,12 @@ logging, or translation dependency.
 callback while showing a filename and caller-supplied category label; square
 thumbnail callers continue to use `FilePreview`.
 
-`FilePreview` has three explicit visual variants. The default `thumbnail` uses the plugin and
-platform rendering described above. `attachment` puts a file-type icon above a multiline filename
-on a compact neutral tile; `card` puts the filename first and the icon at the bottom on a roomier
-surface. Both card variants retain image thumbnails and caller-controlled opening. An
+`FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
+platform rendering described above. `icon` keeps image thumbnails but represents other files with
+only their type icon, for rows that already show the filename. `attachment` puts a file-type icon
+above a multiline filename on a compact neutral tile; `card` puts the filename first and the icon
+at the bottom on a roomier surface. The `icon`, `attachment`, and `card` variants retain image
+thumbnails and caller-controlled opening. An
 optional `badge` slot sits beside the document icon or over an image; callers own its meaning and
 localized content. The complete filename remains the accessible label when its extension is
 omitted from the visible title.

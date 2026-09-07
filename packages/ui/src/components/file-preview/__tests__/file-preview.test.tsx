@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { FileCardPreview } from '../components/file-card-preview';
 import { FilePreview } from '../components/file-preview';
 import { FilePreviewPluginProvider } from '../components/file-preview-plugin-provider';
 import type { FilePreviewFile, FilePreviewKind, FilePreviewPlugin } from '../file-preview.types';
@@ -35,7 +36,6 @@ jest.mock('../components/fallback-preview', () => {
     FilePreviewUnavailable: (props: object) => React.createElement('FilePreviewUnavailable', props),
   };
 });
-
 const labels = { openWith: 'Open with', unavailable: 'Unavailable' };
 const pdfPlugins: readonly FilePreviewPlugin[] = [
   { component: (props) => createElement('PdfPreview', props), kind: 'pdf' },
@@ -59,6 +59,24 @@ describe('FilePreview', () => {
     const renderer = render(<FilePreview file={file('pdf')} labels={labels} onPress={onPress} />);
 
     expect(renderer.root.findAllByType('DefaultFallback')).toHaveLength(1);
+  });
+
+  it('uses the shared icon artwork instead of a platform thumbnail when requested', () => {
+    const renderer = render(
+      <FilePreview file={file('pdf')} labels={labels} onPress={onPress} variant="icon" />,
+    );
+
+    expect(renderer.root.findByType(FileCardPreview).props.variant).toBe('icon');
+    expect(renderer.root.findAllByType('DefaultFallback')).toHaveLength(0);
+  });
+
+  it('keeps image thumbnails in the icon variant', () => {
+    const renderer = render(
+      <FilePreview file={file('image')} labels={labels} onPress={onPress} variant="icon" />,
+    );
+
+    expect(renderer.root.findAllByType('BuiltInImage')).toHaveLength(1);
+    expect(renderer.root.findAllByType(FileCardPreview)).toHaveLength(0);
   });
 
   it('passes the resolved size and error reporter to the plugin', () => {
