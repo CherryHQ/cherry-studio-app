@@ -69,7 +69,7 @@ describe('AgentSessionUsageRecorder', () => {
         source: { icon: null, id: 'agent-1', name: 'Agent One', type: 'agent' },
       }),
       modality: 'language',
-      requestId: 'agent-session-turn:turn-1',
+      requestId: 'agent-session-message:message-1',
       usage: {
         cacheReadTokens: 3,
         cacheWriteTokens: 2,

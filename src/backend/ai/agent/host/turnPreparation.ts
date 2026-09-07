@@ -97,7 +97,7 @@ export type TurnPlan = {
 
 export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
-  parsed: AgentSubmitMessageInput,
+  parsed: Pick<AgentSubmitMessageInput, 'sessionId' | 'parts' | 'modelId' | 'reasoningEffort'>,
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const { sessionId } = parsed;
@@ -183,7 +183,7 @@ export async function prepareInitialTurn(
 
 async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
-  parsed: AgentSubmitMessageInput | AgentStartSessionInput,
+  parsed: Pick<AgentSubmitMessageInput, 'parts' | 'modelId' | 'reasoningEffort'>,
   session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
@@ -313,7 +313,7 @@ async function prepareResolvedTurn(
   };
 }
 
-function applyTurnOverrides(
+export function applyTurnOverrides(
   agent: AgentDefinition,
   input: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'>,
 ): AgentDefinition {

@@ -24,6 +24,7 @@ function snapshot(): AgentSessionSnapshot {
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
     pendingApprovals: [],
     hasHistoryBeforeActiveTurn: null,
+    inputQueue: { isPaused: false, inputs: [] },
     session: {
       agentId: 'agent-1',
       createdAt: '2026-08-25T00:00:00.000Z',
@@ -85,6 +86,12 @@ function protocolWithObservation(
     respondApproval: jest.fn(),
     startSession: jest.fn(),
     submitMessage: jest.fn(),
+    editQueuedInput: jest.fn(),
+    removeQueuedInput: jest.fn(),
+    retryQueuedInput: jest.fn(),
+    promoteQueuedInput: jest.fn(),
+    reorderQueuedInputs: jest.fn(),
+    pauseInputQueue: jest.fn(),
   };
 }
 
@@ -133,6 +140,7 @@ describe('AgentSessionChatClient', () => {
     });
 
     expect(protocol.submitMessage).toHaveBeenCalledWith({
+      inputId: expect.any(String),
       modelId: 'provider::model-b',
       parts: [{ text: 'Hello', type: 'text' }],
       reasoningEffort: 'high',

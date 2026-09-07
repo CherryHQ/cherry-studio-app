@@ -1,3 +1,5 @@
+import { v7 as uuidv7 } from 'uuid';
+
 import type {
   AgentApprovalView,
   AgentEvent,
@@ -244,12 +246,16 @@ export class AgentSessionChatClient {
   async submitMessage(
     sessionId: string,
     parts: AgentInputPart[],
-    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
+    overrides: Pick<
+      AgentSubmitMessageInput,
+      'modelId' | 'reasoningEffort' | 'mode' | 'targetTurnId'
+    > & { inputId?: string } = {},
   ) {
+    const inputId = overrides.inputId ?? uuidv7();
     const entry = this.getEntry(sessionId);
     await this.observe(sessionId);
     try {
-      return await this.protocol.submitMessage({ parts, sessionId, ...overrides });
+      return await this.protocol.submitMessage({ parts, sessionId, ...overrides, inputId });
     } finally {
       // Non-React callers may submit without ever installing a subscriber. The
       // Host snapshot makes a later observation lossless, so do not retain an

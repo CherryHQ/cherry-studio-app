@@ -19,6 +19,7 @@ function createProbe(events: RuntimeEvent[]) {
       yield* events;
     },
     respondApproval: jest.fn(async () => undefined),
+    steer: jest.fn(async () => false),
   };
   return {
     session,

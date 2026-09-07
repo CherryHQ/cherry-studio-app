@@ -4,6 +4,8 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
+import { v7 as uuidv7 } from 'uuid';
+
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -389,13 +391,16 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.hasHistoryBeforeActiveTurn).toBeNull();
 
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     // Event stream shape.
-    expect(events.map((event) => event.type)).toEqual([
+    expect(
+      events.filter((event) => event.type !== 'queue.updated').map((event) => event.type),
+    ).toEqual([
       'message.created', // user
       'message.created', // assistant placeholder
       'turn.updated', // running
@@ -465,7 +470,7 @@ describe('MobileAgentHost', () => {
           context: USAGE_CONTEXT,
           usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
         },
-        turnId: submitted.turnId,
+        turnId: submitted.turnId!,
       }),
     );
 
@@ -502,7 +507,11 @@ describe('MobileAgentHost', () => {
     const secondEvents: AgentEvent[] = [];
     const second = await host.observeSession(session.id, (event) => secondEvents.push(event));
     expect(second.snapshot.activeTurn).toBeNull();
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'More.' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'More.' }],
+    });
     await waitFor(() => terminalTurnEvent(secondEvents) !== undefined, 'the second turn');
     expect(
       requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
@@ -533,11 +542,13 @@ describe('MobileAgentHost', () => {
         .length;
 
     const first = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'First.' }],
     });
     await waitFor(() => completedCount() === 1, 'the first checkpoint turn');
     const second = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Second.' }],
     });
@@ -559,6 +570,7 @@ describe('MobileAgentHost', () => {
     const restartedEvents: AgentEvent[] = [];
     await restartedHost.observeSession(session.id, (event) => restartedEvents.push(event));
     await restartedHost.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Third.' }],
     });
@@ -607,7 +619,11 @@ describe('MobileAgentHost', () => {
       ).length;
 
     for (const [index, text] of ['anchor', 'fail', 'cancel'].entries()) {
-      await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text }] });
+      await host.submitMessage({
+        inputId: uuidv7(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text }],
+      });
       await waitFor(() => terminalCount() === index + 1, `${text} turn`);
     }
 
@@ -640,9 +656,17 @@ describe('MobileAgentHost', () => {
       events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
         .length;
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'one' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'one' }],
+    });
     await waitFor(() => completedCount() === 1, 'the anchor turn');
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'two' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'two' }],
+    });
     await waitFor(() => completedCount() === 2, 'the oversized checkpoint turn');
 
     expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
@@ -663,13 +687,21 @@ describe('MobileAgentHost', () => {
       events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
         .length;
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'First.' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First.' }],
+    });
     await waitFor(() => completedCount() === 1, 'the first turn');
     jest.spyOn(store, 'getLatestContextCheckpoint').mockResolvedValueOnce({
       assistantMessageId: 'checkpoint-row',
       checkpoint,
     });
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Second.' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second.' }],
+    });
     await waitFor(() => completedCount() === 2, 'the fallback turn');
 
     expect(requests[1]?.contextCheckpoint).toBeNull();
@@ -691,6 +723,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Save it.' }],
     });
@@ -748,6 +781,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Create an image.' }],
     });
@@ -845,6 +879,7 @@ describe('MobileAgentHost', () => {
       const events: AgentEvent[] = [];
       await host.observeSession(session.id, (event) => events.push(event));
       await host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Delete it.' }],
       });
@@ -935,6 +970,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Create an image.' }],
     });
@@ -973,6 +1009,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete it.' }],
     });
@@ -981,7 +1018,7 @@ describe('MobileAgentHost', () => {
       'the tool call to start',
     );
 
-    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the cancelled turn to settle');
 
     // The runtime replaced the tool part with `interrupted` before `cancelled`;
@@ -1061,6 +1098,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete both.' }],
     });
@@ -1125,7 +1163,11 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
@@ -1146,7 +1188,11 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await host.submitMessage({
+      inputId: uuidv7(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).not.toHaveBeenCalled();
@@ -1164,6 +1210,7 @@ describe('MobileAgentHost', () => {
         .length;
 
     await host.submitMessage({
+      inputId: uuidv7(),
       modelId: 'override-provider::override-model',
       parts: [{ type: 'text', text: 'Override both.' }],
       reasoningEffort: 'max',
@@ -1176,6 +1223,7 @@ describe('MobileAgentHost', () => {
     });
 
     await host.submitMessage({
+      inputId: uuidv7(),
       parts: [{ type: 'text', text: 'Use the model default.' }],
       reasoningEffort: 'default',
       sessionId: session.id,
@@ -1188,6 +1236,7 @@ describe('MobileAgentHost', () => {
     expect(requests[1]?.options).not.toHaveProperty('reasoningEffort');
 
     await host.submitMessage({
+      inputId: uuidv7(),
       parts: [{ type: 'text', text: 'Use the Agent configuration again.' }],
       sessionId: session.id,
     });
@@ -1239,6 +1288,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not reserve this.' }],
       }),
@@ -1275,6 +1325,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       parts: [{ type: 'text', text: 'Search.' }],
       sessionId: session.id,
     });
@@ -1329,6 +1380,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       parts: [{ type: 'text', text: 'Run tools.' }],
       sessionId: session.id,
     });
@@ -1372,6 +1424,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         parts: [{ type: 'text', text: 'Do not reserve this.' }],
         sessionId: session.id,
       }),
@@ -1382,6 +1435,265 @@ describe('MobileAgentHost', () => {
       },
     });
     await expect(store.listMessages(session.id)).resolves.toEqual([]);
+  });
+
+  test('keeps follow-ups durable and deduplicated, then drains FIFO using settled history', async () => {
+    const finishFirst = createDeferred();
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    runtime.script(async (controller) => {
+      requests.push(controller.request);
+      await finishFirst.promise;
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'answer', type: 'text', text: 'First answer', state: 'done' },
+      });
+    });
+    for (let i = 0; i < 2; i += 1)
+      runtime.script((controller) => {
+        requests.push(controller.request);
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const observation = await host.observeSession(session.id, () => {});
+    await host.submitMessage({
+      inputId: 'first',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First' }],
+    });
+    const followUp = {
+      inputId: 'second',
+      sessionId: session.id,
+      parts: [{ type: 'text' as const, text: 'Second' }],
+    };
+    expect(await host.submitMessage(followUp)).toMatchObject({ disposition: 'queued' });
+    await host.submitMessage({
+      ...followUp,
+      inputId: 'third',
+      parts: [{ type: 'text', text: 'Third' }],
+    });
+    await host.submitMessage(followUp);
+    observation.unsubscribe();
+    expect((await store.listMessages(session.id)).length).toBe(2);
+    const handoff = await host.observeSession(session.id, () => {});
+    expect(handoff.snapshot.inputQueue.inputs.map(({ id }) => id)).toEqual(['second', 'third']);
+    finishFirst.resolve();
+    await waitFor(() => requests.length === 3, 'FIFO follow-ups');
+    expect(requests.map(({ input }) => input)).toEqual([
+      [{ type: 'text', text: 'First' }],
+      [{ type: 'text', text: 'Second' }],
+      [{ type: 'text', text: 'Third' }],
+    ]);
+    expect(requests[1].history[0].messages.at(-1)?.parts).toEqual([
+      { type: 'text', text: 'First answer' },
+    ]);
+    const duplicate = await host.submitMessage(followUp);
+    expect(duplicate.disposition).toBe('started');
+    expect(requests).toHaveLength(3);
+    await host._doStop();
+  });
+
+  test('persists a steering boundary before further output and accounts each segment once', async () => {
+    const steerNow = createDeferred();
+    const boundaryWrite = createDeferred();
+    const releaseBoundary = createDeferred();
+    const finish = createDeferred();
+    let continued = false;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'before', type: 'text', text: 'Before', state: 'done' },
+      });
+      controller.emit({
+        type: 'usage',
+        usage: { inputTokens: 3, outputTokens: 2 },
+        context: USAGE_CONTEXT,
+        completedAt: Date.now(),
+      });
+      await steerNow.promise;
+      const steering = await controller.consumeSteering();
+      expect(steering?.inputId).toBe('steering');
+      continued = true;
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'after', type: 'text', text: 'After', state: 'done' },
+      });
+      controller.emit({
+        type: 'usage',
+        usage: { inputTokens: 7, outputTokens: 4 },
+        context: USAGE_CONTEXT,
+        completedAt: Date.now(),
+      });
+      await finish.promise;
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const started = await host.submitMessage({
+      inputId: 'initial',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Start' }],
+    });
+    const consume = store.consumeInput.bind(store);
+    jest.spyOn(store, 'consumeInput').mockImplementationOnce(async (input) => {
+      boundaryWrite.resolve();
+      await releaseBoundary.promise;
+      return consume(input);
+    });
+    const steering = {
+      inputId: 'steering',
+      sessionId: session.id,
+      mode: 'steer' as const,
+      targetTurnId: started.turnId,
+      parts: [{ type: 'text' as const, text: 'Change direction' }],
+    };
+    expect(await host.submitMessage(steering)).toMatchObject({
+      disposition: 'redirected',
+      turnId: started.turnId,
+    });
+    expect(await host.submitMessage(steering)).toMatchObject({ disposition: 'redirected' });
+    steerNow.resolve();
+    await boundaryWrite.promise;
+    expect(continued).toBe(false);
+    expect((await store.listMessages(session.id)).length).toBe(2);
+    releaseBoundary.resolve();
+    await waitFor(() => continued, 'steering boundary persistence');
+    const live = await host.observeSession(session.id, () => {});
+    expect(live.snapshot.activeTurn?.id).toBe(started.turnId);
+    expect(live.snapshot.hasHistoryBeforeActiveTurn).toBe(true);
+    expect(live.snapshot.activeUserMessage?.parts[0]).toMatchObject({ text: 'Change direction' });
+    expect(backgroundReplyTurn.finish).not.toHaveBeenCalled();
+    await expect(
+      host.removeQueuedInput({ sessionId: session.id, inputId: 'steering' }),
+    ).rejects.toMatchObject({ view: { code: 'INPUT_UNAVAILABLE' } });
+    finish.resolve();
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the steered execution');
+    const transcript = await store.listMessages(session.id);
+    expect(transcript.map(({ role }) => role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+    expect(new Set(transcript.map(({ turnId }) => turnId))).toEqual(new Set([started.turnId]));
+    expect(transcript.filter(({ role }) => role === 'assistant').map(({ usage }) => usage)).toEqual(
+      [
+        { inputTokens: 3, outputTokens: 2 },
+        { inputTokens: 7, outputTokens: 4 },
+      ],
+    );
+    expect(usage.record).toHaveBeenCalledTimes(2);
+    expect(
+      events.filter((event) => event.type === 'turn.updated' && event.turn.endedAt !== null),
+    ).toHaveLength(1);
+    assertJsonRoundTrip(events);
+  });
+
+  test('edits and promotes the original queue identity, preserving incompatible steers as follow-ups', async () => {
+    const finish = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(
+      async () => finish.promise,
+    );
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const started = await host.submitMessage({
+      inputId: 'initial',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Start' }],
+    });
+    await host.submitMessage({
+      inputId: 'queued',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Original' }],
+    });
+    await host.editQueuedInput({
+      inputId: 'queued',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Edited' }],
+    });
+    expect(
+      await host.promoteQueuedInput({
+        inputId: 'queued',
+        sessionId: session.id,
+        targetTurnId: started.turnId!,
+      }),
+    ).toMatchObject({ inputId: 'queued', disposition: 'redirected' });
+    expect(
+      await host.submitMessage({
+        inputId: 'stale',
+        sessionId: session.id,
+        mode: 'steer',
+        targetTurnId: 'old-turn',
+        parts: [{ type: 'text', text: 'Stale' }],
+      }),
+    ).toMatchObject({ disposition: 'queued', reason: 'target-ended' });
+    expect(
+      await host.submitMessage({
+        inputId: 'other-model',
+        sessionId: session.id,
+        mode: 'steer',
+        targetTurnId: started.turnId,
+        reasoningEffort: 'high',
+        parts: [{ type: 'text', text: 'High effort' }],
+      }),
+    ).toMatchObject({ disposition: 'queued', reason: 'configuration-changed' });
+    await host.reorderQueuedInputs({ sessionId: session.id, inputIds: ['other-model', 'stale'] });
+    await host.removeQueuedInput({ sessionId: session.id, inputId: 'stale' });
+    await host.cancelTurn({ sessionId: session.id, turnId: started.turnId! });
+    const queue = (await host.observeSession(session.id, () => {})).snapshot.inputQueue;
+    expect(queue.isPaused).toBe(true);
+    expect(queue.inputs).toHaveLength(2);
+    expect(queue.inputs.find(({ id }) => id === 'queued')).toMatchObject({
+      status: 'queued',
+      reason: 'undelivered',
+      parts: [{ type: 'text', text: 'Edited' }],
+    });
+    finish.resolve();
+  });
+
+  test('Stop then immediate Send waits for the cancelled transcript write before starting again', async () => {
+    const firstStarted = createDeferred();
+    const writingTerminal = createDeferred();
+    const releaseTerminal = createDeferred();
+    const requests: RuntimeExecutionRequest[] = [];
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script(async (controller) => {
+        requests.push(controller.request);
+        firstStarted.resolve();
+        await new Promise<void>((resolve) =>
+          controller.signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+      })
+      .script((controller) => {
+        requests.push(controller.request);
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const first = await host.submitMessage({
+      inputId: 'first',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First' }],
+    });
+    await firstStarted.promise;
+    const finalize = store.finalizeAssistantMessage.bind(store);
+    jest.spyOn(store, 'finalizeAssistantMessage').mockImplementationOnce(async (input) => {
+      writingTerminal.resolve();
+      await releaseTerminal.promise;
+      return finalize(input);
+    });
+    const stopping = host.cancelTurn({ sessionId: session.id, turnId: first.turnId! });
+    const next = host.submitMessage({
+      inputId: 'next',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Next' }],
+    });
+    await writingTerminal.promise;
+    expect(requests).toHaveLength(1);
+    releaseTerminal.resolve();
+    await stopping;
+    expect(await next).toMatchObject({ disposition: 'started' });
+    await waitFor(() => requests.length === 2, 'the replacement execution');
+    expect((await store.listMessages(session.id))[1].status).toBe('cancelled');
+    await host._doStop();
   });
 
   test('cancel settles the turn as cancelled and is idempotent', async () => {
@@ -1402,21 +1714,26 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
 
-    // A concurrent submit while the turn is active fails closed (invariant 1).
+    // Busy submissions are durable follow-ups; Stop retains them in a paused queue.
     await expect(
-      host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'again' }] }),
-    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      host.submitMessage({
+        inputId: uuidv7(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'again' }],
+      }),
+    ).resolves.toMatchObject({ disposition: 'queued' });
 
     await waitFor(
       () =>
         events.some((event) => event.type === 'message.delta' && event.delta.op === 'text.append'),
       'streaming to start',
     );
-    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     const statuses = events
@@ -1434,7 +1751,7 @@ describe('MobileAgentHost', () => {
 
     // Idempotent: cancelling a settled turn is a no-op, not an error.
     await expect(
-      host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId }),
+      host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! }),
     ).resolves.toBeUndefined();
 
     // The session is idle again.
@@ -1462,6 +1779,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime, naming);
     const session = await createStoredSession();
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Keep working.' }],
     });
@@ -1490,6 +1808,7 @@ describe('MobileAgentHost', () => {
     });
 
     const submission = host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Stop before admission completes.' }],
     });
@@ -1500,6 +1819,7 @@ describe('MobileAgentHost', () => {
     await expect(submission).rejects.toThrow('The Agent Host is stopping.');
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not admit after stop.' }],
       }),
@@ -1519,6 +1839,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime);
     const session = await createStoredSession();
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1527,7 +1848,7 @@ describe('MobileAgentHost', () => {
     await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
 
     expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
-    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! });
   });
 
   test('applies summary naming after the turn leaves active Host state', async () => {
@@ -1546,6 +1867,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1577,6 +1899,7 @@ describe('MobileAgentHost', () => {
     });
     const session = await createStoredSession();
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1686,6 +2009,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete this Session.' }],
     });
@@ -1723,6 +2047,7 @@ describe('MobileAgentHost', () => {
     });
 
     const submission = host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Admit before deleting.' }],
     });
@@ -1803,6 +2128,7 @@ describe('MobileAgentHost', () => {
     });
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Start the old turn.' }],
     });
@@ -1812,6 +2138,7 @@ describe('MobileAgentHost', () => {
 
     const resubmission = await host
       .submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Must not start during deletion.' }],
       })
@@ -1901,6 +2228,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete it.' }],
     });
@@ -1923,7 +2251,7 @@ describe('MobileAgentHost', () => {
     await expect(
       host.respondApproval({
         sessionId: session.id,
-        turnId: submitted.turnId,
+        turnId: submitted.turnId!,
         approvalId: 'unknown-approval',
         decision: 'approve',
       }),
@@ -1931,7 +2259,7 @@ describe('MobileAgentHost', () => {
 
     await host.respondApproval({
       sessionId: session.id,
-      turnId: submitted.turnId,
+      turnId: submitted.turnId!,
       approvalId: requested.approval.id,
       decision: 'approve',
     });
@@ -1987,6 +2315,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [
         { type: 'text', text: 'Remember this image.' },
@@ -2023,6 +2352,7 @@ describe('MobileAgentHost', () => {
     // fail a text-only turn. Its content is omitted from Pi history.
     events.length = 0;
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Continue.' }],
     });
@@ -2070,12 +2400,14 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first image turn');
     events.length = 0;
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'What was in that image?' }],
     });
@@ -2114,6 +2446,7 @@ describe('MobileAgentHost', () => {
       .mockRejectedValueOnce(new Error('database busy'));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Retry the terminal write.' }],
     });
@@ -2132,12 +2465,13 @@ describe('MobileAgentHost', () => {
   test('does not reserve transcript rows when the Runtime session cannot open', async () => {
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     jest.spyOn(runtime, 'open').mockRejectedValueOnce(new Error('runtime unavailable'));
-    const reserve = jest.spyOn(store, 'reserveSubmission');
+    const reserve = jest.spyOn(store, 'consumeInput');
     const host = createHost(runtime);
     const session = await createStoredSession();
 
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not persist this.' }],
       }),
@@ -2211,6 +2545,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
@@ -2218,6 +2553,7 @@ describe('MobileAgentHost', () => {
     events.length = 0;
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [
           { type: 'text', text: 'Continue.' },
@@ -2229,6 +2565,7 @@ describe('MobileAgentHost', () => {
     expect(await store.listMessages(session.id)).toHaveLength(2);
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Continue without a new image.' }],
     });
@@ -2277,6 +2614,7 @@ describe('MobileAgentHost', () => {
     const endpointSession = await createStoredSession();
     await expect(
       endpointHost.submitMessage({
+        inputId: uuidv7(),
         sessionId: endpointSession.id,
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
@@ -2316,11 +2654,12 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     const submitted = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
     await waitFor(() => readSignal !== undefined, 'the managed image read');
-    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! });
     expect(readSignal?.aborted).toBe(true);
     resolveRead('data:image/png;base64,LATE');
     await waitFor(
@@ -2376,6 +2715,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [
         { type: 'text', text: 'Compare these files.' },
@@ -2466,6 +2806,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       unsupportedHost.submitMessage({
+        inputId: uuidv7(),
         sessionId: unsupportedSession.id,
         parts: [
           {
@@ -2492,6 +2833,7 @@ describe('MobileAgentHost', () => {
     const binarySession = await createStoredSession();
     await expect(
       binaryHost.submitMessage({
+        inputId: uuidv7(),
         sessionId: binarySession.id,
         parts: [
           {
@@ -2533,6 +2875,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       availableHost.submitMessage({
+        inputId: uuidv7(),
         sessionId: availableSession.id,
         parts: [
           {
@@ -2554,6 +2897,7 @@ describe('MobileAgentHost', () => {
     const unavailableSession = await createStoredSession();
     await expect(
       unavailableHost.submitMessage({
+        inputId: uuidv7(),
         sessionId: unavailableSession.id,
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
@@ -2575,6 +2919,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     const first = await host.submitMessage({
+      inputId: uuidv7(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -2622,7 +2967,11 @@ describe('MobileAgentHost', () => {
       }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
     await expect(
-      host.submitMessage({ sessionId: 'missing', parts: [{ type: 'text', text: 'x' }] }),
+      host.submitMessage({
+        inputId: uuidv7(),
+        sessionId: 'missing',
+        parts: [{ type: 'text', text: 'x' }],
+      }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
     await expect(host.observeSession('missing', () => {})).rejects.toMatchObject({
       view: { code: 'SESSION_NOT_FOUND' },
@@ -2632,6 +2981,7 @@ describe('MobileAgentHost', () => {
     // Raw or unknown ids are rejected before any reservation.
     await expect(
       host.submitMessage({
+        inputId: uuidv7(),
         sessionId: session.id,
         parts: [{ type: 'file', fileEntryId: 'file:///private/image.png', mediaType: 'image/png' }],
       }),

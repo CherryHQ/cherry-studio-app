@@ -51,6 +51,8 @@ export interface AgentRuntime {
 
 export interface AgentRuntimeSession {
   execute(request: RuntimeExecutionRequest): AsyncIterable<RuntimeEvent>;
+  /** Acceptance only. Consumption/undelivered is reported once through the execution stream. */
+  steer(input: RuntimeSteeringInput): Promise<boolean>;
   cancel(turnId: string): Promise<void>;
   respondApproval(input: {
     turnId: string;
@@ -59,6 +61,8 @@ export interface AgentRuntimeSession {
   }): Promise<void>;
   close(): Promise<void>;
 }
+
+export type RuntimeSteeringInput = { turnId: string; inputId: string; text: string };
 
 export type RuntimeModel = {
   providerId: string;
@@ -300,6 +304,8 @@ export type RuntimeError = {
 };
 
 export type RuntimeEvent =
+  | { type: 'input.consumed'; inputId: string; consumedAt: number }
+  | { type: 'input.undelivered'; inputId: string }
   | { type: 'part.add'; index: number; part: RuntimeOutputPart }
   | { type: 'text.delta'; partId: string; text: string }
   | { type: 'part.replace'; part: RuntimeOutputPart }

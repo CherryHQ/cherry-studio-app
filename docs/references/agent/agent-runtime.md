@@ -97,6 +97,7 @@ interface AgentRuntime {
 
 interface AgentRuntimeSession {
   execute(request: RuntimeExecutionRequest): AsyncIterable<RuntimeEvent>
+  steer(input: { turnId: string; inputId: string; text: string }): Promise<boolean>
   cancel(turnId: string): Promise<void>
   respondApproval(input: {
     turnId: string
@@ -397,6 +398,8 @@ ledger. See [Agent Skills](./agent-skills.md).
 
 ```ts
 type RuntimeEvent =
+  | { type: 'input.consumed'; inputId: string; consumedAt: number }
+  | { type: 'input.undelivered'; inputId: string }
   | { type: 'part.add'; index: number; part: RuntimeOutputPart }
   | { type: 'text.delta'; partId: string; text: string }
   | { type: 'part.replace'; part: RuntimeOutputPart }
@@ -528,7 +531,8 @@ the active execution and commits it atomically with a successful assistant termi
 cancelled, or interrupted turns never persist a candidate, and oversized payloads are rejected
 rather than truncated.
 
-`usage` values are cumulative for the execution; the last report before the terminal event is
+`usage` values are cumulative within the current assistant segment; the last report before
+`input.consumed` or the terminal event is
 authoritative. Detailed cache and reasoning counts remain available for pricing even though the
 Agent Protocol message projects only the input, output, and total counts. `context` is the immutable
 provider, served-model, pricing, and credential-attribution snapshot captured when the provider is
@@ -537,6 +541,23 @@ Host adds the Agent source and Session message reference without re-reading muta
 configuration. It does not synthesize provider timing from the broader Host turn lifetime. A
 Runtime that cannot report usage emits no `usage` event, and the assistant message's protocol
 `usage` stays `null`.
+
+### Steering boundaries
+
+The Host owns durable follow-ups. `steer` accepts only nonempty text for the exact active turn;
+`true` means accepted for injection, not consumed. Input ids deduplicate within the execution.
+Every accepted id emits exactly one `input.consumed` or `input.undelivered` before the terminal.
+`input.consumed` includes `consumedAt`; it follows the prior segment's usage and precedes the next
+segment's output. Usage accumulation and output indexes restart at that boundary, while turn id,
+tool budgets, timeout, and the execution's frozen model/tools remain unchanged.
+
+Pi uses native `Agent.steer` in one-at-a-time mode and correlates the injected user message by
+object identity. At its `message_start`, the async event subscriber waits until the Host consumes
+the boundary and requests the next event. The Host commits the old segment and reserves the new
+one during that pause, then replaces its timing collector. Ordinary streaming events stay buffered;
+only this identity boundary applies backpressure. Cancellation releases the wait and the terminal
+fence prevents late output. Remaining native steering is cleared and returned as undelivered.
+Output truncation (`length`) fails the execution before another steering/model step can start.
 
 ## Host execution flow
 

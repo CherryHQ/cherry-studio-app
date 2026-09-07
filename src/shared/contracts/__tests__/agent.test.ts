@@ -59,6 +59,7 @@ describe('Agent tool and managed-file contracts', () => {
     const input = {
       parts: [{ text: 'Draw it.', type: 'text' }],
       sessionId: 'session-1',
+      inputId: 'input-1',
     } as const;
 
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
@@ -120,6 +121,7 @@ describe('Agent tool and managed-file contracts', () => {
       agent: { id: 'agent-1', name: 'Agent' },
       capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
       hasHistoryBeforeActiveTurn: false,
+      inputQueue: { isPaused: false, inputs: [] },
       pendingApprovals: [],
       session: {
         agentId: 'agent-1',

@@ -399,11 +399,21 @@ interface AgentProtocol {
   }): Promise<AgentSessionView>
 
   submitMessage(input: {
+    inputId: string
     sessionId: string
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
-  }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
+    mode?: 'follow-up' | 'steer'
+    targetTurnId?: string
+  }): Promise<AgentSubmitMessageResult>
+
+  editQueuedInput(input: { sessionId: string; inputId: string; parts: AgentInputPart[] }): Promise<void>
+  removeQueuedInput(input: { sessionId: string; inputId: string }): Promise<void>
+  retryQueuedInput(input: { sessionId: string; inputId: string }): Promise<void>
+  promoteQueuedInput(input: { sessionId: string; inputId: string; targetTurnId: string }): Promise<AgentSubmitMessageResult>
+  reorderQueuedInputs(input: { sessionId: string; inputIds: string[] }): Promise<void>
+  pauseInputQueue(input: { sessionId: string; isPaused: boolean }): Promise<void>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
 
@@ -591,7 +601,8 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 ## Invariants
 
 1. A Session has at most one active turn.
-2. An admitted submission reserves the user message and assistant placeholder before execution.
+2. Accepted pending inputs are durable and separate from history. Starting an execution or consuming
+   steering atomically reserves the user message and assistant placeholder before subsequent output.
 3. Every admitted turn reaches exactly one terminal state.
 4. No content event is accepted after the turn becomes terminal.
 5. Terminal message and turn state commit before terminal events publish.
@@ -605,6 +616,43 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable
     historical reference, and artifact parts are not implicit model attachments.
 14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
+
+## Follow-ups and steering
+
+The client allocates `inputId` before submission and reuses it for retries. A consumed id returns
+its existing message identities; a queued id does not enqueue twice, and removed ids cannot run
+again. Omitted mode means `follow-up`. `AgentSubmitMessageResult` returns `inputId` and a
+`disposition`: `started` includes turn/user/assistant ids, `queued` retains pending input, and
+`redirected` includes the target turn id but does not claim model consumption. Rejections remain
+`AgentProtocolError`; an input that became durable before dequeue validation failed remains queued
+with a reason and pauses automatic drain.
+
+Follow-ups drain in submission order after successful terminal persistence and execution cleanup.
+Steering is text-only and pins the intended turn before asynchronous admission. An ended target,
+different model/reasoning effort, unsupported content, or unavailable Runtime leaves the same input
+queued with a closed reason code. Tools, resources, approvals, limits, and model configuration stay
+frozen for the active execution. Waiting for approval does not prevent queue submission and steering
+cannot bypass an unresolved approval.
+
+Snapshots include `inputQueue: { isPaused, inputs }`; `queue.updated` publishes the same shape with
+`sessionId` after durable mutations. Each queued input includes its ordered parts, requested mode,
+model/reasoning selection, optional target, position, status, reason, timestamps, and eventual
+message identities. Only queued/interrupted inputs can be edited, removed, or reordered. Promotion
+updates the existing id. Retrying an interrupted input explicitly makes it queued again; resuming
+the paused queue is a separate action. Pause controls automatic follow-ups; explicit steering can
+still target a live turn.
+
+Stop pauses follow-ups and waits for active execution and persistence to drain. Failed, cancelled,
+timed-out, and output-truncated turns pause automatic drain. Unconsumed native inputs return to the
+queue; ambiguous consumption interrupts the input for manual retry. Restart restores pending
+queues paused. Sending into an empty queue after Stop starts fresh once cleanup finishes; sending
+while older paused inputs remain preserves them and appends the new input.
+
+At native consumption the Host finalizes the previous assistant segment, creates the injected user
+message and next assistant placeholder, then publishes the boundary in that order. The turn id and
+start time remain stable and only the full execution emits a terminal turn. Usage is recorded once
+per assistant segment. `hasHistoryBeforeActiveTurn` also becomes true when a steering boundary
+leaves a persisted prefix before the current live pair, so route handoff loads that prefix.
 
 ## Branching
 

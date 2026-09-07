@@ -20,7 +20,7 @@ type RecordAgentSessionUsageInput = {
 
 const logger = loggerService.withContext('AgentSessionUsageRecorder');
 
-/** Best-effort analytical projection for the single provider call in a V1 Agent turn. */
+/** Best-effort analytical projection of usage accumulated within one assistant segment. */
 export class AgentSessionUsageRecorder {
   private readonly inFlight = new Set<Promise<void>>();
 
@@ -53,7 +53,7 @@ export class AgentSessionUsageRecorder {
         source: { icon: null, id: input.agent.id, name: input.agent.name, type: 'agent' },
       },
       modality: 'language',
-      requestId: `agent-session-turn:${input.turnId}`,
+      requestId: `agent-session-message:${input.assistantMessageId}`,
       usage: input.report.usage,
     });
   }

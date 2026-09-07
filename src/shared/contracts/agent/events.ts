@@ -5,6 +5,7 @@
 
 import * as z from 'zod';
 
+import { AgentInputQueueSchema } from './queue';
 import {
   AgentApprovalViewSchema,
   AgentCapabilitiesSchema,
@@ -34,6 +35,11 @@ export const AgentMessageDeltaSchema = z.union([
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentEventSchema = z.union([
+  z.strictObject({
+    type: z.literal('queue.updated'),
+    sessionId: z.string().min(1),
+    queue: AgentInputQueueSchema,
+  }),
   z.strictObject({ type: z.literal('session.updated'), session: AgentSessionViewSchema }),
   z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
   z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
@@ -61,6 +67,7 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
+  inputQueue: AgentInputQueueSchema,
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 
