@@ -716,13 +716,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
-      const streamFn: PiModelResolution['streamFn'] = (model, context, options) =>
-        resolution.streamFn(model, context, {
+      const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
+        const stream = await resolution.streamFn(model, context, {
           ...options,
           signal: options?.signal
             ? AbortSignal.any([options.signal, turn.abortController.signal])
             : turn.abortController.signal,
         });
+        // Match desktop Pi: capture completed calls before the agent can cancel
+        // between the provider result and message_end. Pi owns stream failures.
+        void stream.result().then(
+          (response) => this.recordInvocation(turn, response),
+          () => undefined,
+        );
+        return stream;
+      };
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           const response = this.contextOptions.completeSimple

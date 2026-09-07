@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import {
   type ArrangedApprovalRequest,
@@ -455,6 +456,41 @@ const harness: RuntimeConformanceHarness = {
 };
 
 describe('Pi invocation capture', () => {
+  test.each(['sync', 'async'] as const)(
+    'retains a completed %s provider stream when cancelled before message_end',
+    async (mode) => {
+      const runtime = createTestRuntime();
+      const stream = new AssistantMessageEventStream();
+      let markResponseReady!: () => void;
+      const responseReady = new Promise<void>((resolve) => {
+        markResponseReady = resolve;
+      });
+      const holder = arrange(runtime, async ({ options, signal }) => {
+        const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+        await responseStream.result();
+        markResponseReady();
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+      holder.resolution.streamFn = () => (mode === 'sync' ? stream : Promise.resolve(stream));
+      const session = await runtime.open();
+      const eventsPromise = collect(
+        session.execute(baseRequest(`cancel-before-message-end-${mode}`)),
+      );
+      stream.end(assistantMessage());
+      await responseReady;
+      await session.cancel(`cancel-before-message-end-${mode}`);
+
+      const events = await eventsPromise;
+      expect(events.filter((event) => event.type === 'usage')).toMatchObject([
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      ]);
+      expect(events.at(-1)?.type).toBe('cancelled');
+      await session.close();
+    },
+  );
+
   test('retains a completed provider call when approval is cancelled before turn_end', async () => {
     const runtime = createTestRuntime();
     const { request } = await harness.arrangeApproval(runtime, 'cancel-after-response');
@@ -474,14 +510,29 @@ describe('Pi invocation capture', () => {
 
   test('deduplicates responses while preserving distinct calls with the same timestamp', async () => {
     const runtime = createTestRuntime();
-    arrange(runtime, async (context) => {
-      const first = assistantMessage({ timestamp: 1 });
-      const second = assistantMessage({ timestamp: 1, responseModel: 'served-model' });
+    const responses = [
+      assistantMessage({ timestamp: 1 }),
+      assistantMessage({ timestamp: 1, responseModel: 'served-model' }),
+    ];
+    const holder = arrange(runtime, async (context) => {
+      const firstStream = await context.options.streamFn(holder.resolution.model, { messages: [] });
+      const first = await firstStream.result();
       await context.emit({ type: 'message_end', message: first });
       await context.emit({ type: 'message_end', message: first });
+      const secondStream = await context.options.streamFn(holder.resolution.model, {
+        messages: [],
+      });
+      const second = await secondStream.result();
       await context.emit({ type: 'message_end', message: second });
       await context.emit({ type: 'turn_end', message: second, toolResults: [] });
     });
+    holder.resolution.streamFn = () => {
+      const response = responses.shift();
+      if (!response) throw new Error('Unexpected provider call.');
+      const stream = new AssistantMessageEventStream();
+      stream.end(response);
+      return stream;
+    };
     const session = await runtime.open();
     const events = await collect(session.execute(baseRequest('same-timestamp')));
     const reports = events.filter((event) => event.type === 'usage');
@@ -495,17 +546,43 @@ describe('Pi invocation capture', () => {
     'does not record an unsuccessful %s response',
     async (stopReason) => {
       const runtime = createTestRuntime();
-      arrange(runtime, async (context) => {
-        const response = assistantMessage({ stopReason });
+      const stream = new AssistantMessageEventStream();
+      stream.end(assistantMessage({ stopReason }));
+      const holder = arrange(runtime, async (context) => {
+        const responseStream = await context.options.streamFn(holder.resolution.model, {
+          messages: [],
+        });
+        const response = await responseStream.result();
         await context.emit({ type: 'message_end', message: response });
         await context.emit({ type: 'turn_end', message: response, toolResults: [] });
       });
+      holder.resolution.streamFn = () => stream;
       const session = await runtime.open();
       const events = await collect(session.execute(baseRequest(`failed-${stopReason}`)));
       expect(events.some((event) => event.type === 'usage')).toBe(false);
       await session.close();
     },
   );
+
+  test('leaves rejected provider results to the agent without recording usage', async () => {
+    const runtime = createTestRuntime();
+    const stream = new AssistantMessageEventStream();
+    jest.spyOn(stream, 'result').mockRejectedValue(new Error('Provider stream failed.'));
+    const holder = arrange(runtime, async ({ options }) => {
+      const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+      await responseStream.result();
+    });
+    holder.resolution.streamFn = () => stream;
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('rejected-provider-result')));
+
+    expect(events.some((event) => event.type === 'usage')).toBe(false);
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      error: { message: 'Provider stream failed.' },
+    });
+    await session.close();
+  });
 });
 
 describe('PiRuntime conformance', () => {
@@ -1604,7 +1681,7 @@ describe('PiRuntime mapping', () => {
       let providerSignal: AbortSignal | undefined;
       const providerStream: PiModelResolution['streamFn'] = (_model, _context, options) => {
         providerSignal = options?.signal;
-        return undefined as never;
+        return new AssistantMessageEventStream();
       };
       holder.resolution = { ...holder.resolution, streamFn: providerStream };
       let markStarted!: () => void;

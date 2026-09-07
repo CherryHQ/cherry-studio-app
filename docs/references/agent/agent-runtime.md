@@ -529,11 +529,11 @@ cancelled, or interrupted turns never persist a candidate, and oversized payload
 rather than truncated.
 
 Each `usage` event describes one successful provider invocation, including compaction calls.
-`requestId` is stable for redelivery and unique across distinct calls. Pi captures assistant
-`message_end` before tool execution or approval, excludes error/aborted responses, and reports
-compaction at its completion boundary. Cancelling a later tool does not erase a completed call. A
-response aborted mid-stream is not recorded even if the provider bills its partial output. Accounting
-for that partial usage is deferred; this change does not estimate it.
+`requestId` is stable for redelivery and unique across distinct calls. Pi captures assistant responses
+at the provider stream result, before `message_end`, tool execution, or approval, and reports
+compaction at its completion boundary. Cancelling after the provider result does not erase a
+completed call. As in desktop Pi accounting, error/aborted responses are excluded even if the provider
+bills partial output; partial usage is not estimated.
 Detailed cache and reasoning counts remain available for pricing. `context` freezes provider,
 pricing, and credential attribution before execution; the served model is taken from the response
 when available. `completedAt` is recorded at the provider boundary.
