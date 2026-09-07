@@ -72,6 +72,7 @@ export function useManagedComposerAttachments(
   const importAttachment = useCallback(
     async (source: ComposerAttachmentSource, token: symbol): Promise<ImportResult> => {
       let importedSize = source.size;
+      const isLibraryUpload = source.ownership === 'library';
 
       try {
         const resolved = await file.createInternalEntry({
@@ -81,21 +82,19 @@ export function useManagedComposerAttachments(
         });
         importedSize = resolved.entry.size;
 
+        // Removing the tile mid-import cancels the upload itself. Losing the
+        // composer does not: a library upload that already started finishes.
         if (cancelledImportTokensRef.current.delete(token)) {
           await deleteEntry(resolved.entry.id);
           return 'ignored';
         }
-        if (!isMountedRef.current) {
-          await deleteEntry(resolved.entry.id);
-          return 'ignored';
-        }
-        if (importTokensRef.current.get(source.id) !== token) {
-          await deleteEntry(resolved.entry.id);
+        if (!isMountedRef.current || importTokensRef.current.get(source.id) !== token) {
+          if (!isLibraryUpload) await deleteEntry(resolved.entry.id);
           return 'ignored';
         }
 
         importTokensRef.current.delete(source.id);
-        ownedEntryIdsRef.current.add(resolved.entry.id);
+        if (!isLibraryUpload) ownedEntryIdsRef.current.add(resolved.entry.id);
         commitAttachments(
           attachmentsRef.current.map((attachment) =>
             attachment.id === source.id && attachment.status === 'importing'

@@ -17,7 +17,6 @@ import { chatReturnToHref } from '@/frontend/appShell/navigation/chat';
 import {
   ComposerAttachments,
   ComposerField,
-  ComposerMenu,
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
@@ -35,6 +34,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
+import { ChatInputMenu } from './components/ChatInputMenu';
 import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
@@ -266,7 +266,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                   style={controlsRowStyle}
                 >
                   {/* The primary actions stay reachable while the field is empty and unfocused. */}
-                  <ComposerMenu />
+                  <ChatInputMenu />
                   <Animated.View
                     accessibilityElementsHidden={!isInputActive}
                     className="min-w-0 shrink"

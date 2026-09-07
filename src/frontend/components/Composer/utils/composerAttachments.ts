@@ -22,8 +22,17 @@ type ComposerAttachmentBase = {
   uri: string;
 };
 
+/**
+ * Who keeps the managed entry an import creates. `composer` is temporary: the
+ * entry is deleted if the attachment is removed or its composer unmounts before
+ * a send hands it over. `library` is an upload: the entry belongs to the file
+ * library as soon as it exists, and the composer only borrows it.
+ */
+export type ComposerAttachmentOwnership = 'composer' | 'library';
+
 export type ComposerAttachmentSource = ComposerAttachmentBase & {
   fileEntryId?: never;
+  ownership?: ComposerAttachmentOwnership;
   status?: never;
 };
 
@@ -138,11 +147,14 @@ export function createDocumentAttachmentDraft(
       ? imageMediaTypeFromExtension(extension)
       : mediaType;
 
+  // Documents are uploads to the library; camera, photo, and pasted images
+  // stay composer-owned until they are sent.
   return {
     id: getFileAttachmentId(asset.uri),
     kind: isImage ? 'image' : 'file',
     mediaType: resolvedMediaType,
     name: asset.name || fallbackFileName,
+    ownership: 'library',
     size: asset.size,
     uri: asset.uri,
   };

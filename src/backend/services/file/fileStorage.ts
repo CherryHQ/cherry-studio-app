@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { Emitter } from '@/backend/core/lifecycle/event';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { ResolvedFile } from '@/shared/contracts';
@@ -24,6 +25,13 @@ import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
+const fileChanges = new Emitter<void>();
+
+/** All managed-file writers notify here, after their entry changes commit. */
+export function subscribeFileChanges(listener: () => void): () => void {
+  const subscription = fileChanges.event(listener);
+  return () => subscription.dispose();
+}
 
 export type CreateInternalEntryInput = { provenance: FileEntryProvenance } & (
   | {
@@ -180,7 +188,9 @@ export async function createInternalEntry(
 ): Promise<FileEntry> {
   const written = await writeInternalFile(input);
   try {
-    return await entries.create(written);
+    const entry = await entries.create(written);
+    fileChanges.fire();
+    return entry;
   } catch (error) {
     try {
       deleteInternalFile(written);
@@ -248,6 +258,7 @@ export async function discardInternalEntries(
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
+    fileChanges.fire();
   }
 }
 
@@ -276,7 +287,9 @@ export async function rewriteInternalTextEntry(
   if (!Number.isSafeInteger(size) || size < 0) {
     throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
   }
-  return entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
+  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
+  fileChanges.fire();
+  return updatedEntry;
 }
 
 /**
@@ -306,6 +319,7 @@ export async function deleteInternalEntry(
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
+  fileChanges.fire();
   return true;
 }
 

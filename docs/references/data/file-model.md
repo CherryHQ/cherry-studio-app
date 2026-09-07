@@ -151,6 +151,14 @@ trash.
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
 without failing the turn. Nothing silently removes a historical reference.
 
+**File-list updates** — all managed-file writes go through `fileStorage`. Its create, rewrite,
+delete, and compensating-discard operations announce changes after entry persistence commits;
+failed writes do not announce a successful change. `FileModule.subscribeChanges` exposes this
+notification to the app-wide frontend `FileQueryBridge`, which invalidates every shared file-list
+page size. This also covers background painting and Agent writes while the library and composer
+are unmounted. Business callers do not refresh queries; URI and preview caches remain reusable
+under their existing file/version keys.
+
 ## Out of scope, deliberately
 
 The avatar is a settings value, not a document: it lives at

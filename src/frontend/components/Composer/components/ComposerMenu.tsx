@@ -2,7 +2,6 @@ import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import { Composer } from '@cherrystudio/ui/components';
-import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,10 +10,10 @@ import { View } from 'react-native';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
+import { useComposerDocumentPicker } from '../hooks/useComposerDocumentPicker';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   createCameraAttachmentDraft,
-  createDocumentAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '../utils/composerAttachments';
 
@@ -22,15 +21,15 @@ const logger = loggerService.withContext('ComposerMenu');
 
 /**
  * The ＋ menu: camera, photos, optionally files, plus whatever the caller
- * appends below a separator. Every row closes the menu; the media rows hand off
- * to a system picker rather than drawing anything here.
+ * appends below a separator. Every row closes the menu; camera and photos open
+ * system pickers, while the caller can replace the files destination.
  *
  * `children` are `Composer.Menu.Item`s — chat puts its tools there; painting
  * has nothing to add and narrows media to images, so unsupported documents are
  * never offered there.
  *
  * Opening it leaves the keyboard **up**. Choosing camera, photos, or files
- * closes the menu, dismisses and blurs the field, then opens the system picker;
+ * closes the menu, dismisses and blurs the field, then opens its picker;
  * caller-owned tool rows only close the menu and keep the input context live.
  *
  * The menu used to take the keyboard down when it opened so
@@ -43,12 +42,14 @@ const logger = loggerService.withContext('ComposerMenu');
  */
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
+  onPickFiles?: () => void;
 }>;
 
-export function ComposerMenu({ children, media = 'all' }: ComposerMenuProps) {
+export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerMenuProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
+  const openDocumentPicker = useComposerDocumentPicker();
 
   const openCamera = useCallback(async () => {
     await runInputReplacement(async () => {
@@ -100,21 +101,13 @@ export function ComposerMenu({ children, media = 'all' }: ComposerMenuProps) {
       );
     });
   }, [addAttachments, runInputReplacement]);
-  const openDocumentPicker = useCallback(async () => {
-    await runInputReplacement(async () => {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        multiple: true,
-        type: '*/*',
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      addAttachments(result.assets.map(createDocumentAttachmentDraft));
-    });
-  }, [addAttachments, runInputReplacement]);
+  const openFiles = useCallback(async () => {
+    if (onPickFiles) {
+      await runInputReplacement(onPickFiles);
+    } else {
+      await openDocumentPicker();
+    }
+  }, [onPickFiles, openDocumentPicker, runInputReplacement]);
   // A picker that fails to open leaves no trace otherwise: the menu has already
   // closed, so the gesture just looks ignored.
   const present = useCallback((label: string, open: () => Promise<void>) => {
@@ -139,7 +132,7 @@ export function ComposerMenu({ children, media = 'all' }: ComposerMenuProps) {
         <Composer.Menu.Item
           icon={<PaperclipIcon className="size-5 text-foreground" />}
           label={t('chat.media.file')}
-          onPress={() => present('document', openDocumentPicker)}
+          onPress={() => present('file', openFiles)}
         />
       ) : null}
       {children ? (
