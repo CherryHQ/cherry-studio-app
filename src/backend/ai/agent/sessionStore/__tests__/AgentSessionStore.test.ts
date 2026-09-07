@@ -1010,6 +1010,62 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(search('hidden')).toEqual([]);
   });
 
+  test('FTS indexes streamed text once, when the row settles', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const search = (term: string) =>
+      raw
+        .prepare(
+          `SELECT m.id FROM agent_session_message m
+           JOIN agent_session_message_fts fts ON m.fts_rowid = fts.rowid
+           WHERE agent_session_message_fts MATCH ?`,
+        )
+        .all(term) as { id: string }[];
+    const streamingParts = [
+      { id: 't-1', type: 'text', text: 'emerald harbor', state: 'streaming' },
+    ] as const;
+
+    const finalized = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'first', state: 'done' }],
+    });
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: finalized.assistantMessage.id,
+      parts: [...streamingParts],
+    });
+    // A mid-stream snapshot is skipped by the update trigger.
+    expect(search('harbor')).toEqual([]);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: finalized.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 't-1', type: 'text', text: 'emerald harbor', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
+
+    // Boot reconciliation is the other settling write and indexes the same way.
+    const interrupted = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-1', type: 'text', text: 'second', state: 'done' }],
+    });
+    await store.updateStreamingAssistantMessage({
+      assistantMessageId: interrupted.assistantMessage.id,
+      parts: [{ id: 't-2', type: 'text', text: 'violet lantern', state: 'streaming' }],
+    });
+    expect(search('lantern')).toEqual([]);
+    await store.reconcileInterrupted(INTERRUPTED);
+    expect(search('lantern').map((row) => row.id)).toEqual([interrupted.assistantMessage.id]);
+    // The earlier settled row keeps a single index entry.
+    expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
+  });
+
   test('a fork indexes its copied rows and outlives the source it cites', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');

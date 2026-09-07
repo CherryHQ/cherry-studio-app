@@ -249,7 +249,9 @@ cannot match a partial index — see `message.ts`.)
 migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
 `ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
 agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
-deliberately not searchable; tool payloads are structured data, not prose.
+deliberately not searchable; tool payloads are structured data, not prose. The update trigger skips
+`pending` and `streaming` rows, so a turn's mid-stream snapshots are indexed once, when the row
+settles.
 
 `reserveSubmission` writes the selected `modelId` and `AgentInferenceSnapshotV1` on the assistant
 placeholder in the same transaction as the user/assistant pair. The existing nullable columns from
