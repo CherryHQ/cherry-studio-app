@@ -15,6 +15,11 @@ actions, downloads, delegation, or external writes. Follow the user's instructio
 [Testing And CI](../../docs/guides/testing-and-ci.md); report unavailable evidence and skipped checks
 without claiming completion.
 
+- **Stacked PRs:** [gh-stack](gh-stack/SKILL.md) is explicit opt-in: use it only when the user
+  explicitly requests a stack workflow or layered PRs for the task. Default to a single branch and
+  PR. Task complexity, dependent concerns, reusable component work, incidental stack mentions, or
+  a checked-out stack do not opt in. This overrides the upstream skill's automatic activation
+  triggers. Follow [Git Workflow](../../docs/guides/git-workflow.md) after the user opts in.
 - **Diagnosis:** [diagnose-fix-loop](diagnose-fix-loop/SKILL.md) loads the project
   [diagnose](diagnose/SKILL.md) as its evidence phase; an activated loop does not need a second named
   invocation. Outside that dependency, `diagnose` remains explicit opt-in. Both skills are required
