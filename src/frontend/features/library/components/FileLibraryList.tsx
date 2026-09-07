@@ -1,4 +1,3 @@
-import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { ContentState, Tabs } from '@cherrystudio/ui/components';
 import {
   LegendList,
@@ -145,12 +144,6 @@ function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibra
 // URI pages retain prior item identities when a new page appends, so mounted
 // tiles stay on the memoized path while the next page resolves.
 const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
-  const { t } = useTranslation();
-  // Only a proven origin is worth saying. Most rows are imports, and rows that
-  // predate the field have no proven origin at all, so labelling everything
-  // would either repeat itself or claim something the data does not support.
-  const isGenerated = item.entry.provenance === 'generated';
-
   return (
     <View
       className="gap-2"
@@ -169,22 +162,10 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
           uri={item.uri}
         />
       )}
-      <View className="min-w-0 gap-0.5 px-0.5">
+      <View className="min-w-0 px-0.5">
         <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
           {item.entry.filename}
         </Text>
-        {/* Held open whether or not the badge shows, so a labelled tile does not
-            make its whole grid row taller than its neighbours. */}
-        <View className="flex-row items-center gap-1" style={styles.provenance}>
-          {isGenerated ? (
-            <>
-              <SparklesIcon className="size-3.5 text-muted-foreground" />
-              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-                {t('library.provenance.generated')}
-              </Text>
-            </>
-          ) : null}
-        </View>
       </View>
     </View>
   );
@@ -196,8 +177,5 @@ const styles = StyleSheet.create({
   },
   header: {
     marginHorizontal: fileLibraryGrid.tileGap / 2,
-  },
-  provenance: {
-    height: fileLibraryGrid.tileProvenanceHeight,
   },
 });
