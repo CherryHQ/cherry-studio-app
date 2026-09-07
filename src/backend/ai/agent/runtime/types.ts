@@ -104,6 +104,12 @@ export type RuntimeArtifact = {
 export type RuntimeToolResult = {
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
+  /** Trusted callback metadata; never inferred from the JSON inside value. */
+  failure?: {
+    error: RuntimeError;
+    /** A tool-scoped failure disables this tool only for the current execution. */
+    scope: 'call' | 'tool';
+  };
 };
 
 export type RuntimeTextAttachmentPart = {

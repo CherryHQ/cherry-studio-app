@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { AgentEvent as PiAgentEvent } from '@earendil-works/pi-agent-core';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import { Agent, type AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
   AssistantMessage,
   Message as PiMessage,
@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
 import {
   type ArrangedApprovalRequest,
@@ -23,6 +24,7 @@ import type {
   RuntimeExecutionRequest,
   RuntimeJsonValue,
   RuntimeTool,
+  RuntimeToolResult,
 } from '../../types';
 import {
   estimatePiContextFixedCosts,
@@ -1411,10 +1413,13 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('marks transient provider transport errors as retryable without an HTTP status', async () => {
+  test.each([
+    ['fetch failed: connection reset', 'ECONNRESET'],
+    ['Connection error.', 'runtime_error'],
+  ])('marks transport failure %s as retryable without an HTTP status', async (message, code) => {
     const runtime = createTestRuntime();
     arrange(runtime, () => {
-      throw Object.assign(new Error('fetch failed: connection reset'), { code: 'ECONNRESET' });
+      throw Object.assign(new Error(message), { code });
     });
     const session = await runtime.open();
 
@@ -1422,7 +1427,7 @@ describe('PiRuntime mapping', () => {
 
     expect(events.at(-1)).toMatchObject({
       type: 'failed',
-      error: { code: 'ECONNRESET', retryable: true },
+      error: { code, retryable: true },
     });
     await session.close();
   });
@@ -2266,6 +2271,169 @@ describe('PiRuntime mapping', () => {
     expect(executionCount).toBe(0);
     await session.close();
   });
+
+  test('lets the real Pi loop finish after a capability becomes unavailable', async () => {
+    const resolution = createResolution();
+    const seenTools: string[][] = [];
+    const seenErrors: boolean[] = [];
+    resolution.streamFn = (_model, context) => {
+      seenTools.push((context.tools ?? []).map((tool) => tool.name));
+      seenErrors.push(
+        ...context.messages
+          .filter((message) => message.role === 'toolResult')
+          .map((message) => message.isError),
+      );
+      // Reproduces a model that keeps trying while the failed capability is offered.
+      const canCall = context.tools?.some((tool) => tool.name === TOOL_PROVIDER_NAME);
+      const message = assistantMessage({
+        content: canCall
+          ? [
+              {
+                type: 'toolCall',
+                id: `call-${seenTools.length}`,
+                name: TOOL_PROVIDER_NAME,
+                arguments: {},
+              },
+            ]
+          : [{ type: 'text', text: 'The source is unavailable; here is what I can explain.' }],
+        stopReason: canCall ? 'toolUse' : 'stop',
+      });
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: canCall ? 'toolUse' : 'stop', message });
+      return stream;
+    };
+    const runtime = new PiRuntime(
+      {
+        preflightModel: () => ({
+          contextWindow: 128_000,
+          inputModalities: ['text'],
+          maxInputTokens: 120_000,
+          maxOutputTokens: 4096,
+          supportsTools: true,
+        }),
+        resolveModel: () => resolution,
+      },
+      (options) => new Agent(options),
+    );
+    const execute = jest.fn(
+      async (): Promise<RuntimeToolResult> => ({
+        value: { status: 'error', message: 'The service is unavailable; do not retry this tool.' },
+        artifacts: [],
+        failure: {
+          scope: 'tool',
+          error: { code: 'service_unavailable', message: 'HTTP 429', retryable: false },
+        },
+      }),
+    );
+    const tool: RuntimeTool = {
+      ...askTool(() => {}),
+      approval: 'auto',
+      inputSchema: { type: 'object', properties: {} },
+      execute,
+    };
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('real-loop', { tools: [tool] })));
+
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(seenTools).toEqual([[TOOL_PROVIDER_NAME], []]);
+    expect(seenErrors).toEqual([true]);
+    expect(execute).toHaveBeenCalledTimes(1);
+    await session.close();
+  });
+
+  test.each(['tool', 'call', 'payload'] as const)(
+    'honors %s failure scope without disabling unrelated tools or later turns',
+    async (scope) => {
+      const runtime = createTestRuntime();
+      const failure = {
+        scope: scope === 'payload' ? ('tool' as const) : scope,
+        error: {
+          code: 'service_unavailable',
+          message: 'Service temporarily unavailable.',
+          retryable: false,
+        },
+      };
+      const output: RuntimeToolResult =
+        scope === 'payload'
+          ? { value: { failure }, artifacts: [] }
+          : { value: { status: 'error' }, artifacts: [], failure };
+      const execute = jest.fn(async () => output);
+      const tool: RuntimeTool = {
+        ref: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        description: 'Exercise classified results.',
+        inputSchema: { type: 'object' },
+        approval: 'auto',
+        execute,
+      };
+      const other: RuntimeTool = {
+        ...tool,
+        ref: { source: 'builtin', capabilityId: 'another_tool' },
+        providerName: 'another_tool',
+        execute: jest.fn(async () => ({ value: 'Available', artifacts: [] })),
+      };
+      arrange(runtime, async (context) => {
+        const [piTool, otherTool] = context.options.initialState!.tools!;
+        const toolCall = {
+          type: 'toolCall' as const,
+          id: 'first',
+          name: piTool.name,
+          arguments: {},
+        };
+        const result = await piTool.execute('first', {}, context.signal);
+        const agentContext = { systemPrompt: '', messages: [], tools: [piTool, otherTool] };
+        const marked = await context.options.afterToolCall?.({
+          assistantMessage: assistantMessage(),
+          toolCall,
+          args: {},
+          result,
+          isError: false,
+          context: agentContext,
+        });
+        expect(marked?.isError).toBe(scope === 'payload' ? undefined : true);
+        const next = await context.options.prepareNextTurnWithContext?.({
+          message: assistantMessage(),
+          context: agentContext,
+          newMessages: [],
+          toolResults: [],
+        });
+        const names = (next?.context?.tools ?? agentContext.tools).map((item) => item.name);
+        expect(names).toEqual(
+          scope === 'tool' ? ['another_tool'] : [TOOL_PROVIDER_NAME, 'another_tool'],
+        );
+        await piTool.execute('again', { changed: true }, context.signal);
+        await otherTool.execute('other', {}, context.signal);
+        await emitText(context, 'I can answer with the available information.');
+      });
+      const session = await runtime.open();
+      const events = await collect(
+        session.execute(baseRequest('failure-first', { tools: [tool, other] })),
+      );
+
+      expect(events.at(-1)?.type).toBe('completed');
+      expect(execute).toHaveBeenCalledTimes(scope === 'tool' ? 1 : 2);
+      expect(other.execute).toHaveBeenCalledTimes(1);
+      const settled = events
+        .filter(
+          (event) =>
+            event.type === 'part.replace' &&
+            event.part.type === 'tool' &&
+            event.part.toolCallId === 'first',
+        )
+        .at(-1);
+      expect(settled).toMatchObject({
+        part: { state: scope === 'payload' ? 'output-available' : 'error' },
+      });
+      const later = await collect(
+        session.execute(baseRequest('failure-later', { tools: [tool, other] })),
+      );
+      expect(later.at(-1)?.type).toBe('completed');
+      expect(execute).toHaveBeenCalledTimes(scope === 'tool' ? 2 : 4);
+      await session.close();
+    },
+  );
 
   test('normalizes callback failures into a classified result envelope', async () => {
     const runtime = createTestRuntime();

@@ -14,6 +14,7 @@
 import type { WebSearchOutput } from '@cherrystudio/universal/ai/builtinTools';
 import * as z from 'zod';
 
+import { HttpError } from '@/backend/services/http';
 import { isPermanentWebSearchConfigError } from '@/backend/services/webSearch/utils/config';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
@@ -75,9 +76,12 @@ export const webLookupErrorSchema = z.object({
 export type WebLookupError = z.infer<typeof webLookupErrorSchema>;
 export type WebLookupResult = WebSearchOutput | WebLookupError;
 
-/** Transient failure (network/provider hiccup) — a retry can succeed. */
+/** A source-specific failure may be recoverable with different input. */
 export const WEB_LOOKUP_ERROR_NOTE =
-  'Web lookup failed (network/provider error); retry or inform the user.';
+  'The requested sources could not be read. Try a different query or URL, or explain the limitation; do not repeat the same failed input.';
+
+const WEB_PROVIDER_UNAVAILABLE_NOTE =
+  'Web providers are unavailable for this tool in the current turn after the available fallback routes failed; do not retry this tool. Use other available sources or explain the limitation to the user.';
 
 /**
  * Permanent failure: no usable web-search provider for the requested capability. Retrying can never
@@ -147,8 +151,32 @@ function isProxyFakeIpError(message: string): boolean {
   );
 }
 
+function providerFailures(error: unknown): unknown[] {
+  return error instanceof AggregateError ? error.errors.flatMap(providerFailures) : [error];
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isUnavailableProvider(error: unknown): boolean {
+  if (isPermanentWebSearchConfigError(error)) return true;
+  if (error instanceof HttpError) {
+    if (error.kind === 'network' || error.kind === 'timeout') return true;
+    if (error.kind === 'invalid_response' && error.code !== 'MCP_TOOL_ERROR') return true;
+    if (error.status === 401 || error.status === 429 || (error.status ?? 0) >= 500) return true;
+  }
+  return (
+    (error instanceof Error && error.name === 'TimeoutError') ||
+    /(?:rate.?limit|quota exceeded|connection (?:error|failed|reset)|network request failed|fetch failed|socket hang up|timed? out)/i.test(
+      errorMessage(error),
+    )
+  );
+}
+
 function classifyWebLookupError(error: unknown): WebLookupError {
-  const message = error instanceof Error ? error.message : String(error);
+  const failures = providerFailures(error);
+  const message = [...new Set(failures.map(errorMessage))].join('; ').slice(0, 2_000);
 
   if (isPermanentWebSearchConfigError(error)) {
     return {
@@ -169,6 +197,10 @@ function classifyWebLookupError(error: unknown): WebLookupError {
     };
   }
 
+  if (failures.length > 0 && failures.every(isUnavailableProvider)) {
+    return { error: message, retryable: false, terminal: true };
+  }
+
   return { error: message, retryable: true };
 }
 
@@ -187,7 +219,7 @@ function webLookupNote(error: WebLookupError): string {
   ) {
     return WEB_PROVIDER_CONFIGURATION_ERROR_NOTE;
   }
-  return WEB_LOOKUP_ERROR_NOTE;
+  return error.terminal ? WEB_PROVIDER_UNAVAILABLE_NOTE : WEB_LOOKUP_ERROR_NOTE;
 }
 
 export function isWebLookupError(output: WebLookupResult): output is WebLookupError {
@@ -206,10 +238,20 @@ export function webLookupToolResult(output: WebLookupResult): RuntimeToolResult 
     return {
       value: {
         status: 'error',
-        message: webLookupNote(output),
+        message: `${output.userMessage ?? output.error} ${webLookupNote(output)}`,
+        error: output.error,
         retryable: output.retryable ?? false,
       },
       artifacts: [],
+      failure: {
+        scope: output.terminal ? 'tool' : 'call',
+        error: {
+          code: output.terminal ? 'web_lookup_unavailable' : 'web_lookup_failed',
+          message: output.userMessage ? `${output.userMessage} ${output.error}` : output.error,
+          retryable: output.retryable ?? false,
+          origin: 'tool',
+        },
+      },
     };
   }
   return { value: output, artifacts: [] };

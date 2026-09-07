@@ -1,3 +1,4 @@
+import { HttpError } from '@/backend/services/http';
 import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../../runtime';
@@ -42,16 +43,107 @@ describe('createWebTools', () => {
     expect(String((result.value as { message: string }).message)).toContain('do not retry');
   });
 
-  test('keeps a provider hiccup retryable', async () => {
+  test('keeps an unclassified failure recoverable with different input', async () => {
     const webSearch = createWebSearch({
       searchKeywords: async () => {
-        throw new Error('socket hang up');
+        throw new Error('The requested page could not be read');
       },
     });
 
     const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
 
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
+  });
+
+  test('preserves exhausted provider reasons and pauses this tool for the turn', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw new AggregateError(
+          [
+            new HttpError('Exa: HTTP 429 rate limit exceeded', { kind: 'http', status: 429 }),
+            new HttpError('Jina reader timed out', { kind: 'timeout' }),
+          ],
+          'Web fetch failed after trying available providers.',
+        );
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com'],
+    });
+
+    expect(result).toMatchObject({
+      failure: { scope: 'tool', error: { code: 'web_lookup_unavailable', retryable: false } },
+      value: {
+        status: 'error',
+        retryable: false,
+        error: expect.stringContaining('Jina reader timed out'),
+      },
+    });
+    expect(result.failure?.error.message).toContain('HTTP 429');
+    expect((result.value as { message: string }).message).toContain('do not retry');
+  });
+
+  test('pauses a broken provider protocol instead of asking for a different query', async () => {
+    const webSearch = createWebSearch({
+      searchKeywords: async () => {
+        throw new AggregateError(
+          [
+            new HttpError('Exa MCP returned invalid JSON', {
+              kind: 'invalid_response',
+              code: 'MCP_INVALID_RESPONSE',
+            }),
+          ],
+          'Web search failed',
+        );
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
+
+    expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
+  });
+
+  test('keeps other URLs available when the target page cannot be read', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw new AggregateError(
+          [
+            new HttpError('Page not found', { kind: 'http', status: 404 }),
+            new HttpError('Target page denied access', { kind: 'http', status: 403 }),
+          ],
+          'Web fetch failed after trying available providers.',
+        );
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com/missing'],
+    });
+
+    expect(result.failure).toMatchObject({
+      scope: 'call',
+      error: { message: expect.stringContaining('Page not found') },
+    });
+  });
+
+  test('propagates cancellation without manufacturing a provider failure', async () => {
+    const controller = new AbortController();
+    const abort = new DOMException('Cancelled', 'AbortError');
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        controller.abort();
+        throw abort;
+      },
+    });
+
+    await expect(
+      toolNamed(webSearch, 'web_fetch').execute({
+        input: { urls: ['https://example.com'] },
+        signal: controller.signal,
+        toolCallId: 'cancelled',
+      }),
+    ).rejects.toBe(abort);
   });
 
   test('rejects a query the model can rewrite instead of calling the provider', async () => {

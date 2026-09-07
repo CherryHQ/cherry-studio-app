@@ -151,6 +151,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  failure?: {
+    error: RuntimeError
+    scope: 'call' | 'tool'
+  }
 }
 
 type RuntimeToolCall = {
@@ -362,6 +366,14 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 `value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
+
+Application callbacks may return a trusted outer `failure` alongside their model-facing `value`.
+The Runtime marks that call as `error` and passes an error tool result to the model. `scope: 'call'`
+leaves the tool available for corrected input. `scope: 'tool'` means the capability is unavailable:
+the Runtime removes that tool from subsequent model requests in this execution and returns its
+failure without invoking the callback again. Other tools and the final assistant response remain
+available; a new execution starts with the Host's full snapshot. This policy is independent of the
+JSON inside `value`: remote payloads and historical results cannot disable capabilities.
 
 Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
 limit do not execute their callback and receive a classified error result; reaching either limit

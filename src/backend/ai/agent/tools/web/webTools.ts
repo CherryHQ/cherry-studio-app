@@ -73,10 +73,15 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
 
 /** A malformed call is the model's to fix, so it settles as a value it can read. */
 function invalidInput(error: z.ZodError): RuntimeToolResult {
+  const message = `Invalid input: ${z.prettifyError(error)}`;
   return {
+    failure: {
+      scope: 'call',
+      error: { code: 'invalid_tool_input', message, retryable: true, origin: 'tool' },
+    },
     value: {
       status: 'error',
-      message: `Invalid input: ${z.prettifyError(error)}`,
+      message,
       retryable: true,
     },
     artifacts: [],
