@@ -36,6 +36,15 @@ const documentEntry = FileEntrySchema.parse({
   size: 256,
   updatedAt: 2,
 });
+const uploadedEntry = FileEntrySchema.parse({
+  createdAt: 3,
+  filename: 'cat.jpg',
+  id: '00000000-0000-4000-8000-000000000003',
+  mediaType: 'image/jpeg',
+  provenance: 'imported',
+  size: 512,
+  updatedAt: 3,
+});
 const dataApi = {
   delete: jest.fn(),
   get: jest.fn(async () => ({ items: [entry, documentEntry] })),
@@ -90,8 +99,9 @@ describe('useFileEntries', () => {
     focusEffect = undefined;
     completePreview = undefined;
     latestResult = undefined;
+    // Mirror the app client's staleTime: a fresh shared cache is the case under test.
     queryClient = new QueryClient({
-      defaultOptions: { queries: { gcTime: Infinity, retry: false } },
+      defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: 30_000 } },
     });
   });
 
@@ -169,6 +179,45 @@ describe('useFileEntries', () => {
     await act(async () => focusEffect?.());
     await flushQueryNotifications();
     expect(dataApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('refetches on mount even when the shared pages are still fresh', async () => {
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    await flushQueryNotifications();
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
+    expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+      entry.id,
+      documentEntry.id,
+    ]);
+
+    // The chat picker fetched these pages a moment ago; an upload landed since.
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    dataApi.get.mockResolvedValueOnce({ items: [uploadedEntry, entry, documentEntry] });
+
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    await flushQueryNotifications();
+
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
+    expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+      uploadedEntry.id,
+      entry.id,
+      documentEntry.id,
+    ]);
   });
 });
 
