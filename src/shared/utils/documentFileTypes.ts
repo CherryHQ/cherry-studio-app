@@ -23,7 +23,7 @@ export function isBuiltinOfficeFileType(type: DocumentFileType): type is Builtin
 }
 
 export function documentFileTypeFromMediaType(mediaType: string): DocumentFileType | undefined {
-  const normalized = mediaType.toLowerCase();
+  const normalized = mediaType.split(';', 1)[0]?.trim().toLowerCase();
   if (normalized === 'text/rtf') return 'rtf';
   return (Object.keys(documentMediaTypes) as DocumentFileType[]).find(
     (type) => documentMediaTypes[type] === normalized,

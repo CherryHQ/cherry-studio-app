@@ -38,6 +38,7 @@ describe('document file types', () => {
     );
     expect(documentFileTypeFromMediaType('application/msword')).toBe('doc');
     expect(documentFileTypeFromMediaType('text/rtf')).toBe('rtf');
+    expect(documentFileTypeFromMediaType('text/rtf;charset=utf-8')).toBe('rtf');
     expect(resolveDocumentImportMediaType('archive.zip')).toBe('application/octet-stream');
     expect(documentFileTypeFromMediaType('application/octet-stream')).toBeUndefined();
   });
