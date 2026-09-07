@@ -203,15 +203,7 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(mockStartGeneration).toHaveBeenCalledWith({
-      images: [
-        {
-          fileEntryId: request.attachments[0].fileEntryId,
-          id: 'draft-1',
-          mediaType: 'image/png',
-          name: 'input.png',
-          uri: 'file:///input.png',
-        },
-      ],
+      fileEntryIds: [request.attachments[0].fileEntryId],
       mode: 'generate',
       modelId: 'provider::gpt-image-2',
       modelName: 'GPT Image 2',

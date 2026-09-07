@@ -2,7 +2,7 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
@@ -32,7 +32,7 @@ export type PaintingInterruption = { reason: PaintingJobInterruptionReason };
 export type PaintingOutput = PaintingGenerationOutput;
 
 export type PaintingGenerationInput = {
-  attachments: readonly ComposerAttachmentDraft[];
+  attachments: readonly ComposerAttachmentReady[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
   modelName: string;
@@ -221,19 +221,7 @@ export function usePaintingGeneration({
 
       try {
         const started = await paintings.startGeneration({
-          images: input.attachments.flatMap((attachment) =>
-            attachment.kind === 'image'
-              ? [
-                  {
-                    fileEntryId: attachment.fileEntryId,
-                    id: attachment.id,
-                    mediaType: attachment.mediaType,
-                    name: attachment.name,
-                    uri: attachment.uri,
-                  },
-                ]
-              : [],
-          ),
+          fileEntryIds: input.attachments.map((attachment) => attachment.fileEntryId),
           mode: input.mode,
           modelId: input.modelId,
           modelName: input.modelName,

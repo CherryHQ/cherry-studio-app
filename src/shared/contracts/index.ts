@@ -1,6 +1,7 @@
 export * from './agent';
 export * from './backend';
 export * from './file';
+export * from './fileAttachment';
 export * from './mcp';
 export * from './models';
 export * from './paintings';
