@@ -1,6 +1,7 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { loggerService } from '@logger';
+import { resolveScheme } from 'expo-linking';
 
 import type {
   BackgroundActivitySession,
@@ -117,7 +118,7 @@ export function createPaintingGenerateJobHandler(
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
       const session = dependencies.activities?.startSession({
-        deepLinkUrl: `cherrystudio://paintings/${encodeURIComponent(paintingId)}`,
+        deepLinkUrl: `${resolveScheme({})}://paintings/${encodeURIComponent(paintingId)}`,
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
         props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),
