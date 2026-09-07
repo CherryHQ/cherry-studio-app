@@ -8,6 +8,7 @@ const mockAlertShow = jest.fn();
 const mockFileAttachmentPreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockFilePreview = jest.fn((_props: Record<string, unknown>) => null);
 const mockLoggerWarn = jest.fn();
+const mockOpenFilePreview = jest.fn();
 const mockSkeleton = jest.fn((_props: Record<string, unknown>) => null);
 const mockUseResolvedFile = jest.fn();
 
@@ -15,6 +16,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   FileAttachmentPreview: (props: Record<string, unknown>) => mockFileAttachmentPreview(props),
   FilePreview: (props: Record<string, unknown>) => mockFilePreview(props),
   Skeleton: (props: Record<string, unknown>) => mockSkeleton(props),
+  openFilePreview: (input: unknown) => mockOpenFilePreview(input),
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -40,6 +42,7 @@ const entry = FileEntrySchema.parse({
 describe('FileEntryPreview', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOpenFilePreview.mockResolvedValue(undefined);
     mockUseResolvedFile.mockReturnValue({
       data: { entry, uri: 'file:///documents/image.png' },
       isLoading: false,
@@ -140,6 +143,24 @@ describe('FileEntryPreview', () => {
         labels: expect.objectContaining({ unavailable: 'filePreview.unavailable' }),
       }),
     );
+  });
+
+  it('opens original bytes and reports a rejected system open', async () => {
+    const error = new Error('No application can open this file');
+    mockOpenFilePreview.mockRejectedValueOnce(error);
+    act(() => {
+      create(<FileEntryPreview entryId={entry.id} />);
+    });
+    const onPress = mockFilePreview.mock.calls[0]?.[0].onPress as () => void;
+
+    await act(async () => onPress());
+
+    expect(mockOpenFilePreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: expect.objectContaining({ uri: 'file:///documents/image.png' }),
+      }),
+    );
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'filePreview.openFailed' });
   });
 
   it('logs all preview errors and alerts only when opening fails', () => {

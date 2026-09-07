@@ -33,8 +33,8 @@ export type FilePreviewLabels = {
 
 /**
  * What every renderer receives, built-in or registered. A renderer draws the
- * preview only: the frame, press target, and system opening stay with
- * `FilePreview` so a plugin cannot diverge on interaction.
+ * preview only: `FilePreview` owns the press target and delegates opening to
+ * the caller, so a plugin cannot diverge on interaction.
  */
 export type FilePreviewComponentProps = {
   file: FilePreviewFile;
@@ -53,6 +53,7 @@ export type FilePreviewProps = {
   file?: FilePreviewFile | null;
   labels: FilePreviewLabels;
   onError?: (error: Error, operation: FilePreviewOperation) => void;
+  onPress: () => void;
   size?: number;
 };
 

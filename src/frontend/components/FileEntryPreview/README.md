@@ -1,8 +1,8 @@
 # FileEntryPreview
 
 Application adapter from a managed `FileEntryId` to CherryUI's business-neutral `FilePreview`.
-It resolves the entry and local URI, classifies the file, injects translations, logs preview
-failures, and presents an Alert when the system viewer cannot open a file.
+It resolves the entry and local URI, classifies the file, injects translations, owns the press
+callback and system opening, logs preview failures, and presents an Alert when opening fails.
 
 `LoadedFileEntryPreview` is the same adapter for a caller that already holds the `FileEntry` — a
 list page, say — and accepts original and preview URIs resolved in the same batch as its peers.

@@ -1,7 +1,9 @@
 import {
   FileAttachmentPreview,
   FilePreview,
+  type FilePreviewFile,
   type FilePreviewOperation,
+  openFilePreview,
   useAlert,
 } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
@@ -70,16 +72,18 @@ function EntryPreview({
   size?: number;
   uri: string | undefined;
 }) {
-  const { handleError, t } = useFileEntryPreviewError(entryId);
+  const { handleError, openFile, t } = useFileEntryPreviewError(entryId);
+  const file = entry && uri ? toFilePreviewFile(entry, uri, previewUri) : null;
 
   return (
     <FilePreview
-      file={entry && uri ? toFilePreviewFile(entry, uri, previewUri) : null}
+      file={file}
       labels={{
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),
       }}
       onError={handleError}
+      onPress={() => openFile(file)}
       size={size}
     />
   );
@@ -94,17 +98,19 @@ function EntryAttachment({
   entryId: FileEntryId;
   uri: string | undefined;
 }) {
-  const { handleError, t } = useFileEntryPreviewError(entryId);
+  const { handleError, openFile, t } = useFileEntryPreviewError(entryId);
+  const file = entry && uri ? toFilePreviewFile(entry, uri) : null;
 
   return (
     <FileAttachmentPreview
       categoryLabel={t('filePreview.document')}
-      file={entry && uri ? toFilePreviewFile(entry, uri) : null}
+      file={file}
       labels={{
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),
       }}
       onError={handleError}
+      onPress={() => openFile(file)}
     />
   );
 }
@@ -122,5 +128,18 @@ function useFileEntryPreviewError(entryId: FileEntryId) {
     [alert, entryId, t],
   );
 
-  return { handleError, t };
+  const openFile = (file: FilePreviewFile | null) => {
+    if (!file) return;
+    void openFilePreview({
+      file,
+      labels: {
+        openWith: t('filePreview.openWith'),
+        unavailable: t('filePreview.unavailable'),
+      },
+    }).catch((error: unknown) => {
+      handleError(error instanceof Error ? error : new Error(String(error)), 'open');
+    });
+  };
+
+  return { handleError, openFile, t };
 }

@@ -3,20 +3,17 @@ import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import type { FileAttachmentPreviewProps } from '../file-preview.types';
-import { openFilePreview } from '../utils/open-file/open-file';
 
 export function FileAttachmentPreview({
   categoryLabel,
   file,
   labels,
-  onError,
+  onPress,
 }: FileAttachmentPreviewProps) {
   const handlePress = () => {
     if (!file) return;
 
-    void openFilePreview({ file, labels }).catch((error) => {
-      onError?.(toError(error), 'open');
-    });
+    onPress();
   };
 
   return (
@@ -59,8 +56,4 @@ export function FileAttachmentPreview({
 function filenameStem(filename: string): string {
   const extensionIndex = filename.lastIndexOf('.');
   return extensionIndex > 0 ? filename.slice(0, extensionIndex) : filename;
-}
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }
