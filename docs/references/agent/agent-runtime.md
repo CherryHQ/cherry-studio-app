@@ -531,17 +531,24 @@ rather than truncated.
 Each `usage` event describes one successful provider invocation, including compaction calls.
 `requestId` is stable for redelivery and unique across distinct calls. Pi captures assistant
 `message_end` before tool execution or approval, excludes error/aborted responses, and reports
-compaction at its completion boundary. Cancelling a later tool does not erase a completed call.
+compaction at its completion boundary. Cancelling a later tool does not erase a completed call. A
+response aborted mid-stream is not recorded even if the provider bills its partial output. Accounting
+for that partial usage is deferred; this change does not estimate it.
 Detailed cache and reasoning counts remain available for pricing. `context` freezes provider,
 pricing, and credential attribution before execution; the served model is taken from the response
 when available. `completedAt` is recorded at the provider boundary.
 
 The Host adds the admitted Agent source and reserved Session message reference, deduplicates reports,
-and records each invocation before terminal publication. `AiUsageRecordService` inserts the fact and
-rebuilds message `stats` and protocol `usage` in the same transaction. The Host retains an aggregate
-for its in-memory message view and fallback when best-effort analytical persistence fails. Runtime
-and approval timing remain message-owned; they never stand in for provider latency. A Runtime that
-cannot report usage emits no `usage` event.
+and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
+event loop; the terminal write waits for the turn's usage writes, so the finalized row carries every
+recorded call. `AiUsageRecordService` inserts the fact and rebuilds message `stats` and protocol
+`usage` in the same transaction. The Host retains an aggregate for its in-memory message view and
+uses it at finalization only when no analytical projection was persisted. If some writes fail,
+an existing projection continues to reflect only persisted records. Tools that call providers on
+the Host's behalf (image generation) read the attribution when they run, because the tool catalog
+is built before the assistant message is reserved; source and bound message references remain
+immutable snapshots. Runtime and approval timing remain message-owned; they never stand in for
+provider latency. A Runtime that cannot report usage emits no `usage` event.
 
 ## Host execution flow
 

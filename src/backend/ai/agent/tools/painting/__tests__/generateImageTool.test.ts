@@ -1,3 +1,4 @@
+import type { AiUsageAttribution } from '@/backend/ai/AiService';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -53,15 +54,18 @@ describe('createGenerateImageTool', () => {
     ]);
   });
 
-  test('carries the reserved Agent message into the image usage capture', async () => {
+  test('reads the reserved Agent message at execution rather than tool creation', async () => {
     const deps = createDependencies();
-    const usageAttribution = {
-      source: { type: 'agent' as const, id: 'agent-1', name: 'Agent One', icon: null },
-      messageRef: { kind: 'agent-session' as const, id: 'message-1' },
+    const usageAttribution: AiUsageAttribution = {
+      source: { type: 'agent', id: 'agent-1', name: 'Agent One', icon: null },
+      messageRef: null,
     };
-    await execute(createGenerateImageTool(deps, MODEL, TURN_FILES, usageAttribution), {
-      prompt: 'A cherry',
-    });
+    const resolveUsageAttribution = jest.fn(() => ({ ...usageAttribution }));
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES, resolveUsageAttribution);
+    expect(resolveUsageAttribution).not.toHaveBeenCalled();
+
+    usageAttribution.messageRef = { kind: 'agent-session', id: 'message-1' };
+    await execute(tool, { prompt: 'A cherry' });
     expect(deps.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ usageAttribution }),
     );

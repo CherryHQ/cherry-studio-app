@@ -191,8 +191,11 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
+  /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
   usage: RuntimeUsage | null;
   recordedInvocations: Set<string>;
+  /** Analytical writes started by this turn; the terminal write waits for them, the loop does not. */
+  usageWrites: Promise<void>[];
   runtimeSession: AgentRuntimeSession;
 };
 
@@ -653,10 +656,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     runtimeSession: AgentRuntimeSession,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
-    plan.usageAttribution.messageRef = { kind: 'agent-session', id: reserved.assistantMessage.id };
-    Object.freeze(plan.usageAttribution.source);
-    Object.freeze(plan.usageAttribution.messageRef);
-    Object.freeze(plan.usageAttribution);
+    plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
     // Match desktop timing ownership: execution starts when the Host launches
     // the Runtime, independently from the placeholder row's creation time.
     const runtimeStartedAt = Date.now();
@@ -694,6 +694,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       snapshotFlush: null,
       usage: null,
       recordedInvocations: new Set(),
+      usageWrites: [],
       runtimeSession,
     };
     this.activeTurns.set(sessionId, state);
@@ -902,17 +903,21 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           if (value !== undefined) usage[key] = (usage[key] ?? 0) + value;
         }
         state.usage = usage;
-        await this.usage.record({
-          agent: state.agent,
-          assistantMessageId: state.assistantMessage.id,
-          report: {
-            requestId: event.requestId,
-            completedAt: event.completedAt,
-            context: event.context,
-            usage: event.usage,
-          },
-          turnId: state.turn.id,
-        });
+        // Same rule as snapshots: the event loop never waits on the store. The
+        // write settles before the terminal write so the finalized row carries it.
+        state.usageWrites.push(
+          this.usage.record({
+            agent: state.agent,
+            assistantMessageId: state.assistantMessage.id,
+            report: {
+              requestId: event.requestId,
+              completedAt: event.completedAt,
+              context: event.context,
+              usage: event.usage,
+            },
+            turnId: state.turn.id,
+          }),
+        );
         return false;
       }
       case 'context.checkpoint': {
@@ -968,7 +973,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
     // No event follows a terminal one, so nothing can request another snapshot
     // once this wait ends: the terminal write is the last write to the row.
-    await state.snapshotFlush;
+    // The recorder logs write failures without rejecting. Finalization preserves
+    // any persisted projection, using the Host aggregate only when none exists.
+    await Promise.all([state.snapshotFlush, ...state.usageWrites]);
     // Invariant 5: the terminal message state (including the turn-level error)
     // commits before the terminal events publish. The terminal turn view is a
     // projection of that committed message.

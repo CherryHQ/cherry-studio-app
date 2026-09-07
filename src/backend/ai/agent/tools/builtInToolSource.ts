@@ -18,7 +18,7 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
-import type { AiUsageAttribution } from '@/backend/ai/AiService';
+import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -93,7 +93,8 @@ export type SystemCapabilitySource = {
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     resources: TurnToolResources;
-    usageAttribution?: AiUsageAttribution;
+    /** Attribution for provider calls a tool makes; read when the tool runs. */
+    resolveUsageAttribution?: AiUsageAttributionResolver;
   }): Promise<readonly RuntimeTool[]>;
 };
 
@@ -123,7 +124,7 @@ export function createSystemCapabilitySource(
   overrides: Partial<SystemCapabilitySourceDependencies> = {},
 ): SystemCapabilitySource {
   return {
-    async getTools({ disabledCapabilities, model, resources, usageAttribution }) {
+    async getTools({ disabledCapabilities, model, resources, resolveUsageAttribution }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
@@ -131,7 +132,7 @@ export function createSystemCapabilitySource(
       }
 
       const scope = await resolveScope(deps, new Set(disabledCapabilities));
-      const catalog = createCatalog(deps, scope, resources, usageAttribution);
+      const catalog = createCatalog(deps, scope, resources, resolveUsageAttribution);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
@@ -202,7 +203,7 @@ function createCatalog(
   deps: SystemCapabilitySourceDependencies,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
-  usageAttribution?: AiUsageAttribution,
+  resolveUsageAttribution?: AiUsageAttributionResolver,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -222,7 +223,7 @@ function createCatalog(
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
-    createGenerateImageTool(deps.painting, scope.paintingModel, resources, usageAttribution),
+    createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),
   ];
   return new Map(
     tools.flatMap((tool) =>

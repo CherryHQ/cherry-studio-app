@@ -18,6 +18,7 @@ import {
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
 import { agentSessionMessageTable } from '@/backend/data/db/schemas/agentSessionMessage';
 import {
@@ -47,7 +48,6 @@ import {
   AiUsageRecordStatsQuerySchema,
   AiUsageRecordTimelineQuerySchema,
 } from '@/shared/data/api/schemas/aiUsageRecords';
-import type { ApiClient } from '@/shared/data/api/types';
 import type {
   AiUsageCostBreakdown,
   AiUsagePricingSnapshot,
@@ -1040,21 +1040,20 @@ async function getMessageUsageProjectionTx(
   };
 }
 
-async function rebuildMessageUsageProjectionTx(
-  db: Database,
-  ref: MessageRef,
-): Promise<string | undefined> {
+/**
+ * Materializes the message's usage columns from its records. This does not
+ * publish a transcript change: the Agent protocol refreshes the transcript when
+ * the message finalizes, and the last record commits before that write.
+ */
+async function rebuildMessageUsageProjectionTx(db: Database, ref: MessageRef): Promise<void> {
   // Mobile owns Agent Session messages; retired chat references remain valid analytical facts.
-  if (ref.kind !== 'agent-session') return undefined;
+  if (ref.kind !== 'agent-session') return;
   const [message] = await db
-    .select({
-      stats: agentSessionMessageTable.stats,
-      sessionId: agentSessionMessageTable.sessionId,
-    })
+    .select({ stats: agentSessionMessageTable.stats })
     .from(agentSessionMessageTable)
     .where(eq(agentSessionMessageTable.id, ref.id))
     .limit(1);
-  if (!message) return undefined;
+  if (!message) return;
   const projection = await getMessageUsageProjectionTx(db, ref);
   const stats: MessageStats = {
     ...(message.stats?.runtimeTiming
@@ -1097,36 +1096,22 @@ async function rebuildMessageUsageProjectionTx(
           : null,
     })
     .where(eq(agentSessionMessageTable.id, ref.id));
-  return `/agent-sessions/${message.sessionId}/messages`;
 }
 
+/** Endpoint caches a newly committed usage record invalidates. */
+const USAGE_ANALYTICS_PATHS = [
+  '/ai-usage-records',
+  '/ai-usage-records/stats',
+  '/ai-usage-records/timeline',
+] as const;
+
 export class AiUsageRecordService {
-  private readonly changeListeners = new Set<(paths: readonly string[]) => void>();
-
-  readonly subscribeChanges: NonNullable<ApiClient['subscribeChanges']> = (listener) => {
-    this.changeListeners.add(listener);
-    return () => {
-      this.changeListeners.delete(listener);
-    };
-  };
-
   async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
     return getMessageUsageProjectionTx(this.dbService.getDb(), ref);
   }
 
   async refreshMessageProjection(ref: MessageRef): Promise<void> {
-    const path = await this.dbService.withWriteTx((tx) => rebuildMessageUsageProjectionTx(tx, ref));
-    if (path) this.notifyChanges([path]);
-  }
-
-  private notifyChanges(paths: readonly string[]): void {
-    for (const listener of this.changeListeners) {
-      try {
-        listener(paths);
-      } catch (error) {
-        logger.warn('AI usage change listener failed', error as Error);
-      }
-    }
+    await this.dbService.withWriteTx((tx) => rebuildMessageUsageProjectionTx(tx, ref));
   }
 
   /**
@@ -1146,19 +1131,17 @@ export class AiUsageRecordService {
     if (inputs.length === 0) return;
     try {
       const rows = inputs.map(invocationToRow);
-      const changedPaths = await this.dbService.withWriteTx(async (tx) => {
-        const paths = new Set<string>();
+      const insertedCount = await this.dbService.withWriteTx(async (tx) => {
+        let inserted = 0;
         const messageRefs = new Map<string, MessageRef>();
         for (const row of rows) {
-          const inserted = await tx
+          const returned = await tx
             .insert(aiUsageRecordTable)
             .values(row)
             .onConflictDoNothing()
             .returning({ id: aiUsageRecordTable.id });
-          if (inserted.length > 0) {
-            paths.add('/ai-usage-records');
-            paths.add('/ai-usage-records/stats');
-            paths.add('/ai-usage-records/timeline');
+          if (returned.length > 0) {
+            inserted += 1;
             if (row.messageKind && row.messageId)
               messageRefs.set(`${row.messageKind}:${row.messageId}`, {
                 kind: row.messageKind,
@@ -1179,12 +1162,11 @@ export class AiUsageRecordService {
           }
         }
         for (const ref of messageRefs.values()) {
-          const path = await rebuildMessageUsageProjectionTx(tx, ref);
-          if (path) paths.add(path);
+          await rebuildMessageUsageProjectionTx(tx, ref);
         }
-        return [...paths];
+        return inserted;
       });
-      if (changedPaths.length > 0) this.notifyChanges(changedPaths);
+      if (insertedCount > 0) publishDataApiChanges(USAGE_ANALYTICS_PATHS);
     } catch (error) {
       logger.error('Failed to record AI usage', error as Error, {
         requestIds: inputs.map(({ requestId }) => requestId),

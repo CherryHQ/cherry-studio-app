@@ -147,10 +147,23 @@ boundaries cannot be recovered.
 New usage facts and their Agent message projections commit together. Message `stats` includes token
 details, request/estimated/unpriced counts, costs grouped by currency, and measured provider
 performance; the Session store owns runtime timing. Agent image tools carry the same source/message
-attribution. Committed writes notify `DataApiService` subscribers; `DataApiProvider` coalesces affected
-endpoint invalidation for 300 ms so background execution refreshes mounted statistics. Table shape
-and existing list/stats/timeline query contracts remain unchanged. No Desktop compatibility baseline
-is advanced by this selective port.
+attribution, so a message's `usage` and `stats` sum every record attributed to it, including image
+calls its tools made, rather than the language-model calls alone.
+
+Committed usage writes publish the `/ai-usage-records*` endpoint paths on the Data API change bus
+(`src/backend/data/dataApiChanges.ts`); `DataApiService` exposes it as `subscribeChanges`, and
+`DataApiProvider` coalesces invalidation for 300 ms so background execution refreshes mounted
+statistics. The bus is shared: any persistence service may publish the paths its committed write
+invalidated, and only published paths refresh. Usage writes do not publish transcript paths; the
+Agent protocol refreshes the transcript when the message finalizes, and the terminal write waits
+for the turn's usage writes, so that refresh already carries the projection. Table shape and
+existing list/stats/timeline query contracts remain unchanged. No Desktop compatibility baseline is
+advanced by this selective port.
+
+`ai_usage_record` grows by one row per provider call, including compaction and image calls,
+and every row carries pricing and credential snapshots. There is no retention or rollup policy yet.
+Follow-up product work must define the retention window and which historical totals remain
+available before automatic deletion or aggregation is introduced.
 
 `MobileAgentHost` persists Agent Session reservations and terminal messages through
 `AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to

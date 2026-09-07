@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 import {
@@ -111,55 +112,66 @@ describe('AI usage analytics', () => {
         requestCount: JSON.parse(row.stats).requestCount,
       };
     });
-    const unsubscribe = service.subscribeChanges(listener);
-    await service.recordInvocations([first, second, image]);
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(
-      expect.arrayContaining([
+    const unsubscribe = subscribeDataApiChanges(listener);
+    try {
+      await service.recordInvocations([first, second, image]);
+      expect(listener).toHaveBeenCalledTimes(1);
+      // Only analytics caches refresh. The transcript is refreshed by the Agent
+      // protocol when the message finalizes, so a per-call refetch would be waste.
+      expect(listener).toHaveBeenCalledWith([
         '/ai-usage-records',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',
-        '/agent-sessions/session-1/messages',
-      ]),
-    );
-    expect(listener.mock.results[0]?.value).toMatchObject({
-      inTransaction: false,
-      requestCount: 3,
-    });
-    const projection = await service.getMessageUsageProjection(ref);
-    expect(projection).toMatchObject({
-      inputTokens: 110,
-      outputTokens: 22,
-      totalTokens: 132,
-      outputTokenDetails: { reasoningTokens: 5, textTokens: 17 },
-      requestCount: 3,
-      estimatedRequestCount: 0,
-      unpricedRequestCount: 1,
-      providerPerformance: { measuredOutputTokens: 22, generationDurationMs: 1000 },
-      costs: [
-        { currency: 'CNY', amount: 0.25, providerReportedRequestCount: 1, computedRequestCount: 0 },
-        {
-          currency: 'USD',
-          amount: expect.closeTo(0.00014, 10),
-          providerReportedRequestCount: 0,
-          computedRequestCount: 1,
-        },
-      ],
-    });
-    const row = sqlite
-      .prepare('SELECT stats, usage FROM agent_session_message WHERE id = ?')
-      .get('message-1') as { stats: string; usage: string };
-    expect(JSON.parse(row.stats)).toEqual({
-      ...projection,
-      contextTokens: 42,
-      runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
-    });
-    expect(JSON.parse(row.usage)).toEqual({ inputTokens: 110, outputTokens: 22, totalTokens: 132 });
-    await service.recordInvocations([first, second, image]);
-    expect(listener).toHaveBeenCalledTimes(1);
-    unsubscribe();
-    await service.refreshMessageProjection(ref);
-    expect(listener).toHaveBeenCalledTimes(1);
+      ]);
+      expect(listener.mock.results[0]?.value).toMatchObject({
+        inTransaction: false,
+        requestCount: 3,
+      });
+      const projection = await service.getMessageUsageProjection(ref);
+      expect(projection).toMatchObject({
+        inputTokens: 110,
+        outputTokens: 22,
+        totalTokens: 132,
+        outputTokenDetails: { reasoningTokens: 5, textTokens: 17 },
+        requestCount: 3,
+        estimatedRequestCount: 0,
+        unpricedRequestCount: 1,
+        providerPerformance: { measuredOutputTokens: 22, generationDurationMs: 1000 },
+        costs: [
+          {
+            currency: 'CNY',
+            amount: 0.25,
+            providerReportedRequestCount: 1,
+            computedRequestCount: 0,
+          },
+          {
+            currency: 'USD',
+            amount: expect.closeTo(0.00014, 10),
+            providerReportedRequestCount: 0,
+            computedRequestCount: 1,
+          },
+        ],
+      });
+      const row = sqlite
+        .prepare('SELECT stats, usage FROM agent_session_message WHERE id = ?')
+        .get('message-1') as { stats: string; usage: string };
+      expect(JSON.parse(row.stats)).toEqual({
+        ...projection,
+        contextTokens: 42,
+        runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
+      });
+      expect(JSON.parse(row.usage)).toEqual({
+        inputTokens: 110,
+        outputTokens: 22,
+        totalTokens: 132,
+      });
+      await service.recordInvocations([first, second, image]);
+      expect(listener).toHaveBeenCalledTimes(1);
+      await service.refreshMessageProjection(ref);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test('uses stable keyset pagination for derived token and performance metrics', async () => {

@@ -746,10 +746,12 @@ describe('MobileAgentHost', () => {
       disabledCapabilities: ['health'],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
-      usageAttribution: {
-        source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
-        messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
-      },
+      resolveUsageAttribution: expect.any(Function),
+    });
+    // Tools are built before reservation; by execution the resolver sees the reserved message.
+    expect(getTools.mock.calls[0]![0].resolveUsageAttribution?.()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
+      messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
@@ -1159,6 +1161,57 @@ describe('MobileAgentHost', () => {
     expect((await store.listMessages(session.id))[1]).toMatchObject({
       status: 'success',
       parts: [firstResult, { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }, secondResult],
+    });
+  });
+
+  test('keeps the event loop moving while a usage write is pending and settles it before the terminal write', async () => {
+    const releaseUsageWrite = createDeferred();
+    usage.record.mockImplementationOnce(() => releaseUsageWrite.promise);
+    const finalizeMessage = jest.spyOn(store, 'finalizeAssistantMessage');
+    const runtime = new FakeRuntime().script((controller) => {
+      controller.emit({
+        type: 'usage',
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'After usage', state: 'done' },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+
+    try {
+      await waitFor(
+        () =>
+          events.some(
+            (event) =>
+              event.type === 'message.delta' &&
+              event.delta.op === 'part.add' &&
+              event.delta.part.id === 'text-1',
+          ),
+        'the part after the usage event to reach observers',
+      );
+      // The analytical write is still blocked, yet later events were forwarded.
+      expect(usage.record).toHaveBeenCalledTimes(1);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(finalizeMessage).not.toHaveBeenCalled();
+      expect(terminalTurnEvent(events)).toBeUndefined();
+    } finally {
+      releaseUsageWrite.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+    expect(finalizeMessage).toHaveBeenCalledTimes(1);
+    expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
+      message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
     });
   });
 

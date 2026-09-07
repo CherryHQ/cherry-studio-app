@@ -42,6 +42,8 @@ import { VertexAuthClient } from './generation/VertexAuthClient';
 // ── Request types ──────────────────────────────────────────────────
 
 export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'messageRef'>;
+/** Read at call time by callers created before the attributed message exists. */
+export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
 /** Non-streaming text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {

@@ -7,6 +7,8 @@ import type {
 } from '@/shared/data/api/paths';
 import type { ApiClient, ApiImplementation, HttpMethod } from '@/shared/data/api/types';
 
+import { subscribeDataApiChanges } from './dataApiChanges';
+
 type RouteHandler = (input: {
   body?: unknown;
   params: Record<string, string>;
@@ -22,10 +24,10 @@ type CompiledRoute = {
 export class DataApiService implements ApiClient {
   private readonly routes: CompiledRoute[];
 
-  constructor(
-    handlers: ApiImplementation,
-    readonly subscribeChanges?: ApiClient['subscribeChanges'],
-  ) {
+  /** Committed backend writes publish the endpoint paths they invalidated; see `dataApiChanges`. */
+  readonly subscribeChanges = subscribeDataApiChanges;
+
+  constructor(handlers: ApiImplementation) {
     this.routes = compileRoutes(handlers);
   }
 
