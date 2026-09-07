@@ -1,4 +1,3 @@
-import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { ContentState, Tabs } from '@cherrystudio/ui/components';
 import {
   LegendList,
@@ -7,7 +6,7 @@ import {
 } from '@legendapp/list/react-native';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -144,12 +143,6 @@ function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibra
 // URI pages retain prior item identities when a new page appends, so mounted
 // tiles stay on the memoized path while the next page resolves.
 const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
-  const { t } = useTranslation();
-  // Only a proven origin is worth saying. Most rows are imports, and rows that
-  // predate the field have no proven origin at all, so labelling everything
-  // would either repeat itself or claim something the data does not support.
-  const isGenerated = item.entry.provenance === 'generated';
-
   return (
     <View
       style={{
@@ -161,16 +154,6 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
         <FileEntrySkeleton size={size} variant="card" />
       ) : (
         <LoadedFileEntryPreview
-          badge={
-            isGenerated ? (
-              <View className="flex-row items-center gap-1 rounded-full bg-card/95 px-2 py-1">
-                <SparklesIcon className="size-3.5 text-muted-foreground" />
-                <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
-                  {t('library.provenance.generated')}
-                </Text>
-              </View>
-            ) : undefined
-          }
           entry={item.entry}
           previewUri={item.previewUri}
           size={size}

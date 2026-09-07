@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
+import { ModelAvatar } from '@/frontend/components/Avatar';
 import {
   getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
@@ -112,6 +113,9 @@ export default function ModelSettingsScreen() {
           label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
           onPress: () => setActiveKind(kind),
           value: item?.model.name ?? t('settings.select.placeholder'),
+          valueLeading: item ? (
+            <ModelAvatar model={item.model} provider={item.provider} />
+          ) : undefined,
         };
       }),
     [draft, imageModelPickerData, isSaving, t, textModelPickerData],
