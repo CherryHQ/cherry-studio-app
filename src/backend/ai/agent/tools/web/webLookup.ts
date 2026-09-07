@@ -14,6 +14,7 @@
 import type { WebSearchOutput } from '@cherrystudio/universal/ai/builtinTools';
 import * as z from 'zod';
 
+import { isHttpError } from '@/backend/services/http';
 import { isPermanentWebSearchConfigError } from '@/backend/services/webSearch/utils/config';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
@@ -40,12 +41,11 @@ Don't use for:
 - Math, code reasoning, or things you can answer from your training
 - Well-known facts unlikely to have changed
 
-You may call this multiple times with different queries to broaden coverage:
-- If the topic likely has more authoritative sources in another language
-  (English for tech / scientific topics, the local language for regional news,
-  Japanese for anime / manga, etc.), repeat the search with the topic translated
-  into the most likely source language.
-- If the first results miss an angle, refine with synonyms or sub-aspects.`;
+Choose a focused query in the language most likely to have authoritative sources.
+Reuse results already available in the conversation. If several independent queries are necessary,
+call them in the same round. Search again only for a specific missing fact or conflicting source
+needed to answer the user; do not automatically repeat searches in other languages or synonyms.
+Once the results support the requested answer, answer without further searches.`;
 
 export const WEB_FETCH_DESCRIPTION = `Fetch the readable content from one or more known web page URLs.
 
@@ -56,9 +56,11 @@ Use this when:
 
 Don't use this when you only have a topic or question; call web_search first.
 
+Read the relevant known URLs together, and reuse pages already read in this conversation.
+Only fetch pages whose content is needed for the answer; search results may already be sufficient.
 Page content is bounded. A result with truncated: true contains only the beginning of the page,
-not its full text. Fetch fewer URLs per call for more detail; do not repeat an identical call
-expecting the missing tail.`;
+not its full text. Repeating the same page read cannot retrieve its missing tail.
+If the available text is sufficient, answer; otherwise state what could not be verified.`;
 
 /**
  * A failed lookup must be distinguishable from "ran fine, found nothing": both
@@ -77,7 +79,10 @@ export type WebLookupResult = WebSearchOutput | WebLookupError;
 
 /** Transient failure (network/provider hiccup) — a retry can succeed. */
 export const WEB_LOOKUP_ERROR_NOTE =
-  'Web lookup failed (network/provider error); retry or inform the user.';
+  'Web lookup failed temporarily. Retry at most once if necessary; if it still fails, answer from available sources and state the limitation.';
+
+const WEB_NON_RETRYABLE_ERROR_NOTE =
+  'Web lookup failed and repeating this request will not help. Do not retry it; answer from available sources and state the limitation.';
 
 /**
  * Permanent failure: no usable web-search provider for the requested capability. Retrying can never
@@ -169,6 +174,25 @@ function classifyWebLookupError(error: unknown): WebLookupError {
     };
   }
 
+  if (isHttpError(error) && error.status !== undefined) {
+    const status = error.status;
+    if (status === 429) {
+      return {
+        error: message,
+        retryable: false,
+        userMessage:
+          'The web provider is rate limited. Do not retry or send more queries in this turn; answer from available sources and tell the user to try again later.',
+      };
+    }
+    if (status >= 400 && status < 500 && status !== 408) {
+      return {
+        error: message,
+        retryable: false,
+        userMessage: `Web lookup was rejected (HTTP ${status}). Do not repeat this request; answer from available sources and state the limitation.`,
+      };
+    }
+  }
+
   return { error: message, retryable: true };
 }
 
@@ -186,6 +210,9 @@ function webLookupNote(error: WebLookupError): string {
     error.i18nKey === 'web_search_api_host_invalid'
   ) {
     return WEB_PROVIDER_CONFIGURATION_ERROR_NOTE;
+  }
+  if (!error.retryable) {
+    return error.userMessage ?? WEB_NON_RETRYABLE_ERROR_NOTE;
   }
   return WEB_LOOKUP_ERROR_NOTE;
 }

@@ -363,11 +363,14 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
 
-Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
-limit do not execute their callback and receive a classified error result; reaching either limit
-stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
-and timeout abort the model, approval waiters, and the callback signal before terminalizing live
-tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+Pi permits at most twenty tool-loop steps and sixty-four tool calls per turn. Calls beyond the limit
+do not execute their callback and receive a classified error result. After the current batch settles,
+reaching either limit disables all tools and allows one final model response using the collected
+results, with instructions to disclose uncertainty and unfinished work. A successful final response
+completes the turn; further tool requests fail with the budget error. Context exhaustion still stops
+before another provider request, and the final response shares the whole turn's ten-minute deadline.
+Cancellation and timeout abort the model, approval waiters, and the callback signal before
+terminalizing live tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -606,7 +609,8 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
+17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
+    context, callback, and whole-turn limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

@@ -124,6 +124,20 @@ describe('ExaMcpProvider', () => {
     );
   });
 
+  test.each(['', 'Invalid API key'])(
+    'preserves HTTP rejection status for lookup retry classification (%s)',
+    async (body) => {
+      global.fetch = jest.fn().mockResolvedValue(new Response(body, { status: 401 }));
+      const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+      await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toMatchObject({
+        name: 'HttpError',
+        kind: 'http',
+        status: 401,
+      });
+    },
+  );
+
   test('surfaces the internal timeout as a TimeoutError rather than an AbortError', async () => {
     jest.useFakeTimers();
     global.fetch = jest.fn((_url, init?: RequestInit) => {

@@ -1,10 +1,9 @@
 /**
  * Web search and fetch.
  *
- * These reach a third-party service configured globally, so the system catalog
- * injects them only for turns whose composer enabled web search. Provider
- * resolution, mapping, and error classification live in `webLookup`; this file
- * is only the Runtime tool wrapper.
+ * The system catalog creates fresh tools for each turn. Keep request reuse and
+ * retry accounting here so they cannot outlive that turn. Provider resolution,
+ * mapping, and error classification live in `webLookup`.
  */
 
 import {
@@ -18,12 +17,15 @@ import * as z from 'zod';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { RuntimeTool, RuntimeToolResult } from '../../runtime';
+import { raceAbort } from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import {
   fetchWeb,
+  isWebLookupError,
   searchWeb,
   WEB_FETCH_DESCRIPTION,
   WEB_SEARCH_DESCRIPTION,
+  type WebLookupResult,
   webLookupToolResult,
 } from './webLookup';
 
@@ -37,6 +39,8 @@ export type WebSearchToolDependencies = {
 };
 
 export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
+  const runSearch = createLookupRunner();
+  const runFetch = createLookupRunner();
   return [
     {
       ref: { source: 'builtin', capabilityId: WEB_SEARCH_TOOL_NAME },
@@ -50,7 +54,8 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
-        return webLookupToolResult(await searchWeb(deps.webSearch, parsed.data.query, signal));
+        const query = parsed.data.query.replace(/\s+/gu, ' ');
+        return runSearch(query, () => searchWeb(deps.webSearch, query, signal), signal);
       },
     },
     {
@@ -65,10 +70,57 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
         if (!parsed.success) {
           return invalidInput(parsed.error);
         }
-        return webLookupToolResult(await fetchWeb(deps.webSearch, parsed.data.urls, signal));
+        const urls = [...new Set(parsed.data.urls)];
+        return runFetch(
+          JSON.stringify([...urls].sort()),
+          () => fetchWeb(deps.webSearch, urls, signal),
+          signal,
+        );
       },
     },
   ];
+}
+
+/** Share pending/successful lookups and allow only one retry of the same failed request. */
+function createLookupRunner() {
+  const lookups = new Map<string, { attempts: number; result?: Promise<RuntimeToolResult> }>();
+
+  return async (
+    key: string,
+    lookup: () => Promise<WebLookupResult>,
+    signal: AbortSignal,
+  ): Promise<RuntimeToolResult> => {
+    signal.throwIfAborted();
+    const entry = lookups.get(key) ?? { attempts: 0, result: undefined };
+    lookups.set(key, entry);
+    if (entry.result) return raceAbort(entry.result, signal);
+
+    entry.attempts += 1;
+    entry.result = lookup()
+      .then((output) => {
+        if (isWebLookupError(output) && output.retryable) {
+          if (entry.attempts < 2) {
+            entry.result = undefined;
+          } else {
+            return {
+              value: {
+                status: 'error',
+                message:
+                  'This web lookup failed again after one retry. Do not retry it; answer from available sources and state the limitation.',
+                retryable: false,
+              },
+              artifacts: [],
+            } satisfies RuntimeToolResult;
+          }
+        }
+        return webLookupToolResult(output);
+      })
+      .catch((error: unknown) => {
+        lookups.delete(key);
+        throw error;
+      });
+    return raceAbort(entry.result, signal);
+  };
 }
 
 /** A malformed call is the model's to fix, so it settles as a value it can read. */

@@ -1,3 +1,4 @@
+import { HttpError } from '@/backend/services/http';
 import { WebSearchConfigError } from '@/backend/services/webSearch/WebSearchConfigError';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../../runtime';
@@ -54,6 +55,106 @@ describe('createWebTools', () => {
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
   });
 
+  test('reuses concurrent and completed searches, including their citation ids', async () => {
+    const webSearch = createWebSearch({});
+    const tool = toolNamed(webSearch, 'web_search');
+    const [first, concurrent] = await Promise.all([
+      execute(tool, { query: 'cherry  studio' }),
+      execute(tool, { query: ' cherry studio ' }),
+    ]);
+    const repeated = await execute(tool, { query: 'cherry studio' });
+
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
+    expect(concurrent).toEqual(first);
+    expect(repeated).toEqual(first);
+  });
+
+  test('allows a different query and starts fresh in the next turn', async () => {
+    const webSearch = createWebSearch({});
+    const tool = toolNamed(webSearch, 'web_search');
+    await execute(tool, { query: 'cherry studio' });
+    await execute(tool, { query: 'cherry studio release date' });
+    await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
+
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(3);
+  });
+
+  test.each([400, 401, 403, 404, 422, 429])(
+    'does not retry a lookup rejected with HTTP %i',
+    async (status) => {
+      const webSearch = createWebSearch({
+        searchKeywords: async () => {
+          throw new HttpError('Provider rejected request', { kind: 'http', status });
+        },
+      });
+      const tool = toolNamed(webSearch, 'web_search');
+      const first = await execute(tool, { query: 'cherry studio' });
+      const repeated = await execute(tool, { query: 'cherry studio' });
+
+      expect(first.value).toMatchObject({ status: 'error', retryable: false });
+      expect(first.value).toMatchObject({
+        message: expect.stringContaining(status === 429 ? 'rate limited' : `HTTP ${status}`),
+      });
+      expect(repeated).toEqual(first);
+      expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test('stops retrying a transient failure after one retry', async () => {
+    const webSearch = createWebSearch({
+      searchKeywords: async () => {
+        throw new HttpError('Provider unavailable', { kind: 'http', status: 503 });
+      },
+    });
+    const tool = toolNamed(webSearch, 'web_search');
+    const first = await execute(tool, { query: 'cherry studio' });
+    const retry = await execute(tool, { query: 'cherry studio' });
+    const repeated = await execute(tool, { query: 'cherry studio' });
+
+    expect(first.value).toMatchObject({ status: 'error', retryable: true });
+    expect(retry.value).toMatchObject({ status: 'error', retryable: false });
+    expect(repeated).toEqual(retry);
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(2);
+  });
+
+  test('caches the result of a successful retry', async () => {
+    let attempts = 0;
+    const webSearch = createWebSearch({
+      searchKeywords: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new HttpError('Request timed out', { kind: 'http', status: 408 });
+        }
+        return RESPONSE;
+      },
+    });
+    const tool = toolNamed(webSearch, 'web_search');
+    await execute(tool, { query: 'cherry studio' });
+    const retry = await execute(tool, { query: 'cherry studio' });
+    const repeated = await execute(tool, { query: 'cherry studio' });
+
+    expect(retry.value).toEqual([expect.objectContaining({ content: 'Body' })]);
+    expect(repeated).toEqual(retry);
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(2);
+  });
+
+  test('honors cancellation even when the requested result is cached', async () => {
+    const webSearch = createWebSearch({});
+    const tool = toolNamed(webSearch, 'web_search');
+    await execute(tool, { query: 'cherry studio' });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      tool.execute({
+        input: { query: 'cherry studio' },
+        signal: controller.signal,
+        toolCallId: 'cancelled-call',
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
+  });
+
   test('rejects a query the model can rewrite instead of calling the provider', async () => {
     const webSearch = createWebSearch({});
 
@@ -75,6 +176,24 @@ describe('createWebTools', () => {
       { signal: expect.any(AbortSignal) },
     );
     expect(result.value).toHaveLength(1);
+  });
+
+  test('deduplicates URLs and reuses an already fetched batch regardless of order', async () => {
+    const webSearch = createWebSearch({});
+    const tool = toolNamed(webSearch, 'web_fetch');
+    const first = await execute(tool, {
+      urls: ['https://example.com/a', 'https://example.com/a', 'https://example.com/b'],
+    });
+    const repeated = await execute(tool, {
+      urls: ['https://example.com/b', 'https://example.com/a'],
+    });
+
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(1);
+    expect(webSearch.fetchUrls).toHaveBeenCalledWith(
+      { urls: ['https://example.com/a', 'https://example.com/b'] },
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(repeated).toEqual(first);
   });
 
   test('rejects a non-http target before any request', async () => {
