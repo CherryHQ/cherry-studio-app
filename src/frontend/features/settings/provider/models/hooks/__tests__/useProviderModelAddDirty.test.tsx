@@ -8,6 +8,7 @@ import { useProviderModelAdd } from '../useProviderModelAdd';
 
 type ModelAdd = ReturnType<typeof useProviderModelAdd>;
 let mockResolvedModels: Model[] | undefined;
+let mockExistingModels: Model[] = [];
 let mockLookupPending = false;
 const mockAddModels = jest.fn();
 const mockRefetchModels = jest.fn();
@@ -22,23 +23,28 @@ jest.mock('@cherrystudio/ui/components', () => ({
 
 jest.mock('@/frontend/data', () => ({
   useMutation: () => ({ isLoading: false, trigger: mockAddModels }),
-  useQuery: (path: string, options?: { query?: { ids: string[] } }) => {
-    if (path === '/models') return { data: [], refetch: mockRefetchModels };
+  useQuery: (path: string, options?: { query?: { ids: string } }) => {
+    if (path === '/models') return { data: mockExistingModels, refetch: mockRefetchModels };
+    const id = options?.query?.ids ?? '';
     return {
       data: mockLookupPending
         ? undefined
         : (mockResolvedModels ??
-          options?.query?.ids.map((id) => ({
-            capabilities: [],
-            id: `custom::${id}`,
-            modelId: id,
-            providerId: 'custom',
-            name: id,
-            isEnabled: true,
-            isHidden: false,
-            isDeprecated: false,
-            supportsStreaming: true,
-          }))),
+          (id
+            ? [
+                {
+                  capabilities: [],
+                  id: `custom::${id}`,
+                  modelId: id,
+                  providerId: 'custom',
+                  name: id,
+                  isEnabled: true,
+                  isHidden: false,
+                  isDeprecated: false,
+                  supportsStreaming: true,
+                },
+              ]
+            : [])),
       refetch: jest.fn(),
     };
   },
@@ -85,6 +91,7 @@ describe('useProviderModelAdd dirty tracking', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockResolvedModels = undefined;
+    mockExistingModels = [];
     mockLookupPending = false;
     mockAddModels.mockReset().mockResolvedValue([]);
     mockRefetchModels.mockReset().mockResolvedValue({ data: [] });
@@ -134,11 +141,10 @@ describe('useProviderModelAdd dirty tracking', () => {
     expect(current().isDirty).toBe(false);
   });
 
-  it('keeps hand-written names and groups when the model id changes', () => {
+  it('keeps the hand-written name when the model id changes', () => {
     act(() => current().updateName('My name'));
-    act(() => current().updateGroup('My group'));
     act(() => current().updateModelId('new-id'));
-    expect(current().formState).toMatchObject({ name: 'My name', group: 'My group' });
+    expect(current().formState.name).toBe('My name');
   });
 
   it('does not store capability overrides after a tag is toggled back', () => {
@@ -157,7 +163,7 @@ describe('useProviderModelAdd dirty tracking', () => {
     expect(current().isDirty).toBe(false);
   });
 
-  it('inherits metadata for the requested alias rather than the returned catalog id', () => {
+  it('inherits metadata for the requested alias rather than the returned catalog id', async () => {
     mockResolvedModels = [
       {
         capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.FUNCTION_CALL],
@@ -177,14 +183,20 @@ describe('useProviderModelAdd dirty tracking', () => {
     act(() => jest.advanceTimersByTime(250));
     expect(current().defaultName).toBe('Catalog display name');
     expect(current().capabilities.vision).toBe(true);
-    expect(current().buildResult.inputs).toEqual([
-      { modelId: 'provider-alias', providerId: 'custom' },
-    ]);
     expect(current().canSubmit).toBe(true);
 
     act(() => current().updateModelId('different-id'));
     expect(current().canSubmit).toBe(false);
     expect(current().baseline).toBeUndefined();
+
+    act(() => current().updateModelId('provider-alias'));
+    act(() => jest.advanceTimersByTime(250));
+    await act(async () => {
+      expect(await current().submitAddModel()).toBe(true);
+    });
+    expect(mockAddModels).toHaveBeenCalledWith({
+      body: [{ modelId: 'provider-alias', providerId: 'custom' }],
+    });
   });
 
   it('blocks save while metadata is unresolved', async () => {
@@ -221,5 +233,40 @@ describe('useProviderModelAdd dirty tracking', () => {
     });
     expect(current().formState.modelId).toBe('new-model');
     expect(current().isSubmitting).toBe(false);
+  });
+
+  it.each(['model-a,model-b', 'model-a，model-b'])(
+    'does not submit multiple IDs: %s',
+    async (value) => {
+      act(() => current().updateModelId(value));
+      act(() => jest.advanceTimersByTime(250));
+      expect(current().canSubmit).toBe(false);
+      expect(current().isResolving).toBe(false);
+      expect(current().fieldErrors.modelId).toBe('settings.provider.models.addSingleModelOnly');
+      await act(async () => {
+        expect(await current().submitAddModel()).toBe(false);
+      });
+      expect(mockAddModels).not.toHaveBeenCalled();
+      expect(current().formState.modelId).toBe(value);
+    },
+  );
+
+  it('shows an inline error for an existing model instead of skipping it', () => {
+    mockExistingModels = [
+      {
+        capabilities: [],
+        id: createUniqueModelId('custom', 'existing'),
+        modelId: 'existing',
+        providerId: 'custom',
+        name: 'Existing',
+        isEnabled: true,
+        isHidden: false,
+        isDeprecated: false,
+        supportsStreaming: true,
+      },
+    ];
+    act(() => current().updateModelId('existing'));
+    expect(current().canSubmit).toBe(false);
+    expect(current().fieldErrors.modelId).toBe('settings.provider.models.addDuplicate');
   });
 });

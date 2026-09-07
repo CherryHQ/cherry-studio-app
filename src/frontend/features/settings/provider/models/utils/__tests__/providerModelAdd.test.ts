@@ -5,14 +5,13 @@ import type { Provider } from '@/shared/data/types/provider';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import {
-  buildProviderModelAddInputs,
+  buildProviderModelAddInput,
   createInitialProviderModelAddFormState,
   getDefaultProviderModelGroupName,
   getProviderChatEndpointTypes,
   getProviderModelAddCapabilities,
   getProviderModelAddEndpointOptions,
   type ProviderModelAddFormState,
-  splitProviderModelIds,
 } from '../providerModelAdd';
 
 const openaiProvider = provider({
@@ -24,15 +23,15 @@ const openaiProvider = provider({
 });
 function build(
   form: Partial<ProviderModelAddFormState> = {},
-  resolvedModels: Model[] = [],
+  baseline?: Model,
   currentProvider = openaiProvider,
   existingModels: Model[] = [],
 ) {
-  return buildProviderModelAddInputs({
+  return buildProviderModelAddInput({
     existingModels,
     formState: { ...createInitialProviderModelAddFormState(), modelId: 'custom-model', ...form },
     provider: currentProvider,
-    resolvedModels,
+    baseline,
   });
 }
 function catalogModel(id: string, overrides: Partial<Model> = {}): Model {
@@ -40,15 +39,10 @@ function catalogModel(id: string, overrides: Partial<Model> = {}): Model {
 }
 
 describe('provider model add helpers', () => {
-  test('derives existing group defaults and splits both comma forms', () => {
+  test('derives existing group defaults', () => {
     expect(getDefaultProviderModelGroupName('Qwen/Qwen3-32B')).toBe('qwen');
     expect(getDefaultProviderModelGroupName('gpt-3.5-turbo')).toBe('gpt-3.5');
     expect(getDefaultProviderModelGroupName('deepseek-r1', 'silicon')).toBe('deepseek');
-    expect(splitProviderModelIds('gpt-4o, gpt-4o-mini，claude-4')).toEqual([
-      'gpt-4o',
-      'gpt-4o-mini',
-      'claude-4',
-    ]);
   });
 
   test('starts with automatic routing and no capability overrides', () => {
@@ -56,14 +50,12 @@ describe('provider model add helpers', () => {
       capabilities: {},
       endpointType: 'auto',
     });
-    expect(build().inputs).toEqual([
-      {
-        modelId: 'custom-model',
-        providerId: 'openai',
-        name: 'custom-model',
-        group: 'custom-model',
-      },
-    ]);
+    expect(build().input).toEqual({
+      modelId: 'custom-model',
+      providerId: 'openai',
+      name: 'custom-model',
+      group: 'custom-model',
+    });
   });
 
   test('preserves catalog name, group, hidden capabilities and routing by omission', () => {
@@ -77,9 +69,7 @@ describe('provider model add helpers', () => {
       ],
       endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
     });
-    expect(build({}, [baseline]).inputs).toEqual([
-      { modelId: 'custom-model', providerId: 'openai' },
-    ]);
+    expect(build({}, baseline).input).toEqual({ modelId: 'custom-model', providerId: 'openai' });
   });
 
   test('adds vision without erasing reasoning, tools or other modalities', () => {
@@ -87,7 +77,7 @@ describe('provider model add helpers', () => {
       capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
       inputModalities: [MODALITY.TEXT, MODALITY.AUDIO],
     });
-    expect(build({ capabilities: { vision: true } }, [baseline]).inputs[0]).toMatchObject({
+    expect(build({ capabilities: { vision: true } }, baseline).input).toMatchObject({
       capabilities: [
         MODEL_CAPABILITY.REASONING,
         MODEL_CAPABILITY.FUNCTION_CALL,
@@ -102,7 +92,7 @@ describe('provider model add helpers', () => {
       capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.FUNCTION_CALL],
       inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
     });
-    expect(build({ capabilities: { vision: false } }, [baseline]).inputs[0]).toMatchObject({
+    expect(build({ capabilities: { vision: false } }, baseline).input).toMatchObject({
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
       inputModalities: [MODALITY.TEXT],
     });
@@ -122,20 +112,20 @@ describe('provider model add helpers', () => {
     (endpointType) => {
       const result = build({ endpointType });
       expect(result.errors).toEqual({});
-      expect(result.inputs[0]).toMatchObject({
+      expect(result.input).toMatchObject({
         capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
         endpointTypes: [endpointType],
         outputModalities: [MODALITY.IMAGE],
       });
       if (endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT)
-        expect(result.inputs[0]?.inputModalities).toContain(MODALITY.IMAGE);
-      expect(result.inputs[0]?.capabilities).not.toContain(MODEL_CAPABILITY.IMAGE_RECOGNITION);
-      expect(isImageGenerationModel({ ...model('custom-model'), ...result.inputs[0] })).toBe(true);
+        expect(result.input?.inputModalities).toContain(MODALITY.IMAGE);
+      expect(result.input?.capabilities).not.toContain(MODEL_CAPABILITY.IMAGE_RECOGNITION);
+      expect(isImageGenerationModel({ ...model('custom-model'), ...result.input })).toBe(true);
     },
   );
 
   test('adds both tags and uses the supported OpenAI image fallback', () => {
-    expect(build({ capabilities: { vision: true, drawing: true } }).inputs[0]).toMatchObject({
+    expect(build({ capabilities: { vision: true, drawing: true } }).input).toMatchObject({
       capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.IMAGE_GENERATION],
       endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
       inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
@@ -149,14 +139,14 @@ describe('provider model add helpers', () => {
       endpointTypes: [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT],
       outputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
     });
-    const result = build({ capabilities: { vision: true } }, [baseline]);
+    const result = build({ capabilities: { vision: true } }, baseline);
     expect(result.errors).toEqual({});
-    expect(result.inputs[0]).not.toHaveProperty('endpointTypes');
-    expect(result.inputs[0]?.capabilities).toEqual([
+    expect(result.input).not.toHaveProperty('endpointTypes');
+    expect(result.input?.capabilities).toEqual([
       MODEL_CAPABILITY.IMAGE_GENERATION,
       MODEL_CAPABILITY.IMAGE_RECOGNITION,
     ]);
-    expect(result.inputs[0]).not.toHaveProperty('outputModalities');
+    expect(result.input).not.toHaveProperty('outputModalities');
   });
 
   test('does not invent image support from a non-OpenAI text URL', () => {
@@ -170,9 +160,9 @@ describe('provider model add helpers', () => {
     expect(getProviderModelAddEndpointOptions(anthropic).map(({ id }) => id)).toEqual([
       ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
     ]);
-    expect(build({ capabilities: { drawing: true } }, [], anthropic).errors.endpointType).toBe(
-      'settings.provider.models.addImageEndpointRequired',
-    );
+    expect(
+      build({ capabilities: { drawing: true } }, undefined, anthropic).errors.endpointType,
+    ).toBe('settings.provider.models.addImageEndpointRequired');
   });
 
   test('does not allow a drawing tag to override an explicit incompatible protocol', () => {
@@ -189,15 +179,15 @@ describe('provider model add helpers', () => {
       capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
       endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
     });
-    expect(build({ capabilities: { drawing: false } }, [baseline]).errors.endpointType).toBe(
+    expect(build({ capabilities: { drawing: false } }, baseline).errors.endpointType).toBe(
       'settings.provider.models.addImageEndpointConflict',
     );
     const switched = build(
       { capabilities: { drawing: false }, endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS },
-      [baseline],
+      baseline,
     );
     expect(switched.errors).toEqual({});
-    expect(switched.inputs[0]).toMatchObject({
+    expect(switched.input).toMatchObject({
       capabilities: [],
       outputModalities: [MODALITY.TEXT],
     });
@@ -209,64 +199,9 @@ describe('provider model add helpers', () => {
       endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
       inputModalities: [MODALITY.IMAGE],
     });
-    expect(
-      build({ capabilities: { vision: false } }, [baseline]).inputs[0]?.inputModalities,
-    ).toEqual([MODALITY.IMAGE]);
-  });
-
-  test('mixed batches inherit independently, ignore single-model fields, and skip duplicates', () => {
-    const chat = catalogModel('chat', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] });
-    const drawing = catalogModel('image', {
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
-    });
-    const result = build(
-      {
-        modelId: 'chat，image,chat,existing',
-        name: 'Ignored',
-        group: 'Ignored',
-        maxOutputTokens: 'invalid',
-      },
-      [chat, drawing],
-      openaiProvider,
-      [model('existing')],
-    );
-    expect(result.errors).toEqual({});
-    expect(result.duplicateIds).toEqual(['chat', 'existing']);
-    expect(result.inputs).toEqual([
-      { modelId: 'chat', providerId: 'openai' },
-      { modelId: 'image', providerId: 'openai' },
+    expect(build({ capabilities: { vision: false } }, baseline).input?.inputModalities).toEqual([
+      MODALITY.IMAGE,
     ]);
-  });
-
-  test('batch tags only add, merging with each model’s own capabilities', () => {
-    const chat = catalogModel('chat', { capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] });
-    const drawing = catalogModel('image', {
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
-    });
-    const result = build(
-      { modelId: 'chat,image', capabilities: { vision: true, drawing: false } },
-      [chat, drawing],
-    );
-    expect(result.errors).toEqual({});
-    expect(result.inputs.map((input) => input.capabilities)).toEqual([
-      [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.IMAGE_RECOGNITION],
-      [MODEL_CAPABILITY.IMAGE_GENERATION, MODEL_CAPABILITY.IMAGE_RECOGNITION],
-    ]);
-  });
-
-  test('reports conflicting IDs individually in a batch', () => {
-    const image = catalogModel('image', {
-      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      endpointTypes: [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT],
-    });
-    expect(
-      build({ modelId: 'chat,image', endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES }, [
-        catalogModel('chat'),
-        image,
-      ]).endpointErrorIds,
-    ).toEqual(['image']);
   });
 
   test.each(['0', '-1', '1.5', '1e3', 'NaN', '9007199254740992'])(
@@ -280,21 +215,20 @@ describe('provider model add helpers', () => {
 
   test('validates positive limits and inherited context/output combinations', () => {
     expect(
-      build({ contextWindow: '128000', maxInputTokens: '64000', maxOutputTokens: '8192' })
-        .inputs[0],
+      build({ contextWindow: '128000', maxInputTokens: '64000', maxOutputTokens: '8192' }).input,
     ).toMatchObject({
       contextWindow: 128000,
       maxInputTokens: 64000,
       maxOutputTokens: 8192,
     });
     const baseline = catalogModel('custom-model', { contextWindow: 16000, maxOutputTokens: 8000 });
-    expect(build({ maxOutputTokens: '16000' }, [baseline]).errors.maxOutputTokens).toBe(
+    expect(build({ maxOutputTokens: '16000' }, baseline).errors.maxOutputTokens).toBe(
       'settings.provider.models.addOutputLimitError',
     );
-    expect(build({ contextWindow: '8000' }, [baseline]).errors.maxOutputTokens).toBe(
+    expect(build({ contextWindow: '8000' }, baseline).errors.maxOutputTokens).toBe(
       'settings.provider.models.addOutputLimitError',
     );
-    expect(build({ maxInputTokens: '16001' }, [baseline]).errors.maxInputTokens).toBe(
+    expect(build({ maxInputTokens: '16001' }, baseline).errors.maxInputTokens).toBe(
       'settings.provider.models.addInputLimitError',
     );
   });
@@ -306,8 +240,8 @@ describe('provider model add helpers', () => {
       maxOutputTokens: '0',
     });
     expect(result.errors).toEqual({});
-    expect(result.inputs[0]).not.toHaveProperty('contextWindow');
-    expect(result.inputs[0]).not.toHaveProperty('maxOutputTokens');
+    expect(result.input).not.toHaveProperty('contextWindow');
+    expect(result.input).not.toHaveProperty('maxOutputTokens');
   });
 
   test('includes app fallbacks when only one token limit is entered', () => {
@@ -327,31 +261,47 @@ describe('provider model add helpers', () => {
         [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: { baseUrl: 'https://images.example.com' },
       },
     });
-    const result = build({ capabilities: { drawing: true } }, [], editProvider);
+    const result = build({ capabilities: { drawing: true } }, undefined, editProvider);
     expect(result.errors).toEqual({});
-    expect(result.inputs[0]).toMatchObject({
+    expect(result.input).toMatchObject({
       endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
       inputModalities: [MODALITY.TEXT, MODALITY.IMAGE],
     });
   });
 
-  test('reports reserved ID characters without throwing; allows slashes and colons', () => {
-    const result = build({ modelId: 'bad?x,bad#x,Qwen/Qwen3,qwen3:32b' });
-    expect(result.invalidIds).toEqual(['bad?x', 'bad#x']);
-    expect(result.inputs.map(({ modelId }) => modelId)).toEqual(['Qwen/Qwen3', 'qwen3:32b']);
+  test.each(['chat,image', 'chat，image', 'same,same', 'model,', 'chat\nimage'])(
+    'rejects multiple IDs instead of splitting or partially creating %s',
+    (modelId) => {
+      expect(build({ modelId })).toEqual({
+        errors: { modelId: 'settings.provider.models.addSingleModelOnly' },
+      });
+    },
+  );
+
+  test.each(['bad?x', 'bad#x'])('rejects reserved characters in %s', (modelId) => {
+    expect(build({ modelId })).toEqual({
+      errors: { modelId: 'settings.provider.models.addInvalidId' },
+    });
   });
 
-  test('limits pending unique models to 500, not raw duplicate count', () => {
-    const ids = Array.from({ length: 501 }, (_, i) => `model-${i}`);
-    expect(build({ modelId: ids.join(',') }).errors.modelId).toBe(
-      'settings.provider.models.addBatchLimit',
+  test.each(['Qwen/Qwen3', 'qwen3:32b'])('accepts a single ID %s', (modelId) => {
+    expect(build({ modelId: `  ${modelId}  ` }).input?.modelId).toBe(modelId);
+  });
+
+  test('requires a model ID and rejects an existing model', () => {
+    expect(build({ modelId: '  ' }).errors.modelId).toBe(
+      'settings.provider.models.addModelIdRequired',
     );
-    expect(build({ modelId: ids.join(',') }, [], openaiProvider, [model(ids[0]!)]).errors).toEqual(
-      {},
-    );
-    expect(
-      build({ modelId: Array.from({ length: 501 }, () => 'same').join(',') }).inputs,
-    ).toHaveLength(1);
+    expect(build({}, undefined, openaiProvider, [model('custom-model')])).toEqual({
+      errors: { modelId: 'settings.provider.models.addDuplicate' },
+    });
+  });
+
+  test('keeps the requested alias while inheriting its canonical catalog model', () => {
+    expect(build({ modelId: 'provider-alias' }, catalogModel('canonical')).input).toEqual({
+      modelId: 'provider-alias',
+      providerId: 'openai',
+    });
   });
 
   test('chat endpoint choices exclude image and unconfigured endpoints', () => {

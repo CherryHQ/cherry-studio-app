@@ -177,16 +177,13 @@ jest.mock('../../hooks/useProviderDetailSettings', () => ({
 jest.mock('../../../models/hooks/useProviderModelAdd', () => ({
   useProviderModelAdd: () => ({
     canSubmit: false,
-    buildResult: { inputs: [], duplicateIds: [], invalidIds: [] },
     capabilities: { vision: false, drawing: false },
     fieldErrors: {},
-    defaultGroup: '',
     defaultName: '',
     formState: {
       contextWindow: '',
       capabilities: {},
       endpointType: 'auto',
-      group: '',
       maxInputTokens: '',
       maxOutputTokens: '',
       modelId: '',
@@ -194,7 +191,6 @@ jest.mock('../../../models/hooks/useProviderModelAdd', () => ({
     },
     isDirty: false,
     isSubmitting: false,
-    isBatchAdd: false,
     isResolving: false,
     hasLookupError: false,
     resetForm: jest.fn(),
@@ -203,7 +199,6 @@ jest.mock('../../../models/hooks/useProviderModelAdd', () => ({
     retryLookup: jest.fn(),
     updateContextWindow: jest.fn(),
     updateEndpointType: jest.fn(),
-    updateGroup: jest.fn(),
     updateMaxInputTokens: jest.fn(),
     updateMaxOutputTokens: jest.fn(),
     updateModelId: jest.fn(),

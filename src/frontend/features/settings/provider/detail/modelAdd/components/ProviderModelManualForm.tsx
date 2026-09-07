@@ -8,7 +8,7 @@ import {
   SelectField,
   TextField,
 } from '@cherrystudio/ui/components';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, type TextInputProps, View } from 'react-native';
 import {
@@ -42,14 +42,11 @@ export function ProviderModelManualForm({
   const { t } = useTranslation();
   const {
     baseline,
-    buildResult,
     canSubmit,
     capabilities,
-    defaultGroup,
     defaultName,
     fieldErrors,
     formState,
-    isBatchAdd,
     isDirty,
     isResolving,
     isSubmitting,
@@ -59,7 +56,6 @@ export function ProviderModelManualForm({
     updateCapability,
     updateContextWindow,
     updateEndpointType,
-    updateGroup,
     updateMaxInputTokens,
     updateMaxOutputTokens,
     updateModelId,
@@ -142,9 +138,7 @@ export function ProviderModelManualForm({
             label:
               isSubmitting || flow.isEnabling
                 ? t('common.saving')
-                : isBatchAdd
-                  ? t('settings.provider.models.addCount', { count: buildResult.inputs.length })
-                  : t('settings.provider.models.add'),
+                : t('settings.provider.models.add'),
             onPress: () => void handleSubmit(),
             type: 'label',
           },
@@ -168,13 +162,11 @@ export function ProviderModelManualForm({
         ) : (
           <KeyboardAwareScrollView
             bottomOffset={
-              showMoreSettings && !isBatchAdd
-                ? advancedSettingsKeyboardBottomOffset
-                : defaultKeyboardBottomOffset
+              showMoreSettings ? advancedSettingsKeyboardBottomOffset : defaultKeyboardBottomOffset
             }
             contentContainerStyle={[
               styles.scrollContent,
-              showMoreSettings && !isBatchAdd ? styles.expandedScrollContent : null,
+              showMoreSettings ? styles.expandedScrollContent : null,
             ]}
             contentInsetAdjustmentBehavior="automatic"
             disableScrollOnKeyboardHide
@@ -184,22 +176,10 @@ export function ProviderModelManualForm({
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
           >
-            <Text className="text-foreground-secondary text-sm">
-              {t('settings.provider.models.addManualDescription')}
-            </Text>
-
-            <ProviderModelAddSection
-              description={t(
-                isBatchAdd
-                  ? 'settings.provider.models.addBatchDescription'
-                  : 'settings.provider.models.addModelInfoDescription',
-              )}
-              title={t('settings.provider.models.addModelInfoTitle')}
-            >
+            <View className="gap-4">
               <ProviderModelAddTextField
                 required
                 accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
-                description={t('settings.provider.models.addModelIdDescription')}
                 errorMessage={fieldErrors.modelId}
                 isDisabled={isSubmitting}
                 label={t('settings.provider.models.addModelIdLabel')}
@@ -207,28 +187,14 @@ export function ProviderModelManualForm({
                 value={formState.modelId}
                 onChangeText={updateModelId}
               />
-
-              {!isBatchAdd ? (
-                <ProviderModelAddTextField
-                  accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
-                  isDisabled={isSubmitting}
-                  label={t('settings.provider.models.addModelNameLabel')}
-                  placeholder={defaultName || t('settings.provider.models.addModelNamePlaceholder')}
-                  value={formState.name}
-                  onChangeText={updateName}
-                />
-              ) : null}
-              {isBatchAdd ||
-              buildResult.duplicateIds.length > 0 ||
-              buildResult.invalidIds.length > 0 ? (
-                <Text className="text-muted-foreground text-xs">
-                  {t('settings.provider.models.addBatchSummary', {
-                    count: buildResult.inputs.length,
-                    duplicates: buildResult.duplicateIds.length,
-                    invalid: buildResult.invalidIds.length,
-                  })}
-                </Text>
-              ) : null}
+              <ProviderModelAddTextField
+                accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addModelNameLabel')}
+                placeholder={defaultName || t('settings.provider.models.addModelNamePlaceholder')}
+                value={formState.name}
+                onChangeText={updateName}
+              />
               {hasLookupError ? (
                 <View className="items-start gap-2">
                   <Text className="text-error text-xs">
@@ -243,20 +209,12 @@ export function ProviderModelManualForm({
                   {t('settings.provider.models.addResolving')}
                 </Text>
               ) : null}
-            </ProviderModelAddSection>
+            </View>
 
-            <ProviderModelAddSection
-              title={t(
-                isBatchAdd
-                  ? 'settings.provider.models.addBatchCapabilities'
-                  : 'settings.provider.models.addCapabilities',
-              )}
-              description={t(
-                isBatchAdd
-                  ? 'settings.provider.models.addBatchCapabilitiesDescription'
-                  : 'settings.provider.models.addCapabilitiesDescription',
-              )}
-            >
+            <View className="gap-3">
+              <Text className="font-medium text-base text-foreground">
+                {t('settings.provider.models.addCapabilities')}
+              </Text>
               <View className="flex-row flex-wrap gap-2">
                 {(['vision', 'drawing'] as const).map((capability) => (
                   <Chip.Selectable
@@ -271,7 +229,7 @@ export function ProviderModelManualForm({
                   </Chip.Selectable>
                 ))}
               </View>
-            </ProviderModelAddSection>
+            </View>
 
             <View className="gap-3">
               <View className="items-start">
@@ -308,68 +266,47 @@ export function ProviderModelManualForm({
                       <SelectField.ValueText>{endpointLabel}</SelectField.ValueText>
                     </SelectField.Value>
                   </SelectField>
-                  <Text className="text-muted-foreground text-xs">
-                    {t('settings.provider.models.addEndpointTypeDescription')}
-                  </Text>
                   {fieldErrors.endpointType ? (
                     <Text className="text-error text-xs">{fieldErrors.endpointType}</Text>
                   ) : null}
-                  {!isBatchAdd ? (
+                  {!capabilities.drawing ? (
                     <>
-                      <ProviderModelAddTextField
-                        accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
-                        isDisabled={isSubmitting}
-                        label={t('settings.provider.models.addGroupNameLabel')}
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.contextWindow}
+                        label={t('settings.provider.models.addContextWindowLabel')}
                         placeholder={
-                          defaultGroup || t('settings.provider.models.addGroupNamePlaceholder')
+                          baseline?.contextWindow?.toString() ??
+                          t('settings.provider.models.addContextWindowPlaceholder')
                         }
-                        value={formState.group}
-                        onChangeText={updateGroup}
+                        value={formState.contextWindow}
+                        onChangeText={updateContextWindow}
                         onFocus={handleAdvancedFieldFocus}
                       />
-                      {!capabilities.drawing ? (
-                        <>
-                          <Text className="text-muted-foreground text-xs">
-                            {t('settings.provider.models.addAdvancedDescription')}
-                          </Text>
-                          <ProviderModelNumberField
-                            disabled={isSubmitting}
-                            errorMessage={fieldErrors.contextWindow}
-                            label={t('settings.provider.models.addContextWindowLabel')}
-                            placeholder={
-                              baseline?.contextWindow?.toString() ??
-                              t('settings.provider.models.addContextWindowPlaceholder')
-                            }
-                            value={formState.contextWindow}
-                            onChangeText={updateContextWindow}
-                            onFocus={handleAdvancedFieldFocus}
-                          />
-                          <ProviderModelNumberField
-                            disabled={isSubmitting}
-                            errorMessage={fieldErrors.maxInputTokens}
-                            label={t('settings.provider.models.addMaxInputTokensLabel')}
-                            placeholder={
-                              baseline?.maxInputTokens?.toString() ??
-                              t('settings.provider.models.addMaxInputTokensPlaceholder')
-                            }
-                            value={formState.maxInputTokens}
-                            onChangeText={updateMaxInputTokens}
-                            onFocus={handleAdvancedFieldFocus}
-                          />
-                          <ProviderModelNumberField
-                            disabled={isSubmitting}
-                            errorMessage={fieldErrors.maxOutputTokens}
-                            label={t('settings.provider.models.addMaxOutputTokensLabel')}
-                            placeholder={
-                              baseline?.maxOutputTokens?.toString() ??
-                              t('settings.provider.models.addMaxOutputTokensPlaceholder')
-                            }
-                            value={formState.maxOutputTokens}
-                            onChangeText={updateMaxOutputTokens}
-                            onFocus={handleAdvancedFieldFocus}
-                          />
-                        </>
-                      ) : null}
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.maxInputTokens}
+                        label={t('settings.provider.models.addMaxInputTokensLabel')}
+                        placeholder={
+                          baseline?.maxInputTokens?.toString() ??
+                          t('settings.provider.models.addMaxInputTokensPlaceholder')
+                        }
+                        value={formState.maxInputTokens}
+                        onChangeText={updateMaxInputTokens}
+                        onFocus={handleAdvancedFieldFocus}
+                      />
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.maxOutputTokens}
+                        label={t('settings.provider.models.addMaxOutputTokensLabel')}
+                        placeholder={
+                          baseline?.maxOutputTokens?.toString() ??
+                          t('settings.provider.models.addMaxOutputTokensPlaceholder')
+                        }
+                        value={formState.maxOutputTokens}
+                        onChangeText={updateMaxOutputTokens}
+                        onFocus={handleAdvancedFieldFocus}
+                      />
                     </>
                   ) : null}
                 </View>
@@ -393,29 +330,8 @@ export function ProviderModelManualForm({
   );
 }
 
-function ProviderModelAddSection({
-  children,
-  description,
-  title,
-}: {
-  children: ReactNode;
-  description?: string;
-  title: string;
-}) {
-  return (
-    <View className="gap-3">
-      <View className="gap-1">
-        <Text className="font-medium text-base text-foreground">{title}</Text>
-        {description ? <Text className="text-muted-foreground text-xs">{description}</Text> : null}
-      </View>
-      {children}
-    </View>
-  );
-}
-
 function ProviderModelAddTextField({
   accessibilityLabel,
-  description,
   errorMessage,
   isDisabled,
   label,
@@ -424,10 +340,8 @@ function ProviderModelAddTextField({
   placeholder,
   required = false,
   value,
-  textInputProps,
 }: {
   accessibilityLabel: string;
-  description?: string;
   errorMessage?: string;
   isDisabled: boolean;
   label: string;
@@ -435,7 +349,6 @@ function ProviderModelAddTextField({
   onFocus?: TextInputProps['onFocus'];
   placeholder: string;
   required?: boolean;
-  textInputProps?: Pick<TextInputProps, 'inputMode' | 'keyboardType'>;
   value: string;
 }) {
   return (
@@ -450,9 +363,7 @@ function ProviderModelAddTextField({
         placeholder={placeholder}
         returnKeyType="done"
         value={value}
-        {...textInputProps}
       />
-      {description ? <TextField.Description>{description}</TextField.Description> : null}
       <TextField.Error>{errorMessage}</TextField.Error>
     </TextField>
   );

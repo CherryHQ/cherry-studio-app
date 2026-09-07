@@ -1,6 +1,6 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
-import { type CreateModelDto, MODELS_BATCH_MAX_ITEMS } from '@/shared/data/api/schemas/models';
+import type { CreateModelDto } from '@/shared/data/api/schemas/models';
 import {
   createUniqueModelId,
   type EndpointType,
@@ -20,7 +20,6 @@ export type ProviderModelAddFormState = {
   capabilities: Partial<Record<ProviderModelAddCapability, boolean>>;
   contextWindow: string;
   endpointType: ProviderModelAddEndpoint;
-  group: string;
   maxInputTokens: string;
   maxOutputTokens: string;
   modelId: string;
@@ -29,11 +28,8 @@ export type ProviderModelAddFormState = {
 
 type NumberField = 'contextWindow' | 'maxInputTokens' | 'maxOutputTokens';
 export type ProviderModelAddBuildResult = {
-  duplicateIds: string[];
-  invalidIds: string[];
-  endpointErrorIds: string[];
   errors: Partial<Record<NumberField | 'modelId' | 'endpointType', string>>;
-  inputs: CreateModelDto[];
+  input?: CreateModelDto;
 };
 
 export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
@@ -58,7 +54,6 @@ export function createInitialProviderModelAddFormState(): ProviderModelAddFormSt
     capabilities: {},
     contextWindow: '',
     endpointType: 'auto',
-    group: '',
     maxInputTokens: '',
     maxOutputTokens: '',
     modelId: '',
@@ -90,16 +85,16 @@ export function getDefaultProviderModelGroupName(id: string, providerId?: string
   return str;
 }
 
-export function splitProviderModelIds(rawModelId: string): string[] {
-  return rawModelId
-    .replaceAll('，', ',')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-export function isProviderModelAddIdValid(providerId: string, modelId: string): boolean {
-  return UniqueModelIdSchema.safeParse(`${providerId}::${modelId}`).success;
+export function getProviderModelAddIdError(
+  providerId: string,
+  modelId: string,
+): string | undefined {
+  if (!modelId) return 'settings.provider.models.addModelIdRequired';
+  if (/[,，\r\n]/.test(modelId)) return 'settings.provider.models.addSingleModelOnly';
+  if (!UniqueModelIdSchema.safeParse(`${providerId}::${modelId}`).success) {
+    return 'settings.provider.models.addInvalidId';
+  }
+  return undefined;
 }
 
 export function getProviderChatEndpointTypes(
@@ -148,123 +143,79 @@ export function getProviderModelAddEndpointOptions(provider: Provider) {
   });
 }
 
-export function getProviderModelAddCapabilities(
-  form: ProviderModelAddFormState,
-  baseline?: Model,
-  isBatch = false,
-) {
+export function getProviderModelAddCapabilities(form: ProviderModelAddFormState, baseline?: Model) {
   return {
-    vision: isBatch
-      ? form.capabilities.vision === true
-      : (form.capabilities.vision ??
-        baseline?.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ??
-        false),
+    vision:
+      form.capabilities.vision ??
+      baseline?.capabilities.includes(MODEL_CAPABILITY.IMAGE_RECOGNITION) ??
+      false,
     drawing:
       isProviderModelImageEndpoint(form.endpointType) ||
-      (!isBatch &&
-        form.endpointType === 'auto' &&
+      (form.endpointType === 'auto' &&
         baseline?.endpointTypes?.some(isProviderModelImageEndpoint)) ||
-      (isBatch
-        ? form.capabilities.drawing === true
-        : (form.capabilities.drawing ?? (baseline ? isImageGenerationModel(baseline) : false))),
+      (form.capabilities.drawing ?? (baseline ? isImageGenerationModel(baseline) : false)),
   };
 }
 
-export function buildProviderModelAddInputs({
+export function buildProviderModelAddInput({
   existingModels,
   formState,
   provider,
-  resolvedModels,
+  baseline,
 }: {
   existingModels: readonly Model[];
   formState: ProviderModelAddFormState;
   provider: Provider;
-  resolvedModels: readonly Model[];
+  baseline?: Model;
 }): ProviderModelAddBuildResult {
-  const result: ProviderModelAddBuildResult = {
-    duplicateIds: [],
-    invalidIds: [],
-    endpointErrorIds: [],
-    errors: {},
-    inputs: [],
-  };
-  const modelIds = splitProviderModelIds(formState.modelId);
-  const isBatch = modelIds.length > 1;
-  const seenIds = new Set(existingModels.map((model) => model.id));
-  const baselines = new Map(resolvedModels.map((model) => [model.modelId, model]));
-
-  for (const modelId of modelIds) {
-    if (!isProviderModelAddIdValid(provider.id, modelId)) {
-      result.invalidIds.push(modelId);
-      continue;
-    }
-    const id = createUniqueModelId(provider.id, modelId);
-    if (seenIds.has(id)) {
-      result.duplicateIds.push(modelId);
-      continue;
-    }
-    seenIds.add(id);
-    const baseline = baselines.get(modelId);
-    const { fields, endpointError, drawing } = buildCapabilityFields(
-      formState,
-      provider,
-      baseline,
-      isBatch,
-    );
-    if (endpointError) {
-      result.endpointErrorIds.push(modelId);
-      result.errors.endpointType = endpointError;
-    }
-    const input: CreateModelDto = { modelId, providerId: provider.id, ...fields };
-    // Omitting catalog metadata keeps it live; custom models retain useful local defaults.
-    if (!isBatch && formState.name.trim()) input.name = formState.name.trim();
-    if (!isBatch && formState.group.trim()) input.group = formState.group.trim();
-    if (!baseline?.presetModelId) {
-      input.name ??= modelId;
-      input.group ??= getDefaultProviderModelGroupName(modelId, provider.id);
-    }
-    if (!isBatch && !drawing) {
-      for (const field of ['contextWindow', 'maxInputTokens', 'maxOutputTokens'] as const) {
-        const value = formState[field].trim();
-        if (!value) continue;
-        if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) {
-          result.errors[field] = 'settings.provider.models.addPositiveInteger';
-        } else input[field] = Number(value);
-      }
-      const context =
-        input.contextWindow ?? baseline?.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
-      const output =
-        input.maxOutputTokens ?? baseline?.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
-      const maxInput = input.maxInputTokens ?? baseline?.maxInputTokens;
-      if (output >= context)
-        result.errors.maxOutputTokens = 'settings.provider.models.addOutputLimitError';
-      if (maxInput !== undefined && maxInput > context)
-        result.errors.maxInputTokens = 'settings.provider.models.addInputLimitError';
-    }
-    result.inputs.push(input);
+  const errors: ProviderModelAddBuildResult['errors'] = {};
+  const modelId = formState.modelId.trim();
+  const modelIdError = getProviderModelAddIdError(provider.id, modelId);
+  if (modelIdError) return { errors: { modelId: modelIdError } };
+  const id = createUniqueModelId(provider.id, modelId);
+  if (existingModels.some((model) => model.id === id)) {
+    return { errors: { modelId: 'settings.provider.models.addDuplicate' } };
   }
-  if (modelIds.length === 0) result.errors.modelId = 'settings.provider.models.addModelIdRequired';
-  else if (result.invalidIds.length > 0)
-    result.errors.modelId = 'settings.provider.models.addInvalidIds';
-  else if (result.inputs.length > MODELS_BATCH_MAX_ITEMS)
-    result.errors.modelId = 'settings.provider.models.addBatchLimit';
-  return result;
+
+  const { fields, endpointError, drawing } = buildCapabilityFields(formState, provider, baseline);
+  if (endpointError) errors.endpointType = endpointError;
+  const input: CreateModelDto = { modelId, providerId: provider.id, ...fields };
+  // Omitting catalog metadata keeps it live; custom models retain useful local defaults.
+  if (formState.name.trim()) input.name = formState.name.trim();
+  if (!baseline?.presetModelId) {
+    input.name ??= modelId;
+    input.group = getDefaultProviderModelGroupName(modelId, provider.id);
+  }
+  if (!drawing) {
+    for (const field of ['contextWindow', 'maxInputTokens', 'maxOutputTokens'] as const) {
+      const value = formState[field].trim();
+      if (!value) continue;
+      if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) <= 0) {
+        errors[field] = 'settings.provider.models.addPositiveInteger';
+      } else input[field] = Number(value);
+    }
+    const context = input.contextWindow ?? baseline?.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
+    const output =
+      input.maxOutputTokens ?? baseline?.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
+    const maxInput = input.maxInputTokens ?? baseline?.maxInputTokens;
+    if (output >= context) errors.maxOutputTokens = 'settings.provider.models.addOutputLimitError';
+    if (maxInput !== undefined && maxInput > context)
+      errors.maxInputTokens = 'settings.provider.models.addInputLimitError';
+  }
+  return Object.keys(errors).length > 0 ? { errors } : { errors, input };
 }
 
 function buildCapabilityFields(
   form: ProviderModelAddFormState,
   provider: Provider,
   baseline: Model | undefined,
-  isBatch: boolean,
 ) {
   const fields: Pick<
     CreateModelDto,
     'capabilities' | 'endpointTypes' | 'inputModalities' | 'outputModalities'
   > = {};
-  const visionOverride =
-    isBatch && form.capabilities.vision !== true ? undefined : form.capabilities.vision;
-  const drawingOverride =
-    isBatch && form.capabilities.drawing !== true ? undefined : form.capabilities.drawing;
+  const visionOverride = form.capabilities.vision;
+  const drawingOverride = form.capabilities.drawing;
   const inheritedDrawing = baseline ? isImageGenerationModel(baseline) : false;
   const explicitEndpoint = form.endpointType === 'auto' ? undefined : form.endpointType;
   const endpoints = explicitEndpoint ? [explicitEndpoint] : baseline?.endpointTypes;
