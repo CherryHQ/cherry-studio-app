@@ -1,9 +1,8 @@
-import { v7 as uuidv7 } from 'uuid';
-
 import type {
   AgentApprovalView,
   AgentEvent,
   AgentInputPart,
+  AgentInputQueue,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -22,6 +21,7 @@ export type AgentSessionChatState = {
   enteringUserMessageId?: string;
   error?: Error;
   hasHistoryBeforeActiveTurn?: boolean;
+  inputQueue: AgentInputQueue;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
   sessionId: string;
@@ -57,6 +57,7 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
 function createSessionState(sessionId: string): AgentSessionChatState {
   return {
     activeTurn: null,
+    inputQueue: { isPaused: false, inputs: [] },
     liveMessages: [],
     pendingApprovals: [],
     sessionId,
@@ -248,14 +249,13 @@ export class AgentSessionChatClient {
     parts: AgentInputPart[],
     overrides: Pick<
       AgentSubmitMessageInput,
-      'modelId' | 'reasoningEffort' | 'mode' | 'targetTurnId'
-    > & { inputId?: string } = {},
+      'inputId' | 'modelId' | 'reasoningEffort' | 'mode' | 'targetTurnId'
+    >,
   ) {
-    const inputId = overrides.inputId ?? uuidv7();
     const entry = this.getEntry(sessionId);
     await this.observe(sessionId);
     try {
-      return await this.protocol.submitMessage({ parts, sessionId, ...overrides, inputId });
+      return await this.protocol.submitMessage({ parts, sessionId, ...overrides });
     } finally {
       // Non-React callers may submit without ever installing a subscriber. The
       // Host snapshot makes a later observation lossless, so do not retain an
@@ -295,6 +295,30 @@ export class AgentSessionChatClient {
     if (changed) {
       this.commitLiveMessages(entry);
     }
+  }
+
+  editQueuedInput(input: Parameters<AgentProtocol['editQueuedInput']>[0]) {
+    return this.protocol.editQueuedInput(input);
+  }
+
+  removeQueuedInput(input: Parameters<AgentProtocol['removeQueuedInput']>[0]) {
+    return this.protocol.removeQueuedInput(input);
+  }
+
+  reorderQueuedInputs(input: Parameters<AgentProtocol['reorderQueuedInputs']>[0]) {
+    return this.protocol.reorderQueuedInputs(input);
+  }
+
+  promoteQueuedInput(input: Parameters<AgentProtocol['promoteQueuedInput']>[0]) {
+    return this.protocol.promoteQueuedInput(input);
+  }
+
+  retryQueuedInput(input: Parameters<AgentProtocol['retryQueuedInput']>[0]) {
+    return this.protocol.retryQueuedInput(input);
+  }
+
+  pauseInputQueue(input: Parameters<AgentProtocol['pauseInputQueue']>[0]) {
+    return this.protocol.pauseInputQueue(input);
   }
 
   async cancelTurn(sessionId: string): Promise<void> {
@@ -374,6 +398,7 @@ export class AgentSessionChatClient {
         ? { enteringUserMessageId: snapshot.activeUserMessage.id }
         : {}),
       hasHistoryBeforeActiveTurn: snapshot.hasHistoryBeforeActiveTurn ?? undefined,
+      inputQueue: snapshot.inputQueue,
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
       sessionId: snapshot.session.id,
@@ -384,6 +409,11 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'queue.updated':
+        if (event.sessionId === entry.state.sessionId) {
+          this.updateState(entry, { ...entry.state, inputQueue: event.queue });
+        }
+        return;
       case 'session.updated':
         this.updateState(entry, {
           ...entry.state,

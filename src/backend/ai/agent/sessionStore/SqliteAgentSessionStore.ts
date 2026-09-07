@@ -147,14 +147,15 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   async reorderInputs(sessionId: string, inputIds: string[]): Promise<boolean> {
     return this.dbService.withWriteTx(async (tx) => {
       const rows = await tx
-        .select({ id: agentSessionInputTable.id })
+        .select({ id: agentSessionInputTable.id, position: agentSessionInputTable.position })
         .from(agentSessionInputTable)
         .where(
           and(
             eq(agentSessionInputTable.sessionId, sessionId),
             inArray(agentSessionInputTable.status, ['queued', 'interrupted']),
           ),
-        );
+        )
+        .orderBy(agentSessionInputTable.position, agentSessionInputTable.id);
       const requested = new Set(inputIds);
       if (
         requested.size !== inputIds.length ||
@@ -163,10 +164,11 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       ) {
         return false;
       }
-      for (const [position, id] of inputIds.entries()) {
+      // Reorder eligible slots without moving an in-flight steering input.
+      for (const [index, id] of inputIds.entries()) {
         await tx
           .update(agentSessionInputTable)
-          .set({ position })
+          .set({ position: rows[index]!.position })
           .where(eq(agentSessionInputTable.id, id));
       }
       return true;

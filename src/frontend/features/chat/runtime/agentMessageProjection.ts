@@ -290,10 +290,20 @@ export function mergeAgentMessageViews(
   const merged = persisted.map((message) => liveById.get(message.id) ?? message);
   const persistedIds = new Set(persisted.map((message) => message.id));
 
+  let hasMissingLiveMessages = false;
   for (const message of live) {
     if (!persistedIds.has(message.id)) {
       merged.push(message);
+      hasMissingLiveMessages = true;
     }
+  }
+  // A persisted page may already contain a later steering segment while an
+  // earlier segment still lives in the observation overlay.
+  if (hasMissingLiveMessages) {
+    merged.sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+    );
   }
 
   return merged;

@@ -89,7 +89,10 @@ describe('ChatProvider Draft handoff', () => {
     });
 
     await act(async () => {
-      await currentControls().sendMessage({ parts: [{ text: 'Hello', type: 'text' }] });
+      await currentControls().sendMessage({
+        inputId: 'draft-1',
+        parts: [{ text: 'Hello', type: 'text' }],
+      });
     });
 
     expect(mockSetParams).toHaveBeenCalledWith({ agentId: undefined, sessionId: 'session-1' });

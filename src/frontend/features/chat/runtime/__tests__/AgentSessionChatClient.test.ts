@@ -96,6 +96,32 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
+  test('installs queue snapshots and isolates queue updates from the transcript', async () => {
+    let emit!: (event: AgentEvent) => void;
+    const initial = snapshot();
+    initial.inputQueue = { isPaused: true, inputs: [] };
+    const onTranscriptChanged = jest.fn();
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      emit = listener;
+      return { snapshot: initial, unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    const unsubscribe = client.subscribe('session-1', () => {});
+    await client.observe('session-1');
+    expect(client.getState('session-1').inputQueue).toBe(initial.inputQueue);
+    const messages = client.getState('session-1').liveMessages;
+    onTranscriptChanged.mockClear();
+    const queue = { isPaused: false, inputs: [] };
+    emit({ type: 'queue.updated', sessionId: 'another-session', queue });
+    expect(client.getState('session-1').inputQueue).toBe(initial.inputQueue);
+    emit({ type: 'queue.updated', sessionId: 'session-1', queue });
+    expect(client.getState('session-1').inputQueue).toBe(queue);
+    expect(client.getState('session-1').liveMessages).toBe(messages);
+    expect(onTranscriptChanged).not.toHaveBeenCalled();
+    expect(protocol.submitMessage).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   test('starts a durable Session without leaving an ownerless observation before navigation', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
@@ -135,12 +161,13 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
 
     await client.submitMessage('session-1', [{ text: 'Hello', type: 'text' }], {
+      inputId: 'submission-1',
       modelId: 'provider::model-b',
       reasoningEffort: 'high',
     });
 
     expect(protocol.submitMessage).toHaveBeenCalledWith({
-      inputId: expect.any(String),
+      inputId: 'submission-1',
       modelId: 'provider::model-b',
       parts: [{ text: 'Hello', type: 'text' }],
       reasoningEffort: 'high',

@@ -27,6 +27,7 @@ const CODE_REASONS: Readonly<Partial<Record<string, AgentFailureReason>>> = {
   mcp_error: 'mcp',
   missing_terminal_event: 'internal',
   model_not_found: 'model_not_found',
+  output_token_limit: 'output_limit',
   permission_denied: 'permission',
   provider_unavailable: 'provider_unavailable',
   rate_limit_error: 'rate_limit',

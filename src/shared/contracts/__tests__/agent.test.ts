@@ -47,6 +47,14 @@ describe('Agent tool and managed-file contracts', () => {
     const redirected = { inputId: 'input-1', disposition: 'redirected', turnId: 'turn-1' };
     expect(AgentSubmitMessageResultSchema.parse(roundTrip(redirected))).toEqual(redirected);
     expect(
+      AgentSubmitMessageResultSchema.safeParse({ inputId: 'input-1', disposition: 'started' })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageResultSchema.safeParse({ inputId: 'input-1', disposition: 'redirected' })
+        .success,
+    ).toBe(false);
+    expect(
       AgentInputQueueSchema.safeParse({
         ...queue,
         inputs: [{ ...queue.inputs[0], status: 'running' }],

@@ -44,13 +44,23 @@ export const AgentInputQueueSchema = z.strictObject({
 });
 export type AgentInputQueue = z.infer<typeof AgentInputQueueSchema>;
 
-export const AgentSubmitMessageResultSchema = z.strictObject({
-  inputId: z.string().min(1),
-  /** Redirected acknowledges delivery to the Runtime, not model consumption. */
-  disposition: z.enum(['started', 'queued', 'redirected']),
-  turnId: z.string().min(1).optional(),
-  userMessageId: z.string().min(1).optional(),
-  assistantMessageId: z.string().min(1).optional(),
-  reason: AgentInputQueueReasonSchema.optional(),
-});
+export const AgentSubmitMessageResultSchema = z
+  .strictObject({
+    inputId: z.string().min(1),
+    /** Redirected acknowledges delivery to the Runtime, not model consumption. */
+    disposition: z.enum(['started', 'queued', 'redirected']),
+    turnId: z.string().min(1).optional(),
+    userMessageId: z.string().min(1).optional(),
+    assistantMessageId: z.string().min(1).optional(),
+    reason: AgentInputQueueReasonSchema.optional(),
+  })
+  .refine(
+    (result) =>
+      result.disposition !== 'started' ||
+      Boolean(result.turnId && result.userMessageId && result.assistantMessageId),
+    { message: 'Started submissions require turn and message identities.' },
+  )
+  .refine((result) => result.disposition !== 'redirected' || Boolean(result.turnId), {
+    message: 'Redirected submissions require their target turn identity.',
+  });
 export type AgentSubmitMessageResult = z.infer<typeof AgentSubmitMessageResultSchema>;

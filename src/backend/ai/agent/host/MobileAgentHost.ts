@@ -190,7 +190,7 @@ export type MobileAgentHostPorts = {
 
 /**
  * The Host owns the Turn projection (agent-persistence.md): the store persists
- * messages only, live turn state exists here, and the terminal turn view is
+ * messages and input receipts, live turn state exists here, and the terminal turn view is
  * derived from the settled assistant message.
  */
 type ActiveTurnState = {
@@ -552,15 +552,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private async acceptInput(input: AgentSubmitMessageInput): Promise<AgentSubmitMessageResult> {
-    const existing = await this.store.getInput(input.inputId);
+    const signal = this.lifecycleAbortController.signal;
+    const existing = await raceAbort(this.store.getInput(input.inputId), signal);
     if (existing) {
       if (existing.sessionId !== input.sessionId || existing.status === 'removed') {
         fail('INPUT_UNAVAILABLE', 'This input identity is no longer available in this Session.');
       }
       return submissionResult(existing);
     }
-    const session = await this.requireSession(input.sessionId);
-    const configuredAgent = await this.requireAgent(session.agentId);
+    const session = await raceAbort(this.requireSession(input.sessionId), signal);
+    const configuredAgent = await raceAbort(this.requireAgent(session.agentId), signal);
     const agent = applyTurnOverrides(configuredAgent, input);
     if (
       !this.runtime.descriptor.capabilities.attachments &&
@@ -580,7 +581,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           ? 'none'
           : (agent.options.reasoningEffort ?? 'default'),
     };
-    const queue = await this.store.getInputQueue(input.sessionId);
+    const queue = await raceAbort(this.store.getInputQueue(input.sessionId), signal);
     const active = this.activeTurns.get(input.sessionId);
     if (!active && !this.runningTurnsBySession.has(input.sessionId) && queue.inputs.length === 0) {
       return this.startInput(queued, true);

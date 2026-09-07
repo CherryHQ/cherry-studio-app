@@ -121,6 +121,8 @@ export type ComposerInputProps = {
 };
 
 export type ComposerSendProps = {
+  /** Keep sending available when the caller composes a separate stop control. */
+  action?: 'auto' | 'send';
   testID?: string;
 };
 

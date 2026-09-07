@@ -574,6 +574,9 @@ only when a conditional row should animate the surface height:
 </Composer.Collapsible>
 ```
 
+`Composer.Send action="send"` remains a send action while streaming when a caller composes a
+separate stop control. The default action still switches to Stop.
+
 The package deliberately ships no attachment strip; callers compose their own row and pass its
 presence through `canSend`. `Composer.Menu` is private to the composer and supports nested content:
 use `closeOnPress={false}` for an item that replaces the panel contents. `width` is a floor, and

@@ -1650,6 +1650,114 @@ describe('MobileAgentHost', () => {
     finish.resolve();
   });
 
+  test.each(['turn_timeout', 'output_token_limit', 'provider_error'])(
+    'pauses durable follow-ups after %s until an explicit resume',
+    async (code) => {
+      const finish = createDeferred();
+      let executionCount = 0;
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+        .script(async (controller) => {
+          executionCount += 1;
+          await finish.promise;
+          controller.emit({
+            type: 'failed',
+            error: { code, message: 'Stopped early', retryable: false },
+          });
+        })
+        .script(() => {
+          executionCount += 1;
+        });
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        inputId: 'initial',
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Start' }],
+      });
+      await host.submitMessage({
+        inputId: 'next',
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      finish.resolve();
+      await waitFor(() => terminalTurnEvent(events) !== undefined, 'failed execution');
+      const observed = await host.observeSession(session.id, () => {});
+      expect(observed.snapshot.inputQueue).toMatchObject({
+        isPaused: true,
+        inputs: [{ id: 'next', status: 'queued' }],
+      });
+      expect(executionCount).toBe(1);
+      await host.pauseInputQueue({ sessionId: session.id, isPaused: false });
+      await waitFor(() => executionCount === 2, 'explicit queue resume');
+      await host._doStop();
+    },
+  );
+
+  test('accepts steering during approval but consumes it only after an explicit decision', async () => {
+    const finish = createDeferred();
+    let consumed = false;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      const approval = {
+        id: 'approval-steer',
+        turnId: controller.turnId,
+        toolCallId: 'call-steer',
+        toolRef: TOOL_REF,
+        displayName: TOOL_DISPLAY_NAME,
+        input: {},
+        status: 'pending' as const,
+      };
+      controller.emit({ type: 'approval.requested', approval });
+      const decision = await controller.waitForApproval(approval.id);
+      controller.emit({
+        type: 'approval.resolved',
+        approval: {
+          ...approval,
+          status: decision === 'approve' ? 'approved' : 'denied',
+        },
+      });
+      expect((await controller.consumeSteering())?.inputId).toBe('steer-during-approval');
+      consumed = true;
+      await finish.promise;
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const started = await host.submitMessage({
+      inputId: 'initial',
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Start' }],
+    });
+    await waitFor(() => events.some((event) => event.type === 'approval.requested'), 'approval');
+    expect(
+      await host.submitMessage({
+        inputId: 'steer-during-approval',
+        sessionId: session.id,
+        mode: 'steer',
+        targetTurnId: started.turnId,
+        parts: [{ type: 'text', text: 'Adjust' }],
+      }),
+    ).toMatchObject({ disposition: 'redirected' });
+    const observed = await host.observeSession(session.id, () => {});
+    expect(observed.snapshot.pendingApprovals).toHaveLength(1);
+    expect(observed.snapshot.inputQueue.inputs[0].status).toBe('steering');
+    expect(consumed).toBe(false);
+    expect(await store.listMessages(session.id)).toHaveLength(2);
+    await host.respondApproval({
+      sessionId: session.id,
+      turnId: started.turnId!,
+      approvalId: 'approval-steer',
+      decision: 'deny',
+    });
+    await waitFor(() => consumed, 'steering after the denied tool');
+    expect(await store.listMessages(session.id)).toHaveLength(4);
+    expect(backgroundReplyTurn.finish).not.toHaveBeenCalled();
+    finish.resolve();
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'steered completion');
+  });
+
   test('Stop then immediate Send waits for the cancelled transcript write before starting again', async () => {
     const firstStarted = createDeferred();
     const writingTerminal = createDeferred();

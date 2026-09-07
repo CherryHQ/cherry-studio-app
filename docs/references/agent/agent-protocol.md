@@ -329,8 +329,8 @@ persists only its requested target name and normalized error, never unresolved p
 `input-streaming` is a live lifecycle signal and may omit `input`; consumers must not interpret it as
 an executable call until the part advances to `input-available`.
 
-`usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
-the turn and commits the final value together with the terminal message state, so
+`usage` is populated only on assistant messages. The Host accumulates Runtime usage reports within
+each assistant segment and commits that value when the segment finalizes, so
 `message.finalized` and later transcript reads both carry it. While the message is streaming,
 `usage` is `null`; there is no dedicated usage event.
 
@@ -481,6 +481,8 @@ type AgentEvent =
   | { type: 'message.finalized'; message: AgentMessageView }
   | { type: 'approval.requested'; approval: AgentApprovalView }
   | { type: 'approval.resolved'; approval: AgentApprovalView }
+  | { type: 'session.updated'; session: AgentSessionView }
+  | { type: 'queue.updated'; sessionId: string; queue: AgentInputQueue }
 
 type AgentMessageDelta =
   | { op: 'part.add'; index: number; part: AgentMessagePart }
@@ -506,6 +508,7 @@ type AgentSessionSnapshot = {
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
   pendingApprovals: AgentApprovalView[]
+  inputQueue: AgentInputQueue
 }
 ```
 
@@ -531,6 +534,7 @@ type AgentErrorView = {
     | 'SESSION_NOT_FOUND'
     | 'MESSAGE_NOT_FOUND'
     | 'SESSION_BUSY'
+    | 'INPUT_UNAVAILABLE'
     | 'CAPABILITY_UNSUPPORTED'
     | 'ATTACHMENT_INVALID'
     | 'ATTACHMENT_UNAVAILABLE'
@@ -564,6 +568,7 @@ type AgentFailureSnapshot = {
     | 'timeout'
     | 'invalid_input'
     | 'tool_limit'
+    | 'output_limit'
     | 'tool_failed'
     | 'mcp'
     | 'parse'

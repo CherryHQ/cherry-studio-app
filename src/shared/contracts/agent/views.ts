@@ -164,6 +164,7 @@ export const AgentFailureReasonSchema = z.enum([
   'timeout',
   'invalid_input',
   'tool_limit',
+  'output_limit',
   'tool_failed',
   'mcp',
   'parse',

@@ -14,7 +14,17 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   cannot reuse one Session's draft in another.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
-- While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
+- While a turn is active, Send remains available and a separate Stop action calls `cancelTurn`.
+  Stop pauses automatic queue drain. A busy submission can queue for the next reply or steer the
+  explicitly selected current turn; only text with matching model/reasoning settings can steer.
+- Submission identity belongs to the composer attempt. Retrying a restored unchanged payload
+  reuses its `inputId`; accepting it clears the draft even when it is queued or awaiting steering.
+- The queue entry observes Host snapshots/events through a leaf selector. Its sheet supports pause,
+  resume, text edits that preserve attachments, remove, move earlier/later, and promotion of the
+  same queued identity to steering. Interrupted inputs require explicit requeue, then resume.
+  Queue edits do not create transcript rows, and the frontend never drains the queue.
+- An approval sheet may be temporarily dismissed to compose inputs. Its reminder reopens the
+  pending request; only an explicit approve/deny decision releases the tool's approval gate.
 - When empty and unfocused, the composer is one row with the ＋ menu and send action always
   reachable. Focus, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and
@@ -48,4 +58,5 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
+- A fresh observer reconstructs the pending queue after navigation. Restart restores queues paused;
+  uncertain dispatch or steering requires review before retrying.

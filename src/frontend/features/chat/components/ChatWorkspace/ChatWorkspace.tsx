@@ -1,6 +1,6 @@
-import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +59,7 @@ export function ChatWorkspace({
   const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
   const live = useAgentChatSession(sessionId);
   const client = useAgentChatActions();
+  const [deferredApprovalId, setDeferredApprovalId] = useState<string>();
   const headerHeight = useHeaderHeight();
   const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -217,10 +218,20 @@ export function ChatWorkspace({
         />
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
+      {pendingApprovals[0] && deferredApprovalId === pendingApprovals[0].approvalId ? (
+        <View className="absolute right-4 left-4" style={{ bottom: contentBottomInset }}>
+          <Button variant="secondary" onPress={() => setDeferredApprovalId(undefined)}>
+            <Button.Label>{t('chat.tool.approval.reviewPending')}</Button.Label>
+          </Button>
+        </View>
+      ) : null}
       <ToolApprovalSheet
         key={`tool-approval-${sessionId}`}
         approvals={pendingApprovals}
-        isOpen={pendingApprovals.length > 0}
+        isOpen={
+          pendingApprovals.length > 0 && deferredApprovalId !== pendingApprovals[0]?.approvalId
+        }
+        onClose={() => setDeferredApprovalId(pendingApprovals[0]?.approvalId)}
         onCancel={handleApprovalCancel}
         onRespond={handleApprovalRespond}
       />

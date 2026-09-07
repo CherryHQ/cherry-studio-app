@@ -271,6 +271,36 @@ describe.each([
     expect(await store.getInput('input-2')).toBeNull();
   });
 
+  test('reorders queued slots without moving an undelivered steering input', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    for (const id of ['first', 'steering', 'last']) {
+      await store.enqueueInput({
+        id,
+        sessionId: session.id,
+        mode: 'follow-up',
+        parts: [{ type: 'text', text: id }],
+      });
+    }
+    await store.updateInput({
+      id: 'steering',
+      sessionId: session.id,
+      expectedStatus: ['queued'],
+      patch: { status: 'steering' },
+    });
+    expect(await store.reorderInputs(session.id, ['last', 'first'])).toBe(true);
+    await store.updateInput({
+      id: 'steering',
+      sessionId: session.id,
+      expectedStatus: ['steering'],
+      patch: { status: 'queued', reason: 'undelivered' },
+    });
+    expect((await store.getInputQueue(session.id)).inputs.map(({ id }) => id)).toEqual([
+      'last',
+      'steering',
+      'first',
+    ]);
+  });
+
   test('recovers queued inputs paused and ambiguous dispatches interrupted without making messages', async () => {
     const session = await harness.createEmptySession({ agentId });
     for (const id of ['queued', 'dispatching', 'steering']) {

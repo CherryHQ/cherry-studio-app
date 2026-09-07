@@ -27,6 +27,24 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('orders older live steering segments before a persisted later segment', () => {
+    const user1 = message('01', { role: 'user', status: 'success' });
+    const assistant1 = message('02', { status: 'success' });
+    const user2 = message('03', { role: 'user', status: 'success' });
+    const assistant2 = message('04');
+    const nextTurn = message('05', { turnId: 'turn-2', createdAt: '2026-08-25T00:00:01.000Z' });
+
+    expect(
+      mergeAgentMessageViews([user2, assistant2, nextTurn], [user1, assistant1, assistant2]),
+    ).toEqual([user1, assistant1, user2, assistant2, nextTurn]);
+    expect(mergeAgentMessageViews([user1, user2, assistant2], [assistant1, assistant2])).toEqual([
+      user1,
+      assistant1,
+      user2,
+      assistant2,
+    ]);
+  });
+
   test('projects presentation metadata captured for the individual message', () => {
     const modelId = createUniqueModelId('openai', 'gpt-5');
     const item = toAgentMessageListItem(

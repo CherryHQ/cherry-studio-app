@@ -231,11 +231,13 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async reorderInputs(sessionId: string, inputIds: string[]): Promise<boolean> {
-    const queued = [...this.inputs.values()].filter(
-      (input) =>
-        input.sessionId === sessionId &&
-        (input.status === 'queued' || input.status === 'interrupted'),
-    );
+    const queued = [...this.inputs.values()]
+      .filter(
+        (input) =>
+          input.sessionId === sessionId &&
+          (input.status === 'queued' || input.status === 'interrupted'),
+      )
+      .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
     const requested = new Set(inputIds);
     if (
       requested.size !== inputIds.length ||
@@ -244,9 +246,9 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     ) {
       return false;
     }
-    for (const [position, id] of inputIds.entries()) {
+    for (const [index, id] of inputIds.entries()) {
       const input = this.inputs.get(id)!;
-      this.inputs.set(id, { ...input, position, updatedAt: nowIso() });
+      this.inputs.set(id, { ...input, position: queued[index]!.position, updatedAt: nowIso() });
     }
     return true;
   }
