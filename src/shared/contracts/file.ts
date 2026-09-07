@@ -20,6 +20,8 @@ export type CreateInternalEntryInput = {
 };
 
 export interface FileModule {
+  /** Subscribe to committed managed-file creates, rewrites, deletions, and discards. */
+  subscribeChanges(listener: () => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
   /** Hard-delete: removes the entry row and its bytes (composer cancel-upload). */

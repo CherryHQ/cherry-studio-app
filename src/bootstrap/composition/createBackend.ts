@@ -191,6 +191,7 @@ export function createBackend(
         generatePreviewUri: services.fileContent.generatePreviewUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
+        subscribeChanges: services.fileContent.subscribeChanges,
       },
       mcp: services.mcpRuntime,
       models,

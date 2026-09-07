@@ -38,6 +38,8 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   and batched previews with the library screen. Selection stays local until Add is pressed; the
   action appears only for newly selected, available attachments. Already attached files are marked
   and cannot be added twice. Close discards the selection. Search is not offered.
+  The app-wide file-change subscription keeps these shared pages current; opening the picker
+  reuses fresh pages without forcing another fetch.
 - Upload files closes the library picker and presents the system document picker from chat. Each
   chosen file appears in the composer's attachment strip at once with its upload progress, and is
   uploaded to the library from there: the entry belongs to the library as soon as it lands, so

@@ -9,6 +9,7 @@ src/frontend/data/
 ├── PreferenceProvider.tsx  # internal PreferenceClient injection for preference hooks
 ├── CacheService.ts         # frontend memory and persisted UI cache
 ├── QueryProvider.tsx       # React Query client and AppState focus bridge
+├── FileQueryBridge.tsx     # invalidates shared file lists after managed-file writes
 ├── ProviderRegistryQueryBridge.tsx # invalidates model projections after a registry hot-swap
 ├── queryKeys/              # one file per endpoint family plus the public registry
 ├── hooks/                  # typed Data API, preference, and cache React bindings
@@ -19,6 +20,12 @@ Resource-specific reads and mutations stay in their owning frontend hooks and ca
 `useMutation`, or `useInfiniteQuery`. Those hooks use the injected `ApiClient`; callers never select
 a persistence module. Query keys mirror endpoint families with one file each, but the data
 directory does not duplicate those endpoints as service or gateway wrappers.
+
+`FileQueryBridge` subscribes to the file workflow's committed changes for the app lifetime.
+Managed-file creation, draft rewrites, deletion, and rollback discards all notify through
+`fileStorage`; the bridge invalidates every file-list page size while retaining versioned URI and
+preview caches. Composer, painting, and Agent callers only perform their file operation. Library
+and picker readers reuse fresh pages and receive updates without owning focus or write refreshes.
 
 Preferences remain a separate client and hook family, matching Cherry Desktop. `BackendProvider`
 is reserved for multi-step workflows and long-lived sessions defined in `shared/contracts`; it is

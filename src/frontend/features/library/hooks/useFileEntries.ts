@@ -1,5 +1,4 @@
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { type ResolvedFileEntry, useFileEntryPages } from '@/frontend/hooks/file';
 import type { FileEntry } from '@/shared/data/types/file';
@@ -29,7 +28,6 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
     [filter, query.entries],
   );
 
-  useRefreshOnRefocus(query.refresh, enabled);
   useFillViewport({
     enabled,
     hasNext: query.hasNext,
@@ -81,34 +79,4 @@ function useFillViewport({
       loadNext();
     }
   }, [enabled, hasNext, isLoadingMore, loadNext, visibleCount]);
-}
-
-/**
- * Composer imports invalidate these pages themselves, but files the backend
- * writes during image generation and agent turns never pass through a DataApi
- * mutation this cache could invalidate. While the library stays mounted under
- * a screen pushed above it, the user can create those files there; regaining
- * focus is the moment it learns about them.
- */
-function useRefreshOnRefocus(refresh: () => void, enabled: boolean) {
-  const refreshRef = useRef(refresh);
-  // On mount, the query already uses fresh data or refetches invalidated pages.
-  const hasFocusedRef = useRef(false);
-
-  useEffect(() => {
-    refreshRef.current = refresh;
-  }, [refresh]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!enabled) {
-        return;
-      }
-      if (hasFocusedRef.current) {
-        refreshRef.current();
-      } else {
-        hasFocusedRef.current = true;
-      }
-    }, [enabled]),
-  );
 }

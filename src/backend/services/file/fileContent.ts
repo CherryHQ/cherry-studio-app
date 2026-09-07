@@ -23,6 +23,7 @@ import {
   getFileUri,
   resolveFileEntry,
   rewriteInternalTextEntry,
+  subscribeFileChanges,
 } from './fileStorage';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -46,6 +47,7 @@ const createTextEntryInputSchema = z.strictObject({
  * factory to inject.
  */
 export const fileContent = {
+  subscribeChanges: subscribeFileChanges,
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
    * port is import-only by contract, which is why it fixes the provenance

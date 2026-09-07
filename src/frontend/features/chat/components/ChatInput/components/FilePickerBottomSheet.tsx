@@ -37,7 +37,6 @@ export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomShe
   const { addAttachments } = useComposerActions();
   const { entries, error, isLoading, isLoadingMore, loadNext, refresh } = useFileEntryPages({
     enabled: true,
-    refetchOnMount: 'always',
   });
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<FileEntryId>>(() => new Set());
   const attachedIds = new Set(

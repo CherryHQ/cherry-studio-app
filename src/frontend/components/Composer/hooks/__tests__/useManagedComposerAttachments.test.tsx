@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -7,8 +6,7 @@ import type {
   ComposerAttachmentSource,
   ComposerInitialAttachment,
 } from '@/frontend/components/Composer/utils/composerAttachments';
-import { queryKeys } from '@/frontend/data';
-import type { FileEntryId } from '@/shared/data/types/file';
+import { type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 
 import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
 
@@ -23,7 +21,6 @@ const mockFileModule = {
 };
 
 jest.mock('@/frontend/data', () => ({
-  queryKeys: jest.requireActual('@/frontend/data/queryKeys').queryKeys,
   useBackendModule: () => mockFileModule,
 }));
 
@@ -48,75 +45,17 @@ jest.mock('react-i18next', () => ({
 
 let renderer: ReactTestRenderer | undefined;
 let snapshot: ReturnType<typeof useManagedComposerAttachments> | undefined;
-let queryClient: QueryClient;
-const filePagesKey = ['/files/entries', { limit: 30 }] as const;
 
 describe('useManagedComposerAttachments', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     snapshot = undefined;
-    queryClient = new QueryClient({
-      defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: 30_000 } },
-    });
   });
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
-    queryClient.clear();
     jest.restoreAllMocks();
-  });
-
-  it('refreshes mounted file pages after an upload without invalidating existing previews', async () => {
-    const existing = resolvedFile('00000000-0000-7000-8000-000000000040', 'existing.pdf');
-    const uploaded = resolvedFile('00000000-0000-7000-8000-000000000041', 'upload.pdf');
-    let entries = [existing.entry];
-    const filePages = { queryFn: async () => ({ items: entries }), queryKey: filePagesKey };
-    await queryClient.fetchQuery(filePages);
-    const otherPageSizeKey = ['/files/entries', { limit: 10 }] as const;
-    queryClient.setQueryData(otherPageSizeKey, { items: entries });
-    const previewKeys = [
-      queryKeys.files.uri(existing.entry.id),
-      queryKeys.files.previewUri(existing.entry),
-      queryKeys.files.previewUriPage(entries),
-    ];
-    for (const key of previewKeys) queryClient.setQueryData(key, existing.uri);
-    const unsubscribe = new QueryObserver(queryClient, filePages).subscribe(jest.fn());
-    const pending = deferred<ReturnType<typeof resolvedFile>>();
-    mockCreateInternalEntry.mockReturnValue(pending.promise);
-
-    try {
-      await renderHook();
-      await act(async () => snapshot?.addAttachments([librarySource('upload.pdf')]));
-      expect(queryClient.getQueryData(filePagesKey)).toEqual({ items: [existing.entry] });
-      expect(queryClient.getQueryState(otherPageSizeKey)?.isInvalidated).toBe(false);
-
-      await act(async () => {
-        entries = [uploaded.entry, existing.entry];
-        pending.resolve(uploaded);
-        await pending.promise;
-      });
-
-      expect(queryClient.getQueryData(filePagesKey)).toEqual({ items: entries });
-      expect(queryClient.getQueryState(otherPageSizeKey)?.isInvalidated).toBe(true);
-      for (const key of previewKeys) {
-        expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
-        expect(queryClient.getQueryData(key)).toBe(existing.uri);
-      }
-    } finally {
-      unsubscribe();
-    }
-  });
-
-  it('keeps fresh file pages when an import fails', async () => {
-    queryClient.setQueryData(filePagesKey, { items: [] });
-    mockCreateInternalEntry.mockRejectedValueOnce(new Error('copy failed'));
-    await renderHook();
-
-    await act(async () => snapshot?.addAttachments([librarySource('failed.pdf')]));
-
-    expect(snapshot?.attachments).toEqual([]);
-    expect(queryClient.getQueryState(filePagesKey)?.isInvalidated).toBe(false);
   });
 
   it('preserves source order and keeps successful imports when one item fails', async () => {
@@ -186,8 +125,6 @@ describe('useManagedComposerAttachments', () => {
   });
 
   it('deletes a composer-owned ready attachment when the user removes it', async () => {
-    const pendingDelete = deferred<boolean>();
-    mockDeleteEntry.mockReturnValueOnce(pendingDelete.promise);
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000016', 'owned.pdf'),
     );
@@ -195,18 +132,10 @@ describe('useManagedComposerAttachments', () => {
 
     await act(async () => snapshot?.addAttachments([source('owned.pdf')]));
     await act(flushPromises);
-    queryClient.setQueryData(filePagesKey, { items: [snapshot?.attachments[0]] });
     await act(async () => snapshot?.removeAttachment('source:owned.pdf'));
 
     expect(snapshot?.attachments).toEqual([]);
     expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000016');
-    expect(queryClient.getQueryState(filePagesKey)?.isInvalidated).toBe(false);
-
-    await act(async () => {
-      pendingDelete.resolve(true);
-      await pendingDelete.promise;
-    });
-    expect(queryClient.getQueryState(filePagesKey)?.isInvalidated).toBe(true);
   });
 
   it('deletes an import that finishes after the composer unmounts', async () => {
@@ -275,14 +204,12 @@ describe('useManagedComposerAttachments', () => {
     await act(flushPromises);
     await act(async () => renderer?.unmount());
     renderer = undefined;
-    queryClient.setQueryData(filePagesKey, { items: [] });
     await act(async () => {
       pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000033', 'in-flight.pdf'));
       await pending.promise;
     });
 
     expect(mockDeleteEntry).not.toHaveBeenCalled();
-    expect(queryClient.getQueryState(filePagesKey)?.isInvalidated).toBe(true);
   });
 
   it('cancels a library upload when its tile is removed before it lands', async () => {
@@ -431,11 +358,7 @@ function Probe({
 
 async function renderHook(initialAttachments: readonly ComposerInitialAttachment[] = []) {
   await act(async () => {
-    renderer = create(
-      <QueryClientProvider client={queryClient}>
-        <Probe initialAttachments={initialAttachments} />
-      </QueryClientProvider>,
-    );
+    renderer = create(<Probe initialAttachments={initialAttachments} />);
   });
 }
 
@@ -474,15 +397,15 @@ function readyAttachment(entryId: FileEntryId, name: string): ComposerAttachment
 
 function resolvedFile(entryId: FileEntryId, name: string) {
   return {
-    entry: {
+    entry: FileEntrySchema.parse({
       createdAt: 1_754_611_200_000,
       filename: name,
       id: entryId,
       mediaType: 'application/pdf',
-      provenance: 'imported' as const,
+      provenance: 'imported',
       size: 128,
       updatedAt: 1_754_611_200_000,
-    },
+    }),
     uri: `file:///managed/${name}`,
   };
 }

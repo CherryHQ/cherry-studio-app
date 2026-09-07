@@ -24,18 +24,11 @@ type FilePreviewResult = {
 };
 
 /** Shared cursor pages and batched previews for the library and attachment picker. */
-export function useFileEntryPages({
-  enabled,
-  refetchOnMount,
-}: {
-  enabled: boolean;
-  refetchOnMount?: boolean | 'always';
-}) {
+export function useFileEntryPages({ enabled }: { enabled: boolean }) {
   const file = useBackendModule('file');
   const query = useInfiniteQuery('/files/entries', {
     enabled,
     limit: FILE_ENTRY_PAGE_SIZE,
-    refetchOnMount,
   });
   const uriPageQueries = useMemo(
     () =>
