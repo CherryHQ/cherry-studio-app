@@ -37,7 +37,10 @@ Product-specific parsing or backend calls remain in this adapter family. Add a n
 only with explicit card and opening behavior; the CherryUI plugin vocabulary itself stays open.
 Do not infer a second classification from filenames at individual surfaces.
 
-The default `thumbnail` variant keeps the platform fallback for text and unsupported documents.
+Rows that already render filename metadata use the explicit `icon` variant: images retain their
+thumbnail, while other files use the same type-icon presentation as Composer and the library.
+The default `thumbnail` variant keeps Quick Look on iOS and the Android extension-card fallback for
+text and unsupported documents.
 The composer's `attachment` and library's `card` variants use the shared file icon/title layout.
 Extension-based icon routing changes artwork only; it never changes product classification or
 opening. Text excerpts remain a separate follow-up.

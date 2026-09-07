@@ -16,6 +16,20 @@ export function FileCardPreview({
   variant: Exclude<FilePreviewVariant, 'thumbnail'>;
 }) {
   const { icon: Icon, iconClassName } = fileVisualPreset(file);
+
+  if (variant === 'icon') {
+    return (
+      <View className="flex-1 items-center justify-center bg-secondary">
+        <Icon className={cn('size-6 shrink-0', iconClassName)} />
+        {badge ? (
+          <View className="absolute right-1 bottom-1 max-w-3/4" pointerEvents="none">
+            {badge}
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   const filename = (
     <Text
       className={cn('w-full shrink text-foreground', variant === 'card' ? 'text-base' : 'text-sm')}

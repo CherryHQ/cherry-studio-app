@@ -46,6 +46,7 @@ exported `openFilePreview` remains the platform primitive: Quick Look on iOS, ap
 | Surface | Images | Other files |
 | --- | --- | --- |
 | Composer | Square thumbnail with removal control | Compact file-type icon above a multiline title |
+| Chat file picker | Square thumbnail | Compact file-type icon beside the filename metadata |
 | User-message strips | Existing square preview | Existing platform fallback |
 | Assistant deliverables | Image itself at message width | Full-width filename/type row |
 | File library | Bounded WebP thumbnail | Title-first card with file-type icon at the bottom |

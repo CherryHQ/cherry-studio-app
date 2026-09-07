@@ -16,8 +16,8 @@ export type FilePreviewKind = BuiltInFilePreviewKind | (string & {});
 
 export type FilePreviewOperation = 'open' | 'thumbnail';
 
-/** Native/content thumbnail, compact attachment, or title-first library card. */
-export type FilePreviewVariant = 'thumbnail' | 'attachment' | 'card';
+/** Native/content thumbnail, icon tile, compact attachment, or title-first library card. */
+export type FilePreviewVariant = 'thumbnail' | 'icon' | 'attachment' | 'card';
 
 export type FilePreviewFile = {
   displayName: string;
