@@ -1,0 +1,34 @@
+import type { TFunction } from 'i18next';
+
+import { AgentProtocolError } from '@/shared/contracts/agent';
+import {
+  FileAttachmentError,
+  type FileAttachmentIssue,
+  type FileAttachmentReport,
+} from '@/shared/contracts/fileAttachment';
+
+export function getFileAttachmentIssue(error: unknown): FileAttachmentIssue | undefined {
+  if (error instanceof FileAttachmentError) return error.issue;
+  if (error instanceof AgentProtocolError) return error.view.attachmentIssue;
+  return undefined;
+}
+
+/** Shared by every submit surface; diagnostic backend messages never become UI copy. */
+export function fileAttachmentIssueDescription(issue: FileAttachmentIssue, t: TFunction): string {
+  const reason = t(`attachments.issue.${issue.code}`, {
+    count: issue.limit,
+    // File limits are binary byte ceilings; keep the displayed unit equally explicit.
+    size:
+      issue.limit === undefined ? '' : `${Number((issue.limit / (1024 * 1024)).toFixed(1))} MiB`,
+  });
+  return [issue.name, reason, t('attachments.draftKept')].filter(Boolean).join('\n\n');
+}
+
+export function fileAttachmentNoticeKeys(report: FileAttachmentReport | undefined): string[] {
+  if (!report) return [];
+  return [
+    ...(report.mode === 'document-text' ? ['attachments.notice.documentText'] : []),
+    ...(report.sourceTruncated ? ['attachments.notice.sourceTruncated'] : []),
+    ...(report.requestTruncated ? ['attachments.notice.requestTruncated'] : []),
+  ];
+}

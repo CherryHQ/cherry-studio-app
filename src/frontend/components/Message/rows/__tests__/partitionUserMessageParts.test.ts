@@ -36,6 +36,22 @@ describe('partitionUserMessageParts', () => {
     expect(message.data.parts).toBe(parts);
   });
 
+  test('keeps each processing report beside its file when text and attachments are partitioned', () => {
+    const file = managedFilePart('report.pdf', '00000000-0000-7000-8000-000000000001');
+    const report = {
+      mode: 'document-text' as const,
+      sourceTruncated: false,
+      requestTruncated: true,
+    };
+    const message = createMessage([textPart('read'), file]);
+    const partition = partitionUserMessageParts({
+      ...message,
+      data: { ...message.data, partKeys: ['text', 'file'], attachmentReports: { file: report } },
+    });
+    expect(partition.attachments).toEqual([{ index: 1, part: file, report }]);
+    expect(partition.bodyMessage?.data.parts).toEqual([message.data.parts?.[0]]);
+  });
+
   test('omits unmanaged files and does not create an empty body message', () => {
     const managed = managedFilePart('photo.png', '00000000-0000-7000-8000-000000000003');
     const message = createMessage([unmanagedFilePart('legacy.pdf'), managed]);

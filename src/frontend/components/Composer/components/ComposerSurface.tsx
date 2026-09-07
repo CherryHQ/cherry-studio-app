@@ -1,8 +1,12 @@
-import { Composer, useToast } from '@cherrystudio/ui/components';
+import { Composer, useAlert, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardController } from 'react-native-keyboard-controller';
 
+import {
+  fileAttachmentIssueDescription,
+  getFileAttachmentIssue,
+} from '@/frontend/utils/fileAttachmentFeedback';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerState } from '../context/ComposerProvider';
@@ -40,8 +44,8 @@ type ComposerSurfaceProps = PropsWithChildren<{
  * The composer root, and the one piece of it that is not pluggable. Everything
  * inside is the caller's to arrange, but sending is a protocol rather than a
  * part — trim, clear before awaiting, restore the draft *and* the attachments
- * if it rejects, toast, log — and two screens assembling that separately is two
- * implementations of it. Since this is what renders the surface, there is no
+ * if it rejects, explain the outcome, and log. Two screens assembling that
+ * separately would be two implementations of it. Since this is what renders the surface, there is no
  * way to compose a composer that skips it.
  */
 export function ComposerSurface({
@@ -56,8 +60,9 @@ export function ComposerSurface({
 }: ComposerSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { alert } = useAlert();
   const { attachments, draft } = useComposerState();
-  const { clearAttachments, setAttachments, setDraft } = useComposerActions();
+  const { addAttachments, clearAttachments, setDraft } = useComposerActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
 
@@ -92,7 +97,10 @@ export function ComposerSurface({
     try {
       await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
     } catch (error) {
-      const explainedLabel = getSendErrorLabel?.(error);
+      const issue = getFileAttachmentIssue(error);
+      const explainedLabel = issue
+        ? fileAttachmentIssueDescription(issue, t)
+        : getSendErrorLabel?.(error);
       // The toast is deliberately vague, so without this the failure leaves no
       // trace at all and there is nothing to go on when a send breaks on device.
       // An explained rejection is an expected outcome, so it stays below the
@@ -103,12 +111,18 @@ export function ComposerSurface({
       } else {
         logger.error('Message send failed', errorDetail, { attemptId });
       }
-      setDraft(draftSnapshot);
-      setAttachments(attachmentSnapshot);
-      toast.show({
-        label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
-        variant: 'danger',
-      });
+      setDraft((current) =>
+        current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
+      );
+      addAttachments([...attachmentSnapshot]);
+      if (issue) {
+        alert.show({ title: t('attachments.sendRejected'), description: explainedLabel });
+      } else {
+        toast.show({
+          label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
+          variant: 'danger',
+        });
+      }
     } finally {
       activeSendAttemptIdRef.current = null;
     }
@@ -120,7 +134,8 @@ export function ComposerSurface({
     getSendErrorLabel,
     labels?.sendFailed,
     onSend,
-    setAttachments,
+    addAttachments,
+    alert,
     setDraft,
     t,
     toast,

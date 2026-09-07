@@ -1,3 +1,4 @@
+import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
@@ -7,6 +8,7 @@ type FilePart = Extract<CherryMessagePart, { type: 'file' }>;
 
 export type UserMessageAttachmentPart = {
   index: number;
+  report?: FileAttachmentReport;
   part: FilePart;
 };
 
@@ -35,7 +37,9 @@ export function partitionUserMessageParts(message: MessageListItem): Partitioned
     }
 
     if (readCherryMeta(part as FilePart)?.fileEntryId) {
-      attachments.push({ index, part });
+      const key = message.data.partKeys?.[index];
+      const report = key ? message.data.attachmentReports?.[key] : undefined;
+      attachments.push({ index, part, ...(report ? { report } : {}) });
     }
   });
 

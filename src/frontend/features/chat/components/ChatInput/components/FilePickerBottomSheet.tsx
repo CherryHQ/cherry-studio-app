@@ -9,7 +9,6 @@ import { useComposerActions, useComposerState } from '@/frontend/components/Comp
 import {
   type ComposerAttachmentReady,
   isComposerAttachmentReady,
-  isComposerAttachmentSupported,
   isComposerImageMediaType,
 } from '@/frontend/components/Composer/utils/composerAttachments';
 import { FileEntrySkeleton, LoadedFileEntryPreview } from '@/frontend/components/FileEntryPreview';
@@ -47,7 +46,7 @@ export function FilePickerBottomSheet({ onClose, onUpload }: FilePickerBottomShe
   const selectedAttachments = entries.flatMap((item) => {
     if (!selectedIds.has(item.entry.id) || attachedIds.has(item.entry.id)) return [];
     const attachment = toLibraryAttachment(item);
-    return attachment && isComposerAttachmentSupported(attachment) ? [attachment] : [];
+    return attachment ? [attachment] : [];
   });
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, {
     day: 'numeric',
@@ -200,16 +199,12 @@ function FilePickerRow({
   onToggle: (id: FileEntryId) => void;
 }) {
   const { t } = useTranslation();
-  const attachment = toLibraryAttachment(item);
-  const isSupported = attachment && isComposerAttachmentSupported(attachment);
-  const isDisabled = isAttached || !isSupported;
+  const isDisabled = isAttached || !item.uri;
   const description = !item.uri
     ? t('filePreview.unavailable')
-    : !isSupported
-      ? t('chat.attachments.unsupportedImageFormat')
-      : isAttached
-        ? t('chat.filePicker.alreadyAdded')
-        : t('chat.filePicker.modifiedAt', { date: modifiedDate });
+    : isAttached
+      ? t('chat.filePicker.alreadyAdded')
+      : t('chat.filePicker.modifiedAt', { date: modifiedDate });
 
   return (
     <Pressable

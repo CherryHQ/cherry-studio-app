@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessageListProps } from '@/frontend/components/Message';
 import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { Painting } from '@/shared/data/types/painting';
 
 import type {
@@ -94,6 +95,7 @@ const input: PaintingGenerationInput = {
 };
 
 const mockCancel = jest.fn();
+const mockAlertShow = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult | null>, [PaintingGenerationInput]>();
 const mockGeneration = {
   aspectRatio: 16 / 9,
@@ -130,6 +132,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/utils/constants', () => ({ isIOS: false }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
   useComposerDockLayout: () => ({
     contentBottomInset: 88,
     handleInputHeightChange: jest.fn(),
@@ -309,6 +312,18 @@ describe('PaintingComposer', () => {
     });
     expect(mockMessageListMounts).toBe(1);
     expect(mockMessageListUnmounts).toBe(0);
+  });
+
+  it('restores the previous painting after attachment rejection and lets the submit surface explain it', async () => {
+    renderComposer();
+    const previousMessages = mockMessageListProps?.messages;
+    const failure = new FileAttachmentError({ code: 'unavailable' });
+    mockGenerate.mockRejectedValueOnce(failure);
+    await act(async () => {
+      await expect(mockInputProps?.onGenerate(input)).rejects.toBe(failure);
+    });
+    expect(mockMessageListProps?.messages).toEqual(previousMessages);
+    expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
   it('keeps a failed turn but clears a cancelled turn', async () => {
