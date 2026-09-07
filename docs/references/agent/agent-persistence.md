@@ -275,16 +275,19 @@ projection:
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
   cascading the source delete to its messages.
-- File part additions or replacements and terminal tool parts (`output-available`, `denied`,
-  `error`, `interrupted`) save the current assistant `data.parts` snapshot while the message is
-  `streaming`, including any text already produced. The Host awaits each
-  write in its serial event loop; a failed snapshot write is logged and execution continues.
-  Text-only events and non-terminal tool states do not trigger writes, and there is no periodic
+- File part additions or replacements and settled tool parts (`output-available`, `denied`,
+  `error`) request a snapshot of the current assistant `data.parts` while the message is
+  `streaming`, including any text already produced. The Host coalesces requests: the event loop
+  does not wait on the store, one snapshot write is in flight at a time, and requests that arrive
+  during a write collapse into one further write. A failed snapshot write is logged and execution
+  continues. Text-only events and non-terminal tool states do not request writes, `interrupted`
+  parts do not either because the terminal write always follows them, and there is no periodic
   flush. A pending tool may be included in another tool or file's snapshot, but its intermediate
-  states are not guaranteed to survive a restart. Finalization remains
-  authoritative; snapshot updates cannot reopen a settled row. On restart, reconciliation keeps
-  saved parts, closes streaming text, and interrupts unfinished tools. This preserves recorded
-  artifacts for later turns without resuming execution or persisting a draft-file state.
+  states are not guaranteed to survive a restart. Finalization remains authoritative: it drains
+  the in-flight snapshot before the terminal write, and a late snapshot cannot reopen a settled
+  row. On restart, reconciliation keeps saved parts, closes streaming text, and interrupts
+  unfinished tools. This preserves recorded artifacts for later turns without resuming execution
+  or persisting a draft-file state.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
   or else from the source, sets

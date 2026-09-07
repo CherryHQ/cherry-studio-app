@@ -155,9 +155,7 @@ export interface AgentSessionStore {
   /**
    * Durably records the parts an active turn has produced so far and marks the
    * placeholder `streaming`. A no-op once the row has settled: the terminal
-   * write is the only authority for a settled message. The Host saves when a
-   * tool part is terminal or a file part changes; text and non-terminal tool
-   * changes do not trigger writes of their own.
+   * write is the only authority for a settled message.
    */
   updateStreamingAssistantMessage(input: UpdateStreamingAssistantMessageInput): Promise<void>;
 
