@@ -140,6 +140,7 @@ export function ProviderNewFormContent({
       keyboardShouldPersistTaps="handled"
       mode="layout"
       showsVerticalScrollIndicator={false}
+      testID="provider-form"
     >
       {issue || disabledKeys ? (
         <View className="gap-3 px-4 py-3">
@@ -169,7 +170,13 @@ export function ProviderNewFormContent({
         )}
       </ProviderForm>
       <View className="px-4 pb-8">
-        <Button disabled={!canSave} loading={isSaving} onPress={onSave} size="lg">
+        <Button
+          disabled={!canSave}
+          loading={isSaving}
+          onPress={onSave}
+          size="lg"
+          testID="provider-save"
+        >
           {t(isSaving ? 'settings.provider.setup.preparing' : 'settings.provider.setup.next')}
         </Button>
       </View>

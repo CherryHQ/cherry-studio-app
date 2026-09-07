@@ -17,6 +17,7 @@ export function useMainHeaderActions() {
       icon: NewConversationIcon,
       key: 'new-chat',
       onPress: openNewSession,
+      testID: 'main-header-new-chat',
       type: 'icon',
     },
   ];
@@ -27,6 +28,7 @@ export function useMainHeaderActions() {
       icon: HistoryIcon,
       key: 'agent-history',
       onPress: openAgentHistory,
+      testID: 'main-header-agent-history',
       type: 'icon',
     });
   }

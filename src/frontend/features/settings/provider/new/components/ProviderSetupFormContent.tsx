@@ -49,6 +49,7 @@ export function ProviderSetupFormContent({
       behavior="padding"
       keyboardVerticalOffset={headerHeight}
       style={{ flex: 1 }}
+      testID="onboarding-connection"
     >
       <ScrollView
         keyboardDismissMode="on-drag"
@@ -66,7 +67,13 @@ export function ProviderSetupFormContent({
         <ProviderForm value={form}>{children}</ProviderForm>
       </ScrollView>
       <View className="gap-2 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-        <Button disabled={!canSave} loading={form.meta.isSubmitting} onPress={onSave} size="lg">
+        <Button
+          disabled={!canSave}
+          loading={form.meta.isSubmitting}
+          onPress={onSave}
+          size="lg"
+          testID="onboarding-connection-next"
+        >
           {t('settings.provider.setup.next')}
         </Button>
         {!canSave && !form.meta.isSubmitting ? (
@@ -179,6 +186,7 @@ export function ProviderSetupCustomFields() {
           keyboardType="url"
           onChangeText={(value) => actions.setEndpointUrl(endpoint, value)}
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+          testID="provider-base-url-input"
           value={baseUrl}
         />
         <TextField.Error>
@@ -189,6 +197,7 @@ export function ProviderSetupCustomFields() {
         accessibilityLabel={t('onboarding.connection.protocol')}
         disabled={meta.isSubmitting}
         onPress={() => setIsProtocolPickerOpen(true)}
+        testID="provider-protocol-select"
       >
         <SelectField.Label>{t('onboarding.connection.protocol')}</SelectField.Label>
         <SelectField.Value>

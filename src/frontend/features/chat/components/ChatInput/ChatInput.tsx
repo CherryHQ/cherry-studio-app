@@ -252,12 +252,17 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
               onSend={handleSendPress}
               onStop={() => void cancel()}
               streaming={isBusy}
+              testID="chat-composer"
             >
               <ComposerAttachments />
               <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
                 <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
                   <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
-                    <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
+                    <ComposerField
+                      onBlur={handleInputBlur}
+                      onFocus={handleInputFocus}
+                      testID="chat-composer-input"
+                    />
                   </View>
                 </Animated.View>
                 <Animated.View
@@ -299,7 +304,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
                         {effortGauge}
                       </Animated.View>
                     ) : null}
-                    <Composer.Send />
+                    <Composer.Send testID={isBusy ? 'chat-composer-stop' : 'chat-composer-send'} />
                   </View>
                 </Animated.View>
               </Animated.View>

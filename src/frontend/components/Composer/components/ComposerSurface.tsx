@@ -34,6 +34,7 @@ type ComposerSurfaceProps = PropsWithChildren<{
   onSend: (payload: ComposerSendPayload) => Promise<void>;
   onStop: () => void;
   streaming: boolean;
+  testID?: string;
 }>;
 
 /**
@@ -53,6 +54,7 @@ export function ComposerSurface({
   onSend,
   onStop,
   streaming,
+  testID,
 }: ComposerSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -140,6 +142,7 @@ export function ComposerSurface({
       onSend={handleSend}
       onStop={onStop}
       streaming={streaming}
+      testID={testID}
       value={draft}
     >
       {children}

@@ -117,7 +117,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <ContextMenu items={menuItems}>
-      <View className="w-full" collapsable={false}>
+      <View className="w-full" collapsable={false} testID={`chat-message-${message.id}`}>
         {message.role === 'user' ? (
           <UserMessage message={message} />
         ) : (

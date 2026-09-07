@@ -103,6 +103,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
         behavior="padding"
         keyboardVerticalOffset={headerHeight}
         style={{ flex: 1 }}
+        testID="onboarding-model"
       >
         <View className="gap-2 px-4 pt-5 pb-4">
           {providerId ? (
@@ -134,6 +135,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
                 onChangeText={setManualId}
                 placeholder={t('onboarding.model.manualPlaceholder')}
                 returnKeyType="done"
+                testID="onboarding-model-manual-input"
                 value={manualId}
                 onSubmitEditing={start}
               />
@@ -232,8 +234,10 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
                   }
                   onPress={() => setSelectedId(item.id)}
                   selected={item.id === selectedModel?.id}
+                  testID={`onboarding-model-${item.id}`}
                 />
               )}
+              testID="onboarding-model-list"
             />
           </>
         )}
@@ -248,6 +252,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
                 loading={isBusy}
                 onPress={start}
                 size="lg"
+                testID="onboarding-model-start"
               >
                 {t(
                   phase === 'checking'
@@ -260,7 +265,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
             </>
           ) : null}
           {isBusy ? (
-            <Button onPress={cancel} variant="ghost">
+            <Button onPress={cancel} testID="onboarding-model-cancel" variant="ghost">
               {t('common.cancel')}
             </Button>
           ) : providerId &&
@@ -268,6 +273,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
             <Button
               disabled={!data.provider || Boolean(data.error)}
               onPress={() => setSelectionMode(selectionMode === 'manual' ? 'catalog' : 'manual')}
+              testID="onboarding-model-mode-toggle"
               variant="ghost"
             >
               {t(
@@ -277,7 +283,7 @@ function OnboardingModelSelection({ providerId }: { providerId?: string }) {
               )}
             </Button>
           ) : providerId && !data.isLoading && data.items.length === 0 ? (
-            <Button onPress={data.retry} variant="ghost">
+            <Button onPress={data.retry} testID="onboarding-model-reload" variant="ghost">
               {t('onboarding.model.reload')}
             </Button>
           ) : null}

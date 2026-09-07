@@ -18,6 +18,7 @@ export function ProviderFormName() {
         disabled={meta.isSubmitting}
         onChangeText={actions.setName}
         placeholder={t('settings.provider.add.name')}
+        testID="provider-name-input"
         value={state.name}
       />
     </TextField>
@@ -44,6 +45,7 @@ export function ProviderFormApiKey({ autoFocus = false }: { autoFocus?: boolean 
         placeholder={t('settings.provider.apiService.apiKey')}
         returnKeyType="done"
         scrollEnabled={false}
+        testID="provider-api-key-input"
         type="password"
         value={state.apiKey}
         visibilityAccessibilityLabels={{

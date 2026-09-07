@@ -95,16 +95,23 @@ function SidebarBodyDefault({
     <>
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
-        <SidebarNavRow icon={FolderIcon} label={t('navigation.library')} onPress={openLibrary} />
+        <SidebarNavRow
+          icon={FolderIcon}
+          label={t('navigation.library')}
+          onPress={openLibrary}
+          testID="sidebar-library"
+        />
         <SidebarNavRow
           icon={MousePointerClickIcon}
           label={t('navigation.agents')}
           onPress={navigateAgents}
+          testID="sidebar-agents"
         />
         <SidebarNavRow
           icon={PaletteIcon}
           label={t('navigation.paintings')}
           onPress={openPaintings}
+          testID="sidebar-paintings"
         />
       </View>
 

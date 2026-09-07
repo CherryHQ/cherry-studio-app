@@ -11,6 +11,7 @@ export type HeaderActionTargetSize = 'surface' | 'touch-target';
 
 type HeaderActionBase = {
   key: string;
+  testID?: string;
 };
 
 export type HeaderToolbarAction =

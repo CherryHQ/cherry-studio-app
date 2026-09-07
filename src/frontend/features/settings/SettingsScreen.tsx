@@ -106,6 +106,7 @@ export default function SettingsScreen() {
               label={t('settings.appearance.title')}
               leading={<PaletteIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
+              testID="settings-appearance"
             />
           </Section>
           <Section>

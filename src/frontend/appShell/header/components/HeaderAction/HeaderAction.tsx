@@ -20,7 +20,11 @@ export function HeaderAction({
 
   switch (action.type) {
     case 'custom':
-      return <View className={iconActionClassName}>{action.element}</View>;
+      return (
+        <View className={iconActionClassName} testID={action.testID}>
+          {action.element}
+        </View>
+      );
 
     case 'menu': {
       const Icon = action.icon;
@@ -33,6 +37,7 @@ export function HeaderAction({
             accessibilityState={{ disabled: action.disabled }}
             className={cn(iconActionClassName, action.disabled && 'opacity-50')}
             pointerEvents={action.disabled ? 'none' : 'auto'}
+            testID={action.testID}
           >
             <Icon className={cn('size-[18px]', contentClassName)} />
           </View>
@@ -54,6 +59,7 @@ export function HeaderAction({
           )}
           disabled={action.disabled}
           onPress={action.onPress}
+          testID={action.testID}
         >
           <Text className={cn('font-semibold text-base', contentClassName)}>{action.label}</Text>
         </Pressable>
@@ -68,6 +74,7 @@ export function HeaderAction({
           disabled={action.disabled}
           onPress={action.onPress}
           targetSize={targetSize}
+          testID={action.testID}
         >
           <Icon className={cn('size-[18px]', contentClassName)} />
         </HeaderIconButton>

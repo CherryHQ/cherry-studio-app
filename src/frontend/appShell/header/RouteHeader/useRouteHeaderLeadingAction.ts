@@ -40,6 +40,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             icon: SidebarExpandIcon,
             key: 'route-leading',
             onPress: openDrawer,
+            testID: 'main-header-open-sidebar',
             type: 'icon',
           }
         : action === 'close'
@@ -48,6 +49,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               icon: XIcon,
               key: 'route-leading',
               onPress: goBack,
+              testID: 'route-header-close',
               type: 'icon',
             }
           : {
@@ -55,6 +57,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
               icon: ArrowLeftIcon,
               key: 'route-leading',
               onPress: goBack,
+              testID: 'route-header-back',
               type: 'icon',
             },
     [action, goBack, openDrawer, t],
