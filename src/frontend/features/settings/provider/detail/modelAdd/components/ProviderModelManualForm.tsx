@@ -1,7 +1,14 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
-import { Button, Chip, Input, TextField } from '@cherrystudio/ui/components';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Button,
+  Chip,
+  Input,
+  OptionPickerBottomSheet,
+  SelectField,
+  TextField,
+} from '@cherrystudio/ui/components';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, type TextInputProps, View } from 'react-native';
 import {
@@ -10,15 +17,13 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
-import type { EndpointType } from '@/shared/data/types/model';
 
 import { ProviderModelNumberField } from '../../../models/components/ProviderModelNumberField';
 import { useProviderModelAdd } from '../../../models/hooks/useProviderModelAdd';
 import {
   getProviderModelEndpointLabelKey,
-  getProviderModelPurposeOptions,
-  providerModelAddEndpointOptions,
-  splitProviderModelIds,
+  getProviderModelAddEndpointOptions,
+  type ProviderModelAddEndpoint,
 } from '../../../models/utils/providerModelAdd';
 import { useProviderModelTask } from '../hooks/useProviderModelTask';
 import type { ProviderModelTaskProps } from '../types';
@@ -36,24 +41,24 @@ export function ProviderModelManualForm({
 }: ProviderModelTaskProps) {
   const { t } = useTranslation();
   const {
+    baseline,
     canSubmit,
-    chatEndpointTypes,
-    endpointTypeError,
+    capabilities,
+    defaultName,
+    fieldErrors,
     formState,
     isDirty,
+    isResolving,
     isSubmitting,
-    modelAddMode,
-    modelIdError,
-    modelPurpose,
+    hasLookupError,
+    retryLookup,
     submitAddModel,
-    updateChatEndpointType,
+    updateCapability,
     updateContextWindow,
-    updateEndpointTypes,
-    updateGroup,
+    updateEndpointType,
     updateMaxInputTokens,
     updateMaxOutputTokens,
     updateModelId,
-    updateModelPurpose,
     updateName,
   } = useProviderModelAdd({ provider });
 
@@ -67,11 +72,22 @@ export function ProviderModelManualForm({
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
   const advancedSettingsScrollYRef = useRef(0);
   const advancedFieldScrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [showMoreSettings, setShowMoreSettings] = useState(false);
-  const isBatchAdd = splitProviderModelIds(formState.modelId).length > 1;
-  const modelPurposeOptions = getProviderModelPurposeOptions(provider);
-  const showsModelPurposeOptions = modelPurposeOptions.length > 1;
-  const showsChatEndpointOptions = modelPurpose === 'chat' && chatEndpointTypes.length > 1;
+  const [moreSettingsOpen, setShowMoreSettings] = useState(false);
+  const [isEndpointOpen, setIsEndpointOpen] = useState(false);
+  const showMoreSettings =
+    moreSettingsOpen ||
+    Object.entries(fieldErrors).some(([field, error]) => field !== 'modelId' && Boolean(error));
+  const endpointOptions = [
+    { value: 'auto' as const, label: t('settings.provider.models.addEndpointAuto') },
+    ...getProviderModelAddEndpointOptions(provider).map(({ id, labelKey }) => ({
+      value: id,
+      label: t(labelKey),
+    })),
+  ];
+  const endpointLabel =
+    formState.endpointType === 'auto'
+      ? t('settings.provider.models.addEndpointAuto')
+      : t(getProviderModelEndpointLabelKey(formState.endpointType));
 
   const clearAdvancedFieldScrollTimer = useCallback(() => {
     if (!advancedFieldScrollTimeoutRef.current) {
@@ -107,32 +123,6 @@ export function ProviderModelManualForm({
   const toggleMoreSettings = useCallback(() => {
     setShowMoreSettings((current) => !current);
   }, []);
-  const handleModelIdChange = useCallback(
-    (value: string) => {
-      if (splitProviderModelIds(value).length > 1) {
-        setShowMoreSettings(false);
-      }
-      updateModelId(value);
-    },
-    [updateModelId],
-  );
-  const selectedEndpointTypes = useMemo(
-    () => new Set(formState.endpointTypes),
-    [formState.endpointTypes],
-  );
-  const toggleEndpointType = useCallback(
-    (endpointType: EndpointType) => {
-      const currentTypes = new Set(selectedEndpointTypes);
-      if (currentTypes.has(endpointType)) {
-        currentTypes.delete(endpointType);
-      } else {
-        currentTypes.add(endpointType);
-      }
-
-      updateEndpointTypes([...currentTypes]);
-    },
-    [selectedEndpointTypes, updateEndpointTypes],
-  );
 
   async function handleSubmit() {
     if (await submitAddModel()) await flow.completeAfterSave();
@@ -172,13 +162,11 @@ export function ProviderModelManualForm({
         ) : (
           <KeyboardAwareScrollView
             bottomOffset={
-              showMoreSettings && !isBatchAdd
-                ? advancedSettingsKeyboardBottomOffset
-                : defaultKeyboardBottomOffset
+              showMoreSettings ? advancedSettingsKeyboardBottomOffset : defaultKeyboardBottomOffset
             }
             contentContainerStyle={[
               styles.scrollContent,
-              showMoreSettings && !isBatchAdd ? styles.expandedScrollContent : null,
+              showMoreSettings ? styles.expandedScrollContent : null,
             ]}
             contentInsetAdjustmentBehavior="automatic"
             disableScrollOnKeyboardHide
@@ -188,234 +176,162 @@ export function ProviderModelManualForm({
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
           >
-            <Text className="text-foreground-secondary text-sm">
-              {t('settings.provider.models.addManualDescription')}
-            </Text>
-
-            <ProviderModelAddSection
-              description={t(
-                isBatchAdd
-                  ? 'settings.provider.models.addBatchDescription'
-                  : 'settings.provider.models.addModelInfoDescription',
-              )}
-              title={t('settings.provider.models.addModelInfoTitle')}
-            >
+            <View className="gap-4">
               <ProviderModelAddTextField
                 required
                 accessibilityLabel={t('settings.provider.models.addModelIdLabel')}
-                description={t('settings.provider.models.addModelIdDescription')}
-                errorMessage={modelIdError}
+                errorMessage={fieldErrors.modelId}
                 isDisabled={isSubmitting}
                 label={t('settings.provider.models.addModelIdLabel')}
                 placeholder={t('settings.provider.models.addModelIdPlaceholder')}
                 value={formState.modelId}
-                onChangeText={handleModelIdChange}
+                onChangeText={updateModelId}
               />
-
-              {!isBatchAdd ? (
-                <>
-                  <ProviderModelAddTextField
-                    accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
-                    isDisabled={isSubmitting}
-                    label={t('settings.provider.models.addModelNameLabel')}
-                    placeholder={t('settings.provider.models.addModelNamePlaceholder')}
-                    value={formState.name}
-                    onChangeText={updateName}
-                  />
-
-                  <ProviderModelAddTextField
-                    accessibilityLabel={t('settings.provider.models.addGroupNameLabel')}
-                    isDisabled={isSubmitting}
-                    label={t('settings.provider.models.addGroupNameLabel')}
-                    placeholder={t('settings.provider.models.addGroupNamePlaceholder')}
-                    value={formState.group}
-                    onChangeText={updateGroup}
-                  />
-                </>
-              ) : null}
-            </ProviderModelAddSection>
-
-            {modelAddMode === 'endpoint-types' ? (
-              <ProviderModelAddSection
-                description={t('settings.provider.models.addEndpointTypeDescription')}
-                title={t('settings.provider.models.addEndpointTypeLabel')}
-              >
-                <View className="flex-row flex-wrap gap-2">
-                  {providerModelAddEndpointOptions.map((option) => (
-                    <Chip.Selectable
-                      accessibilityLabel={t(option.labelKey)}
-                      accessibilityRole="checkbox"
-                      disabled={isSubmitting}
-                      key={option.id}
-                      onSelectedChange={() => toggleEndpointType(option.id)}
-                      selected={selectedEndpointTypes.has(option.id)}
-                    >
-                      {t(option.labelKey)}
-                    </Chip.Selectable>
-                  ))}
-                </View>
-                {endpointTypeError ? (
-                  <Text className="text-error text-xs">{endpointTypeError}</Text>
-                ) : null}
-              </ProviderModelAddSection>
-            ) : null}
-
-            {modelAddMode === 'purpose' &&
-            (showsModelPurposeOptions || showsChatEndpointOptions) ? (
-              <ProviderModelAddSection
-                description={t(
-                  showsModelPurposeOptions
-                    ? 'settings.provider.models.addPurposeDescription'
-                    : 'settings.provider.models.addChatEndpointDescription',
-                )}
-                title={t(
-                  showsModelPurposeOptions
-                    ? 'settings.provider.models.addPurposeLabel'
-                    : 'settings.provider.models.addChatEndpointLabel',
-                )}
-              >
-                {showsModelPurposeOptions ? (
-                  <View className="flex-row flex-wrap gap-2">
-                    {modelPurposeOptions.map((option) => (
-                      <Chip.Selectable
-                        accessibilityLabel={t(option.labelKey)}
-                        accessibilityRole="radio"
-                        disabled={isSubmitting}
-                        key={option.id}
-                        onSelectedChange={(selected) => {
-                          if (selected) {
-                            updateModelPurpose(option.id);
-                          }
-                        }}
-                        selected={modelPurpose === option.id}
-                      >
-                        {t(option.labelKey)}
-                      </Chip.Selectable>
-                    ))}
-                  </View>
-                ) : null}
-
-                {showsChatEndpointOptions ? (
-                  <View className="gap-2">
-                    {showsModelPurposeOptions ? (
-                      <>
-                        <Text className="font-medium text-foreground text-sm">
-                          {t('settings.provider.models.addChatEndpointLabel')}
-                        </Text>
-                        <Text className="text-muted-foreground text-xs">
-                          {t('settings.provider.models.addChatEndpointDescription')}
-                        </Text>
-                      </>
-                    ) : null}
-                    <View className="flex-row flex-wrap gap-2">
-                      {chatEndpointTypes.map((endpointType) => (
-                        <Chip.Selectable
-                          accessibilityLabel={t(getProviderModelEndpointLabelKey(endpointType))}
-                          accessibilityRole="radio"
-                          disabled={isSubmitting}
-                          key={endpointType}
-                          onSelectedChange={(selected) => {
-                            if (selected) {
-                              updateChatEndpointType(endpointType);
-                            }
-                          }}
-                          selected={formState.endpointTypes[0] === endpointType}
-                        >
-                          {t(getProviderModelEndpointLabelKey(endpointType))}
-                        </Chip.Selectable>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-              </ProviderModelAddSection>
-            ) : null}
-
-            {!isBatchAdd ? (
-              <View className="gap-3">
-                <View className="items-start">
-                  <Button
-                    accessibilityLabel={t('settings.provider.models.addMoreSettings')}
-                    accessibilityState={{ expanded: showMoreSettings }}
-                    disabled={isSubmitting}
-                    hitSlop={8}
-                    onPress={toggleMoreSettings}
-                    size="inline"
-                    variant="ghost"
-                  >
-                    <Button.Label numberOfLines={1}>
-                      {t('settings.provider.models.addMoreSettings')}
-                    </Button.Label>
-                    {showMoreSettings ? (
-                      <ChevronUpIcon className="size-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDownIcon className="size-4 text-muted-foreground" />
-                    )}
+              <ProviderModelAddTextField
+                accessibilityLabel={t('settings.provider.models.addModelNameLabel')}
+                isDisabled={isSubmitting}
+                label={t('settings.provider.models.addModelNameLabel')}
+                placeholder={defaultName || t('settings.provider.models.addModelNamePlaceholder')}
+                value={formState.name}
+                onChangeText={updateName}
+              />
+              {hasLookupError ? (
+                <View className="items-start gap-2">
+                  <Text className="text-error text-xs">
+                    {t('settings.provider.models.addLookupFailed')}
+                  </Text>
+                  <Button size="inline" variant="ghost" onPress={() => void retryLookup()}>
+                    <Button.Label>{t('common.retry')}</Button.Label>
                   </Button>
                 </View>
+              ) : isResolving ? (
+                <Text className="text-muted-foreground text-xs">
+                  {t('settings.provider.models.addResolving')}
+                </Text>
+              ) : null}
+            </View>
 
-                {showMoreSettings ? (
-                  <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
-                    <Text className="text-muted-foreground text-xs">
-                      {t('settings.provider.models.addAdvancedDescription')}
-                    </Text>
-                    <ProviderModelNumberField
-                      disabled={isSubmitting}
-                      label={t('settings.provider.models.addContextWindowLabel')}
-                      placeholder={t('settings.provider.models.addContextWindowPlaceholder')}
-                      value={formState.contextWindow}
-                      onChangeText={updateContextWindow}
-                      onFocus={handleAdvancedFieldFocus}
-                    />
-                    <ProviderModelNumberField
-                      disabled={isSubmitting}
-                      label={t('settings.provider.models.addMaxInputTokensLabel')}
-                      placeholder={t('settings.provider.models.addMaxInputTokensPlaceholder')}
-                      value={formState.maxInputTokens}
-                      onChangeText={updateMaxInputTokens}
-                      onFocus={handleAdvancedFieldFocus}
-                    />
-                    <ProviderModelNumberField
-                      disabled={isSubmitting}
-                      label={t('settings.provider.models.addMaxOutputTokensLabel')}
-                      placeholder={t('settings.provider.models.addMaxOutputTokensPlaceholder')}
-                      value={formState.maxOutputTokens}
-                      onChangeText={updateMaxOutputTokens}
-                      onFocus={handleAdvancedFieldFocus}
-                    />
-                  </View>
-                ) : null}
+            <View className="gap-3">
+              <Text className="font-medium text-base text-foreground">
+                {t('settings.provider.models.addCapabilities')}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {(['vision', 'drawing'] as const).map((capability) => (
+                  <Chip.Selectable
+                    accessibilityLabel={t(`settings.provider.models.addCapability.${capability}`)}
+                    accessibilityRole="checkbox"
+                    disabled={isSubmitting || isResolving || hasLookupError}
+                    key={capability}
+                    onSelectedChange={(selected) => updateCapability(capability, selected)}
+                    selected={capabilities[capability]}
+                  >
+                    {t(`settings.provider.models.addCapability.${capability}`)}
+                  </Chip.Selectable>
+                ))}
               </View>
-            ) : null}
+            </View>
+
+            <View className="gap-3">
+              <View className="items-start">
+                <Button
+                  accessibilityLabel={t('settings.provider.models.addMoreSettings')}
+                  accessibilityState={{ expanded: showMoreSettings }}
+                  disabled={isSubmitting}
+                  hitSlop={8}
+                  onPress={toggleMoreSettings}
+                  size="inline"
+                  variant="ghost"
+                >
+                  <Button.Label numberOfLines={1}>
+                    {t('settings.provider.models.addMoreSettings')}
+                  </Button.Label>
+                  {showMoreSettings ? (
+                    <ChevronUpIcon className="size-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDownIcon className="size-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </View>
+              {showMoreSettings ? (
+                <View className="gap-3" onLayout={handleAdvancedSettingsLayout}>
+                  <SelectField
+                    accessibilityLabel={t('settings.provider.models.addEndpointTypeLabel')}
+                    disabled={isSubmitting || endpointOptions.length === 1}
+                    onPress={() => setIsEndpointOpen(true)}
+                  >
+                    <SelectField.Label>
+                      {t('settings.provider.models.addEndpointTypeLabel')}
+                    </SelectField.Label>
+                    <SelectField.Value>
+                      <SelectField.ValueText>{endpointLabel}</SelectField.ValueText>
+                    </SelectField.Value>
+                  </SelectField>
+                  {fieldErrors.endpointType ? (
+                    <Text className="text-error text-xs">{fieldErrors.endpointType}</Text>
+                  ) : null}
+                  {!capabilities.drawing ? (
+                    <>
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.contextWindow}
+                        label={t('settings.provider.models.addContextWindowLabel')}
+                        placeholder={
+                          baseline?.contextWindow?.toString() ??
+                          t('settings.provider.models.addContextWindowPlaceholder')
+                        }
+                        value={formState.contextWindow}
+                        onChangeText={updateContextWindow}
+                        onFocus={handleAdvancedFieldFocus}
+                      />
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.maxInputTokens}
+                        label={t('settings.provider.models.addMaxInputTokensLabel')}
+                        placeholder={
+                          baseline?.maxInputTokens?.toString() ??
+                          t('settings.provider.models.addMaxInputTokensPlaceholder')
+                        }
+                        value={formState.maxInputTokens}
+                        onChangeText={updateMaxInputTokens}
+                        onFocus={handleAdvancedFieldFocus}
+                      />
+                      <ProviderModelNumberField
+                        disabled={isSubmitting}
+                        errorMessage={fieldErrors.maxOutputTokens}
+                        label={t('settings.provider.models.addMaxOutputTokensLabel')}
+                        placeholder={
+                          baseline?.maxOutputTokens?.toString() ??
+                          t('settings.provider.models.addMaxOutputTokensPlaceholder')
+                        }
+                        value={formState.maxOutputTokens}
+                        onChangeText={updateMaxOutputTokens}
+                        onFocus={handleAdvancedFieldFocus}
+                      />
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
           </KeyboardAwareScrollView>
         )}
       </View>
+      {isEndpointOpen ? (
+        <OptionPickerBottomSheet<ProviderModelAddEndpoint>
+          open
+          onClose={() => setIsEndpointOpen(false)}
+          title={t('settings.provider.models.addEndpointTypeLabel')}
+          options={endpointOptions}
+          selectedValue={formState.endpointType}
+          onValueChange={updateEndpointType}
+          size="compact"
+        />
+      ) : null}
     </>
-  );
-}
-
-function ProviderModelAddSection({
-  children,
-  description,
-  title,
-}: {
-  children: ReactNode;
-  description?: string;
-  title: string;
-}) {
-  return (
-    <View className="gap-3">
-      <View className="gap-1">
-        <Text className="font-medium text-base text-foreground">{title}</Text>
-        {description ? <Text className="text-muted-foreground text-xs">{description}</Text> : null}
-      </View>
-      {children}
-    </View>
   );
 }
 
 function ProviderModelAddTextField({
   accessibilityLabel,
-  description,
   errorMessage,
   isDisabled,
   label,
@@ -424,10 +340,8 @@ function ProviderModelAddTextField({
   placeholder,
   required = false,
   value,
-  textInputProps,
 }: {
   accessibilityLabel: string;
-  description?: string;
   errorMessage?: string;
   isDisabled: boolean;
   label: string;
@@ -435,7 +349,6 @@ function ProviderModelAddTextField({
   onFocus?: TextInputProps['onFocus'];
   placeholder: string;
   required?: boolean;
-  textInputProps?: Pick<TextInputProps, 'inputMode' | 'keyboardType'>;
   value: string;
 }) {
   return (
@@ -450,9 +363,7 @@ function ProviderModelAddTextField({
         placeholder={placeholder}
         returnKeyType="done"
         value={value}
-        {...textInputProps}
       />
-      {description ? <TextField.Description>{description}</TextField.Description> : null}
       <TextField.Error>{errorMessage}</TextField.Error>
     </TextField>
   );
