@@ -43,7 +43,7 @@ describe('createWebTools', () => {
     expect(String((result.value as { message: string }).message)).toContain('do not retry');
   });
 
-  test('keeps an unclassified failure recoverable with different input', async () => {
+  test('stops after an unclassified failure and asks for an answer from existing content', async () => {
     const webSearch = createWebSearch({
       searchKeywords: async () => {
         throw new Error('The requested page could not be read');
@@ -52,20 +52,22 @@ describe('createWebTools', () => {
 
     const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
 
-    expect(result.value).toMatchObject({ status: 'error', retryable: true });
+    expect(result.value).toMatchObject({ status: 'error', retryable: false });
+    expect(result.failure?.scope).toBe('tool');
+    expect((result.value as { message: string }).message).toContain('content already obtained');
   });
 
-  test('preserves exhausted provider reasons and pauses this tool for the turn', async () => {
+  test('preserves provider and input diagnostics when a lookup fails', async () => {
     const webSearch = createWebSearch({
-      fetchUrls: async () => {
-        throw new AggregateError(
-          [
-            new HttpError('Exa: HTTP 429 rate limit exceeded', { kind: 'http', status: 429 }),
-            new HttpError('Jina reader timed out', { kind: 'timeout' }),
-          ],
-          'Web fetch failed after trying available providers.',
-        );
-      },
+      fetchUrls: async () => ({
+        ...RESPONSE,
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        results: [],
+        failures: [
+          { input: 'https://example.com', kind: 'http', status: 429, message: 'Too many requests' },
+        ],
+      }),
     });
 
     const result = await execute(toolNamed(webSearch, 'web_fetch'), {
@@ -73,27 +75,22 @@ describe('createWebTools', () => {
     });
 
     expect(result).toMatchObject({
-      failure: { scope: 'tool', error: { code: 'web_lookup_unavailable', retryable: false } },
+      failure: { scope: 'tool', error: { code: 'web_lookup_failed', retryable: false } },
       value: {
         status: 'error',
         retryable: false,
-        error: expect.stringContaining('Jina reader timed out'),
+        providerId: 'jina',
+        failures: [{ input: 'https://example.com', kind: 'http', status: 429 }],
       },
     });
-    expect(result.failure?.error.message).toContain('HTTP 429');
-    expect((result.value as { message: string }).message).toContain('do not retry');
+    expect(result.failure?.error.message).toContain('jina: https://example.com');
+    expect((result.value as { message: string }).message).toContain('Do not retry');
   });
 
   test('stops network-failed lookups for this turn and explains the connection problem', async () => {
     const webSearch = createWebSearch({
       fetchUrls: async () => {
-        throw new AggregateError(
-          [
-            new HttpError('Jina: Network request failed', { kind: 'network' }),
-            new TypeError('Exa: fetch failed'),
-          ],
-          'Web fetch failed after trying available providers.',
-        );
+        throw new HttpError('Jina: Network request failed', { kind: 'network' });
       },
     });
 
@@ -109,36 +106,25 @@ describe('createWebTools', () => {
     expect((result.value as { message: string }).message).toContain('do not retry automatically');
   });
 
-  test('pauses a broken provider protocol instead of asking for a different query', async () => {
-    const webSearch = createWebSearch({
-      searchKeywords: async () => {
-        throw new AggregateError(
-          [
-            new HttpError('Exa MCP returned invalid JSON', {
-              kind: 'invalid_response',
-              code: 'MCP_INVALID_RESPONSE',
-            }),
-          ],
-          'Web search failed',
-        );
-      },
-    });
+  test.each(['MCP_INVALID_RESPONSE', 'MCP_TOOL_ERROR'])(
+    'stops a provider failure with code %s without changing the query',
+    async (code) => {
+      const webSearch = createWebSearch({
+        searchKeywords: async () => {
+          throw new HttpError('Exa MCP failed', { kind: 'invalid_response', code });
+        },
+      });
 
-    const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
+      const result = await execute(toolNamed(webSearch, 'web_search'), { query: 'cherry studio' });
 
-    expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
-  });
+      expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
+    },
+  );
 
-  test('keeps other URLs available when the target page cannot be read', async () => {
+  test('stops after a target-page failure instead of trying another URL', async () => {
     const webSearch = createWebSearch({
       fetchUrls: async () => {
-        throw new AggregateError(
-          [
-            new HttpError('Page not found', { kind: 'http', status: 404 }),
-            new HttpError('Target page denied access', { kind: 'http', status: 403 }),
-          ],
-          'Web fetch failed after trying available providers.',
-        );
+        throw new HttpError('Page not found', { kind: 'http', status: 404 });
       },
     });
 
@@ -147,9 +133,34 @@ describe('createWebTools', () => {
     });
 
     expect(result.failure).toMatchObject({
-      scope: 'call',
+      scope: 'tool',
       error: { message: expect.stringContaining('Page not found') },
     });
+  });
+
+  test('keeps citable content and failed inputs together when only part of a lookup succeeds', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => ({
+        ...RESPONSE,
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        failures: [
+          { input: 'https://example.com/b', kind: 'http', status: 404, message: 'Not found' },
+        ],
+      }),
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com/a', 'https://example.com/b'],
+    });
+
+    expect(result.value).toMatchObject({
+      status: 'partial',
+      results: [{ id: expect.any(String), content: 'Body', url: 'https://example.com/a' }],
+      failures: [{ input: 'https://example.com/b', status: 404 }],
+      retryable: false,
+    });
+    expect(result.failure?.scope).toBe('tool');
   });
 
   test('propagates cancellation without manufacturing a provider failure', async () => {
@@ -178,6 +189,7 @@ describe('createWebTools', () => {
 
     expect(webSearch.searchKeywords).not.toHaveBeenCalled();
     expect(result.value).toMatchObject({ status: 'error', retryable: true });
+    expect(result.failure?.scope).toBe('call');
   });
 
   test('fetches known page URLs', async () => {

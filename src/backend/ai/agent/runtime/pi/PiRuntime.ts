@@ -227,6 +227,7 @@ type ActiveTurn = {
   toolCallCount: number;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
   toolParts: Map<string, ToolPartBase>;
+  tools: readonly RuntimeTool[];
   toolStepCount: number;
   turnId: string;
   usage: RuntimeUsage;
@@ -621,6 +622,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
+      tools: request.tools,
       toolStepCount: 0,
       turnId: request.turnId,
       usage: {
@@ -1266,6 +1268,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
         turn.failedToolCalls.add(toolCallId);
         if (output.failure.scope === 'tool') {
           turn.unavailableTools.set(runtimeTool.providerName, output);
+          if (runtimeTool.failureGroup) {
+            for (const tool of turn.tools) {
+              if (tool.failureGroup === runtimeTool.failureGroup) {
+                turn.unavailableTools.set(tool.providerName, output);
+              }
+            }
+          }
         }
       } else {
         this.replaceToolPart(turn, part, { state: 'output-available', output });

@@ -1,7 +1,6 @@
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { WEB_SEARCH_FALLBACK_PROVIDER_IDS_BY_CAPABILITY } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -17,7 +16,7 @@ import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
 import { createWebSearchProvider } from './providers/factory';
 import { getProviderForCapability, getRuntimeConfig } from './utils/config';
-import { isAbortError } from './utils/errors';
+import { toWebSearchFailure } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
 import { ApiKeyRotationState } from './utils/provider';
 import { WebSearchConfigError } from './WebSearchConfigError';
@@ -93,47 +92,33 @@ export class WebSearchService extends BaseService {
     searchResults: PromiseSettledResult<WebSearchResponse>[],
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
-    const abortedSearch = searchResults.find(
-      (item): item is PromiseRejectedResult =>
-        item.status === 'rejected' && isAbortError(item.reason),
+    httpOptions?.signal?.throwIfAborted();
+    const failures = searchResults.flatMap((item, index) =>
+      item.status === 'rejected' ? [toWebSearchFailure(context.inputs[index], item.reason)] : [],
     );
-
-    if (abortedSearch && httpOptions?.signal?.aborted) {
-      throw abortedSearch.reason;
-    }
-
-    searchResults.forEach((item, index) => {
-      if (item.status === 'rejected') {
-        logger.warn('Partial web search input failed', {
-          providerId: context.provider.id,
-          capability: context.capability,
-          input: context.inputs[index],
-          error: item.reason instanceof Error ? item.reason.message : String(item.reason),
-        });
-      }
+    failures.forEach((failure) => {
+      logger.warn('Web search input failed', {
+        providerId: context.provider.id,
+        capability: context.capability,
+        ...failure,
+      });
     });
 
     const successfulSearches = searchResults.filter(
       (item): item is PromiseFulfilledResult<WebSearchResponse> => item.status === 'fulfilled',
     );
 
-    if (successfulSearches.length === 0) {
-      const firstRejected = searchResults.find((item) => item.status === 'rejected');
-      throw firstRejected?.reason ?? new Error('Web search failed with no successful results');
-    }
-
-    const providerIds = [...new Set(successfulSearches.map((item) => item.value.providerId))];
     const mergedResponse: WebSearchResponse = {
       query: context.inputs.join(' | '),
-      providerId: providerIds.at(-1) ?? context.provider.id,
-      ...(providerIds.length > 1 ? { providerIds } : {}),
+      providerId: context.provider.id,
       capability: context.capability,
       inputs: context.inputs,
       results: successfulSearches.flatMap((item) => item.value.results),
+      ...(failures.length > 0 ? { failures } : {}),
     };
 
     const postProcessed = await postProcessWebSearchResponse(mergedResponse, context.runtimeConfig);
-
+    httpOptions?.signal?.throwIfAborted();
     return postProcessed.response;
   }
 
@@ -142,63 +127,9 @@ export class WebSearchService extends BaseService {
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
     const context = await this.prepareContext(request);
-    const searchResults = await this.executeCapabilityWithFallback(context, httpOptions);
+    httpOptions?.signal?.throwIfAborted();
+    const searchResults = await this.executeCapability(context, httpOptions);
     return this.buildFinalResponse(context, searchResults, httpOptions);
-  }
-
-  private async executeCapabilityWithFallback(
-    context: PreparedWebSearchContext,
-    httpOptions?: RequestInit,
-  ): Promise<PromiseSettledResult<WebSearchResponse>[]> {
-    const signal = httpOptions?.signal;
-    signal?.throwIfAborted();
-    const results = await this.executeCapability(context, httpOptions);
-    signal?.throwIfAborted();
-    const failures = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : [],
-    );
-
-    for (const providerId of WEB_SEARCH_FALLBACK_PROVIDER_IDS_BY_CAPABILITY[context.capability]) {
-      if (providerId === context.provider.id) continue;
-      const failedIndexes = results.flatMap((result, index) =>
-        result.status === 'rejected' ? [index] : [],
-      );
-      if (failedIndexes.length === 0) break;
-      let fallbackResults: PromiseSettledResult<WebSearchResponse>[];
-      try {
-        const provider = await getProviderForCapability(
-          providerId,
-          context.capability,
-          this.preferenceService,
-        );
-        signal?.throwIfAborted();
-        fallbackResults = await this.executeCapability(
-          {
-            ...context,
-            inputs: failedIndexes.map((index) => context.inputs[index]),
-            provider,
-            providerDriver: createWebSearchProvider(provider, this.apiKeyRotationState),
-          },
-          httpOptions,
-        );
-      } catch (error) {
-        // A broken backup must not discard pages already read by the primary provider.
-        fallbackResults = failedIndexes.map(() => ({ status: 'rejected', reason: error }));
-      }
-      signal?.throwIfAborted();
-      fallbackResults.forEach((result, index) => {
-        if (result.status === 'rejected') failures.push(result.reason);
-        results[failedIndexes[index]] = result;
-      });
-    }
-
-    if (results.every((result) => result.status === 'rejected')) {
-      throw new AggregateError(
-        failures,
-        `Web ${context.capability === 'fetchUrls' ? 'fetch' : 'search'} failed after trying available providers.`,
-      );
-    }
-    return results;
   }
 
   async searchKeywords(

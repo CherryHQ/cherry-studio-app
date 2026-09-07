@@ -45,6 +45,7 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_SEARCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webSearchInputSchema),
       approval: 'auto',
+      failureGroup: 'web',
       execute: async ({ input, signal }) => {
         const parsed = webSearchInputSchema.safeParse(input);
         if (!parsed.success) {
@@ -60,6 +61,7 @@ export function createWebTools(deps: WebSearchToolDependencies): RuntimeTool[] {
       description: WEB_FETCH_DESCRIPTION,
       inputSchema: toRuntimeInputSchema(webFetchInputSchema),
       approval: 'auto',
+      failureGroup: 'web',
       execute: async ({ input, signal }) => {
         const parsed = webFetchInputSchema.safeParse(input);
         if (!parsed.success) {

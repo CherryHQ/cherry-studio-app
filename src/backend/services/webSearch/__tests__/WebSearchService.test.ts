@@ -61,22 +61,22 @@ describe('WebSearchService', () => {
     });
   });
 
-  test('recovers the default Jina read through Exa inside the same fetch call', async () => {
+  test('records a failed Jina read without retrying or calling Exa', async () => {
     requestWebSearchJsonMock.mockRejectedValue(
       new HttpError('Jina timed out', { kind: 'timeout' }),
     );
-    global.fetch = jest.fn().mockResolvedValue(exaPageResponse('https://example.com', 'Recovered'));
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
 
     await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
-      providerId: 'exa-mcp',
-      results: [{ content: 'Recovered' }],
+      providerId: 'jina',
+      results: [],
+      failures: [{ input: 'https://example.com', kind: 'timeout', message: 'Jina timed out' }],
     });
     expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  test('retries only failed URLs on the backup and keeps the successful pages', async () => {
+  test('keeps partial results and failures from the selected provider without switching', async () => {
     global.fetch = jest
       .fn()
       .mockResolvedValueOnce(exaPageResponse('https://example.com/a', 'First'))
@@ -95,26 +95,38 @@ describe('WebSearchService', () => {
       urls: ['https://example.com/a', 'https://example.com/b'],
     });
 
-    expect(response.results.map((result) => result.content)).toEqual(['First', 'Second']);
-    expect(response.providerIds).toEqual(['exa-mcp', 'jina']);
-    expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(1);
-    expect(requestWebSearchJsonMock).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'https://r.jina.ai/https://example.com/b' }),
-    );
+    expect(response.results.map((result) => result.content)).toEqual(['First']);
+    expect(response.providerId).toBe('exa-mcp');
+    expect(response.failures).toEqual([
+      { input: 'https://example.com/b', kind: 'unknown', message: 'unavailable' },
+    ]);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
   });
 
-  test('does not cycle providers when every fetch route fails', async () => {
-    requestWebSearchJsonMock.mockRejectedValue(new Error('Jina unavailable'));
+  test('retains every failed input and its status when no pages succeed', async () => {
+    requestWebSearchJsonMock.mockRejectedValue(
+      new HttpError('Jina unavailable', { kind: 'http', status: 503, code: 'UNAVAILABLE' }),
+    );
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
 
-    await expect(service.fetchUrls({ urls: ['https://example.com'] })).rejects.toMatchObject({
-      errors: [expect.any(Error), expect.any(Error)],
+    const urls = ['https://example.com/a', 'https://example.com/b'];
+    await expect(service.fetchUrls({ urls })).resolves.toMatchObject({
+      providerId: 'jina',
+      results: [],
+      failures: urls.map((input) => ({
+        input,
+        kind: 'http',
+        status: 503,
+        code: 'UNAVAILABLE',
+        message: 'Jina unavailable',
+      })),
     });
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(1);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(2);
   });
 
-  test('does not start a backup request after the caller cancels', async () => {
+  test('propagates caller cancellation without returning a lookup failure', async () => {
     const controller = new AbortController();
     requestWebSearchJsonMock.mockImplementation(async () => {
       controller.abort();
@@ -189,6 +201,7 @@ describe('WebSearchService', () => {
     ).resolves.toMatchObject({
       query: 'first | second',
       providerId: 'tavily',
+      failures: [{ input: 'second', kind: 'unknown', message: 'nope' }],
       results: [
         {
           title: 'First',

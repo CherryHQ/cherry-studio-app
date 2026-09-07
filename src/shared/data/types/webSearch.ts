@@ -99,14 +99,22 @@ export type WebSearchResult = {
   truncated?: boolean;
 };
 
+export type WebSearchFailure = {
+  input: string;
+  kind: 'configuration' | 'http' | 'invalid_response' | 'network' | 'timeout' | 'unknown';
+  message: string;
+  code?: string;
+  status?: number;
+};
+
 export type WebSearchResponse = {
   query?: string;
   providerId: WebSearchProviderId;
-  /** Present when successful inputs were handled by more than one provider. */
-  providerIds?: WebSearchProviderId[];
   capability: WebSearchCapability;
   inputs: string[];
   results: WebSearchResult[];
+  /** Failed inputs are retained even when other inputs succeeded. */
+  failures?: WebSearchFailure[];
 };
 
 export type WebSearchSearchKeywordsRequest = {

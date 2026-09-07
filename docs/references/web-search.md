@@ -34,10 +34,10 @@ Runtime behavior:
 
 - selects a provider by requested capability;
 - builds runtime configuration from preferences;
-- executes one request per normalized keyword or URL;
-- retries only failed inputs through the capability’s fallback providers, excluding the selected
-  provider and attempting each route once; provider checks do not use fallback;
-- merges successful results and logs partial failures;
+- executes one request per normalized keyword or URL using only the selected provider;
+- returns successful results alongside failed inputs, retaining error kind, message, and available
+  status/code even when every input fails;
+- logs failures with their provider and capability; it never retries or switches providers;
 - bounds fetched page content and applies configured search-result compression;
 - propagates caller aborts.
 
@@ -50,22 +50,27 @@ unsupported-provider error rather than being silently rewritten.
 
 Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
 for page reading, both without requiring a user API key. Exa MCP also supports page reading
-(`web_fetch_exa`) when selected or used as a fallback; its optional configured key uses `x-api-key`.
+(`web_fetch_exa`) when explicitly selected; its optional configured key uses `x-api-key`.
 Both services handle page extraction remotely; mobile does not parse arbitrary HTML. The Exa adapter
 accepts MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
 protocol/tool errors as failures rather than empty successful searches.
 
-Keyword search falls back to Exa MCP. Page reading falls back through Exa MCP and Jina, skipping
-the selected route. Successful pages are retained and only failed URLs reach the backup. The
-response records the providers that actually returned those pages. Exa and Jina reader calls
-allow 60 seconds each; Exa keyword search retains its 25-second limit. Caller cancellation stops
-fallback immediately. Stored provider selections are retained, so existing Jina selections can
-recover through Exa without a preference migration.
+Stored provider selections remain unchanged. A selected provider is the only request destination,
+including when it uses a custom host. Exa and Jina reader calls allow 60 seconds each; Exa keyword
+search retains its 25-second limit. Caller cancellation propagates without becoming a lookup error.
 
-Network reachability is separate from a provider's free tier or extraction capability. When all
-attempted routes fail at the network boundary, the tool preserves those errors, asks the user to
-check connectivity, and prevents further calls to that capability in the same turn. Other tools
-remain available, and the next user turn can try again after the network changes.
+Any lookup failure, including a failed URL in an otherwise successful batch, stops new calls to
+both `web_search` and `web_fetch` for the current turn. The tools share the Runtime's `web` failure
+group. Already running requests may finish and contribute content; no retry, alternate query, or
+provider switch is started after failure. Invalid tool arguments remain correctable before a
+network request is made. A new user turn starts with both configured capabilities available again.
+
+The failed tool result retains citable successful content and per-input diagnostics. The model is
+instructed to answer from content already obtained and explain missing sources, or explain the
+failure if no content was obtained. The Host persists these details in the ordinary error envelope;
+the frontend retains successful sources for citation even when the tool part reports an error.
+Network failures ask the user to check connectivity without drawing conclusions about a provider's
+pricing or extraction capability. Other, non-web tools remain available.
 
 ## Preferences
 

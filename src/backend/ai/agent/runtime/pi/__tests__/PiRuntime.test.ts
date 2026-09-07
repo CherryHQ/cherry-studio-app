@@ -11,6 +11,7 @@ import type {
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import { createWebTools } from '../../../tools/web/webTools';
 import {
   type ArrangedApprovalRequest,
   type ArrangedErrorRequest,
@@ -2272,10 +2273,11 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('lets the real Pi loop finish after a capability becomes unavailable', async () => {
+  test('finishes the real Pi loop with existing sources after a partial web failure', async () => {
     const resolution = createResolution();
     const seenTools: string[][] = [];
     const seenErrors: boolean[] = [];
+    const seenResults: ToolResultMessage[] = [];
     resolution.streamFn = (_model, context) => {
       seenTools.push((context.tools ?? []).map((tool) => tool.name));
       seenErrors.push(
@@ -2283,16 +2285,22 @@ describe('PiRuntime mapping', () => {
           .filter((message) => message.role === 'toolResult')
           .map((message) => message.isError),
       );
-      // Reproduces a model that keeps trying while the failed capability is offered.
-      const canCall = context.tools?.some((tool) => tool.name === TOOL_PROVIDER_NAME);
+      seenResults.push(...context.messages.filter((message) => message.role === 'toolResult'));
+      // A model may switch from fetching to search if either web tool is still offered.
+      const nextTool =
+        context.tools?.find((tool) => tool.name === 'web_fetch') ?? context.tools?.[0];
+      const canCall = nextTool !== undefined;
       const message = assistantMessage({
-        content: canCall
+        content: nextTool
           ? [
               {
                 type: 'toolCall',
                 id: `call-${seenTools.length}`,
-                name: TOOL_PROVIDER_NAME,
-                arguments: {},
+                name: nextTool.name,
+                arguments:
+                  nextTool.name === 'web_fetch'
+                    ? { urls: ['https://example.com/a', 'https://example.com/b'] }
+                    : { query: 'alternative source' },
               },
             ]
           : [{ type: 'text', text: 'The source is unavailable; here is what I can explain.' }],
@@ -2316,29 +2324,117 @@ describe('PiRuntime mapping', () => {
       },
       (options) => new Agent(options),
     );
-    const execute = jest.fn(
-      async (): Promise<RuntimeToolResult> => ({
-        value: { status: 'error', message: 'The service is unavailable; do not retry this tool.' },
-        artifacts: [],
-        failure: {
-          scope: 'tool',
-          error: { code: 'service_unavailable', message: 'HTTP 429', retryable: false },
-        },
-      }),
-    );
-    const tool: RuntimeTool = {
-      ...askTool(() => {}),
-      approval: 'auto',
-      inputSchema: { type: 'object', properties: {} },
-      execute,
+    const webSearch = {
+      fetchUrls: jest.fn(async () => ({
+        providerId: 'jina' as const,
+        capability: 'fetchUrls' as const,
+        inputs: ['https://example.com/a', 'https://example.com/b'],
+        results: [
+          {
+            title: 'Available',
+            url: 'https://example.com/a',
+            content: 'Available page body',
+            sourceInput: 'https://example.com/a',
+          },
+        ],
+        failures: [
+          {
+            input: 'https://example.com/b',
+            kind: 'http' as const,
+            status: 404,
+            message: 'Page not found',
+          },
+        ],
+      })),
+      searchKeywords: jest.fn(async () => ({
+        providerId: 'exa-mcp' as const,
+        capability: 'searchKeywords' as const,
+        inputs: ['alternative source'],
+        results: [],
+      })),
     };
     const session = await runtime.open();
-    const events = await collect(session.execute(baseRequest('real-loop', { tools: [tool] })));
+    const events = await collect(
+      session.execute(baseRequest('real-loop', { tools: createWebTools({ webSearch }) })),
+    );
 
     expect(events.at(-1)).toEqual({ type: 'completed' });
-    expect(seenTools).toEqual([[TOOL_PROVIDER_NAME], []]);
+    expect(seenTools).toEqual([['web_search', 'web_fetch'], []]);
     expect(seenErrors).toEqual([true]);
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(1);
+    expect(webSearch.searchKeywords).not.toHaveBeenCalled();
+    expect(seenResults[0].details).toMatchObject({
+      value: {
+        status: 'partial',
+        results: [{ content: 'Available page body' }],
+        failures: [{ input: 'https://example.com/b', status: 404 }],
+      },
+    });
+    await session.close();
+  });
+
+  test('blocks sibling callbacks after a group failure but accepts in-flight results and resets next turn', async () => {
+    const runtime = createTestRuntime();
+    let finishRead!: (output: RuntimeToolResult) => void;
+    const read = jest.fn(
+      () =>
+        new Promise<RuntimeToolResult>((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    const failure: RuntimeToolResult = {
+      value: { status: 'error' },
+      artifacts: [],
+      failure: {
+        scope: 'tool',
+        error: { code: 'lookup_failed', message: 'Timed out', retryable: false },
+      },
+    };
+    const search = jest.fn(async () => failure);
+    const other = jest.fn(async () => ({ value: 'Other content', artifacts: [] }));
+    const tools: RuntimeTool[] = [
+      {
+        ...askTool(() => {}),
+        approval: 'auto',
+        providerName: 'search',
+        failureGroup: 'web',
+        execute: search,
+      },
+      {
+        ...askTool(() => {}),
+        approval: 'auto',
+        providerName: 'read',
+        failureGroup: 'web',
+        execute: read,
+      },
+      { ...askTool(() => {}), approval: 'auto', providerName: 'other', execute: other },
+    ];
+    arrange(runtime, async (context) => {
+      const [searchTool, readTool, otherTool] = context.options.initialState!.tools!;
+      const pendingRead = readTool.execute('in-flight', {}, context.signal);
+      await searchTool.execute('failure', {}, context.signal);
+      finishRead({ value: 'Already requested content', artifacts: [] });
+      expect(await pendingRead).toMatchObject({ details: { value: 'Already requested content' } });
+      await readTool.execute('blocked', {}, context.signal);
+      await otherTool.execute('other', {}, context.signal);
+      await emitText(context, 'Answer from existing content.');
+    });
+    const session = await runtime.open();
+    const first = await collect(session.execute(baseRequest('group-first', { tools })));
+    expect(first.at(-1)).toEqual({ type: 'completed' });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+
+    arrange(runtime, async (context) => {
+      const readTool = context.options.initialState!.tools![1];
+      const pendingRead = readTool.execute('new-turn', {}, context.signal);
+      finishRead({ value: 'Fresh content', artifacts: [] });
+      await pendingRead;
+      await emitText(context, 'Fresh answer.');
+    });
+    const later = await collect(session.execute(baseRequest('group-later', { tools })));
+    expect(later.at(-1)).toEqual({ type: 'completed' });
+    expect(read).toHaveBeenCalledTimes(2);
     await session.close();
   });
 
