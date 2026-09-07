@@ -13,4 +13,5 @@ export type {
   FilePreviewOperation,
   FilePreviewPlugin,
   FilePreviewProps,
+  FilePreviewVariant,
 } from './file-preview.types';

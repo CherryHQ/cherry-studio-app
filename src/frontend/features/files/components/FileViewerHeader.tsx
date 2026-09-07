@@ -50,32 +50,35 @@ export function FileViewerHeader({
     }
   };
 
-  const menuItems: MenuItem[] = [...items];
-  if (isImage) {
-    menuItems.push({
-      id: 'save-to-photos',
-      label: t('fileViewer.saveToPhotos'),
-      onPress: () => void saveToPhotos(),
-    });
-  }
-  menuItems.push({
-    id: 'open-with',
-    label: t('filePreview.openWith'),
-    onPress: () => void openFileEntryWithSystem(file),
-  });
+  const menuItems: MenuItem[] = [
+    ...items,
+    {
+      disabled: isSharing,
+      id: 'share',
+      label: t('fileViewer.share'),
+      onPress: () => void share(),
+    },
+    ...(isImage
+      ? [
+          {
+            id: 'save-to-photos',
+            label: t('fileViewer.saveToPhotos'),
+            onPress: () => void saveToPhotos(),
+          },
+        ]
+      : []),
+    {
+      id: 'open-with',
+      label: t('filePreview.openWith'),
+      onPress: () => void openFileEntryWithSystem(file),
+    },
+  ];
 
   return (
     <HeaderChrome
       actionTone={isImage ? 'inverse' : 'default'}
       leftActions={[leadingAction]}
       rightActions={[
-        {
-          disabled: isSharing,
-          key: 'share',
-          label: t('fileViewer.share'),
-          onPress: () => void share(),
-          type: 'label',
-        },
         {
           accessibilityLabel: t('common.more'),
           icon: EllipsisIcon,

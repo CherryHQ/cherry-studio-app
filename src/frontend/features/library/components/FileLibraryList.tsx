@@ -57,8 +57,7 @@ export function FileLibraryList({
   const tileSize =
     (windowWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap) /
     fileLibraryGrid.columns;
-  const estimatedItemSize =
-    tileSize + fileLibraryGrid.tileMetadataEstimatedHeight + fileLibraryGrid.tileGap;
+  const estimatedItemSize = tileSize + fileLibraryGrid.tileGap;
 
   const contentContainerStyle = useMemo(
     () => ({
@@ -153,39 +152,32 @@ const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry
 
   return (
     <View
-      className="gap-2"
       style={{
         paddingBottom: fileLibraryGrid.tileGap,
         paddingHorizontal: fileLibraryGrid.tileGap / 2,
       }}
     >
       {fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
-        <FileEntrySkeleton size={size} />
+        <FileEntrySkeleton size={size} variant="card" />
       ) : (
         <LoadedFileEntryPreview
+          badge={
+            isGenerated ? (
+              <View className="flex-row items-center gap-1 rounded-full bg-card/95 px-2 py-1">
+                <SparklesIcon className="size-3.5 text-muted-foreground" />
+                <Text className="shrink text-xs text-muted-foreground" numberOfLines={1}>
+                  {t('library.provenance.generated')}
+                </Text>
+              </View>
+            ) : undefined
+          }
           entry={item.entry}
           previewUri={item.previewUri}
           size={size}
           uri={item.uri}
+          variant="card"
         />
       )}
-      <View className="min-w-0 gap-0.5 px-0.5">
-        <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
-          {item.entry.filename}
-        </Text>
-        {/* Held open whether or not the badge shows, so a labelled tile does not
-            make its whole grid row taller than its neighbours. */}
-        <View className="flex-row items-center gap-1" style={styles.provenance}>
-          {isGenerated ? (
-            <>
-              <SparklesIcon className="size-3.5 text-muted-foreground" />
-              <Text className="text-xs text-muted-foreground" numberOfLines={1}>
-                {t('library.provenance.generated')}
-              </Text>
-            </>
-          ) : null}
-        </View>
-      </View>
     </View>
   );
 });
@@ -196,8 +188,5 @@ const styles = StyleSheet.create({
   },
   header: {
     marginHorizontal: fileLibraryGrid.tileGap / 2,
-  },
-  provenance: {
-    height: fileLibraryGrid.tileProvenanceHeight,
   },
 });
