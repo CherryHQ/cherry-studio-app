@@ -72,7 +72,10 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   'exa-mcp': {
     name: 'ExaMCP',
     type: 'mcp',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' }],
+    capabilities: [
+      { feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' },
+      { feature: 'fetchUrls', apiHost: 'https://mcp.exa.ai/mcp' },
+    ],
   },
   bocha: {
     name: 'Bocha',
@@ -106,6 +109,11 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
     ],
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
+
+export const WEB_SEARCH_FALLBACK_PROVIDER_IDS_BY_CAPABILITY = {
+  searchKeywords: ['exa-mcp'],
+  fetchUrls: ['exa-mcp', 'jina'],
+} as const satisfies Record<WebSearchCapability, readonly WebSearchProviderId[]>;
 
 /** Providers exposed by the mobile UI. `fetch` and SearXNG remain data-compatible only. */
 export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [

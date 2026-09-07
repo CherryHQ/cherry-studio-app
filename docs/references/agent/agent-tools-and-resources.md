@@ -73,8 +73,9 @@ and auto-approval eligibility. The Agent editor enables or disables capability g
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
 auto-approval eligible: enabling the image group is not consent to spend provider quota.
 
-`web_search` and `web_fetch` additionally require their default web search provider to be chosen in
-settings. `generate_image` additionally requires a configured drawing model. An OS permission scope
+`web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
+installations select hosted Exa MCP for both capabilities; no user API key is required.
+`generate_image` additionally requires a configured drawing model. An OS permission scope
 that was never requested does not hide a device tool: it is offered as `ask`, and execution
 triggers the one-shot system permission prompt after the user approves the call in-app. A denied or
 unavailable scope removes the tool for the turn. The inference snapshot records the tools that

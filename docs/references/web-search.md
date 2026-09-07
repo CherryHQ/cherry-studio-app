@@ -35,16 +35,31 @@ Runtime behavior:
 - selects a provider by requested capability;
 - builds runtime configuration from preferences;
 - executes one request per normalized keyword or URL;
+- retries only failed inputs through the capability’s fallback providers, excluding the selected
+  provider and attempting each route once; provider checks do not use fallback;
 - merges successful results and logs partial failures;
 - bounds fetched page content and applies configured search-result compression;
 - propagates caller aborts.
 
 ## Provider Registry
 
-Current mobile provider ids are `zhipu`, `tavily`, `searxng`, `exa`, `bocha`, `querit`, and `jina`.
-`exa-mcp`, `fetch`, and `firecrawl` remain explicit unsupported entries. They are hidden from mobile
-settings and selectors, while old stored ids fail with an unsupported-provider error rather than
-being silently rewritten.
+Current mobile provider ids are `zhipu`, `tavily`, `exa`, `exa-mcp`, `bocha`, `querit`, `jina`,
+and `firecrawl`. SearXNG remains data-compatible but hidden from mobile settings and selectors.
+The direct `fetch` provider is unsupported on mobile; old stored selections fail with an
+unsupported-provider error rather than being silently rewritten.
+
+Fresh installations use hosted Exa MCP for both keyword search (`web_search_exa`) and page reading
+(`web_fetch_exa`), without requiring a user API key. An optional configured key uses `x-api-key`.
+Exa handles page extraction remotely; mobile does not parse arbitrary HTML. The adapter accepts
+MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
+protocol/tool errors as failures rather than empty successful searches.
+
+Keyword search falls back to Exa MCP. Page reading falls back through Exa MCP and Jina, skipping
+the selected route. Successful pages are retained and only failed URLs reach the backup. The
+response records the providers that actually returned those pages. Exa and Jina reader calls
+allow 60 seconds each; Exa keyword search retains its 25-second limit. Caller cancellation stops
+fallback immediately. Stored provider selections are retained, so existing Jina selections can
+recover through Exa without a preference migration.
 
 ## Preferences
 

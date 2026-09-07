@@ -102,6 +102,8 @@ export type WebSearchResult = {
 export type WebSearchResponse = {
   query?: string;
   providerId: WebSearchProviderId;
+  /** Present when successful inputs were handled by more than one provider. */
+  providerIds?: WebSearchProviderId[];
   capability: WebSearchCapability;
   inputs: string[];
   results: WebSearchResult[];

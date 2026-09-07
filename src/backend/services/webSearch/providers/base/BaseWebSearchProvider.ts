@@ -1,6 +1,7 @@
 import type * as z from 'zod';
 
 import type { HttpHeaders } from '@/backend/services/http';
+import { HttpError } from '@/backend/services/http';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types/webSearch';
 
@@ -47,6 +48,7 @@ export abstract class BaseWebSearchProvider {
     operation: string;
     responseSchema: z.ZodType<TResponse>;
     signal?: AbortSignal;
+    timeoutMs?: number;
     url: string;
   }): Promise<TResponse> {
     return this.jsonRequester<TResponse, TBody>({
@@ -59,7 +61,11 @@ export abstract class BaseWebSearchProvider {
     const errorText = (await response.text()).trim();
 
     if (!errorText) {
-      throw new Error(`${message}: HTTP ${response.status}`);
+      throw new HttpError(`${message}: HTTP ${response.status}`, {
+        kind: 'http',
+        status: response.status,
+        retryAfter: response.headers.get('retry-after') ?? undefined,
+      });
     }
 
     const truncatedErrorText =
@@ -67,6 +73,10 @@ export abstract class BaseWebSearchProvider {
         ? `${errorText.slice(0, MAX_HTTP_ERROR_TEXT_LENGTH)}... [truncated]`
         : errorText;
 
-    throw new Error(`${message}: HTTP ${response.status} ${truncatedErrorText}`);
+    throw new HttpError(`${message}: HTTP ${response.status} ${truncatedErrorText}`, {
+      kind: 'http',
+      status: response.status,
+      retryAfter: response.headers.get('retry-after') ?? undefined,
+    });
   }
 }
