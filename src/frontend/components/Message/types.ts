@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
+import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
 import type { Model } from '@/shared/data/types/model';
 
@@ -10,6 +11,7 @@ export type MessageListItem = Readonly<{
   data: Readonly<{
     /** Stable render identities aligned one-to-one with `parts` when the source provides them. */
     partKeys?: readonly string[];
+    attachmentReports?: Readonly<Record<string, FileAttachmentReport>>;
     parts?: readonly CherryMessagePart[];
   }>;
   id: string;

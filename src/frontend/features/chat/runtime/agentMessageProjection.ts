@@ -206,13 +206,20 @@ function projectAgentPart(
 function toDisplayParts(
   parts: readonly AgentMessagePart[],
   cache?: AgentMessageListProjectionCache,
-): Pick<NonNullable<MessageListItem['data']>, 'partKeys' | 'parts'> {
+): Pick<NonNullable<MessageListItem['data']>, 'partKeys' | 'parts' | 'attachmentReports'> {
+  const attachmentReports: Record<
+    string,
+    NonNullable<MessageListItem['data']['attachmentReports']>[string]
+  > = {};
   const displayParts: CherryMessagePart[] = [];
   const partKeys: string[] = [];
   const sourceParts: SourceUrlPart[] = [];
   const sourcePartKeys: string[] = [];
 
   for (const sourcePart of parts) {
+    if (sourcePart.type === 'file' && sourcePart.attachmentReport) {
+      attachmentReports[sourcePart.id] = sourcePart.attachmentReport;
+    }
     const projection = projectAgentPart(sourcePart, cache);
     displayParts.push(projection.part);
     partKeys.push(sourcePart.id);
@@ -226,6 +233,7 @@ function toDisplayParts(
   // Synthetic sources stay at the tail, but their identity is derived from the
   // tool part rather than from their changing array position.
   return {
+    ...(Object.keys(attachmentReports).length > 0 ? { attachmentReports } : {}),
     partKeys: [...partKeys, ...sourcePartKeys],
     parts: [...displayParts, ...sourceParts],
   };

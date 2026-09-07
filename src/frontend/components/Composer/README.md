@@ -68,12 +68,12 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 ## What is deliberately *not* pluggable
 
 Sending. Trim, clear before awaiting, restore the draft *and* the attachments if
-it rejects, toast, log, and the un-animated keyboard dismissal — that is a
+it rejects, explain the outcome, log, and the un-animated keyboard dismissal — that is a
 protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
 surface, so there is no way to compose a composer that skips it. A synchronous
 in-flight lock also prevents a repeated gesture from snapshotting and restoring
-the same draft twice. Pasting is baked into `ComposerField` for the same reason.
+the same draft twice. Failure restoration also retains text and attachments added while the send was pending. Pasting is baked into `ComposerField` for the same reason.
 
 The full checklist for it is the behaviour contract in
 `src/frontend/features/chat/components/ChatInput/README.md` — that is the screen you actually
@@ -91,18 +91,13 @@ walk to verify it.
   shows import progress, then delegates ready files to `FileEntryPreview`.
 - `components/ComposerSessionProvider.tsx` and
   `hooks/useManagedComposerAttachments.ts`: own one composer session and import
-  transient picker results into managed file entries before exposing them to
-  Chat or Painting. Existing managed entries passed into a session are borrowed;
-  removing them detaches them without deleting their source file. A successful
-  send transfers a newly imported entry out of temporary Composer ownership;
-  failed-send restoration restores that ownership with the draft. Unmounting a
-  composer deletes any newly imported entries it still owns. A source marked
-  `ownership: 'library'` — every document upload — is borrowed as soon as its
-  import lands: removing it later or unmounting leaves the library file in
-  place, and only removing its tile mid-import cancels the upload. Managed-file
-  storage announces committed writes, and the app-wide `FileQueryBridge`
-  refreshes shared file lists even after the composer unmounts. URI and preview
-  caches stay reusable.
+  transient picker results into My Files before exposing their references to
+  Chat or Painting. Every import belongs to the library as soon as it completes.
+  Removing a draft reference, leaving the screen, or failing a send never
+  deletes the library file; an in-flight import may finish after its tile is
+  removed, but cannot restore that stale tile. Only explicit library deletion
+  removes the file. Managed-file storage announces committed writes and the
+  app-wide `FileQueryBridge` refreshes shared file lists after unmount too.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
@@ -129,3 +124,17 @@ walk to verify it.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.
+
+## Send-time file preparation
+
+Picking and importing do not check model suitability or parse document content.
+Chat and painting resolve the actual selected model in their backend workflow,
+then use the shared file attachment policy and preparation functions. Painting
+submits only `fileEntryIds`; it never trusts picker URIs or draft media metadata.
+
+`ComposerSurface` renders structured file issues through one localized alert,
+with the filename, reason, and recovery guidance. Other send failures keep their
+existing feedback. A rejected submit restores the draft references; it does not
+remove files from My Files. Persisted message attachment reports distinguish
+text extraction limits from request capacity limits, and older messages without
+a report remain unknown.

@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { Backend } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { JobSnapshot } from '@/shared/data/api/schemas/jobs';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { Painting } from '@/shared/data/types/painting';
@@ -188,6 +189,22 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(api?.aspectRatio).toBeCloseTo(928 / 1664);
+  });
+
+  it('returns attachment rejection to the submitter while preserving the previous canvas', async () => {
+    await mountProbe(undefined, 1664 / 928);
+    const beforeOutputs = api?.outputs;
+    const failure = new FileAttachmentError({ code: 'unsupported-type' });
+    mockStartGeneration.mockRejectedValueOnce(failure);
+    await act(async () => {
+      await expect(api?.generate({ ...request, paramValues: { size: '928x1664' } })).rejects.toBe(
+        failure,
+      );
+    });
+    expect(api?.error).toBeNull();
+    expect(api?.outputs).toBe(beforeOutputs);
+    expect(api?.aspectRatio).toBeCloseTo(1664 / 928);
+    expect(api?.status).toBe('idle');
   });
 
   it('enqueues via the backend and displays outputs from the terminal job', async () => {

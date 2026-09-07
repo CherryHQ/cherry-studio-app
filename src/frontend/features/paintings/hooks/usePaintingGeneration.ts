@@ -16,6 +16,7 @@ import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -250,7 +251,13 @@ export function usePaintingGeneration({
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));
-        setError(normalized);
+        if (normalized instanceof FileAttachmentError) {
+          // Admission failed before a job existed; preserve the previous canvas.
+          setError(error);
+          setDisplayParamValues(displayParamValues);
+        } else {
+          setError(normalized);
+        }
         setStatus('idle');
         throw normalized;
       }
@@ -258,6 +265,8 @@ export function usePaintingGeneration({
     [
       activeJobId,
       cancelStartedGeneration,
+      displayParamValues,
+      error,
       interruption,
       onReceipt,
       paintingId,
