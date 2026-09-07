@@ -52,8 +52,7 @@ describe('composer attachments', () => {
   test('classifies document picker images as image attachments', () => {
     expect(
       createDocumentAttachmentDraft({
-        lastModified: 0,
-        mimeType: 'image/png',
+        mediaType: 'image/png',
         name: 'screen.png',
         uri: 'file://screen.png',
       }),
@@ -104,7 +103,6 @@ describe('composer attachments', () => {
   test('classifies image documents by filename when media type is missing', () => {
     expect(
       createDocumentAttachmentDraft({
-        lastModified: 0,
         name: 'photo.webp',
         uri: 'file://photo.webp',
       }),
@@ -120,8 +118,7 @@ describe('composer attachments', () => {
     expect(
       isComposerAttachmentSupported(
         createDocumentAttachmentDraft({
-          lastModified: 0,
-          mimeType: 'image/heic',
+          mediaType: 'image/heic',
           name: 'photo.heic',
           uri: 'file://photo.heic',
         }),
@@ -132,8 +129,7 @@ describe('composer attachments', () => {
   test('classifies non-image documents as file attachments', () => {
     expect(
       createDocumentAttachmentDraft({
-        lastModified: 0,
-        mimeType: 'application/pdf',
+        mediaType: 'application/pdf',
         name: 'brief.pdf',
         uri: 'file://brief.pdf',
       }),

@@ -1,29 +1,27 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { useCallback } from 'react';
+
+import { useFileUploadPicker } from '@/frontend/hooks/file';
 
 import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
 import { createDocumentAttachmentDraft } from '../utils/composerAttachments';
 
 /**
- * System document upload shared by the menu and the chat library picker. The
- * chosen files are staged in the composer at once and uploaded to the library
- * from there; see `createDocumentAttachmentDraft` for their ownership.
+ * Composer adapter over the shared file-upload picker. It owns the input
+ * replacement and stages chosen files as attachments; the shared picker owns
+ * the native selection contract.
  */
 export function useComposerDocumentPicker() {
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
+  const pickFiles = useFileUploadPicker();
 
   return useCallback(async () => {
     await runInputReplacement(async () => {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        multiple: true,
-        type: '*/*',
-      });
+      const files = await pickFiles();
 
-      if (!result.canceled) {
-        addAttachments(result.assets.map(createDocumentAttachmentDraft));
+      if (files.length > 0) {
+        addAttachments(files.map(createDocumentAttachmentDraft));
       }
     });
-  }, [addAttachments, runInputReplacement]);
+  }, [addAttachments, pickFiles, runInputReplacement]);
 }

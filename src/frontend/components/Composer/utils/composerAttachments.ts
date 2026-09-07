@@ -1,5 +1,4 @@
-import type { DocumentPickerAsset } from 'expo-document-picker';
-
+import type { FileUploadSelection } from '@/frontend/hooks/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
@@ -137,9 +136,9 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAt
 }
 
 export function createDocumentAttachmentDraft(
-  asset: DocumentPickerAsset,
+  asset: FileUploadSelection,
 ): ComposerAttachmentSource {
-  const mediaType = resolveDocumentImportMediaType(asset.name, asset.mimeType);
+  const mediaType = resolveDocumentImportMediaType(asset.name, asset.mediaType);
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
   const extension = asset.name.trim().split('.').pop()?.toLowerCase();
   const resolvedMediaType =

@@ -49,8 +49,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator. `onPickFiles` can replace the files destination;
   the menu still settles input dismissal before calling it.
-- `useComposerDocumentPicker` — opens the system document picker through the
-  shared input-replacement action and stages the chosen files as library uploads.
+- `useComposerDocumentPicker` — composes the app-wide file-upload picker with
+  the shared input-replacement action and stages the chosen files as library uploads.
 - `ComposerModelPill` — the model button. Its `icon` is a composed `ModelPickerIcon`, and
   `children` trail the label inside the pill.
 - `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
@@ -86,7 +86,7 @@ walk to verify it.
   `components/ComposerModelPill.tsx`: the parts.
 - `components/ComposerMenu.tsx`: the ＋ menu. Camera and photos hand off to
   `expo-image-picker`. Files use the caller's destination when supplied and
-  otherwise open the system document picker.
+  otherwise use the shared file-upload picker through the Composer adapter.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
   shows import progress, then delegates ready files to `FileEntryPreview`.
 - `components/ComposerSessionProvider.tsx` and
