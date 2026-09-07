@@ -1,20 +1,15 @@
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FilePreviewFrame } from '../components/file-preview-frame';
 
-jest.mock('uniwind', () => ({
-  useResolveClassNames: (className: string) => ({
-    borderRadius: className === 'rounded-4xl' ? 26 : 18,
-  }),
-}));
-
 describe('FilePreviewFrame', () => {
   test.each([
-    ['default', undefined, 112, 18],
-    ['library card', 'card', 160, 26],
+    ['default', undefined, 112, 'rounded-2xl'],
+    ['library card', 'card', 160, 'rounded-4xl'],
   ] as const)(
-    'clips %s previews to the resolved continuous corners',
-    (_, variant, size, radius) => {
+    'clips %s preview content at the shared corner boundary',
+    (_, variant, size, cornerClassName) => {
       let renderer: ReactTestRenderer | undefined;
 
       act(() => {
@@ -33,13 +28,18 @@ describe('FilePreviewFrame', () => {
       expect(renderer?.toJSON()).toMatchObject({
         props: {
           style: {
-            borderCurve: 'continuous',
-            borderRadius: radius,
             height: size,
-            overflow: 'hidden',
             width: size,
           },
         },
+      });
+
+      const clippingView = renderer?.root
+        .findAllByType(View)
+        .find((node) => node.props.className?.includes('overflow-hidden'));
+      expect(clippingView?.props).toMatchObject({
+        className: `size-full overflow-hidden ${cornerClassName}`,
+        style: { borderCurve: 'continuous' },
       });
     },
   );

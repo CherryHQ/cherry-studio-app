@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
+import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { useResolveClassNames } from 'uniwind';
 
 import type { FilePreviewVariant } from '../file-preview.types';
 
@@ -19,7 +19,10 @@ export function FilePreviewFrame({
   size: number;
   variant?: FilePreviewVariant;
 }) {
-  const cornerStyle = useResolveClassNames(variant === 'card' ? 'rounded-4xl' : 'rounded-2xl');
+  const clippingClassName =
+    variant === 'card'
+      ? 'size-full overflow-hidden rounded-4xl'
+      : 'size-full overflow-hidden rounded-2xl';
 
   return (
     <Pressable
@@ -30,14 +33,13 @@ export function FilePreviewFrame({
       disabled={disabled}
       onPress={onPress}
       style={{
-        ...cornerStyle,
-        borderCurve: 'continuous',
         height: size,
-        overflow: 'hidden',
         width: size,
       }}
     >
-      {children}
+      <View className={clippingClassName} style={{ borderCurve: 'continuous' }}>
+        {children}
+      </View>
     </Pressable>
   );
 }
