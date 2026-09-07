@@ -84,6 +84,31 @@ describe('createWebTools', () => {
     expect((result.value as { message: string }).message).toContain('do not retry');
   });
 
+  test('stops network-failed lookups for this turn and explains the connection problem', async () => {
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw new AggregateError(
+          [
+            new HttpError('Jina: Network request failed', { kind: 'network' }),
+            new TypeError('Exa: fetch failed'),
+          ],
+          'Web fetch failed after trying available providers.',
+        );
+      },
+    });
+
+    const result = await execute(toolNamed(webSearch, 'web_fetch'), {
+      urls: ['https://example.com'],
+    });
+
+    expect(result.failure).toMatchObject({ scope: 'tool', error: { retryable: false } });
+    expect(result.value).toMatchObject({
+      error: expect.stringContaining('Jina: Network request failed'),
+      message: expect.stringContaining('check their network connection'),
+    });
+    expect((result.value as { message: string }).message).toContain('do not retry automatically');
+  });
+
   test('pauses a broken provider protocol instead of asking for a different query', async () => {
     const webSearch = createWebSearch({
       searchKeywords: async () => {

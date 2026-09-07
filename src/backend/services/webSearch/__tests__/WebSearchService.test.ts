@@ -23,16 +23,18 @@ describe('WebSearchService', () => {
     global.fetch = originalFetch;
   });
 
-  test('fetches with the fresh-install defaults and no provider keys', async () => {
-    global.fetch = jest.fn().mockResolvedValue(exaPageResponse('https://example.com', 'Page body'));
+  test('reads through Jina with fresh-install defaults and no provider keys', async () => {
+    requestWebSearchJsonMock.mockResolvedValue({
+      data: { title: 'Example', content: 'Page body', url: 'https://example.com' },
+    });
     const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
 
     const response = await service.fetchUrls({ urls: ['https://example.com'] });
 
-    expect(response).toMatchObject({ providerId: 'exa-mcp', results: [{ content: 'Page body' }] });
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
-    const headers = jest.mocked(global.fetch).mock.calls[0]?.[1]?.headers as Headers;
-    expect(headers.has('x-api-key')).toBe(false);
+    expect(response).toMatchObject({ providerId: 'jina', results: [{ content: 'Page body' }] });
+    expect(global.fetch).not.toHaveBeenCalled();
+    const headers = requestWebSearchJsonMock.mock.calls[0]?.[0]?.headers;
+    expect(headers).not.toHaveProperty('Authorization');
   });
 
   test('searches with fresh-install defaults without discarding hosted Highlights', async () => {
@@ -59,16 +61,12 @@ describe('WebSearchService', () => {
     });
   });
 
-  test('recovers existing Jina defaults through Exa inside the same fetch call', async () => {
+  test('recovers the default Jina read through Exa inside the same fetch call', async () => {
     requestWebSearchJsonMock.mockRejectedValue(
       new HttpError('Jina timed out', { kind: 'timeout' }),
     );
     global.fetch = jest.fn().mockResolvedValue(exaPageResponse('https://example.com', 'Recovered'));
-    const service = new WebSearchService(
-      createPreferenceService({
-        'chat.web_search.default_fetch_urls_provider': 'jina',
-      }),
-    );
+    const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
 
     await expect(service.fetchUrls({ urls: ['https://example.com'] })).resolves.toMatchObject({
       providerId: 'exa-mcp',
@@ -86,7 +84,12 @@ describe('WebSearchService', () => {
     requestWebSearchJsonMock.mockResolvedValue({
       data: { title: 'Second', content: 'Second', url: 'https://example.com/b' },
     });
-    const service = new WebSearchService(createPreferenceService(PreferenceDefaults));
+    const service = new WebSearchService(
+      createPreferenceService({
+        ...PreferenceDefaults,
+        'chat.web_search.default_fetch_urls_provider': 'exa-mcp',
+      }),
+    );
 
     const response = await service.fetchUrls({
       urls: ['https://example.com/a', 'https://example.com/b'],
@@ -113,7 +116,7 @@ describe('WebSearchService', () => {
 
   test('does not start a backup request after the caller cancels', async () => {
     const controller = new AbortController();
-    global.fetch = jest.fn().mockImplementation(async () => {
+    requestWebSearchJsonMock.mockImplementation(async () => {
       controller.abort();
       throw new Error('interrupted');
     });
@@ -122,7 +125,7 @@ describe('WebSearchService', () => {
     await expect(
       service.fetchUrls({ urls: ['https://example.com'] }, { signal: controller.signal }),
     ).rejects.toBeDefined();
-    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   test('checks provider with temporary selected api key', async () => {

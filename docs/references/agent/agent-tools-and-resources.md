@@ -74,7 +74,8 @@ only changes whether effective `ask` calls show an interactive prompt. `generate
 auto-approval eligible: enabling the image group is not consent to spend provider quota.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
-installations select hosted Exa MCP for both capabilities; no user API key is required.
+installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
+requires a user API key.
 `generate_image` additionally requires a configured drawing model. An OS permission scope
 that was never requested does not hide a device tool: it is offered as `ask`, and execution
 triggers the one-shot system permission prompt after the user approves the call in-app. A denied or

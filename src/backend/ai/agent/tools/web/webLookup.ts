@@ -159,18 +159,23 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof HttpError) return error.kind === 'network';
+  return /(?:connection (?:error|failed|reset)|network request failed|fetch failed|socket hang up)/i.test(
+    errorMessage(error),
+  );
+}
+
 function isUnavailableProvider(error: unknown): boolean {
-  if (isPermanentWebSearchConfigError(error)) return true;
+  if (isPermanentWebSearchConfigError(error) || isNetworkFailure(error)) return true;
   if (error instanceof HttpError) {
-    if (error.kind === 'network' || error.kind === 'timeout') return true;
+    if (error.kind === 'timeout') return true;
     if (error.kind === 'invalid_response' && error.code !== 'MCP_TOOL_ERROR') return true;
     if (error.status === 401 || error.status === 429 || (error.status ?? 0) >= 500) return true;
   }
   return (
     (error instanceof Error && error.name === 'TimeoutError') ||
-    /(?:rate.?limit|quota exceeded|connection (?:error|failed|reset)|network request failed|fetch failed|socket hang up|timed? out)/i.test(
-      errorMessage(error),
-    )
+    /(?:rate.?limit|quota exceeded|timed? out)/i.test(errorMessage(error))
   );
 }
 
@@ -187,9 +192,9 @@ function classifyWebLookupError(error: unknown): WebLookupError {
     };
   }
 
-  if (isProxyFakeIpError(message)) {
+  if (isProxyFakeIpError(message) || (failures.length > 0 && failures.every(isNetworkFailure))) {
     return {
-      error: WEB_NETWORK_ERROR_MESSAGE,
+      error: message,
       retryable: false,
       terminal: true,
       userMessage: WEB_NETWORK_ERROR_MESSAGE,

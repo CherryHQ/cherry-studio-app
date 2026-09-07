@@ -48,10 +48,11 @@ and `firecrawl`. SearXNG remains data-compatible but hidden from mobile settings
 The direct `fetch` provider is unsupported on mobile; old stored selections fail with an
 unsupported-provider error rather than being silently rewritten.
 
-Fresh installations use hosted Exa MCP for both keyword search (`web_search_exa`) and page reading
-(`web_fetch_exa`), without requiring a user API key. An optional configured key uses `x-api-key`.
-Exa handles page extraction remotely; mobile does not parse arbitrary HTML. The adapter accepts
-MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
+Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
+for page reading, both without requiring a user API key. Exa MCP also supports page reading
+(`web_fetch_exa`) when selected or used as a fallback; its optional configured key uses `x-api-key`.
+Both services handle page extraction remotely; mobile does not parse arbitrary HTML. The Exa adapter
+accepts MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
 protocol/tool errors as failures rather than empty successful searches.
 
 Keyword search falls back to Exa MCP. Page reading falls back through Exa MCP and Jina, skipping
@@ -60,6 +61,11 @@ response records the providers that actually returned those pages. Exa and Jina 
 allow 60 seconds each; Exa keyword search retains its 25-second limit. Caller cancellation stops
 fallback immediately. Stored provider selections are retained, so existing Jina selections can
 recover through Exa without a preference migration.
+
+Network reachability is separate from a provider's free tier or extraction capability. When all
+attempted routes fail at the network boundary, the tool preserves those errors, asks the user to
+check connectivity, and prevents further calls to that capability in the same turn. Other tools
+remain available, and the next user turn can try again after the network changes.
 
 ## Preferences
 
