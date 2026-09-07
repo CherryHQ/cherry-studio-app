@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import { queryKeys } from '@/frontend/data/queryKeys';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import { FileEntrySchema } from '@/shared/data/types/file';
@@ -38,9 +39,9 @@ const documentEntry = FileEntrySchema.parse({
 });
 const uploadedEntry = FileEntrySchema.parse({
   createdAt: 3,
-  filename: 'cat.jpg',
+  filename: 'upload.pdf',
   id: '00000000-0000-4000-8000-000000000003',
-  mediaType: 'image/jpeg',
+  mediaType: 'application/pdf',
   provenance: 'imported',
   size: 512,
   updatedAt: 3,
@@ -99,7 +100,6 @@ describe('useFileEntries', () => {
     focusEffect = undefined;
     completePreview = undefined;
     latestResult = undefined;
-    // Mirror the app client's staleTime: a fresh shared cache is the case under test.
     queryClient = new QueryClient({
       defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: 30_000 } },
     });
@@ -181,7 +181,7 @@ describe('useFileEntries', () => {
     expect(dataApi.get).toHaveBeenCalledTimes(2);
   });
 
-  test('refetches on mount even when the shared pages are still fresh', async () => {
+  test('reuses fresh shared pages until a file write invalidates them', async () => {
     await act(async () => {
       renderer = create(
         <Providers>
@@ -192,15 +192,29 @@ describe('useFileEntries', () => {
     await flushQueryNotifications();
     await flushQueryNotifications();
     expect(dataApi.get).toHaveBeenCalledTimes(1);
+
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
     expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
       entry.id,
       documentEntry.id,
     ]);
 
-    // The chat picker fetched these pages a moment ago; an upload landed since.
+    // An upload finishes while neither the picker nor the library is mounted.
     await act(async () => renderer?.unmount());
     renderer = undefined;
     dataApi.get.mockResolvedValueOnce({ items: [uploadedEntry, entry, documentEntry] });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.files.entries() });
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       renderer = create(

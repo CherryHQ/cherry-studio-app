@@ -19,9 +19,7 @@ export type FileLibraryEntry = ResolvedFileEntry;
  * cannot share a thing.
  */
 export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled: boolean }) {
-  // The chat file picker shares these pages and may have fetched them seconds
-  // ago, before an upload landed; a fresh cache must not skip this fetch.
-  const query = useFileEntryPages({ enabled, refetchOnMount: 'always' });
+  const query = useFileEntryPages({ enabled });
   const loadNext = query.loadNext;
   const entries = useMemo(
     () =>
@@ -86,14 +84,15 @@ function useFillViewport({
 }
 
 /**
- * Files are written by the backend during chat attachment and image generation,
- * never through a DataApi mutation this cache could invalidate. While the
- * library stays mounted under a screen pushed above it, the user can create
- * those files there; regaining focus is the moment it learns about them.
+ * Composer imports invalidate these pages themselves, but files the backend
+ * writes during image generation and agent turns never pass through a DataApi
+ * mutation this cache could invalidate. While the library stays mounted under
+ * a screen pushed above it, the user can create those files there; regaining
+ * focus is the moment it learns about them.
  */
 function useRefreshOnRefocus(refresh: () => void, enabled: boolean) {
   const refreshRef = useRef(refresh);
-  // The mounting fetch always runs, so the first focus has nothing to refresh.
+  // On mount, the query already uses fresh data or refetches invalidated pages.
   const hasFocusedRef = useRef(false);
 
   useEffect(() => {

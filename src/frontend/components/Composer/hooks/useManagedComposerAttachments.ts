@@ -1,8 +1,9 @@
 import { useToast } from '@cherrystudio/ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ComposerAttachmentStore } from '../context/ComposerProvider';
@@ -28,6 +29,7 @@ export function useManagedComposerAttachments(
   const { t } = useTranslation();
   const { toast } = useToast();
   const file = useBackendModule('file');
+  const queryClient = useQueryClient();
   const [initialAttachmentState] = useState(() => {
     const accepted = initialAttachments.filter(isComposerAttachmentSupported);
     return { accepted, rejectedCount: initialAttachments.length - accepted.length };
@@ -53,15 +55,22 @@ export function useManagedComposerAttachments(
     setAttachmentState(nextAttachments);
   }, []);
 
+  // These writes bypass DataApi mutations, so notify the shared file lists
+  // after storage changes even if the composer has already unmounted.
+  const invalidateFileEntries = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.files.entries() });
+  }, [queryClient]);
+
   const deleteEntry = useCallback(
     async (entryId: ComposerAttachmentReady['fileEntryId']) => {
       try {
         await file.delete(entryId);
+        invalidateFileEntries();
       } catch (error) {
         logger.warn('Failed to delete a cancelled attachment', toError(error), { entryId });
       }
     },
-    [file],
+    [file, invalidateFileEntries],
   );
   const deleteEntryRef = useRef(deleteEntry);
 
@@ -81,6 +90,7 @@ export function useManagedComposerAttachments(
           uri: source.uri,
         });
         importedSize = resolved.entry.size;
+        invalidateFileEntries();
 
         // Removing the tile mid-import cancels the upload itself. Losing the
         // composer does not: a library upload that already started finishes.
@@ -128,7 +138,7 @@ export function useManagedComposerAttachments(
         return 'failed';
       }
     },
-    [commitAttachments, deleteEntry, file],
+    [commitAttachments, deleteEntry, file, invalidateFileEntries],
   );
 
   const importAttachments = useCallback(

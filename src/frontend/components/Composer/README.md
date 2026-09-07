@@ -99,7 +99,9 @@ walk to verify it.
   composer deletes any newly imported entries it still owns. A source marked
   `ownership: 'library'` — every document upload — is borrowed as soon as its
   import lands: removing it later or unmounting leaves the library file in
-  place, and only removing its tile mid-import cancels the upload.
+  place, and only removing its tile mid-import cancels the upload. Successful
+  imports and deletions invalidate the shared file lists, including writes
+  that finish after the composer unmounts. URI and preview caches stay reusable.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.
