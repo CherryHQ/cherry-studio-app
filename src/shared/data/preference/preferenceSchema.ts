@@ -48,6 +48,7 @@ export interface PreferenceSchema {
   'agent.session_naming.prompt': string;
 
   'ui.font_size_step': FontSizeStep;
+  'ui.library.view_mode': 'grid' | 'list';
   'ui.theme_mode': ThemeMode;
 }
 
@@ -75,6 +76,7 @@ export const PreferenceDefaults = {
   'agent.session_naming.prompt': '',
 
   'ui.font_size_step': 0,
+  'ui.library.view_mode': 'grid',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 
