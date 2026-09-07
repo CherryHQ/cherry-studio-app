@@ -11,6 +11,11 @@ import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
+const mockSetStringAsync = jest.fn().mockResolvedValue(true);
+const mockToastShow = jest.fn();
+
+jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetStringAsync(text) }));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -72,6 +77,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 
   return {
+    Button: ({ children, ...props }: { children: ReactNode }) => (
+      <MockView {...props}>
+        <MockText>{children}</MockText>
+      </MockView>
+    ),
+    useToast: () => ({ toast: { show: mockToastShow } }),
     formatMessagePartValue: formatValue,
     hasMessagePartValue: hasValue,
     Image: (props: Record<string, unknown>) => <MockView {...props} />,
@@ -101,6 +112,8 @@ describe('tool message detail sheets', () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
+    mockSetStringAsync.mockClear();
+    mockToastShow.mockClear();
   });
 
   it('opens generic tool details from the message status row', async () => {
@@ -154,6 +167,51 @@ describe('tool message detail sheets', () => {
     });
   });
 
+  it('clips JSON before Markdown rendering and copies the full output on demand', async () => {
+    const output = { body: 'x'.repeat(5_000), tail: 'must remain copyable' };
+    await render(<GenericToolPart part={makeToolPart({ output, toolName: 'calculator' })} />);
+    expect(findAllByTestID('mock-markdown-text')).toHaveLength(0);
+    expect(mockSetStringAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      findByTestID('tool-part-trigger').props.onPress();
+    });
+
+    const markdown = findByTestID('mock-markdown-text').props.markdown as string;
+    expect(markdown.length).toBeLessThan(4_020);
+    expect(markdown).not.toContain('must remain copyable');
+    expect(findText('chat.tool.previewTruncated')).toHaveLength(1);
+
+    await act(async () => {
+      findByTestID('tool-result-copy-full-text').props.onPress();
+    });
+
+    expect(mockSetStringAsync).toHaveBeenCalledWith(JSON.stringify(output, null, 2));
+    expect(mockToastShow).toHaveBeenCalledWith({ label: 'chat.tool.copied', variant: 'success' });
+    expect(findByTestID('mock-markdown-text').props.markdown).toBe(markdown);
+  });
+
+  it('reports clipboard failures without expanding the preview', async () => {
+    mockSetStringAsync.mockRejectedValueOnce(new Error('Clipboard unavailable'));
+    await render(
+      <GenericToolPart
+        part={makeToolPart({ output: 'x'.repeat(5_000), toolName: 'calculator' })}
+      />,
+    );
+    await act(async () => {
+      findByTestID('tool-part-trigger').props.onPress();
+    });
+    await act(async () => {
+      findByTestID('tool-result-copy-full-text').props.onPress();
+    });
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.tool.copyFailed',
+      variant: 'danger',
+    });
+    expect(findText('x'.repeat(5_000))).toHaveLength(0);
+  });
+
   it('maps a processing generic tool to the shared running state', async () => {
     await render(
       <GenericToolPart part={makeToolPart({ state: 'input-available', toolName: 'calculator' })} />,
@@ -166,15 +224,71 @@ describe('tool message detail sheets', () => {
 
   it('keeps the web fetch action free of implementation details', async () => {
     await render(
-      <GenericToolPart
+      <WebSearchToolPart
         part={makeToolPart({
           input: { urls: ['https://www.goldprice.org/gold-price.html'] },
+          state: 'input-available',
           toolName: 'web_fetch',
         })}
       />,
     );
 
-    expect(findByTestID('tool-part-trigger').props.title).toBe('chat.builtinTool.web.fetch');
+    expect(findByTestID('web-search-tool-part-trigger').props.title).toBe(
+      'chat.builtinTool.web.fetch',
+    );
+    expect(findByTestID('web-search-tool-part-trigger').props.statusText).toBe(
+      'chat.webSearch.fetching',
+    );
+  });
+
+  it('presents fetched pages as bounded source cards instead of raw JSON', async () => {
+    await render(
+      <WebSearchToolPart
+        part={makeToolPart({
+          toolName: 'web_fetch',
+          output: [
+            {
+              id: 'page-1',
+              title: 'Article',
+              url: 'https://example.com/article',
+              content: '文'.repeat(4_000),
+              truncated: true,
+            },
+          ],
+        })}
+      />,
+    );
+    await act(async () => {
+      findByTestID('web-search-tool-part-trigger').props.onPress();
+    });
+
+    expect(findByTestID('web-search-tool-part-detail').props.title).toBe(
+      'chat.webSearch.fetchDetailTitle',
+    );
+    expect(findText('Article')).toHaveLength(1);
+    expect(findText(`${'文'.repeat(299)}…`)[0].props.numberOfLines).toBe(3);
+    expect(findAllByTestID('mock-markdown-text')).toHaveLength(0);
+  });
+
+  it('preserves failed fetch details rather than presenting an empty result list', async () => {
+    await render(
+      <WebSearchToolPart
+        part={makeToolPart({
+          toolName: 'web_fetch',
+          output: { status: 'error', message: 'Provider is unavailable', retryable: false },
+        })}
+      />,
+    );
+    expect(findByTestID('web-search-tool-part-trigger').props.statusTone).toBe('danger');
+    expect(findByTestID('web-search-tool-part-trigger').props.statusText).toBe(
+      'chat.tool.callError',
+    );
+    await act(async () => {
+      findByTestID('web-search-tool-part-trigger').props.onPress();
+    });
+
+    expect(findText('Provider is unavailable')).toHaveLength(1);
+    expect(findText('chat.webSearch.noResults')).toHaveLength(0);
   });
 
   it('opens MCP tool details with the server and tool name', async () => {

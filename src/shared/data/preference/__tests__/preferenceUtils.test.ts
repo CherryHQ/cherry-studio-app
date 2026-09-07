@@ -22,7 +22,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('chat.web_search.default_fetch_urls_provider')).toBe('jina');
     expect(getDefaultValue('chat.web_search.default_search_keywords_provider')).toBe('exa-mcp');
     expect(getDefaultValue('chat.web_search.max_results')).toBe(5);
-    expect(getDefaultValue('chat.web_search.compression.method')).toBe('none');
+    expect(getDefaultValue('chat.web_search.compression.method')).toBe('cutoff');
     expect(getDefaultValue('chat.web_search.compression.cutoff_limit')).toBe(2000);
     expect(getDefaultValue('feature.paintings.default_model_id')).toBeNull();
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
