@@ -1,4 +1,5 @@
 import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
@@ -18,6 +19,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
+
+import { cn } from '../../utils';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
@@ -43,6 +46,7 @@ export type BottomSheetBackAction = {
 type BottomSheetBaseProps = {
   backAction?: BottomSheetBackAction;
   children: ReactNode;
+  closeAction?: { accessibilityLabel: string };
   dismissible?: boolean;
   footer?: ReactNode;
   headerAction?: ReactNode;
@@ -84,6 +88,7 @@ export function BottomSheet(props: BottomSheetProps) {
   const {
     backAction,
     children,
+    closeAction,
     dismissible = true,
     footer,
     headerAction,
@@ -108,6 +113,7 @@ export function BottomSheet(props: BottomSheetProps) {
   const detentHeight = cardHeight + OUTER_INSET;
   const bottomCornerRadius = Math.max(BOTTOM_CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
   const hasFooter = footer != null;
+  const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
   const hasNotifiedCloseRef = useRef(false);
@@ -208,15 +214,35 @@ export function BottomSheet(props: BottomSheetProps) {
               >
                 <ArrowLeftIcon className="size-6 text-foreground" />
               </Pressable>
+            ) : closeAction ? (
+              <View className="min-w-11 flex-1 items-start">
+                <Pressable
+                  accessibilityLabel={closeAction.accessibilityLabel}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !dismissible }}
+                  className="size-11 items-center justify-center rounded-full active:bg-secondary disabled:opacity-40"
+                  disabled={!dismissible}
+                  onPress={requestClose}
+                >
+                  <XIcon className="size-6 text-foreground" />
+                </Pressable>
+              </View>
             ) : null}
             <Text
               accessibilityRole="header"
-              className="min-w-0 flex-1 font-semibold text-foreground text-lg"
+              className={cn(
+                'min-w-0 font-semibold text-foreground text-lg',
+                isCloseActionVisible ? 'shrink px-2 text-center' : 'flex-1',
+              )}
               numberOfLines={2}
             >
               {title}
             </Text>
-            {headerAction ? <View className="ml-2">{headerAction}</View> : null}
+            {isCloseActionVisible ? (
+              <View className="min-w-11 flex-1 items-end">{headerAction}</View>
+            ) : headerAction ? (
+              <View className="ml-2">{headerAction}</View>
+            ) : null}
           </View>
           <View
             className="min-h-0 flex-1"

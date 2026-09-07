@@ -60,8 +60,11 @@ visible:
 </BottomSheet>
 ```
 
-Root sheets intentionally have no close button. Users dismiss them with a downward gesture, the
-scrim, Android back, or the accessibility escape action.
+Root sheets omit the close button by default. For a picker with an explicit cancel affordance,
+pass `closeAction={{ accessibilityLabel: 'Close' }}`. This places an X on the left and centers the
+title between equal action columns; `headerAction` stays on the right. The close button uses the
+same dismissal path as the downward gesture, scrim, Android back, and accessibility escape action.
+When showing a second level, `backAction` takes precedence over `closeAction`.
 
 Set `dismissible={false}` when a workflow must remain visible until it reaches an explicit outcome.
 The closed detent then becomes programmatic-only: drag, scrim, Android back, and accessibility
