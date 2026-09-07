@@ -45,17 +45,20 @@ exported `openFilePreview` remains the platform primitive: Quick Look on iOS, ap
 
 | Surface | Images | Other files |
 | --- | --- | --- |
-| Composer and user-message strips | Existing square preview | Existing platform fallback |
+| Composer | Square thumbnail with removal control | Compact file-type icon above a multiline title |
+| User-message strips | Existing square preview | Existing platform fallback |
 | Assistant deliverables | Image itself at message width | Full-width filename/type row |
-| File library | Bounded WebP thumbnail | Existing platform fallback |
+| File library | Bounded WebP thumbnail | Title-first card with file-type icon at the bottom |
 
 Assistant images use the existing backend thumbnail query. Until dimensions load, the image
 reserves a square. The rendered aspect ratio matches the asset, with a height cap of 1.25 times
 its width and contain fitting for taller images. A thumbnail failure leaves the filename and an
 accessible open action. Opening always resolves the original file.
 
-Raster derivatives stay in the backend file-preview pipeline. Text excerpt cards are deferred;
-iOS keeps Quick Look thumbnails and Android keeps extension cards for those files.
+Raster derivatives stay in the backend file-preview pipeline. The composer and library share
+CherryUI's extension-to-icon presets and theme colors; icon routing never controls opening.
+Generated-file badges fit inside library cards. Text excerpt cards are deferred; the default
+`thumbnail` variant keeps iOS Quick Look thumbnails and Android extension cards.
 
 ## Viewer
 
@@ -68,7 +71,7 @@ under system bars. Images use constant black/white chrome; text uses theme surfa
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
-Every resolved file has a primary Share action and an Open with action in the overflow menu.
+Every resolved file has Share and Open with actions in the overflow menu.
 Images also have Save to Photos, using the add-only permission flow shared with the painting viewer.
 
 ### Image

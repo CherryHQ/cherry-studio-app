@@ -6,7 +6,7 @@ import {
 } from '@legendapp/list/react-native';
 import { memo, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -56,8 +56,7 @@ export function FileLibraryList({
   const tileSize =
     (windowWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap) /
     fileLibraryGrid.columns;
-  const estimatedItemSize =
-    tileSize + fileLibraryGrid.tileMetadataEstimatedHeight + fileLibraryGrid.tileGap;
+  const estimatedItemSize = tileSize + fileLibraryGrid.tileGap;
 
   const contentContainerStyle = useMemo(
     () => ({
@@ -146,27 +145,22 @@ function renderFileTile({ extraData, item }: LegendListRenderItemProps<FileLibra
 const FileTile = memo(function FileTile({ item, size }: { item: FileLibraryEntry; size: number }) {
   return (
     <View
-      className="gap-2"
       style={{
         paddingBottom: fileLibraryGrid.tileGap,
         paddingHorizontal: fileLibraryGrid.tileGap / 2,
       }}
     >
       {fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
-        <FileEntrySkeleton size={size} />
+        <FileEntrySkeleton size={size} variant="card" />
       ) : (
         <LoadedFileEntryPreview
           entry={item.entry}
           previewUri={item.previewUri}
           size={size}
           uri={item.uri}
+          variant="card"
         />
       )}
-      <View className="min-w-0 px-0.5">
-        <Text className="text-sm font-medium text-foreground" numberOfLines={1}>
-          {item.entry.filename}
-        </Text>
-      </View>
     </View>
   );
 });

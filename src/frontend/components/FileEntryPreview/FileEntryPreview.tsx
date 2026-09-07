@@ -2,8 +2,9 @@ import {
   FileAttachmentPreview,
   FilePreview,
   type FilePreviewOperation,
+  type FilePreviewVariant,
 } from '@cherrystudio/ui/components';
-import { useCallback } from 'react';
+import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -18,14 +19,30 @@ import { fileEntryPreviewKind, toFilePreviewFile } from './utils/fileEntryPresen
 const logger = loggerService.withContext('FileEntryPreview');
 
 /** Reads the entry by id, then its URI. */
-export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size?: number }) {
+export function FileEntryPreview({
+  entryId,
+  size,
+  variant,
+}: {
+  entryId: FileEntryId;
+  size?: number;
+  variant?: FilePreviewVariant;
+}) {
   const { data, isLoading } = useResolvedFile(entryId);
 
   if (isLoading) {
-    return <FileEntrySkeleton size={size} />;
+    return <FileEntrySkeleton size={size} variant={variant} />;
   }
 
-  return <EntryPreview entry={data?.entry} entryId={entryId} size={size} uri={data?.uri} />;
+  return (
+    <EntryPreview
+      entry={data?.entry}
+      entryId={entryId}
+      size={size}
+      uri={data?.uri}
+      variant={variant}
+    />
+  );
 }
 
 /** Assistant artifacts render images directly; other files retain their result row. */
@@ -47,33 +64,49 @@ export function FileEntryAttachment({ entryId }: { entryId: FileEntryId }) {
  * Same preview for a caller that already holds the entry and its resolved URI.
  */
 export function LoadedFileEntryPreview({
+  badge,
   entry,
   previewUri,
   size,
   uri,
+  variant,
 }: {
+  badge?: ReactNode;
   entry: FileEntry;
   previewUri: string | undefined;
   size?: number;
   uri: string | undefined;
+  variant?: FilePreviewVariant;
 }) {
   return (
-    <EntryPreview entry={entry} entryId={entry.id} previewUri={previewUri} size={size} uri={uri} />
+    <EntryPreview
+      badge={badge}
+      entry={entry}
+      entryId={entry.id}
+      previewUri={previewUri}
+      size={size}
+      uri={uri}
+      variant={variant}
+    />
   );
 }
 
 function EntryPreview({
+  badge,
   entry,
   entryId,
   previewUri,
   size,
   uri,
+  variant,
 }: {
+  badge?: ReactNode;
   entry: FileEntry | undefined;
   entryId: FileEntryId;
   previewUri?: string;
   size?: number;
   uri: string | undefined;
+  variant?: FilePreviewVariant;
 }) {
   const { handleError, t } = useFileEntryPreviewError(entryId);
   const { openFileEntry } = useOpenFileEntry();
@@ -81,6 +114,7 @@ function EntryPreview({
 
   return (
     <FilePreview
+      badge={badge}
       file={file}
       labels={{
         openWith: t('filePreview.openWith'),
@@ -91,6 +125,7 @@ function EntryPreview({
         if (entry && uri) openFileEntry({ entry, uri });
       }}
       size={size}
+      variant={variant}
     />
   );
 }

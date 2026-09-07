@@ -132,7 +132,8 @@ describe('FileEntryPreview', () => {
 
     expect(mockFilePreview).not.toHaveBeenCalled();
     expect(mockSkeleton).toHaveBeenCalledWith({
-      style: { borderRadius: 16, height: 96, width: 96 },
+      className: 'rounded-2xl',
+      style: { height: 96, width: 96 },
     });
   });
 

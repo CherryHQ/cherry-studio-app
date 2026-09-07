@@ -4,7 +4,6 @@ export const fileLibraryGrid = {
   pageEdge: 16, // page margin outside the outermost tiles
   skeletonTiles: 6, // placeholder tiles shown while a page is in flight
   tileGap: 12, // gap between tiles, horizontally and vertically
-  tileMetadataEstimatedHeight: 28, // preview gap and filename
 } as const;
 
 /**
