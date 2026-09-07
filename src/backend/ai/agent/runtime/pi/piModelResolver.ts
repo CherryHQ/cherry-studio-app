@@ -7,14 +7,16 @@ import { resolveProviderConnection } from '@/backend/ai/provider/providerConnect
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import {
+  DEFAULT_MODEL_CONTEXT_WINDOW,
+  DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+} from '@/shared/utils/modelTokenLimits';
 
 import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
 import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
 
-const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
-const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
 const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
 
 class PiModelResolutionError extends Error {
@@ -130,8 +132,8 @@ async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {
 }
 
 export function toPiModelPreflight(model: Model): RuntimeModelPreflight {
-  const contextWindow = model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW;
-  const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS;
+  const contextWindow = model.contextWindow ?? DEFAULT_MODEL_CONTEXT_WINDOW;
+  const maxOutputTokens = model.maxOutputTokens ?? DEFAULT_MODEL_MAX_OUTPUT_TOKENS;
   const contextInputLimit = Math.max(0, contextWindow - maxOutputTokens);
   const maxInputTokens = Math.max(
     0,

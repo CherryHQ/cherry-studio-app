@@ -1,6 +1,8 @@
 import type { Database } from '@/backend/data/db/DbService';
 import type { PaintingsModule } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
+import type { Model } from '@/shared/data/types/model';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -43,7 +45,21 @@ function createSubject() {
     },
     files: {
       resolve: jest.fn(),
+      prepareAttachments: jest.fn(async ({ fileEntryIds }) =>
+        fileEntryIds.map((id) => ({
+          entry: fileEntry(id),
+          uri: 'file:///managed.png',
+          report: { mode: 'image' as const, sourceTruncated: false, requestTruncated: false },
+        })),
+      ),
     },
+    getModel: jest.fn(
+      async () =>
+        ({
+          id: modelId,
+          imageGeneration: { modes: { edit: { maxInputImages: 2, supports: {} } } },
+        }) as Model,
+    ),
     jobs: {
       cancelGenerate: jest.fn(async () => undefined),
       enqueueGenerateTx: jest.fn(async () => ({ id: 'job-1' })),
@@ -53,25 +69,14 @@ function createSubject() {
       createTx: jest.fn(async () => painting('painting-1')),
       resetForRetryTx: jest.fn(async (_tx: Database, id: string) => painting(id)),
     },
-    storage: {
-      createInternalEntry: jest.fn(async () => fileEntry(inputFileId)),
-      discard: jest.fn(async () => undefined),
-    },
   };
   const backend: PaintingsModule = createPaintingsModule(dependencies);
   return { backend, dependencies };
 }
 
 const generationInput = {
-  images: [
-    {
-      id: 'draft-1',
-      mediaType: 'image/png',
-      name: 'input.png',
-      uri: 'file:///picked.png',
-    },
-  ],
-  mode: 'generate' as const,
+  fileEntryIds: [inputFileId],
+  mode: 'edit' as const,
   modelId,
   modelName: 'GPT Image 2',
   paramValues: {},
@@ -80,8 +85,8 @@ const generationInput = {
 
 function signatureFor(paintingId: string | null = null) {
   return JSON.stringify({
-    images: ['draft-1:file:///picked.png'],
-    mode: 'generate',
+    images: [inputFileId],
+    mode: 'edit',
     modelId,
     paintingId,
     paramValues: {},
@@ -100,14 +105,6 @@ describe('createPaintingsModule', () => {
       paintingId: 'painting-1',
     });
 
-    // Exact call shape: the media type rides along and no cleanup policy exists.
-    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith({
-      mediaType: 'image/png',
-      name: 'input.png',
-      provenance: 'imported',
-      source: 'uri',
-      uri: 'file:///picked.png',
-    });
     expect(dependencies.paintings.createTx).toHaveBeenCalledWith(tx, {
       inputFileIds: [inputFileId],
       modelId,
@@ -117,8 +114,8 @@ describe('createPaintingsModule', () => {
     expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
       tx,
       {
-        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///picked.png' }],
-        mode: 'generate',
+        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///managed.png' }],
+        mode: 'edit',
         modelId,
         modelName: 'GPT Image 2',
         paintingId: 'painting-1',
@@ -127,7 +124,6 @@ describe('createPaintingsModule', () => {
       },
       { idempotencyKey: expectedSignature },
     );
-    expect(dependencies.storage.discard).not.toHaveBeenCalled();
   });
 
   it('passes through images that already have a file entry without re-creating them', async () => {
@@ -135,25 +131,16 @@ describe('createPaintingsModule', () => {
 
     await backend.startGeneration({
       ...generationInput,
-      images: [
-        {
-          fileEntryId: existingFileId,
-          id: 'attachment-1',
-          mediaType: 'image/png',
-          name: 'existing.png',
-          uri: 'file:///existing.png',
-        },
-      ],
+      fileEntryIds: [existingFileId],
     });
 
-    expect(dependencies.storage.createInternalEntry).not.toHaveBeenCalled();
     expect(dependencies.paintings.createTx).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({ inputFileIds: [existingFileId] }),
     );
   });
 
-  it('returns the active job on an idempotency hit and discards its fresh inputs', async () => {
+  it('returns the active job on an idempotency hit without creating another receipt', async () => {
     const { backend, dependencies } = createSubject();
     jest
       .mocked(dependencies.jobs.findActiveGenerateTx)
@@ -167,9 +154,6 @@ describe('createPaintingsModule', () => {
     expect(dependencies.jobs.findActiveGenerateTx).toHaveBeenCalledWith(tx, expectedSignature);
     expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
     expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
-    expect(dependencies.storage.discard).toHaveBeenCalledWith([
-      expect.objectContaining({ id: inputFileId }),
-    ]);
   });
 
   it('reuses the interrupted receipt when a paintingId is supplied instead of minting a new one', async () => {
@@ -205,24 +189,46 @@ describe('createPaintingsModule', () => {
     expect(new Set(keys).size).toBe(2);
   });
 
-  it('discards created inputs when receipt persistence fails', async () => {
+  it('propagates a receipt failure without enqueueing a job', async () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.paintings.createTx).mockRejectedValue(new Error('database failed'));
 
     await expect(backend.startGeneration(generationInput)).rejects.toThrow('database failed');
-    expect(dependencies.storage.discard).toHaveBeenCalledWith([
-      expect.objectContaining({ id: inputFileId }),
-    ]);
+    expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
   });
 
-  it('discards created inputs when the enqueue fails', async () => {
+  it('propagates an enqueue failure out of the transaction', async () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.jobs.enqueueGenerateTx).mockRejectedValue(new Error('enqueue failed'));
 
     await expect(backend.startGeneration(generationInput)).rejects.toThrow('enqueue failed');
-    expect(dependencies.storage.discard).toHaveBeenCalledWith([
-      expect.objectContaining({ id: inputFileId }),
-    ]);
+  });
+
+  it('rejects an unavailable library reference before opening a write transaction', async () => {
+    const { backend, dependencies } = createSubject();
+    jest
+      .mocked(dependencies.files.prepareAttachments)
+      .mockRejectedValue(
+        new FileAttachmentError({ code: 'unavailable', fileEntryId: inputFileId }),
+      );
+    await expect(backend.startGeneration(generationInput)).rejects.toMatchObject({
+      issue: { code: 'unavailable' },
+    });
+    expect(dependencies.db.withWriteTx).not.toHaveBeenCalled();
+  });
+
+  it('uses stored model capabilities and passes the authoritative reference limit', async () => {
+    const { backend, dependencies } = createSubject();
+    await backend.startGeneration(generationInput);
+    expect(dependencies.files.prepareAttachments).toHaveBeenCalledWith({
+      fileEntryIds: [inputFileId],
+      target: { purpose: 'painting', acceptsImages: true, maxImages: 2 },
+    });
+    jest.mocked(dependencies.getModel).mockResolvedValue(null);
+    await expect(backend.startGeneration(generationInput)).rejects.toMatchObject({
+      issue: { code: 'model-unsupported' },
+    });
+    expect(dependencies.db.withWriteTx).toHaveBeenCalledTimes(1);
   });
 
   it('delegates cancellation to the job port', async () => {

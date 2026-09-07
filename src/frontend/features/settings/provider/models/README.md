@@ -30,6 +30,19 @@ An empty directory also offers manual creation. Removal results report protected
 The manual form and synchronization task mount independently under `detail/modelAdd/components/`;
 the synchronization preview lives with that task, while the legacy pull page only redirects.
 
+Manual creation edits vision/drawing capabilities, not a separate purpose. Existing list rules
+derive chat/drawing groups. The local registry resolver supplies the model baseline; untouched fields
+stay omitted, and name overrides survive ID edits. The form has no group input; existing group
+metadata and automatic defaults are preserved. Advanced endpoint selection is single-choice
+and defaults to automatic, preserving catalog and gateway routing. Drawing retains native catalog
+routes or uses a configured OpenAI image endpoint; it does not expose chat token limits.
+
+Manual creation accepts one model at a time. Multiple or duplicate IDs and conflicting interfaces
+produce field errors. The form keeps labels and placeholders concise, with optional fields behind
+More settings. Numeric fields preserve raw input for validation; context/output checks share the
+runtime's mobile fallback constants. Failed writes keep the draft, and immediate duplicate saves are
+guarded. The separate synchronization workflow retains its batch support.
+
 The management list uses CherryUI context menus and a scroll boundary. A tap opens details; a long
 press offers details, editing, selection, and deletion. Selection disables navigation and endpoint
 controls, retains the current filter scope, and uses stable model IDs. The list owns selection until

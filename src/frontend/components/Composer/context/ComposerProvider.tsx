@@ -3,6 +3,7 @@ import {
   createContext,
   type PropsWithChildren,
   type RefObject,
+  type SetStateAction,
   use,
   useCallback,
   useMemo,
@@ -35,11 +36,11 @@ type ComposerActionsContextValue = {
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
   /**
    * Replaces the whole draft. Only for the cases that own it wholesale — send
-   * clearing it, a failed send restoring it. Anything that *adds* to what the
+   * clearing it, a failed send restoring it with a functional update to preserve newer text. Anything that *adds* to what the
    * user wrote goes through `inputRef` instead: the field owns the buffer and
    * the caret, and a string handed in here would land at neither.
    */
-  setDraft: (draft: string) => void;
+  setDraft: (draft: SetStateAction<string>) => void;
 };
 
 export type ComposerAttachmentStore = Pick<

@@ -1,6 +1,7 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { loggerService } from '@logger';
+import { resolveScheme } from 'expo-linking';
 
 import type {
   BackgroundActivitySession,
@@ -25,9 +26,9 @@ export const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
 export const PAINTING_JOB_QUEUE = 'painting';
 
 /**
- * Input images always carry a fileEntryId: `startGeneration` materializes
- * draft-only images into internal entries before the job is enqueued, and the
- * receipt's `files.input` records them for the job's lifetime. The uri is
+ * Input images always carry a fileEntryId: `startGeneration` validates library
+ * references before the job is enqueued, and the receipt's `files.input`
+ * records them for the job's lifetime. The uri is
  * a same-process convenience for readDataUrl — an abandoned job never re-runs
  * (recovery `'abandon'`, maxAttempts 1), so it is never read across restarts.
  */
@@ -117,7 +118,7 @@ export function createPaintingGenerateJobHandler(
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
       const session = dependencies.activities?.startSession({
-        deepLinkUrl: `cherrystudio://paintings/${encodeURIComponent(paintingId)}`,
+        deepLinkUrl: `${resolveScheme({})}://paintings/${encodeURIComponent(paintingId)}`,
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
         props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),

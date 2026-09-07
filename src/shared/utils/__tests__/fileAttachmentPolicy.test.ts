@@ -1,22 +1,23 @@
+import {
+  FileAttachmentError,
+  type FileAttachmentTarget,
+  type FileAttachmentFact as ManagedFileFact,
+} from '@/shared/contracts/fileAttachment';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import type { RuntimeModelPreflight } from '../../runtime';
 import {
-  findImageAttachmentLimit,
+  validateFileAttachments,
   IMAGE_CONTEXT_TOKEN_RESERVE,
   MAX_IMAGE_ATTACHMENT_BYTES,
   MAX_IMAGE_ATTACHMENT_COUNT,
   MAX_IMAGE_ATTACHMENT_TOTAL_BYTES,
   MIN_TEXT_CONTEXT_TOKEN_RESERVE,
-} from '../imageAttachments';
-import type { ManagedFileFact } from '../managedFileResolver';
+} from '../fileAttachmentPolicy';
 
-const MODEL: RuntimeModelPreflight = {
-  contextWindow: 128_000,
-  inputModalities: ['text', 'image'],
+const MODEL: FileAttachmentTarget = {
+  purpose: 'chat',
+  acceptsImages: true,
   maxInputTokens: 120_000,
-  maxOutputTokens: 8_000,
-  supportsTools: true,
 };
 
 describe('image attachment limits', () => {
@@ -82,4 +83,14 @@ function imageFact(index: number, size: number): ManagedFileFact {
     name: `image-${index}.png`,
     size,
   };
+}
+
+function findImageAttachmentLimit(files: readonly ManagedFileFact[], target: FileAttachmentTarget) {
+  try {
+    validateFileAttachments(files, target);
+    return null;
+  } catch (error) {
+    if (error instanceof FileAttachmentError) return error.issue.code;
+    throw error;
+  }
 }

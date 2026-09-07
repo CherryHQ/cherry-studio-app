@@ -8,15 +8,11 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
 } from '@/backend/services/file/fileStorage';
+import type { FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-export type ManagedFileFact = {
-  fileEntryId: FileEntryId;
-  mediaType: string;
-  name: string;
-  size: number;
-};
+export type ManagedFileFact = FileAttachmentFact;
 
 export type TurnResourceLedger = {
   /** Managed ids explicitly referenced by the current input or Session transcript. */

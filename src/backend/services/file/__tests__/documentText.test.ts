@@ -1,9 +1,7 @@
+import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+
 import { extractPdfText } from '../../../../../modules/pdf-text-extractor';
-import {
-  DocumentTextError,
-  MAX_DOCUMENT_ATTACHMENT_BYTES,
-  readDocumentUriText,
-} from '../documentText';
+import { DocumentTextError, readDocumentUriText } from '../documentText';
 import { readFileUriBytes } from '../fileStorage';
 
 const mockFile = { size: 64 };

@@ -40,6 +40,15 @@ describe('JinaProvider', () => {
 
     expect(requester.mock.calls[0]?.[0].headers).toHaveProperty('Authorization', 'Bearer jina-key');
   });
+
+  test('gives remote page rendering a longer deadline than ordinary API requests', async () => {
+    const requester = createMockJsonRequester({ data: { content: 'Page' } });
+    const signal = new AbortController().signal;
+
+    await createProvider([], requester).fetchUrls('https://example.com', config, { signal });
+
+    expect(requester.mock.calls[0]?.[0]).toMatchObject({ timeoutMs: 60_000, signal });
+  });
 });
 
 function createProvider(apiKeys: string[], requester: MockWebSearchJsonRequester) {

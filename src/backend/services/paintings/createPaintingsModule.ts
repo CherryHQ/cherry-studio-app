@@ -4,14 +4,17 @@ import type {
   PaintingGenerationStart,
   PaintingsModule,
   ResolvedFile,
+  FileModule,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
-import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 import type {
-  PaintingFileStorage,
   PaintingGenerateJobImage,
   PaintingGenerateJobInput,
 } from './tasks/paintingGenerateJobHandler';
@@ -51,10 +54,10 @@ type PaintingJobsPort = {
 
 export type PaintingsModuleDependencies = {
   db: { withWriteTx<TValue>(fn: (tx: Database) => Promise<TValue>): Promise<TValue> };
-  files: PaintingFileRepository;
+  files: PaintingFileRepository & Pick<FileModule, 'prepareAttachments'>;
+  getModel(id: UniqueModelId): Promise<Model | null>;
   jobs: PaintingJobsPort;
   paintings: PaintingGenerationPersistence;
-  storage: Pick<PaintingFileStorage, 'createInternalEntry' | 'discard'>;
 };
 
 export function createPaintingsModule(dependencies: PaintingsModuleDependencies): PaintingsModule {
@@ -71,86 +74,69 @@ export function createPaintingsModule(dependencies: PaintingsModuleDependencies)
   };
 }
 
-/**
- * Creates the receipt and enqueues the `painting.generate` job in one write
- * transaction — on rollback neither exists. Draft-only images are materialized
- * into internal entries first (file IO cannot ride the transaction); the
- * receipt's `files.input` is what records them, so an entry no receipt ended up
- * recording — on failure or on an idempotency hit — is discarded before
- * returning.
- */
+/** Validate all library references before creating a receipt or starting durable work. */
 async function startGeneration(
   dependencies: PaintingsModuleDependencies,
   input: PaintingGenerationInput,
 ): Promise<PaintingGenerationStart> {
   const prompt = input.prompt.trim();
   const signature = generationSignature({ ...input, prompt });
-  const createdInputs: FileEntry[] = [];
-  let createdInputsSettled = false;
-  try {
-    const images: PaintingGenerateJobImage[] = [];
-    for (const image of input.images) {
-      if (image.fileEntryId) {
-        images.push({ fileEntryId: image.fileEntryId, mediaType: image.mediaType, uri: image.uri });
-      } else {
-        const entry = await dependencies.storage.createInternalEntry({
-          mediaType: image.mediaType,
-          name: image.name,
-          provenance: 'imported',
-          source: 'uri',
-          uri: image.uri,
-        });
-        createdInputs.push(entry);
-        images.push({ fileEntryId: entry.id, mediaType: image.mediaType, uri: image.uri });
-      }
-    }
-
-    const { providerId } = parseUniqueModelId(input.modelId);
-    const result = await dependencies.db.withWriteTx(async (tx) => {
-      const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
-      if (existing) {
-        return {
-          jobId: existing.id,
-          paintingId: activeJobPaintingId(existing.input),
-          reusedActive: true,
-        };
-      }
-      const receiptInput = {
-        inputFileIds: images.map((image) => image.fileEntryId),
-        modelId: input.modelId,
-        prompt,
-        providerId,
-      };
-      const receipt = input.paintingId
-        ? await dependencies.paintings.resetForRetryTx(tx, input.paintingId, receiptInput)
-        : await dependencies.paintings.createTx(tx, receiptInput);
-      const handle = await dependencies.jobs.enqueueGenerateTx(
-        tx,
-        {
-          images,
-          mode: input.mode,
-          modelId: input.modelId,
-          modelName: input.modelName,
-          paintingId: receipt.id,
-          paramValues: input.paramValues,
-          prompt,
-        },
-        { idempotencyKey: signature },
-      );
-      return { jobId: handle.id, paintingId: receipt.id, reusedActive: false };
-    });
-
-    if (result.reusedActive) {
-      // The reused receipt already lists its own copies of these inputs.
-      await dependencies.storage.discard(createdInputs);
-    }
-    createdInputsSettled = true;
-    return { jobId: result.jobId, paintingId: result.paintingId };
-  } finally {
-    if (!createdInputsSettled) {
-      await dependencies.storage.discard(createdInputs);
-    }
+  const model = await dependencies.getModel(input.modelId);
+  const hasImages = input.fileEntryIds.length > 0;
+  if (!model || !supportsPaintingGenerationMode(model, hasImages ? 'edit' : 'generate')) {
+    throw new FileAttachmentError({ code: 'model-unsupported' });
   }
+  const definition = model.imageGeneration?.modes[input.mode];
+  if (model.imageGeneration && !definition)
+    throw new FileAttachmentError({ code: 'model-unsupported' });
+  const prepared = await dependencies.files.prepareAttachments({
+    fileEntryIds: input.fileEntryIds,
+    target: {
+      purpose: 'painting',
+      acceptsImages: supportsPaintingGenerationMode(model, 'edit'),
+      maxImages: definition?.maxInputImages,
+    },
+  });
+  const images: PaintingGenerateJobImage[] = prepared.map((file) => ({
+    fileEntryId: file.entry.id,
+    mediaType: file.entry.mediaType,
+    uri: file.uri,
+  }));
+  const { providerId } = parseUniqueModelId(input.modelId);
+  const result = await dependencies.db.withWriteTx(async (tx) => {
+    const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
+    if (existing) {
+      return {
+        jobId: existing.id,
+        paintingId: activeJobPaintingId(existing.input),
+      };
+    }
+    const receiptInput = {
+      inputFileIds: images.map((image) => image.fileEntryId),
+      modelId: input.modelId,
+      prompt,
+      providerId,
+    };
+    const receipt = input.paintingId
+      ? await dependencies.paintings.resetForRetryTx(tx, input.paintingId, receiptInput)
+      : await dependencies.paintings.createTx(tx, receiptInput);
+    const handle = await dependencies.jobs.enqueueGenerateTx(
+      tx,
+      {
+        images,
+        mode: input.mode,
+        modelId: input.modelId,
+        modelName: input.modelName,
+        paintingId: receipt.id,
+        paramValues: input.paramValues,
+        prompt,
+      },
+      { idempotencyKey: signature },
+    );
+    return { jobId: handle.id, paintingId: receipt.id };
+  });
+
+  return { jobId: result.jobId, paintingId: result.paintingId };
 }
 
 async function resolveFileEntries(files: PaintingFileRepository, ids: readonly FileEntryId[]) {
@@ -179,7 +165,7 @@ function activeJobPaintingId(jobInput: unknown): string {
  */
 function generationSignature(input: PaintingGenerationInput): string {
   return JSON.stringify({
-    images: input.images.map((image) => image.fileEntryId ?? `${image.id}:${image.uri}`),
+    images: input.fileEntryIds,
     mode: input.mode,
     modelId: input.modelId,
     paintingId: input.paintingId ?? null,

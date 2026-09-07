@@ -37,6 +37,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => {
+  const { useState } = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
 
   return {
@@ -48,13 +49,16 @@ jest.mock('react-native-reanimated', () => {
     useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => true,
     useSharedValue: (initial: number) => {
-      let value = initial;
-      return {
-        get: () => value,
-        set: (next: number) => {
-          value = next;
-        },
-      };
+      const [sharedValue] = useState(() => {
+        let value = initial;
+        return {
+          get: () => value,
+          set: (next: number) => {
+            value = next;
+          },
+        };
+      });
+      return sharedValue;
     },
     withTiming: (value: number) => value,
   };
@@ -155,5 +159,47 @@ describe('PaintingAssistantMessage', () => {
         'painting.outputAccessibility:{"count":2,"index":2,"prompt":"Draw a cherry"}',
       ]),
     );
+  });
+
+  it('makes the result visible when persisted files end its fade before the image displays', () => {
+    const props = {
+      aspectRatio: 1,
+      error: null,
+      interruption: null,
+      paintingId: 'painting-1',
+      prompt: 'Draw a cherry',
+      resolution: '1024 x 1024',
+    };
+    const outputs = [{ fileEntryId: 'output-1', uri: 'file:///one.png' }];
+    act(() => {
+      renderer = create(<PaintingAssistantMessage {...props} outputs={[]} status="generating" />);
+    });
+    act(() => {
+      renderer?.update(
+        <PaintingAssistantMessage {...props} animateOutput outputs={outputs} status="idle" />,
+      );
+    });
+    expect(renderer?.root.findByProps({ testID: 'painting-results' }).props.style).toEqual({
+      opacity: 0,
+    });
+
+    // Query synchronization can turn off the fade before the native onDisplay event.
+    act(() => {
+      renderer?.update(
+        <PaintingAssistantMessage
+          {...props}
+          animateOutput={false}
+          outputs={outputs}
+          status="idle"
+        />,
+      );
+    });
+    expect(renderer?.root.findByProps({ testID: 'painting-results' }).props.style).toEqual({
+      opacity: 1,
+    });
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-output-output-1' }).props.pointerEvents,
+    ).toBe('auto');
+    expect(renderer?.root.findAllByProps({ testID: 'painting-generation-loader' })).toHaveLength(0);
   });
 });

@@ -1,4 +1,4 @@
-import { useComposerDockLayout } from '@cherrystudio/ui/components';
+import { useAlert, useComposerDockLayout } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
@@ -15,6 +15,10 @@ import {
 } from '@/frontend/data/paintings/imageGenerationParams';
 import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
+import {
+  fileAttachmentIssueDescription,
+  getFileAttachmentIssue,
+} from '@/frontend/utils/fileAttachmentFeedback';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {
@@ -50,6 +54,7 @@ export function PaintingComposer({
   painting?: Painting;
 }) {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const headerHeight = useHeaderHeight();
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
@@ -114,18 +119,25 @@ export function PaintingComposer({
         userMessageId: Crypto.randomUUID(),
       });
 
-      const result = await generatePainting(input);
-      if (!result) {
-        setActiveTurn(null);
-        return null;
+      try {
+        const result = await generatePainting(input);
+        if (!result) {
+          setActiveTurn(null);
+          return null;
+        }
+        setActiveTurn((current) =>
+          current ? { ...current, paintingId: result.painting.id } : current,
+        );
+        return result;
+      } catch (error) {
+        if (getFileAttachmentIssue(error)) {
+          setActiveTurn(activeTurn);
+          setShowPersistedTurn(showPersistedTurn);
+        }
+        throw error;
       }
-
-      setActiveTurn((current) =>
-        current ? { ...current, paintingId: result.painting.id } : current,
-      );
-      return result;
     },
-    [generatePainting],
+    [activeTurn, generatePainting, showPersistedTurn],
   );
   const retryInput = activeTurn?.input;
   const canRetry = Boolean(failure && retryInput);
@@ -135,10 +147,17 @@ export function PaintingComposer({
       return;
     }
 
-    // The generation hook owns the resulting inline error state. Consume the
-    // rejection here so a button-triggered retry cannot become unhandled.
-    void handleGenerate(retryInput).catch(() => {});
-  }, [handleGenerate, retryInput]);
+    // Job failures belong inline. Admission failures need the same feedback
+    // as a composer submit, since retry has no ComposerSurface to present it.
+    void handleGenerate(retryInput).catch((error: unknown) => {
+      const issue = getFileAttachmentIssue(error);
+      if (issue)
+        alert.show({
+          title: t('attachments.sendRejected'),
+          description: fileAttachmentIssueDescription(issue, t),
+        });
+    });
+  }, [alert, handleGenerate, retryInput, t]);
   const messageRenderState = useMemo<PaintingMessageState>(
     () => ({
       animateOutput:
@@ -177,28 +196,11 @@ export function PaintingComposer({
   );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
-  const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
-  const composerInitialAttachments = firstOutput
-    ? [
-        {
-          fileEntryId: firstOutput.fileEntryId,
-          id: `painting-file:${firstOutput.fileEntryId}`,
-          kind: 'image' as const,
-          mediaType: firstOutput.mediaType,
-          name: firstOutput.name,
-          size: firstOutput.size,
-          status: 'ready' as const,
-          uri: firstOutput.uri,
-        },
-      ]
-    : initialAttachments.length > 0
-      ? initialAttachments
-      : receiptId
-        ? initialFiles.inputs
-        : [];
-  const composerInitialDraft = firstOutput
-    ? ''
-    : initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
+  // Results belong to the message list. Only an explicit handoff or an
+  // unfinished receipt seeds the draft; finishing a job must not remount it.
+  const composerInitialAttachments =
+    initialAttachments.length > 0 ? initialAttachments : receiptId ? initialFiles.inputs : [];
+  const composerInitialDraft = initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
 
   return (
     <View className="flex-1">
@@ -215,7 +217,6 @@ export function PaintingComposer({
       <ComposerSessionProvider
         initialAttachments={composerInitialAttachments}
         initialDraft={composerInitialDraft}
-        key={composerKey}
       >
         <ComposerDock onHeightChange={handleInputHeightChange}>
           <PaintingInput

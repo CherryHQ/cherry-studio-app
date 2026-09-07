@@ -5,21 +5,22 @@
  * so the tool file there is a thin wrapper; mobile keeps the same split to make
  * the two readable side by side.
  *
- * Never throws on lookup failure: a failed lookup returns a structured error so
- * callers can distinguish transient failures from failures that cannot succeed
- * without a configuration change. A cancellation (aborted signal) is the
- * exception — it rethrows so it propagates as the cancellation it is.
+ * Failed lookups retain diagnostics and any successful sources, then stop web
+ * access for the current turn. Cancellation still propagates to the caller.
  */
 
 import type { WebSearchOutput } from '@cherrystudio/universal/ai/builtinTools';
-import * as z from 'zod';
 
-import { isPermanentWebSearchConfigError } from '@/backend/services/webSearch/utils/config';
-import { isAbortError } from '@/backend/services/webSearch/utils/errors';
+import { isAbortError, toWebSearchFailure } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { WebSearchResponse } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchCapability,
+  WebSearchFailure,
+  WebSearchProviderId,
+  WebSearchResponse,
+} from '@/shared/data/types/webSearch';
 
 import type { RuntimeToolResult } from '../../runtime';
 import { citeId, newCitePrefix } from './citationIds';
@@ -62,22 +63,22 @@ expecting the missing tail.`;
 
 /**
  * A failed lookup must be distinguishable from "ran fine, found nothing": both
- * would otherwise be `[]`. Success returns the results array (matching
- * `webSearchOutputSchema`); failure returns `{ error }`.
+ * would otherwise be `[]`. A partial failure also retains successful sources.
  */
-export const webLookupErrorSchema = z.object({
-  error: z.string(),
-  retryable: z.boolean().optional(),
-  terminal: z.literal(true).optional(),
-  userMessage: z.string().optional(),
-  i18nKey: z.string().optional(),
-});
-export type WebLookupError = z.infer<typeof webLookupErrorSchema>;
+export type WebLookupError = {
+  error: string;
+  userMessage?: string;
+  i18nKey?: string;
+  capability: WebSearchCapability;
+  providerId?: WebSearchProviderId;
+  failures: WebSearchFailure[];
+  results: WebSearchOutput;
+};
 export type WebLookupResult = WebSearchOutput | WebLookupError;
 
-/** Transient failure (network/provider hiccup) — a retry can succeed. */
+/** A failed lookup ends web access for this turn, including alternate queries and tools. */
 export const WEB_LOOKUP_ERROR_NOTE =
-  'Web lookup failed (network/provider error); retry or inform the user.';
+  'Stop web lookups for this turn. Do not retry, reformulate queries, switch providers, or call either web tool again. Answer using the content already obtained and explain which sources could not be read; if no content was obtained, explain the failure.';
 
 /**
  * Permanent failure: no usable web-search provider for the requested capability. Retrying can never
@@ -147,32 +148,42 @@ function isProxyFakeIpError(message: string): boolean {
   );
 }
 
-function classifyWebLookupError(error: unknown): WebLookupError {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (isPermanentWebSearchConfigError(error)) {
+function createWebLookupError(
+  failures: WebSearchFailure[],
+  capability: WebSearchCapability,
+  results: WebSearchOutput = [],
+  providerId?: WebSearchProviderId,
+): WebLookupError {
+  const message = failures
+    .map((failure) => `${failure.input}: ${failure.message}`)
+    .join('; ')
+    .slice(0, 2_000);
+  const output: WebLookupError = {
+    error: providerId ? `${providerId}: ${message}` : message,
+    capability,
+    failures,
+    results,
+    ...(providerId ? { providerId } : {}),
+  };
+  const configFailure = failures.find((failure) => failure.kind === 'configuration');
+  if (configFailure?.code && Object.hasOwn(WEB_CONFIG_ERROR_PRESENTATION, configFailure.code)) {
     return {
-      error: message,
-      retryable: false,
-      terminal: true,
-      ...WEB_CONFIG_ERROR_PRESENTATION[error.code],
+      ...output,
+      ...WEB_CONFIG_ERROR_PRESENTATION[configFailure.code as WebSearchConfigErrorCode],
     };
   }
-
-  if (isProxyFakeIpError(message)) {
+  if (isProxyFakeIpError(message) || failures.every((failure) => failure.kind === 'network')) {
     return {
-      error: WEB_NETWORK_ERROR_MESSAGE,
-      retryable: false,
-      terminal: true,
+      ...output,
       userMessage: WEB_NETWORK_ERROR_MESSAGE,
       i18nKey: 'web_lookup_network_error',
     };
   }
 
-  return { error: message, retryable: true };
+  return output;
 }
 
-/** Branch the model-facing note: permanent failures must not trigger a retry loop. */
+/** Explain the failure without changing the shared stop policy. */
 function webLookupNote(error: WebLookupError): string {
   if (error.i18nKey === 'web_lookup_network_error' || isProxyFakeIpError(error.error)) {
     return WEB_NETWORK_ERROR_NOTE;
@@ -187,7 +198,7 @@ function webLookupNote(error: WebLookupError): string {
   ) {
     return WEB_PROVIDER_CONFIGURATION_ERROR_NOTE;
   }
-  return WEB_LOOKUP_ERROR_NOTE;
+  return '';
 }
 
 export function isWebLookupError(output: WebLookupResult): output is WebLookupError {
@@ -198,32 +209,51 @@ export function isWebLookupError(output: WebLookupResult): output is WebLookupEr
 
 /**
  * Shared result projection. Success is the results array the renderer and the
- * model both read; a failure carries the note that tells the model whether a
- * retry can help, because a thrown error would reach it as an opaque failure.
+ * model both read; a failure retains partial sources and tells the model to
+ * finish using existing content.
  */
 export function webLookupToolResult(output: WebLookupResult): RuntimeToolResult {
   if (isWebLookupError(output)) {
     return {
       value: {
-        status: 'error',
-        message: webLookupNote(output),
-        retryable: output.retryable ?? false,
+        status: output.results.length > 0 ? 'partial' : 'error',
+        message: [output.userMessage ?? output.error, webLookupNote(output), WEB_LOOKUP_ERROR_NOTE]
+          .filter(Boolean)
+          .join(' '),
+        error: output.error,
+        retryable: false,
+        capability: output.capability,
+        ...(output.providerId ? { providerId: output.providerId } : {}),
+        failures: output.failures,
+        results: output.results,
       },
       artifacts: [],
+      failure: {
+        scope: 'tool',
+        error: {
+          code: 'web_lookup_failed',
+          message: output.userMessage ? `${output.userMessage} ${output.error}` : output.error,
+          retryable: false,
+          origin: 'tool',
+        },
+      },
     };
   }
   return { value: output, artifacts: [] };
 }
 
-function mapResponse(response: WebSearchResponse): WebSearchOutput {
+function mapResponse(response: WebSearchResponse): WebLookupResult {
   const prefix = newCitePrefix();
-  return response.results.map((result, index) => ({
+  const results = response.results.map((result, index) => ({
     id: citeId(prefix, index),
     title: result.title,
     url: result.url,
     content: result.content,
     ...(result.truncated ? { truncated: true } : {}),
   }));
+  return response.failures?.length
+    ? createWebLookupError(response.failures, response.capability, results, response.providerId)
+    : results;
 }
 
 export async function searchWeb(
@@ -239,7 +269,7 @@ export async function searchWeb(
     // retryable error that keeps the tool loop running after the request was already aborted.
     if (signal?.aborted || isAbortError(error)) throw error;
     logger.error('webSearchService.searchKeywords failed', error as Error, { query });
-    return classifyWebLookupError(error);
+    return createWebLookupError([toWebSearchFailure(query, error)], 'searchKeywords');
   }
 }
 
@@ -254,6 +284,9 @@ export async function fetchWeb(
   } catch (error) {
     if (signal?.aborted || isAbortError(error)) throw error;
     logger.error('webSearchService.fetchUrls failed', error as Error, { urls });
-    return classifyWebLookupError(error);
+    return createWebLookupError(
+      urls.map((url) => toWebSearchFailure(url, error)),
+      'fetchUrls',
+    );
   }
 }

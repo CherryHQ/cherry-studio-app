@@ -2,6 +2,7 @@ import type { LegendListRef } from '@legendapp/list/react-native';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { cacheService } from '@/frontend/data/CacheService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -18,8 +19,6 @@ import {
 const SAVE_THROTTLE_MS = 200;
 const scrollLog = loggerService.withContext('ChatScroll');
 
-type ScrollMessageToEnd = (options: { animated: boolean; closeKeyboard: boolean }) => Promise<void>;
-
 type MessageListScrollControllerInputs = {
   dataKey: string | undefined;
   enteringMessageId: string | undefined;
@@ -27,7 +26,6 @@ type MessageListScrollControllerInputs = {
   listRef: RefObject<LegendListRef | null>;
   messages: readonly MessageListItem[];
   onReady: (() => void) | undefined;
-  scrollMessageToEnd: ScrollMessageToEnd;
 };
 
 type ObservedScrollAnchor = Readonly<{
@@ -107,17 +105,21 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   const scrollToLiveEdge = useCallback(
     async (reason: FollowingReason, options: { animated: boolean; closeKeyboard: boolean }) => {
-      const current = inputsRef.current;
+      const generation = restoreGenerationRef.current;
       follow.enterFollowing(reason);
       clearStoredAnchor();
       liveEdgeScrollCountRef.current += 1;
 
       try {
         if (options.closeKeyboard) {
-          await current.scrollMessageToEnd(options);
-        } else {
-          await current.listRef.current?.scrollToEnd({ animated: options.animated });
+          // Keep keyboard geometry updates active so dismissal clears its bottom
+          // inset before we resolve the list's new live edge.
+          await KeyboardController.dismiss();
+          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+            return;
+          }
         }
+        await inputsRef.current.listRef.current?.scrollToEnd({ animated: options.animated });
       } catch (error) {
         scrollLog.warn('[SCROLL] liveEdgeScroll failed', error as Error, { reason });
       } finally {

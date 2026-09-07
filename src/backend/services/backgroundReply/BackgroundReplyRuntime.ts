@@ -1,4 +1,5 @@
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
+import { resolveScheme } from 'expo-linking';
 import { Platform } from 'react-native';
 
 import {
@@ -439,7 +440,7 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: `cherrystudio:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    deepLinkUrl: `${resolveScheme({})}:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
     key: input.sessionId,
   };
 }

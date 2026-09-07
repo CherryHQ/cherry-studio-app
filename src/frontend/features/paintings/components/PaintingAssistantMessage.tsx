@@ -93,7 +93,11 @@ export function PaintingAssistantMessage({
     resultOpacity.set(1);
     completeFade();
   }, [completeFade, resultOpacity]);
-  const resultStyle = useAnimatedStyle(() => ({ opacity: resultOpacity.get() }));
+  // A persisted-file refresh can end the transition before onDisplay fires.
+  // Keep owning opacity: detaching an animated style leaves its native value.
+  const resultStyle = useAnimatedStyle(() => ({
+    opacity: animateOutput && !isFadeComplete ? resultOpacity.get() : 1,
+  }));
 
   if (status !== 'generating' && (error || interruption)) {
     const didFail = Boolean(error) || interruption?.reason === 'failed';
@@ -204,7 +208,7 @@ export function PaintingAssistantMessage({
           ) : null
         ) : null}
         {results.length > 0 ? (
-          <Animated.View className="w-full gap-3" style={animateOutput ? resultStyle : undefined}>
+          <Animated.View className="w-full gap-3" style={resultStyle} testID="painting-results">
             {results}
           </Animated.View>
         ) : null}

@@ -1,3 +1,4 @@
+import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 /**
  * Agent Runtime contract types.
  *
@@ -14,7 +15,6 @@
  * Shapes mirror the design document exactly. Do not add, rename, or "improve"
  * fields without updating the spec first.
  */
-
 import type {
   AiUsagePricingSnapshot,
   ServingCredentialReceipt,
@@ -104,6 +104,12 @@ export type RuntimeArtifact = {
 export type RuntimeToolResult = {
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
+  /** Trusted callback metadata; never inferred from the JSON inside value. */
+  failure?: {
+    error: RuntimeError;
+    /** Stops this tool and its failure group for the current execution. */
+    scope: 'call' | 'tool';
+  };
 };
 
 export type RuntimeTextAttachmentPart = {
@@ -114,6 +120,7 @@ export type RuntimeTextAttachmentPart = {
   text: string;
   truncated: boolean;
   trust: 'untrusted-user-content';
+  attachmentReport?: FileAttachmentReport;
 };
 
 export type RuntimeInputPart =
@@ -177,6 +184,8 @@ export type RuntimeTool = {
   description: string;
   inputSchema: RuntimeJsonValue;
   approval: 'auto' | 'ask' | 'deny';
+  /** Tools in the same group stop together after a tool-scoped failure. */
+  failureGroup?: string;
   /**
    * False keeps the Agent's global auto mode from promoting this tool's `ask`
    * (cost-bearing or permission-gated calls). Absent means eligible.

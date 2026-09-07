@@ -20,7 +20,6 @@ import {
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
-import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
@@ -120,7 +119,7 @@ export function createBackend(
         services.job.findActiveByIdempotencyKeyTx(tx, idempotencyKey),
     },
     paintings: services.painting,
-    storage: paintingFileStorage,
+    getModel: (id) => services.model.getById(id),
   });
   const mcpServerMutations = createMcpServerMutations({
     runtime: services.mcpRuntime,
@@ -188,6 +187,7 @@ export function createBackend(
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,
+        prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,

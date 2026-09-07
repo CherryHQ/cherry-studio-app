@@ -40,7 +40,14 @@ describe('UserMessage', () => {
     const message = createMessage([textPart('Hello'), first, second]);
     const renderer = render(<UserMessage message={message} />);
     const scrollView = renderer.root.findByType(ScrollView);
-    const attachmentContainer = renderer.root.findByProps({ className: 'max-w-full self-end' });
+    const attachmentContainer = renderer.root.find(
+      (node) =>
+        node.type === View &&
+        typeof node.props.className === 'string' &&
+        ['max-w-full', 'self-end'].every((className) =>
+          node.props.className.split(' ').includes(className),
+        ),
+    );
     const renderedContent = renderer.root.findAll(
       (node) => node.type === 'FilePart' || node.type === 'MessageParts',
     );

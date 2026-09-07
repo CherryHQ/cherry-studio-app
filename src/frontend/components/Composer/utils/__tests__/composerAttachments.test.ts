@@ -11,7 +11,6 @@ import {
   createPhotoAttachmentDraft,
   hasComposerSendableContent,
   hasImportingComposerAttachments,
-  isComposerAttachmentSupported,
   isComposerAttachmentReady,
   isComposerImageFileName,
   isComposerImageMediaType,
@@ -39,6 +38,22 @@ describe('composer attachments', () => {
     expect(
       appendComposerAttachments([imageAttachment], [transientFileAttachment, imageAttachment]),
     ).toEqual([imageAttachment, transientFileAttachment]);
+  });
+
+  test('deduplicates library references within a batch without dropping distinct files', () => {
+    const libraryAttachment = {
+      ...readyFileAttachment,
+      id: `file-entry:${readyFileAttachment.fileEntryId}`,
+    };
+    const otherFile: ComposerAttachmentReady = {
+      ...readyFileAttachment,
+      id: 'file:other',
+      fileEntryId: '00000000-0000-7000-8000-000000000002',
+    };
+
+    expect(
+      appendComposerAttachments([], [libraryAttachment, readyFileAttachment, otherFile]),
+    ).toEqual([libraryAttachment, otherFile]);
   });
 
   test('removes an attachment by id', () => {
@@ -107,23 +122,6 @@ describe('composer attachments', () => {
         uri: 'file://photo.webp',
       }),
     ).toMatchObject({ kind: 'image', mediaType: 'image/webp' });
-  });
-
-  test('allows only model-supported image attachment formats', () => {
-    expect(
-      isComposerAttachmentSupported(
-        createPhotoAttachmentDraft({ fileName: 'photo.jpg', id: 'jpg', uri: 'file://photo.jpg' }),
-      ),
-    ).toBe(true);
-    expect(
-      isComposerAttachmentSupported(
-        createDocumentAttachmentDraft({
-          mediaType: 'image/heic',
-          name: 'photo.heic',
-          uri: 'file://photo.heic',
-        }),
-      ),
-    ).toBe(false);
   });
 
   test('classifies non-image documents as file attachments', () => {
