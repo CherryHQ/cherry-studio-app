@@ -18,6 +18,11 @@ jest.mock('expo-router', () => ({
   },
 }));
 
+// Exercise the real classifier without loading native preview components.
+jest.mock('@/frontend/components/FileEntryPreview', () =>
+  jest.requireActual('@/frontend/components/FileEntryPreview/utils/fileEntryPresentation'),
+);
+
 const entry = FileEntrySchema.parse({
   createdAt: 1,
   filename: 'photo.png',

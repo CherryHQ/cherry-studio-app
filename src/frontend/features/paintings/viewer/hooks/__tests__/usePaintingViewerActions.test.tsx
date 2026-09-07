@@ -40,6 +40,11 @@ jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
+// Keep the real permission/save flow without loading the native image viewer.
+jest.mock('@/frontend/components/ArtifactPreview', () =>
+  jest.requireActual('@/frontend/components/ArtifactPreview/hooks/useSaveImageToPhotos'),
+);
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
