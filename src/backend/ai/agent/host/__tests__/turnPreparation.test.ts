@@ -118,12 +118,13 @@ describe('turn preparation', () => {
       kind: 'agent-session',
       id: 'assistant-1',
     });
-    expect(() => {
-      resolvedAttribution.source!.name = 'Changed by a tool';
-    }).toThrow(TypeError);
-    expect(() => {
-      resolvedAttribution.messageRef!.id = 'changed-by-a-tool';
-    }).toThrow(TypeError);
+    // Failed writes need not throw in Expo's non-strict test transform.
+    expect(Reflect.set(resolvedAttribution.source!, 'name', 'Changed by a tool')).toBe(false);
+    expect(Reflect.set(resolvedAttribution.messageRef!, 'id', 'changed-by-a-tool')).toBe(false);
+    expect(plan.usageAttribution.resolve()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: AGENT.name, icon: null },
+      messageRef: { kind: 'agent-session', id: 'assistant-1' },
+    });
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
