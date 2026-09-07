@@ -2,6 +2,7 @@ import { queryOptions, useQueries } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { queryKeys, useBackendModule, useInfiniteQuery } from '@/frontend/data';
 import type { FileEntry } from '@/shared/data/types/file';
 
@@ -68,7 +69,7 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
     () =>
       uriPages.entries.map((item) => {
         const needsPreview =
-          Boolean(item.uri) && item.entry.mediaType.startsWith('image/') && !item.previewUri;
+          Boolean(item.uri) && fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri;
         return queryOptions({
           enabled: needsPreview,
           initialData: needsPreview ? undefined : item,
@@ -121,7 +122,7 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
 
 /** Image is the only positive class; a document is everything else. */
 function entryKind(entry: FileEntry): FileLibraryFilter {
-  return entry.mediaType.startsWith('image/') ? 'image' : 'document';
+  return fileEntryPreviewKind(entry) === 'image' ? 'image' : 'document';
 }
 
 /**

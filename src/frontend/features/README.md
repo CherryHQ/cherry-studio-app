@@ -55,6 +55,7 @@ The implementation name may use repository `camelCase` conventions even when the
 - `chat/`: the main Agent Session conversation page.
 - `agents/`: Agent list plus the shared create/edit child page.
 - `drawings/`: painting history and selection page.
+- `files/`: shared managed-file viewer reached from chat, attachments, and the file library.
 - `home/`: home page and its `aiUsage/` child page.
 - `library/`: file library page.
 - `onboarding/`: onboarding page.
