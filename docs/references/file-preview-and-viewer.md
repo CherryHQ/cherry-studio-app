@@ -71,7 +71,7 @@ under system bars. Images use constant black/white chrome; text uses theme surfa
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
-Every resolved file has a primary Share action and an Open with action in the overflow menu.
+Every resolved file has Share and Open with actions in the overflow menu.
 Images also have Save to Photos, using the add-only permission flow shared with the painting viewer.
 
 ### Image
