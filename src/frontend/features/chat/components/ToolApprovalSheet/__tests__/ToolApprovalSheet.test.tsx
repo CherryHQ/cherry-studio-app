@@ -64,7 +64,13 @@ describe('ToolApprovalSheet', () => {
     const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <ToolApprovalSheet approvals={approvals} isOpen onCancel={onCancel} onRespond={onRespond} />
+      <ToolApprovalSheet
+        approvals={approvals}
+        onClose={jest.fn()}
+        isOpen
+        onCancel={onCancel}
+        onRespond={onRespond}
+      />
     );
 
     act(() => {
@@ -118,10 +124,11 @@ describe('ToolApprovalSheet', () => {
     });
   });
 
-  test('cannot be dismissed while an approval is pending', () => {
-    render();
-
-    expect(renderer.root.findByType(BottomSheet).props.dismissible).toBe(false);
+  test('closing the sheet leaves the approval undecided', () => {
+    const { onCancel, onRespond } = render();
+    act(() => renderer.root.findByType(BottomSheet).props.onClose());
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onRespond).not.toHaveBeenCalled();
   });
 
   test('does not mount a sheet before an approval exists', () => {
@@ -130,6 +137,7 @@ describe('ToolApprovalSheet', () => {
         <ToolApprovalSheet
           approvals={[]}
           isOpen={false}
+          onClose={jest.fn()}
           onCancel={jest.fn()}
           onRespond={jest.fn()}
         />,

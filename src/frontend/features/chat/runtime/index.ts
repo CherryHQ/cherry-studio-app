@@ -6,6 +6,7 @@ export {
   useAgentChatDraftHandoff,
   useAgentChatFork,
   useAgentChatSession,
+  useAgentInputQueue,
 } from './ChatProvider';
 export {
   createAgentMessageListProjectionCache,

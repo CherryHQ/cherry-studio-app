@@ -57,6 +57,11 @@ import {
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  AgentEditQueuedInputSchema,
+  AgentPromoteQueuedInputSchema,
+  AgentReorderQueuedInputsSchema,
+  AgentPauseInputQueueSchema,
+  AgentQueuedInputIdentitySchema,
   AgentSessionSnapshotSchema,
   AgentProtocolError,
   type AgentApprovalView,
@@ -66,6 +71,15 @@ import {
   type AgentExecutionTarget,
   type AgentForkSessionInput,
   type AgentInputPart,
+  type AgentInferenceSnapshotV1,
+  type AgentSessionInput,
+  type AgentSubmitMessageResult,
+  type AgentEditQueuedInput,
+  type AgentPromoteQueuedInput,
+  type AgentReorderQueuedInputs,
+  type AgentPauseInputQueue,
+  type AgentQueuedInputIdentity,
+  type AgentInputQueueReason,
   type AgentMessagePart,
   type AgentMessageView,
   type AgentProtocol,
@@ -77,6 +91,7 @@ import {
 } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
@@ -87,7 +102,12 @@ import type {
   RuntimeUsageReport,
 } from '../runtime';
 import { raceAbort } from '../runtime';
-import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
+import type {
+  AgentSessionStore,
+  EnqueueSessionInput,
+  ReserveSubmissionResult,
+  FinalizeAssistantMessageInput,
+} from '../sessionStore/AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
   settleStreamingTextParts,
@@ -107,10 +127,11 @@ import {
   toAgentMessagePart,
   toAgentUsageView,
 } from './runtimeProjection';
-import { materializeRuntimeAttachments } from './turnAttachments';
+import { materializeRuntimeAttachments, resolveManagedInput } from './turnAttachments';
 import {
   prepareInitialTurn,
   prepareTurn,
+  applyTurnOverrides,
   type TurnPlan,
   type TurnPreparationDependencies,
 } from './turnPreparation';
@@ -169,7 +190,7 @@ export type MobileAgentHostPorts = {
 
 /**
  * The Host owns the Turn projection (agent-persistence.md): the store persists
- * messages only, live turn state exists here, and the terminal turn view is
+ * messages and input receipts, live turn state exists here, and the terminal turn view is
  * derived from the settled assistant message.
  */
 type ActiveTurnState = {
@@ -178,6 +199,7 @@ type ActiveTurnState = {
   turn: AgentTurnView;
   activeUserMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
+  inferenceSnapshot: AgentInferenceSnapshotV1;
   autoNamePromise: Promise<AgentSessionView | null> | null;
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
@@ -262,6 +284,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     { runtimeId: string; session: AgentRuntimeSession }
   >();
   private readonly runningTurns = new Set<Promise<void>>();
+  /** Serializes queue mutations and snapshot capture, never waits for a running turn. */
+  private readonly inputOperations = new Map<string, Promise<void>>();
   private readonly naming: MobileAgentHostNaming;
   private readonly lifecycleAbortController = new AbortController();
   private acceptingSubmissions = true;
@@ -326,6 +350,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     for (const admission of this.initialAdmissions) {
       admission.abortController.abort(reason);
     }
+    await Promise.allSettled(this.inputOperations.values());
     await Promise.allSettled(
       [...this.admittingSessions.values(), ...this.initialAdmissions].map(
         ({ completion }) => completion,
@@ -354,6 +379,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
     this.observingSessions.clear();
+    this.inputOperations.clear();
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
@@ -363,6 +389,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // as pending. Publishing the settled row refreshes it in place.
     for (const message of reconciled) {
       this.publish(message.sessionId, { type: 'message.finalized', message });
+    }
+    for (const sessionId of this.listeners.keys()) {
+      await this.withInputOperation(sessionId, () => this.publishInputQueue(sessionId));
     }
     return reconciled.length;
   }
@@ -469,6 +498,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // installing its active/running state for us to cancel and drain below.
     this.deletingSessions.add(sessionId);
     try {
+      await this.inputOperations.get(sessionId);
       const observations = this.observingSessions.get(sessionId);
       if (observations) {
         await Promise.allSettled([...observations]);
@@ -501,40 +531,110 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  async submitMessage(
-    input: AgentSubmitMessageInput,
-  ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }> {
+  async submitMessage(input: AgentSubmitMessageInput): Promise<AgentSubmitMessageResult> {
     const parsed = AgentSubmitMessageInputSchema.parse(input);
-    const { sessionId } = parsed;
-    this.assertIdle(sessionId);
-    // Synchronous admission guard: a second submit that interleaves at any
-    // await below still fails SESSION_BUSY (invariant 1).
+    // Pin the intent before any await; an omitted target must never steer a newer turn.
+    const targetTurnId = parsed.targetTurnId ?? this.activeTurns.get(parsed.sessionId)?.turn.id;
+    for (;;) {
+      const result = await this.withInputOperation(parsed.sessionId, async () => {
+        this.assertSessionWritable(parsed.sessionId);
+        const active = this.activeTurns.get(parsed.sessionId);
+        const predecessor = this.runningTurnsBySession.get(parsed.sessionId);
+        if (predecessor && (!active || active.turn.status === 'cancelling')) {
+          return { predecessor };
+        }
+        return { submission: await this.acceptInput({ ...parsed, targetTurnId }) };
+      });
+      if (result.submission) return result.submission;
+      // Stop then send joins the previous execution and persistence outside the queue lock.
+      await result.predecessor;
+    }
+  }
+
+  private async acceptInput(input: AgentSubmitMessageInput): Promise<AgentSubmitMessageResult> {
+    const signal = this.lifecycleAbortController.signal;
+    const existing = await raceAbort(this.store.getInput(input.inputId), signal);
+    if (existing) {
+      if (existing.sessionId !== input.sessionId || existing.status === 'removed') {
+        fail('INPUT_UNAVAILABLE', 'This input identity is no longer available in this Session.');
+      }
+      return submissionResult(existing);
+    }
+    const session = await raceAbort(this.requireSession(input.sessionId), signal);
+    const configuredAgent = await raceAbort(this.requireAgent(session.agentId), signal);
+    const agent = applyTurnOverrides(configuredAgent, input);
+    if (
+      !this.runtime.descriptor.capabilities.attachments &&
+      input.parts.some((part) => part.type === 'file')
+    ) {
+      fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
+    }
+    const queued: EnqueueSessionInput = {
+      id: input.inputId,
+      sessionId: input.sessionId,
+      parts: input.parts,
+      mode: input.mode ?? 'follow-up',
+      targetTurnId: input.targetTurnId,
+      modelId: createUniqueModelId(agent.model.providerId, agent.model.modelId),
+      reasoningEffort:
+        agent.options.reasoningEffort === 'off'
+          ? 'none'
+          : (agent.options.reasoningEffort ?? 'default'),
+    };
+    const queue = await raceAbort(this.store.getInputQueue(input.sessionId), signal);
+    const active = this.activeTurns.get(input.sessionId);
+    if (!active && !this.runningTurnsBySession.has(input.sessionId) && queue.inputs.length === 0) {
+      return this.startInput(queued, true);
+    }
+    const { parts } = await resolveManagedInput(
+      this.files,
+      input.parts,
+      [],
+      this.lifecycleAbortController.signal,
+    );
+    this.assertSessionWritable(input.sessionId);
+    const { input: stored } = await this.store.enqueueInput({ ...queued, parts });
+    const result = await this.redirectInput(stored, active);
+    await this.publishInputQueue(input.sessionId);
+    this.requestQueueDrain(input.sessionId);
+    return result;
+  }
+
+  /** Resolves fresh history and configuration immediately before reserving a queued input. */
+  private async startInput(
+    input: EnqueueSessionInput,
+    isNew: boolean,
+  ): Promise<AgentSubmitMessageResult> {
+    this.assertAcceptingSubmissions();
+    const sessionId = input.sessionId;
     const completion = createCompletionSignal();
     const abortController = new AbortController();
     const { signal } = abortController;
-    this.admittingSessions.set(sessionId, {
-      abortController,
-      completion: completion.promise,
-    });
+    this.admittingSessions.set(sessionId, { abortController, completion: completion.promise });
     try {
-      // Every gate between admission and the first durable write lives in the
-      // preparation stage; a failure there leaves nothing to reconcile.
-      const plan = await prepareTurn(this.turnPreparation, parsed, signal);
-
-      // Open the Runtime before creating durable pending rows. A failed open
-      // must leave no reservation that startup reconciliation has to repair.
+      const plan = await prepareTurn(this.turnPreparation, input, signal);
       const runtimeSession = await this.getRuntimeSession(sessionId, plan.runtime, signal);
       signal.throwIfAborted();
-
-      // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.store.reserveSubmission({
+      if (isNew) {
+        await this.store.enqueueInput({ ...input, parts: plan.inputParts });
+        // A fresh explicit send into an empty queue starts even after a prior stop.
+        await this.store.setInputQueuePaused(sessionId, false);
+      }
+      const dispatching = await this.store.updateInput({
+        id: input.id,
+        sessionId,
+        expectedStatus: ['queued'],
+        patch: { status: 'dispatching', reason: null },
+      });
+      if (!dispatching) fail('INPUT_UNAVAILABLE', 'The queued input is no longer available.');
+      const reserved = await this.store.consumeInput({
+        inputId: input.id,
         sessionId,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
-
-      return this.startReservedTurn(
+      const started = this.startReservedTurn(
         sessionId,
         plan.sessionTitle,
         plan,
@@ -542,16 +642,247 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         runtimeSession,
         abortController,
       );
+      await this.publishInputQueue(sessionId);
+      return { inputId: input.id, disposition: 'started', ...started };
+    } catch (error) {
+      const stored = await this.store.getInput(input.id);
+      if (!stored || stored.status === 'consumed') throw error;
+      const reason = error instanceof AgentProtocolError ? 'invalid-input' : 'runtime-unavailable';
+      const retained = await this.store.updateInput({
+        id: input.id,
+        sessionId,
+        expectedStatus: ['queued', 'dispatching'],
+        patch: { status: 'queued', reason },
+      });
+      await this.store.setInputQueuePaused(sessionId, true);
+      await this.publishInputQueue(sessionId);
+      logger.warn('Queued input could not start; queue paused', {
+        inputId: input.id,
+        sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return submissionResult(retained ?? stored);
     } finally {
       this.admittingSessions.delete(sessionId);
       completion.resolve();
     }
   }
 
+  private async redirectInput(
+    input: AgentSessionInput,
+    active: ActiveTurnState | undefined,
+  ): Promise<AgentSubmitMessageResult> {
+    let reason: AgentInputQueueReason = 'busy';
+    if (input.mode === 'steer') {
+      if (!active || active.turn.id !== input.targetTurnId || active.turn.status === 'cancelling') {
+        reason = 'target-ended';
+      } else if (
+        input.parts.some((part) => part.type !== 'text') ||
+        !input.parts.some((part) => part.type === 'text' && part.text.trim())
+      ) {
+        reason = 'unsupported-content';
+      } else {
+        const requestedAgent = applyTurnOverrides(active.agent, input);
+        if (
+          createUniqueModelId(requestedAgent.model.providerId, requestedAgent.model.modelId) !==
+            active.inferenceSnapshot.model.uniqueModelId ||
+          requestedAgent.options.reasoningEffort !== active.agent.options.reasoningEffort
+        ) {
+          reason = 'configuration-changed';
+        } else {
+          const steering = await this.store.updateInput({
+            id: input.id,
+            sessionId: input.sessionId,
+            expectedStatus: ['queued'],
+            patch: { status: 'steering', reason: null },
+          });
+          if (!steering) fail('INPUT_UNAVAILABLE', 'The input is no longer queued.');
+          const accepted = await active.runtimeSession
+            .steer({
+              turnId: active.turn.id,
+              inputId: input.id,
+              text: input.parts
+                .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+                .join('\n'),
+            })
+            .catch(async (error: unknown) => {
+              // An exception cannot prove whether native injection happened. Cancellation
+              // returns known leftovers; terminal settlement interrupts any unresolved ids.
+              await this.store.setInputQueuePaused(input.sessionId, true);
+              active.abortController.abort(error);
+              void active.runtimeSession
+                .cancel(active.turn.id)
+                .catch((cancelError: unknown) =>
+                  logger.warn(
+                    'Failed to cancel an uncertain steering submission',
+                    cancelError as Error,
+                  ),
+                );
+              logger.warn(
+                'Steering acceptance failed; input retained for recovery',
+                error as Error,
+              );
+              return null;
+            });
+          if (accepted === null)
+            return { inputId: input.id, disposition: 'queued', reason: 'runtime-unavailable' };
+          if (accepted)
+            return { inputId: input.id, disposition: 'redirected', turnId: active.turn.id };
+          reason = 'runtime-unavailable';
+        }
+      }
+    }
+    const retained = await this.store.updateInput({
+      id: input.id,
+      sessionId: input.sessionId,
+      expectedStatus: ['queued', 'steering'],
+      patch: { status: 'queued', reason },
+    });
+    return submissionResult(retained ?? input);
+  }
+
+  async editQueuedInput(input: AgentEditQueuedInput): Promise<void> {
+    const parsed = AgentEditQueuedInputSchema.parse(input);
+    await this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      const { parts } = await resolveManagedInput(
+        this.files,
+        parsed.parts,
+        [],
+        this.lifecycleAbortController.signal,
+      );
+      const updated = await this.store.updateInput({
+        id: parsed.inputId,
+        sessionId: parsed.sessionId,
+        expectedStatus: ['queued', 'interrupted'],
+        patch: { parts },
+      });
+      if (!updated) fail('INPUT_UNAVAILABLE', 'Only unconsumed queued inputs can be edited.');
+      await this.publishInputQueue(parsed.sessionId);
+    });
+  }
+
+  async removeQueuedInput(input: AgentQueuedInputIdentity): Promise<void> {
+    const parsed = AgentQueuedInputIdentitySchema.parse(input);
+    await this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      const updated = await this.store.updateInput({
+        id: parsed.inputId,
+        sessionId: parsed.sessionId,
+        expectedStatus: ['queued', 'interrupted'],
+        patch: { status: 'removed' },
+      });
+      if (!updated) fail('INPUT_UNAVAILABLE', 'Only unconsumed queued inputs can be removed.');
+      await this.publishInputQueue(parsed.sessionId);
+    });
+    this.requestQueueDrain(parsed.sessionId);
+  }
+
+  async retryQueuedInput(input: AgentQueuedInputIdentity): Promise<void> {
+    const parsed = AgentQueuedInputIdentitySchema.parse(input);
+    await this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      const updated = await this.store.updateInput({
+        id: parsed.inputId,
+        sessionId: parsed.sessionId,
+        expectedStatus: ['queued', 'interrupted'],
+        patch: { status: 'queued', reason: null },
+      });
+      if (!updated) fail('INPUT_UNAVAILABLE', 'The input is no longer available for retry.');
+      await this.publishInputQueue(parsed.sessionId);
+    });
+    this.requestQueueDrain(parsed.sessionId);
+  }
+
+  async promoteQueuedInput(input: AgentPromoteQueuedInput): Promise<AgentSubmitMessageResult> {
+    const parsed = AgentPromoteQueuedInputSchema.parse(input);
+    return this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      const updated = await this.store.updateInput({
+        id: parsed.inputId,
+        sessionId: parsed.sessionId,
+        expectedStatus: ['queued'],
+        patch: { mode: 'steer', targetTurnId: parsed.targetTurnId },
+      });
+      if (!updated) fail('INPUT_UNAVAILABLE', 'Only queued inputs can be promoted.');
+      const result = await this.redirectInput(updated, this.activeTurns.get(parsed.sessionId));
+      await this.publishInputQueue(parsed.sessionId);
+      return result;
+    });
+  }
+
+  async reorderQueuedInputs(input: AgentReorderQueuedInputs): Promise<void> {
+    const parsed = AgentReorderQueuedInputsSchema.parse(input);
+    await this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      if (!(await this.store.reorderInputs(parsed.sessionId, parsed.inputIds)))
+        fail('INPUT_UNAVAILABLE', 'The queue changed before it could be reordered.');
+      await this.publishInputQueue(parsed.sessionId);
+    });
+    this.requestQueueDrain(parsed.sessionId);
+  }
+
+  async pauseInputQueue(input: AgentPauseInputQueue): Promise<void> {
+    const parsed = AgentPauseInputQueueSchema.parse(input);
+    await this.withInputOperation(parsed.sessionId, async () => {
+      this.assertSessionWritable(parsed.sessionId);
+      await this.requireSession(parsed.sessionId);
+      await this.store.setInputQueuePaused(parsed.sessionId, parsed.isPaused);
+      await this.publishInputQueue(parsed.sessionId);
+    });
+    if (!parsed.isPaused) this.requestQueueDrain(parsed.sessionId);
+  }
+
+  private requestQueueDrain(sessionId: string): void {
+    void this.withInputOperation(sessionId, async () => {
+      if (
+        !this.acceptingSubmissions ||
+        this.deletingSessions.has(sessionId) ||
+        this.activeTurns.has(sessionId) ||
+        this.admittingSessions.has(sessionId) ||
+        this.runningTurnsBySession.has(sessionId)
+      )
+        return;
+      const queue = await this.store.getInputQueue(sessionId);
+      const next = queue.inputs[0];
+      if (queue.isPaused || !next) return;
+      if (next.status !== 'queued') {
+        await this.store.setInputQueuePaused(sessionId, true);
+        await this.publishInputQueue(sessionId);
+        return;
+      }
+      await this.startInput(next, false);
+    }).catch((error: unknown) =>
+      logger.warn('Agent input queue drain failed', error as Error, { sessionId }),
+    );
+  }
+
+  private async publishInputQueue(sessionId: string): Promise<void> {
+    this.publish(sessionId, {
+      type: 'queue.updated',
+      sessionId,
+      queue: await this.store.getInputQueue(sessionId),
+    });
+  }
+
+  private withInputOperation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.inputOperations.get(sessionId) ?? Promise.resolve();
+    const result = previous.then(operation);
+    const settled = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.inputOperations.set(sessionId, settled);
+    void settled.then(() => {
+      if (this.inputOperations.get(sessionId) === settled) this.inputOperations.delete(sessionId);
+    });
+    return result;
+  }
+
   async cancelTurn(input: { sessionId: string; turnId: string }): Promise<void> {
     const parsed = AgentCancelTurnInputSchema.parse(input);
     const active = this.activeTurns.get(parsed.sessionId);
-    if (!active || active.turn.id !== parsed.turnId) {
+    if (!active || active.turn.id !== parsed.turnId || active.turn.endedAt !== null) {
       return; // invariant 6: idempotent, including after the turn settled
     }
     if (active.turn.status !== 'cancelling') {
@@ -559,7 +890,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(parsed.sessionId, { type: 'turn.updated', turn: active.turn });
     }
     active.abortController.abort(new Error('The turn was cancelled.'));
-    await active.runtimeSession.cancel(parsed.turnId);
+    const pause = this.withInputOperation(parsed.sessionId, async () => {
+      await this.store.setInputQueuePaused(parsed.sessionId, true);
+      await this.publishInputQueue(parsed.sessionId);
+    });
+    await Promise.all([pause, active.runtimeSession.cancel(parsed.turnId)]);
+    await this.runningTurnsBySession.get(parsed.sessionId);
   }
 
   async respondApproval(input: {
@@ -605,36 +941,42 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_BUSY', 'The session is being deleted.');
       }
 
-      // Snapshot capture and listener registration are one synchronous section:
-      // no event can fall into a snapshot/subscription gap (invariant 8).
-      const active = this.activeTurns.get(sessionId);
-      const snapshot = AgentSessionSnapshotSchema.parse(
-        cloneJson({
-          agent: { id: agent.id, name: agent.name },
-          session,
-          capabilities,
-          activeTurn: active?.turn ?? null,
-          activeUserMessage: active?.activeUserMessage ?? null,
-          hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
-          streamingMessage: active?.assistantMessage ?? null,
-          pendingApprovals: active
-            ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
-            : [],
-        }),
-      );
-      const sessionListeners = this.listeners.get(sessionId) ?? new Set();
-      this.listeners.set(sessionId, sessionListeners);
-      sessionListeners.add(listener);
+      return await this.withInputOperation(sessionId, async () => {
+        const inputQueue = await this.store.getInputQueue(sessionId);
+        if (this.deletingSessions.has(sessionId))
+          fail('SESSION_BUSY', 'The session is being deleted.');
+        // Snapshot capture and listener registration are one synchronous section:
+        // no event can fall into a snapshot/subscription gap (invariant 8).
+        const active = this.activeTurns.get(sessionId);
+        const snapshot = AgentSessionSnapshotSchema.parse(
+          cloneJson({
+            agent: { id: agent.id, name: agent.name },
+            session,
+            capabilities,
+            inputQueue,
+            activeTurn: active?.turn ?? null,
+            activeUserMessage: active?.activeUserMessage ?? null,
+            hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
+            streamingMessage: active?.assistantMessage ?? null,
+            pendingApprovals: active
+              ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
+              : [],
+          }),
+        );
+        const sessionListeners = this.listeners.get(sessionId) ?? new Set();
+        this.listeners.set(sessionId, sessionListeners);
+        sessionListeners.add(listener);
 
-      return {
-        snapshot,
-        unsubscribe: () => {
-          sessionListeners.delete(listener);
-          if (sessionListeners.size === 0 && this.listeners.get(sessionId) === sessionListeners) {
-            this.listeners.delete(sessionId);
-          }
-        },
-      };
+        return {
+          snapshot,
+          unsubscribe: () => {
+            sessionListeners.delete(listener);
+            if (sessionListeners.size === 0 && this.listeners.get(sessionId) === sessionListeners) {
+              this.listeners.delete(sessionId);
+            }
+          },
+        };
+      });
     } finally {
       observations.delete(completion.promise);
       if (observations.size === 0 && this.observingSessions.get(sessionId) === observations) {
@@ -671,6 +1013,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       turn,
       activeUserMessage: reserved.userMessage,
       assistantMessage: reserved.assistantMessage,
+      inferenceSnapshot: plan.inferenceSnapshot,
       autoNamePromise: null,
       autoNameUserParts: plan.hasMessages ? null : plan.inputParts,
       backgroundReply: this.startBackgroundReply({
@@ -711,6 +1054,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (this.runningTurnsBySession.get(sessionId) === run) {
         this.runningTurnsBySession.delete(sessionId);
       }
+      this.requestQueueDrain(sessionId);
     });
 
     return {
@@ -747,7 +1091,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         tools: [...plan.tools],
         options: plan.agent.options,
-        runtimeTimingSink: state.runtimeTiming.sink,
+        // Pi pauses at each consumed-input boundary until this collector is replaced.
+        runtimeTimingSink: {
+          onToolExecutionStart: (event) => state.runtimeTiming.sink.onToolExecutionStart(event),
+          onToolExecutionEnd: (event) => state.runtimeTiming.sink.onToolExecutionEnd(event),
+        },
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
@@ -778,11 +1126,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }),
       );
     } catch (error) {
+      const wasCancelled = state.abortController.signal.aborted;
+      state.abortController.abort(error);
+      await state.runtimeSession.cancel(state.turn.id).catch((cancelError: unknown) => {
+        logger.warn('Failed to cancel after a Host event-stream failure', cancelError as Error);
+      });
       if (error instanceof TerminalPersistenceError) {
         this.handleTerminalPersistenceFailure(sessionId, state, error);
         return;
       }
-      if (state.abortController.signal.aborted) {
+      if (wasCancelled) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);
         } catch (finalizeError) {
@@ -817,6 +1170,22 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
+      case 'input.consumed':
+        await this.withInputOperation(sessionId, () =>
+          this.consumeSteeringInput(sessionId, state, event),
+        );
+        return false;
+      case 'input.undelivered':
+        await this.withInputOperation(sessionId, async () => {
+          await this.store.updateInput({
+            id: event.inputId,
+            sessionId,
+            expectedStatus: ['steering'],
+            patch: { status: 'queued', reason: 'undelivered' },
+          });
+          await this.publishInputQueue(sessionId);
+        });
+        return false;
       case 'part.add': {
         const part = toAgentMessagePart(event.part);
         if (part.type === 'file') {
@@ -888,7 +1257,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'usage': {
-        // Cumulative; the last report before the terminal event is authoritative.
+        // Cumulative within this segment; consumption starts a new accumulator.
         state.usage = {
           completedAt: event.completedAt,
           context: event.context,
@@ -923,44 +1292,148 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
+  private async consumeSteeringInput(
+    sessionId: string,
+    state: ActiveTurnState,
+    event: Extract<RuntimeEvent, { type: 'input.consumed' }>,
+  ): Promise<void> {
+    const input = await this.store.getInput(event.inputId);
+    if (
+      input?.sessionId === sessionId &&
+      input.status === 'consumed' &&
+      input.turnId === state.turn.id
+    )
+      return;
+    if (
+      !input ||
+      input.sessionId !== sessionId ||
+      input.status !== 'steering' ||
+      input.targetTurnId !== state.turn.id
+    ) {
+      throw new Error('The Runtime consumed an input that was not steering this turn.');
+    }
+    if ([...state.pendingApprovals.values()].some((approval) => approval.status === 'pending')) {
+      throw new Error('The Runtime consumed steering before pending approvals settled.');
+    }
+    const previous = this.segmentFinalization(state, 'completed', null, event.consumedAt);
+    previous.contextCheckpoint = null;
+    await state.snapshotFlush;
+    let reserved: Awaited<ReturnType<AgentSessionStore['consumeInput']>>;
+    try {
+      reserved = await this.store.consumeInput({
+        inputId: input.id,
+        sessionId,
+        userParts: input.parts.map<AgentMessagePart>((part, index) => {
+          if (part.type !== 'text') throw new Error('Steering supports text only.');
+          return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
+        }),
+        modelId: state.inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot: state.inferenceSnapshot,
+        continuation: { turnId: state.turn.id, previousAssistant: previous },
+      });
+    } catch (error) {
+      // Native consumption already happened. Never turn an ambiguous write into automatic replay.
+      state.abortController.abort(error);
+      void state.runtimeSession
+        .cancel(state.turn.id)
+        .catch((cancelError: unknown) =>
+          logger.warn(
+            'Failed to cancel after a steering boundary write failed',
+            cancelError as Error,
+          ),
+        );
+      throw new TerminalPersistenceError(error);
+    }
+    const finalized = reserved.previousAssistantMessage;
+    if (!finalized)
+      throw new Error('The steering transaction did not return the previous segment.');
+    if (state.usage)
+      this.usage.record({
+        agent: state.agent,
+        assistantMessageId: finalized.id,
+        report: state.usage,
+        turnId: state.turn.id,
+      });
+    if (state.autoNameUserParts)
+      state.autoNameUserParts = [...state.autoNameUserParts, ...input.parts];
+    state.activeUserMessage = reserved.userMessage;
+    state.assistantMessage = reserved.assistantMessage;
+    state.turn = { ...state.turn, assistantMessageId: reserved.assistantMessage.id };
+    state.runtimeTiming = new MessageRuntimeTimingCollector(undefined, event.consumedAt);
+    state.usage = null;
+    // Route handoff must load the persisted prefix before this live pair, even within turn 1.
+    state.hasHistoryBeforeActiveTurn = true;
+    state.snapshotDirty = false;
+    this.publish(sessionId, { type: 'message.finalized', message: finalized });
+    this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
+    this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
+    this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+    state.backgroundReply.update(state.assistantMessage);
+    await this.publishInputQueue(sessionId);
+  }
+
+  private segmentFinalization(
+    state: ActiveTurnState,
+    outcome: 'completed' | 'failed' | 'cancelled',
+    error: AgentErrorView | null,
+    completedAt: number,
+  ): FinalizeAssistantMessageInput {
+    state.runtimeTiming.closeOpenSpans(completedAt);
+    state.runtimeTiming.complete(completedAt);
+    const timing = state.runtimeTiming.snapshot();
+    const parts = interruptNonTerminalToolParts(
+      settleStreamingTextParts(state.assistantMessage.parts),
+      'The turn ended before this tool call completed.',
+    );
+    if (outcome === 'failed' && error)
+      parts.push({ id: `error-${state.turn.id}`, type: 'error', error });
+    return {
+      assistantMessageId: state.assistantMessage.id,
+      status: outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled',
+      parts,
+      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
+      error,
+      contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
+      runtimeStats: {
+        runtimeTiming: {
+          ...timing,
+          completedAt: timing.completedAt ?? Math.max(timing.startedAt, completedAt),
+        },
+      },
+    };
+  }
+
   private async finalize(
     sessionId: string,
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
   ): Promise<void> {
-    const terminalAt = Date.now();
-    state.runtimeTiming.closeOpenSpans(terminalAt);
-    state.runtimeTiming.complete(terminalAt);
-    const timingSnapshot = state.runtimeTiming.snapshot();
-    const runtimeTiming = {
-      ...timingSnapshot,
-      completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
-    };
-    const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      settleStreamingTextParts(state.assistantMessage.parts),
-      'The turn ended before this tool call completed.',
-    );
-    if (outcome === 'failed' && error) {
-      parts.push({ id: `error-${state.turn.id}`, type: 'error', error });
-    }
-    const messageStatus =
-      outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
-
-    // No event follows a terminal one, so nothing can request another snapshot
-    // once this wait ends: the terminal write is the last write to the row.
+    if (outcome === 'completed' && state.abortController.signal.aborted) outcome = 'cancelled';
+    const terminalInput = this.segmentFinalization(state, outcome, error, Date.now());
+    const runtimeTiming = terminalInput.runtimeStats.runtimeTiming;
     await state.snapshotFlush;
-    // Invariant 5: the terminal message state (including the turn-level error)
-    // commits before the terminal events publish. The terminal turn view is a
-    // projection of that committed message.
-    const finalized = await this.persistTerminalState({
-      assistantMessageId: state.assistantMessage.id,
-      status: messageStatus,
-      parts,
-      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
-      error,
-      contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+    // Terminal persistence precedes queue release, events, and automatic follow-ups.
+    const finalized = await this.persistTerminalState(terminalInput);
+    await this.withInputOperation(sessionId, async () => {
+      const queue = await this.store.getInputQueue(sessionId);
+      let hasAmbiguousInput = false;
+      for (const input of queue.inputs) {
+        if (input.status === 'steering') {
+          hasAmbiguousInput = true;
+          await this.store.updateInput({
+            id: input.id,
+            sessionId,
+            expectedStatus: ['steering'],
+            patch: { status: 'interrupted', reason: 'interrupted' },
+          });
+        }
+      }
+      if (outcome !== 'completed' || hasAmbiguousInput)
+        await this.store.setInputQueuePaused(sessionId, true);
+      await this.publishInputQueue(sessionId);
+    }).catch((failure: unknown) => {
+      throw new TerminalPersistenceError(failure);
     });
     const turn: AgentTurnView = {
       ...state.turn,
@@ -1108,6 +1581,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
+  private assertSessionWritable(sessionId: string): void {
+    this.assertAcceptingSubmissions();
+    if (this.deletingSessions.has(sessionId)) fail('SESSION_BUSY', 'The session is being deleted.');
+  }
+
+  private async requireSession(sessionId: string): Promise<AgentSessionView> {
+    const session = await this.store.getSession(sessionId);
+    if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+    return session;
+  }
+
   private assertIdle(sessionId: string): void {
     this.assertAcceptingSubmissions();
     if (this.deletingSessions.has(sessionId)) {
@@ -1239,4 +1723,29 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         logger.warn('Agent Session auto-naming failed', error as Error);
       });
   }
+}
+
+function submissionResult(input: AgentSessionInput): AgentSubmitMessageResult {
+  if (
+    input.status === 'consumed' &&
+    input.turnId &&
+    input.userMessageId &&
+    input.assistantMessageId
+  ) {
+    return {
+      inputId: input.id,
+      disposition: 'started',
+      turnId: input.turnId,
+      userMessageId: input.userMessageId,
+      assistantMessageId: input.assistantMessageId,
+    };
+  }
+  if (input.status === 'steering' && input.targetTurnId) {
+    return { inputId: input.id, disposition: 'redirected', turnId: input.targetTurnId };
+  }
+  return {
+    inputId: input.id,
+    disposition: 'queued',
+    ...(input.reason ? { reason: input.reason } : {}),
+  };
 }

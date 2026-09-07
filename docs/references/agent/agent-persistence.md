@@ -11,8 +11,8 @@ record for mobile-originated Agent Sessions only.
 
 ## Scope
 
-- Four Agent-owned tables: `agent`, `agent_tool_binding`, `agent_session`,
-  `agent_session_message`, plus an FTS index for message search.
+- Five Agent-owned tables: `agent`, `agent_tool_binding`, `agent_session`,
+  `agent_session_message`, and `agent_session_input`, plus an FTS index for message search.
 - A message-centric `AgentSessionStore` port: the protocol's Turn is a Host projection over the
   assistant message plus Host-held live state. Starting from a Draft atomically inserts the Session
   and its first user/assistant message pair.
@@ -77,14 +77,14 @@ relation rather than a directory path or opaque JSON scope.
 **Turn is a projection, not a table.** Decomposed by requirement, a V1 Turn is three things and
 none of them needs a row of its own:
 
-- a *correlation id* pairing one submission's user and assistant messages — a shared `turnId`
-  column on both message rows;
+- a *correlation id* shared by every message segment produced within one Runtime execution;
+  steering adds another user/assistant pair under the same `turnId`;
 - *live lifecycle state* (`running`, `awaiting-approval`, `cancelling`) — Host memory by
   definition: the protocol declares process death non-resumable and boot reconciliation
   interrupts everything unfinished, so persisting these states stores only dead values;
 - *terminal facts* — turn terminal statuses map one-to-one onto message statuses
   (`completed→success`, `failed→error`, `cancelled`, `interrupted`), usage already lives on the
-  assistant message, `startedAt`/`endedAt` come from its `stats.runtimeTiming`, and the turn-level
+  assistant segment, `startedAt`/`endedAt` span the execution's segments, and the turn-level
   error gets an `error` column on the message row.
 
 The Host synthesizes `AgentTurnView` from the assistant message row plus its live state; the
@@ -261,6 +261,32 @@ schema, return `null` for old rows, and retain unknown raw JSON behind an `unsup
 Model deletion may null the foreign key but never rewrites the historical snapshot.
 
 ## Store port and adapter
+
+### Durable input queue
+
+`agent_session_input` is mobile-owned because mobile process eviction requires durable pending
+inputs. It stores the client-allocated `id`, Session, ordered input parts with managed file ids,
+requested mode/model/reasoning effort, optional target turn, position, status, fallback reason,
+and eventual turn/user/assistant message ids. `agent_session.input_queue_paused` controls automatic
+drain independently of an active execution. Neither queue mutation nor pause advances conversation
+activity. Input ids and consumed/removed receipts survive retries until Session deletion.
+
+Pending inputs are not transcript rows, model history, search results, or fork content. At dequeue,
+the Host prepares fresh history and validates current model and files before `consumeInput`
+atomically creates the user/assistant pair and marks the input consumed. A native steering boundary
+uses the same transaction to settle the prior assistant segment and reserve the next pair under
+the existing turn id. The partial unique index still permits only one unsettled assistant row.
+The transaction returns the settled prior message for publication after commit; intermediate
+segments never save context checkpoints. History trimming selects the last row of the anchor turn.
+Forking any segment of a still-active turn is rejected.
+
+Queued or interrupted inputs can be edited, removed, or reordered using status-conditional writes.
+Reorder requires the exact set of editable ids; a stale or duplicate permutation changes nothing.
+Dispatching and steering inputs cannot be edited. On restart, pending queues pause and ambiguous
+dispatching/steering inputs become interrupted. Already-reserved execution placeholders follow
+ordinary interrupted-message recovery. No potentially executed input automatically replays.
+
+### Message operations
 
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:

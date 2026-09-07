@@ -6,6 +6,35 @@ const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('Turn Runtime input assembly', () => {
+  test('replays all steering segments in one history turn and keeps the next turn separate', () => {
+    const messages: AgentMessageView[] = ['user', 'assistant', 'user', 'assistant', 'user'].map(
+      (role, index) => ({
+        id: `message-${index}`,
+        sessionId: 'session-1',
+        turnId: index < 4 ? 'turn-1' : 'turn-2',
+        role: role as 'user' | 'assistant',
+        status: 'success',
+        parts: [{ id: `text-${index}`, type: 'text', text: `Segment ${index}`, state: 'done' }],
+        usage: null,
+        modelId: null,
+        inferenceSnapshot: null,
+        stats: null,
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+      }),
+    );
+    const history = toRuntimeHistory(messages);
+    expect(
+      history.map(({ turnId, messages }) => [turnId, messages.map(({ role }) => role)]),
+    ).toEqual([
+      ['turn-1', ['user', 'assistant', 'user', 'assistant']],
+      ['turn-2', ['user']],
+    ]);
+    expect(history[0].messages.map(({ parts }) => parts[0])).toEqual(
+      [0, 1, 2, 3].map((index) => ({ type: 'text', text: `Segment ${index}` })),
+    );
+  });
+
   test('projects only ledger-authorized managed image content into Runtime input', () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const image = {

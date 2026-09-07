@@ -30,6 +30,7 @@ const AGENT_FAILURE_TITLE_KEYS = {
   timeout: 'chat.errorPart.reason.timeout',
   invalid_input: 'chat.errorPart.reason.invalidInput',
   tool_limit: 'chat.errorPart.reason.toolLimit',
+  output_limit: 'chat.errorPart.reason.outputLimit',
   tool_failed: 'chat.errorPart.reason.toolFailed',
   mcp: 'chat.errorPart.reason.mcp',
   parse: 'chat.errorPart.reason.parse',

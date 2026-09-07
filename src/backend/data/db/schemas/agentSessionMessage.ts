@@ -29,7 +29,7 @@ export type AgentMessageData = {
  * (docs/references/agent/agent-persistence.md).
  *
  * There is no message tree and no turn table: `turnId` is the correlation id
- * shared by a submission's user/assistant pair, and the Host projects
+ * shared by every user/assistant segment in one execution, and the Host projects
  * `AgentTurnView` from the assistant row plus its live in-memory state.
  * searchableText is a plain column populated by triggers for FTS5 indexing;
  * see AGENT_SESSION_MESSAGE_FTS_STATEMENTS below.
@@ -42,7 +42,7 @@ export const agentSessionMessageTable = sqliteTable(
     sessionId: text()
       .notNull()
       .references(() => agentSessionTable.id, { onDelete: 'cascade' }),
-    // Correlation id for one submission; nullable per protocol (system rows)
+    // Correlation id for one execution; nullable per protocol (system rows)
     turnId: text(),
     // Message role: user, assistant, system — no 'root', the transcript is linear
     role: text().notNull(),

@@ -8,7 +8,13 @@ import type {
   AgentForkSessionInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
+  AgentEditQueuedInput,
+  AgentPromoteQueuedInput,
+  AgentReorderQueuedInputs,
+  AgentPauseInputQueue,
+  AgentQueuedInputIdentity,
 } from './inputs';
+import type { AgentSubmitMessageResult } from './queue';
 import type { AgentErrorView, AgentSessionView } from './views';
 
 /**
@@ -36,9 +42,14 @@ export interface AgentProtocol {
    */
   forkSession(input: AgentForkSessionInput): Promise<AgentSessionView>;
 
-  submitMessage(
-    input: AgentSubmitMessageInput,
-  ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
+  submitMessage(input: AgentSubmitMessageInput): Promise<AgentSubmitMessageResult>;
+
+  editQueuedInput(input: AgentEditQueuedInput): Promise<void>;
+  removeQueuedInput(input: AgentQueuedInputIdentity): Promise<void>;
+  retryQueuedInput(input: AgentQueuedInputIdentity): Promise<void>;
+  promoteQueuedInput(input: AgentPromoteQueuedInput): Promise<AgentSubmitMessageResult>;
+  reorderQueuedInputs(input: AgentReorderQueuedInputs): Promise<void>;
+  pauseInputQueue(input: AgentPauseInputQueue): Promise<void>;
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
 

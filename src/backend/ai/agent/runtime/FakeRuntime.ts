@@ -13,6 +13,7 @@
  * item 11).
  */
 
+import { raceAbort } from './raceAbort';
 import { RuntimeEventChannel } from './RuntimeEventChannel';
 import { createInterruptedToolResult } from './toolResults';
 import type {
@@ -26,6 +27,7 @@ import type {
   RuntimeModel,
   RuntimeModelPreflight,
   RuntimeOutputPart,
+  RuntimeSteeringInput,
 } from './types';
 
 /**
@@ -50,6 +52,8 @@ export interface FakeExecutionController {
    * Rejects if the turn is cancelled or the session closes first.
    */
   waitForApproval(approvalId: string): Promise<'approve' | 'deny'>;
+  /** Consumes the next accepted steering input at a script-controlled safe boundary. */
+  consumeSteering(): Promise<RuntimeSteeringInput | undefined>;
 }
 
 const DEFAULT_DESCRIPTOR: RuntimeDescriptor = {
@@ -172,6 +176,8 @@ type ActiveTurn = {
   abortController: AbortController;
   approvalWaiters: Map<string, ApprovalWaiter>;
   toolParts: Map<string, Extract<RuntimeOutputPart, { type: 'tool' }>>;
+  pendingSteering: Map<string, RuntimeSteeringInput>;
+  acceptedSteeringIds: Set<string>;
 };
 
 class FakeRuntimeSession implements AgentRuntimeSession {
@@ -207,6 +213,8 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       abortController: new AbortController(),
       approvalWaiters: new Map(),
       toolParts: new Map(),
+      pendingSteering: new Map(),
+      acceptedSteeringIds: new Set(),
     };
     this.activeTurn = turn;
 
@@ -216,6 +224,20 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       signal: turn.abortController.signal,
       emit: (event) => this.emitFor(turn, event),
       waitForApproval: (approvalId) => this.waitForApproval(turn, approvalId),
+      consumeSteering: async () => {
+        const input = turn.pendingSteering.values().next().value;
+        if (!input || this.activeTurn !== turn) return undefined;
+        turn.pendingSteering.delete(input.inputId);
+        await raceAbort(
+          turn.channel.pushAndWait({
+            type: 'input.consumed',
+            inputId: input.inputId,
+            consumedAt: Date.now(),
+          }),
+          turn.abortController.signal,
+        );
+        return input;
+      },
     };
 
     const program = this.programs.shift() ?? defaultProgram;
@@ -231,6 +253,21 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       });
 
     return turn.channel.drain();
+  }
+
+  async steer(input: RuntimeSteeringInput): Promise<boolean> {
+    const turn = this.activeTurn;
+    if (
+      !turn ||
+      turn.turnId !== input.turnId ||
+      turn.abortController.signal.aborted ||
+      !input.text.trim()
+    )
+      return false;
+    if (turn.acceptedSteeringIds.has(input.inputId)) return true;
+    turn.acceptedSteeringIds.add(input.inputId);
+    turn.pendingSteering.set(input.inputId, { ...input });
+    return true;
   }
 
   async cancel(turnId: string): Promise<void> {
@@ -283,6 +320,9 @@ class FakeRuntimeSession implements AgentRuntimeSession {
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       this.interruptUnsettledToolParts(turn);
+      for (const inputId of turn.pendingSteering.keys())
+        turn.channel.push({ type: 'input.undelivered', inputId });
+      turn.pendingSteering.clear();
     } else if (
       (event.type === 'part.add' || event.type === 'part.replace') &&
       event.part.type === 'tool'

@@ -27,6 +27,24 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('orders older live steering segments before a persisted later segment', () => {
+    const user1 = message('01', { role: 'user', status: 'success' });
+    const assistant1 = message('02', { status: 'success' });
+    const user2 = message('03', { role: 'user', status: 'success' });
+    const assistant2 = message('04');
+    const nextTurn = message('05', { turnId: 'turn-2', createdAt: '2026-08-25T00:00:01.000Z' });
+
+    expect(
+      mergeAgentMessageViews([user2, assistant2, nextTurn], [user1, assistant1, assistant2]),
+    ).toEqual([user1, assistant1, user2, assistant2, nextTurn]);
+    expect(mergeAgentMessageViews([user1, user2, assistant2], [assistant1, assistant2])).toEqual([
+      user1,
+      assistant1,
+      user2,
+      assistant2,
+    ]);
+  });
+
   test('keeps attachment reports keyed by persisted part identity and leaves old reports unknown', () => {
     const report = {
       mode: 'document-text' as const,
@@ -355,9 +373,16 @@ describe('agentMessageProjection', () => {
 
   test('replaces persisted rows by id and appends only new live rows', () => {
     const persistedUser = message('user-1', { role: 'user', status: 'success' });
-    const persistedAssistant = message('assistant-1', { status: 'pending' });
-    const finalizedAssistant = message('assistant-1', { status: 'success' });
-    const nextUser = message('user-2', { role: 'user', status: 'success' });
+    const persistedAssistant = message('assistant-1', {
+      createdAt: '2026-08-25T00:00:00.001Z',
+      status: 'pending',
+    });
+    const finalizedAssistant: AgentMessageView = { ...persistedAssistant, status: 'success' };
+    const nextUser = message('user-2', {
+      createdAt: '2026-08-25T00:00:00.002Z',
+      role: 'user',
+      status: 'success',
+    });
 
     expect(
       mergeAgentMessageViews([persistedUser, persistedAssistant], [finalizedAssistant, nextUser]),

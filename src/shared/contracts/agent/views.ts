@@ -166,6 +166,7 @@ export const AgentFailureReasonSchema = z.enum([
   'timeout',
   'invalid_input',
   'tool_limit',
+  'output_limit',
   'tool_failed',
   'mcp',
   'parse',
@@ -200,6 +201,7 @@ export const AgentErrorViewSchema = z
       'AGENT_NOT_FOUND',
       'SESSION_NOT_FOUND',
       'MESSAGE_NOT_FOUND',
+      'INPUT_UNAVAILABLE',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
@@ -235,7 +237,7 @@ export const AgentErrorViewSchema = z
   });
 export type AgentErrorView = z.infer<typeof AgentErrorViewSchema>;
 
-/** One submitted user input creates one turn and one assistant response. */
+/** One execution; steering can add message segments while keeping its identity. */
 export const AgentTurnViewSchema = z.strictObject({
   id: z.string().min(1),
   sessionId: z.string().min(1),

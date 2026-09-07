@@ -36,6 +36,7 @@ import type {
   RuntimeModel,
   RuntimeModelPreflight,
   RuntimeOutputPart,
+  RuntimeSteeringInput,
   RuntimeTool,
   RuntimeToolResult,
   RuntimeTextAttachmentPart,
@@ -83,6 +84,8 @@ export type PiRuntimeContextOptions = PiContextCompactionOptions & {
 export type PiRuntimeAgent = {
   abort(): void;
   prompt(message: PiMessage | PiMessage[]): Promise<void>;
+  steer(message: PiMessage): void;
+  clearSteeringQueue(): void;
   subscribe(
     listener: (event: PiAgentEvent, signal: AbortSignal) => Promise<void> | void,
   ): () => void;
@@ -133,6 +136,19 @@ const TOOL_LOOP_CONTEXT_ERROR: RuntimeError = {
   message: 'The tool loop exhausted the model context window before the next request.',
   retryable: false,
   origin: 'runtime',
+};
+const STEERING_CONTEXT_ERROR: RuntimeError = {
+  code: 'context_window_exceeded',
+  message: 'The steering input exceeds the remaining model context window.',
+  retryable: false,
+  origin: 'runtime',
+};
+const OUTPUT_LIMIT_ERROR: RuntimeError = {
+  code: 'output_token_limit',
+  message: 'The response reached its output token limit.',
+  retryable: false,
+  origin: 'runtime',
+  context: { finishReason: 'length' },
 };
 const TURN_TIMEOUT_ERROR: RuntimeError = {
   code: 'turn_timeout',
@@ -218,6 +234,8 @@ type ActiveTurn = {
   nextMessageOrdinal: number;
   nextPartIndex: number;
   phase: TurnPhase;
+  pendingSteering: Map<PiMessage, string>;
+  acceptedSteeringIds: Set<string>;
   runtimeTimingSink?: MessageRuntimeTimingSink;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
@@ -613,6 +631,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
       phase: 'running',
+      pendingSteering: new Map(),
+      acceptedSteeringIds: new Set(),
       runtimeTimingSink: request.runtimeTimingSink,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
@@ -635,6 +655,25 @@ class PiRuntimeSession implements AgentRuntimeSession {
     turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), this.limits.turnTimeoutMs);
     void this.run(request, turn);
     return channel.drain();
+  }
+
+  async steer(input: RuntimeSteeringInput): Promise<boolean> {
+    const turn = this.activeTurn;
+    if (
+      !turn ||
+      turn.turnId !== input.turnId ||
+      turn.phase !== 'running' ||
+      turn.limitError ||
+      !input.text.trim()
+    )
+      return false;
+    if (turn.acceptedSteeringIds.has(input.inputId)) return true;
+    const message: PiMessage = { role: 'user', content: input.text, timestamp: Date.now() };
+    turn.pendingSteering.set(message, input.inputId);
+    turn.acceptedSteeringIds.add(input.inputId);
+    // While model resolution is pending, installation below supplies the same objects.
+    turn.agent?.steer(message);
+    return true;
   }
 
   async cancel(turnId: string): Promise<void> {
@@ -821,7 +860,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
           }
           return undefined;
         },
-        shouldStopAfterTurn: ({ toolResults }) => {
+        shouldStopAfterTurn: ({ message, toolResults }) => {
+          if (message.stopReason === 'length') turn.limitError = OUTPUT_LIMIT_ERROR;
           if (toolResults.length > 0) {
             turn.toolStepCount += 1;
             if (turn.toolStepCount >= this.limits.maxToolSteps && !turn.limitError) {
@@ -831,6 +871,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           return turn.limitError !== undefined || turn.phase !== 'running';
         },
         streamFn,
+        steeringMode: 'one-at-a-time',
         toolExecution: 'parallel',
         transformContext: async (messages) => {
           updateModelContextHeadroom(messages);
@@ -846,6 +887,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
       unsubscribe = agent.subscribe((event) => this.handlePiEvent(turn, event));
+      for (const message of turn.pendingSteering.keys()) agent.steer(message);
 
       // Consumer-side cancellation: the abort releases this wait immediately
       // rather than trusting the third-party loop to return. A late settlement
@@ -878,8 +920,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
       }
       switch (terminal.stopReason) {
         case 'stop':
-        case 'length':
           this.emit(turn, { type: 'completed' });
+          break;
+        case 'length':
+          this.emit(turn, { type: 'failed', error: OUTPUT_LIMIT_ERROR });
           break;
         case 'aborted':
           this.emit(turn, { type: 'cancelled' });
@@ -921,10 +965,45 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
   }
 
-  private handlePiEvent(turn: ActiveTurn, event: PiAgentEvent): void {
+  private async handlePiEvent(turn: ActiveTurn, event: PiAgentEvent): Promise<void> {
     if (turn.phase === 'terminated') return;
     switch (event.type) {
       case 'message_start':
+        if (event.message.role === 'user') {
+          const inputId = turn.pendingSteering.get(event.message);
+          if (inputId !== undefined) {
+            turn.abortController.signal.throwIfAborted();
+            // Admission can precede more output/tool results. Check the live budget at
+            // consumption, retaining this id so terminal settlement returns it to the queue.
+            if (estimatePiMessagesTokens([event.message]) > turn.modelContextHeadroomTokens) {
+              const error = new Error(STEERING_CONTEXT_ERROR.message);
+              turn.limitError = STEERING_CONTEXT_ERROR;
+              this.abortExecution(turn, error);
+              this.emit(turn, { type: 'failed', error: STEERING_CONTEXT_ERROR });
+              // Pi awaits this listener before appending the input or calling the provider.
+              throw error;
+            }
+            turn.pendingSteering.delete(event.message);
+            const consumedAt = Date.now();
+            if (turn.hasUsage && turn.usageContext) {
+              this.emit(turn, {
+                type: 'usage',
+                completedAt: consumedAt,
+                context: turn.usageContext,
+                usage: turn.usage,
+              });
+            }
+            turn.usage = {};
+            turn.hasUsage = false;
+            turn.usageReported = false;
+            turn.nextPartIndex = 0;
+            turn.terminalMessage = undefined;
+            await raceAbort(
+              turn.channel.pushAndWait({ type: 'input.consumed', inputId, consumedAt }),
+              turn.abortController.signal,
+            );
+          }
+        }
         if (event.message.role === 'assistant') {
           turn.currentMessageOrdinal = turn.nextMessageOrdinal++;
         }
@@ -943,6 +1022,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           turn.terminalMessage = event.message;
           turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
           turn.hasUsage = true;
+          turn.usageReported = false;
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;
@@ -1561,6 +1641,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
       }
       this.interruptUnsettledToolParts(turn);
+      turn.agent?.clearSteeringQueue();
+      for (const inputId of turn.pendingSteering.values()) {
+        turn.channel.push({ type: 'input.undelivered', inputId });
+      }
+      turn.pendingSteering.clear();
       turn.phase = 'terminated';
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));
     }

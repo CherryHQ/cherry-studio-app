@@ -12,12 +12,12 @@ const sendStyle = { marginLeft: 'auto' } as const;
 
 /**
  * The primary action: a send arrow that becomes a stop square while a reply
- * streams in. It takes nothing — everything it needs is on the composer.
+ * streams in. Callers with a separate stop control can pin its action to send.
  */
-export function ComposerSend({ testID }: ComposerSendProps) {
+export function ComposerSend({ action = 'auto', testID }: ComposerSendProps) {
   const { canSend, labels, streaming } = useComposerState('Composer.Send');
   const { send, stop } = useComposerActions('Composer.Send');
-  const isStopping = streaming && stop !== undefined;
+  const isStopping = action === 'auto' && streaming && stop !== undefined;
   const isActive = isStopping || canSend;
   const Icon = isStopping ? CirclePauseIcon : SendIcon;
 

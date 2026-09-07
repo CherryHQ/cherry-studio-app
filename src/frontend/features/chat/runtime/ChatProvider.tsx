@@ -14,7 +14,11 @@ import { AppState } from 'react-native';
 
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import type {
+  AgentInputPart,
+  AgentSubmitMessageInput,
+  AgentSubmitMessageResult,
+} from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
@@ -24,6 +28,9 @@ import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessi
 
 type AgentChatSendInput = {
   agentId?: string;
+  inputId: string;
+  mode?: AgentSubmitMessageInput['mode'];
+  targetTurnId?: string;
   modelId?: AgentSubmitMessageInput['modelId'];
   parts: AgentInputPart[];
   reasoningEffort?: AgentSubmitMessageInput['reasoningEffort'];
@@ -42,11 +49,12 @@ type AgentChatContextValue = {
   completeDraftHandoff: (sessionId: string) => void;
   forkSession: (input: AgentChatForkInput) => Promise<void>;
   getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
-  sendMessage: (input: AgentChatSendInput) => Promise<void>;
+  sendMessage: (input: AgentChatSendInput) => Promise<AgentSubmitMessageResult | undefined>;
 };
 
 const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
   activeTurn: null,
+  inputQueue: { isPaused: false, inputs: [] },
   liveMessages: Object.freeze([]),
   pendingApprovals: Object.freeze([]),
   sessionId: '',
@@ -96,7 +104,16 @@ export function ChatProvider({ children }: PropsWithChildren) {
   useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
-    async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
+    async ({
+      agentId,
+      inputId,
+      mode,
+      targetTurnId,
+      modelId,
+      parts,
+      reasoningEffort,
+      sessionId,
+    }: AgentChatSendInput) => {
       let targetSessionId = sessionId;
       if (!targetSessionId) {
         if (!agentId) {
@@ -116,7 +133,10 @@ export function ChatProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      await client.submitMessage(targetSessionId, parts, {
+      return client.submitMessage(targetSessionId, parts, {
+        inputId,
+        mode,
+        targetTurnId,
         ...(modelId !== undefined ? { modelId } : {}),
         ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
       });
@@ -197,6 +217,7 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
   const { client, sendMessage } = useAgentChatContext();
   const { agentId, sessionId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
+  const activeTurnId = useAgentSessionSelection(client, sessionId, selectActiveTurnId);
   const cancel = useCallback(() => {
     if (!sessionId) {
       return Promise.resolve();
@@ -211,6 +232,7 @@ export function useAgentChatControls(input: { agentId?: string; sessionId?: stri
 
   return {
     cancel,
+    activeTurnId,
     isApprovalPending: activeTurnStatus === 'awaiting-approval',
     isBusy:
       activeTurnStatus !== undefined &&
@@ -254,4 +276,20 @@ function selectSessionState(state: AgentSessionChatState) {
 
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
+}
+
+export function useAgentInputQueue(sessionId: string | undefined) {
+  const { client } = useAgentChatContext();
+  return useAgentSessionSelection(client, sessionId, selectInputQueue);
+}
+
+function selectInputQueue(state: AgentSessionChatState) {
+  return state.inputQueue;
+}
+
+function selectActiveTurnId(state: AgentSessionChatState) {
+  const turn = state.activeTurn;
+  return turn && (turn.status === 'running' || turn.status === 'awaiting-approval')
+    ? turn.id
+    : undefined;
 }

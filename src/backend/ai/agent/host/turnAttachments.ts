@@ -292,7 +292,7 @@ async function resolveRuntimeImages(
       continue;
     }
     try {
-      const uri = await files.readAsDataUrl(fact, signal);
+      const uri = await raceAbort(files.readAsDataUrl(fact, signal), signal);
       signal.throwIfAborted();
       if (!uri || !uri.startsWith(`data:${fact.mediaType};base64,`)) {
         if (resources.inputFiles.has(fact.fileEntryId)) {

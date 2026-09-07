@@ -3,8 +3,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-const ignoreClose = () => undefined;
-
 export type PendingToolApproval = {
   approvalId: string;
   input: unknown;
@@ -23,14 +21,16 @@ type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
   onCancel: () => Promise<void>;
+  onClose: () => void;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
 
-/** Shows one AI SDK tool approval at a time, regardless of the tool's source. */
+/** Dismissing the sheet leaves the tool waiting for an explicit decision. */
 export function ToolApprovalSheet({
   approvals,
   isOpen,
   onCancel,
+  onClose,
   onRespond,
 }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
@@ -47,8 +47,7 @@ export function ToolApprovalSheet({
 
   return (
     <BottomSheet
-      dismissible={false}
-      onClose={ignoreClose}
+      onClose={onClose}
       open={isOpen}
       sizes={['compact', 'large']}
       title={t('chat.tool.approval.title')}

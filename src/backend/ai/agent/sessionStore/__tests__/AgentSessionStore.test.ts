@@ -240,6 +240,168 @@ describe.each([
     ).rejects.toThrow();
   });
 
+  test('deduplicates queued inputs, retains deletion receipts, and requires an exact reorder', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = {
+      id: 'input-1',
+      sessionId: session.id,
+      mode: 'follow-up' as const,
+      parts: [{ type: 'text' as const, text: 'First' }],
+    };
+    expect((await store.enqueueInput(first)).created).toBe(true);
+    await store.enqueueInput({ ...first, id: 'input-2' });
+    expect((await store.enqueueInput(first)).created).toBe(false);
+    expect(await store.listMessages(session.id)).toEqual([]);
+    expect(await store.reorderInputs(session.id, ['input-2', 'input-2'])).toBe(false);
+    expect(await store.reorderInputs(session.id, ['input-2'])).toBe(false);
+    expect(await store.reorderInputs(session.id, ['input-2', 'input-1'])).toBe(true);
+    expect((await store.getInputQueue(session.id)).inputs.map(({ id }) => id)).toEqual([
+      'input-2',
+      'input-1',
+    ]);
+    await store.updateInput({
+      id: first.id,
+      sessionId: session.id,
+      expectedStatus: ['queued'],
+      patch: { status: 'removed' },
+    });
+    expect((await store.enqueueInput(first)).input.status).toBe('removed');
+    expect((await store.getInputQueue(session.id)).inputs.map(({ id }) => id)).toEqual(['input-2']);
+    await store.deleteSession(session.id);
+    expect(await store.getInput('input-2')).toBeNull();
+  });
+
+  test('reorders queued slots without moving an undelivered steering input', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    for (const id of ['first', 'steering', 'last']) {
+      await store.enqueueInput({
+        id,
+        sessionId: session.id,
+        mode: 'follow-up',
+        parts: [{ type: 'text', text: id }],
+      });
+    }
+    await store.updateInput({
+      id: 'steering',
+      sessionId: session.id,
+      expectedStatus: ['queued'],
+      patch: { status: 'steering' },
+    });
+    expect(await store.reorderInputs(session.id, ['last', 'first'])).toBe(true);
+    await store.updateInput({
+      id: 'steering',
+      sessionId: session.id,
+      expectedStatus: ['steering'],
+      patch: { status: 'queued', reason: 'undelivered' },
+    });
+    expect((await store.getInputQueue(session.id)).inputs.map(({ id }) => id)).toEqual([
+      'last',
+      'steering',
+      'first',
+    ]);
+  });
+
+  test('recovers queued inputs paused and ambiguous dispatches interrupted without making messages', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    for (const id of ['queued', 'dispatching', 'steering']) {
+      await store.enqueueInput({
+        id,
+        sessionId: session.id,
+        mode: 'follow-up',
+        parts: [{ type: 'text', text: id }],
+      });
+    }
+    for (const status of ['dispatching', 'steering'] as const) {
+      await store.updateInput({
+        id: status,
+        sessionId: session.id,
+        expectedStatus: ['queued'],
+        patch: { status },
+      });
+    }
+    await store.reconcileInterrupted(INTERRUPTED);
+    const queue = await store.getInputQueue(session.id);
+    expect(queue.isPaused).toBe(true);
+    expect(queue.inputs.map(({ id, status }) => [id, status])).toEqual([
+      ['queued', 'queued'],
+      ['dispatching', 'interrupted'],
+      ['steering', 'interrupted'],
+    ]);
+    expect(await store.listMessages(session.id)).toEqual([]);
+  });
+
+  test('consumes steering atomically into another segment of the same turn and fences replay', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'u1', type: 'text', text: 'First', state: 'done' }],
+    });
+    await store.enqueueInput({
+      id: 'steer',
+      sessionId: session.id,
+      mode: 'steer',
+      parts: [{ type: 'text', text: 'Change direction' }],
+    });
+    await store.updateInput({
+      id: 'steer',
+      sessionId: session.id,
+      expectedStatus: ['queued'],
+      patch: { status: 'steering' },
+    });
+    const consumption = {
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      inputId: 'steer',
+      userParts: [
+        { id: 'u2', type: 'text' as const, text: 'Change direction', state: 'done' as const },
+      ],
+      continuation: {
+        turnId: first.turnId,
+        previousAssistant: {
+          assistantMessageId: first.assistantMessage.id,
+          status: 'success' as const,
+          parts: [
+            { id: 'a1', type: 'text' as const, text: 'Before steering', state: 'done' as const },
+          ],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          error: null,
+          contextCheckpoint: null,
+          runtimeStats: { runtimeTiming: terminalTiming() },
+        },
+      },
+    };
+    const next = await store.consumeInput(consumption);
+    expect(next.turnId).toBe(first.turnId);
+    expect(next.previousAssistantMessage?.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(
+      (await store.listMessages(session.id)).map(({ role, status, turnId }) => [
+        role,
+        status,
+        turnId,
+      ]),
+    ).toEqual([
+      ['user', 'success', first.turnId],
+      ['assistant', 'success', first.turnId],
+      ['user', 'success', first.turnId],
+      ['assistant', 'pending', first.turnId],
+    ]);
+    expect((await store.getInputQueue(session.id)).inputs).toEqual([]);
+    expect(
+      await store.updateInput({
+        id: 'steer',
+        sessionId: session.id,
+        expectedStatus: ['queued'],
+        patch: { status: 'removed' },
+      }),
+    ).toBeNull();
+    await expect(store.consumeInput(consumption)).rejects.toThrow('no longer available');
+    expect(
+      await store.forkSession({ sessionId: session.id, fromMessageId: first.assistantMessage.id }),
+    ).toEqual({ status: 'fork-point-unsettled' });
+    expect((await store.loadRuntimeTurnContext(session.id, first.turnId)).history).toEqual([]);
+  });
+
   test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
     const reserved = await store.reserveInitialSubmission({
       ...RESERVATION_FACTS,
@@ -567,6 +729,15 @@ describe.each([
       ...RESERVATION_FACTS,
       sessionId: source.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
 
     const result = await store.forkSession({

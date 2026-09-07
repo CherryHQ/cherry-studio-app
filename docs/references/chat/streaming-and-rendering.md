@@ -20,12 +20,14 @@ and [Cherry Agent Protocol](../agent/agent-protocol.md).
 `MobileAgentHost` is an application-owned `AgentProtocol` implementation. For each Session it:
 
 - allows at most one active turn;
-- reserves the user message and assistant placeholder before execution;
+- persists pending inputs separately from the transcript and drains follow-ups after successful turns;
+- reserves the user message and assistant placeholder before execution or at a steering boundary;
 - normalizes Runtime text, reasoning, tool, approval, error, and usage state into Agent protocol
   values;
 - publishes durable facts only after their store transaction commits;
 - emits ephemeral streaming deltas without persisting every token;
-- finalizes the assistant message and turn before publishing terminal events.
+- finalizes each assistant segment before publishing its message event; only the execution terminal
+  finishes the turn, approvals, background reply, and queue lifecycle.
 
 Version 1 routes the local execution target to Pi. The Agent client branches on protocol
 capabilities, never on Runtime identity. Attachment admission is capability-driven: the composer
@@ -45,8 +47,8 @@ Session id through `useSyncExternalStore`. The client:
 
 - installs the atomic `observeSession` snapshot before applying events queued during observation;
 - applies `part.add`, `text.append`, and `part.replace` deltas to the live message projection;
-- exposes active-turn status, pending approvals, and the entering user-message id through narrow
-  selectors;
+- exposes active-turn status/identity, pending approvals, input queue, and the entering user-message
+  id through narrow selectors;
 - releases the Host observation when the final React subscriber leaves;
 - replaces observed Session state from a fresh snapshot when the app returns to the foreground.
 
@@ -67,7 +69,8 @@ The message list receives a chronological presentation sequence from two sources
    approvals needed before the next persisted read settles.
 
 The window owns older-message pagination and local reveal policy. `mergeAgentMessageViews` replaces
-persisted rows with live rows of the same id and appends new live rows. `agentMessageProjection`
+persisted rows with live rows of the same id and merges missing live rows by `(createdAt, id)`.
+This preserves segment order when persisted pages catch up to a later segment before an earlier one. `agentMessageProjection`
 then maps protocol parts and statuses into the existing `MessageList` renderer shape.
 
 When a message is created or finalized, the frontend invalidates the transcript query. When a turn
@@ -78,7 +81,22 @@ query refreshes from creating duplicate rows.
 
 Pending approvals come from the live Session snapshot/events. The approval sheet sends an
 approve/deny decision with the protocol approval and turn identity. A terminal turn clears pending
-approvals. Stop calls `cancelTurn` only when the selected Session has a non-terminal active turn.
+approvals. Temporarily closing the sheet leaves the approval pending and presents a reminder; it
+permits queuing or steering input without granting tool permission. Stop calls `cancelTurn` only
+when the selected Session has a non-terminal active turn and pauses automatic follow-ups.
+
+## Input Queue And Steering
+
+The composer assigns an `inputId` before its first submission and reuses it on a failed unchanged
+retry. Busy follow-ups are durable Host inputs; the frontend displays `inputQueue` snapshots and
+`queue.updated` events and calls explicit edit/remove/reorder/pause/retry/promote operations. It
+never starts queued work based on rendering, subscription lifetime, or terminal event edges.
+
+Steering pins the turn selected by the user. Native consumption finalizes the current assistant
+segment and reserves another user/assistant pair under that same turn id before output continues.
+The live turn stays active between segments, and each assistant segment retains its own usage and
+timing. Reattaching receives the current pair; earlier segments come from the transcript window.
+Only the full execution terminal releases approvals/background reply and allows follow-up drain.
 
 ## Persistence And Recovery
 
@@ -87,7 +105,7 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 - Terminal messages, parts, errors, and usage are durable transcript facts.
 - Route unmount removes the observation but does not cancel a Host-owned turn.
 - On process start, unfinished local turns reconcile to `interrupted`; Version 1 does not resume
-  execution.
+  execution. Pending input queues restore paused, with ambiguous dispatch/steering marked interrupted.
 - Background execution is not guaranteed across OS suspension or process termination.
 
 ## Rendering
@@ -101,7 +119,7 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 ## Current Non-Goals
 
 - Attachment submission while the Host capability is false.
-- Follow-up queues, steering, autonomous turns, or more than one execution per turn.
+- Autonomous turns or more than one execution per turn.
 - A separate token throttle store or per-token SQLite checkpoint scheduler.
 - Background continuation or recoverable stream resume.
 
@@ -116,3 +134,6 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 - Route unmount does not cancel a turn, and foreground refresh replaces stale live state.
 - Text, reasoning, tool, approval, error, and terminal status parts render through shared chat
   surfaces.
+
+- Queue state survives route unmount; Stop/failure pauses drain and restart never replays uncertain input.
+- Steering keeps one turn id with correctly ordered message segments and per-segment usage.

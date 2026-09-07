@@ -47,6 +47,7 @@ describe('bundled SQLite migrations', () => {
       ).toEqual([
         'agent',
         'agent_session',
+        'agent_session_input',
         'agent_session_message',
         'agent_tool_binding',
         'ai_usage_record',
@@ -125,6 +126,34 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'forked_from_session_id',
         'fork_boundary_message_id',
+        'input_queue_paused',
+      ]);
+      expect(columnNames(database, 'agent_session_input')).toEqual([
+        'id',
+        'session_id',
+        'parts',
+        'mode',
+        'model_id',
+        'reasoning_effort',
+        'target_turn_id',
+        'position',
+        'status',
+        'reason',
+        'turn_id',
+        'user_message_id',
+        'assistant_message_id',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(getForeignKeys(database, 'agent_session_input')).toEqual([
+        expect.objectContaining({
+          from: 'session_id',
+          table: 'agent_session',
+          on_delete: 'CASCADE',
+        }),
+      ]);
+      expect(indexNames(database, 'agent_session_input')).toEqual([
+        'agent_session_input_queue_idx',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',

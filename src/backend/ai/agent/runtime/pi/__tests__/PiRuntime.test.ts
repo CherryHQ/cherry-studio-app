@@ -57,6 +57,7 @@ type TestAgentContext = {
   options: AgentOptions;
   prompt: PiMessage;
   signal: AbortSignal;
+  takeSteering(): PiMessage | undefined;
 };
 
 type TestAgentProgram = (context: TestAgentContext) => Promise<void> | void;
@@ -65,6 +66,15 @@ class TestPiAgent implements PiRuntimeAgent {
   private activeRun = Promise.resolve();
   private readonly controller = new AbortController();
   private readonly listeners = new Set<Parameters<PiRuntimeAgent['subscribe']>[0]>();
+  private readonly steering: PiMessage[] = [];
+
+  steer(message: PiMessage): void {
+    this.steering.push(message);
+  }
+
+  clearSteeringQueue(): void {
+    this.steering.length = 0;
+  }
 
   constructor(
     private readonly options: AgentOptions,
@@ -86,6 +96,7 @@ class TestPiAgent implements PiRuntimeAgent {
         options: this.options,
         prompt,
         signal: this.controller.signal,
+        takeSteering: () => this.steering.shift(),
       }),
     );
     await this.activeRun;
@@ -473,6 +484,157 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
+  test('correlates native steering by identity, waits at consumption, and resets segment usage', async () => {
+    const runtime = createTestRuntime();
+    let continued = false;
+    arrange(runtime, async (context) => {
+      await emitText(context, 'Before');
+      const message = context.takeSteering();
+      if (!message) throw new Error('Expected a native steering message.');
+      // Identical text in another message is not this accepted input.
+      await context.emit({ type: 'message_start', message: { ...message } });
+      await context.emit({ type: 'message_start', message });
+      continued = true;
+      await context.emit({ type: 'message_end', message });
+      await emitText(context, 'After');
+    });
+    const session = await runtime.open();
+    const iterator = session.execute(baseRequest('turn-steer'))[Symbol.asyncIterator]();
+    const input = { turnId: 'turn-steer', inputId: 'input-1', text: 'Change direction' };
+    expect(await session.steer(input)).toBe(true);
+    expect(await session.steer(input)).toBe(true);
+    const events: RuntimeEvent[] = [];
+    for (;;) {
+      const next = await iterator.next();
+      if (next.done) throw new Error('Missing consumption boundary.');
+      events.push(next.value);
+      if (next.value.type === 'input.consumed') break;
+    }
+    expect(continued).toBe(false);
+    // A retry after consumption also cannot inject a second copy.
+    expect(await session.steer(input)).toBe(true);
+    for (;;) {
+      const next = await iterator.next();
+      if (next.done) break;
+      events.push(next.value);
+    }
+    expect(continued).toBe(true);
+    expect(events.filter((event) => event.type === 'input.consumed')).toEqual([
+      { type: 'input.consumed', inputId: 'input-1', consumedAt: expect.any(Number) },
+    ]);
+    expect(
+      events.filter((event) => event.type === 'usage').map((event) => event.usage.totalTokens),
+    ).toEqual([5, 5]);
+    expect(events.filter((event) => event.type === 'part.add').map((event) => event.index)).toEqual(
+      [0, 0],
+    );
+    expect(events.at(-1)?.type).toBe('completed');
+    expect(await session.steer(input)).toBe(false);
+  });
+
+  test.each(['stop', 'length'] as const)(
+    'returns unconsumed steering before a %s terminal',
+    async (stopReason) => {
+      const runtime = createTestRuntime();
+      arrange(runtime, async (context) => {
+        const message = assistantMessage({ stopReason });
+        await context.emit({ type: 'turn_end', message, toolResults: [] });
+        if (stopReason === 'length') {
+          expect(
+            await context.options.shouldStopAfterTurn?.({
+              message,
+              toolResults: [],
+              context: { messages: [message], tools: [], systemPrompt: '' },
+              newMessages: [message],
+            }),
+          ).toBe(true);
+        }
+      });
+      const session = await runtime.open();
+      const stream = session.execute(baseRequest('turn-ended'));
+      const input = { turnId: 'turn-ended', inputId: 'leftover', text: 'Next' };
+      expect(await session.steer({ ...input, turnId: 'other-turn' })).toBe(false);
+      expect(await session.steer(input)).toBe(true);
+      expect(await session.steer(input)).toBe(true);
+      const events = await collect(stream);
+      expect(events.filter((event) => event.type === 'input.undelivered')).toEqual([
+        { type: 'input.undelivered', inputId: 'leftover' },
+      ]);
+      expect(events.some((event) => event.type === 'input.consumed')).toBe(false);
+      expect(events.at(-1)).toMatchObject(
+        stopReason === 'length'
+          ? { type: 'failed', error: { code: 'output_token_limit' } }
+          : { type: 'completed' },
+      );
+    },
+  );
+
+  test.each(['before-first-response', 'after-response'] as const)(
+    'returns overflowing steering without consumption %s',
+    async (boundary) => {
+      const runtime = createTestRuntime();
+      let continued = false;
+      const holder = arrange(runtime, async (context) => {
+        if (boundary === 'after-response') {
+          const previous = assistantMessage({ usage: usage(4_500, 1_000) });
+          await context.emit({ type: 'message_start', message: previous });
+          await context.emit({ type: 'message_end', message: previous });
+          await context.emit({ type: 'turn_end', message: previous, toolResults: [] });
+          await context.options.prepareNextTurnWithContext?.({
+            message: previous,
+            toolResults: [],
+            context: {
+              messages: [context.prompt, previous],
+              systemPrompt: 'Be helpful.',
+              tools: [],
+            },
+            newMessages: [context.prompt, previous],
+          });
+        }
+        const message = context.takeSteering();
+        if (!message) throw new Error('Expected a native steering message.');
+        await context.emit({ type: 'message_start', message });
+        continued = true;
+        await emitText(context, 'Must not request another response.');
+      });
+      holder.resolution = {
+        ...holder.resolution,
+        model: { ...holder.resolution.model, contextWindow: 8_000, maxTokens: 512 },
+      };
+      const session = await runtime.open();
+      const stream = session.execute(baseRequest('turn-steering-overflow'));
+      // The smaller input fits at admission, before the previous response uses the budget.
+      expect(
+        await session.steer({
+          turnId: 'turn-steering-overflow',
+          inputId: 'overflow',
+          text: 'x'.repeat(boundary === 'after-response' ? 8_000 : 40_000),
+        }),
+      ).toBe(true);
+      expect(
+        await session.steer({
+          turnId: 'turn-steering-overflow',
+          inputId: 'leftover',
+          text: 'Another pending input',
+        }),
+      ).toBe(true);
+
+      const events = await collect(stream);
+
+      expect(continued).toBe(false);
+      expect(events.some((event) => event.type === 'input.consumed')).toBe(false);
+      expect(events.filter((event) => event.type === 'input.undelivered')).toEqual([
+        { type: 'input.undelivered', inputId: 'overflow' },
+        { type: 'input.undelivered', inputId: 'leftover' },
+      ]);
+      expect(events.at(-1)).toMatchObject({
+        type: 'failed',
+        error: { code: 'context_window_exceeded', origin: 'runtime' },
+      });
+      await session.close();
+    },
+  );
+
   test('publishes tool input generation without forwarding every argument delta', async () => {
     const runtime = createTestRuntime();
     const fullInput = {

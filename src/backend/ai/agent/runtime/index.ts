@@ -20,6 +20,7 @@ export type {
   RuntimeMessage,
   RuntimeMessagePart,
   RuntimeModel,
+  RuntimeSteeringInput,
   RuntimeModelPreflight,
   RuntimeOptions,
   RuntimeOutputPart,
