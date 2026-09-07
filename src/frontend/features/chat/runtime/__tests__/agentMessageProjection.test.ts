@@ -373,9 +373,16 @@ describe('agentMessageProjection', () => {
 
   test('replaces persisted rows by id and appends only new live rows', () => {
     const persistedUser = message('user-1', { role: 'user', status: 'success' });
-    const persistedAssistant = message('assistant-1', { status: 'pending' });
-    const finalizedAssistant = message('assistant-1', { status: 'success' });
-    const nextUser = message('user-2', { role: 'user', status: 'success' });
+    const persistedAssistant = message('assistant-1', {
+      createdAt: '2026-08-25T00:00:00.001Z',
+      status: 'pending',
+    });
+    const finalizedAssistant: AgentMessageView = { ...persistedAssistant, status: 'success' };
+    const nextUser = message('user-2', {
+      createdAt: '2026-08-25T00:00:00.002Z',
+      role: 'user',
+      status: 'success',
+    });
 
     expect(
       mergeAgentMessageViews([persistedUser, persistedAssistant], [finalizedAssistant, nextUser]),

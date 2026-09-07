@@ -2133,6 +2133,11 @@ describe('MobileAgentHost', () => {
 
     await expect(host.reconcileInterruptedTurns()).resolves.toBe(1);
 
+    const queueEvent = {
+      type: 'queue.updated',
+      sessionId: session.id,
+      queue: { isPaused: true, inputs: [] },
+    } satisfies AgentEvent;
     expect(events).toEqual([
       {
         type: 'message.finalized',
@@ -2143,10 +2148,12 @@ describe('MobileAgentHost', () => {
           status: 'interrupted',
         }),
       },
+      queueEvent,
     ]);
-    // A second recovery pass has nothing left to publish.
+    // A second recovery pass refreshes the queue without finalizing the row again.
     await expect(host.reconcileInterruptedTurns()).resolves.toBe(0);
-    expect(events).toHaveLength(1);
+    expect(events).toHaveLength(3);
+    expect(events[2]).toEqual(queueEvent);
   });
 
   test('settles an active turn before deleting its Session rows', async () => {
@@ -2819,6 +2826,7 @@ describe('MobileAgentHost', () => {
     await waitFor(() => readSignal !== undefined, 'the managed image read');
     await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId! });
     expect(readSignal?.aborted).toBe(true);
+    expect(terminalTurnEvent(events)?.turn.status).toBe('cancelled');
     resolveRead('data:image/png;base64,LATE');
     await waitFor(
       () => terminalTurnEvent(events)?.turn.status === 'cancelled',
@@ -3099,6 +3107,9 @@ describe('MobileAgentHost', () => {
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
+    if (!first.userMessageId || !first.assistantMessageId) {
+      throw new Error('Expected the first input to start a turn.');
+    }
     // A fork point must be a clean cut: while the turn runs, the source is
     // refused outright rather than quietly copying a shorter transcript.
     await expect(

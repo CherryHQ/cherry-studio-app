@@ -1,8 +1,4 @@
-import type {
-  AgentMessageView,
-  AgentSessionView,
-  AgentSubmitMessageInput,
-} from '@/shared/contracts/agent';
+import type { AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -82,7 +78,7 @@ describe('turn preparation', () => {
 
   test('builds a canonical turn plan from frozen model, tool, and attachment facts', async () => {
     const harness = createHarness();
-    const input: AgentSubmitMessageInput = {
+    const input: Parameters<typeof prepareTurn>[1] = {
       sessionId: SESSION_ID,
       parts: [
         { type: 'text', text: 'Review this file.' },
@@ -315,7 +311,7 @@ function createHarness() {
   };
 }
 
-function textInput(): AgentSubmitMessageInput {
+function textInput(): Parameters<typeof prepareTurn>[1] {
   return { sessionId: SESSION_ID, parts: [{ type: 'text', text: 'Continue.' }] };
 }
 
