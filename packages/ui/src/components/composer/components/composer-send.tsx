@@ -48,10 +48,10 @@ export function ComposerSend({ testID }: ComposerSendProps) {
       <Icon
         className={cn(
           isStopping
-            ? 'size-5 text-destructive'
+            ? 'size-8 text-destructive'
             : isActive
-              ? 'size-[22px] text-primary'
-              : 'size-[22px] text-foreground-disabled',
+              ? 'size-8 text-primary'
+              : 'size-8 text-foreground-disabled',
         )}
       />
     </ComposerAction>
