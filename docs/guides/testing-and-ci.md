@@ -3,6 +3,12 @@
 This guide defines the focused development loop, test-value rules, local pull request gates, and
 the remote CI boundary.
 
+Coding agents preparing application acceptance must also read
+[Parallel Device Testing](./parallel-device-testing.md) for configuration preparation,
+development-client reuse, and Conductor device isolation. That standard does not expand the user's
+active authorization for checks, builds, device actions, or external calls. Preparation capabilities
+marked as design must not be reported as implemented.
+
 ## Test The Owned Behavior
 
 - Put a test at the lowest layer that owns the behavior. Prefer pure functions and hooks over
