@@ -71,6 +71,13 @@ export const paintingViewer = {
 
 export const appSidebar = {
   sceneRevealWidth: 64, // chat strip left visible beside the open drawer (as in ChatGPT); tap to close
+  // Finger travel before the open/close swipe commits. Chat content holds native
+  // horizontal scroll surfaces (markdown tables, code blocks, math) that claim a
+  // touch once it passes the platform scroll threshold: Android touch slop (8dp)
+  // or the UIScrollView start distance (about 10pt). The drawer must commit later
+  // than both so those surfaces win and cancel it; the library default of 5
+  // beats them and steals their scroll.
+  swipeActivationDistance: 20,
   fallbackCornerRadius: 55, // surface radius when the device is missing from expo-screen-corner-radius' table
   dockHeight: 48, // floating bottom dock's button height, shared by both buttons
   dockMinInset: 16, // floor for the dock's concentric inset (see SidebarDock)
