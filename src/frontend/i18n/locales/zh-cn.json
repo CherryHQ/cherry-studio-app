@@ -281,7 +281,7 @@
   "chat.messageUsage.costEstimated": "估算费用",
   "chat.messageUsage.costMixed": "上报与估算合计",
   "chat.messageUsage.createdAt": "发送时间",
-  "chat.messageUsage.durationHint": "总耗时包含模型响应、工具执行和等待确认；整体速度按输出 Token 除以总耗时计算。并行工具的重叠时间只计一次。",
+  "chat.messageUsage.durationHint": "总耗时包含模型响应、工具执行和等待确认；整体速度按输出 Token 除以总耗时计算。并行工具的重叠时间只计一次。模型生成速度仅统计当前聊天模型的已测语言调用。",
   "chat.messageUsage.firstToken": "首 Token 延迟",
   "chat.messageUsage.input": "输入",
   "chat.messageUsage.loadError": "无法加载用量详情。",

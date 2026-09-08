@@ -18,7 +18,7 @@ export function MessageUsageDetail({
 }) {
   const { t, i18n } = useTranslation();
   const { error, isLoading, records, refresh } = useMessageUsageRecords(message.id);
-  const detail = getMessageUsageDetails(message.stats, records);
+  const detail = getMessageUsageDetails(message.stats, records, message.model);
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const numbers = new Intl.NumberFormat(locale);
   const decimals = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });

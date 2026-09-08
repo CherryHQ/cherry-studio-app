@@ -1,5 +1,6 @@
 import type { AiUsageRecordEntry } from '@/shared/data/types/aiUsageRecord';
 import type { MessageRuntimeTiming, MessageStats } from '@/shared/data/types/message';
+import type { Model } from '@/shared/data/types/model';
 
 function knownCount(value: number | null | undefined): number | undefined {
   return value != null && Number.isFinite(value) && value >= 0 ? value : undefined;
@@ -48,19 +49,34 @@ function spanDurationMs(
 export function getMessageUsageDetails(
   stats: MessageStats | undefined,
   records: readonly AiUsageRecordEntry[],
+  model: Pick<Model, 'modelId' | 'providerId'> | undefined,
 ) {
   const tokens = getMessageTokenUsage(stats);
   const durationMs = getMessageDurationMs(stats);
-  const firstInvocation = records.find(
-    (record) => record.recordKind === 'invocation' && record.modality === 'language',
+  // The message's providerPerformance also includes image tools and other models.
+  const modelInvocations = records.filter(
+    (record) =>
+      model !== undefined &&
+      record.recordKind === 'invocation' &&
+      record.modality === 'language' &&
+      record.providerId === model.providerId &&
+      record.modelId === model.modelId,
   );
-  const firstTokenMs = knownCount(firstInvocation?.timeFirstTokenMs);
-  const measuredOutput = knownCount(stats?.providerPerformance?.measuredOutputTokens);
-  const generationMs = knownCount(stats?.providerPerformance?.generationDurationMs);
-  const modelTokensPerSecond =
-    measuredOutput !== undefined && generationMs !== undefined && generationMs > 0
-      ? measuredOutput / (generationMs / 1000)
-      : undefined;
+  const firstTokenMs = knownCount(modelInvocations[0]?.timeFirstTokenMs);
+  let measuredOutputTokens = 0;
+  let generationDurationMs = 0;
+  for (const invocation of modelInvocations) {
+    const outputTokens = knownCount(invocation.outputTokens);
+    const completionMs = knownCount(invocation.timeCompletionMs);
+    if (outputTokens === undefined || completionMs === undefined || completionMs === 0) continue;
+
+    const invocationFirstTokenMs = knownCount(invocation.timeFirstTokenMs);
+    measuredOutputTokens += outputTokens;
+    generationDurationMs +=
+      invocationFirstTokenMs !== undefined && invocationFirstTokenMs < completionMs
+        ? completionMs - invocationFirstTokenMs
+        : completionMs;
+  }
 
   return {
     ...tokens,
@@ -73,7 +89,8 @@ export function getMessageUsageDetails(
     hasUnpricedRecords: (stats?.unpricedRequestCount ?? 0) > 0,
     durationMs,
     firstTokenMs,
-    modelTokensPerSecond,
+    modelTokensPerSecond:
+      generationDurationMs > 0 ? measuredOutputTokens / (generationDurationMs / 1000) : undefined,
     endToEndTokensPerSecond:
       tokens.outputTokens !== undefined && durationMs !== undefined && durationMs > 0
         ? tokens.outputTokens / (durationMs / 1000)
