@@ -112,11 +112,12 @@ describe('AnyDoc raw JSON reads', () => {
       }),
       'requires start_line',
     );
-    for (const params of [
+    const invalidPaginationParams: Record<string, number>[] = [
       { offset: -1 },
       { max_characters: 0 },
       { max_characters: READ_FILE_MAX_CHARACTERS + 1 },
-    ] as const) {
+    ];
+    for (const params of invalidPaginationParams) {
       expectError(await execute(tool, { file_entry_id: FILE_ID, ...params }), 'Invalid input');
     }
   });
