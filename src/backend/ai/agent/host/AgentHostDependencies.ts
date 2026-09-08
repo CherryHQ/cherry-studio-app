@@ -21,6 +21,7 @@ import { providerService } from '@/backend/data/services/ProviderService';
 import type { TraceStorageService } from '@/backend/services/diagnostics/TraceStorageService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { AgentEvent } from '@/shared/contracts/agent';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
@@ -95,6 +96,10 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       this.preferenceService.readCached('app.language'),
       getLocales()[0]?.languageCode,
     );
+  }
+
+  documentParserMode(): DocumentParserMode {
+    return this.preferenceService.readCached('file.document_parser.mode');
   }
 
   naming(signal: AbortSignal): MobileAgentHostNaming {

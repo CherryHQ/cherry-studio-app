@@ -42,4 +42,19 @@ describe('file attachment feedback', () => {
       fileAttachmentNoticeKeys({ mode: 'text', sourceTruncated: false, requestTruncated: true }),
     ).toEqual(['attachments.notice.requestTruncated']);
   });
+
+  test.each(['parser-unavailable', 'parser-unsupported'] as const)(
+    'localizes %s without showing native details',
+    (code) => {
+      const error = new FileAttachmentError(
+        { code, name: 'report.doc' },
+        {
+          cause: new Error('private native diagnostic'),
+        },
+      );
+      const description = fileAttachmentIssueDescription(getFileAttachmentIssue(error)!, t);
+      expect(description).toBe(`report.doc\n\nattachments.issue.${code}\n\nattachments.draftKept`);
+      expect(description).not.toContain('private');
+    },
+  );
 });

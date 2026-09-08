@@ -1,6 +1,11 @@
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
-import type { FileAttachmentReport, FileAttachmentTarget } from './fileAttachment';
+import type {
+  DocumentParserMode,
+  FileAttachmentContent,
+  FileAttachmentReport,
+  FileAttachmentTarget,
+} from './fileAttachment';
 
 export type ResolvedFile = {
   entry: FileEntry;
@@ -24,12 +29,13 @@ export type CreateInternalEntryInput = {
 export type PrepareFileAttachmentsInput = {
   fileEntryIds: readonly FileEntryId[];
   target: FileAttachmentTarget;
+  documentParserMode?: DocumentParserMode;
   signal?: AbortSignal;
 };
 
 export type PreparedFile = ResolvedFile & {
   report: FileAttachmentReport;
-  text?: string;
+  content?: FileAttachmentContent;
 };
 
 export interface FileModule {

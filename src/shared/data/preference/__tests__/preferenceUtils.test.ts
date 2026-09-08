@@ -26,6 +26,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('chat.web_search.compression.method')).toBe('cutoff');
     expect(getDefaultValue('chat.web_search.compression.cutoff_limit')).toBe(2000);
     expect(getDefaultValue('feature.paintings.default_model_id')).toBeNull();
+    expect(getDefaultValue('file.document_parser.mode')).toBe('anydoc');
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
   });
