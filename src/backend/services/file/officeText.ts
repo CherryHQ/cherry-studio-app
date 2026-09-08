@@ -9,7 +9,7 @@ import {
   zipSync,
 } from 'fflate/browser';
 
-import type { DocumentFileType } from '@/shared/utils/documentFileTypes';
+import type { BuiltinOfficeFileType } from '@/shared/utils/documentFileTypes';
 
 const MAX_ZIP_ENTRIES = 2_048;
 const MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
@@ -27,7 +27,7 @@ export type ExtractedDocumentText = { text: string; truncated: boolean };
 /** Local OOXML extraction; ZIP entries never become filesystem paths. */
 export function extractOfficeText(
   bytes: Uint8Array,
-  type: Exclude<DocumentFileType, 'pdf'>,
+  type: BuiltinOfficeFileType,
 ): ExtractedDocumentText {
   let entryCount = 0;
   let totalBytes = 0;

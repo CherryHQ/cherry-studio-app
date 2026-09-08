@@ -196,7 +196,26 @@ type RuntimeInputPart =
       truncated: boolean
       trust: 'untrusted-user-content'
     }
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
+
+type RuntimeDocumentAttachmentPart = {
+  type: 'document-attachment'
+  fileEntryId: string
+  mediaType: string
+  name: string
+  trust: 'untrusted-user-content'
+  parser: 'anydoc'
+  parserVersion: string
+  totalCharacters: number // Unicode code points in JSON.stringify(original IR)
+  document:
+    | { delivery: 'complete'; result: { status: 'ok'; ir: RuntimeJsonValue; warnings: string[] } }
+    | { delivery: 'deferred' }
+  assetDelivery: { assetRef: string; contentType: string | null; size: number;
+    status: 'sent' | 'model-unsupported' | 'unsupported-type' | 'budget' }[]
+  images: { assetRef: string; mediaType: string; uri: string }[]
+  attachmentReport?: FileAttachmentReport
+}
 ```
 
 Runtime implementations receive model/provider dependencies from application composition. They do
@@ -230,7 +249,21 @@ forge its boundary metadata. Pi's current-input/history estimator counts the res
 alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
 are redacted if a compaction model reproduces them in a persisted checkpoint.
 
-Neither Data URLs, extracted text, nor device URIs enter protocol values, SQLite, snapshots, or
+Document attachments use the file module's shared reader with the parser preference frozen before
+turn preparation first yields. That same setting enters the turn's `read_file` callback. The Host
+does not flatten AnyDoc IR into text: the document part keeps the original opaque JSON and admitted
+images, while the persisted user file part receives only its preparation report. Current and
+historical occurrences share the file module's content and image budgets. PDF remains native text;
+switching parsers affects the next turn's reads, not previous messages or persisted tool results.
+
+Pi serializes the complete document envelope once, with the original IR as a nested object, never
+an escaped JSON string. When delivery is deferred, it emits managed-id/offset continuation guidance
+instead of partial JSON. Each admitted image follows a label identifying `fileEntryId` and
+`assetRef`, using the existing image channel. Delivery descriptors stay separate from the IR and
+explain omitted pixels. Runtime validation, context estimates, history replay, error redaction, and
+checkpoint redaction cover document parts as well as text and direct images.
+
+Neither Data URLs, attachment IR, extracted attachment text, nor device URIs enter protocol values, SQLite, snapshots, or
 logs. Tool-side access follows the stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
@@ -258,6 +291,7 @@ type RuntimeMessagePart =
       truncated: boolean
       trust: 'untrusted-user-content'
     }
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
   | {
       type: 'tool-call'

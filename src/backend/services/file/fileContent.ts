@@ -136,13 +136,14 @@ export const fileContent = {
         readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
       signal,
       target: input.target,
+      documentParserMode: input.documentParserMode,
     });
     return input.fileEntryIds.map((id) => {
       const attachment = prepared.get(id)!;
       return {
         ...resolved.get(id)!,
         report: attachment.report,
-        ...(attachment.text !== undefined ? { text: attachment.text } : {}),
+        ...(attachment.content ? { content: attachment.content } : {}),
       };
     });
   },

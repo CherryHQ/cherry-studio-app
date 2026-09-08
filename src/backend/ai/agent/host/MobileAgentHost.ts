@@ -77,6 +77,7 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
 
@@ -160,6 +161,7 @@ export type MobileAgentHostNaming = Pick<
 export type MobileAgentHostPorts = {
   agents: AgentDefinitionSource;
   appLanguage: () => LanguageVarious;
+  documentParserMode: () => DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
@@ -301,6 +303,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get turnPreparation(): TurnPreparationDependencies {
     return {
       agents: this.ports.agents,
+      documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       routeExecutionTarget: (target) => this.routeExecutionTarget(target),
@@ -761,7 +764,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         modelPreflight: plan.modelPreflight,
         resources: state.resources,
         signal: state.abortController.signal,
-        textAttachments: plan.runtimeTextAttachments,
+        contentAttachments: plan.runtimeContentAttachments,
       });
       state.abortController.signal.throwIfAborted();
       const events = state.runtimeSession.execute({

@@ -1,8 +1,10 @@
+import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import type {
   AgentMessageView,
   AgentSessionView,
   AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
+import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { FileEntryIdSchema, type FileEntryId } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -12,6 +14,8 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
+import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
+import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
 import {
@@ -19,6 +23,7 @@ import {
   prepareTurn,
   type TurnPreparationDependencies,
 } from '../turnPreparation';
+import { toRuntimeHistory } from '../turnRuntimeInput';
 
 const AGENT_ID = 'agent-1';
 const SESSION_ID = 'session-1';
@@ -58,7 +63,108 @@ const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
   sessionTurnIds: [],
 };
 
+jest.mock('@/backend/services/file/anydocParser', () => ({
+  ANYDOC_PARSER_VERSION: '0.4.1',
+  parseAnydocDocument: jest.fn(),
+}));
+
 describe('turn preparation', () => {
+  test.each(['existing', 'initial'] as const)(
+    'freezes the parser before %s preparation yields and shares it with read_file',
+    async (kind) => {
+      const harness = createHarness();
+      let mode: DocumentParserMode = 'anydoc';
+      harness.dependencies.documentParserMode = () => mode;
+      const mediaType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const document = fact(FILE_ENTRY_ID, 'report.docx', mediaType, 3);
+      harness.files.resolveAvailable = async () => new Map([[FILE_ENTRY_ID, document]]);
+      harness.files.readDocumentText = async () => ({ text: 'built-in result', truncated: false });
+      const ir = { unknownFutureField: { text: '原始结果🍒' } };
+      jest
+        .mocked(parseAnydocDocument)
+        .mockResolvedValue({ status: 'ok', ir, assets: [], warnings: ['unchanged'] });
+      harness.getAgent.mockImplementationOnce(async () => {
+        mode = 'builtin';
+        return AGENT;
+      });
+      harness.getSystemTools.mockImplementation(async (input) => [
+        createReadFileTool(harness.files, input.resources, input.documentParserMode),
+      ]);
+      const parts = [{ type: 'file' as const, fileEntryId: FILE_ENTRY_ID, mediaType }];
+      const plan =
+        kind === 'initial'
+          ? await prepareInitialTurn(
+              harness.dependencies,
+              { agentId: AGENT_ID, executionTarget: { kind: 'local' }, parts },
+              new AbortController().signal,
+            )
+          : await prepareTurn(
+              harness.dependencies,
+              { sessionId: SESSION_ID, parts },
+              new AbortController().signal,
+            );
+      expect(mode).toBe('builtin');
+      expect(plan.documentParserMode).toBe('anydoc');
+      expect(plan.runtimeContentAttachments.get(FILE_ENTRY_ID)).toMatchObject({
+        type: 'document-attachment',
+        document: { result: { ir } },
+      });
+      expect(plan.userParts[0]).toMatchObject({
+        attachmentReport: { mode: 'document-ir', parser: 'anydoc', delivery: 'complete' },
+      });
+      expect(JSON.stringify(plan.userParts)).not.toContain('原始结果');
+      const read = await plan.tools[0]!.execute({
+        input: { file_entry_id: FILE_ENTRY_ID },
+        signal: new AbortController().signal,
+        toolCallId: 'read-1',
+      });
+      expect(read.value).toMatchObject({
+        parser: 'anydoc',
+        format: 'json-fragment',
+        text: JSON.stringify(ir),
+      });
+
+      const history = [{ ...textMessage('old-input', 'old-turn'), parts: plan.userParts }];
+      const originalHistory = JSON.parse(JSON.stringify(history));
+      harness.loadRuntimeTurnContext.mockResolvedValue({
+        anchorFound: true,
+        hasMessages: true,
+        history,
+        referencedFileEntryIds: [FILE_ENTRY_ID],
+        sessionTurnIds: ['old-turn'],
+      });
+      const next = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      expect(next.documentParserMode).toBe('builtin');
+      expect(next.runtimeContentAttachments.get(FILE_ENTRY_ID)).toMatchObject({
+        type: 'text-attachment',
+        text: 'built-in result',
+      });
+      expect(
+        toRuntimeHistory(next.history, next.runtimeContentAttachments)[0]?.messages[0]?.parts,
+      ).toEqual([
+        expect.objectContaining({
+          type: 'text-attachment',
+          text: 'built-in result',
+          attachmentReport: expect.objectContaining({ parser: 'builtin' }),
+        }),
+      ]);
+      expect(history).toEqual(originalHistory);
+      expect(history[0]?.parts[0]).toMatchObject({ attachmentReport: { parser: 'anydoc' } });
+      expect(
+        (
+          await next.tools[0]!.execute({
+            input: { file_entry_id: FILE_ENTRY_ID },
+            signal: new AbortController().signal,
+            toolCallId: 'read-2',
+          })
+        ).value,
+      ).toMatchObject({ parser: 'builtin', text: 'built-in result' });
+    },
+  );
   test('prepares a Draft first turn without reading a durable Session', async () => {
     const harness = createHarness();
 
@@ -103,6 +209,7 @@ describe('turn preparation', () => {
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
+      documentParserMode: 'anydoc',
       resolveUsageAttribution: plan.usageAttribution.resolve,
     });
     // Tools read the attribution when they run; the Host binds the message after reservation.
@@ -163,7 +270,7 @@ describe('turn preparation', () => {
         },
       },
     ]);
-    expect(plan.runtimeTextAttachments.get(FILE_ENTRY_ID)).toEqual({
+    expect(plan.runtimeContentAttachments.get(FILE_ENTRY_ID)).toEqual({
       attachmentReport: {
         mode: 'text',
         sourceTruncated: false,
@@ -291,7 +398,9 @@ function createHarness() {
   };
   const systemTool = tool('system_tool', 'ask');
   const configuredTool = tool('configured_tool', 'deny');
-  const getSystemTools = jest.fn(async () => [systemTool]);
+  const getSystemTools = jest.fn(
+    async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
+  );
   const resolveRuntimeTools = jest.fn(async (_agentId: string) => [configuredTool]);
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({
@@ -315,6 +424,7 @@ function createHarness() {
   const routeExecutionTarget = jest.fn(() => runtime);
   const dependencies: TurnPreparationDependencies = {
     agents: { getAgent },
+    documentParserMode: () => 'anydoc',
     files,
     inferenceModel: resolveInferenceModel,
     routeExecutionTarget,
@@ -326,6 +436,7 @@ function createHarness() {
   return {
     configuredTool,
     dependencies,
+    files,
     getAgent,
     getLatestContextCheckpoint,
     getSession,

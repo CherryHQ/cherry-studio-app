@@ -45,4 +45,34 @@ describe('persisted attachment feedback', () => {
       }).success,
     ).toBe(false);
   });
+
+  test('roundtrips deferred document and image delivery facts without allowing persisted IR', () => {
+    const report = {
+      mode: 'document-ir',
+      parser: 'anydoc',
+      parserVersion: '0.4.1',
+      sourceTruncated: false,
+      requestTruncated: false,
+      delivery: 'deferred',
+      includedCharacters: 200,
+      images: { sent: 1, omitted: 2 },
+    };
+    expect(
+      AgentMessagePartSchema.parse(
+        JSON.parse(JSON.stringify({ ...filePart, attachmentReport: report })),
+      ),
+    ).toEqual({ ...filePart, attachmentReport: report });
+    expect(
+      AgentMessagePartSchema.safeParse({ ...filePart, attachmentReport: { ...report, ir: {} } })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentErrorViewSchema.parse({
+        code: 'ATTACHMENT_INVALID',
+        message: 'parser unavailable',
+        retryable: false,
+        attachmentIssue: { code: 'parser-unavailable' },
+      }),
+    ).toHaveProperty('attachmentIssue.code', 'parser-unavailable');
+  });
 });

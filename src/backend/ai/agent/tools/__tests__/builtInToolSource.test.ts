@@ -182,6 +182,7 @@ describe('createSystemCapabilitySource', () => {
     };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
       resources,
@@ -233,6 +234,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
       resources: {
@@ -286,6 +288,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
       resources: {
@@ -326,6 +329,7 @@ describe('createSystemCapabilitySource', () => {
       .mockResolvedValue(new TextEncoder().encode('a\nb'));
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
       resources: { ...TURN_RESOURCES, fileEntryIds: new Set([knownId]) },
@@ -367,6 +371,7 @@ async function resolve(
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
+    documentParserMode: 'builtin',
     disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
     resources: TURN_RESOURCES,
