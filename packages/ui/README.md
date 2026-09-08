@@ -110,6 +110,15 @@ updates and exposes native scroll indicators. Table cells do not open a copy men
 copy stays with the message actions. This behavior is native and requires a development-client
 rebuild after changing the patch.
 
+On Android, a touch starting inside an overflowing table reserves that sequence from ancestor
+pans. Horizontal drags stay with the table, including at its edges; vertical drags cancel the
+table's child touches and yield to the message list. Touches outside the table and tables that fit
+their viewport do not acquire this reservation. Axis recognition uses Android's touch slop, and
+release, cancellation, or detachment clears the reservation. This adapts the Android
+[NestedScrollableHost pattern](https://github.com/android/views-widgets-samples/blob/main/ViewPager2/app/src/main/java/androidx/viewpager2/integration/testapp/NestedScrollableHost.kt)
+at the native table boundary, where cell link handlers cannot accidentally release the ancestor
+lock. Device acceptance must cover cell text, padding, links, both drag directions, and table edges.
+
 When rendering selectable content inside a scroll surface, follow the selection and
 scroll-cancellation contract in
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)
