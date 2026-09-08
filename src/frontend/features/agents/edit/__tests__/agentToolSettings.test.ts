@@ -17,6 +17,32 @@ const UNSUPPORTED_ID = '00000000-0000-4000-8000-000000000004';
 const DELETED_ID = '00000000-0000-4000-8000-000000000005';
 
 describe('agent tool settings', () => {
+  it('offers built-in plugins as MCP bindings without requiring a network endpoint', () => {
+    const plugin: McpServer = {
+      ...makeServer(HTTP_ID, 'GitHub', 'https://unused.example'),
+      origin: 'builtin',
+      builtinId: 'github',
+      authorizationId: SAME_NAME_ID,
+      endpointUrl: null,
+      headers: undefined,
+    };
+    const [option] = buildAgentMcpServerOptions({
+      bindings: [],
+      originalBindings: [],
+      servers: [plugin],
+    });
+    expect(option.status).toBe('available');
+    expect(setAgentMcpServerEnabled([], option, true)).toEqual([
+      {
+        approval: 'ask',
+        displayNameSnapshot: 'GitHub',
+        enabled: true,
+        serverId: HTTP_ID,
+        source: 'mcp',
+      },
+    ]);
+  });
+
   it('keys duplicate display names by server id and excludes unbound unsupported servers', () => {
     const bindings = [makeStoredMcpBinding(UNSUPPORTED_ID), makeStoredMcpBinding(DELETED_ID)];
     const draft = createAgentToolBindingDraft(bindings);

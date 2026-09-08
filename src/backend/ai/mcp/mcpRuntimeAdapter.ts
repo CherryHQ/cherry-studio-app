@@ -34,7 +34,7 @@ export type McpExecutableToolDescriptor = {
    * it: editing the server row must fail the frozen tool as unavailable, never
    * silently retarget the approved call to a new remote authority.
    */
-  endpointUrl: string;
+  endpointUrl: string | null;
   /** Monotonic identity of the live catalog that produced this descriptor. */
   generation: number;
 };
@@ -50,7 +50,7 @@ export type McpToolInvocationCapability = {
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
-    discoveredEndpointUrl: string,
+    discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
   ): Promise<unknown>;
 };
@@ -132,7 +132,7 @@ export function createMcpRuntimeTools(
     if (
       !descriptor.serverId ||
       !descriptor.rawToolName ||
-      !descriptor.endpointUrl ||
+      (descriptor.endpointUrl !== null && !descriptor.endpointUrl) ||
       !Number.isSafeInteger(descriptor.generation) ||
       descriptor.generation < 0
     ) {
@@ -194,7 +194,7 @@ export function createMcpRuntimeTools(
 
 async function executeMcpRuntimeTool(input: {
   call: RuntimeToolCall;
-  endpointUrl: string;
+  endpointUrl: string | null;
   generation: number;
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];

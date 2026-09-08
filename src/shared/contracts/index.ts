@@ -9,3 +9,4 @@ export * from './permissions';
 export * from './profile';
 export * from './providers';
 export * from './webSearch';
+export * from './plugins';

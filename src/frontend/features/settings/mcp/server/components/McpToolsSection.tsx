@@ -28,7 +28,7 @@ export function McpToolsSection({
   const disabledTools = useMemo(() => new Set(server.disabledTools), [server.disabledTools]);
 
   const toolsQuery = useQuery({
-    enabled: /^https?:\/\//i.test(server.endpointUrl),
+    enabled: server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? ''),
     queryFn: () => mcp.listTools(server.id),
     queryKey: queryKeys.mcpServers.tools(server.id),
     retry: false,

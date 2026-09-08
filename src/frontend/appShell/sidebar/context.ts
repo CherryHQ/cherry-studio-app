@@ -4,6 +4,7 @@ export type SidebarActions = {
   closeDrawer: () => void;
   navigateAgents: () => void;
   openLibrary: () => void;
+  openPlugins: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   startNewChat: () => void;

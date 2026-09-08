@@ -1,5 +1,5 @@
 import type { McpServerService } from '@/backend/data/services/McpServerService';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import {
   createMcpServerHandlers,
@@ -7,7 +7,7 @@ import {
   type McpServerMutations,
 } from '../mcpServers';
 
-function server(overrides: Partial<McpServer> = {}): McpServer {
+function server(overrides: Partial<RemoteMcpServer> = {}): RemoteMcpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
     disabledTools: [],
@@ -27,7 +27,7 @@ function createMutationsSubject() {
     create: jest.fn(async () => current),
     delete: jest.fn(async () => undefined),
     getById: jest.fn(async () => current),
-    update: jest.fn(async (_id: string, input: Partial<McpServer>) => server(input)),
+    update: jest.fn(async (_id: string, input: Partial<RemoteMcpServer>) => server(input)),
   };
   return { mutations: createMcpServerMutations({ runtime, servers }), runtime, servers };
 }

@@ -1,5 +1,8 @@
 type McpConnectionConfigLike = {
-  endpointUrl: string;
+  endpointUrl: string | null;
+  origin?: 'builtin' | 'remote';
+  builtinId?: string;
+  authorizationId?: string;
   headers?: Readonly<Record<string, string>>;
 };
 
@@ -26,6 +29,13 @@ export function isSameMcpConnectionConfig(
   left: McpConnectionConfigLike,
   right: McpConnectionConfigLike,
 ): boolean {
+  if (left.origin === 'builtin' || right.origin === 'builtin') {
+    return (
+      left.origin === right.origin &&
+      left.builtinId === right.builtinId &&
+      left.authorizationId === right.authorizationId
+    );
+  }
   if (left.endpointUrl !== right.endpointUrl) {
     return false;
   }

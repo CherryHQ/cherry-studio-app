@@ -4,6 +4,7 @@ import type { McpModule } from './mcp';
 import type { ModelsModule } from './models';
 import type { PaintingsModule } from './paintings';
 import type { PermissionsModule } from './permissions';
+import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { WebSearchModule } from './webSearch';
@@ -15,6 +16,7 @@ export interface Backend {
   readonly models: ModelsModule;
   readonly paintings: PaintingsModule;
   readonly permissions: PermissionsModule;
+  readonly plugins: PluginsModule;
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
   readonly webSearch: WebSearchModule;

@@ -6,6 +6,39 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds plugin authorization inside a transaction without changing existing MCP credentials or bindings', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(({ tag }) => tag === '0019_plugin-authorizations');
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO mcp_server (id, name, base_url, headers, disabled_tools, is_active, created_at, updated_at)
+        VALUES ('legacy-server', 'Remote', 'https://example.com/mcp', '{"Authorization":"Bearer fixture"}', '["write"]', 1, 1, 2);
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at)
+        VALUES ('binding-1', 'agent-1', 'mcp', 'legacy-server', 1, 'ask', 1, 1);
+      `);
+      const server = database.prepare('SELECT * FROM mcp_server').get();
+      const binding = database.prepare('SELECT * FROM agent_tool_binding').get();
+      database.exec('BEGIN IMMEDIATE');
+      applyMigrationSql(database, entries[target].sql);
+      database.exec('COMMIT');
+      expect(database.prepare('SELECT * FROM mcp_server').get()).toEqual({
+        ...server,
+        origin: 'remote',
+        builtin_id: null,
+        authorization_id: null,
+      });
+      expect(database.prepare('SELECT * FROM agent_tool_binding').get()).toEqual(binding);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('registers every journal entry in the Expo runtime bundle', () => {
     const journal = readMigrationJournal();
     const bundleSource = readFileSync(`${process.cwd()}/src/backend/data/db/migrations.ts`, 'utf8');
@@ -81,6 +114,7 @@ describe('bundled SQLite migrations', () => {
         'job',
         'mcp_server',
         'painting',
+        'plugin_authorization',
         'preference',
         'user_model',
         'user_provider',
@@ -90,11 +124,24 @@ describe('bundled SQLite migrations', () => {
         'id',
         'name',
         'base_url',
+        'origin',
+        'builtin_id',
+        'authorization_id',
+        'headers',
         'is_active',
+        'disabled_tools',
         'created_at',
         'updated_at',
-        'disabled_tools',
-        'headers',
+      ]);
+      expect(columnNames(database, 'plugin_authorization')).toEqual([
+        'id',
+        'plugin_id',
+        'auth_method',
+        'account_label',
+        'credential_ciphertext',
+        'credential_key_id',
+        'created_at',
+        'updated_at',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'scope',
@@ -184,7 +231,10 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
       ]);
 
-      expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_active_idx']);
+      expect(indexNames(database, 'mcp_server')).toEqual([
+        'mcp_server_builtin_idx',
+        'mcp_server_is_active_idx',
+      ]);
       expect(columnNames(database, 'job')).toContain('cancel_requested_at');
       expect(columnNames(database, 'user_model')).toContain('input_modalities_explicit');
       expect(indexNames(database, 'user_model')).toEqual(

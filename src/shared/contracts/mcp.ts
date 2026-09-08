@@ -1,9 +1,20 @@
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
+  origin?: 'remote';
   endpointUrl: string;
   headers?: Record<string, string>;
 };
+
+export type McpRuntimeConnectionConfig =
+  | McpConnectionConfig
+  | {
+      origin: 'builtin';
+      endpointUrl: null;
+      builtinId: 'github' | 'amap';
+      authorizationId: string;
+      headers?: never;
+    };
 
 export type McpToolSummary = {
   description?: string;

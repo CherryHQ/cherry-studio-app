@@ -41,6 +41,10 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/drawings');
       },
+      openPlugins: () => {
+        navigation.closeDrawer();
+        router.push('/plugins');
+      },
       openSettings: () => {
         navigation.closeDrawer();
         router.push('/settings');

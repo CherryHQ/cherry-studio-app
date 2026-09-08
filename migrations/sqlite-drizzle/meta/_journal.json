@@ -134,6 +134,13 @@
       "when": 1788769828080,
       "tag": "0018_usage-invocation-semantics",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788884288598,
+      "tag": "0019_plugin-authorizations",
+      "breakpoints": true
     }
   ]
 }

@@ -5,8 +5,10 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
+import { createBuiltInMcpTransport } from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
+  McpRuntimeConnectionConfig,
   McpModule,
   McpServerInfo,
   McpServerRuntimeSummary,
@@ -35,7 +37,7 @@ const logger = loggerService.withContext('McpRuntimeService');
  * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'state'> & {
-  connectionConfig: McpConnectionConfig;
+  connectionConfig: McpRuntimeConnectionConfig;
 };
 
 type McpToolCallingClient = MCPClient & {
@@ -51,7 +53,7 @@ type ServerRuntimeState = {
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
   client?: MCPClient;
-  connectionConfig: McpConnectionConfig;
+  connectionConfig: McpRuntimeConnectionConfig;
   connectionPromise?: Promise<MCPClient>;
   discoveredToolNames: Set<string>;
   generation: number;
@@ -118,7 +120,17 @@ async function listAllTools(
 
 /** On failure — including an aborted initialize — the SDK closes its own
  * transport before rethrowing, so callers never inherit a half-open client. */
-function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Promise<MCPClient> {
+function createMcpClient(
+  config: McpRuntimeConnectionConfig,
+  signal: AbortSignal,
+): Promise<MCPClient> {
+  if (config.origin === 'builtin') {
+    return createMCPClient({
+      clientName: 'Cherry Studio',
+      initializationOptions: { signal },
+      transport: createBuiltInMcpTransport(config.builtinId, config.authorizationId),
+    });
+  }
   const headers = normalizeMcpHeaders(config.headers);
   return createMCPClient({
     clientName: 'Cherry Studio',
@@ -132,8 +144,8 @@ function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Pro
   });
 }
 
-function hasRunnableUrl(server: McpServer): boolean {
-  return /^https?:\/\//i.test(server.endpointUrl);
+function isRunnableMcpServer(server: McpServer): boolean {
+  return server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 
 function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClient {
@@ -141,7 +153,7 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
 }
 
 /**
- * Runtime MCP client manager (remote Streamable HTTP servers only).
+ * Runtime MCP client manager for remote servers and in-process plugins.
  *
  * Every read fetches `tools/list` live, bounded by `TOOLS_FETCH_TIMEOUT_MS`.
  * Fetches reconnect once; tool calls are never replayed.
@@ -177,7 +189,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   ): Promise<Record<string, McpServerRuntimeSummary>> {
     await Promise.allSettled(
       servers.flatMap((server) => {
-        if (!server.isEnabled || !hasRunnableUrl(server)) {
+        if (!server.isEnabled || !isRunnableMcpServer(server)) {
           return [];
         }
         const state = this.getRuntimeState(server);
@@ -191,7 +203,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Tool list for the server edit screen. */
   async listTools(serverId: string): Promise<McpToolSummary[]> {
     const server = await mcpServerService.getById(serverId);
-    if (!hasRunnableUrl(server)) {
+    if (!isRunnableMcpServer(server)) {
       throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
     }
 
@@ -205,7 +217,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Raw, JSON-safe definitions used by the Host-facing Runtime projection. */
   async listExecutableToolDescriptors(serverId: string): Promise<McpExecutableToolDescriptor[]> {
     const server = await mcpServerService.getById(serverId);
-    if (!server.isEnabled || !hasRunnableUrl(server)) {
+    if (!server.isEnabled || !isRunnableMcpServer(server)) {
       throw new McpRuntimeToolError(
         'mcp_tool_unavailable',
         'The MCP server is not executable.',
@@ -334,7 +346,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (!server.isEnabled) {
       return { ...snapshot, state: 'disabled' };
     }
-    if (!hasRunnableUrl(server)) {
+    if (!isRunnableMcpServer(server)) {
       return { ...snapshot, lastError: 'Invalid MCP server URL', state: 'error' };
     }
 
@@ -379,7 +391,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.server.id': state.serverId,
       'mcp.connection.generation': generation,
     });
-    const initPromise: Promise<MCPClient> = createHttpClient(state.connectionConfig, signal)
+    const initPromise: Promise<MCPClient> = createMcpClient(state.connectionConfig, signal)
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
           this.closeQuietly(client);
@@ -418,7 +430,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     });
     let client: MCPClient | undefined;
     try {
-      client = await createHttpClient(config, bound.signal);
+      client = await createMcpClient(config, bound.signal);
       trace?.end('ok');
       return await operation(client);
     } catch (error) {
@@ -477,7 +489,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
-    discoveredEndpointUrl: string,
+    discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
   ): Promise<unknown> {
     if (input === null || Array.isArray(input) || typeof input !== 'object') {
@@ -496,7 +508,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     if (
       !server.isEnabled ||
-      !hasRunnableUrl(server) ||
+      !isRunnableMcpServer(server) ||
       server.disabledTools.includes(ref.rawToolName)
     ) {
       throw unavailableToolError();
@@ -631,7 +643,14 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 }
 
-function toMcpConnectionConfig(server: McpServer): McpConnectionConfig {
+function toMcpConnectionConfig(server: McpServer): McpRuntimeConnectionConfig {
+  if (server.origin === 'builtin')
+    return {
+      origin: 'builtin',
+      endpointUrl: null,
+      builtinId: server.builtinId,
+      authorizationId: server.authorizationId,
+    };
   return {
     endpointUrl: server.endpointUrl,
     ...(server.headers && { headers: { ...server.headers } }),

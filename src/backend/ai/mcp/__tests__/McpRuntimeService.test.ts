@@ -2,11 +2,18 @@ import type { ListToolsResult } from '@ai-sdk/mcp';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import type { TraceRecorder } from '../../observability';
 import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import { McpRuntimeService } from '../McpRuntimeService';
+
+jest.mock('@/backend/services/builtInMcp', () => ({
+  createBuiltInMcpTransport: (pluginId: string, authorizationId: string) => ({
+    pluginId,
+    authorizationId,
+  }),
+}));
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
@@ -79,7 +86,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<RemoteMcpServer> = {}): RemoteMcpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
     disabledTools: [],
@@ -583,3 +590,31 @@ function retainedSnapshotCount(service: McpRuntimeService): number {
   const internals = service as unknown as { runtimeSnapshots: Map<string, unknown> };
   return internals.runtimeSnapshots.size;
 }
+
+describe('built-in plugin identities', () => {
+  it('uses an in-process transport and rejects a frozen catalog after grant rotation', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'github',
+      authorizationId: 'grant-1',
+    };
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    expect(descriptor?.endpointUrl).toBeNull();
+    expect(mockCreateMCPClient).toHaveBeenCalledWith(
+      expect.objectContaining({ transport: { pluginId: 'github', authorizationId: 'grant-1' } }),
+    );
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    server.authorizationId = 'grant-2';
+    await expect(
+      tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'call-1' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(client.callTool).not.toHaveBeenCalled();
+    service.invalidateServer(server.id);
+  });
+});

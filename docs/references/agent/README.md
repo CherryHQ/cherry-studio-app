@@ -112,6 +112,7 @@ while transport details remain deferred to a separately versioned adapter contra
 | [Agent Runtime](./agent-runtime.md) | Host-private execution input/output, Pi binding, lifetime, and conformance |
 | [Agent Persistence](./agent-persistence.md) | SQLite schema, store adapter, deletion semantics, and current limitations |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
+| [Built-In MCP Integrations](./built-in-mcp-design.md) | Planned GitHub, Canva, Gmail, Amap, Yuque and Feishu integrations, authorization storage and local MCP execution (`Status: design`) |
 | [Agent Skills](./agent-skills.md) | Explicitly deferred Mobile Skill policy and trust boundary |
 
 ## Related

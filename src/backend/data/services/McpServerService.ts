@@ -1,10 +1,5 @@
-/**
- * MCP Server Service - CRUD over the stored MCP endpoints.
- *
- * MOBILE SYNC DIVERGENCE: desktop's service manages four transports and an
- * install lifecycle. Mobile stores one Streamable HTTP connection per row, so
- * there is no transport to branch on and no projection to normalize.
- */
+/** CRUD for remote MCP connections and shared plugin availability controls.
+ * Plugin authorization owns built-in creation, credential changes, and deletion. */
 
 import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
@@ -23,7 +18,7 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import { McpServerSchema, type McpServer } from '@/shared/data/types/mcpServer';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -33,7 +28,12 @@ export type ListMcpServersQuery = {
 };
 
 function rowToMcpServer(row: McpServerRow): McpServer {
-  return {
+  return McpServerSchema.parse({
+    origin: row.origin,
+    ...(row.origin === 'builtin' && {
+      builtinId: row.builtinId,
+      authorizationId: row.authorizationId,
+    }),
     createdAt: timestampToISO(row.createdAt),
     disabledTools: row.disabledTools,
     endpointUrl: row.endpointUrl,
@@ -42,7 +42,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     isEnabled: row.isEnabled,
     name: row.name,
     updatedAt: timestampToISO(row.updatedAt),
-  };
+  });
 }
 
 export class McpServerService {
@@ -125,6 +125,14 @@ export class McpServerService {
   async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
     const existing = await this.getById(id);
     const parsed = UpdateMcpServerSchema.parse(dto);
+    if (
+      existing.origin === 'builtin' &&
+      (parsed.endpointUrl !== undefined ||
+        parsed.headers !== undefined ||
+        parsed.name !== undefined)
+    ) {
+      throw DataApiErrorFactory.validation({ origin: ['Manage this connection from Plugins'] });
+    }
     const name = parsed.name?.trim();
     if (name !== undefined) {
       this.validateName(name);
@@ -158,6 +166,9 @@ export class McpServerService {
   }
 
   async delete(id: string): Promise<void> {
+    if ((await this.getById(id)).origin === 'builtin') {
+      throw DataApiErrorFactory.validation({ origin: ['Disconnect this connection from Plugins'] });
+    }
     await this.dbService.withWriteTx(async (tx) => {
       await tx
         .update(agentToolBindingTable)

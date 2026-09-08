@@ -1,3 +1,4 @@
+import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
@@ -89,7 +90,8 @@ function SidebarBodyDefault({
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openLibrary, openPaintings, openPlugins } =
+    useSidebarActions('Sidebar.Body');
 
   return (
     <>
@@ -112,6 +114,12 @@ function SidebarBodyDefault({
           label={t('navigation.paintings')}
           onPress={openPaintings}
           testID="sidebar-paintings"
+        />
+        <SidebarNavRow
+          icon={BoxesIcon}
+          label={t('plugins.title')}
+          onPress={openPlugins}
+          testID="sidebar-plugins"
         />
       </View>
 
