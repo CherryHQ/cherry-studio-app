@@ -112,14 +112,14 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
             <Text accessibilityRole="header" className="font-semibold text-foreground text-2xl">
               {model.name}
             </Text>
-            <Text className="text-foreground-secondary text-sm">
+            <Text className="text-muted-foreground text-sm">
               {provider.name} · {purpose}
             </Text>
           </View>
         </View>
         <View className="flex-row items-center gap-2 rounded-xl bg-secondary py-1 pr-1 pl-4">
           <View className="min-w-0 flex-1 gap-1 py-2">
-            <Text className="text-foreground-secondary text-xs">
+            <Text className="text-muted-foreground text-xs">
               {t('settings.provider.models.detail.modelId')}
             </Text>
             <Text className="font-mono text-foreground text-sm">{model.modelId}</Text>
@@ -140,13 +140,13 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
             <Text accessibilityRole="header" className="font-semibold text-foreground text-base">
               {t('settings.provider.models.detail.specifications')}
             </Text>
-            <Text className="text-foreground-secondary text-xs">
+            <Text className="text-muted-foreground text-xs">
               {t('settings.provider.models.detail.tokenUnit')}
             </Text>
           </View>
           {hasContextWindow ? (
             <View className="gap-1">
-              <Text className="text-foreground-secondary text-sm">
+              <Text className="text-muted-foreground text-sm">
                 {t('settings.provider.models.detail.contextWindow')}
               </Text>
               <Text className="font-semibold text-foreground text-3xl" style={styles.number}>
@@ -158,7 +158,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
             <View className="flex-row flex-wrap gap-4">
               {limits.map((limit) => (
                 <View className="min-w-32 flex-1 gap-1" key={limit.field}>
-                  <Text className="text-foreground-secondary text-sm">{limit.label}</Text>
+                  <Text className="text-muted-foreground text-sm">{limit.label}</Text>
                   <Text className="font-medium text-foreground text-xl" style={styles.number}>
                     {limit.value?.toLocaleString()}
                   </Text>
@@ -235,7 +235,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
           <Text accessibilityRole="header" className="font-semibold text-foreground text-base">
             {t('settings.provider.models.detail.description')}
           </Text>
-          <Text className="text-foreground-secondary text-sm">{model.description}</Text>
+          <Text className="text-muted-foreground text-sm">{model.description}</Text>
         </View>
       ) : null}
       {model.notes?.trim() ? (
@@ -243,7 +243,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
           <Text accessibilityRole="header" className="font-semibold text-foreground text-base">
             {t('settings.provider.models.detail.notes')}
           </Text>
-          <Text className="text-foreground-secondary text-sm">{model.notes}</Text>
+          <Text className="text-muted-foreground text-sm">{model.notes}</Text>
         </View>
       ) : null}
     </SettingsScrollPage>
@@ -253,7 +253,7 @@ function ModelDetails({ model, provider }: { model: Model; provider: Provider })
 function ModelDetailField({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-row items-start gap-4">
-      <Text className="max-w-2/5 shrink text-foreground-secondary text-sm">{label}</Text>
+      <Text className="max-w-2/5 shrink text-muted-foreground text-sm">{label}</Text>
       <Text className="min-w-0 flex-1 text-right text-foreground text-sm">{value}</Text>
     </View>
   );
