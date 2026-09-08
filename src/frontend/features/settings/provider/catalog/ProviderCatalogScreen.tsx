@@ -136,7 +136,7 @@ function ProviderRegistryUpdateNotice({
         <Text className="font-medium text-base text-foreground">
           {t('settings.provider.catalog.registryUpdate.availableTitle')}
         </Text>
-        <Text className="text-foreground-secondary text-sm">
+        <Text className="text-muted-foreground text-sm">
           {t('settings.provider.catalog.registryUpdate.availableDescription')}
         </Text>
       </View>
