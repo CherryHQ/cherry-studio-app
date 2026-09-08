@@ -12,6 +12,10 @@ suffix.
 
 ## Ownership
 
+- `diagnostics` owns Desktop-aligned bundle inspection, archive creation, rule scanning, system
+  export, and retained upload retry. Its process logger captures startup errors; its
+  `TraceStorageService` is an application-host resource. See [Diagnostics](diagnostics/README.md).
+
 - `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.

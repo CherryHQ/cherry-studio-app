@@ -10,6 +10,7 @@ const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
+const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
@@ -73,6 +74,7 @@ const createRuntime = () =>
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     DbService: mockDb,
+    DiagnosticBundleService: mockDiagnostics,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -114,6 +116,7 @@ describe('createAppBootstrapRuntime', () => {
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
+      diagnostics: mockDiagnostics,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,
     });

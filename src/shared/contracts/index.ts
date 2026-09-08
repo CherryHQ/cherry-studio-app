@@ -1,5 +1,6 @@
 export * from './agent';
 export * from './backend';
+export * from './diagnostics';
 export * from './file';
 export * from './fileAttachment';
 export * from './mcp';

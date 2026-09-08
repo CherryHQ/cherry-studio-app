@@ -31,18 +31,21 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
-    plugins: config.plugins?.map((plugin) => {
-      if (plugin === 'expo-dev-client') {
-        return [plugin, { addGeneratedScheme: profile === 'development' }];
-      }
-      if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
-        return [
-          plugin[0],
-          { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
-        ];
-      }
-      return plugin;
-    }),
+    plugins: [
+      ...(config.plugins?.map<NonNullable<ExpoConfig['plugins']>[number]>((plugin) => {
+        if (plugin === 'expo-dev-client') {
+          return [plugin, { addGeneratedScheme: profile === 'development' }];
+        }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
+          return [
+            plugin[0],
+            { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
+          ];
+        }
+        return plugin;
+      }) ?? []),
+      './plugins/withDiagnostics',
+    ],
     extra: {
       ...config.extra,
       eas: {

@@ -15,6 +15,7 @@ import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -60,6 +61,7 @@ export function createAppBootstrapRuntime(
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
+  const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
@@ -79,6 +81,7 @@ export function createAppBootstrapRuntime(
   });
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
+    diagnostics,
     languageServing,
     providerRegistryUpdater,
   });

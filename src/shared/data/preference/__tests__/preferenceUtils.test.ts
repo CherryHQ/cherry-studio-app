@@ -19,6 +19,7 @@ describe('preference schema', () => {
   });
 
   test('defaults the web search and theme values the rest of the app reads', () => {
+    expect(getDefaultValue('app.developer_mode.enabled')).toBe(false);
     expect(getDefaultValue('chat.web_search.default_fetch_urls_provider')).toBe('jina');
     expect(getDefaultValue('chat.web_search.default_search_keywords_provider')).toBe('exa-mcp');
     expect(getDefaultValue('chat.web_search.max_results')).toBe(5);

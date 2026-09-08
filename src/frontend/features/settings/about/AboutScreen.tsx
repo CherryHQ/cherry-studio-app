@@ -6,6 +6,7 @@ import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-
 import RssIcon from '@cherrystudio/app-icons/icons/rss';
 import { Chip, Image, Section } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -29,6 +30,7 @@ const ABOUT_LINKS = {
 
 export default function AboutSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
 
   const openLink = useCallback((url: string) => {
     void openExternalUrl(url);
@@ -58,6 +60,11 @@ export default function AboutSettingsScreen() {
       </View>
 
       <Section title={t('settings.about.title')}>
+        <Section.Item
+          label={t('settings.about.diagnostics.title')}
+          description={t('settings.about.diagnostics.entryHint')}
+          onPress={() => router.push('/settings/diagnostics')}
+        />
         <Section.Item
           label={t('settings.about.repository.title')}
           leading={<GithubIcon className="size-[18px] text-foreground" />}

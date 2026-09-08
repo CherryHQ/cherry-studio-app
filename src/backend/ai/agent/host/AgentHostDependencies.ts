@@ -18,7 +18,9 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type { TraceStorageService } from '@/backend/services/diagnostics/TraceStorageService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { AgentEvent } from '@/shared/contracts/agent';
 import type { LanguageVarious } from '@/shared/data/preference';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
@@ -43,6 +45,7 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentH
   'PreferenceService',
   'McpRuntimeService',
   'WebSearchService',
+  'TraceStorageService',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   readonly files = managedFileResolver;
@@ -56,6 +59,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly preferenceService: PreferenceService,
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
+    private readonly traces: TraceStorageService,
   ) {
     super();
     this.runtimeTools = createAgentRuntimeToolResolver({
@@ -80,6 +84,10 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
     }));
+  }
+
+  recordTrace(sessionId: string, event: AgentEvent): void {
+    this.traces.record(sessionId, event);
   }
 
   appLanguage(): LanguageVarious {

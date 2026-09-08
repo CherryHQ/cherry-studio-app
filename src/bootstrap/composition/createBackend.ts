@@ -37,6 +37,7 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -53,6 +54,7 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
   },
@@ -184,6 +186,7 @@ export function createBackend(
   return {
     backend: {
       agent: services.agent,
+      diagnostics: infrastructure.diagnostics,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,

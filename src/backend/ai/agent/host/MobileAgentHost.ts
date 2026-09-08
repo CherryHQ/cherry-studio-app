@@ -156,6 +156,7 @@ export type MobileAgentHostNaming = Pick<
  * never constructs a collaborator itself.
  */
 export type MobileAgentHostPorts = {
+  recordTrace?(sessionId: string, event: AgentEvent): void;
   agents: AgentDefinitionSource;
   appLanguage: () => LanguageVarious;
   files: ManagedFileResolver;
@@ -1201,6 +1202,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private publish(sessionId: string, event: AgentEvent): void {
+    this.ports.recordTrace?.(sessionId, event);
     const sessionListeners = this.listeners.get(sessionId);
     if (!sessionListeners || sessionListeners.size === 0) {
       return;
