@@ -1,7 +1,9 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
+import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { Painting } from '@/shared/data/types/painting';
 
 import type {
@@ -11,6 +13,7 @@ import type {
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
+  initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
 };
@@ -61,8 +64,20 @@ const files: ResolvedPaintingFiles = {
 };
 const result: PaintingGenerationResult = {
   outputs: [
-    { fileEntryId: 'output-2', uri: 'file:///output-2.png' },
-    { fileEntryId: 'output-3', uri: 'file:///output-3.png' },
+    {
+      fileEntryId: 'output-2',
+      mediaType: 'image/png',
+      name: 'output-2.png',
+      size: 2,
+      uri: 'file:///output-2.png',
+    },
+    {
+      fileEntryId: 'output-3',
+      mediaType: 'image/png',
+      name: 'output-3.png',
+      size: 3,
+      uri: 'file:///output-3.png',
+    },
   ],
   painting: {
     ...painting,
@@ -80,13 +95,14 @@ const input: PaintingGenerationInput = {
 };
 
 const mockCancel = jest.fn();
+const mockAlertShow = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult | null>, [PaintingGenerationInput]>();
 const mockGeneration = {
   aspectRatio: 16 / 9,
   cancel: mockCancel,
   error: null as Error | null,
   generate: mockGenerate,
-  interruption: null as { message?: string } | null,
+  interruption: null as { reason: 'failed' | 'interrupted' } | null,
   outputs: [...result.outputs],
   paramValues: { size: '1664x928' },
   status: 'idle' as 'generating' | 'idle',
@@ -99,6 +115,7 @@ let mockMessageListProps: MessageListProps | undefined;
 let mockProviderProps:
   | { initialAttachments?: readonly unknown[]; initialDraft?: string }
   | undefined;
+let mockProviderMounts = 0;
 let mockUuid = 0;
 
 jest.mock('expo-crypto', () => ({
@@ -116,6 +133,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('@/frontend/utils/constants', () => ({ isIOS: false }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
   useComposerDockLayout: () => ({
     contentBottomInset: 88,
     handleInputHeightChange: jest.fn(),
@@ -127,6 +145,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+    const { useEffect } = jest.requireActual('react');
+    useEffect(() => {
+      mockProviderMounts += 1;
+    }, []);
     mockProviderProps = props;
     return children;
   },
@@ -184,6 +206,7 @@ describe('PaintingComposer', () => {
     mockMessageListUnmounts = 0;
     mockMessageListProps = undefined;
     mockProviderProps = undefined;
+    mockProviderMounts = 0;
     mockUuid = 0;
     mockGeneration.aspectRatio = 16 / 9;
     mockGeneration.error = null;
@@ -211,7 +234,7 @@ describe('PaintingComposer', () => {
     });
   }
 
-  it('projects a completed painting while keeping the composer empty', () => {
+  it('shows completed outputs in the message list without attaching them to the draft', () => {
     renderComposer();
 
     expect(mockMessageListProps?.messages.map((message) => message.role)).toEqual([
@@ -233,7 +256,31 @@ describe('PaintingComposer', () => {
       paintingId: painting.id,
       status: 'idle',
     });
-    expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: [],
+      initialDraft: '',
+    });
+  });
+
+  it('seeds the input image and params when explicitly handed off for editing', () => {
+    act(() => {
+      renderer = create(
+        <PaintingComposer
+          initialAttachments={[files.outputs[0]]}
+          initialDraft="Change the aspect ratio"
+          initialFiles={{ inputs: [], outputAspectRatio: 1, outputs: [] }}
+          initialParamValues={{ aspectRatio: '16:9' }}
+          isHandoff
+          painting={painting}
+        />,
+      );
+    });
+
+    expect(mockInputProps?.initialParamValues).toEqual({ aspectRatio: '16:9' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: [files.outputs[0]],
+      initialDraft: 'Change the aspect ratio',
+    });
   });
 
   it('replaces the persisted turn with a pending request and then its result', async () => {
@@ -275,6 +322,20 @@ describe('PaintingComposer', () => {
     });
     expect(mockMessageListMounts).toBe(1);
     expect(mockMessageListUnmounts).toBe(0);
+    expect(mockProviderMounts).toBe(1);
+    expect(mockProviderProps?.initialAttachments).toEqual([]);
+  });
+
+  it('restores the previous painting after attachment rejection and lets the submit surface explain it', async () => {
+    renderComposer();
+    const previousMessages = mockMessageListProps?.messages;
+    const failure = new FileAttachmentError({ code: 'unavailable' });
+    mockGenerate.mockRejectedValueOnce(failure);
+    await act(async () => {
+      await expect(mockInputProps?.onGenerate(input)).rejects.toBe(failure);
+    });
+    expect(mockMessageListProps?.messages).toEqual(previousMessages);
+    expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
   it('keeps a failed turn but clears a cancelled turn', async () => {
@@ -289,6 +350,7 @@ describe('PaintingComposer', () => {
     });
     expect(mockMessageListProps?.messages[1].status).toBe('error');
     expect(mockAssistantProps?.error).toEqual(new Error('provider unavailable'));
+    expect(mockAssistantProps?.onRetry).toEqual(expect.any(Function));
 
     mockGeneration.error = null;
     mockGenerate.mockResolvedValueOnce(null);
@@ -298,11 +360,33 @@ describe('PaintingComposer', () => {
     expect(mockMessageListProps?.messages).toEqual([]);
   });
 
-  it('keeps an interrupted receipt in the message list with an empty composer', () => {
+  it('retries a failed active turn from its inline action', async () => {
+    renderComposer();
+    mockGenerate.mockImplementationOnce(async () => {
+      mockGeneration.error = new Error('provider unavailable');
+      throw mockGeneration.error;
+    });
+    await act(async () => {
+      await mockInputProps?.onGenerate(input).catch(() => undefined);
+    });
+
+    mockGeneration.error = null;
+    mockGenerate.mockResolvedValueOnce(result);
+    act(() => (mockAssistantProps?.onRetry as (() => void) | undefined)?.());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+    expect(mockGenerate).toHaveBeenLastCalledWith(input);
+  });
+
+  it('restores an interrupted receipt in the message list and composer', () => {
     const receipt = { ...painting, files: { input: ['input-1'], output: [] } };
     const pendingFiles = { inputs: files.inputs, outputs: [] };
     mockGeneration.outputs = [];
-    mockGeneration.interruption = { message: 'Invalid JSON response' };
+    mockGeneration.interruption = { reason: 'failed' };
     act(() => {
       renderer = create(
         <PaintingComposer
@@ -329,9 +413,13 @@ describe('PaintingComposer', () => {
     ]);
     expect(mockMessageListProps?.messages[1].status).toBe('error');
     expect(mockAssistantProps).toMatchObject({
-      interruption: { message: 'Invalid JSON response' },
+      interruption: { reason: 'failed' },
       paintingId: receipt.id,
+      prompt: receipt.prompt,
     });
-    expect(mockProviderProps).toMatchObject({ initialAttachments: [], initialDraft: '' });
+    expect(mockProviderProps).toMatchObject({
+      initialAttachments: files.inputs,
+      initialDraft: receipt.prompt,
+    });
   });
 });

@@ -67,7 +67,7 @@ export class EntitySearchService {
     for (const type of types) {
       try {
         // Keep desktop's fail-fast all-or-nothing behavior while adapting DB reads to Expo async.
-        groups.push(await this.searchType(type, query.q, limit, updatedAtFromMs));
+        groups.push(await this.searchType(type, query.q, limit, updatedAtFromMs, query.agentId));
       } catch (error) {
         logger.error('entity search type failed', error as Error, { type });
         throw withTypeContext(type, error);
@@ -81,12 +81,13 @@ export class EntitySearchService {
     q: string,
     limit: number,
     updatedAtFrom: number | undefined,
+    agentId: string | undefined,
   ): Promise<EntitySearchGroup> {
     switch (type) {
       case 'agent':
         return { items: await this.searchAgents(q, limit, updatedAtFrom), type };
       case 'session':
-        return { items: await this.searchSessions(q, limit, updatedAtFrom), type };
+        return { items: await this.searchSessions(q, limit, updatedAtFrom, agentId), type };
       default: {
         const exhaustive: never = type;
         throw new Error(`Unknown entity search type: ${exhaustive}`);
@@ -120,9 +121,10 @@ export class EntitySearchService {
     );
   }
 
-  private async searchSessions(q: string, limit: number, updatedAtFrom?: number) {
+  private async searchSessions(q: string, limit: number, updatedAtFrom?: number, agentId?: string) {
     const pattern = likePattern(q);
     const conditions: SQL[] = [sql`${agentSessionTable.title} LIKE ${pattern} ESCAPE '\\'`];
+    if (agentId) conditions.push(eq(agentSessionTable.agentId, agentId));
     if (updatedAtFrom !== undefined) {
       conditions.push(gte(agentSessionTable.updatedAt, updatedAtFrom));
     }

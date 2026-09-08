@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
+import { View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
-const frameRadius = 16;
+import type { FilePreviewVariant } from '../file-preview.types';
 
 export function FilePreviewFrame({
   accessibilityLabel,
@@ -9,13 +10,20 @@ export function FilePreviewFrame({
   disabled,
   onPress,
   size,
+  variant = 'thumbnail',
 }: {
   accessibilityLabel: string;
   children: ReactNode;
   disabled?: boolean;
   onPress: () => void;
   size: number;
+  variant?: FilePreviewVariant;
 }) {
+  const clippingClassName =
+    variant === 'card'
+      ? 'size-full overflow-hidden rounded-4xl'
+      : 'size-full overflow-hidden rounded-2xl';
+
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -25,14 +33,13 @@ export function FilePreviewFrame({
       disabled={disabled}
       onPress={onPress}
       style={{
-        borderCurve: 'continuous',
-        borderRadius: frameRadius,
         height: size,
-        overflow: 'hidden',
         width: size,
       }}
     >
-      {children}
+      <View className={clippingClassName} style={{ borderCurve: 'continuous' }}>
+        {children}
+      </View>
     </Pressable>
   );
 }

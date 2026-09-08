@@ -1125,6 +1125,7 @@ export class JobRuntime extends BaseService {
     return {
       attempt: 0,
       cancelRequested: true,
+      cancelRequestedAt: nowIso,
       createdAt: nowIso,
       error: { code: 'JOB_FINALIZE_TX_FAILED', message: cause.message, retryable: true },
       finishedAt: nowIso,

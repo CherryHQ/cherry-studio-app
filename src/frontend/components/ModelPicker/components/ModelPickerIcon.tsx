@@ -1,8 +1,9 @@
 import { Image } from '@cherrystudio/ui/components';
-import { resolveIcon } from '@cherrystudio/ui/icons';
+import { resolveModelIcon, resolveModelProviderIcon } from '@cherrystudio/ui/icons';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
+import { PROVIDER_BRAND_ICON_SCALE } from '@/frontend/components/Avatar';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -10,28 +11,24 @@ type ModelPickerIconProps = {
   model: Model;
   /** Absent while the model's provider is still loading; the initial stands in. */
   provider: Provider | undefined;
-  providerIconSize?: number;
   size?: number;
 };
 
-export function ModelPickerIcon({
-  model,
-  provider,
-  providerIconSize,
-  size = 32,
-}: ModelPickerIconProps) {
+export function ModelPickerIcon({ model, provider, size = 32 }: ModelPickerIconProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
+  const modelIconSource = resolveModelIcon(model.modelId);
   const iconSource = provider
-    ? resolveIcon(model.modelId, provider.presetProviderId ?? provider.id)
-    : null;
+    ? (modelIconSource ??
+      resolveModelProviderIcon(model.modelId, provider.presetProviderId ?? provider.id))
+    : modelIconSource;
+  const imageSize = modelIconSource ? size : size * PROVIDER_BRAND_ICON_SCALE;
   const avatarInitial = model.name.trim().charAt(0).toUpperCase() || 'M';
   const frameStyle = {
     borderRadius: size / 2,
     height: size,
     width: size,
   };
-  const imageSize = providerIconSize ?? Math.round(size * 0.8125);
 
   if (iconSource) {
     return (

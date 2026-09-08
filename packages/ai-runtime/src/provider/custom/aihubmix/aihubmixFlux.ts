@@ -47,11 +47,11 @@ class AihubmixFluxTransport implements ImageGenerationTransport {
     const inputBody: Record<string, unknown> = {};
     if (input.prompt) inputBody.prompt = input.prompt;
 
-    // aspectRatio gets normalized into `${number}:${number}` upstream and lives
-    // on `options.aspectRatio`, but it isn't part of ImageGenerationSubmitInput —
-    // callers that need it pass it via the bag (snake or camel). Strip any
-    // `ASPECT_X_Y` form to `X:Y` as a defensive fallback.
+    // aspectRatio gets normalized into `${number}:${number}` upstream and is a
+    // native AI SDK option. Keep the provider bag as a compatibility fallback
+    // for older/direct callers, including `ASPECT_X_Y` values.
     const rawAspect =
+      input.aspectRatio ??
       (typeof bag.aspect_ratio === 'string' ? bag.aspect_ratio : undefined) ??
       (typeof bag.aspectRatio === 'string' ? bag.aspectRatio : undefined);
     if (rawAspect) {

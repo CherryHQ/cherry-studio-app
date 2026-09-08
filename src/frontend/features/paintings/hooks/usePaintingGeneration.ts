@@ -2,11 +2,12 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ComposerAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import { imageParamsAspectRatio } from '@/frontend/data/paintings/imageGenerationParams';
 import {
-  paintingJobFailureMessage,
+  type PaintingJobInterruptionReason,
+  paintingJobInterruptionReason,
   paintingJobParamValues,
   usePaintingJobs,
 } from '@/frontend/data/paintings/usePaintingJobs';
@@ -15,6 +16,7 @@ import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -23,14 +25,15 @@ export type PaintingGenerationStatus = 'idle' | 'generating';
 /**
  * The receipt exists but holds no images and nothing is running for it — the
  * previous attempt died with the app, timed out, or the provider refused.
- * `message` is provider text when there is any worth repeating.
+ * The closed reason selects localized recovery copy while provider diagnostics
+ * remain available only through the persisted job ledger.
  */
-export type PaintingInterruption = { message?: string };
+export type PaintingInterruption = { reason: PaintingJobInterruptionReason };
 
 export type PaintingOutput = PaintingGenerationOutput;
 
 export type PaintingGenerationInput = {
-  attachments: readonly ComposerAttachmentDraft[];
+  attachments: readonly ComposerAttachmentReady[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
   modelName: string;
@@ -117,7 +120,7 @@ export function usePaintingGeneration({
     outputs.length === 0;
   const interruptedJob = paintingId ? jobs.interruptedByPaintingId.get(paintingId) : undefined;
   const interruption: PaintingInterruption | null = useMemo(
-    () => (isInterrupted ? { message: paintingJobFailureMessage(interruptedJob) } : null),
+    () => (isInterrupted ? { reason: paintingJobInterruptionReason(interruptedJob) } : null),
     [interruptedJob, isInterrupted],
   );
 
@@ -219,19 +222,7 @@ export function usePaintingGeneration({
 
       try {
         const started = await paintings.startGeneration({
-          images: input.attachments.flatMap((attachment) =>
-            attachment.kind === 'image'
-              ? [
-                  {
-                    fileEntryId: attachment.fileEntryId,
-                    id: attachment.id,
-                    mediaType: attachment.mediaType,
-                    name: attachment.name,
-                    uri: attachment.uri,
-                  },
-                ]
-              : [],
-          ),
+          fileEntryIds: input.attachments.map((attachment) => attachment.fileEntryId),
           mode: input.mode,
           modelId: input.modelId,
           modelName: input.modelName,
@@ -260,7 +251,13 @@ export function usePaintingGeneration({
       } catch (generationError) {
         const normalized =
           generationError instanceof Error ? generationError : new Error(String(generationError));
-        setError(normalized);
+        if (normalized instanceof FileAttachmentError) {
+          // Admission failed before a job existed; preserve the previous canvas.
+          setError(error);
+          setDisplayParamValues(displayParamValues);
+        } else {
+          setError(normalized);
+        }
         setStatus('idle');
         throw normalized;
       }
@@ -268,6 +265,8 @@ export function usePaintingGeneration({
     [
       activeJobId,
       cancelStartedGeneration,
+      displayParamValues,
+      error,
       interruption,
       onReceipt,
       paintingId,

@@ -1,5 +1,5 @@
 import { loggerService } from '@logger';
-import { and, asc, count, desc, eq, inArray, lte, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, lte, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
@@ -59,6 +59,8 @@ function rowToSnapshot(row: JobRow): JobSnapshot {
   return {
     attempt: row.attempt,
     cancelRequested: row.cancelRequested,
+    cancelRequestedAt:
+      row.cancelRequestedAt === null ? null : timestampToISO(row.cancelRequestedAt),
     createdAt: timestampToISO(row.createdAt),
     error: validateError(row.id, row.error),
     finishedAt: row.finishedAt === null ? null : timestampToISO(row.finishedAt),
@@ -275,7 +277,23 @@ export class JobService {
   }
 
   async setCancelRequestedTx(tx: Database, id: string): Promise<void> {
-    await tx.update(jobTable).set({ cancelRequested: true }).where(eq(jobTable.id, id));
+    const now = Date.now();
+    const activeStatuses = sql.join(
+      ACTIVE_JOB_STATUSES.map((status) => sql`${status}`),
+      sql`, `,
+    );
+    await tx
+      .update(jobTable)
+      .set({
+        cancelRequested: true,
+        cancelRequestedAt: sql`CASE
+          WHEN ${jobTable.status} IN (${activeStatuses})
+          THEN COALESCE(${jobTable.cancelRequestedAt}, ${now})
+          ELSE ${jobTable.cancelRequestedAt}
+        END`,
+        updatedAt: now,
+      })
+      .where(eq(jobTable.id, id));
   }
 
   /** Caller passes the already-merged object. Fenced on `status='running'`. */

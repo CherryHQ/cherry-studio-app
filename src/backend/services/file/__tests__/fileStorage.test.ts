@@ -14,6 +14,8 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
   resolveFileEntry,
+  rewriteInternalTextEntry,
+  subscribeFileChanges,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -137,7 +139,12 @@ type FileSystemTestState = {
 const { testState } = jest.requireMock<{ testState: FileSystemTestState }>('expo-file-system');
 
 describe('fileStorage', () => {
+  let onFileChange: jest.Mock;
+  let unsubscribe: () => void;
+
   beforeEach(() => {
+    onFileChange = jest.fn();
+    unsubscribe = subscribeFileChanges(onFileChange);
     testState.copies.length = 0;
     testState.directories.clear();
     testState.failures.clear();
@@ -146,6 +153,8 @@ describe('fileStorage', () => {
     testState.writes.length = 0;
     testState.paths.document.uri = 'file:///documents/';
   });
+
+  afterEach(() => unsubscribe());
 
   test('copies files with a normalized extension and records their actual size', async () => {
     testState.files.set('file:///picker/brief.PDF', 42);
@@ -160,7 +169,7 @@ describe('fileStorage', () => {
         createdAt: 1,
         filename: 'Quarterly Brief.pdf',
         id: '00000000-0000-7000-8000-000000000001',
-        mediaType: 'application/octet-stream',
+        mediaType: 'application/pdf',
         provenance: 'imported',
         size: 42,
         updatedAt: 1,
@@ -169,7 +178,7 @@ describe('fileStorage', () => {
     expect(entries.create).toHaveBeenCalledWith({
       filename: 'Quarterly Brief.pdf',
       id: '00000000-0000-7000-8000-000000000001',
-      mediaType: 'application/octet-stream',
+      mediaType: 'application/pdf',
       provenance: 'imported',
       size: 42,
     });
@@ -183,8 +192,9 @@ describe('fileStorage', () => {
     }
     expect(managedPart.url).toBe(fileEntryUrl(managed.entries[0].id));
     expect(managedPart.url).toBe('cherry://file/00000000-0000-7000-8000-000000000001');
-    expect(managedPart.mediaType).toBe('application/octet-stream');
+    expect(managedPart.mediaType).toBe('application/pdf');
     expect(readCherryMeta(managedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
+    expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
   test('stores extensionless files without a trailing dot', async () => {
@@ -316,6 +326,8 @@ describe('fileStorage', () => {
       'file:///picker/second.txt',
     ]);
     expect(entries.delete).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000001');
+    // The committed first file is announced, then its compensating discard is announced.
+    expect(onFileChange).toHaveBeenCalledTimes(2);
   });
 
   test('writes generated base64 and persists its internal entry', async () => {
@@ -338,6 +350,7 @@ describe('fileStorage', () => {
     expect(testState.writes).toEqual([
       expect.objectContaining({ content: 'AAAA', options: { encoding: 'base64' } }),
     ]);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
   test('writes text verbatim under the caller-provided filename', async () => {
@@ -367,6 +380,7 @@ describe('fileStorage', () => {
         uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.md',
       },
     ]);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
   test('rejects a text filename that escapes the managed directory', async () => {
@@ -381,6 +395,7 @@ describe('fileStorage', () => {
     ).rejects.toThrow();
 
     expect(testState.writes).toEqual([]);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('removes a partially written text file on failure', async () => {
@@ -397,6 +412,7 @@ describe('fileStorage', () => {
       }),
     ).rejects.toThrow('write failed');
     expect(testState.files.has(uri)).toBe(false);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('removes the text blob when FileEntry persistence fails', async () => {
@@ -416,6 +432,7 @@ describe('fileStorage', () => {
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
     ).toBe(false);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('removes a partially written generated image on failure', async () => {
@@ -431,6 +448,7 @@ describe('fileStorage', () => {
       }),
     ).rejects.toThrow('write failed');
     expect(testState.files.has(uri)).toBe(false);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('removes the managed blob when FileEntry persistence fails', async () => {
@@ -450,6 +468,7 @@ describe('fileStorage', () => {
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
     ).toBe(false);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('keeps the managed blob when discarding its FileEntry fails', async () => {
@@ -462,12 +481,14 @@ describe('fileStorage', () => {
       uri: 'file:///picker/brief.txt',
     });
     entries.delete.mockRejectedValueOnce(new Error('database failed'));
+    onFileChange.mockClear();
 
     await discardInternalEntries(entries, [entry]);
 
     expect(
       testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
     ).toBe(true);
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('hard-deletes an entry row and its file', async () => {
@@ -478,13 +499,64 @@ describe('fileStorage', () => {
     const entries = {
       deleteTx: jest.fn(async () => undefined),
       findByIdTx: jest.fn(async () => entry),
-      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback(tx)),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
+        const result = await callback(tx);
+        expect(onFileChange).not.toHaveBeenCalled();
+        return result;
+      }),
     };
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(true);
 
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('rewrites a draft text blob in place and records the new size', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    const tx = {};
+    const entries = {
+      findById: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
+        ...entry,
+        id,
+        size,
+      })),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
+        const result = await callback(tx);
+        expect(onFileChange).not.toHaveBeenCalled();
+        return result;
+      }),
+    };
+
+    const rewritten = await rewriteInternalTextEntry(entries as never, {
+      data: 'longer content',
+      id: entry.id,
+    });
+
+    expect(testState.writes).toEqual([{ content: 'longer content', options: undefined, uri }]);
+    expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
+    expect(rewritten.size).toBe(14);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('refuses to rewrite a draft whose bytes are missing', async () => {
+    const entry = internalEntry();
+    const entries = {
+      findById: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(),
+      withWriteTx: jest.fn(),
+    };
+
+    await expect(
+      rewriteInternalTextEntry(entries as never, { data: 'x', id: entry.id }),
+    ).rejects.toThrow('Draft file bytes are missing');
+    expect(testState.writes).toEqual([]);
+    expect(entries.updateSizeTx).not.toHaveBeenCalled();
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('reports a missing entry row without deleting anything', async () => {
@@ -497,6 +569,62 @@ describe('fileStorage', () => {
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(false);
     expect(entries.deleteTx).not.toHaveBeenCalled();
+    expect(onFileChange).not.toHaveBeenCalled();
+  });
+
+  test('notifies only after a create commits and supports unsubscribing', async () => {
+    const entry = internalEntry();
+    let commit!: () => void;
+    const committed = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    let started!: () => void;
+    const persisting = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const entries = {
+      create: async () => {
+        started();
+        await committed;
+        return entry;
+      },
+    };
+    const creating = createInternalEntry(entries, {
+      data: 'text',
+      mediaType: 'text/plain',
+      name: entry.filename,
+      provenance: 'generated',
+      source: 'text',
+    });
+
+    await persisting;
+    expect(onFileChange).not.toHaveBeenCalled();
+    commit();
+    await creating;
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    await discardInternalEntries(createEntryStore(), [entry]);
+    expect(onFileChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not notify when a delete or rewrite transaction rolls back', async () => {
+    const entry = internalEntry();
+    testState.files.set(`file:///documents/Data/Files/${entry.id}.txt`, entry.size);
+    const entries = {
+      findById: jest.fn(async () => entry),
+      withWriteTx: jest.fn(async () => {
+        throw new Error('transaction failed');
+      }),
+    };
+
+    await expect(deleteInternalEntry(entries as never, entry.id)).rejects.toThrow(
+      'transaction failed',
+    );
+    await expect(
+      rewriteInternalTextEntry(entries as never, { data: 'new text', id: entry.id }),
+    ).rejects.toThrow('transaction failed');
+    expect(onFileChange).not.toHaveBeenCalled();
   });
 
   test('resolves a local image as a data URL, falling back to the file type', async () => {

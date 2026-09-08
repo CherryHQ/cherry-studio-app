@@ -17,8 +17,10 @@ Keep a component feature-local when its state, language, or interaction belongs 
 workflow. Move it into CherryUI only when it is reusable across independent features and fits the
 package's platform-neutral interaction ownership.
 
-When CherryUI lacks a qualifying reusable component, create it in an independent bottom PR before
-the feature integration PR. Use a `gh-stack` layer when the integration depends on that component.
+When CherryUI lacks a qualifying reusable component, implement it in CherryUI and keep the component
+and feature integration in the same PR by default. Only when the user explicitly requests a stack
+or layered PRs, place the component in a bottom PR and the dependent feature integration above it.
+Follow [Git Workflow](./git-workflow.md) for the opt-in stack workflow.
 
 When an implementation differs between iOS and Android, follow
 [Platform Variants](../references/naming-conventions.md#platform-variants): keep the full component
@@ -31,8 +33,9 @@ the eligible interactions and cancellation order before choosing a gesture imple
 
 ## Compose Component APIs
 
-Use the project `vercel-composition-patterns` skill when creating or substantially changing a
-reusable React component API. In particular:
+Use the project
+[vercel-composition-patterns skill](../../.agents/skills/vercel-composition-patterns/SKILL.md)
+when creating or substantially changing a reusable React component API. In particular:
 
 - compose explicit variants instead of accumulating boolean mode props;
 - use compound components and children for structural composition;

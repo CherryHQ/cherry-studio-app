@@ -24,6 +24,7 @@ type ProviderConnection = Omit<
   | 'apiFeatures'
   | 'modelListSource'
   | 'authOptional'
+  | 'reportsActualCost'
 > & {
   endpointConfigs: Partial<ProviderConfig['endpointConfigs']>;
   defaultChatEndpoint?: ProviderConfig['defaultChatEndpoint'];
@@ -31,6 +32,8 @@ type ProviderConnection = Omit<
   modelListSource?: ProviderConfig['modelListSource'];
   /** Defaults to `false`; only credential-free local providers declare it. */
   authOptional?: ProviderConfig['authOptional'];
+  /** Defaults false; only providers with authoritative billed usage declare it. */
+  reportsActualCost?: ProviderConfig['reportsActualCost'];
   /** Only the non-default flags are declared; the schema fills the rest at load time. */
   apiFeatures?: Partial<ApiFeatures>;
 };

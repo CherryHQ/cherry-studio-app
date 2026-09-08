@@ -21,9 +21,9 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 `Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
 API.
 
-`FilePreview` renders and opens a business-neutral file descriptor. The caller supplies display
+`FilePreview` renders a business-neutral file descriptor and delegates presses to its caller. The caller supplies display
 metadata, the file's kind, localized unavailable/opening labels, and an error callback; the
-component owns the frame, the press target, unavailable states, system opening, and iOS Quick Look
+component owns the frame, the press target, unavailable states, and iOS Quick Look
 thumbnail caching. Loading placeholders belong to the caller because it owns the loading lifecycle:
 
 ```tsx
@@ -38,6 +38,7 @@ thumbnail caching. Loading placeholders belong to the caller because it owns the
   }}
   labels={{ openWith: 'Open with', unavailable: 'Unavailable' }}
   onError={(error, operation) => reportPreviewError(error, operation)}
+  onPress={openBrief}
 />;
 ```
 
@@ -56,7 +57,7 @@ const previewPlugins = [{ component: PdfPreview, kind: 'pdf' }];
 ```
 
 A plugin receives `FilePreviewComponentProps` — the file, the resolved size, and the same `onError`
-— and draws the preview only. The frame, press target, and system opening stay with `FilePreview`,
+— and draws the preview only. The frame and press target stay with `FilePreview`,
 so a plugin cannot diverge on interaction. Providers nest: an inner one overrides the kinds it
 names and inherits the rest, including the platform fallback.
 
@@ -65,13 +66,29 @@ beyond `file.uri` and a platform API, as `image` and the iOS Quick Look thumbnai
 parses a format or calls a service is product code and registers through the provider; see
 `src/frontend/components/FileEntryPreview/README.md` for that path.
 
-`onError` distinguishes `open` from `thumbnail`, allowing product code to alert for a failed open
-while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
+`openFilePreview` is the exported platform-opening primitive. The caller chooses when to use it
+and handles its rejected promise. `onError` reports thumbnail failures; the shared operation type
+also includes `open` for callers that use one error reporter for both operations. CherryUI carries no file database,
 logging, or translation dependency.
 
-`FileAttachmentPreview` is the compact horizontal result variant. It keeps the same platform file
-opening and error contract while showing a filename and caller-supplied category label; square
+`FileAttachmentPreview` is the compact horizontal result variant. It requires the same `onPress`
+callback while showing a filename and caller-supplied category label; square
 thumbnail callers continue to use `FilePreview`.
+
+`FilePreview` has four explicit visual variants. The default `thumbnail` uses the plugin and
+platform rendering described above. `icon` keeps image thumbnails but represents other files with
+only their type icon, for rows that already show the filename. `attachment` puts a file-type icon
+above a multiline filename on a compact neutral tile; `card` puts the filename first and the icon
+at the bottom on a roomier surface. The `icon`, `attachment`, and `card` variants retain image
+thumbnails and caller-controlled opening. An
+optional `badge` slot sits beside the document icon or over an image; callers own its meaning and
+localized content. The complete filename remains the accessible label when its extension is
+omitted from the visible title.
+
+`file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
+colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
+file-specific adapters in `@cherrystudio/app-icons` retain the desktop Lucide 0.525.0 vector paths
+where the current native Lucide version has renamed or redrawn them. They need no raster assets.
 
 `MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
 native renderer. A part that has streamed keeps the streaming renderer for its full mounted

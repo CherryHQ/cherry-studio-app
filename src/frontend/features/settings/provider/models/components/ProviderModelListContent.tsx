@@ -1,13 +1,21 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import { Button } from '@cherrystudio/ui/components';
+import {
+  Button,
+  ContextMenu,
+  ContextMenuScrollBoundary,
+  type MenuItem,
+} from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { useRouter } from 'expo-router';
 import { type ReactElement, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useListBottomInset } from '@/frontend/components/Selection';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
+import type { useProviderModelManagement } from '../hooks/useProviderModelManagement';
 import { getProviderModelEndpointLabelKey } from '../utils/providerModelAdd';
 import {
   getProviderModelEndpointState,
@@ -21,6 +29,8 @@ import { ProviderModelRow, providerModelRowEstimatedHeights } from './ProviderMo
 
 export type ProviderModelListContentProps = {
   groupByPurpose: boolean;
+  supportedModelIds?: ReadonlySet<string>;
+  management?: ReturnType<typeof useProviderModelManagement>;
   ListEmptyComponent?: ReactElement;
   isEndpointSelectionDisabled?: boolean;
   models: Model[];
@@ -30,6 +40,8 @@ export type ProviderModelListContentProps = {
 };
 
 type ProviderModelListExtraData = {
+  supportedModelIds?: ReadonlySet<string>;
+  management?: ReturnType<typeof useProviderModelManagement>;
   isEndpointSelectionDisabled: boolean;
   onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
@@ -38,6 +50,8 @@ type ProviderModelListExtraData = {
 
 export function ProviderModelListContent({
   groupByPurpose,
+  management,
+  supportedModelIds,
   isEndpointSelectionDisabled = false,
   ListEmptyComponent,
   models,
@@ -46,18 +60,28 @@ export function ProviderModelListContent({
   updatingModelId,
 }: ProviderModelListContentProps) {
   const { t } = useTranslation();
+  const bottomInset = useListBottomInset();
   const listItems = useMemo(
     () => buildProviderModelListItems(models, groupByPurpose),
     [groupByPurpose, models],
   );
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
+      management,
+      supportedModelIds,
       isEndpointSelectionDisabled,
       onEndpointPress,
       provider,
       updatingModelId,
     }),
-    [isEndpointSelectionDisabled, onEndpointPress, provider, updatingModelId],
+    [
+      supportedModelIds,
+      management,
+      isEndpointSelectionDisabled,
+      onEndpointPress,
+      provider,
+      updatingModelId,
+    ],
   );
   const renderItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => {
@@ -99,6 +123,29 @@ export function ProviderModelListContent({
           />
         ) : null;
 
+      if (itemExtraData.management) {
+        return (
+          <ManagedModelRow
+            model={item.model}
+            provider={itemProvider}
+            isSelecting={itemExtraData.management.isSelecting}
+            isDeleting={itemExtraData.management.isDeleting}
+            isSelected={itemExtraData.management.selectedIds.has(item.model.id)}
+            onSelect={itemExtraData.management.beginSelection}
+            onDelete={itemExtraData.management.requestDelete}
+            onToggle={itemExtraData.management.toggleModel}
+            statusLabel={
+              !item.model.isEnabled
+                ? t('settings.provider.models.management.disabled')
+                : itemExtraData.supportedModelIds &&
+                    !itemExtraData.supportedModelIds.has(item.model.id)
+                  ? t('settings.provider.models.management.unsupported')
+                  : undefined
+            }
+            endpointButton={endpointButton}
+          />
+        );
+      }
       return (
         <ProviderModelRow model={item.model} provider={itemProvider} variant="management">
           {endpointButton}
@@ -109,24 +156,115 @@ export function ProviderModelListContent({
   );
 
   return (
-    <LegendList
-      automaticallyAdjustsScrollIndicatorInsets
-      contentContainerStyle={styles.contentContainer}
-      contentInsetAdjustmentBehavior="automatic"
-      data={listItems}
-      estimatedItemSize={providerModelRowEstimatedHeights.management}
-      extraData={extraData}
-      getItemType={getProviderModelListItemType}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      keyExtractor={providerModelListKeyExtractor}
-      ListEmptyComponent={ListEmptyComponent}
-      maintainVisibleContentPosition={false}
-      recycleItems
-      renderItem={renderItem}
-      showsVerticalScrollIndicator={false}
-      style={styles.list}
-    />
+    <ContextMenuScrollBoundary>
+      {(scrollHandlers) => (
+        <LegendList
+          {...scrollHandlers}
+          automaticallyAdjustsScrollIndicatorInsets
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomInset }]}
+          contentInsetAdjustmentBehavior="automatic"
+          data={listItems}
+          estimatedItemSize={providerModelRowEstimatedHeights.management}
+          extraData={extraData}
+          getItemType={getProviderModelListItemType}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          keyExtractor={providerModelListKeyExtractor}
+          ListEmptyComponent={ListEmptyComponent}
+          maintainVisibleContentPosition={false}
+          recycleItems
+          renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
+          style={styles.list}
+        />
+      )}
+    </ContextMenuScrollBoundary>
+  );
+}
+
+function ManagedModelRow({
+  model,
+  provider,
+  isSelecting,
+  isDeleting,
+  isSelected,
+  onSelect,
+  onDelete,
+  onToggle,
+  statusLabel,
+  endpointButton,
+}: {
+  model: Model;
+  provider: Provider | undefined;
+  isSelecting: boolean;
+  isDeleting: boolean;
+  isSelected: boolean;
+  onSelect: ReturnType<typeof useProviderModelManagement>['beginSelection'];
+  onDelete: ReturnType<typeof useProviderModelManagement>['requestDelete'];
+  onToggle: ReturnType<typeof useProviderModelManagement>['toggleModel'];
+  statusLabel?: string;
+  endpointButton: ReactElement | null;
+}) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const openModel = (edit = false) =>
+    router.push({
+      pathname: edit
+        ? '/settings/provider/[providerId]/model-edit'
+        : '/settings/provider/[providerId]/model',
+      params: { providerId: model.providerId, modelId: model.id },
+    });
+  const items: readonly MenuItem[] = [
+    {
+      id: 'detail',
+      label: t('settings.provider.models.management.details'),
+      onPress: () => openModel(),
+    },
+    {
+      id: 'edit',
+      label: t('settings.provider.models.management.edit'),
+      onPress: () => openModel(true),
+    },
+    {
+      id: 'select',
+      label: t('settings.provider.models.management.select'),
+      onPress: () => onSelect(model),
+    },
+    {
+      id: 'delete',
+      label: t('common.delete'),
+      destructive: true,
+      onPress: () => onDelete([model]),
+    },
+  ];
+  if (isSelecting) {
+    return (
+      <ProviderModelRow
+        model={model}
+        provider={provider}
+        variant="management"
+        statusLabel={statusLabel}
+        selection={{
+          isDisabled: isDeleting,
+          isSelected,
+          onToggle: () => onToggle(model.id),
+        }}
+      />
+    );
+  }
+  return (
+    <ContextMenu items={isDeleting ? [] : items}>
+      <ProviderModelRow
+        model={model}
+        provider={provider}
+        variant="management"
+        statusLabel={statusLabel}
+        disabled={isDeleting}
+        onPress={() => openModel()}
+      >
+        {endpointButton}
+      </ProviderModelRow>
+    </ContextMenu>
   );
 }
 

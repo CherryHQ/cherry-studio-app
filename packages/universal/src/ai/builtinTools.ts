@@ -35,6 +35,8 @@ export const webSearchOutputItemSchema = z.object({
   title: z.string(),
   url: z.string(),
   content: z.string(),
+  // Optional so existing stored tool results remain valid.
+  truncated: z.boolean().optional(),
 });
 
 export const webSearchOutputSchema = z.array(webSearchOutputItemSchema);

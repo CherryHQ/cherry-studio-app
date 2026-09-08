@@ -99,6 +99,15 @@ describe('AI usage overview', () => {
     });
   });
 
+  test('counts image-only and unknown-token calls as active days', () => {
+    const data = buildAiUsageCalendarData(
+      [bucket('2026-01-01', 0)],
+      rangeForDays(new Date(2026, 0, 1), 2),
+    );
+    expect(data).toEqual({ '2026-01-01': 1, '2026-01-02': 0 });
+    expect(getFirstAiUsageDateKey(data)).toBe('2026-01-01');
+  });
+
   test('fills the summary with zero levels without usage records', () => {
     expect(buildAiUsageCalendarData([], rangeForDays(new Date(2026, 0, 1), 2))).toEqual({
       '2026-01-01': 0,

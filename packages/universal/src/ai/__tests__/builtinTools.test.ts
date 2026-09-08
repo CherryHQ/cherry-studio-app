@@ -8,9 +8,16 @@ import {
   WEB_FETCH_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   webFetchInputSchema,
+  webFetchOutputSchema,
 } from '../builtinTools';
 
 describe('builtin tool contracts', () => {
+  it('preserves truncation metadata while accepting older stored web results', () => {
+    const legacy = { id: 'call-1', title: 'Article', url: 'https://example.com', content: 'Text' };
+    const truncated = { ...legacy, truncated: true };
+    expect(webFetchOutputSchema.parse([legacy, truncated])).toEqual([legacy, truncated]);
+  });
+
   it('uses model-facing builtin tool names', () => {
     expect(WEB_SEARCH_TOOL_NAME).toBe('web_search');
     expect(WEB_FETCH_TOOL_NAME).toBe('web_fetch');

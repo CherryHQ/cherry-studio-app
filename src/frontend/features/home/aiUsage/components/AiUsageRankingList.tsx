@@ -1,7 +1,7 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { Button } from '@cherrystudio/ui/components';
-import { resolveIcon } from '@cherrystudio/ui/icons';
+import { resolveModelIcon, resolveModelProviderIcon } from '@cherrystudio/ui/icons';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -230,14 +230,16 @@ function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: 
     );
   }
 
+  const modelIconSource = item.isOther ? undefined : resolveModelIcon(item.modelId ?? '');
   const iconSource = item.isOther
     ? undefined
-    : resolveIcon(item.modelId ?? '', item.providerId ?? '');
+    : (modelIconSource ?? resolveModelProviderIcon(item.modelId ?? '', item.providerId ?? ''));
 
   if (iconSource) {
     return (
       <BrandAvatar {...frameProps}>
         <BrandAvatarIcon
+          displayContext={modelIconSource ? undefined : 'provider'}
           iconId={item.providerId ?? undefined}
           recyclingKey={item.key}
           source={iconSource[iconTheme]}

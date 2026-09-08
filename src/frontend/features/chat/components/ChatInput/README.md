@@ -15,8 +15,9 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- At rest the composer is one row with the ＋ menu and send action always reachable. Focusing the
-  field morphs it into two rows: the field takes the full width, the action row moves below it, and
+- When empty and unfocused, the composer is one row with the ＋ menu and send action always
+  reachable. Focus, draft text, or attachments keep it expanded into two rows: the field takes the
+  full width, the action row moves below it, and
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
@@ -34,4 +35,17 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - The composer menu offers media only. Web search and create-image were removed from it, so the
   composer no longer requests any turn-local capability; tool availability comes from Agent
   configuration alone.
+- The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
+  and batched previews with the library screen. Selection stays local until Add is pressed; the
+  action appears only for newly selected, available attachments. Already attached files are marked
+  and cannot be added twice. Close discards the selection. Search is not offered.
+  The app-wide file-change subscription keeps these shared pages current; opening the picker
+  reuses fresh pages without forcing another fetch.
+- Upload files closes the library picker and presents the system document picker from chat. Each
+  chosen file appears in the composer's attachment strip at once with its upload progress, and is
+  uploaded to the library from there: the entry belongs to the library as soon as it lands, so
+  removing the attachment afterwards or leaving the chat keeps the file, and the picker lists it
+  under Recent next time. Removing the tile while it is still uploading cancels that upload.
+- Library selections are ready attachments borrowed by entry ID, so removing one from the composer
+  leaves the library file intact. Camera, photos, and painting keep their existing flows.
 - Follow-up queues and steering are not part of the Version 1 Agent Session composer.

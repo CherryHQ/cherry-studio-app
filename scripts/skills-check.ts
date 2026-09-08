@@ -122,7 +122,8 @@ function checkTrackedFilesAgainstWhitelist(skillNames: string[], errors: string[
 /**
  * Validates public skills governance:
  * - generated gitignore files are up to date
- * - Claude skill files match source skills by content
+ * - every public skill has a nonempty SKILL.md entry point
+ * - Claude skill symlinks resolve to their canonical source directories
  * - tracked skill files do not exceed the public whitelist
  */
 function main() {
@@ -152,9 +153,16 @@ function main() {
 
   for (const skillName of skillNames) {
     const agentSkillDir = path.join(AGENTS_SKILLS_DIR, skillName);
-    if (!fs.existsSync(agentSkillDir)) {
-      errors.push(`.agents/skills/${skillName} is missing`);
+    if (!fs.statSync(agentSkillDir, { throwIfNoEntry: false })?.isDirectory()) {
+      errors.push(`.agents/skills/${skillName} is missing or not a directory`);
       continue;
+    }
+
+    const entryPath = path.join(agentSkillDir, 'SKILL.md');
+    if (!fs.statSync(entryPath, { throwIfNoEntry: false })?.isFile()) {
+      errors.push(`.agents/skills/${skillName}/SKILL.md is missing or not a file`);
+    } else if (fs.readFileSync(entryPath, 'utf-8').trim() === '') {
+      errors.push(`.agents/skills/${skillName}/SKILL.md is empty`);
     }
 
     checkClaudeSkillSymlink(skillName, errors);

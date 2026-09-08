@@ -1,7 +1,7 @@
 import { AgentSessionUsageRecorder } from '../AgentSessionUsageRecorder';
 
 describe('AgentSessionUsageRecorder', () => {
-  test('attributes a turn to its Agent and Agent Session message', async () => {
+  test('preserves provider invocation identity and attributes its Agent and message', async () => {
     const recordInvocation = jest.fn(async () => undefined);
     const recorder = new AgentSessionUsageRecorder({
       usage: { recordInvocation },
@@ -19,6 +19,7 @@ describe('AgentSessionUsageRecorder', () => {
       },
       assistantMessageId: 'message-1',
       report: {
+        requestId: 'pi-agent:turn-1:response-1:served-model',
         completedAt: 1_500,
         context: {
           credentialReceipt: {
@@ -69,7 +70,7 @@ describe('AgentSessionUsageRecorder', () => {
         source: { icon: null, id: 'agent-1', name: 'Agent One', type: 'agent' },
       }),
       modality: 'language',
-      requestId: 'agent-session-turn:turn-1',
+      requestId: 'pi-agent:turn-1:response-1:served-model',
       usage: {
         cacheReadTokens: 3,
         cacheWriteTokens: 2,

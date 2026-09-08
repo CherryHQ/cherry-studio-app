@@ -1,22 +1,19 @@
-import FileIcon from '@cherrystudio/app-icons/icons/file';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 import type { FileAttachmentPreviewProps } from '../file-preview.types';
-import { openFilePreview } from '../utils/open-file/open-file';
 
 export function FileAttachmentPreview({
   categoryLabel,
   file,
   labels,
-  onError,
+  onPress,
 }: FileAttachmentPreviewProps) {
   const handlePress = () => {
     if (!file) return;
 
-    void openFilePreview({ file, labels }).catch((error) => {
-      onError?.(toError(error), 'open');
-    });
+    onPress();
   };
 
   return (
@@ -38,7 +35,7 @@ export function FileAttachmentPreview({
             className="size-10 items-center justify-center rounded-lg border border-border bg-background"
             style={{ borderCurve: 'continuous', transform: [{ rotate: '-5deg' }] }}
           >
-            <FileIcon className="size-5 text-foreground" />
+            <FileTextIcon className="size-5 text-foreground" />
           </View>
         </View>
         <View className="min-w-0 flex-1 justify-center gap-0.5 pr-3">
@@ -59,8 +56,4 @@ export function FileAttachmentPreview({
 function filenameStem(filename: string): string {
   const extensionIndex = filename.lastIndexOf('.');
   return extensionIndex > 0 ? filename.slice(0, extensionIndex) : filename;
-}
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
 }

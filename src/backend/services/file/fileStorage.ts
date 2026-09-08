@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { Emitter } from '@/backend/core/lifecycle/event';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { ResolvedFile } from '@/shared/contracts';
@@ -18,11 +19,20 @@ import {
 } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
+import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
+import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
+const fileChanges = new Emitter<void>();
+
+/** All managed-file writers notify here, after their entry changes commit. */
+export function subscribeFileChanges(listener: () => void): () => void {
+  const subscription = fileChanges.event(listener);
+  return () => subscription.dispose();
+}
 
 export type CreateInternalEntryInput = { provenance: FileEntryProvenance } & (
   | {
@@ -121,7 +131,10 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
   if (input.source === 'uri') {
     const source = new File(input.uri);
     filename = projectFilename(input.name ?? source.name, source.name);
-    mediaType = resolveMediaType(input.mediaType, source.type);
+    mediaType = resolveTextImportMediaType(
+      filename,
+      resolveDocumentImportMediaType(filename, resolveMediaType(input.mediaType, source.type)),
+    );
     write = (destination) => source.copy(destination);
   } else if (input.source === 'base64') {
     mediaType = resolveMediaType(input.mediaType);
@@ -176,7 +189,9 @@ export async function createInternalEntry(
 ): Promise<FileEntry> {
   const written = await writeInternalFile(input);
   try {
-    return await entries.create(written);
+    const entry = await entries.create(written);
+    fileChanges.fire();
+    return entry;
   } catch (error) {
     try {
       deleteInternalFile(written);
@@ -244,7 +259,38 @@ export async function discardInternalEntries(
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
+    fileChanges.fire();
   }
+}
+
+/**
+ * Replace the bytes of a draft text entry in place and record the new size.
+ * The one content write in the file model: a turn may rewrite an entry it
+ * produced until the turn ends, so repeated edits leave one artifact rather
+ * than a chain of same-name copies. Bytes go first; a crash before the row
+ * update leaves a stale `size`, which the next read tolerates, while a row
+ * updated ahead of its bytes would misreport content the blob never held.
+ */
+export async function rewriteInternalTextEntry(
+  entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
+  input: { data: string; id: FileEntryId },
+): Promise<FileEntry> {
+  const entry = await entries.findById(input.id);
+  if (!entry) {
+    throw new Error(`Draft file entry does not exist: ${input.id}`);
+  }
+  const file = managedFileForEntry(entry);
+  if (!file.exists) {
+    throw new Error(`Draft file bytes are missing: ${input.id}`);
+  }
+  await file.write(input.data);
+  const size = file.size;
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+  }
+  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
+  fileChanges.fire();
+  return updatedEntry;
 }
 
 /**
@@ -274,6 +320,7 @@ export async function deleteInternalEntry(
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
+  fileChanges.fire();
   return true;
 }
 

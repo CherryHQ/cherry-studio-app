@@ -142,6 +142,8 @@ export class JinaProvider extends BaseWebSearchProvider {
       operation: 'reader',
       responseSchema: JinaReaderResponseSchema,
       signal: context.signal,
+      // Remote rendering can outlast the shared API client's 30-second default.
+      timeoutMs: 60_000,
       url: context.requestUrl,
     });
   }

@@ -17,7 +17,7 @@ describe('ApiFeaturesSchema.reportsActualCost', () => {
   it('declares OpenRouter actual-cost ownership and currency in providers.json', () => {
     const { providers } = ProviderListSchema.parse(readCatalogJson('providers.json'));
     const openrouter = providers.find((p) => p.id === 'openrouter');
-    expect(openrouter?.apiFeatures?.reportsActualCost).toBe(true);
+    expect(openrouter?.reportsActualCost).toBe(true);
     expect(openrouter?.reportedCostCurrency).toBe('USD');
   });
 });

@@ -1,14 +1,11 @@
 import { createContext, use } from 'react';
 
-import type { SessionViewMode } from '@/frontend/components/SessionList';
-
 export type SidebarActions = {
   closeDrawer: () => void;
   navigateAgents: () => void;
   openLibrary: () => void;
   openPaintings: () => void;
   openSettings: () => void;
-  openSessionList: (view?: SessionViewMode) => void;
   startNewChat: () => void;
 };
 

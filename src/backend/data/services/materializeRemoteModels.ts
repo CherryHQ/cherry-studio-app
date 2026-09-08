@@ -75,6 +75,7 @@ function enrichFromRegistry(model: Model, provider: Provider): Model {
     model.providerId,
     registryData.reasoningProfile.wire,
     registryData.reasoningProfile.support,
+    registryData.serviceTierControl,
   );
 
   return {

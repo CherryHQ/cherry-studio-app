@@ -98,12 +98,12 @@ describe('auxiliary Data API integration', () => {
       .run(agentId, 'Needle Agent', 'a0', now, now);
     sqlite
       .prepare(
-        'INSERT INTO agent_session (id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session (id, agent_id, name, is_name_manually_edited, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
       .run(sessionId, agentId, 'Needle Session', 1, now, now, now);
     sqlite
       .prepare(
-        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         userMessageId,
@@ -117,11 +117,10 @@ describe('auxiliary Data API integration', () => {
         'success',
         now,
         now,
-        now,
       );
     sqlite
       .prepare(
-        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         assistantMessageId,
@@ -133,7 +132,6 @@ describe('auxiliary Data API integration', () => {
           version: 1,
         }),
         'success',
-        now + 1,
         now + 1,
         now + 1,
       );

@@ -45,10 +45,6 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/settings');
       },
-      openSessionList: (view = 'sessions') => {
-        navigation.closeDrawer();
-        router.push({ pathname: '/sessions', params: { view } });
-      },
       startNewChat: () => {
         navigation.closeDrawer();
         void startNewChat();
@@ -59,7 +55,7 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
 
   return (
     <SidebarActionsContext value={actions}>
-      <View className="flex-1">
+      <View className="flex-1" testID="sidebar">
         {children ?? (
           <>
             <SidebarBody />

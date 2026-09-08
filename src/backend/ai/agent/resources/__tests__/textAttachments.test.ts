@@ -1,11 +1,11 @@
+import { DocumentTextError } from '@/backend/services/file/documentText';
+import type { TextAttachmentLimits } from '@/backend/services/file/prepareFileAttachments';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+import { isSupportedTextAttachment } from '@/shared/utils/textFileTypes';
 
 import type { ManagedFileFact } from '../managedFileResolver';
-import {
-  isSupportedTextAttachment,
-  resolveManagedTextAttachments,
-  type TextAttachmentLimits,
-} from '../textAttachments';
+import { resolveManagedTextAttachments } from '../textAttachments';
 
 const FIRST_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
 const SECOND_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000002');
@@ -41,6 +41,12 @@ describe('managed text attachments', () => {
       truncated: true,
       trust: 'untrusted-user-content',
       type: 'text-attachment',
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: true,
+        includedCharacters: 1,
+      },
     });
   });
 
@@ -57,6 +63,12 @@ describe('managed text attachments', () => {
       truncated: false,
       trust: 'untrusted-user-content',
       type: 'text-attachment',
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: false,
+        includedCharacters: body.length,
+      },
     });
   });
 
@@ -68,7 +80,7 @@ describe('managed text attachments', () => {
     const file = fact(FIRST_ID, 'spoofed.txt', 'text/plain');
 
     await expect(resolve([file], new Map([[FIRST_ID, bytes]]))).rejects.toMatchObject({
-      failure,
+      issue: { code: failure },
       message: expect.stringContaining('spoofed.txt'),
     });
   });
@@ -81,7 +93,7 @@ describe('managed text attachments', () => {
         maxCharactersPerFile: 10,
         maxTotalCharacters: 10,
       }),
-    ).rejects.toMatchObject({ failure: 'file-bytes' });
+    ).rejects.toMatchObject({ issue: { code: 'file-bytes' } });
 
     const actualTooLarge = fact(FIRST_ID, 'actual.txt', 'text/plain', 1);
     await expect(
@@ -90,7 +102,7 @@ describe('managed text attachments', () => {
         maxCharactersPerFile: 10,
         maxTotalCharacters: 10,
       }),
-    ).rejects.toMatchObject({ failure: 'file-bytes' });
+    ).rejects.toMatchObject({ issue: { code: 'file-bytes' } });
   });
 
   test('shares the total character budget across files and repeated model-visible references', async () => {
@@ -130,6 +142,85 @@ describe('managed text attachments', () => {
     });
 
     expect(contents).toEqual(new Map());
+  });
+
+  test('shares the text budget with extracted documents and retains native truncation', async () => {
+    const document = fact(FIRST_ID, 'report.pdf', 'application/pdf', 2 * 1024 * 1024);
+    const text = fact(SECOND_ID, 'notes.txt', 'text/plain');
+    const contents = await resolveManagedTextAttachments({
+      availableFiles: new Map([
+        [FIRST_ID, document],
+        [SECOND_ID, text],
+      ]),
+      currentFileEntryIds: [FIRST_ID, SECOND_ID],
+      historicalFileEntryIds: [FIRST_ID],
+      limits: { maxBytesPerFile: 64, maxCharactersPerFile: 10, maxTotalCharacters: 9 },
+      readBytes: async () => utf8('uvwxyz'),
+      readDocumentText: async () => ({ text: 'abc', truncated: true }),
+      signal: new AbortController().signal,
+    });
+
+    expect(contents.get(FIRST_ID)).toMatchObject({
+      text: 'abc',
+      truncated: true,
+      mediaType: 'application/pdf',
+      trust: 'untrusted-user-content',
+      attachmentReport: {
+        mode: 'document-text',
+        sourceTruncated: true,
+        requestTruncated: false,
+        includedCharacters: 3,
+      },
+    });
+    expect(contents.get(SECOND_ID)).toMatchObject({ text: 'uvw', truncated: true });
+  });
+
+  test.each(['empty', 'invalid', 'file-bytes'] as const)(
+    'rejects current document %s failures and skips broken history',
+    async (failure) => {
+      const document = fact(FIRST_ID, 'report.pdf', 'application/pdf');
+      const input = {
+        availableFiles: new Map([[FIRST_ID, document]]),
+        currentFileEntryIds: [FIRST_ID],
+        historicalFileEntryIds: [],
+        readBytes: async () => undefined,
+        readDocumentText: async () => {
+          throw new DocumentTextError(failure);
+        },
+        signal: new AbortController().signal,
+      };
+      await expect(resolveManagedTextAttachments(input)).rejects.toMatchObject({
+        issue: { code: failure === 'file-bytes' ? 'file-bytes' : `document-${failure}` },
+      });
+      await expect(
+        resolveManagedTextAttachments({
+          ...input,
+          currentFileEntryIds: [],
+          historicalFileEntryIds: [FIRST_ID],
+        }),
+      ).resolves.toEqual(new Map());
+    },
+  );
+
+  test('rejects oversized documents before extraction', async () => {
+    const document = fact(
+      FIRST_ID,
+      'report.pdf',
+      'application/pdf',
+      MAX_DOCUMENT_ATTACHMENT_BYTES + 1,
+    );
+    const readDocumentText = jest.fn(async () => ({ text: 'body', truncated: false }));
+    await expect(
+      resolveManagedTextAttachments({
+        availableFiles: new Map([[FIRST_ID, document]]),
+        currentFileEntryIds: [FIRST_ID],
+        historicalFileEntryIds: [],
+        readBytes: async () => undefined,
+        readDocumentText,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'file-bytes' } });
+    expect(readDocumentText).not.toHaveBeenCalled();
   });
 });
 

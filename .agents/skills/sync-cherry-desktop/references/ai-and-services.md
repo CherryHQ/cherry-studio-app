@@ -1,61 +1,57 @@
 # AI And Services
 
-## Enforce Exact Package Mirrors
+Read [Desktop AI Reuse](../../../../docs/references/ai/desktop-package-reuse.md) completely before
+selecting AI changes. It owns admission rules and the current registry compatibility ledger.
 
-Compare sorted Git-tracked file sets and path-plus-content SHA-256 for desktop `packages/aiCore/` against mobile `packages/ai-core/`, and for both `packages/ai-sdk-provider/` trees. Mirror source, tests, configuration, package metadata, and documentation byte for byte. Treat any file-set or byte difference as drift; allow no semantic shortcut or unrecorded packaging exception.
+## Select Behavior By Consumer
 
-## Port Provider Registry Behavior
+For each candidate, identify a current production caller and classify its execution path:
 
-Align provider/model catalogs, schemas, aliases, endpoint matrices, creators and factories, capability and reasoning controls, generated data, defaults, and tests in `packages/provider-registry/`. Retain only the narrow mobile loading adapter needed by Metro. Prove equivalent catalog content and behavior instead of treating similar file names or counts as parity.
+- Pi conversation behavior belongs behind Mobile's Agent Runtime contract.
+- Non-conversation text, model checks/listing, and image generation use `AiService` and the AI SDK.
+- Shared provider connection facts may serve both paths through their existing resolvers.
 
-Trace every provider/model change through registry, seed data, persisted schema, AI configuration, service behavior, icons, settings, tests, and i18n. Include dependency versions and patches that change provider behavior.
+`packages/ai-core` and `packages/ai-sdk-provider` are semantic ports. Compare behavior, imports,
+tests, dependencies, and exports within the admitted consumer closure; do not copy whole desktop
+trees or require identical packaging. Do not restore desktop conversation-loop or context modules
+because their names include `Agent` or they reside in an AI package.
 
-## Trace The AI Runtime
+Mobile owns its Pi host, persistence, lifecycle, tools, approval flow, and platform services.
+Desktop filesystem sessions, Shell tools, Electron services, and application owners do not cross
+that boundary. Wire behavior needs an adapter in the path that actually consumes it.
 
-Follow each ordinary chat request through shared assistant/provider/model/message types, request and stream contracts, endpoint and credential resolution, provider extensions, parameter assembly, system prompts, capabilities, reasoning controls, telemetry, hooks, tool loop, cancellation, errors, usage observers, terminal state, attachments, file handling, MCP resolution, persisted result conversion, chat/session services, frontend input, and stream consumption.
+## Review Provider Registry Admission Separately
 
-Require every desktop input and state transition to reach the mobile provider boundary, including reasoning effort, fast mode, selected MCP tools, call overrides, abort signals, and provider-specific options. Add contract tests for outputs, errors, ordering, retries, cancellation, tool termination, and stream lifecycle.
+Port catalog semantics while retaining the static JSON Mobile loader, persisted-data projection,
+and Mobile-only providers. Keep Node-only loaders outside Metro's dependency graph.
 
-Exclude only these application-level paths declared by the Manifest:
+Trace consumed fields through model materialization, provider resolution, request serialization,
+settings, icons, and tests. Do not assume an AI SDK serializer change also changes Pi requests.
+Unsupported optional capabilities need an explicit product classification, not automatic feature
+implementation. Required consumed semantics and all admission gates must pass before the registry
+compatibility version advances; follow the current ledger instead of a copied version here.
 
-- `src/main/ai/agentSession/**`
-- `src/main/ai/agents/**`
-- `src/main/ai/observability/adapters/claudeCode/**`
-- `src/main/ai/runtime/claudeCode/**`
-- `src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts`
-- `src/main/ai/streamManager/buildCompactReplay.ts`
-- `src/main/ai/tools/adapters/claudeCode/**`
+Remote catalogs cannot replace trusted bundled provider definitions, base URLs, headers, adapter
+families, or credentials. A synchronization baseline does not relax that policy.
 
-The compact-replay pair is an Electron transport adaptation rather than a chat behavior gap. Mobile
-publishes each accumulated assistant overlay through its in-process Topic snapshot, which remains
-available across route subscribers without buffering a second copy of every raw chunk. Keep the
-shared stream types for desktop alignment, and preserve cancellation, approval state, terminal
-message persistence, and snapshot ordering in mobile contract tests.
+## Port Services And Shared Helpers
 
-The Manifest may also exclude shared contracts used only by those Agent surfaces, such as
-`src/shared/ai/agentSession*`, `src/shared/ai/claudecode/**`, Agent slash-command catalogs, and
-Agent tool-policy DTOs. Retain any shared file reached by ordinary chat or persisted mobile data;
-`agentSessionCompaction.ts` remains in scope because mobile can retain compaction-anchor parts.
+For services reached by the selected feature, preserve inputs, outputs, error mapping, redaction,
+cancellation, timeouts, retries, lifecycle, and security checks. Keep platform differences behind
+existing Expo/React Native adapters. Do not import desktop composition roots or invent unused
+service APIs to satisfy tree parity.
 
-Honor the shared-ai `shapeOnlyPorts` entries: `prompts.ts` ports only `TRANSLATE_PROMPT` (the
-seeded `feature.translate.model_prompt` default); the remaining desktop templates stay out. Some
-shared-ai mirrors (`builtinTools.ts`, `anthropicCache.ts`, `paintingGenerateError.ts`) are retained
-verbatim while mobile still runs divergent parallel implementations — rewiring mobile onto them is
-tracked follow-up work, not a reason to delete the mirrors.
+Admit `universal` helpers according to
+[Universal Package](../../../../docs/references/universal-package.md). Preserve manifest trims;
+check package imports and serialized boundaries before rejecting or removing consumerless code.
+Mobile-owned data contracts belong in `src/shared`, not in a restored desktop data mirror.
 
-Synchronize ordinary chat `src/main/ai/runtime/aiSdk/Agent.ts` and `packages/aiCore/**/agents/createAgent.ts`. Do not infer an exclusion from the word `Agent`. For channels, inference, observability, stream management, local MCP, browser, file tools, or any other non-Agent gap, implement it, prove an existing equivalent, or classify the domain as `blocked` with evidence.
+## Dependencies And Validation
 
-## Port Used Services And Shared Code
+Change SDK versions and patches only when selected behavior requires them. Review peer resolutions,
+Metro exports, package boundaries, and Expo compatibility together. Do not copy the desktop lockfile
+or add Node-only dependencies to Mobile.
 
-Compare every desktop service reached by mobile composition roots and features, plus transitive shared types and utilities. Cover web search, CherryIN OAuth, topic naming, provider/model management, MCP, paintings, files, profile storage, and newly discovered common services.
-
-- Preserve inputs, outputs, error mapping, redaction, retries, cancellation, timeouts, lifecycle/disposal, region behavior, and security checks.
-- Place Electron, Node filesystem/network/credential, and browser-session differences behind narrow Expo or React Native adapters.
-- Match web-search provider coverage, validation, raw fetch behavior, post-processing, blacklist rules, headers, and regional hosts.
-- Match topic-name gating, prompt, result, and persistence behavior; exclude only its explicit Product Agent session branch.
-- Match OAuth REST payloads, refresh behavior, error mapping, and token redaction while retaining Expo browser/session integration.
-- Persist all MCP transports and project only `streamableHttp` into mobile runtime capabilities.
-
-## Align Dependencies Deliberately
-
-Compare root and package dependency ranges, lockfile resolutions, AI SDK patches, Metro/export behavior, and peer requirements together. Do not copy the desktop lockfile or Node-only dependencies into Expo. Prove the smallest compatible resolution with package tests plus production iOS and Android exports. Identical patch files do not prove differently resolved versions behave identically.
+Cover the owning path's request/response, errors, cancellation, stream ordering, tools, and image
+transport contracts as applicable. Package checks and platform admission follow
+[validation-and-reporting.md](validation-and-reporting.md); hash equality alone is not validation.

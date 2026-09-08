@@ -19,6 +19,71 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test('marks historical turn aggregates as estimated without rewriting their usage or cost', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(({ tag }) => tag === '0018_usage-invocation-semantics');
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      const insert = database.prepare(`INSERT INTO ai_usage_record
+        (id, request_id, record_kind, request_count, message_kind, message_id, provider_id, model_id,
+         modality, api_key_attribution, input_tokens, output_tokens, total_tokens, cost, cost_currency, cost_source, created_at)
+        VALUES (?, ?, 'invocation', 1, 'agent-session', 'message-1', 'provider-1', 'model-1', 'language', 'unknown', 100, 20, 120, 0.25, 'USD', 'computed', 1000)`);
+      insert.run('old', 'agent-session-turn:old-turn');
+      insert.run('new', 'pi-agent:new-turn:call-0:model-1');
+      const before = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
+      applyMigrationSql(database, entries[target]!.sql);
+      const after = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
+      expect(after).toEqual(
+        before.map((row) => ({
+          ...row,
+          record_kind: row.id === 'old' ? 'legacy-aggregate' : 'invocation',
+        })),
+      );
+    } finally {
+      database.close();
+    }
+  });
+
+  test('preserves paired desktops when upgrading from the former 0016 development migration', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      applyMigrationsAsDrizzleWould(database, entries.slice(0, 16));
+      // This is the table already installed by the branch's original 0016 migration.
+      database.exec(`
+        CREATE TABLE desktop_connection (
+          id text PRIMARY KEY NOT NULL,
+          name text NOT NULL,
+          base_urls text NOT NULL,
+          active_base_url text NOT NULL,
+          desktop_version text NOT NULL,
+          status text DEFAULT 'paired' NOT NULL,
+          last_fetched_at integer,
+          created_at integer NOT NULL,
+          updated_at integer NOT NULL
+        );
+        INSERT INTO desktop_connection
+          (id, name, base_urls, active_base_url, desktop_version, last_fetched_at, created_at, updated_at)
+        VALUES
+          ('desktop-1', 'My Desktop', '["http://desktop.local:23333"]',
+           'http://desktop.local:23333', '1.0.0', 2, 1, 2);
+      `);
+      const before = database.prepare('SELECT * FROM desktop_connection').all();
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(16));
+
+      expect(database.prepare('SELECT * FROM desktop_connection').all()).toEqual(before);
+      expect(columnNames(database, 'agent_session_message')).toContain('stats');
+      expect(columnNames(database, 'job')).toContain('cancel_requested_at');
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('replays the journal into the schema the services are typed against', () => {
     const database = new DatabaseSync(':memory:');
 
@@ -64,8 +129,8 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'mcp_server')).toEqual([
         'id',
         'name',
-        'endpoint_url',
-        'is_enabled',
+        'base_url',
+        'is_active',
         'created_at',
         'updated_at',
         'disabled_tools',
@@ -83,6 +148,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
+        'scope',
         'key',
         'value',
         'created_at',
@@ -117,7 +183,7 @@ describe('bundled SQLite migrations', () => {
         'name',
         'instructions',
         'avatar',
-        'model_id',
+        'model',
         'order_key',
         'created_at',
         'updated_at',
@@ -128,8 +194,8 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'agent_session')).toEqual([
         'id',
         'agent_id',
-        'title',
-        'title_is_manual',
+        'name',
+        'is_name_manually_edited',
         'execution_target',
         'last_activity_at',
         'created_at',
@@ -153,7 +219,7 @@ describe('bundled SQLite migrations', () => {
         'created_at',
         'updated_at',
         'context_checkpoint',
-        'activity_at',
+        'stats',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',
@@ -169,7 +235,9 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
       ]);
 
-      expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);
+      expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_active_idx']);
+      expect(columnNames(database, 'job')).toContain('cancel_requested_at');
+      expect(columnNames(database, 'user_model')).toContain('input_modalities_explicit');
       expect(indexNames(database, 'user_model')).toEqual(
         expect.arrayContaining([
           'user_model_preset_idx',
@@ -273,10 +341,10 @@ describe('bundled SQLite migrations', () => {
         ) VALUES ('binding-tool', 'agent-1', 'mcp', 'server-1', 'write', 0, 'deny', 1, 1);
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
         VALUES ('session-1', 'agent-1', 1, 1, 1);
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1, 1);
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
       `);
       expect(
         database.prepare("SELECT tool_approval_mode FROM agent WHERE id = 'agent-1'").get(),
@@ -306,24 +374,24 @@ describe('bundled SQLite migrations', () => {
       // race the partial unique index exists to reject.
       expect(() =>
         database.exec(`
-          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2, 2);
+          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
         `),
       ).toThrow(/UNIQUE/);
       // Settling the first frees the slot for the next reservation.
       database.exec(`
         UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
-        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at)
-        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2, 2);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2);
       `);
       expect(() =>
         database.exec(
-          "INSERT INTO agent_session_message (id, session_id, role, data, status, activity_at, created_at, updated_at) VALUES ('m-bad', 'session-1', 'root', '{}', 'success', 3, 3, 3)",
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'root', '{}', 'success', 3, 3)",
         ),
       ).toThrow(/agent_session_message_role_check/);
       expect(() =>
         database.exec(
-          "INSERT INTO agent_session_message (id, session_id, role, data, status, activity_at, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3, 3)",
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3)",
         ),
       ).toThrow(/agent_session_message_status_check/);
       // A fork points back at its source. Deleting the source must clear the
@@ -432,6 +500,86 @@ describe('bundled SQLite migrations', () => {
       expect(
         database.prepare("SELECT disabled_tools FROM mcp_server WHERE id = 'legacy'").get(),
       ).toEqual({ disabled_tools: '[]' });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('preserves existing values while aligning desktop-compatible fields', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const alignmentMigrationIndex = entries.findIndex(
+        ({ tag }) => tag === '0017_desktop-compatible-fields',
+      );
+      expect(alignmentMigrationIndex).toBeGreaterThan(0);
+
+      for (const { sql } of entries.slice(0, alignmentMigrationIndex)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+        VALUES ('provider', 'Provider', 'a0', 1, 1);
+        INSERT INTO user_model (
+          id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at
+        ) VALUES ('provider::model', 'provider', 'model', 'model', 'a0', 1, 1);
+        INSERT INTO agent (id, name, model_id, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', 'provider::model', 'a0', 1, 1);
+        INSERT INTO agent_session (
+          id, agent_id, title, title_is_manual, last_activity_at, created_at, updated_at
+        ) VALUES ('session-1', 'agent-1', 'Retained title', 1, 1, 1, 1);
+        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
+        VALUES ('server-1', 'Server', 'https://example.com/mcp', 1, 1, 1);
+        INSERT INTO preference (key, value, created_at, updated_at)
+        VALUES ('ui.theme_mode', '"dark"', 1, 1);
+        INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
+        VALUES ('job-1', 'test', 'running', 'test', 1, '{}', 1, 1);
+      `);
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(alignmentMigrationIndex));
+
+      expect(database.prepare("SELECT model FROM agent WHERE id = 'agent-1'").get()).toEqual({
+        model: 'provider::model',
+      });
+      expect(
+        database
+          .prepare("SELECT name, is_name_manually_edited FROM agent_session WHERE id = 'session-1'")
+          .get(),
+      ).toEqual({ is_name_manually_edited: 1, name: 'Retained title' });
+      expect(
+        database.prepare("SELECT base_url, is_active FROM mcp_server WHERE id = 'server-1'").get(),
+      ).toEqual({ base_url: 'https://example.com/mcp', is_active: 1 });
+      expect(
+        database.prepare("SELECT scope, value FROM preference WHERE key = 'ui.theme_mode'").get(),
+      ).toEqual({ scope: 'default', value: '"dark"' });
+      expect(
+        database.prepare("SELECT cancel_requested_at FROM job WHERE id = 'job-1'").get(),
+      ).toEqual({ cancel_requested_at: null });
+      expect(
+        database
+          .prepare("SELECT input_modalities_explicit FROM user_model WHERE id = 'provider::model'")
+          .get(),
+      ).toEqual({ input_modalities_explicit: 0 });
+
+      database.exec(`
+        INSERT INTO preference (scope, key, value, created_at, updated_at)
+        VALUES ('desktop', 'ui.theme_mode', '"light"', 2, 2);
+        INSERT INTO ai_usage_record (
+          id, request_id, record_kind, request_count, provider_id, model_id,
+          source_type, source_id, modality, api_key_attribution, created_at
+        ) VALUES (
+          'usage-1', 'request-1', 'invocation', 1, 'provider', 'model',
+          'mini-app', 'mini-app-1', 'language', 'unknown', 2
+        );
+      `);
+      expect(
+        database
+          .prepare("SELECT count(*) AS count FROM preference WHERE key = 'ui.theme_mode'")
+          .get(),
+      ).toEqual({ count: 2 });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       database.close();
     }
@@ -547,10 +695,10 @@ describe('bundled SQLite migrations', () => {
       expect(
         database
           .prepare(
-            "SELECT title, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
+            "SELECT name, forked_from_session_id FROM agent_session WHERE id = 'legacy-session'",
           )
           .get(),
-      ).toEqual({ forked_from_session_id: null, title: 'Arithmetic drills' });
+      ).toEqual({ forked_from_session_id: null, name: 'Arithmetic drills' });
       expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
         { count: 1 },
       );
@@ -567,7 +715,7 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test('backfills message activity independently from later row updates', () => {
+  test('converts message activity into desktop-aligned runtime timing', () => {
     const database = new DatabaseSync(':memory:');
 
     try {
@@ -599,24 +747,31 @@ describe('bundled SQLite migrations', () => {
 
       applyMigrationsAsDrizzleWould(database, entries.slice(activityMigrationIndex));
 
-      expect(
-        database
-          .prepare('SELECT id, activity_at AS activityAt FROM agent_session_message ORDER BY id')
-          .all(),
-      ).toEqual([
-        { activityAt: 2, id: 'copied-terminal' },
-        { activityAt: 5, id: 'normal-terminal' },
-        { activityAt: 3, id: 'recovered-terminal' },
+      const migrated = database
+        .prepare('SELECT id, stats FROM agent_session_message ORDER BY id')
+        .all() as { id: string; stats: string }[];
+      expect(migrated.map(({ id, stats }) => ({ id, stats: JSON.parse(stats) }))).toEqual([
+        {
+          id: 'copied-terminal',
+          stats: { runtimeTiming: { startedAt: 2, completedAt: 2, spans: [] } },
+        },
+        {
+          id: 'normal-terminal',
+          stats: { runtimeTiming: { startedAt: 2, completedAt: 5, spans: [] } },
+        },
+        {
+          id: 'recovered-terminal',
+          stats: { runtimeTiming: { startedAt: 3, completedAt: 3, spans: [] } },
+        },
       ]);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(
-        (
-          database.prepare("PRAGMA table_info('agent_session_message')").all() as {
-            name: string;
-            notnull: number;
-          }[]
-        ).find(({ name }) => name === 'activity_at'),
-      ).toEqual(expect.objectContaining({ name: 'activity_at', notnull: 1 }));
+      const columns = database.prepare("PRAGMA table_info('agent_session_message')").all() as {
+        name: string;
+      }[];
+      expect(columns).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'stats' })]));
+      expect(columns).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'activity_at' })]),
+      );
     } finally {
       database.close();
     }

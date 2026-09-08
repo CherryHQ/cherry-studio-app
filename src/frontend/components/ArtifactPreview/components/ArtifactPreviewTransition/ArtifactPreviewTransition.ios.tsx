@@ -6,15 +6,19 @@ import type {
   ArtifactPreviewTargetProps,
 } from './ArtifactPreviewTransition.types';
 
-/** Native zoom transition between an artifact preview and its viewer. */
+/**
+ * Keep the pressable child as the native accessibility owner. Expo Router's
+ * Apple zoom source currently flattens that child out of the iOS accessibility
+ * tree, so accessibility takes precedence over the decorative transition.
+ */
 export function ArtifactPreviewLink({ children, href }: ArtifactPreviewLinkProps) {
   return (
     <Link asChild href={href}>
-      <Link.AppleZoom>{children}</Link.AppleZoom>
+      {children}
     </Link>
   );
 }
 
 export function ArtifactPreviewTarget({ children }: ArtifactPreviewTargetProps): ReactNode {
-  return <Link.AppleZoomTarget>{children}</Link.AppleZoomTarget>;
+  return children;
 }

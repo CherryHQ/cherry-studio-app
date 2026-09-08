@@ -6,6 +6,7 @@ import {
 } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
 
@@ -52,6 +53,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
   return (
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
+        <FileQueryBridge />
         <ProviderRegistryQueryBridge />
         <PreferenceProvider preference={runtime.preference}>
           <AppBootstrapContext value={state}>{children}</AppBootstrapContext>

@@ -1,5 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
@@ -76,5 +76,46 @@ describe('ProviderModelRow variants', () => {
       0,
     );
     expect(renderer?.root.findByProps({ accessibilityLabel: 'Display name' })).toBeDefined();
+  });
+
+  it('keeps availability visible and accessible when browsing changes to selection', () => {
+    const onPress = jest.fn();
+    const onToggle = jest.fn();
+    act(() => {
+      renderer = create(
+        <ProviderModelRow
+          model={model}
+          provider={undefined}
+          variant="management"
+          statusLabel="Unavailable"
+          onPress={onPress}
+        />,
+      );
+    });
+    const expectStatus = (accessibilityRole: 'button' | 'checkbox') => {
+      expect(
+        renderer?.root.findAllByType(Text).some((node) => node.props.children === 'Unavailable'),
+      ).toBe(true);
+      expect(renderer?.root.findByProps({ accessibilityRole }).props.accessibilityLabel).toContain(
+        'Unavailable',
+      );
+    };
+    expectStatus('button');
+    act(() => {
+      renderer?.update(
+        <ProviderModelRow
+          model={model}
+          provider={undefined}
+          variant="management"
+          statusLabel="Unavailable"
+          onPress={onPress}
+          selection={{ isSelected: false, onToggle }}
+        />,
+      );
+    });
+    expectStatus('checkbox');
+    act(() => renderer?.root.findByProps({ accessibilityRole: 'checkbox' }).props.onPress());
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
   });
 });

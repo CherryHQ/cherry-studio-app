@@ -1,5 +1,5 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, type ServiceTierSelection } from '@cherrystudio/provider-registry';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type {
@@ -52,14 +52,70 @@ export function applyFastModeToProviderOptions(
   if (!fastMode || !model.supportsFastMode || provider.fastMode?.transport !== 'openai-priority') {
     return providerOptions;
   }
+  const serviceTier = provider.fastMode.serviceTier ?? 'priority';
 
   return {
     ...providerOptions,
     openai: {
       ...providerOptions.openai,
-      serviceTier: 'priority',
+      serviceTier,
     },
   };
+}
+
+export type ServiceTierWireControl = {
+  default: ServiceTierSelection;
+  options: ServiceTierSelection[];
+  wire: {
+    delivery: { key: string; type: 'provider-option' | 'request-body' };
+    values: Partial<Record<ServiceTierSelection, string>>;
+  };
+};
+
+/** Accept both the registry vocabulary and legacy persisted provider wire values. */
+export function normalizeServiceTierSelection(
+  control: ServiceTierWireControl,
+  selection: string | null | undefined,
+): ServiceTierSelection | undefined {
+  if (!selection) return undefined;
+  if (control.options.includes(selection as ServiceTierSelection)) {
+    return selection as ServiceTierSelection;
+  }
+
+  return control.options.find((option) => control.wire.values[option] === selection);
+}
+
+export function resolveServiceTierWireValue(
+  control: ServiceTierWireControl,
+  selection: ServiceTierSelection | undefined,
+): string {
+  const effective = selection && control.options.includes(selection) ? selection : control.default;
+  const value = control.wire.values[effective];
+  if (!value) throw new Error(`Missing wire value for service tier '${effective}'`);
+  return value;
+}
+
+export function applyServiceTierToProviderOptions<T extends ProviderOptions>(
+  providerOptions: T,
+  providerOptionsKey: string,
+  control: ServiceTierWireControl,
+  selection: ServiceTierSelection | undefined,
+): T {
+  if (control.wire.delivery.type === 'request-body') {
+    const namespace = providerOptions[providerOptionsKey];
+    if (!namespace || !Object.hasOwn(namespace, control.wire.delivery.key)) return providerOptions;
+    const cleanedNamespace = { ...namespace };
+    delete cleanedNamespace[control.wire.delivery.key];
+    return { ...providerOptions, [providerOptionsKey]: cleanedNamespace } as T;
+  }
+
+  return {
+    ...providerOptions,
+    [providerOptionsKey]: {
+      ...providerOptions[providerOptionsKey],
+      [control.wire.delivery.key]: resolveServiceTierWireValue(control, selection),
+    },
+  } as T;
 }
 
 type GroqProvider = Provider & { id: 'groq' };
@@ -354,7 +410,7 @@ export function mergeCustomProviderParameters(
       ? normalizeOpenAICompatibleParams(providerParams)
       : providerParams;
 
-  let result = providerOptions;
+  const result = { ...providerOptions };
   for (const key of Object.keys(normalizedProviderParams)) {
     const isProviderNamespace = actualAiSdkProviderIds.includes(key) || key === rawProviderId;
     const value =
@@ -366,39 +422,15 @@ export function mergeCustomProviderParameters(
         ? normalizeOpenAICompatibleParams(normalizedProviderParams[key])
         : normalizedProviderParams[key];
     if (actualAiSdkProviderIds.includes(key)) {
-      result = {
-        ...result,
-        [key]: {
-          ...result[key],
-          ...value,
-        },
-      };
+      result[key] = { ...result[key], ...value };
     } else if (key === rawProviderId && !actualAiSdkProviderIds.includes(rawProviderId)) {
       if (key === SystemProviderIds.gateway) {
-        result = {
-          ...result,
-          [key]: {
-            ...result[key],
-            ...value,
-          },
-        };
+        result[key] = { ...result[key], ...value };
       } else {
-        result = {
-          ...result,
-          [primaryAiSdkProviderId]: {
-            ...result[primaryAiSdkProviderId],
-            ...value,
-          },
-        };
+        result[primaryAiSdkProviderId] = { ...result[primaryAiSdkProviderId], ...value };
       }
     } else {
-      result = {
-        ...result,
-        [primaryAiSdkProviderId]: {
-          ...result[primaryAiSdkProviderId],
-          [key]: value,
-        },
-      };
+      result[primaryAiSdkProviderId] = { ...result[primaryAiSdkProviderId], [key]: value };
     }
   }
   return result;

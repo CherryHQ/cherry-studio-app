@@ -6,7 +6,10 @@
 
 import * as z from 'zod';
 
+import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
+
+import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -199,7 +202,9 @@ export const AgentErrorViewSchema = z
       'MESSAGE_NOT_FOUND',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
+      'TOOL_CALLING_UNSUPPORTED',
       'ATTACHMENT_INVALID',
+      'ATTACHMENT_NO_TEXT',
       'ATTACHMENT_UNAVAILABLE',
       'ATTACHMENT_METADATA_MISMATCH',
       'APPROVAL_NOT_FOUND',
@@ -217,6 +222,7 @@ export const AgentErrorViewSchema = z
     retryable: z.boolean(),
     /** Present on newly persisted execution failures; optional for historical rows. */
     failure: AgentFailureSnapshotSchema.optional(),
+    attachmentIssue: FileAttachmentIssueSchema.optional(),
   })
   .superRefine((error, context) => {
     if (error.failure !== undefined && error.code !== 'EXECUTION_FAILED') {
@@ -249,6 +255,15 @@ export const AgentTurnViewSchema = z.strictObject({
 });
 export type AgentTurnView = z.infer<typeof AgentTurnViewSchema>;
 
+/** Latest turn status in this Host generation, retained after the turn settles. */
+export const AgentSessionStatusSchema = z
+  .strictObject({
+    turnId: AgentTurnViewSchema.shape.id,
+    status: AgentTurnViewSchema.shape.status,
+  })
+  .readonly();
+export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
+
 export const AgentToolResultSchema = z.strictObject({
   value: JsonValueSchema,
   artifacts: z.array(
@@ -274,6 +289,7 @@ const ErrorToolResultSchema = z.strictObject({
   value: z.strictObject({
     status: z.literal('error'),
     error: z.strictObject({ code: z.string(), message: z.string(), retryable: z.boolean() }),
+    details: JsonValueSchema.optional(),
   }),
   artifacts: z.tuple([]),
 });
@@ -340,6 +356,7 @@ export const AgentMessagePartSchema = z.union([
     mediaType: z.string(),
     name: z.string().optional(),
     purpose: z.enum(['input-attachment', 'artifact']),
+    attachmentReport: FileAttachmentReportSchema.optional(),
   }),
   AgentToolMessagePartSchema,
   z.strictObject({
@@ -365,6 +382,7 @@ export const AgentMessageViewSchema = z.strictObject({
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
   usage: AgentUsageViewSchema.nullable(),
+  stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
   createdAt: z.iso.datetime(),

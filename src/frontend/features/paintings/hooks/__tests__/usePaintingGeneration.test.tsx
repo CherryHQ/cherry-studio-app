@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { Backend } from '@/shared/contracts';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { JobSnapshot } from '@/shared/data/api/schemas/jobs';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { Painting } from '@/shared/data/types/painting';
@@ -30,6 +31,7 @@ function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
   return {
     attempt: 1,
     cancelRequested: false,
+    cancelRequestedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     error: null,
     finishedAt: null,
@@ -189,6 +191,22 @@ describe('usePaintingGeneration', () => {
     expect(api?.aspectRatio).toBeCloseTo(928 / 1664);
   });
 
+  it('returns attachment rejection to the submitter while preserving the previous canvas', async () => {
+    await mountProbe(undefined, 1664 / 928);
+    const beforeOutputs = api?.outputs;
+    const failure = new FileAttachmentError({ code: 'unsupported-type' });
+    mockStartGeneration.mockRejectedValueOnce(failure);
+    await act(async () => {
+      await expect(api?.generate({ ...request, paramValues: { size: '928x1664' } })).rejects.toBe(
+        failure,
+      );
+    });
+    expect(api?.error).toBeNull();
+    expect(api?.outputs).toBe(beforeOutputs);
+    expect(api?.aspectRatio).toBeCloseTo(1664 / 928);
+    expect(api?.status).toBe('idle');
+  });
+
   it('enqueues via the backend and displays outputs from the terminal job', async () => {
     jobById.set(
       'job-1',
@@ -202,15 +220,7 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(mockStartGeneration).toHaveBeenCalledWith({
-      images: [
-        {
-          fileEntryId: request.attachments[0].fileEntryId,
-          id: 'draft-1',
-          mediaType: 'image/png',
-          name: 'input.png',
-          uri: 'file:///input.png',
-        },
-      ],
+      fileEntryIds: [request.attachments[0].fileEntryId],
       mode: 'generate',
       modelId: 'provider::gpt-image-2',
       modelName: 'GPT Image 2',
@@ -424,7 +434,7 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it('reports an image-less receipt with nothing running as interrupted, carrying the provider text', async () => {
+  it('reports a failed image-less receipt without projecting provider diagnostics', async () => {
     interruptedJobs = [
       jobSnapshot({
         error: { code: 'JOB_HANDLER_THREW', message: 'Invalid JSON response', retryable: true },
@@ -435,10 +445,10 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ message: 'Invalid JSON response' });
+    expect(api?.interruption).toEqual({ reason: 'failed' });
   });
 
-  it('keeps a cancelled job wordless: its message never went through i18n', async () => {
+  it('reports a cancelled recovery as an interruption', async () => {
     interruptedJobs = [
       jobSnapshot({
         error: {
@@ -453,7 +463,7 @@ describe('usePaintingGeneration', () => {
     await mountProbe('painting-1');
     await waitForCondition(() => api?.interruption !== null);
 
-    expect(api?.interruption).toEqual({ message: undefined });
+    expect(api?.interruption).toEqual({ reason: 'interrupted' });
   });
 
   it('retries into the interrupted receipt instead of minting a second painting', async () => {

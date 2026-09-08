@@ -1,5 +1,3 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
-import MessageCircleMoreIcon from '@cherrystudio/app-icons/icons/message-circle-more';
 import {
   ContentState,
   ContextMenuScrollBoundary,
@@ -34,6 +32,7 @@ import {
   sessionSelectionScope,
   useSessionSelectionSource,
 } from '../hooks/useSessionSelectionSource';
+import { SessionStatus } from './SessionStatus';
 import { useSessionActionAlerts } from './useSessionActionAlerts';
 
 type SessionRowProps = {
@@ -159,11 +158,6 @@ const SessionListView = memo(function SessionListView() {
           <View className="px-8 py-16">
             <ContentState.Empty
               description={t('session.list.emptyDescription')}
-              icon={
-                <ContentState.Icon>
-                  <MessageCircleMoreIcon className="size-7 text-foreground" />
-                </ContentState.Icon>
-              }
               prominence="prominent"
               title={t('session.list.empty')}
             />
@@ -215,7 +209,7 @@ export function SessionList({ agentId }: { agentId?: string }) {
   );
 }
 
-export const SessionRow = memo(function SessionRow({
+const SessionRow = memo(function SessionRow({
   agentName,
   isEditing,
   isSelected,
@@ -266,7 +260,7 @@ export const SessionRow = memo(function SessionRow({
   const row = (
     <Pressable
       accessibilityActions={isEditing ? EDITING_ACCESSIBILITY_ACTIONS : undefined}
-      accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityLabel={isEditing ? session.title || t('session.list.untitled') : undefined}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
@@ -279,9 +273,6 @@ export const SessionRow = memo(function SessionRow({
             <SelectionIndicator selected={isSelected} />
           </Animated.View>
         ) : null}
-        <View className="ml-1 size-10 items-center justify-center rounded-full bg-secondary">
-          <BotIcon className="size-5 text-foreground" />
-        </View>
         <View className="min-w-0 flex-1 pr-4">
           <View className="gap-0.5">
             <View className="min-w-0 flex-row items-center gap-2">
@@ -295,9 +286,12 @@ export const SessionRow = memo(function SessionRow({
                 {activityLabel}
               </Text>
             </View>
-            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-              {agentName ?? t('session.list.deletedAgent')}
-            </Text>
+            <View className="min-w-0 flex-row items-center gap-2">
+              <Text className="min-w-0 flex-1 text-foreground-tertiary text-xs" numberOfLines={1}>
+                {agentName ?? t('session.list.deletedAgent')}
+              </Text>
+              {!isEditing ? <SessionStatus sessionId={session.id} /> : null}
+            </View>
           </View>
         </View>
       </View>

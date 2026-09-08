@@ -1083,7 +1083,7 @@ async function auditDomain(
     });
   }
 
-  if (id === 'ai-core') {
+  if (id === 'ai-core' && domain.strategy === 'mirror') {
     const ordinaryAgentFile = ORDINARY_AGENT_SOURCE;
     addInvariant(invariants, {
       domain: id,

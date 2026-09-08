@@ -3,7 +3,23 @@ import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { applyFastModeToProviderOptions, buildCapabilityProviderOptions } from '../options';
+import {
+  applyFastModeToProviderOptions,
+  applyServiceTierToProviderOptions,
+  buildCapabilityProviderOptions,
+  normalizeServiceTierSelection,
+  resolveServiceTierWireValue,
+  type ServiceTierWireControl,
+} from '../options';
+
+const serviceTierControl: ServiceTierWireControl = {
+  default: 'standard',
+  options: ['standard', 'auto', 'fast', 'flex'],
+  wire: {
+    delivery: { key: 'serviceTier', type: 'provider-option' },
+    values: { standard: 'on_demand', auto: 'auto', fast: 'performance', flex: 'flex' },
+  },
+};
 
 describe('applyFastModeToProviderOptions', () => {
   it('uses OpenAI priority service tier only for supported provider-model pairs', () => {
@@ -27,6 +43,23 @@ describe('applyFastModeToProviderOptions', () => {
         true,
       ),
     ).toBe(providerOptions);
+  });
+
+  it('serializes registry-owned service-tier values without provider-id branches', () => {
+    expect(
+      applyServiceTierToProviderOptions(
+        { groq: { parallelToolCalls: true } },
+        'groq',
+        serviceTierControl,
+        'fast',
+      ),
+    ).toEqual({ groq: { parallelToolCalls: true, serviceTier: 'performance' } });
+  });
+
+  it('accepts legacy persisted wire values during the registry migration', () => {
+    expect(normalizeServiceTierSelection(serviceTierControl, 'on_demand')).toBe('standard');
+    expect(normalizeServiceTierSelection(serviceTierControl, 'performance')).toBe('fast');
+    expect(resolveServiceTierWireValue(serviceTierControl, undefined)).toBe('on_demand');
   });
 
   it('adds the configured context window beside Ollama reasoning options', () => {

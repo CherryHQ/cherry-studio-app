@@ -56,12 +56,12 @@ export function AiUsageWeeklyChart({
 }: AiUsageWeeklyChartProps) {
   const { t } = useTranslation();
   const { onLayout, ref: containerRef, width: containerWidth } = useMeasuredWidth();
-  const [info, warning, muted, separator, success, foreground] = useThemeColor([
-    'info',
-    'warning',
+  const [chart1, chart2, chart3, muted, separator, foreground] = useThemeColor([
+    'chart-1',
+    'chart-2',
+    'chart-3',
     'muted-foreground',
     'border-strong',
-    'success',
     'foreground',
   ]);
   const formatTokens = useMemo(() => createAiUsageTokenFormatter(locale), [locale]);
@@ -121,14 +121,14 @@ export function AiUsageWeeklyChart({
     }
 
     return data.series.map((series, index) => ({
-      color: getSeriesColor(series.isOther, index, success, info, warning, muted),
+      color: getSeriesColor(series.isOther, index, chart1, chart2, chart3, muted),
       key: series.key,
       label: series.isOther
         ? t('aiUsage.other')
         : displayAiUsageModelId(series.modelId) || t('aiUsage.unknownModel'),
       yKey: seriesValueKey(index),
     }));
-  }, [data.series, info, muted, success, t, warning]);
+  }, [chart1, chart2, chart3, data.series, muted, t]);
   const chartTheme = useMemo<CartesianChartTheme>(
     () => ({
       axis: 'transparent',
@@ -136,10 +136,10 @@ export function AiUsageWeeklyChart({
       grid: 'transparent',
       mutedText: muted,
       plotBackground: 'transparent',
-      series: chartSeries.map((series) => series.color ?? success),
+      series: chartSeries.map((series) => series.color ?? chart1),
       text: foreground,
     }),
-    [chartSeries, foreground, muted, success],
+    [chart1, chartSeries, foreground, muted],
   );
   const renderBar = useCallback(
     ({ bar, fill, radius }: BarChartRenderBarProps<ChartDatum>) => {
@@ -270,7 +270,7 @@ export function AiUsageWeeklyChart({
                   ))}
                   {hasAverage ? (
                     <Line
-                      stroke={success}
+                      stroke={foreground}
                       strokeDasharray="5 5"
                       strokeWidth={1.5}
                       testID="ai-usage-average-line"
@@ -344,7 +344,7 @@ export function AiUsageWeeklyChart({
                 ))}
                 {hasAverage ? (
                   <Text
-                    className="absolute left-1 font-medium text-success text-xs"
+                    className="absolute left-1 font-medium text-foreground text-xs"
                     numberOfLines={1}
                     style={[styles.axisLabel, { top: getAxisLabelTop(averageY) }]}
                     testID="ai-usage-average-label"
@@ -437,15 +437,15 @@ function WeeklyChartSkeleton() {
 function getSeriesColor(
   isOther: boolean,
   index: number,
-  success: string,
-  info: string,
-  warning: string,
+  chart1: string,
+  chart2: string,
+  chart3: string,
   muted: string,
 ): string {
   if (isOther) return muted;
-  if (index === 0) return success;
-  if (index === 1) return info;
-  if (index === 2) return warning;
+  if (index === 0) return chart1;
+  if (index === 1) return chart2;
+  if (index === 2) return chart3;
   return muted;
 }
 

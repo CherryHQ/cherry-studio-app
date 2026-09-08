@@ -190,7 +190,10 @@ function createServices({
         value: override ?? 'rotated-key',
       })),
     },
-    providerRegistry: { listProviderRegistryModels: jest.fn(() => registryModels) },
+    providerRegistry: {
+      getImageGenerationSupport: jest.fn(() => null),
+      listProviderRegistryModels: jest.fn(() => registryModels),
+    },
     vertexAuth: {
       getAuthorizationHeaders: jest.fn(async () => ({ Authorization: 'Bearer vertex-token' })),
     },

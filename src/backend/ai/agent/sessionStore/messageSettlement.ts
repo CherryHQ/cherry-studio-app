@@ -25,14 +25,27 @@ export function interruptNonTerminalToolParts(
   });
 }
 
-/** Makes a recovered assistant placeholder self-describing in transcript reads. */
+/** Closes text and reasoning parts that were still streaming when the turn ended. */
+export function settleStreamingTextParts(parts: AgentMessagePart[]): AgentMessagePart[] {
+  return parts.map((part) =>
+    (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
+      ? { ...part, state: 'done' }
+      : part,
+  );
+}
+
+/**
+ * Makes a recovered assistant placeholder self-describing in transcript reads.
+ * Parts persisted while the turn streamed are kept: text closes as `done`,
+ * unfinished tool calls become `interrupted`, and the turn error is appended.
+ */
 export function settleInterruptedAssistantParts(
   parts: AgentMessagePart[],
   error: AgentErrorView,
   errorPartId: string,
 ): AgentMessagePart[] {
   return [
-    ...interruptNonTerminalToolParts(parts, error.message),
+    ...interruptNonTerminalToolParts(settleStreamingTextParts(parts), error.message),
     { id: errorPartId, type: 'error', error },
   ];
 }

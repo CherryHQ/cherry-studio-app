@@ -11,8 +11,22 @@ export function isTextGenerationModel(model: Model): boolean {
   return !isNonTextGenerationModel(model);
 }
 
+function canOutputImage(model: Model): boolean {
+  return !model.outputModalities?.length || model.outputModalities.includes(MODALITY.IMAGE);
+}
+
 export function isImageGenerationModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
+  const hasImageEndpoint =
+    model.endpointTypes?.some(
+      (endpointType) =>
+        endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION ||
+        endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+    ) ?? false;
+
+  return (
+    hasImageEndpoint ||
+    (model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION) && canOutputImage(model))
+  );
 }
 
 export function isEmbeddingModel(model: Model): boolean {

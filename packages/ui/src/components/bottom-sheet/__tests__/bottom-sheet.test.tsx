@@ -13,6 +13,14 @@ jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   return View;
 });
 
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
 jest.mock('@swmansion/react-native-bottom-sheet', () => {
   const { View } = jest.requireActual('react-native');
 

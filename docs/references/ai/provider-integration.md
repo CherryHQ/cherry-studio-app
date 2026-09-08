@@ -53,8 +53,9 @@ It is not exposed through `Backend` or frontend context. Every request supplies 
 auth config, endpoint configs, feature flags, settings, ordering, and enabled state.
 
 `ModelService` reads and writes `user_model` rows. Model metadata is resolved when the model is added
-or reconciled, then stored locally for runtime use. The runtime does not re-merge the provider
-registry on every request.
+or reconciled, then stored locally for runtime use. Most fields are read from that projection.
+Request-only registry facts that intentionally are not persisted, such as reasoning wire dialects
+and service-tier delivery mappings, are rehydrated by `ProviderRegistryService` at request time.
 
 `UniqueModelId` combines provider id and model id and is the runtime model identifier used by Agents,
 paintings, and settings. Provider and Model shapes follow Cherry Desktop unless mobile has a
@@ -68,10 +69,11 @@ family, normalized wire model id, gateway provider-options key, and mobile/Provi
 headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
 contain sensitive values, the result remains in memory and must not be persisted or logged.
 
-For language models, `resolveLanguageServingPlan()` adds declared authentication facts, the shared
-language transport policy, and a typed Pi compatibility result. Pi requires that result before
-selecting a credential. AI SDK language configuration consumes the same plan but retains its own
-broader Provider and IAM projections. Image models bypass the language plan.
+For language models, Pi consumes the resolved connection through `resolvePiLanguageBinding()` and
+requires a typed compatibility result before selecting a credential. AI SDK configuration consumes
+the same connection facts directly while retaining its broader Provider and IAM projections. The
+shared language transport policy is composed by both bindings where applicable. Image models
+bypass the Pi binding.
 
 `resolveProviderAiSdkConfig()` converts a Provider and Model into the configuration used by
 `AiService`. Endpoint selection priority is:
@@ -90,6 +92,21 @@ Request assembly in `buildAgentParams.ts` supports explicit reasoning, sampling/
 headers, timeouts, retries, and caller-supplied tools. It owns no conversation persistence or
 stream lifecycle. AI SDK `ToolSet` is never the canonical Agent tool model: new Agent tool behavior
 resolves through the application-owned `RuntimeTool` contract and a Pi adapter.
+
+Endpoint declarations own wire-level behavior. `resolveEndpointDialect()` currently supplies the
+stream-usage behavior for the selected endpoint, while `ProviderRegistryService` consumes the
+reasoning-summary declaration when it builds the reasoning wire profile. OpenAI Responses
+reasoning summary is default-off; the official OpenAI, Azure OpenAI, and OpenAI Codex endpoint
+declarations opt into it explicitly. Mobile's explicit system-role compatibility policy still
+controls developer-role behavior. Provider-level actual-cost reporting is projected to the current
+persisted `apiFeatures` shape only when the registry declares it, so absent catalog facts do not
+overwrite a newer persisted value with a generated default.
+
+Service tier is also catalog-driven. `ProviderRegistryService.resolveServiceTierControl()` combines
+the selected endpoint declaration with a model override, normalizes legacy persisted wire values to
+semantic selections, and narrows the available options. Request assembly then maps the semantic
+selection back to either an AI SDK provider-option namespace or a JSON request-body field. The
+body-field path composes a cached fetch wrapper instead of adding Provider-id conditionals.
 
 Mobile sends application instructions with the `system` role on OpenAI Chat Completions and OpenAI
 Responses endpoints. The Pi bridge disables its URL/model-based developer-role inference, and the
@@ -113,6 +130,29 @@ OAuth-only preset providers are projected out by `MobileRegistryLoader.isProvide
 
 Azure provider configuration handles OpenAI, Responses, and Anthropic variants. `iam-azure` auth
 configuration and API-version settings influence the generated provider settings.
+
+## Remote Registry Boundary
+
+Mobile may fetch Desktop-published `models.json` and `provider-models.json` snapshots after an
+explicit user action. The manifest must match the schema lane and the latest Desktop registry
+semantics fully implemented by this Mobile Runtime. This compatibility number is independent of
+the Mobile application version.
+
+The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
+replaced remotely. Provider base URLs, adapter families, headers, and credential behavior remain
+inside the reviewed binary. A remote Provider-model override may still select an endpoint type from
+that bundled Provider definition and update an image model's `vendorTransport` relative path and
+sync/async behavior. Remote protocol support is not a substitute for synchronizing schemas,
+interpreters, normalizers, or endpoint semantics: required behavior consumed by Mobile must be
+implemented and validated, while unsupported optional behavior must be explicitly classified,
+before the compatibility version advances.
+
+The accepted semantic line is currently Desktop `2.0.8`. Desktop `2.0.9` remains gated on a full
+Mobile compatibility review of the downloaded model and override payloads. Mobile does not need to
+implement provider-native `serverTools` merely to consume newer model data: those optional fields
+may be explicitly ignored while application-owned Web Search remains the only conversation search
+path. The review must still prove that removal of the older per-model `web-search` capability does
+not affect any Mobile consumer before the compatibility number advances.
 
 ## Transport
 

@@ -10,6 +10,7 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { AgentInputPart, AgentMessagePart, AgentSessionView } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { LanguageVarious } from '@/shared/data/preference';
 import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
@@ -21,6 +22,7 @@ const FALLBACK_PROMPT =
 
 type AgentSessionNamingDependencies = {
   ai: Pick<AiService, 'generateText'>;
+  appLanguage: () => LanguageVarious;
   model: Pick<ModelService, 'getById'>;
   preference: Pick<PreferenceService, 'get'>;
   provider: Pick<ProviderService, 'getByProviderId'>;
@@ -212,7 +214,7 @@ export class AgentSessionNaming {
 
   private async resolveNamingPrompt(): Promise<string> {
     const configuredPrompt = await this.dependencies.preference.get('agent.session_naming.prompt');
-    const language = (await this.dependencies.preference.get('app.language')) || 'en-us';
+    const language = this.dependencies.appLanguage();
     return (configuredPrompt || FALLBACK_PROMPT).replaceAll('{{language}}', language);
   }
 }

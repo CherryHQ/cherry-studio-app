@@ -25,6 +25,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
 
 import { Portal } from '../../../portal';
 import { SurfaceFrame } from '../../../surface/surface-frame';
@@ -107,6 +108,13 @@ function MorphMenuRoot({
   const panelWidth = useSharedValue(minPanelWidth);
   const footprintRef = useRef<View>(null);
   const portalName = useId();
+  // The closed trigger shares the toolbar actions' circular fill. Once the
+  // menu is portalled, `anchor` stays set through the closing animation, so
+  // the expanded panel keeps its popover surface until it is fully collapsed.
+  const surfaceClassName = anchor ? 'bg-popover' : 'bg-secondary';
+  const surfaceFill = useResolveClassNames(surfaceClassName);
+  const tintColor =
+    typeof surfaceFill.backgroundColor === 'string' ? surfaceFill.backgroundColor : undefined;
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
     [triggerSize],
@@ -220,7 +228,12 @@ function MorphMenuRoot({
         {/* The panel stays inside the surface: an empty `GlassView` draws no
             material at all, so the two cannot be split into siblings to fade
             them separately. */}
-        <SurfaceFrame className="bg-popover" cornerRadius={openRadius} style={fillStyle}>
+        <SurfaceFrame
+          className={surfaceClassName}
+          cornerRadius={openRadius}
+          style={fillStyle}
+          tintColor={tintColor}
+        >
           <Animated.View
             onLayout={handlePanelLayout}
             pointerEvents={isOpen ? 'auto' : 'none'}

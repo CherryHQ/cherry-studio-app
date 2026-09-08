@@ -1,97 +1,49 @@
 # FileEntryPreview
 
-Application adapter from a managed `FileEntryId` to CherryUI's business-neutral `FilePreview`.
-It resolves the entry and local URI, classifies the file, injects translations, logs preview
-failures, and presents an Alert when the system viewer cannot open a file.
+Application adapter from a managed `FileEntryId` to CherryUI's business-neutral file components.
+It owns entry and URI resolution, the closed product classification, translations, preview error
+logging, and the single opening policy shared by the composer, messages, and file library.
 
-`LoadedFileEntryPreview` is the same adapter for a caller that already holds the `FileEntry` — a
-list page, say — and accepts original and preview URIs resolved in the same batch as its peers.
-Image cards render the bounded WebP preview while opening continues to use the original file.
+## Public Interface
 
-`FileEntrySkeleton` is the shared same-sized placeholder for both adapters and file-entry grids.
+- `FileEntryPreview`: a square attachment tile resolved by entry id.
+- `LoadedFileEntryPreview`: the same tile with caller-resolved entry, original URI, and preview URI.
+- `FileEntryAttachment`: an assistant deliverable. Images render directly at their aspect ratio,
+  with a height cap of 1.25 times the width; other kinds retain a full-width file row.
+- `FileEntrySkeleton` and `FileEntryAttachmentSkeleton`: loading placeholders owned by the adapter.
+- `fileEntryPreviewKind`: one `mediaType` classifier for `image`, `markdown`, `text`, `html`, and
+  `document`. JSON, XML, and YAML belong to `text`; PDF and unsupported types belong to `document`.
+- `useResolvedFile`: entry and local-byte resolution for cards and the viewer, with explicit retry.
+- `useOpenFileEntry`: `openFileEntry` routes supported kinds to `/files/[fileEntryId]` and hands
+  `document` to the platform. `openFileEntryWithSystem` is the viewer's explicit escape hatch.
 
-## Classification
+Opening failures report a toast. Thumbnail failures are logged and keep the existing fallback.
+The image thumbnail query uses the same resolved-entry shape and query key as the file library.
 
-`fileEntryPreviewKind` maps a media type onto the kind CherryUI resolves renderers against:
-`image`, `text`, `pdf`, and `document` for everything else — audio and video included, since
-nothing previews them yet.
+The adapters forward CherryUI's `variant`: the composer uses `attachment` (icon above the file
+title), and the library uses `card` (title above the icon). Images keep their thumbnails. Both
+variants share the file icon/color presets in CherryUI, while the default `thumbnail` retains
+plugin and platform preview rendering. `LoadedFileEntryPreview` also forwards a caller-owned
+`badge`, used for the library's generated-file provenance without reserving empty metadata rows.
 
-Kinds are an open set, so classification may run ahead of rendering. A kind no plugin claims falls
-back to the platform preview — an iOS Quick Look thumbnail, an Android extension card — which is
-what `document` has always rendered. Naming a format before it has a renderer therefore changes
-what a file is called, not how it looks.
+## Renderer Boundary
 
-## Adding A Preview Kind
+CherryUI requires `onPress` and owns the frame, press target, unavailable state, plugin registry,
+image rendering, and iOS Quick Look thumbnails. It exports `openFilePreview` as a system-opening
+primitive, without deciding application navigation.
 
-Three edits, all in this layer. Word is the worked example; `useDocxCover` and `DocxCover` below
-stand in for whatever that format actually needs.
+A renderer that needs only a neutral file descriptor and platform APIs belongs in CherryUI.
+Product-specific parsing or backend calls remain in this adapter family. Add a new product kind
+only with explicit card and opening behavior; the CherryUI plugin vocabulary itself stays open.
+Do not infer a second classification from filenames at individual surfaces.
 
-1. Write the renderer under `plugins/`. It receives CherryUI's `FilePreviewComponentProps` and
-   draws the preview only — the frame, press target, unavailable state, and system opening stay
-   with `FilePreview`, so a plugin cannot diverge on interaction:
+Rows that already render filename metadata use the explicit `icon` variant: images retain their
+thumbnail, while other files use the same type-icon presentation as Composer and the library.
+The default `thumbnail` variant keeps Quick Look on iOS and the Android extension-card fallback for
+text and unsupported documents.
+The composer's `attachment` and library's `card` variants use the shared file icon/title layout.
+Extension-based icon routing changes artwork only; it never changes product classification or
+opening. Text excerpts remain a separate follow-up.
 
-   ```tsx
-   // plugins/WordPreview.tsx
-   import type { FilePreviewComponentProps } from '@cherrystudio/ui/components';
-
-   import { FileEntrySkeleton } from '../FileEntrySkeleton';
-
-   export function WordPreview({ file, size }: FilePreviewComponentProps) {
-     const { data, isLoading } = useDocxCover(file.uri);
-
-     if (isLoading) return <FileEntrySkeleton size={size} />;
-     return data ? <DocxCover cover={data} size={size} /> : <WordCard file={file} size={size} />;
-   }
-   ```
-
-   Parsing, caching, loading, and failure states belong to the renderer, because only it knows
-   what its format costs to read.
-
-2. Claim the media types in `utils/fileEntryPresentation.ts`:
-
-   ```ts
-   const kindByMediaType = new Map<string, FilePreviewKind>([
-     ['application/pdf', 'pdf'],
-     ['application/msword', 'word'],
-     ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'word'],
-   ]);
-   ```
-
-3. Register the renderer in the provider stack in `src/app/_layout.tsx`:
-
-   ```tsx
-   // A module constant: `plugins` is a memo dependency, and a fresh array per render would
-   // rebuild the registry and re-render every preview beneath it.
-   const previewPlugins = [{ component: WordPreview, kind: 'word' }];
-
-   <FilePreviewPluginProvider plugins={previewPlugins}>
-   ```
-
-   Nest a second provider lower down to override a kind for one screen; it inherits every kind it
-   does not name, including the platform fallback.
-
-Once several formats exist, fold the media types into the plugin list so a format is declared once
-instead of in two files — the media-type mapping stays in this layer either way, because CherryUI
-is business-neutral and does not know what a media type is.
-
-## Where A Renderer Belongs
-
-A renderer stays here when it carries business knowledge: a parser, a backend call, a format the
-product understands. It belongs in CherryUI only when it needs nothing beyond `file.uri` and a
-platform API — which is why `ImagePreview` and the iOS Quick Look thumbnail live there, and a Word
-or slide renderer would not.
-
-If several renderers converge on one shape — a cover image with a format badge, say — promote that
-presentational primitive to CherryUI and leave each plugin owning only how it produces the cover.
-Promote once the third renderer exists, not in anticipation of it.
-
-## What Fails Quietly
-
-- Skipping step 2 or step 3 is silent: the file keeps its previous kind or resolves to the
-  platform fallback, and nothing reports a missing renderer. That is deliberate — one unregistered
-  plugin must not blank an attachment grid — but it means a wrong kind shows up only as the wrong
-  rendering.
-- `kind` is an open string on both sides, so a misspelling is not a type error.
-- `FilePreviewOperation` is `open | thumbnail`. A parse failure has no name of its own yet;
-  reporting it as `thumbnail` gets the right behavior — logged, no Alert — under the wrong label.
-  Add a value when a renderer needs one.
+The viewer and export behavior are documented in
+[File Preview And Viewer](../../../../docs/references/file-preview-and-viewer.md).

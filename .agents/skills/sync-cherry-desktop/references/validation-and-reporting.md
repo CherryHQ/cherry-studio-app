@@ -2,60 +2,51 @@
 
 ## Audit Guarantees
 
-Run the read-only repository audit before and after synchronization. Require valid mobile package identity `cherry-studio-app`, desktop identity `CherryStudio`, and shared package identities. Reject uncommitted or untracked files under selected desktop source paths without an override. Do not run desktop formatters, generators, installs, snapshot-writing tests, or edit commands.
+Run the read-only audit before and after synchronization against a clean selected desktop source.
+Keep desktop installs, formatters, generators, and snapshot-writing tests out of this workflow.
+Use tracked files and the audit's structured hashes/probes; observations are not new baselines.
+Never let a reporting command silently advance `desktop-sync-manifest.json`.
 
-Use Git-tracked files, sorted path-plus-content SHA-256, structured JSON, and TypeScript AST probes for table names, catalogs, registries, and routes. Keep JSON output deterministic and free of timestamps and machine-specific absolute paths. Treat current snapshots as observations, not baselines. Never let the audit write or silently update `desktop-sync-manifest.json`.
+`--check` fails on selected-domain drift, unbaselined or blocked status, or invariant failures.
+A reporting-only audit may succeed while reporting findings. Scope checks to selected domains,
+report unrelated unresolved domains separately, and resolve every selected blocker before manually
+advancing its baseline.
 
-Require `--check` to fail for drift, an unbaselined or blocked domain, or any invariant failure. A reporting-only audit may exit successfully while describing drift. Before advancing a baseline manually, account for every desktop change with one approved classification and resolve every blocker in that domain.
+## Select Gates By Changed Contract
 
-## Focused Gates
+Follow [Testing And CI](../../../../docs/guides/testing-and-ci.md), including focused suites,
+specialized checks, local draft-PR gates, and the remote PR-suite boundary. Do not add a conflicting
+full-local-suite policy here.
 
-Run checks for every touched contract. At minimum:
+- AI ports: owning package and consumer tests, export-boundary checks, and provider-registry
+  admission gates when compatibility changes.
+- Persisted data: affected schema/migration, preference, serialization, and supported round-trip
+  regressions. Do not demand tests for retired desktop-only domains.
+- Icons/tokens: `pnpm design:sync --desktop-root <path> --check`, `pnpm design:check`, and affected
+  icon routing/catalog regressions. Token regeneration uses local Mobile sources.
+- Skill/doc changes: `pnpm skills:sync`, `pnpm skills:check`, `pnpm docs:check-links`, and formatting.
+  These do not prove runtime behavior.
+- Audit-script changes: focused desktop-sync fixture suites under `scripts/__tests__`. PR CI
+  excludes these suites, so remote success cannot substitute for their focused local run.
 
-- Replay fresh and historical database migrations with foreign keys enabled; test schemas, relations, Data APIs, ordering, search, preferences, all MCP transports, opaque Agent/Knowledge data, and backup round trips.
-- Run `pnpm test:ai-core` and `pnpm test:ai-sdk-provider`; verify exact file sets/hashes and test provider routing, request/response contracts, tools, streams, and platform adapters.
-- Run `pnpm design:sync --desktop-root <path> --check`, `pnpm design:check`, icon catalog/routing tests, and scans for retired tokens/providers, `icons-png`, `IconPngSource`, and `packages/ui/src/**/*.png`.
-- Add regression tests for every behavior adaptation and every previously undetected drift.
+Add regression coverage for changed behavior and newly identified audit gaps. Inspect generated
+files and preserve unrelated work. If required checks cannot run within the task's permissions or
+environment, report them as skipped and leave admission/baseline advancement pending.
 
-## Repository Gates
+## Platform Admission
 
-Run all gates after focused checks pass:
+Runtime, dependency, native-adapter, and bundle-sensitive ports require platform exports and device
+acceptance defined by the owning architecture reference. Visual changes additionally need light/dark
+inspection and applicable icon-cache checks. Follow
+[Parallel Device Testing](../../../../docs/guides/parallel-device-testing.md) for workspace isolation.
 
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-creator/scripts/quick_validate.py" \
-  .agents/skills/sync-cherry-desktop
-pnpm skills:sync
-pnpm skills:check
-pnpm typecheck
-pnpm lint
-pnpm format:check
-pnpm test --runInBand
-git diff --check
-```
-
-Review every rewritten or generated file. Attribute unrelated pre-existing changes instead of reverting them. Report any skipped command and its exact reason.
-
-## Export And Visual Gates
-
-When runtime, dependencies, native adapters, themes, icons, or bundle-sensitive code changes, run production exports:
-
-```bash
-pnpm exec expo export --platform ios --output-dir .context/expo-export-ios
-pnpm exec expo export --platform android --output-dir .context/expo-export-android
-```
-
-Launch production-equivalent iPhone and Android builds. Inspect every affected view in light and dark mode, clear Metro and image caches when needed, and store screenshots under `.context/`. Check clipping, overlap, density, stale assets, routing, missing dark assets, and platform-only crashes. If a pure audit/Skill change does not affect runtime visuals, report export and device QA as not applicable instead of claiming they ran.
-
-## Forward-Test The Workflow
-
-Use isolated temporary Git fixtures and a fresh agent to prove:
-
-1. A clean current checkout identifies exact mirrors and real drift without modifying either repository.
-2. A dirty selected desktop source is rejected.
-3. A catalog-only embedded raster such as Radeon Cloud becomes a provenance-tracked WebP, while `opencode -> open-code` remains a valid virtual mapping.
-4. Ordinary AI SDK Agent code stays in scope and every unexplained non-Agent AI gap blocks its domain.
-5. Knowledge, Agent, and non-HTTP MCP data must round trip, while physical desktop v7 backup incompatibility remains accurately blocked.
+Pure documentation/skill changes do not require runtime export or visual acceptance; report those
+as not applicable instead of claiming they ran.
 
 ## Completion Report
 
-Report the desktop repository identity and commit; per-domain source hashes, baseline, and final status; changed files and file/table/token/icon counts; migrations and data-retention behavior; all six change classifications; provider/model fan-out; backup compatibility; focused, repository, export, and visual results; skipped checks with reasons; screenshot/export/audit artifact paths; Metro and image cache state; dirty worktree state; device, credentials, SDK, network, and external-service blockers; and Conventional Commit hashes and subjects.
+Report the desktop identity/commit, selected domains and hashes, baseline/final status, admitted
+consumers, classified changes, unresolved drift, and blockers. Include touched migrations,
+data-retention and compatibility effects, provider/icon fan-out, check results, and skipped checks
+with reasons. Report export/screenshot artifacts, device/cache state, and external dependencies
+only when relevant. An audit result does not authorize commits, publication, or baseline changes.

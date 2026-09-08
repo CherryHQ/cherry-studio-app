@@ -7,6 +7,7 @@ import {
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
   AgentSessionSnapshotSchema,
+  AgentSessionStatusSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentToolRefSchema,
@@ -18,6 +19,21 @@ const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search
 function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }
+
+describe('Agent Session status contract', () => {
+  test('round-trips immutable status snapshots without admitting transcript or error payloads', () => {
+    const input = { status: 'awaiting-approval', turnId: 'turn-1' };
+    const snapshot = AgentSessionStatusSchema.parse(roundTrip(input));
+
+    expect(snapshot).toEqual(input);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(AgentSessionStatusSchema.safeParse({ ...input, parts: [] }).success).toBe(false);
+    expect(AgentSessionStatusSchema.safeParse({ ...input, status: 'streaming' }).success).toBe(
+      false,
+    );
+    expect(AgentSessionStatusSchema.safeParse({ ...input, turnId: '' }).success).toBe(false);
+  });
+});
 
 describe('Agent tool and managed-file contracts', () => {
   test('rejects the retired turn-only capability field', () => {
@@ -63,6 +79,7 @@ describe('Agent tool and managed-file contracts', () => {
       turnId: 'turn-1',
       updatedAt: '2026-08-31T00:00:00.000Z',
       usage: null,
+      stats: null,
     } as const;
     const assistantMessage = {
       ...userMessage,

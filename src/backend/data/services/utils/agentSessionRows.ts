@@ -46,6 +46,7 @@ export function toAgentMessageView(row: AgentSessionMessageRow): AgentMessageVie
     status: row.status,
     parts: row.data.parts,
     usage: row.usage ?? null,
+    stats: row.stats ?? null,
     modelId: row.modelId,
     inferenceSnapshot: readAgentInferenceSnapshot(row.messageSnapshot),
     createdAt: timestampToISO(row.createdAt),

@@ -22,6 +22,8 @@
 !expo-dev-client/**
 !expo-tailwind-setup/
 !expo-tailwind-setup/**
+!gh-stack/
+!gh-stack/**
 !improve-react/
 !improve-react/**
 !legend-list-best-practices/
@@ -42,5 +44,7 @@
 !uniwind/**
 !upgrading-expo/
 !upgrading-expo/**
+!vercel-composition-patterns/
+!vercel-composition-patterns/**
 !vercel-react-native-skills/
 !vercel-react-native-skills/**

@@ -15,7 +15,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 
 import { getStartupExitDurationMs, STARTUP_ATTRIBUTION_ENTER_DURATION_MS } from './startupState';
 
-const STARTUP_LOGO = require('@/assets/cherry-studio-splash-logo.png');
+const STARTUP_LOGO = require('@/assets/icon.png');
 const LOGO_SIZE = 96;
 const ATTRIBUTION_SAFE_AREA_GAP = 48;
 

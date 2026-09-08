@@ -152,8 +152,6 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
  * post-save prewarming, a cache-only chat path. That stack was never designed
  * against mobile constraints, so it was removed wholesale rather than tuned.
  * What replaces it has to answer, for a phone on cellular:
- * - The settings list reports `connected` from a live client, so a row that has
- *   never been read this session shows `connecting` until something reads it.
  * - Nothing rate-limits a dead server anymore; that was the backoff's job.
  *
  * Connection reuse (`runtimeStates`) deliberately stayed so repeated settings
@@ -166,13 +164,21 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
 
-  /** Runtime metadata for the settings list, reported from live client state. */
-  getRuntimeSummaries(
+  /** Runtime metadata for the settings list, initializing any runnable server not yet observed. */
+  async getRuntimeSummaries(
     servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>> {
-    return Promise.resolve(
-      Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)])),
+    await Promise.allSettled(
+      servers.flatMap((server) => {
+        if (!server.isEnabled || !hasRunnableUrl(server)) {
+          return [];
+        }
+        const state = this.getRuntimeState(server);
+        return state.client ? [] : [this.fetchToolsWithRetry(server, state)];
+      }),
     );
+
+    return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
   }
 
   /** Tool list for the server edit screen. */

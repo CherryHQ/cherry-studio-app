@@ -2,6 +2,7 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 import { loggerService } from '@logger';
+import Constants from 'expo-constants';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
@@ -16,6 +17,16 @@ import {
   type PaintingGenerateJobDependencies,
   type PaintingGenerateJobInput,
 } from '../paintingGenerateJobHandler';
+
+jest.mock('expo-constants', () => ({
+  ...jest.requireActual('expo-constants'),
+  __esModule: true,
+  default: { executionEnvironment: 'bare', expoConfig: { scheme: 'cherrystudio' } },
+}));
+
+afterEach(() => {
+  Constants.expoConfig!.scheme = 'cherrystudio';
+});
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
@@ -100,7 +111,15 @@ describe('createPaintingGenerateJobHandler', () => {
     const handler = createPaintingGenerateJobHandler(dependencies);
 
     await expect(handler.execute(createContext())).resolves.toEqual({
-      outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
+      outputs: [
+        {
+          fileEntryId: outputFileId,
+          mediaType: 'image/png',
+          name: 'image.png',
+          size: 1,
+          uri: 'file:///output.png',
+        },
+      ],
       painting: painting('painting-1', [outputFileId]),
     });
 
@@ -114,6 +133,9 @@ describe('createPaintingGenerateJobHandler', () => {
         prompt: 'draw',
         uniqueModelId: modelId,
       }),
+    );
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'draw.png', provenance: 'generated', source: 'base64' }),
     );
     expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
       outputFileId,
@@ -203,38 +225,42 @@ describe('createPaintingGenerateJobHandler', () => {
       return { dependencies, sessions, startSession };
     }
 
-    it('opens a session while generating and finishes it as completed', async () => {
-      const { dependencies, sessions, startSession } = createSessionDependencies();
-      const handler = createPaintingGenerateJobHandler(dependencies);
+    it.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
+      'opens and finishes a painting activity with the current app scheme %s',
+      async (scheme) => {
+        Constants.expoConfig!.scheme = scheme;
+        const { dependencies, sessions, startSession } = createSessionDependencies();
+        const handler = createPaintingGenerateJobHandler(dependencies);
 
-      await handler.execute(createContext());
+        await handler.execute(createContext());
 
-      expect(startSession).toHaveBeenCalledWith(
-        expect.objectContaining({
-          deepLinkUrl: 'cherrystudio://paintings/painting-1',
-          keepAlive: false,
-          props: expect.objectContaining({
-            attribution: 'GPT Image 2',
-            compactIcon: 'paintbrush',
-            icon: 'paintbrush',
-            phase: 'generating',
-            preview: 'draw',
-            title: '绘图',
+        expect(startSession).toHaveBeenCalledWith(
+          expect.objectContaining({
+            deepLinkUrl: `${scheme}://paintings/painting-1`,
+            keepAlive: false,
+            props: expect.objectContaining({
+              attribution: 'GPT Image 2',
+              compactIcon: 'paintbrush',
+              icon: 'paintbrush',
+              phase: 'generating',
+              preview: 'draw',
+              title: '绘图',
+            }),
+            tag: 'painting.generate',
           }),
-          tag: 'painting.generate',
-        }),
-      );
-      const activityInput = startSession.mock.calls[0]?.[0] as { props: unknown } | undefined;
-      expect(activityInput?.props).not.toHaveProperty('compactLabel');
-      expect(sessions[0]?.finish).toHaveBeenCalledWith(
-        expect.objectContaining({
-          compactIcon: 'paintbrush',
-          compactLabel: '已完成',
-          icon: 'check-circle',
-          phase: 'completed',
-        }),
-      );
-    });
+        );
+        const activityInput = startSession.mock.calls[0]?.[0] as { props: unknown } | undefined;
+        expect(activityInput?.props).not.toHaveProperty('compactLabel');
+        expect(sessions[0]?.finish).toHaveBeenCalledWith(
+          expect.objectContaining({
+            compactIcon: 'paintbrush',
+            compactLabel: '已完成',
+            icon: 'check-circle',
+            phase: 'completed',
+          }),
+        );
+      },
+    );
 
     it('finishes the session as failed when generation throws', async () => {
       const { dependencies, sessions } = createSessionDependencies();
@@ -293,7 +319,15 @@ describe('createPaintingGenerateJobHandler', () => {
       expect(snapshot.status).toBe('completed');
       expect(snapshot.queue).toBe('painting');
       expect(snapshot.output).toEqual({
-        outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
+        outputs: [
+          {
+            fileEntryId: outputFileId,
+            mediaType: 'image/png',
+            name: 'image.png',
+            size: 1,
+            uri: 'file:///output.png',
+          },
+        ],
         painting: painting('painting-1', [outputFileId]),
       });
     });

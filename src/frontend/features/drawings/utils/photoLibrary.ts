@@ -13,6 +13,13 @@ export type PhotoPreview = {
   uri: string;
 };
 
+export function shouldRequestPhotoPreviewAccess(
+  permission: { canAskAgain: boolean; granted: boolean },
+  isUserInitiated: boolean,
+): boolean {
+  return isUserInitiated && !permission.granted && permission.canAskAgain;
+}
+
 type PhotoPreviewPage = {
   hasNextPhotoPage: boolean;
   nextOffset: number;

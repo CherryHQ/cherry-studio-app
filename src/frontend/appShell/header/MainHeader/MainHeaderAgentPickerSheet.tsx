@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
+import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { BottomSheet, Button, ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -132,7 +132,7 @@ function AgentPickerRow({
         hitSlop={4}
         onPress={() => onEdit(agent.id)}
       >
-        <InfoIcon className="size-5 text-muted-foreground" />
+        <SquarePenIcon className="size-5 text-muted-foreground" />
       </Pressable>
     </View>
   );

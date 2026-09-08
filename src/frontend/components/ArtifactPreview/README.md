@@ -7,18 +7,22 @@ This shared component family connects an artifact preview surface to its viewer 
 - `ArtifactImageViewer` renders a measured, pannable, pinch- and double-tap-zoomable image inside
   the transition target. Callers supply its accessible label and observe zoom state when navigation
   gestures must be disabled.
+- `useSaveImageToPhotos` owns the shared add-only photo permission and save flow, consumed by
+  painting and file viewers.
 - `ArtifactPreviewLink` accepts an Expo Router destination and marks its child as the preview
   source.
 - `ArtifactPreviewTarget` marks the corresponding viewer content as the transition target.
 
-On iOS the gateway uses the native Apple zoom transition. Android and fallback platforms retain
-the same navigation contract with a normal link.
+All platforms use a normal link so the preview pressable remains the accessibility owner. Expo
+Router's native Apple zoom source is intentionally not used because it flattens that pressable out
+of the iOS accessibility tree.
 
 ## Ownership
 
 Painting and drawing pages own artifact descriptors, file resolution, viewer routes, chrome, and
-capability actions such as edit, download, or retry. This family owns only the transition and zoom
-contract shared by those pages.
+capability actions such as edit, download, or retry. This family owns the transition, zoom, and save-to-Photos
+contracts shared by those pages. Image load failures are reported through the optional `onError`
+callback so the page owns its retry and fallback.
 
 ## Organization
 

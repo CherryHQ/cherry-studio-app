@@ -2,6 +2,8 @@ import { type ReactNode, useEffect } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
+
 import {
   ComposerProvider,
   useComposerActions,
@@ -17,11 +19,13 @@ import { ComposerSurface } from '../ComposerSurface';
 type MockComposerProps = {
   canSend?: boolean;
   children?: ReactNode;
+  labels?: { send: string; stop: string };
   onSend: () => Promise<void> | void;
   value: string;
 };
 
 const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerError = jest.fn();
 const mockLoggerWarn = jest.fn();
@@ -46,6 +50,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
     Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: { show: mockToastShow } }),
+    useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });
 
@@ -140,6 +145,72 @@ describe('ComposerSurface', () => {
     expect(mockToastShow).toHaveBeenCalledTimes(1);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.input.sendFailed',
+      variant: 'danger',
+    });
+  });
+
+  it('explains attachment rejection once and preserves content typed while send was pending', async () => {
+    const pending = deferred<void>();
+    const original = readyAttachment();
+    const added = readyAttachment({
+      id: 'file:new',
+      name: 'new.pdf',
+      fileEntryId: '00000000-0000-7000-8000-000000000039',
+    });
+    render(
+      <ComposerSurface onSend={() => pending.promise} onStop={jest.fn()} streaming={false}>
+        <StateProbe />
+      </ComposerSurface>,
+      'original',
+      [original],
+    );
+    let send: Promise<void> | undefined;
+    act(() => {
+      send = Promise.resolve(mockComposerProps?.onSend());
+    });
+    act(() => {
+      mockComposerActions?.setDraft('new text');
+      mockComposerActions?.addAttachments([added]);
+    });
+    await act(async () => {
+      pending.reject(new FileAttachmentError({ code: 'document-empty', name: 'scan.pdf' }));
+      await send;
+    });
+    expect(mockComposerState).toEqual({
+      draft: 'original\nnew text',
+      attachments: [added, original],
+    });
+    expect(mockAlertShow).toHaveBeenCalledTimes(1);
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'attachments.sendRejected',
+      description: 'scan.pdf\n\nattachments.issue.document-empty\n\nattachments.draftKept',
+    });
+    expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  it('uses caller-owned action and failure labels', async () => {
+    const onSend = jest.fn(async () => {
+      throw new Error('generation failed');
+    });
+    render(
+      <ComposerSurface
+        labels={{ send: 'Generate image', sendFailed: 'Image failed', stop: 'Stop generating' }}
+        onSend={onSend}
+        onStop={jest.fn()}
+        streaming={false}
+      />,
+      'paint',
+    );
+
+    expect(mockComposerProps?.labels).toEqual({
+      send: 'Generate image',
+      stop: 'Stop generating',
+    });
+
+    await act(async () => mockComposerProps?.onSend());
+
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'Image failed',
       variant: 'danger',
     });
   });
@@ -274,9 +345,11 @@ function readyAttachment(
 
 function deferred<TValue>() {
   let resolve!: (value: TValue) => void;
-  const promise = new Promise<TValue>((resolvePromise) => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<TValue>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
     resolve = resolvePromise;
   });
 
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }

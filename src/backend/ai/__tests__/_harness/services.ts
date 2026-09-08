@@ -39,7 +39,10 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
       getRotatedApiKey: jest.fn(async () => 'contract-key'),
       resolveApiKey,
     },
-    providerRegistry: { listProviderRegistryModels: jest.fn(() => []) },
+    providerRegistry: {
+      getImageGenerationSupport: jest.fn(() => model.imageGeneration ?? null),
+      listProviderRegistryModels: jest.fn(() => []),
+    },
     vertexAuth: { getAuthorizationHeaders: jest.fn(async () => ({})) },
   } as unknown as AiServiceDependencies;
 

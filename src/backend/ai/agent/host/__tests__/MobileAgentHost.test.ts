@@ -8,12 +8,16 @@ import {
   AgentEventSchema,
   AgentProtocolError,
   type AgentEvent,
+  type AgentMessagePart,
+  type AgentSessionStatus,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { ManagedFileResolver } from '../../resources/managedFileResolver';
 import {
+  createDeniedToolResult,
+  createErrorToolResult,
   FakeRuntime,
   type RuntimeDescriptor,
   type RuntimeExecutionRequest,
@@ -104,6 +108,7 @@ const inferenceModel = async (model: { providerId: string; modelId: string }) =>
 const noFiles: ManagedFileResolver = {
   resolveAvailable: jest.fn(async () => new Map()),
   readAsBytes: jest.fn(async () => undefined),
+  readDocumentText: jest.fn(async () => undefined),
   readAsDataUrl: jest.fn(async () => undefined),
 };
 
@@ -176,6 +181,7 @@ function hostWithText(
       });
       controller.emit({
         type: 'usage',
+        requestId: `invocation:${controller.request.turnId}`,
         completedAt: 1_500,
         context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -241,6 +247,59 @@ describe('MobileAgentHost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
+  });
+
+  test('retains each latest turn without transcript observers and only notifies status changes', async () => {
+    const host = hostWithText(['First streamed answer', 'Second streamed answer']);
+    const session = await createStoredSession();
+    const otherSession = await createStoredSession();
+    const statuses: (AgentSessionStatus | null)[] = [];
+    const otherStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribe = host.subscribeSessionStatus(session.id, () => {
+      statuses.push(host.getSessionStatus(session.id));
+    });
+    const unsubscribeOther = host.subscribeSessionStatus(otherSession.id, () => {
+      otherStatuses.push(host.getSessionStatus(otherSession.id));
+    });
+    expect(host.getSessionStatus(session.id)).toBeNull();
+
+    const firstTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First question' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'first status');
+
+    expect(statuses).toEqual([
+      { status: 'running', turnId: firstTurn.turnId },
+      { status: 'completed', turnId: firstTurn.turnId },
+    ]);
+    expect(otherStatuses).toEqual([]);
+    expect(host.getSessionStatus(session.id)).toBe(statuses[1]);
+    expect(Object.isFrozen(host.getSessionStatus(session.id))).toBe(true);
+    unsubscribe();
+    unsubscribeOther();
+
+    const secondTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Another question while the list is unmounted' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'second status');
+
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: secondTurn.turnId,
+    });
+    expect(secondTurn.turnId).not.toBe(firstTurn.turnId);
+    expect(statuses).toHaveLength(2);
+
+    const deletedStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribeDeleted = host.subscribeSessionStatus(session.id, () => {
+      deletedStatuses.push(host.getSessionStatus(session.id));
+    });
+    await host.deleteSession({ sessionId: session.id });
+    expect(deletedStatuses).toEqual([null]);
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    unsubscribeDeleted();
   });
 
   test('creates the durable Session together with an admitted first submission', async () => {
@@ -343,6 +402,7 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(runtime, noOpNaming, {
       readAsBytes: jest.fn(async () => undefined),
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
       resolveAvailable: jest.fn(async () => new Map([[FILE_ENTRY_ID, imageFact]])),
     });
@@ -356,7 +416,10 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({
       view: {
         code: 'CAPABILITY_UNSUPPORTED',
-        message: 'The selected model does not accept image attachments.',
+        attachmentIssue: {
+          code: 'model-unsupported',
+          fileEntryId: FILE_ENTRY_ID,
+        },
       },
     });
 
@@ -456,6 +519,7 @@ describe('MobileAgentHost', () => {
         agent: expect.objectContaining({ id: AGENT_ID }),
         assistantMessageId: submitted.assistantMessageId,
         report: {
+          requestId: `invocation:${submitted.turnId}`,
           completedAt: 1_500,
           context: USAGE_CONTEXT,
           usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -502,6 +566,50 @@ describe('MobileAgentHost', () => {
     expect(
       requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
     ).toEqual(['user', 'assistant']);
+  });
+
+  test('records unique invocations before a failed terminal and sums their message usage', async () => {
+    const runtime = new FakeRuntime();
+    runtime.script((controller) => {
+      const report = {
+        type: 'usage' as const,
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      };
+      controller.emit(report);
+      controller.emit(report);
+      controller.emit({
+        ...report,
+        requestId: 'call-2',
+        usage: { inputTokens: 10, outputTokens: 1, totalTokens: 11 },
+      });
+      controller.emit({
+        type: 'failed',
+        error: {
+          code: 'provider_error',
+          message: 'Later call failed',
+          retryable: true,
+          origin: 'provider',
+        },
+      });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the failed turn to settle');
+    expect(usage.record).toHaveBeenCalledTimes(2);
+    expect(usage.record.mock.calls.map(([input]) => input.report.requestId)).toEqual([
+      'call-1',
+      'call-2',
+    ]);
+    const finalized = events.find((event) => event.type === 'message.finalized');
+    expect(finalized).toMatchObject({
+      message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
+    });
   });
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
@@ -695,6 +803,12 @@ describe('MobileAgentHost', () => {
       disabledCapabilities: ['health'],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
+      resolveUsageAttribution: expect.any(Function),
+    });
+    // Tools are built before reservation; by execution the resolver sees the reserved message.
+    expect(getTools.mock.calls[0]![0].resolveUsageAttribution?.()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
+      messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
@@ -715,7 +829,8 @@ describe('MobileAgentHost', () => {
 
   test('grants validated Runtime artifacts to the frozen turn resource scope', async () => {
     let resources: Parameters<SystemCapabilitySource['getTools']>[0]['resources'] | undefined;
-    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+    const releaseExecution = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
       controller.emit({
         type: 'part.add',
         index: 0,
@@ -728,6 +843,7 @@ describe('MobileAgentHost', () => {
           purpose: 'artifact',
         },
       });
+      await releaseExecution.promise;
       controller.emit({ type: 'completed' });
     });
     const host = createHost(runtime, noOpNaming, noFiles, {
@@ -744,10 +860,416 @@ describe('MobileAgentHost', () => {
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Create an image.' }],
     });
+    try {
+      await waitForAsync(
+        async () =>
+          (await store.listMessages(session.id))[1]?.parts.some((part) => part.type === 'file') ??
+          false,
+        'the artifact to be saved before finalization',
+      );
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'streaming',
+        parts: [{ type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }],
+      });
+    } finally {
+      releaseExecution.resolve();
+    }
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the artifact turn');
 
     expect(resources).toBeDefined();
     expect([...(resources?.fileEntryIds ?? [])]).toEqual([SECOND_FILE_ENTRY_ID]);
+  });
+
+  test.each(['output-available', 'denied', 'error'] as const)(
+    'saves %s tool results without writes for text or intermediate tool states',
+    async (state) => {
+      const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+      const releaseTool = createDeferred();
+      const releaseResult = createDeferred();
+      const releaseTerminal = createDeferred();
+      const toolPart = {
+        id: 'tool-1',
+        type: 'tool',
+        toolCallId: 'call-1',
+        toolRef: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        state: 'running',
+        input: { fileEntryId: FILE_ENTRY_ID },
+      } as const;
+      const toolResult = {
+        ...toolPart,
+        state,
+        output: {
+          'output-available': { value: { deleted: true }, artifacts: [] },
+          denied: createDeniedToolResult('Denied by the user.'),
+          error: createErrorToolResult({
+            code: 'tool_failed',
+            message: 'Failed.',
+            retryable: false,
+          }),
+        }[state],
+      };
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(
+        async (controller) => {
+          controller.emit({
+            type: 'part.add',
+            index: 0,
+            part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+          });
+          controller.emit({ type: 'text.delta', partId: 'text-1', text: 'Deleting.' });
+          controller.emit({
+            type: 'part.replace',
+            part: { id: 'text-1', type: 'text', text: 'Deleting.', state: 'done' },
+          });
+          await releaseTool.promise;
+          controller.emit({
+            type: 'part.add',
+            index: 1,
+            part: { ...toolPart, state: 'input-streaming' },
+          });
+          controller.emit({
+            type: 'part.replace',
+            part: { ...toolPart, state: 'input-available' },
+          });
+          controller.emit({
+            type: 'part.replace',
+            part: { ...toolPart, state: 'awaiting-approval', approvalId: 'approval-1' },
+          });
+          controller.emit({ type: 'part.replace', part: toolPart });
+          await releaseResult.promise;
+          controller.emit({ type: 'part.replace', part: toolResult });
+          controller.emit({
+            type: 'part.add',
+            index: 2,
+            part: { id: 'text-2', type: 'text', text: '', state: 'streaming' },
+          });
+          controller.emit({ type: 'text.delta', partId: 'text-2', text: 'Finished.' });
+          await releaseTerminal.promise;
+          controller.emit({ type: 'completed' });
+        },
+      );
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Delete it.' }],
+      });
+
+      try {
+        await waitFor(
+          () =>
+            events.some(
+              (event) => event.type === 'message.delta' && event.delta.op === 'part.replace',
+            ),
+          'the initial text to finish streaming',
+        );
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'pending',
+          parts: [],
+        });
+        releaseTool.resolve();
+        await waitFor(
+          () =>
+            events.some(
+              (event) =>
+                event.type === 'message.delta' &&
+                event.delta.op === 'part.replace' &&
+                event.delta.part.type === 'tool' &&
+                event.delta.part.state === 'running',
+            ),
+          'the intermediate tool states to be processed',
+        );
+        expect(saveSnapshot).not.toHaveBeenCalled();
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'pending',
+          parts: [],
+        });
+        releaseResult.resolve();
+        await waitFor(
+          () =>
+            events.some(
+              (event) =>
+                event.type === 'message.delta' &&
+                event.delta.op === 'text.append' &&
+                event.delta.partId === 'text-2',
+            ),
+          'the text after the tool result',
+        );
+        expect(saveSnapshot).toHaveBeenCalledTimes(1);
+        expect((await store.listMessages(session.id))[1]).toMatchObject({
+          status: 'streaming',
+          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, toolResult],
+        });
+      } finally {
+        releaseTool.resolve();
+        releaseResult.resolve();
+        releaseTerminal.resolve();
+      }
+      await waitFor(() => terminalTurnEvent(events) !== undefined, 'the tool turn to settle');
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'success',
+        parts: [
+          { id: 'text-1', text: 'Deleting.', state: 'done' },
+          toolResult,
+          { id: 'text-2', text: 'Finished.', state: 'done' },
+        ],
+      });
+    },
+  );
+
+  test('still finalizes the complete message when a mid-turn snapshot write fails', async () => {
+    jest
+      .spyOn(store, 'updateStreamingAssistantMessage')
+      .mockRejectedValue(new Error('database locked'));
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: {
+          id: 'artifact-1',
+          type: 'file',
+          ref: { kind: 'managed-file', fileEntryId: SECOND_FILE_ENTRY_ID },
+          mediaType: 'image/png',
+          name: 'generated.png',
+          purpose: 'artifact',
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Create an image.' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(events) !== undefined,
+      'finalization after a snapshot failure',
+    );
+
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'success',
+      parts: [{ type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }],
+    });
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+  });
+
+  test('leaves interrupted tool parts to the terminal write', async () => {
+    const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+    const toolPart = {
+      id: 'tool-1',
+      type: 'tool',
+      toolCallId: 'call-1',
+      toolRef: TOOL_REF,
+      providerName: TOOL_PROVIDER_NAME,
+      displayName: TOOL_DISPLAY_NAME,
+      state: 'running',
+      input: { fileEntryId: FILE_ENTRY_ID },
+    } as const;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({ type: 'part.add', index: 0, part: toolPart });
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const submitted = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Delete it.' }],
+    });
+    await waitFor(
+      () => events.some((event) => event.type === 'message.delta' && event.delta.op === 'part.add'),
+      'the tool call to start',
+    );
+
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the cancelled turn to settle');
+
+    // The runtime replaced the tool part with `interrupted` before `cancelled`;
+    // only the terminal write recorded it.
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'message.delta' &&
+          event.delta.op === 'part.replace' &&
+          event.delta.part.type === 'tool' &&
+          event.delta.part.state === 'interrupted',
+      ),
+    ).toBe(true);
+    expect(saveSnapshot).not.toHaveBeenCalled();
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'cancelled',
+      parts: [{ id: 'tool-1', type: 'tool', state: 'interrupted' }],
+    });
+  });
+
+  test('coalesces snapshot writes and drains them before the terminal write', async () => {
+    const releaseFirstWrite = createDeferred();
+    const releaseTerminal = createDeferred();
+    const writeStreaming = store.updateStreamingAssistantMessage.bind(store);
+    const writtenParts: AgentMessagePart[][] = [];
+    const saveSnapshot = jest
+      .spyOn(store, 'updateStreamingAssistantMessage')
+      .mockImplementation(async (input) => {
+        // Capture what the Host handed over, not the live array it keeps mutating.
+        writtenParts.push(JSON.parse(JSON.stringify(input.parts)) as AgentMessagePart[]);
+        if (writtenParts.length === 1) {
+          await releaseFirstWrite.promise;
+        }
+        await writeStreaming(input);
+      });
+    const finalizeMessage = jest.spyOn(store, 'finalizeAssistantMessage');
+    const toolPart = (id: string, toolCallId: string) =>
+      ({
+        id,
+        type: 'tool',
+        toolCallId,
+        toolRef: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        state: 'running',
+        input: { fileEntryId: FILE_ENTRY_ID },
+      }) as const;
+    const firstResult = {
+      ...toolPart('tool-1', 'call-1'),
+      state: 'output-available' as const,
+      output: { value: { deleted: true }, artifacts: [] },
+    };
+    const secondResult = {
+      ...toolPart('tool-2', 'call-2'),
+      state: 'output-available' as const,
+      output: { value: { deleted: true }, artifacts: [] },
+    };
+    const artifact = {
+      id: 'artifact-1',
+      type: 'file',
+      ref: { kind: 'managed-file', fileEntryId: SECOND_FILE_ENTRY_ID },
+      mediaType: 'image/png',
+      name: 'generated.png',
+      purpose: 'artifact',
+    } as const;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({ type: 'part.add', index: 0, part: toolPart('tool-1', 'call-1') });
+      controller.emit({ type: 'part.replace', part: firstResult });
+      controller.emit({ type: 'part.add', index: 1, part: artifact });
+      controller.emit({ type: 'part.add', index: 2, part: toolPart('tool-2', 'call-2') });
+      controller.emit({ type: 'part.replace', part: secondResult });
+      await releaseTerminal.promise;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Delete both.' }],
+    });
+
+    try {
+      await waitFor(
+        () =>
+          events.some(
+            (event) =>
+              event.type === 'message.delta' &&
+              event.delta.op === 'part.replace' &&
+              event.delta.part.id === 'tool-2',
+          ),
+        'the second tool result to reach observers',
+      );
+      // Three durable-value events, one blocked write: the loop kept going.
+      expect(saveSnapshot).toHaveBeenCalledTimes(1);
+      expect(writtenParts[0]).toEqual([firstResult]);
+
+      releaseTerminal.resolve();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(finalizeMessage).not.toHaveBeenCalled();
+    } finally {
+      releaseFirstWrite.resolve();
+      releaseTerminal.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(saveSnapshot).toHaveBeenCalledTimes(2);
+    expect(writtenParts[1]).toEqual([
+      firstResult,
+      {
+        id: artifact.id,
+        type: 'file',
+        fileEntryId: SECOND_FILE_ENTRY_ID,
+        mediaType: artifact.mediaType,
+        name: artifact.name,
+        purpose: artifact.purpose,
+      },
+      secondResult,
+    ]);
+    expect(finalizeMessage).toHaveBeenCalledTimes(1);
+    expect(Math.max(...saveSnapshot.mock.invocationCallOrder)).toBeLessThan(
+      finalizeMessage.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'success',
+      parts: [firstResult, { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }, secondResult],
+    });
+  });
+
+  test('keeps the event loop moving while a usage write is pending and settles it before the terminal write', async () => {
+    const releaseUsageWrite = createDeferred();
+    usage.record.mockImplementationOnce(() => releaseUsageWrite.promise);
+    const finalizeMessage = jest.spyOn(store, 'finalizeAssistantMessage');
+    const runtime = new FakeRuntime().script((controller) => {
+      controller.emit({
+        type: 'usage',
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'After usage', state: 'done' },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+
+    try {
+      await waitFor(
+        () =>
+          events.some(
+            (event) =>
+              event.type === 'message.delta' &&
+              event.delta.op === 'part.add' &&
+              event.delta.part.id === 'text-1',
+          ),
+        'the part after the usage event to reach observers',
+      );
+      // The analytical write is still blocked, yet later events were forwarded.
+      expect(usage.record).toHaveBeenCalledTimes(1);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(finalizeMessage).not.toHaveBeenCalled();
+      expect(terminalTurnEvent(events)).toBeUndefined();
+    } finally {
+      releaseUsageWrite.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+    expect(finalizeMessage).toHaveBeenCalledTimes(1);
+    expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
+      message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+    });
   });
 
   test('runs the turn tool-less when the catalog cannot be resolved', async () => {
@@ -1015,7 +1537,7 @@ describe('MobileAgentHost', () => {
       }),
     ).rejects.toMatchObject({
       view: {
-        code: 'CAPABILITY_UNSUPPORTED',
+        code: 'TOOL_CALLING_UNSUPPORTED',
         message: 'The selected model does not support native tool calling.',
       },
     });
@@ -1061,6 +1583,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'cancelling', 'cancelled']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'cancelled',
+      turnId: submitted.turnId,
+    });
     assertJsonRoundTrip(events);
 
     const transcript = await store.listMessages(session.id);
@@ -1188,6 +1714,8 @@ describe('MobileAgentHost', () => {
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+    const finishOptions = backgroundReplyTurn.finish.mock.calls[0]?.[1];
+    await expect(finishOptions?.waitFor).resolves.toBeNull();
     const renamed = await store.autoRenameSession(session.id, '', 'Summary title');
     resolveSummary(renamed);
     await waitFor(
@@ -1553,6 +2081,10 @@ describe('MobileAgentHost', () => {
     // A snapshot taken now carries the live approval and turn state (invariant 8).
     const midStream = await host.observeSession(session.id, () => {});
     expect(midStream.snapshot.activeTurn?.status).toBe('awaiting-approval');
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'awaiting-approval',
+      turnId: submitted.turnId,
+    });
     expect(midStream.snapshot.pendingApprovals).toEqual([requested.approval]);
 
     // Wrong correlation fails closed (invariant 7).
@@ -1577,6 +2109,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'awaiting-approval', 'running', 'completed']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: submitted.turnId,
+    });
     expect(events.some((event) => event.type === 'approval.resolved')).toBe(true);
     assertJsonRoundTrip(events);
 
@@ -1614,6 +2150,7 @@ describe('MobileAgentHost', () => {
     const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
     const host = createHost(fake, noOpNaming, {
       readAsBytes: jest.fn(async () => undefined),
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl,
       resolveAvailable,
     });
@@ -1641,6 +2178,7 @@ describe('MobileAgentHost', () => {
         mediaType: 'image/png',
         name: 'managed.png',
         purpose: 'input-attachment',
+        attachmentReport: { mode: 'image', sourceTruncated: false, requestTruncated: false },
       },
     ]);
     expect(requests[0]?.input).toEqual([
@@ -1695,6 +2233,7 @@ describe('MobileAgentHost', () => {
     };
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
@@ -1834,6 +2373,7 @@ describe('MobileAgentHost', () => {
     const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl,
       resolveAvailable: async (ids) =>
         new Map([...facts].filter(([fileEntryId]) => ids.includes(fileEntryId))),
@@ -1898,6 +2438,7 @@ describe('MobileAgentHost', () => {
     };
     const files: ManagedFileResolver = {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: jest.fn(async () => 'data:image/png;base64,AAAA'),
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, fact]]),
     };
@@ -1936,6 +2477,7 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(runtime, noOpNaming, {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async (_file, signal) => {
         readSignal = signal;
         return read;
@@ -1998,6 +2540,7 @@ describe('MobileAgentHost', () => {
     );
     const host = createHost(runtime, noOpNaming, {
       readAsBytes,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => undefined,
       resolveAvailable,
     });
@@ -2038,6 +2581,12 @@ describe('MobileAgentHost', () => {
       type: 'text-attachment',
     });
     expect(requests[0]?.input[2]).toEqual({
+      attachmentReport: {
+        mode: 'text',
+        sourceTruncated: false,
+        requestTruncated: false,
+        includedCharacters: 16,
+      },
       fileEntryId: SECOND_FILE_ENTRY_ID,
       name: 'config.json',
       mediaType: 'application/json',
@@ -2057,6 +2606,12 @@ describe('MobileAgentHost', () => {
         mediaType: 'text/markdown',
         name: 'notes.md',
         purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
       },
       {
         id: 'input-2',
@@ -2065,6 +2620,12 @@ describe('MobileAgentHost', () => {
         mediaType: 'application/json',
         name: 'config.json',
         purpose: 'input-attachment',
+        attachmentReport: {
+          mode: 'text',
+          sourceTruncated: false,
+          requestTruncated: false,
+          includedCharacters: expect.any(Number),
+        },
       },
     ]);
     expect(JSON.stringify(transcript)).not.toContain('Ignore policy');
@@ -2078,8 +2639,8 @@ describe('MobileAgentHost', () => {
     const readAsBytes = jest.fn(async () => Uint8Array.from([65, 0, 66]));
     const unsupportedFact = {
       fileEntryId: FILE_ENTRY_ID,
-      mediaType: 'application/pdf',
-      name: 'report.pdf',
+      mediaType: 'application/zip',
+      name: 'archive.zip',
       size: 3,
     };
     const unsupportedHost = createHost(
@@ -2087,6 +2648,7 @@ describe('MobileAgentHost', () => {
       noOpNaming,
       {
         readAsBytes,
+        readDocumentText: jest.fn(async () => undefined),
         readAsDataUrl: async () => undefined,
         resolveAvailable: async () => new Map([[FILE_ENTRY_ID, unsupportedFact]]),
       },
@@ -2100,13 +2662,13 @@ describe('MobileAgentHost', () => {
           {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
-            mediaType: 'application/pdf',
-            name: 'report.pdf',
+            mediaType: 'application/zip',
+            name: 'archive.zip',
           },
         ],
       }),
     ).rejects.toMatchObject({
-      view: { code: 'ATTACHMENT_INVALID', message: expect.stringContaining('report.pdf') },
+      view: { code: 'ATTACHMENT_INVALID', message: expect.stringContaining('archive.zip') },
     });
     expect(readAsBytes).not.toHaveBeenCalled();
     expect(await store.listMessages(unsupportedSession.id)).toEqual([]);
@@ -2114,6 +2676,7 @@ describe('MobileAgentHost', () => {
     const textFact = { ...unsupportedFact, mediaType: 'text/plain', name: 'spoofed.txt' };
     const binaryHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
       readAsBytes,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => undefined,
       resolveAvailable: async () => new Map([[FILE_ENTRY_ID, textFact]]),
     });
@@ -2153,6 +2716,7 @@ describe('MobileAgentHost', () => {
     ]);
     const availableHost = createHost(new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }), noOpNaming, {
       readAsBytes: async () => undefined,
+      readDocumentText: jest.fn(async () => undefined),
       readAsDataUrl: async () => 'data:image/png;base64,AAAA',
       resolveAvailable: async () => facts,
     });

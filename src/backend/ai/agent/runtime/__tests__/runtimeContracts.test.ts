@@ -44,6 +44,23 @@ describe('Agent Runtime settled contracts', () => {
     expect(JSON.parse(JSON.stringify({ ref, result }))).toEqual({ ref, result: expected });
   });
 
+  test('round-trips classified tool failure metadata without interpreting the payload', () => {
+    const result: RuntimeToolResult = {
+      value: { status: 'error', error: 'HTTP 429' },
+      artifacts: [],
+      failure: {
+        scope: 'tool',
+        error: {
+          code: 'service_unavailable',
+          message: 'HTTP 429',
+          retryable: false,
+          origin: 'tool',
+        },
+      },
+    };
+    expect(JSON.parse(JSON.stringify(result))).toEqual(result);
+  });
+
   test('keeps meta activity distinct from executable tool refs', () => {
     const ref: RuntimeMessageToolRef = { source: 'meta', name: 'tool_search' };
 

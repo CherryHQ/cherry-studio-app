@@ -229,6 +229,7 @@ export function classifyAgentFailureReason(facts: AgentFailureFacts): AgentFailu
       'fetch failed',
       'enotfound',
       'connection failed',
+      'connection error',
     ])
   ) {
     return 'network';

@@ -48,6 +48,7 @@ jest.mock('@/frontend/components/Composer', () => ({
 jest.mock('expo-router', () => ({
   useIsPreview: () => false,
   useLocalSearchParams: () => mockRouteParams,
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 jest.mock('@/frontend/appShell/header', () => ({ MainHeader: () => null }));
@@ -71,6 +72,12 @@ jest.mock('@/frontend/hooks/agent', () => ({
     refetch: mockSessionRefetch,
   }),
 }));
+
+jest.mock('../runtime', () => ({
+  useAgentChatDraftHandoff: () => undefined,
+}));
+
+jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {

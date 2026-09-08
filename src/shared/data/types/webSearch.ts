@@ -95,6 +95,16 @@ export type WebSearchResult = {
   content: string;
   url: string;
   sourceInput: string;
+  /** The returned content is only a prefix of the provider's result. */
+  truncated?: boolean;
+};
+
+export type WebSearchFailure = {
+  input: string;
+  kind: 'configuration' | 'http' | 'invalid_response' | 'network' | 'timeout' | 'unknown';
+  message: string;
+  code?: string;
+  status?: number;
 };
 
 export type WebSearchResponse = {
@@ -103,6 +113,8 @@ export type WebSearchResponse = {
   capability: WebSearchCapability;
   inputs: string[];
   results: WebSearchResult[];
+  /** Failed inputs are retained even when other inputs succeeded. */
+  failures?: WebSearchFailure[];
 };
 
 export type WebSearchSearchKeywordsRequest = {
@@ -126,6 +138,7 @@ export type WebSearchCheckProviderResponse = {
 };
 
 export type WebSearchCompressionConfig = {
+  /** Keyword-search policy; page fetches have independent mandatory limits. */
   method: WebSearchCompressionMethod;
   cutoffLimit: number;
 };

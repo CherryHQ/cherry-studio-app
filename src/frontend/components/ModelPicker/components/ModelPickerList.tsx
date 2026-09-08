@@ -253,7 +253,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           {item.model.name}
         </Text>
       </View>
-      {isSelected ? <CheckIcon className="size-5 shrink-0 text-success" /> : null}
+      {isSelected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
     </Pressable>
   );
 });

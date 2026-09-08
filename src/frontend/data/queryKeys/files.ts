@@ -1,9 +1,12 @@
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
+// Invalidate every list page size without refetching stable URI and preview queries.
 export const fileQueryKeys = {
-  previewUri: (entry: FileEntry) =>
-    ['/files/entries', entry.id, 'preview-uri', entry.updatedAt] as const,
-  uri: (entryId: FileEntryId) => ['/files/entries', entryId, 'uri'] as const,
+  entries: () => ['/files/entries'] as const,
+  viewerText: (entry: FileEntry, uri: string) =>
+    ['files', entry.id, 'viewer-text', entry.updatedAt, uri] as const,
+  previewUri: (entry: FileEntry) => ['files', entry.id, 'preview-uri', entry.updatedAt] as const,
+  uri: (entryId: FileEntryId) => ['files', entryId, 'uri'] as const,
   previewUriPage: (entries: readonly FileEntry[]) =>
-    ['/files/entries', 'preview-uri-page', entries] as const,
+    ['files', 'preview-uri-page', entries] as const,
 };

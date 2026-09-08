@@ -1,6 +1,8 @@
+import { eq } from 'drizzle-orm';
+
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
-import { preferenceTable } from '@/backend/data/db/schemas';
+import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
 import {
   getDefaultValue,
   getPreferenceKeys,
@@ -67,7 +69,8 @@ export class PreferenceService extends BaseService implements PreferenceClient {
         key: preferenceTable.key,
         value: preferenceTable.value,
       })
-      .from(preferenceTable);
+      .from(preferenceTable)
+      .where(eq(preferenceTable.scope, DEFAULT_PREFERENCE_SCOPE));
 
     for (const row of rows) {
       if (isPreferenceKey(row.key)) {
@@ -239,8 +242,11 @@ export class PreferenceService extends BaseService implements PreferenceClient {
         // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
         await tx
           .insert(preferenceTable)
-          .values({ key, value })
-          .onConflictDoUpdate({ target: preferenceTable.key, set: { value } });
+          .values({ key, scope: DEFAULT_PREFERENCE_SCOPE, value })
+          .onConflictDoUpdate({
+            target: [preferenceTable.scope, preferenceTable.key],
+            set: { value },
+          });
       }
     });
   }

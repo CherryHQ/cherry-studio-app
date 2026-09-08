@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
@@ -5,6 +6,16 @@ import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/c
 import type { AgentMessagePart } from '@/shared/contracts/agent';
 
 import { BackgroundReplyRuntime } from '../BackgroundReplyRuntime';
+
+jest.mock('expo-constants', () => ({
+  ...jest.requireActual('expo-constants'),
+  __esModule: true,
+  default: { executionEnvironment: 'bare', expoConfig: { scheme: 'cherrystudio' } },
+}));
+
+afterEach(() => {
+  Constants.expoConfig!.scheme = 'cherrystudio';
+});
 
 type SessionInput = BackgroundActivitySessionInput<BackgroundReplyActivityProps>;
 
@@ -44,47 +55,51 @@ describe('BackgroundReplyRuntime', () => {
     jest.restoreAllMocks();
   });
 
-  test('opens one keep-alive activity per Agent Session with a chat deeplink', async () => {
-    const runtime = await createRuntime();
-    expect(runtime.isActivated).toBe(true);
-    const first = runtime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    const second = runtime.startTurn({
-      agentId: 'agent-2',
-      agentName: 'Beta',
-      sessionId: 'session-2',
-      sessionTitle: 'Second session',
-    });
-    expect(first).not.toBe(second);
-    expect(mockStartSession).toHaveBeenCalledTimes(2);
-    expect(mockSessions[0]?.input).toMatchObject({
-      deepLinkUrl: 'cherrystudio:///?agentId=agent-1&sessionId=session-1',
-      keepAlive: true,
-      props: expect.objectContaining({
-        attribution: 'Alpha',
-        compactIcon: 'bubble-ellipsis',
-        detail: 'chat.backgroundReply.preparing',
-        icon: 'hourglass',
-        phase: 'preparing',
-        title: 'First session',
-      }),
-      tag: 'chat.backgroundReply',
-    });
-    expect(mockSessions[1]?.input).toMatchObject({
-      deepLinkUrl: 'cherrystudio:///?agentId=agent-2&sessionId=session-2',
-      props: expect.objectContaining({
-        attribution: 'Beta',
-        detail: 'chat.backgroundReply.preparing',
-        title: 'Second session',
-      }),
-    });
+  test.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
+    'opens chat activities with the current app scheme %s',
+    async (scheme) => {
+      Constants.expoConfig!.scheme = scheme;
+      const runtime = await createRuntime();
+      expect(runtime.isActivated).toBe(true);
+      const first = runtime.startTurn({
+        agentId: 'agent-1',
+        agentName: 'Alpha',
+        sessionId: 'session-1',
+        sessionTitle: 'First session',
+      });
+      const second = runtime.startTurn({
+        agentId: 'agent-2',
+        agentName: 'Beta',
+        sessionId: 'session-2',
+        sessionTitle: 'Second session',
+      });
+      expect(first).not.toBe(second);
+      expect(mockStartSession).toHaveBeenCalledTimes(2);
+      expect(mockSessions[0]?.input).toMatchObject({
+        deepLinkUrl: `${scheme}:///?agentId=agent-1&sessionId=session-1`,
+        keepAlive: true,
+        props: expect.objectContaining({
+          attribution: 'Alpha',
+          compactIcon: 'bubble-ellipsis',
+          detail: 'chat.backgroundReply.preparing',
+          icon: 'hourglass',
+          phase: 'preparing',
+          title: 'First session',
+        }),
+        tag: 'chat.backgroundReply',
+      });
+      expect(mockSessions[1]?.input).toMatchObject({
+        deepLinkUrl: `${scheme}:///?agentId=agent-2&sessionId=session-2`,
+        props: expect.objectContaining({
+          attribution: 'Beta',
+          detail: 'chat.backgroundReply.preparing',
+          title: 'Second session',
+        }),
+      });
 
-    await runtime._doStop();
-  });
+      await runtime._doStop();
+    },
+  );
 
   test('uses the localized assistant fallback when no assistant or model name is available', async () => {
     const runtime = await createRuntime();

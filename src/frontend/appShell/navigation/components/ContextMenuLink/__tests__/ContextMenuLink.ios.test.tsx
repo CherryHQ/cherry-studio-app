@@ -1,39 +1,50 @@
+import type { ReactElement } from 'react';
 import { Pressable, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ContextMenuLink } from '../ContextMenuLink.ios';
 
-jest.mock('expo-router', () => {
+let mockLinkProps: { asChild?: boolean; href?: unknown } | undefined;
+
+jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const { Pressable: MockPressable, View } = jest.requireActual('react-native');
+  const { View: MockView } = jest.requireActual('react-native');
 
-  const Link = Object.assign(
-    ({ children, ...props }: { children: React.ReactNode; href: unknown }) =>
-      React.createElement(View, { ...props, testID: 'link' }, children),
-    {
-      Menu: ({ children }: { children: React.ReactNode }) =>
-        React.createElement(View, { testID: 'link-menu' }, children),
-      MenuAction: ({ children, ...props }: { children: React.ReactNode }) =>
-        React.createElement(MockPressable, { ...props, testID: `action-${children}` }, children),
-      Preview: (props: Record<string, unknown>) =>
-        React.createElement(View, { ...props, testID: 'link-preview' }),
-      Trigger: ({ children }: { children: React.ReactNode }) =>
-        React.createElement(View, { testID: 'link-trigger' }, children),
+  return {
+    ContextMenu: ({ children, items }: { children: ReactElement; items: readonly unknown[] }) =>
+      React.createElement(MockView, { items, testID: 'context-menu' }, children),
+  };
+});
+
+jest.mock('expo-router', () => {
+  return {
+    Link: ({
+      children,
+      ...props
+    }: {
+      asChild?: boolean;
+      children: ReactElement;
+      href: unknown;
+    }) => {
+      mockLinkProps = props;
+      return children;
     },
-  );
-
-  return { Link };
+  };
 });
 
 describe('ContextMenuLink.ios', () => {
   let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    mockLinkProps = undefined;
+  });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
   });
 
-  it('renders a route preview and native context actions', () => {
+  it('keeps the route trigger accessible while retaining native context actions', () => {
     const onDelete = jest.fn();
 
     act(() => {
@@ -49,42 +60,22 @@ describe('ContextMenuLink.ios', () => {
             },
           ]}
         >
-          <Pressable>
+          <Pressable accessibilityLabel="Session" accessibilityRole="link">
             <Text>Session</Text>
           </Pressable>
         </ContextMenuLink>,
       );
     });
 
-    expect(renderer!.root.findByProps({ testID: 'link' }).props.href).toEqual({
+    expect(mockLinkProps?.href).toEqual({
       pathname: '/sessions',
       params: { sessionId: 'session-1' },
     });
-    expect(renderer!.root.findByProps({ testID: 'link' }).props.asChild).toBe(true);
-    const preview = renderer!.root.findByProps({ testID: 'link-preview' });
-    expect(preview.props.style.width).toBeGreaterThan(0);
-    expect(preview.props.style.height).toBe(preview.props.style.width);
-    expect(renderer!.root.findByProps({ testID: 'action-Delete' }).props).toMatchObject({
-      destructive: true,
-    });
-    expect(renderer!.root.findByProps({ testID: 'action-Delete' }).props.icon).toBeUndefined();
-
-    act(() => renderer!.root.findByProps({ testID: 'action-Delete' }).props.onPress());
-    expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-
-  it('can render a native context menu without a route preview', () => {
-    act(() => {
-      renderer = create(
-        <ContextMenuLink href="/agents/agent-1/edit" items={[]} preview={false}>
-          <Pressable>
-            <Text>Agent</Text>
-          </Pressable>
-        </ContextMenuLink>,
-      );
-    });
-
-    expect(renderer!.root.findByProps({ testID: 'link-menu' })).toBeTruthy();
-    expect(renderer!.root.findAllByProps({ testID: 'link-preview' })).toHaveLength(0);
+    expect(mockLinkProps?.asChild).toBe(true);
+    const accessibleRow = renderer!.root.findByProps({ accessibilityLabel: 'Session' });
+    expect(accessibleRow.props.accessibilityRole).toBe('link');
+    expect(renderer!.root.findByProps({ testID: 'context-menu' }).props.items).toEqual([
+      expect.objectContaining({ destructive: true, id: 'delete', onPress: onDelete }),
+    ]);
   });
 });

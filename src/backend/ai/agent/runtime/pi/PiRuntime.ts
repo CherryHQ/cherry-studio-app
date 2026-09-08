@@ -1,4 +1,5 @@
 import type {
+  AgentContext as PiAgentContext,
   AgentEvent as PiAgentEvent,
   AgentMessage as PiAgentMessage,
   AgentTool as PiAgentTool,
@@ -26,6 +27,7 @@ import {
 import type {
   AgentRuntime,
   AgentRuntimeSession,
+  MessageRuntimeTimingSink,
   RuntimeDescriptor,
   RuntimeError,
   RuntimeEvent,
@@ -57,6 +59,7 @@ import {
   type PiMetaToolActivity,
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
+import { disablePiToolCalls } from './piToolChoice';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -110,10 +113,15 @@ export type PiRuntimeLimits = {
 };
 
 export const DEFAULT_PI_RUNTIME_LIMITS: PiRuntimeLimits = Object.freeze({
-  maxToolCalls: 16,
-  maxToolSteps: 8,
+  maxToolCalls: 64,
+  maxToolSteps: 20,
   turnTimeoutMs: 10 * 60 * 1000,
 });
+
+const TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS =
+  'The tool budget for this turn is exhausted. Tools are now unavailable. ' +
+  'Give your final answer using the information already collected. ' +
+  'Clearly state any remaining uncertainty or unfinished work; do not invent results or request more tools.';
 
 const TOOL_CALL_LIMIT_ERROR: RuntimeError = {
   code: 'tool_call_limit_exceeded',
@@ -211,24 +219,28 @@ type ActiveTurn = {
   currentMessageOrdinal?: number;
   dispatchCalls: Map<string, RuntimeJsonValue>;
   failedToolCalls: Set<string>;
-  hasUsage: boolean;
+  recordedInvocations: Set<string>;
+  recordedResponses: WeakSet<AssistantMessage>;
+  nextInvocationOrdinal: number;
+  unavailableTools: Map<string, RuntimeToolResult>;
   limitError?: RuntimeError;
   modelContextHeadroomTokens: number;
   nextMessageOrdinal: number;
   nextPartIndex: number;
   phase: TurnPhase;
+  runtimeTimingSink?: MessageRuntimeTimingSink;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
+  toolBudgetError?: RuntimeError;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
   toolParts: Map<string, ToolPartBase>;
+  tools: readonly RuntimeTool[];
   toolStepCount: number;
   turnId: string;
-  usage: RuntimeUsage;
   usageContext?: RuntimeUsageContext;
-  usageReported: boolean;
 };
 
 async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent> {
@@ -377,7 +389,7 @@ function isRetryableProviderFailure(
   }
   if (RETRYABLE_PROVIDER_ERROR_CODES.has(code.toUpperCase())) return true;
 
-  return /(?:connection (?:failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
+  return /(?:connection (?:error|failed|reset)|fetch failed|network request failed|premature close|stream (?:closed|ended unexpectedly)|timed? out)/iu.test(
     message,
   );
 }
@@ -537,21 +549,6 @@ function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   };
 }
 
-function mergeRuntimeUsage(current: RuntimeUsage, next: RuntimeUsage): RuntimeUsage {
-  const merged: RuntimeUsage = {
-    cacheReadTokens: (current.cacheReadTokens ?? 0) + (next.cacheReadTokens ?? 0),
-    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + (next.cacheWriteTokens ?? 0),
-    inputTokens: (current.inputTokens ?? 0) + (next.inputTokens ?? 0),
-    noCacheTokens: (current.noCacheTokens ?? 0) + (next.noCacheTokens ?? 0),
-    outputTokens: (current.outputTokens ?? 0) + (next.outputTokens ?? 0),
-    totalTokens: (current.totalTokens ?? 0) + (next.totalTokens ?? 0),
-  };
-  if (current.reasoningTokens !== undefined || next.reasoningTokens !== undefined) {
-    merged.reasoningTokens = (current.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0);
-  }
-  return merged;
-}
-
 function resolveThinkingLevel(
   request: RuntimeExecutionRequest,
   resolution: PiModelResolution,
@@ -606,27 +603,23 @@ class PiRuntimeSession implements AgentRuntimeSession {
       channel,
       dispatchCalls: new Map(),
       failedToolCalls: new Set(),
-      hasUsage: false,
+      recordedInvocations: new Set(),
+      recordedResponses: new WeakSet(),
+      nextInvocationOrdinal: 0,
+      unavailableTools: new Map(),
       modelContextHeadroomTokens: 0,
       nextMessageOrdinal: 0,
       nextPartIndex: 0,
       phase: 'running',
+      runtimeTimingSink: request.runtimeTimingSink,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
+      tools: request.tools,
       toolStepCount: 0,
       turnId: request.turnId,
-      usage: {
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        inputTokens: 0,
-        noCacheTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-      },
-      usageReported: false,
     };
     this.activeTurn = turn;
     turn.timeoutHandle = setTimeout(() => this.timeoutTurn(turn), this.limits.turnTimeoutMs);
@@ -732,23 +725,41 @@ class PiRuntimeSession implements AgentRuntimeSession {
               systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
             }
           : baseConversation;
+      const hasAvailableTools = () => piTools.some((tool) => !turn.unavailableTools.has(tool.name));
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
-      const streamFn: PiModelResolution['streamFn'] = (model, context, options) =>
-        resolution.streamFn(model, context, {
+      const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
+        const stream = await resolution.streamFn(model, context, {
           ...options,
+          onPayload:
+            turn.toolBudgetError || (turn.unavailableTools.size > 0 && !hasAvailableTools())
+              ? async (payload, model) =>
+                  disablePiToolCalls(
+                    (await options?.onPayload?.(payload, model)) ?? payload,
+                    model.api,
+                  )
+              : options?.onPayload,
           signal: options?.signal
             ? AbortSignal.any([options.signal, turn.abortController.signal])
             : turn.abortController.signal,
         });
+        // Match desktop Pi: capture completed calls before the agent can cancel
+        // between the provider result and message_end. Pi owns stream failures.
+        void stream.result().then(
+          (response) => this.recordInvocation(turn, response),
+          () => undefined,
+        );
+        return stream;
+      };
       const models: Pick<Models, 'completeSimple'> = {
-        completeSimple:
-          this.contextOptions.completeSimple ??
-          (async (model, context, options) => {
-            const stream = await streamFn(model, context, options);
-            return stream.result();
-          }),
+        completeSimple: async (model, context, options) => {
+          const response = this.contextOptions.completeSimple
+            ? await this.contextOptions.completeSimple(model, context, options)
+            : await (await streamFn(model, context, options)).result();
+          this.recordInvocation(turn, response);
+          return response;
+        },
       };
       const compactionRedactions = [
         ...secrets,
@@ -783,21 +794,22 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
         return;
       }
-      if (contextPlan.usage) {
-        turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(contextPlan.usage));
-        turn.hasUsage = true;
-      }
       if (contextPlan.checkpoint) {
         this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
       }
       const outputReserveTokens = request.options.maxOutputTokens ?? resolution.model.maxTokens;
+      let modelContext: Pick<PiAgentContext, 'systemPrompt' | 'tools'> = {
+        systemPrompt: conversation.systemPrompt,
+        tools: piTools,
+      };
+      let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         turn.modelContextHeadroomTokens = estimatePiLoopContextHeadroomTokens({
           contextWindow: resolution.model.contextWindow,
           messages,
           outputReserveTokens,
-          systemPrompt: conversation.systemPrompt,
-          tools: piTools,
+          systemPrompt: modelContext.systemPrompt,
+          tools: modelContext.tools ?? [],
         });
       };
       updateModelContextHeadroom([...contextPlan.messages, conversation.prompt]);
@@ -812,20 +824,50 @@ class PiRuntimeSession implements AgentRuntimeSession {
           tools: piTools,
         },
         prepareNextTurnWithContext: ({ context, toolResults }) => {
+          if (responsePhase === 'final-response') {
+            responsePhase = 'done';
+            if (toolResults.length > 0) turn.limitError = turn.toolBudgetError;
+            return undefined;
+          }
+          if (toolResults.length === 0 || turn.phase !== 'running') return undefined;
+
+          turn.toolStepCount += 1;
+          if (turn.toolCallCount >= this.limits.maxToolCalls) {
+            turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+          } else if (turn.toolStepCount >= this.limits.maxToolSteps) {
+            turn.toolBudgetError ??= TOOL_STEP_LIMIT_ERROR;
+          }
+          const nextContext: PiAgentContext = {
+            ...context,
+            systemPrompt: turn.toolBudgetError
+              ? `${context.systemPrompt}\n\n${TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS}`
+              : context.systemPrompt,
+            // A tool-free answer still needs definitions for its tool history.
+            // streamFn disables selection; runtime guards reject further calls.
+            tools:
+              turn.toolBudgetError || !hasAvailableTools()
+                ? piTools
+                : context.tools?.filter((tool) => !turn.unavailableTools.has(tool.name)),
+          };
+          modelContext = nextContext;
           updateModelContextHeadroom(context.messages);
-          if (toolResults.length > 0 && turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
+          if (turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
             turn.limitError = TOOL_LOOP_CONTEXT_ERROR;
+          }
+          if (turn.limitError) return undefined;
+
+          // Pi prepares the next context before asking whether to stop. Allow
+          // this one response, then stop even if the model asks for more tools.
+          if (turn.toolBudgetError) responsePhase = 'final-response';
+          if (turn.toolBudgetError || turn.unavailableTools.size > 0) {
+            return { context: nextContext };
           }
           return undefined;
         },
-        shouldStopAfterTurn: ({ toolResults }) => {
-          if (toolResults.length > 0) {
-            turn.toolStepCount += 1;
-            if (turn.toolStepCount >= this.limits.maxToolSteps && !turn.limitError) {
-              turn.limitError = TOOL_STEP_LIMIT_ERROR;
-            }
-          }
-          return turn.limitError !== undefined || turn.phase !== 'running';
+        shouldStopAfterTurn: () => {
+          return (
+            responsePhase === 'done' || turn.limitError !== undefined || turn.phase !== 'running'
+          );
         },
         streamFn,
         toolExecution: 'parallel',
@@ -863,12 +905,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
 
-      this.emit(turn, {
-        type: 'usage',
-        completedAt: Date.now(),
-        context: resolution.usageContext,
-        usage: turn.usage,
-      });
       if (turn.limitError) {
         this.emit(turn, { type: 'failed', error: turn.limitError });
         return;
@@ -895,7 +931,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         case 'pending':
           this.emit(turn, {
             type: 'failed',
-            error: {
+            error: turn.toolBudgetError ?? {
               code: 'runtime_error',
               message: `Pi ended with unsupported stop reason: ${terminal.stopReason}.`,
               retryable: false,
@@ -931,6 +967,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         break;
       case 'message_end':
         if (event.message.role === 'assistant') {
+          this.recordInvocation(turn, event.message);
           turn.currentMessageOrdinal = undefined;
           turn.modelContextHeadroomTokens -= estimatePiMessagesTokens([event.message]);
         }
@@ -938,8 +975,6 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
-          turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
-          turn.hasUsage = true;
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;
@@ -1059,12 +1094,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     turn.toolCallCount += 1;
-    if (turn.toolCallCount > this.limits.maxToolCalls) {
-      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
-      turn.limitError = TOOL_CALL_LIMIT_ERROR;
+    if (turn.toolBudgetError || turn.toolCallCount > this.limits.maxToolCalls) {
+      turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+      const output = createErrorToolResult(turn.toolBudgetError);
       this.replaceToolPart(turn, part, {
         state: 'error',
-        error: TOOL_CALL_LIMIT_ERROR,
+        error: turn.toolBudgetError,
         output,
       });
       turn.failedToolCalls.add(toolCallId);
@@ -1073,6 +1108,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
       return output;
     }
 
+    const toolStartedAt = performance.now();
+    turn.runtimeTimingSink?.onToolExecutionStart({
+      callId: toolCallId,
+      toolName: activity.providerName,
+    });
     try {
       const modelOutputCharacterLimit = Math.floor(
         Math.max(0, turn.modelContextHeadroomTokens) * PI_ESTIMATED_CHARACTERS_PER_TOKEN,
@@ -1109,6 +1149,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.settledToolCalls.add(toolCallId);
       this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
       return output;
+    } finally {
+      turn.runtimeTimingSink?.onToolExecutionEnd({
+        callId: toolCallId,
+        toolName: activity.providerName,
+        durationMs: Math.max(0, performance.now() - toolStartedAt),
+      });
     }
   }
 
@@ -1133,17 +1179,29 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     turn.toolCallCount += 1;
-    if (turn.toolCallCount > this.limits.maxToolCalls) {
-      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
-      turn.limitError = TOOL_CALL_LIMIT_ERROR;
+    if (turn.toolBudgetError || turn.toolCallCount > this.limits.maxToolCalls) {
+      turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+      const output = createErrorToolResult(turn.toolBudgetError);
       this.replaceToolPart(turn, part, {
         state: 'error',
-        error: TOOL_CALL_LIMIT_ERROR,
+        error: turn.toolBudgetError,
         output,
       });
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       return output;
+    }
+
+    const unavailable = turn.unavailableTools.get(runtimeTool.providerName);
+    if (unavailable) {
+      this.replaceToolPart(turn, part, {
+        state: 'error',
+        error: unavailable.failure?.error,
+        output: unavailable,
+      });
+      turn.failedToolCalls.add(toolCallId);
+      turn.settledToolCalls.add(toolCallId);
+      return unavailable;
     }
 
     if (runtimeTool.approval === 'deny') {
@@ -1208,6 +1266,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     this.replaceToolPart(turn, part, { state: 'running' });
+    const toolStartedAt = performance.now();
+    turn.runtimeTimingSink?.onToolExecutionStart({
+      callId: toolCallId,
+      toolName: runtimeTool.providerName,
+    });
     try {
       const callbackSignal = signal
         ? AbortSignal.any([turn.abortController.signal, signal])
@@ -1220,7 +1283,22 @@ class PiRuntimeSession implements AgentRuntimeSession {
       if (turn.phase !== 'running' || callbackSignal.aborted) {
         return this.interruptToolCall(turn, part);
       }
-      this.replaceToolPart(turn, part, { state: 'output-available', output });
+      if (output.failure) {
+        this.replaceToolPart(turn, part, { state: 'error', error: output.failure.error, output });
+        turn.failedToolCalls.add(toolCallId);
+        if (output.failure.scope === 'tool') {
+          turn.unavailableTools.set(runtimeTool.providerName, output);
+          if (runtimeTool.failureGroup) {
+            for (const tool of turn.tools) {
+              if (tool.failureGroup === runtimeTool.failureGroup) {
+                turn.unavailableTools.set(tool.providerName, output);
+              }
+            }
+          }
+        }
+      } else {
+        this.replaceToolPart(turn, part, { state: 'output-available', output });
+      }
       turn.settledToolCalls.add(toolCallId);
       this.emitArtifacts(turn, toolCallId, output);
       return output;
@@ -1240,6 +1318,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       return output;
+    } finally {
+      turn.runtimeTimingSink?.onToolExecutionEnd({
+        callId: toolCallId,
+        toolName: runtimeTool.providerName,
+        durationMs: Math.max(0, performance.now() - toolStartedAt),
+      });
     }
   }
 
@@ -1518,23 +1602,36 @@ class PiRuntimeSession implements AgentRuntimeSession {
     this.abortExecution(turn, new Error('The Agent turn timed out.'));
   }
 
+  private recordInvocation(turn: ActiveTurn, message: AssistantMessage): void {
+    if (
+      !turn.usageContext ||
+      turn.phase === 'terminated' ||
+      message.stopReason === 'error' ||
+      message.stopReason === 'aborted'
+    )
+      return;
+    if (turn.recordedResponses.has(message)) return;
+    turn.recordedResponses.add(message);
+    const modelId = message.responseModel ?? message.model;
+    const requestId = `pi-agent:${turn.turnId}:${message.responseId ?? `call-${turn.nextInvocationOrdinal++}`}:${modelId}`;
+    if (turn.recordedInvocations.has(requestId)) return;
+    turn.recordedInvocations.add(requestId);
+    this.emit(turn, {
+      type: 'usage',
+      requestId,
+      completedAt: Date.now(),
+      context: { ...turn.usageContext, modelId },
+      usage: toRuntimeUsage(message.usage),
+    });
+  }
+
   private emit(turn: ActiveTurn, event: RuntimeEvent): void {
     if (turn.phase === 'terminated') return;
-    if (event.type === 'usage') turn.usageReported = true;
     const isTerminal =
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
       turn.abortController.abort();
-      if (turn.hasUsage && !turn.usageReported && turn.usageContext) {
-        turn.usageReported = true;
-        turn.channel.push({
-          type: 'usage',
-          completedAt: Date.now(),
-          context: turn.usageContext,
-          usage: turn.usage,
-        });
-      }
       this.interruptUnsettledToolParts(turn);
       turn.phase = 'terminated';
       this.rejectApprovals(turn, new Error('The turn reached a terminal state.'));

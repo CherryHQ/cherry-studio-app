@@ -1,6 +1,13 @@
+import { File } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import type {
+  PrepareFileAttachmentsInput,
+  PreparedFile,
+  ResolvedFile,
+} from '@/shared/contracts/file';
+import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import {
   type FileEntry,
   type FileEntryId,
@@ -11,6 +18,7 @@ import {
   SafeNameSchema,
 } from '@/shared/data/types/file';
 
+import { readDocumentUriText } from './documentText';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
@@ -21,8 +29,12 @@ import {
   deleteInternalEntry,
   discardInternalEntries,
   getFileUri,
+  readFileUriBytes,
   resolveFileEntry,
+  rewriteInternalTextEntry,
+  subscribeFileChanges,
 } from './fileStorage';
+import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema.optional(),
@@ -45,6 +57,7 @@ const createTextEntryInputSchema = z.strictObject({
  * factory to inject.
  */
 export const fileContent = {
+  subscribeChanges: subscribeFileChanges,
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
    * port is import-only by contract, which is why it fixes the provenance
@@ -85,7 +98,64 @@ export const fileContent = {
     const validated = createTextEntryInputSchema.parse(input);
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
   },
+  prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
+    const signal = input.signal ?? new AbortController().signal;
+    const resolved = new Map<string, ResolvedFile>();
+    const facts = new Map<string, FileAttachmentFact>();
+    for (const id of input.fileEntryIds) {
+      signal.throwIfAborted();
+      if (resolved.has(id)) continue;
+      const parsed = FileEntryIdSchema.safeParse(id);
+      if (!parsed.success) throw new FileAttachmentError({ code: 'unavailable' });
+      const unavailable = new FileAttachmentError({
+        code: 'unavailable',
+        fileEntryId: parsed.data,
+      });
+      try {
+        const file = await resolveFileEntry(fileEntryService, parsed.data);
+        if (!file) throw unavailable;
+        facts.set(id, {
+          fileEntryId: file.entry.id,
+          mediaType: file.entry.mediaType,
+          name: file.entry.filename,
+          size: new File(file.uri).size,
+        });
+        resolved.set(id, file);
+      } catch {
+        signal.throwIfAborted();
+        // Native errors may contain private paths; expose only the managed reference.
+        throw unavailable;
+      }
+    }
+    const prepared = await prepareFileAttachments({
+      availableFiles: facts,
+      currentFileEntryIds: input.fileEntryIds,
+      readBytes: (file, readSignal) =>
+        readFileUriBytes(resolved.get(file.fileEntryId)!.uri, readSignal),
+      readDocumentText: (file, readSignal) =>
+        readDocumentUriText(resolved.get(file.fileEntryId)!.uri, file.mediaType, readSignal),
+      signal,
+      target: input.target,
+    });
+    return input.fileEntryIds.map((id) => {
+      const attachment = prepared.get(id)!;
+      return {
+        ...resolved.get(id)!,
+        report: attachment.report,
+        ...(attachment.text !== undefined ? { text: attachment.text } : {}),
+      };
+    });
+  },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
+  /**
+   * Replace a draft text entry's bytes in place. Only a turn's own artifact is
+   * a draft; the caller (the edit tool) proves that through its turn ledger.
+   */
+  rewriteTextEntry: (input: { data: string; id: FileEntryId }) =>
+    rewriteInternalTextEntry(fileEntryService, {
+      data: input.data,
+      id: FileEntryIdSchema.parse(input.id),
+    }),
   generatePreviewUri: generateFilePreviewUri,
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
   resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),

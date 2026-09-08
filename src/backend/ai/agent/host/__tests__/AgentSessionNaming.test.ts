@@ -2,6 +2,7 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { LanguageVarious } from '@/shared/data/preference';
 
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import { AgentSessionNaming } from '../AgentSessionNaming';
@@ -17,6 +18,7 @@ function deferred<TValue>() {
 }
 
 function createNaming(input: {
+  appLanguage?: LanguageVarious;
   defaultModelId?: string | null;
   generateText?: AiService['generateText'];
   namingModelId?: string | null;
@@ -33,12 +35,12 @@ function createNaming(input: {
       if (key === 'agent.session_naming.model_id') return input.namingModelId ?? null;
       if (key === 'agent.default_model_id') return defaultModelId;
       if (key === 'agent.session_naming.prompt') return '';
-      if (key === 'app.language') return 'en-us';
       return null;
     }),
   } as unknown as PreferenceService;
   const naming = new AgentSessionNaming({
     ai: { generateText } as Pick<AiService, 'generateText'>,
+    appLanguage: () => input.appLanguage ?? 'en-US',
     model: { getById: jest.fn(async () => ({})) } as unknown as Pick<ModelService, 'getById'>,
     preference,
     provider: {
@@ -88,6 +90,27 @@ describe('AgentSessionNaming', () => {
       }),
     );
     expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty('reasoningEffort');
+  });
+
+  test('uses the effective App language in the summary naming prompt', async () => {
+    const { generateText, naming, store } = createNaming({ appLanguage: 'zh-CN' });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+
+    await naming.maybeRenameFromConversationSummary({
+      assistantParts: [
+        { id: 'text-1', state: 'done', text: 'Earth blocks the sunlight.', type: 'text' },
+      ],
+      sessionId: session.id,
+      userParts,
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('title in zh-CN'),
+      }),
+    );
   });
 
   test('keeps the first-message title when no usable naming model is configured', async () => {

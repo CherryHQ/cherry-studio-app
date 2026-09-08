@@ -1,4 +1,6 @@
-import { preferenceTable } from '@/backend/data/db/schemas';
+import { eq } from 'drizzle-orm';
+
+import { DEFAULT_PREFERENCE_SCOPE, preferenceTable } from '@/backend/data/db/schemas';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
 import { hashObject } from '../hashObject';
@@ -17,7 +19,8 @@ export class PreferenceSeeder implements DatabaseSeeder {
     const stored = await dbService
       .getDb()
       .select({ key: preferenceTable.key })
-      .from(preferenceTable);
+      .from(preferenceTable)
+      .where(eq(preferenceTable.scope, DEFAULT_PREFERENCE_SCOPE));
     const storedKeys = new Set(stored.map((preference) => preference.key));
     const missing = Object.entries(PreferenceDefaults).filter(([key]) => !storedKeys.has(key));
 
@@ -30,7 +33,10 @@ export class PreferenceSeeder implements DatabaseSeeder {
     await dbService.withWriteTx(async (tx) => {
       for (const [key, value] of missing) {
         // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
-        await tx.insert(preferenceTable).values({ key, value }).onConflictDoNothing();
+        await tx
+          .insert(preferenceTable)
+          .values({ key, scope: DEFAULT_PREFERENCE_SCOPE, value })
+          .onConflictDoNothing();
       }
     });
   }

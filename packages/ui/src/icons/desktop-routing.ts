@@ -1,5 +1,5 @@
 /**
- * Generated from desktop icon routing at commit 55feedb21473daf04792962db81ca66ab53e58a0.
+ * Generated from desktop icon routing at commit 9320c74569bc3cc536d94220ab597d8de0298d0c.
  * Do not edit directly. Run `pnpm design:sync --desktop-root <path>`.
  */
 
@@ -130,7 +130,7 @@ export const MODEL_ICON_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   // `seed-2.0-lite`/`seed-1.6` match, while `seedream`/`seedance` keep their explicit alts
   [/doubao|seedream|seedance|ep-202|(?:^|[-_/])seed(?:[-_\d]|$)/i, 'doubao'],
   [/^(?:hunyuan|hy-|hy\d)/i, 'hunyuan'],
-  [/kimi|moonshot/i, 'kimi'],
+  [/kimi|moonshot|^k3(?:[-_.]|$)/i, 'kimi'],
   // Other model-specific icons
   [/grok/i, 'grok'],
   [/hailuo/i, 'hailuo'],
@@ -286,5 +286,6 @@ export const PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
   aionly: 'ai-only',
   dashscope: 'bailian',
   zai: 'z-ai',
-  'minimax-global': 'minimax'
+  'minimax-global': 'minimax',
+  cherryai: 'cherryin'
 };

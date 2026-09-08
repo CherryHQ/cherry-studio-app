@@ -13,10 +13,9 @@ Cherry uses two visually matching surfaces during every process cold start:
 | Native launch screen | `expo-splash-screen` config plugin | System Light/Dark | The React Native cover has completed layout and crossed two composited frames |
 | React Native startup cover | App shell `StartupCoordinator` | Appearance frozen from the system at process start | Bootstrap and initial content are ready, and 800 ms has elapsed since the cover visibly replaced the native surface |
 
-The native and React Native surfaces use the same transparent
-`assets/cherry-studio-splash-logo.png` at 96 dp on `#FFFFFF` in Light appearance and `#000000`
-in Dark appearance. The logo remains `#FF5757` in both modes. The native surface contains no
-attribution or animation.
+The native and React Native surfaces use the same desktop-aligned `assets/icon.png` at 96 dp on
+`#FFFFFF` in Light appearance and `#000000` in Dark appearance. The brand artwork remains fixed in
+both modes. The native surface contains no attribution or animation.
 
 The React Native cover adds a two-line `from` / `Cherry Studio` attribution 48 dp above the bottom
 safe area. The centered logo stays fixed across the native-to-React handoff, while the attribution

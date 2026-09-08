@@ -9,9 +9,10 @@ history, message rows and parts, viewport following, and scroll restoration.
 - `MessageList` renders a virtualized history from `MessageListItem` values and delegates
   every row to the feature-owned `renderMessage` function.
 - `MessageListItem` contains only the persistence-neutral fields needed for rendering. Its optional
-  `partKeys` carries source-owned part identity beside the projected visual parts; `systemEvent`
-  carries a feature-synthesized timeline row such as a fork origin. Renderers never synthesize
-  positional part identity when source identity is available.
+  `stats.runtimeTiming` carries message-owned execution timing; `partKeys` carries source-owned part
+  identity beside the projected visual parts; `systemEvent` carries a feature-synthesized timeline
+  row such as a fork origin. Renderers never synthesize positional part identity when source
+  identity is available.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, dataset
   identity, bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered
   state that is not carried by message items.
@@ -220,8 +221,9 @@ bootstrap once, and the controller adopts following mode without issuing a secon
 
 Keyboard lift remains `whenAtEnd`: focusing the composer must not move a viewport that is reading
 history. The keyboard controller is a platform geometry adapter; it never transitions the product
-following/reading state. A local send uses its keyboard-aware scroll helper once so keyboard
-dismissal and the animated return to the live edge share one operation.
+following/reading state. A local send keeps keyboard geometry updates active while awaiting
+dismissal, then scrolls to the live edge after the keyboard inset clears. A dataset switch or
+committed drag during dismissal cancels that pending scroll.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 horizontally scrollable attachment strip sits above the optional bubble. This is a presentation

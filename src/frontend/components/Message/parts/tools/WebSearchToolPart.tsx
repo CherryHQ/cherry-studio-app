@@ -6,7 +6,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { enrichWebSources, parseWebSources } from '../webSource';
 import { WebSourceCard } from '../WebSourceCard';
-import { getToolStatusTone, type ToolMessagePart } from './toolPartState';
+import { getToolName, getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
   messageParts?: readonly CherryMessagePart[];
@@ -17,10 +17,24 @@ export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps
   const { t } = useTranslation();
   const rawResults = part.state === 'output-available' ? parseWebSources(part.output) : [];
   const results = messageParts ? enrichWebSources(rawResults, messageParts) : rawResults;
-  const statusText = getWebSearchStatusText(part, results.length, t);
-  const actionTitle = t('chat.builtinTool.web.search');
+  const outputError =
+    part.state === 'output-available' && isRecord(part.output) && part.output.status === 'error'
+      ? typeof part.output.message === 'string'
+        ? part.output.message
+        : t('chat.tool.callError')
+      : undefined;
+  const statusText =
+    outputError !== undefined
+      ? t('chat.tool.callError')
+      : getWebSearchStatusText(part, results.length, t);
+  const isFetch = getToolName(part) === 'web_fetch';
+  const actionTitle = t(isFetch ? 'chat.builtinTool.web.fetch' : 'chat.builtinTool.web.search');
   const detailTitle =
-    results.length > 0 ? t('chat.webSearch.detailTitle', { count: results.length }) : actionTitle;
+    results.length > 0
+      ? t(isFetch ? 'chat.webSearch.fetchDetailTitle' : 'chat.webSearch.detailTitle', {
+          count: results.length,
+        })
+      : actionTitle;
   const isSearching = part.state === 'input-streaming' || part.state === 'input-available';
 
   return (
@@ -29,11 +43,16 @@ export function WebSearchToolPart({ messageParts, part }: WebSearchToolPartProps
       detailVariant="source-list"
       state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
-      statusTone={getToolStatusTone(part)}
+      statusTone={getToolStatusTone(
+        part,
+        part.state === 'output-error' || outputError !== undefined,
+      )}
       testID="web-search-tool-part"
       title={actionTitle}
     >
-      {results.length === 0 ? (
+      {outputError !== undefined ? (
+        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={outputError} />
+      ) : results.length === 0 ? (
         <Text className="text-foreground text-base italic" selectable>
           {statusText}
         </Text>
@@ -73,5 +92,7 @@ function getWebSearchStatusText(
     return part.approval.approved ? t('chat.webSearch.approved') : t('chat.webSearch.denied');
   }
 
-  return t('chat.webSearch.searching');
+  return t(
+    getToolName(part) === 'web_fetch' ? 'chat.webSearch.fetching' : 'chat.webSearch.searching',
+  );
 }

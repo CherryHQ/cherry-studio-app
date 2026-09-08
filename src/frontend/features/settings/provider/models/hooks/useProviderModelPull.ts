@@ -1,77 +1,86 @@
 import { useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { queryKeys, useBackendModule } from '@/frontend/data';
-import { isModelPullTimeoutError } from '@/shared/contracts';
+import { useBackendModule } from '@/frontend/data';
+import {
+  ModelPullError,
+  ModelPullTimeoutError,
+  ProviderSetupError,
+  type ProviderConfigurationIssue,
+} from '@/shared/contracts';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import type { ProviderModelPullPreview } from '../utils/providerModelPullPreview';
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
 
-type UseProviderModelPullOptions = {
-  providerId: string;
-};
+export type ProviderModelPullLoadResult =
+  | 'empty'
+  | 'failed'
+  | 'ready'
+  | 'timedOut'
+  | 'cancelled'
+  | ModelPullError['reason']
+  | ProviderConfigurationIssue;
 
-/**
- * How a pull ended. The caller renders it — the screen a pull runs on has room
- * for a full state, and an alert or a toast on top of that would say the same
- * thing twice. `timedOut` is split from `failed` because it is the one failure
- * worth telling apart: the endpoint answered, just not in time.
- */
-export type ProviderModelPullLoadResult = 'empty' | 'failed' | 'ready' | 'timedOut';
-
-export function useProviderModelPull({ providerId }: UseProviderModelPullOptions) {
+export function useProviderModelPull({ providerId }: { providerId: string }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const models = useBackendModule('models');
   const queryClient = useQueryClient();
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [preview, setPreview] = useState<ProviderModelPullPreview | null>(null);
+  const request = useRef<AbortController | null>(null);
+  const cancelPull = useCallback(() => {
+    request.current?.abort();
+    request.current = null;
+  }, []);
+  useEffect(() => cancelPull, [cancelPull]);
 
   const loadPullPreview = useCallback(async (): Promise<ProviderModelPullLoadResult> => {
-    if (!providerId) {
-      return 'failed';
-    }
-
+    if (!providerId) return 'failed';
+    cancelPull();
+    const controller = new AbortController();
+    request.current = controller;
+    setPreview(null);
     setIsPreviewLoading(true);
-    const load = async (): Promise<ProviderModelPullLoadResult> => {
-      const result = await models.pull(providerId);
-
-      if (result.status === 'up-to-date') {
-        setPreview(null);
-        if (result.providerEnabled) {
-          await refreshProviderQueries(queryClient, providerId);
-        }
-        return 'empty';
-      }
-
+    try {
+      const result = await models.pull(providerId, controller.signal);
+      if (controller.signal.aborted) return 'cancelled';
+      if (result.status === 'up-to-date') return 'empty';
       setPreview(result.preview);
       return 'ready';
-    };
-    return await load()
-      .catch(
-        (error): ProviderModelPullLoadResult =>
-          isModelPullTimeoutError(error) ? 'timedOut' : 'failed',
-      )
-      .finally(() => setIsPreviewLoading(false));
-  }, [models, providerId, queryClient]);
+    } catch (error) {
+      if (controller.signal.aborted) return 'cancelled';
+      if (error instanceof ModelPullTimeoutError) return 'timedOut';
+      if (error instanceof ModelPullError) return error.reason;
+      if (error instanceof ProviderSetupError && error.reason !== 'no-models') return error.reason;
+      return 'failed';
+    } finally {
+      if (request.current === controller) {
+        request.current = null;
+        setIsPreviewLoading(false);
+      }
+    }
+  }, [cancelPull, models, providerId]);
 
-  /** Commits the selected additions and removals after the explicit Save action. */
   const applyModelChange = useCallback(
     async ({ toAdd = [], toRemove = [] }: { toAdd?: Model[]; toRemove?: UniqueModelId[] }) => {
-      if (toAdd.length === 0 && toRemove.length === 0) {
-        return false;
-      }
-
+      if (toAdd.length === 0 && toRemove.length === 0) return false;
       try {
         const result = await models.reconcile(providerId, { toAdd, toRemove });
         await refreshProviderModelQueries(queryClient, providerId);
-        if (result.providerEnabled) {
-          await refreshProviderQueries(queryClient, providerId);
+        const skippedCount = toRemove.length - result.removedIds.length;
+        if (skippedCount > 0) {
+          toast.show({
+            label: t('settings.provider.models.management.protectedSkipped', {
+              count: skippedCount,
+            }),
+            variant: 'warning',
+          });
         }
-        return true;
+        return result.added.length + result.removedIds.length > 0;
       } catch {
         toast.show({ label: t('settings.provider.models.pullApplyFailed'), variant: 'danger' });
         return false;
@@ -80,21 +89,5 @@ export function useProviderModelPull({ providerId }: UseProviderModelPullOptions
     [models, providerId, queryClient, t, toast],
   );
 
-  return {
-    applyModelChange,
-    isPreviewLoading,
-    loadPullPreview,
-    preview,
-  };
-}
-
-async function refreshProviderQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  providerId: string,
-) {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.providers.page() }),
-  ]);
+  return { applyModelChange, cancelPull, isPreviewLoading, loadPullPreview, preview };
 }

@@ -11,10 +11,13 @@ import {
 import { createAiRepair, type RequestContext } from '@cherrystudio/ai-runtime/tools';
 import {
   applyFastModeToProviderOptions,
+  applyServiceTierToProviderOptions,
   buildResolvedReasoningProviderOptions,
   filterStandardParams,
   getTimeout,
+  normalizeServiceTierSelection,
   resolveReasoningInvocation,
+  resolveServiceTierWireValue,
 } from '@cherrystudio/ai-runtime/utils';
 import {
   ENDPOINT_TYPE,
@@ -36,6 +39,7 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { resolveProviderConnection } from '../provider/providerConnection';
 import type { AiSdkGeneratorOptions } from './AiSdkGenerator';
+import { createCustomParamsFetch } from './customParamsFetch';
 import { resolveProviderAiSdkConfig } from './providerConfig';
 
 export interface BuildAgentParamsDependencies {
@@ -105,6 +109,11 @@ export async function buildAgentParams({
     model,
     reasoningEndpointType,
   );
+  const serviceTierControl = providerRegistryService.resolveServiceTierControl(
+    provider,
+    model,
+    endpointType,
+  );
   const invocationModel = reasoningProfile.support
     ? {
         ...model,
@@ -119,7 +128,7 @@ export async function buildAgentParams({
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  const providerOptions =
+  let providerOptions =
     request.reasoningEffort === undefined
       ? {}
       : buildResolvedReasoningProviderOptions({
@@ -128,6 +137,29 @@ export async function buildAgentParams({
           endpointType,
           reasoning,
         });
+  if (serviceTierControl) {
+    const serviceTierSelection = normalizeServiceTierSelection(
+      serviceTierControl,
+      provider.settings.serviceTier,
+    );
+    providerOptions = applyServiceTierToProviderOptions(
+      providerOptions,
+      providerOptionsKey,
+      serviceTierControl,
+      serviceTierSelection,
+    );
+    if (serviceTierControl.wire.delivery.type === 'request-body') {
+      sdkConfig.providerSettings.fetch = createCustomParamsFetch(
+        sdkConfig.providerSettings.fetch ?? globalThis.fetch,
+        {
+          [serviceTierControl.wire.delivery.key]: resolveServiceTierWireValue(
+            serviceTierControl,
+            serviceTierSelection,
+          ),
+        },
+      );
+    }
+  }
   const plugins = buildAgentPlugins({
     aiSdkProviderId: sdkConfig.providerId,
     endpointType,

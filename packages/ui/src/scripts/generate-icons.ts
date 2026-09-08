@@ -244,7 +244,8 @@ export async function generateGroup(group: IconGroup, targetRoot = outputRoot, l
     .filter((fileName) => fileName.endsWith('.svg'))
     .sort();
   const entries: IconEntry[] = [];
-  // Provider icons get their transparent safe-area cropped so logos fill the box.
+  // Match desktop brand sizing: provider logos discard transparent source
+  // padding before being fitted into the shared square asset canvas.
   const shouldTrim = group === 'providers';
 
   rmSync(join(targetRoot, group), { recursive: true, force: true });
@@ -335,11 +336,12 @@ function assertDirectoriesEqual(expectedRoot: string, actualRoot: string) {
   }
 }
 
-async function assertWebpAssetsValid(root: string) {
+async function assertWebpAssetsValid(root: string, group: IconGroup) {
   const webpFiles = listRelativeFiles(root).filter((fileName) => fileName.endsWith('.webp'));
 
   for (const relativePath of webpFiles) {
-    const image = sharp(join(root, relativePath));
+    const assetPath = join(root, relativePath);
+    const image = sharp(assetPath);
     const [metadata, stats] = await Promise.all([image.metadata(), image.stats()]);
     if (metadata.format !== 'webp') {
       throw new Error(`Generated icon must be WebP: ${relativePath}`);
@@ -352,6 +354,35 @@ async function assertWebpAssetsValid(root: string) {
     if (alpha && alpha.max === 0) {
       throw new Error(`Generated icon is fully transparent: ${relativePath}`);
     }
+
+    if (group === 'providers') {
+      const { data, info } = await sharp(assetPath)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      let left = info.width;
+      let top = info.height;
+      let right = -1;
+      let bottom = -1;
+
+      for (let y = 0; y < info.height; y += 1) {
+        for (let x = 0; x < info.width; x += 1) {
+          const pixelAlpha = data[(y * info.width + x) * info.channels + info.channels - 1] ?? 0;
+          if (pixelAlpha <= 4) continue;
+
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
+        }
+      }
+
+      const visibleWidth = right - left + 1;
+      const visibleHeight = bottom - top + 1;
+      if (Math.max(visibleWidth, visibleHeight) !== imageSize) {
+        throw new Error(`Generated provider icon retains transparent safe-area: ${relativePath}`);
+      }
+    }
   }
 }
 
@@ -362,7 +393,7 @@ export async function checkGeneratedIcons() {
     for (const group of ['general', 'models', 'providers'] as const) {
       await generateGroup(group, temporaryRoot, false);
       assertDirectoriesEqual(join(temporaryRoot, group), join(outputRoot, group));
-      await assertWebpAssetsValid(join(outputRoot, group));
+      await assertWebpAssetsValid(join(outputRoot, group), group);
     }
   } finally {
     rmSync(temporaryRoot, { recursive: true, force: true });

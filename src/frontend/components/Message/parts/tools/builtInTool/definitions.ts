@@ -1,6 +1,7 @@
 export type BuiltInToolIconName =
   | 'calendar'
-  | 'file'
+  | 'fileEdit'
+  | 'fileText'
   | 'health'
   | 'image'
   | 'location'
@@ -66,11 +67,15 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     titleKey: 'chat.builtinTool.reminders.update',
   },
   edit_file: {
-    iconName: 'file',
+    iconName: 'fileEdit',
     titleKey: 'chat.builtinTool.file.edit',
   },
+  read_file: {
+    iconName: 'fileText',
+    titleKey: 'chat.builtinTool.file.read',
+  },
   write_file: {
-    iconName: 'file',
+    iconName: 'fileText',
     titleKey: 'chat.builtinTool.file.write',
   },
   generate_image: {

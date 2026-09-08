@@ -10,28 +10,34 @@ import {
   type AgentInputPart,
   type AgentMessageView,
 } from '@/shared/contracts/agent';
+import { FileAttachmentError, type FileAttachmentIssue } from '@/shared/contracts/fileAttachment';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import { fileAttachmentMode, validateFileAttachments } from '@/shared/utils/fileAttachmentPolicy';
 import { isAiSupportedImageMediaType } from '@/shared/utils/imageFileTypes';
 
-import { findImageAttachmentLimit, type ImageAttachmentLimit } from '../resources/imageAttachments';
 import type {
   ManagedFileFact,
   ManagedFileResolver,
   TurnResourceLedger,
 } from '../resources/managedFileResolver';
-import {
-  isSupportedTextAttachment,
-  resolveManagedTextAttachments,
-  TextAttachmentError,
-} from '../resources/textAttachments';
+import { resolveManagedTextAttachments } from '../resources/textAttachments';
 import { raceAbort, unsupportedMediaNote } from '../runtime';
 import type { AgentRuntime, RuntimeInputPart, RuntimeModelPreflight } from '../runtime';
 import type { RuntimeAttachmentContents } from './turnRuntimeInput';
 
 const NO_IMAGE_MEDIA_CAPABILITIES = { image: false, video: true, audio: true } as const;
 
-function fail(code: AgentErrorView['code'], message: string, retryable = false): never {
-  throw new AgentProtocolError({ code, message, retryable });
+function fail(
+  code: AgentErrorView['code'],
+  message: string,
+  attachmentIssue?: FileAttachmentIssue,
+): never {
+  throw new AgentProtocolError({
+    code,
+    message,
+    retryable: false,
+    ...(attachmentIssue ? { attachmentIssue } : {}),
+  });
 }
 
 export type ResolvedManagedInput = {
@@ -57,7 +63,9 @@ export async function resolveManagedInput(
     }
     const parsed = FileEntryIdSchema.safeParse(part.fileEntryId);
     if (!parsed.success) {
-      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.', {
+        code: 'unavailable',
+      });
     }
     return [parsed.data];
   });
@@ -80,7 +88,9 @@ export async function resolveManagedInput(
       );
     } catch {
       signal.throwIfAborted();
-      fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.');
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be verified.', {
+        code: 'unavailable',
+      });
     }
   }
 
@@ -97,10 +107,16 @@ export async function resolveManagedInput(
     }
     const fact = inputFiles.get(part.fileEntryId);
     if (!fact) {
-      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.', {
+        code: 'unavailable',
+      });
     }
     if (part.mediaType !== fact.mediaType || (part.name !== undefined && part.name !== fact.name)) {
-      fail('ATTACHMENT_METADATA_MISMATCH', 'Attached file metadata could not be verified.');
+      fail('ATTACHMENT_METADATA_MISMATCH', 'Attached file metadata could not be verified.', {
+        code: 'metadata-mismatch',
+        fileEntryId: fact.fileEntryId,
+        name: fact.name,
+      });
     }
     return {
       type: 'file',
@@ -126,63 +142,61 @@ export function assertAttachmentRequestSupported(
   resources: TurnResourceLedger,
   model: RuntimeModelPreflight,
 ): void {
-  let hasAttachments = false;
-  const currentImages = input.flatMap((part) => {
-    if (part.type !== 'file') {
-      return [];
-    }
-    const fact = resources.inputFiles.get(part.fileEntryId);
-    if (!fact) {
-      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.');
-    }
-    hasAttachments = true;
-    if (isAiSupportedImageMediaType(fact.mediaType)) {
-      return [fact];
-    }
-    if (isSupportedTextAttachment(fact)) {
-      return [];
-    }
-    fail('ATTACHMENT_INVALID', unsupportedAttachmentMessage(fact));
+  const currentFiles = input.flatMap((part) => {
+    if (part.type !== 'file') return [];
+    const file = resources.inputFiles.get(part.fileEntryId);
+    if (!file)
+      fail('ATTACHMENT_UNAVAILABLE', 'An attached file is no longer available.', {
+        code: 'unavailable',
+      });
+    return [file];
   });
-  const images = [...currentImages];
+  const historicalFiles = history.flatMap((message) =>
+    message.parts.flatMap((part) => {
+      if (part.type !== 'file' || part.purpose !== 'input-attachment') return [];
+      const file = resources.availableFiles.get(part.fileEntryId);
+      return file && fileAttachmentMode(file) ? [file] : [];
+    }),
+  );
+  if (
+    currentFiles.length + historicalFiles.length > 0 &&
+    !runtime.descriptor.capabilities.attachments
+  ) {
+    fail('CAPABILITY_UNSUPPORTED', 'The selected runtime does not support file attachments.', {
+      code: 'runtime-unsupported',
+    });
+  }
+  const acceptsImages = model.inputModalities.includes('image');
+  const historicalImages = acceptsImages
+    ? historicalFiles.filter((file) => fileAttachmentMode(file) === 'image')
+    : [];
+  try {
+    validateFileAttachments([...currentFiles, ...historicalImages], {
+      purpose: 'chat',
+      acceptsImages,
+      maxInputTokens: model.maxInputTokens,
+    });
+  } catch (error) {
+    if (error instanceof FileAttachmentError) failAttachment(error);
+    throw error;
+  }
+}
 
-  for (const message of history) {
-    for (const part of message.parts) {
-      if (part.type !== 'file' || part.purpose !== 'input-attachment') {
-        continue;
-      }
-      const fact = resources.availableFiles.get(part.fileEntryId);
-      if (fact && isAiSupportedImageMediaType(fact.mediaType)) {
-        hasAttachments = true;
-        images.push(fact);
-      } else if (fact && isSupportedTextAttachment(fact)) {
-        hasAttachments = true;
-      }
-    }
-  }
-
-  if (!hasAttachments) {
-    return;
-  }
-  if (!runtime.descriptor.capabilities.attachments) {
-    fail('CAPABILITY_UNSUPPORTED', 'The selected runtime does not support file attachments.');
-  }
-  if (images.length === 0) {
-    return;
-  }
-  if (!model.inputModalities.includes('image')) {
-    if (currentImages.length > 0) {
-      fail('CAPABILITY_UNSUPPORTED', 'The selected model does not accept image attachments.');
-    }
-    // Historical images remain valid transcript references after a model
-    // switch; execution replaces them with text notes without reading bytes.
-    return;
-  }
-
-  const limit = findImageAttachmentLimit(images, model);
-  if (limit) {
-    fail('CAPABILITY_UNSUPPORTED', imageAttachmentLimitMessage(limit));
-  }
+function failAttachment(error: FileAttachmentError): never {
+  const code = error.issue.code;
+  fail(
+    code === 'unavailable'
+      ? 'ATTACHMENT_UNAVAILABLE'
+      : code === 'document-empty'
+        ? 'ATTACHMENT_NO_TEXT'
+        : ['model-unsupported', 'runtime-unsupported', 'count', 'total-bytes', 'context'].includes(
+              code,
+            )
+          ? 'CAPABILITY_UNSUPPORTED'
+          : 'ATTACHMENT_INVALID',
+    error.message,
+    error.issue,
+  );
 }
 
 /** Resolves bounded text attachment bodies, projecting failures to protocol errors. */
@@ -213,17 +227,15 @@ export async function resolveRuntimeTextAttachments(
       currentFileEntryIds,
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
+      readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
       signal,
     });
   } catch (error) {
     signal.throwIfAborted();
-    if (error instanceof TextAttachmentError) {
-      fail(
-        error.failure === 'unavailable' ? 'ATTACHMENT_UNAVAILABLE' : 'ATTACHMENT_INVALID',
-        error.message,
-      );
-    }
-    fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.');
+    if (error instanceof FileAttachmentError) failAttachment(error);
+    fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.', {
+      code: 'unavailable',
+    });
   }
 }
 
@@ -304,21 +316,4 @@ async function resolveRuntimeImages(
     }
   }
   return images;
-}
-
-function imageAttachmentLimitMessage(limit: ImageAttachmentLimit): string {
-  switch (limit) {
-    case 'count':
-      return 'Too many images are attached to this request.';
-    case 'file-bytes':
-      return 'An attached image exceeds the per-file size limit.';
-    case 'total-bytes':
-      return 'The attached images exceed the total request size limit.';
-    case 'context':
-      return 'The attached images exceed the selected model context budget.';
-  }
-}
-
-function unsupportedAttachmentMessage(file: ManagedFileFact): string {
-  return `Attachment ${JSON.stringify(file.name)} has unsupported media type ${JSON.stringify(file.mediaType)}.`;
 }

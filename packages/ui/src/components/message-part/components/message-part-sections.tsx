@@ -50,10 +50,10 @@ export function MessagePartTextSection({
   const textClassName =
     variant === 'code'
       ? tone === 'danger'
-        ? 'font-mono text-destructive text-sm'
+        ? 'font-mono text-error text-sm'
         : 'font-mono text-foreground text-sm'
       : tone === 'danger'
-        ? 'text-base text-destructive'
+        ? 'text-base text-error'
         : 'text-base text-foreground';
 
   return (

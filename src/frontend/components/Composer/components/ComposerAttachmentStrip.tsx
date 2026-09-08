@@ -27,8 +27,9 @@ export function ComposerAttachmentStrip({
   return (
     <ScrollView
       alwaysBounceHorizontal={false}
-      contentContainerClassName="gap-3 pr-1"
+      contentContainerClassName="gap-2 pr-1"
       horizontal
+      keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}
     >
       {attachments.map((attachment) =>
@@ -59,7 +60,7 @@ function ManagedAttachmentTile({
 }) {
   return (
     <View accessibilityLabel={attachment.name}>
-      <FileEntryPreview entryId={attachment.fileEntryId} />
+      <FileEntryPreview entryId={attachment.fileEntryId} variant="attachment" />
       <RemoveBadge onPress={onRemove} />
     </View>
   );
@@ -78,14 +79,14 @@ function ImportingAttachmentTile({
         accessibilityLabel={attachment.name}
         accessibilityState={{ busy: true }}
         accessible
-        className="size-28 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-border bg-secondary p-2"
+        className="size-28 items-start justify-between gap-1 overflow-hidden rounded-2xl bg-secondary p-3"
       >
         <Spinner
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
           size="sm"
         />
-        <Text className="text-center text-base text-muted-foreground" numberOfLines={2}>
+        <Text className="w-full shrink text-sm text-muted-foreground" numberOfLines={3}>
           {attachment.name}
         </Text>
       </View>

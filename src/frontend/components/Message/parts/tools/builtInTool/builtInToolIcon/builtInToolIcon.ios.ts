@@ -1,4 +1,5 @@
-import FileIcon from '@cherrystudio/app-icons/icons/file';
+import FileEditIcon from '@cherrystudio/app-icons/icons/file-edit';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 
@@ -12,7 +13,8 @@ import type { BuiltInToolIcon } from './builtInToolIcon.types';
  */
 const icons: Record<BuiltInToolIconName, BuiltInToolIcon> = {
   calendar: { imageSource: require('../../../../../../../../assets/permissions/ios/calendar.png') },
-  file: { icon: FileIcon },
+  fileEdit: { icon: FileEditIcon },
+  fileText: { icon: FileTextIcon },
   health: { imageSource: require('../../../../../../../../assets/permissions/ios/health.png') },
   image: { icon: ImageIcon },
   location: { imageSource: require('../../../../../../../../assets/permissions/ios/location.png') },

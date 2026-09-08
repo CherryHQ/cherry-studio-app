@@ -103,3 +103,6 @@ jobs:
 
       - name: Documentation Link Check
         run: pnpm docs:check-links
+
+      - name: Skill Check
+        run: pnpm skills:check

@@ -1,10 +1,10 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
-import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
+import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
-import type { PropsWithChildren } from 'react';
+import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -14,6 +14,10 @@ import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
+
+type RegisterEndReachedHandler = (handler?: () => void) => void;
+
+const endReachedThreshold = 24;
 
 /**
  * The sidebar's only scroller: nav rows and the recent sessions scroll together
@@ -27,6 +31,21 @@ export function SidebarBody({ children }: PropsWithChildren) {
   const backgroundColor = useThemeColor('background');
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
+  const endReachedHandlerRef = useRef<(() => void) | undefined>(undefined);
+  const wasNearEndRef = useRef(false);
+  const registerEndReachedHandler = useCallback<RegisterEndReachedHandler>((handler) => {
+    endReachedHandlerRef.current = handler;
+  }, []);
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromEnd = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    const isNearEnd = distanceFromEnd <= endReachedThreshold;
+
+    if (isNearEnd && !wasNearEndRef.current) {
+      endReachedHandlerRef.current?.();
+    }
+    wasNearEndRef.current = isNearEnd;
+  }, []);
 
   return (
     <View className="flex-1">
@@ -47,9 +66,13 @@ export function SidebarBody({ children }: PropsWithChildren) {
                 paddingTop: headerInset,
               }}
               contentInsetAdjustmentBehavior="never"
+              onScroll={handleScroll}
               showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
             >
-              {children ?? <SidebarBodyDefault />}
+              {children ?? (
+                <SidebarBodyDefault registerEndReachedHandler={registerEndReachedHandler} />
+              )}
             </ScrollView>
           )}
         </ContextMenuScrollBoundary>
@@ -60,7 +83,11 @@ export function SidebarBody({ children }: PropsWithChildren) {
 
 SidebarBody.displayName = 'Sidebar.Body';
 
-function SidebarBodyDefault() {
+function SidebarBodyDefault({
+  registerEndReachedHandler,
+}: {
+  registerEndReachedHandler: RegisterEndReachedHandler;
+}) {
   const { t } = useTranslation();
   const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
 
@@ -69,15 +96,26 @@ function SidebarBodyDefault() {
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow
-          icon={LibraryBigIcon}
+          icon={FolderIcon}
           label={t('navigation.library')}
           onPress={openLibrary}
+          testID="sidebar-library"
         />
-        <SidebarNavRow icon={BotIcon} label={t('navigation.agents')} onPress={navigateAgents} />
-        <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
+        <SidebarNavRow
+          icon={MousePointerClickIcon}
+          label={t('navigation.agents')}
+          onPress={navigateAgents}
+          testID="sidebar-agents"
+        />
+        <SidebarNavRow
+          icon={PaletteIcon}
+          label={t('navigation.paintings')}
+          onPress={openPaintings}
+          testID="sidebar-paintings"
+        />
       </View>
 
-      <SidebarRecents />
+      <SidebarRecents registerEndReachedHandler={registerEndReachedHandler} />
     </>
   );
 }

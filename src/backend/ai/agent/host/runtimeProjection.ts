@@ -96,6 +96,21 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
     });
   }
   if (part.type === 'tool') {
+    const runtimeOutput = part.output;
+    const output = runtimeOutput?.failure
+      ? {
+          value: {
+            status: 'error',
+            error: {
+              code: runtimeOutput.failure.error.code,
+              message: runtimeOutput.failure.error.message,
+              retryable: runtimeOutput.failure.error.retryable,
+            },
+            details: runtimeOutput.value,
+          },
+          artifacts: runtimeOutput.artifacts,
+        }
+      : runtimeOutput;
     return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'tool',
@@ -105,7 +120,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       displayName: part.displayName,
       state: part.state,
       ...(part.input !== undefined ? { input: part.input } : {}),
-      ...(part.output !== undefined ? { output: part.output } : {}),
+      ...(output !== undefined ? { output } : {}),
       ...(part.approvalId !== undefined ? { approvalId: part.approvalId } : {}),
       ...(part.error !== undefined ? { error: toAgentErrorView(part.error) } : {}),
     });

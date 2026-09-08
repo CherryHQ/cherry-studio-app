@@ -10,5 +10,5 @@ type FilePartProps = {
 export function FilePart({ part }: FilePartProps) {
   const fileEntryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
 
-  return fileEntryId ? <FileEntryPreview entryId={fileEntryId} /> : null;
+  return fileEntryId ? <FileEntryPreview entryId={fileEntryId} variant="attachment" /> : null;
 }

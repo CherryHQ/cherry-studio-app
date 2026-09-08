@@ -8,6 +8,7 @@ import type {
   AgentUsageView,
   JsonValue,
 } from '@/shared/contracts/agent';
+import type { MessageStats } from '@/shared/data/types/message';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentSessionTable } from './agentSession';
@@ -51,6 +52,8 @@ export const agentSessionMessageTable = sqliteTable(
     status: text().notNull(),
     // Token usage; assistant messages only, committed at settle time
     usage: text({ mode: 'json' }).$type<AgentUsageView>(),
+    // Message-owned runtime timing and desktop-aligned materialized statistics.
+    stats: text({ mode: 'json' }).$type<MessageStats>(),
     // Turn-level error persisted beside the message for the Host's Turn
     // projection; it is not part of the protocol message view.
     error: text({ mode: 'json' }).$type<AgentErrorView>(),
@@ -67,13 +70,6 @@ export const agentSessionMessageTable = sqliteTable(
     // Stable integer surrogate for the FTS5 content_rowid: trigger-assigned,
     // local-only, and nullable because the AFTER INSERT trigger fills it.
     ftsRowid: integer(),
-    // Conversation-event time for recency. Reservation initializes it and
-    // normal terminal settlement advances it; row maintenance and history
-    // copies preserve it so updatedAt remains exclusively the physical row's
-    // latest update time.
-    activityAt: integer()
-      .notNull()
-      .$defaultFn(() => Date.now()),
     ...createUpdateTimestamps,
   },
   (t) => [
@@ -140,7 +136,6 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   // INSERT. MAX+1 is race-free under withWriteTx serialization and O(log N)
   // via agent_session_message_fts_rowid_uniq.
   `CREATE TRIGGER agent_session_message_ai AFTER INSERT ON agent_session_message BEGIN
-    -- activity_at is application-owned and never derived by FTS maintenance.
     UPDATE agent_session_message SET
       fts_rowid = (SELECT COALESCE(MAX(fts_rowid), 0) + 1 FROM agent_session_message),
       searchable_text = ${searchableTextExpression('NEW.data')}
@@ -156,8 +151,12 @@ export const AGENT_SESSION_MESSAGE_FTS_STATEMENTS: string[] = [
   END`,
 
   // Trigger: update searchable_text and sync FTS on UPDATE OF data. fts_rowid
-  // is stable across data edits — only re-keyed delete + re-insert.
-  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF data ON agent_session_message BEGIN
+  // is stable across data edits — only re-keyed delete + re-insert. Unsettled
+  // rows are skipped: a turn's mid-stream snapshots are not worth re-tokenizing,
+  // and searchable_text only changes here, so the settling update still finds
+  // the OLD value it must delete from the index.
+  `CREATE TRIGGER agent_session_message_au AFTER UPDATE OF data ON agent_session_message
+  WHEN NEW.status NOT IN ('pending', 'streaming') BEGIN
     INSERT INTO agent_session_message_fts(agent_session_message_fts, rowid, searchable_text)
     VALUES ('delete', OLD.fts_rowid, OLD.searchable_text);
     UPDATE agent_session_message SET searchable_text = ${searchableTextExpression('NEW.data')} WHERE id = NEW.id;

@@ -58,6 +58,7 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentSessionSnapshotSchema,
+  AgentSessionStatusSchema,
   AgentProtocolError,
   type AgentApprovalView,
   type AgentCapabilities,
@@ -70,6 +71,7 @@ import {
   type AgentMessageView,
   type AgentProtocol,
   type AgentSessionObservation,
+  type AgentSessionStatus,
   type AgentSessionView,
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
@@ -84,11 +86,14 @@ import type {
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
-  RuntimeUsageReport,
+  RuntimeUsage,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
-import { interruptNonTerminalToolParts } from '../sessionStore/messageSettlement';
+import {
+  interruptNonTerminalToolParts,
+  settleStreamingTextParts,
+} from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
@@ -97,6 +102,7 @@ import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
 import { validateRuntimeContextCheckpoint } from './contextCheckpoints';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
+import { MessageRuntimeTimingCollector } from './MessageRuntimeTimingCollector';
 import {
   toAgentApprovalView,
   toAgentErrorView,
@@ -181,8 +187,17 @@ type ActiveTurnState = {
   pendingApprovals: Map<string, AgentApprovalView>;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
+  runtimeTiming: MessageRuntimeTimingCollector;
   sessionTurnIds: Set<string>;
-  usage: RuntimeUsageReport | null;
+  /** Set by a durable-value event; cleared when a snapshot write picks it up. */
+  snapshotDirty: boolean;
+  /** The single in-flight snapshot writer, or null when none is running. */
+  snapshotFlush: Promise<void> | null;
+  /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
+  usage: RuntimeUsage | null;
+  recordedInvocations: Set<string>;
+  /** Analytical writes started by this turn; the terminal write waits for them, the loop does not. */
+  usageWrites: Promise<void>[];
   runtimeSession: AgentRuntimeSession;
 };
 
@@ -208,6 +223,23 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/**
+ * True when the event adds value a restart could not regenerate: a tool
+ * result or a file reference. Text and non-terminal tool states ride along in
+ * the next snapshot; `interrupted` parts only ever precede the terminal write.
+ */
+function isDurableValueEvent(event: RuntimeEvent): boolean {
+  if (event.type !== 'part.add' && event.type !== 'part.replace') {
+    return false;
+  }
+  const { part } = event;
+  return (
+    part.type === 'file' ||
+    (part.type === 'tool' &&
+      (part.state === 'output-available' || part.state === 'denied' || part.state === 'error'))
+  );
+}
+
 function createCompletionSignal(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
   const promise = new Promise<void>((settle) => {
@@ -225,6 +257,8 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  private readonly sessionStatuses = new Map<string, AgentSessionStatus>();
+  private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
   private readonly initialAdmissions = new Set<AdmissionState>();
@@ -327,6 +361,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   protected override onDestroy(): void {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
+    this.sessionStatuses.clear();
+    this.sessionStatusListeners.clear();
     this.observingSessions.clear();
   }
 
@@ -342,6 +378,22 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   // ── Protocol operations ──
+
+  getSessionStatus(sessionId: string): AgentSessionStatus | null {
+    return this.sessionStatuses.get(sessionId) ?? null;
+  }
+
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void {
+    const listeners = this.sessionStatusListeners.get(sessionId) ?? new Set();
+    this.sessionStatusListeners.set(sessionId, listeners);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0 && this.sessionStatusListeners.get(sessionId) === listeners) {
+        this.sessionStatusListeners.delete(sessionId);
+      }
+    };
+  }
 
   async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
     const parsed = AgentStartSessionInputSchema.parse(input);
@@ -469,6 +521,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
       this.deletingSessions.delete(sessionId);
@@ -626,14 +679,18 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     runtimeSession: AgentRuntimeSession,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
-    // The Turn projection starts here: reservation time is the turn start.
+    plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
+    // Match desktop timing ownership: execution starts when the Host launches
+    // the Runtime, independently from the placeholder row's creation time.
+    const runtimeStartedAt = Date.now();
+    const runtimeTiming = new MessageRuntimeTimingCollector(undefined, runtimeStartedAt);
     const turn: AgentTurnView = {
       id: reserved.turnId,
       sessionId,
       status: 'running',
       assistantMessageId: reserved.assistantMessage.id,
       error: null,
-      startedAt: reserved.assistantMessage.createdAt,
+      startedAt: new Date(runtimeStartedAt).toISOString(),
       endedAt: null,
     };
     const state: ActiveTurnState = {
@@ -654,8 +711,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       pendingApprovals: new Map(),
       pendingContextCheckpoint: null,
       resources: plan.resources,
+      runtimeTiming,
       sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
+      snapshotDirty: false,
+      snapshotFlush: null,
       usage: null,
+      recordedInvocations: new Set(),
+      usageWrites: [],
       runtimeSession,
     };
     this.activeTurns.set(sessionId, state);
@@ -715,9 +777,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
         tools: [...plan.tools],
         options: plan.agent.options,
+        runtimeTimingSink: state.runtimeTiming.sink,
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
+        if (isDurableValueEvent(event)) {
+          this.requestSnapshot(sessionId, state);
+        }
         if (MESSAGE_SURFACE_EVENTS.has(event.type)) {
           if (event.type === 'text.delta') {
             state.backgroundReply.update(state.assistantMessage, { deferPreview: true });
@@ -829,6 +895,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         // Approvals and live turn status are Host state by design: they never
         // survive a restart (agent-persistence.md).
         const approval = toAgentApprovalView(event.approval, sessionId);
+        state.runtimeTiming.startApproval(approval.id, approval.toolCallId, approval.displayName);
         state.pendingApprovals.set(approval.id, approval);
         state.turn = { ...state.turn, status: 'awaiting-approval' };
         state.backgroundReply.awaitApproval(state.assistantMessage);
@@ -838,6 +905,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       case 'approval.resolved': {
         const approval = toAgentApprovalView(event.approval, sessionId);
+        state.runtimeTiming.finishApproval({ approvalId: approval.id });
         state.pendingApprovals.set(approval.id, approval);
         const hasPending = [...state.pendingApprovals.values()].some(
           (entry) => entry.status === 'pending',
@@ -850,12 +918,29 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'usage': {
-        // Cumulative; the last report before the terminal event is authoritative.
-        state.usage = {
-          completedAt: event.completedAt,
-          context: event.context,
-          usage: event.usage,
-        };
+        if (state.recordedInvocations.has(event.requestId)) return false;
+        state.recordedInvocations.add(event.requestId);
+        const usage = { ...state.usage };
+        for (const key of Object.keys(event.usage) as (keyof RuntimeUsage)[]) {
+          const value = event.usage[key];
+          if (value !== undefined) usage[key] = (usage[key] ?? 0) + value;
+        }
+        state.usage = usage;
+        // Same rule as snapshots: the event loop never waits on the store. The
+        // write settles before the terminal write so the finalized row carries it.
+        state.usageWrites.push(
+          this.usage.record({
+            agent: state.agent,
+            assistantMessageId: state.assistantMessage.id,
+            report: {
+              requestId: event.requestId,
+              completedAt: event.completedAt,
+              context: event.context,
+              usage: event.usage,
+            },
+            turnId: state.turn.id,
+          }),
+        );
         return false;
       }
       case 'context.checkpoint': {
@@ -891,12 +976,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
   ): Promise<void> {
+    const terminalAt = Date.now();
+    state.runtimeTiming.closeOpenSpans(terminalAt);
+    state.runtimeTiming.complete(terminalAt);
+    const timingSnapshot = state.runtimeTiming.snapshot();
+    const runtimeTiming = {
+      ...timingSnapshot,
+      completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
+    };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      state.assistantMessage.parts.map((part) =>
-        (part.type === 'text' || part.type === 'reasoning') && part.state === 'streaming'
-          ? { ...part, state: 'done' }
-          : part,
-      ),
+      settleStreamingTextParts(state.assistantMessage.parts),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
@@ -905,6 +994,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const messageStatus =
       outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
 
+    // No event follows a terminal one, so nothing can request another snapshot
+    // once this wait ends: the terminal write is the last write to the row.
+    // The recorder logs write failures without rejecting. Finalization preserves
+    // any persisted projection, using the Host aggregate only when none exists.
+    await Promise.all([state.snapshotFlush, ...state.usageWrites]);
     // Invariant 5: the terminal message state (including the turn-level error)
     // commits before the terminal events publish. The terminal turn view is a
     // projection of that committed message.
@@ -912,15 +1006,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
+      usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
+      runtimeStats: { runtimeTiming },
     });
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,
       error,
-      endedAt: finalized.updatedAt,
+      endedAt: new Date(runtimeTiming.completedAt).toISOString(),
     };
 
     if (this.activeTurns.get(sessionId) === state) {
@@ -937,7 +1032,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           : logger.error.bind(logger);
       logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
-        durationMs: Math.max(0, Date.parse(finalized.updatedAt) - Date.parse(state.turn.startedAt)),
+        durationMs: Math.max(0, runtimeTiming.completedAt - runtimeTiming.startedAt),
         hasUsage: state.usage !== null,
         modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
         providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,
@@ -947,34 +1042,64 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sourceCode: error.failure?.source.code,
         sourceLayer: error.failure?.source.layer,
         statusCode: error.failure?.context?.statusCode,
-        totalTokens: state.usage?.usage.totalTokens,
-        turnId: state.turn.id,
-      });
-    }
-    if (state.usage) {
-      this.usage.record({
-        agent: state.agent,
-        assistantMessageId: finalized.id,
-        report: state.usage,
+        totalTokens: state.usage?.totalTokens,
         turnId: state.turn.id,
       });
     }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });
-    const namingPromises = state.autoNamePromise ? [state.autoNamePromise] : [];
+    const initialNamePromise = state.autoNamePromise;
     if (outcome === 'completed' && state.autoNameUserParts) {
       const summaryNamePromise = this.naming.maybeRenameFromConversationSummary({
         assistantParts: finalized.parts,
         sessionId,
         userParts: state.autoNameUserParts,
       });
-      namingPromises.push(summaryNamePromise);
       this.publishSessionRename(summaryNamePromise);
     }
     state.backgroundReply.finish(
       outcome,
-      namingPromises.length > 0 ? { waitFor: Promise.allSettled(namingPromises) } : undefined,
+      initialNamePromise ? { waitFor: initialNamePromise } : undefined,
     );
+  }
+
+  /**
+   * Coalesces snapshot writes: the event loop never waits on the store, one
+   * write is in flight at a time, and a burst of durable-value events collapses
+   * into the single write that starts after the in-flight one settles.
+   */
+  private requestSnapshot(sessionId: string, state: ActiveTurnState): void {
+    state.snapshotDirty = true;
+    state.snapshotFlush ??= this.flushSnapshots(sessionId, state);
+  }
+
+  private async flushSnapshots(sessionId: string, state: ActiveTurnState): Promise<void> {
+    try {
+      while (state.snapshotDirty) {
+        state.snapshotDirty = false;
+        await this.persistStreamingMessage(sessionId, state.assistantMessage);
+      }
+    } finally {
+      state.snapshotFlush = null;
+    }
+  }
+
+  private async persistStreamingMessage(
+    sessionId: string,
+    assistantMessage: AgentMessageView,
+  ): Promise<void> {
+    try {
+      await this.store.updateStreamingAssistantMessage({
+        assistantMessageId: assistantMessage.id,
+        parts: assistantMessage.parts,
+      });
+    } catch (error) {
+      logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
+        assistantMessageId: assistantMessage.id,
+        error: error instanceof Error ? error.message : String(error),
+        sessionId,
+      });
+    }
   }
 
   private async persistTerminalState(
@@ -1117,6 +1242,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private publish(sessionId: string, event: AgentEvent): void {
+    if (event.type === 'turn.updated') {
+      this.updateSessionStatus(
+        sessionId,
+        AgentSessionStatusSchema.parse({ turnId: event.turn.id, status: event.turn.status }),
+      );
+    }
     const sessionListeners = this.listeners.get(sessionId);
     if (!sessionListeners || sessionListeners.size === 0) {
       return;
@@ -1129,6 +1260,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         listener(cloned);
       } catch (error) {
         logger.warn('Agent event listener threw', error as Error);
+      }
+    }
+  }
+
+  private updateSessionStatus(sessionId: string, status: AgentSessionStatus | null): void {
+    const previous = this.getSessionStatus(sessionId);
+    if (previous?.turnId === status?.turnId && previous?.status === status?.status) {
+      return;
+    }
+    if (status) {
+      this.sessionStatuses.set(sessionId, status);
+    } else {
+      this.sessionStatuses.delete(sessionId);
+    }
+    for (const listener of this.sessionStatusListeners.get(sessionId) ?? []) {
+      try {
+        listener();
+      } catch (error) {
+        logger.warn('Agent Session status listener threw', error as Error);
       }
     }
   }

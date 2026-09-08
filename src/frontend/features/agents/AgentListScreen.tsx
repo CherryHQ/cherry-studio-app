@@ -1,4 +1,3 @@
-import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import {
   ContentState,
@@ -127,11 +126,6 @@ export default function AgentListScreen() {
               <View className="px-8 py-16">
                 <ContentState.Empty
                   description={t('agent.list.emptyDescription')}
-                  icon={
-                    <ContentState.Icon>
-                      <BotIcon className="size-7 text-foreground" />
-                    </ContentState.Icon>
-                  }
                   primaryAction={{
                     accessibilityLabel: t('agent.actions.create'),
                     children: t('agent.actions.create'),

@@ -26,6 +26,27 @@ describe('providerToAiSdkConfig', () => {
     expect(config.providerSettings.fetch).toBeUndefined();
   });
 
+  it('uses endpoint stream-options dialect instead of the legacy global flag', async () => {
+    const provider = createProvider({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          baseUrl: 'https://example.com/v1',
+          dialect: { streamOptions: false },
+        },
+      },
+      id: 'custom-openai',
+    });
+
+    const config = await providerToAiSdkConfig(
+      provider,
+      createModel(provider.id, 'custom-model'),
+      createRuntime(),
+    );
+
+    expect(config.providerSettings).toMatchObject({ includeUsage: false });
+  });
+
   it('resolves registered adapter extensions before falling back to openai-compatible', async () => {
     const provider = createProvider({
       id: 'together',
@@ -46,6 +67,28 @@ describe('providerToAiSdkConfig', () => {
     );
 
     expect(config.providerId).toBe('togetherai');
+  });
+
+  it('routes an endpoint-declared image model through the provider image adapter', async () => {
+    const provider = createProvider({
+      id: 'silicon',
+      presetProviderId: 'silicon',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://api.siliconflow.cn/v1',
+        },
+      },
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    });
+    const model = {
+      ...createModel(provider.id, 'opaque-image-model'),
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+    };
+
+    const config = await providerToAiSdkConfig(provider, model, createRuntime());
+
+    expect(config.providerId).toBe('silicon');
   });
 
   it('adds X-Source only to Radeon Cloud chat request headers', async () => {

@@ -3,7 +3,7 @@
 exports[`AiService.generateText AI SDK contract passes model messages when no prompt string is supplied: messages call 1`] = `
 {
   "headers": {
-    "user-agent": "ai/6.0.183",
+    "user-agent": "ai/6.0.185",
   },
   "prompt": [
     {
@@ -40,7 +40,7 @@ exports[`AiService.generateText AI SDK contract passes model messages when no pr
 exports[`AiService.generateText AI SDK contract uses the explicit system prompt and returns text with recorded usage: prompt call 1`] = `
 {
   "headers": {
-    "user-agent": "ai/6.0.183",
+    "user-agent": "ai/6.0.185",
   },
   "prompt": [
     {

@@ -80,6 +80,10 @@ export const userModelTable = sqliteTable(
     /** Supported input modalities (e.g., TEXT, VISION, AUDIO, VIDEO) */
     inputModalities: text({ mode: 'json' }).$type<Modality[]>(),
 
+    /** Whether inputModalities was explicitly supplied by the user. Historical empty arrays predate
+     *  this provenance bit and are treated as an implicit default. */
+    inputModalitiesExplicit: integer({ mode: 'boolean' }).notNull().default(false),
+
     /** Supported output modalities (e.g., TEXT, VISION, AUDIO, VIDEO, VECTOR) */
     outputModalities: text({ mode: 'json' }).$type<Modality[]>(),
 

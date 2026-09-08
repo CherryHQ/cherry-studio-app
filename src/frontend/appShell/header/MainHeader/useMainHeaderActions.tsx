@@ -1,7 +1,7 @@
-import ClockIcon from '@cherrystudio/app-icons/icons/clock';
-import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
+import HistoryIcon from '@cherrystudio/app-icons/icons/history';
 import { useTranslation } from 'react-i18next';
 
+import NewConversationIcon from '../../icons/NewConversationIcon';
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
 import { useMainHeaderAgent } from './MainHeaderAgentButton';
@@ -14,9 +14,10 @@ export function useMainHeaderActions() {
   const rightActions: HeaderToolbarAction[] = [
     {
       accessibilityLabel: t('navigation.newChat'),
-      icon: SquarePenIcon,
+      icon: NewConversationIcon,
       key: 'new-chat',
       onPress: openNewSession,
+      testID: 'main-header-new-chat',
       type: 'icon',
     },
   ];
@@ -24,9 +25,10 @@ export function useMainHeaderActions() {
   if (currentAgentId) {
     rightActions.push({
       accessibilityLabel: t('agent.actions.viewSessions'),
-      icon: ClockIcon,
+      icon: HistoryIcon,
       key: 'agent-history',
       onPress: openAgentHistory,
+      testID: 'main-header-agent-history',
       type: 'icon',
     });
   }

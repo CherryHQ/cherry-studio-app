@@ -1,5 +1,5 @@
 import { ContextMenuScrollBoundary, ScrollToBottomButton } from '@cherrystudio/ui/components';
-import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
+import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +35,6 @@ export function MessageList({
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
-  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
   const {
     handleContentSizeChange,
     handleDisclosureToggle,
@@ -56,7 +55,6 @@ export function MessageList({
     listRef,
     messages,
     onReady,
-    scrollMessageToEnd,
   });
   const isAtBottom = useSharedValue(true);
   const contentHeightRef = useRef({ dataKey, height: 0 });
@@ -134,7 +132,7 @@ export function MessageList({
 
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
-      <View className="flex-1">
+      <View className="flex-1" testID="chat-message-list">
         <ContextMenuScrollBoundary
           onMomentumScrollBegin={handleMomentumScrollBegin}
           onMomentumScrollEnd={handleMomentumScrollEnd}
@@ -155,7 +153,6 @@ export function MessageList({
               estimatedItemSize={300}
               estimatedHeaderSize={contentTopInset}
               extraData={extraData}
-              freeze={freeze}
               getItemType={getMessageRowType}
               keyExtractor={messageKeyExtractor}
               keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}

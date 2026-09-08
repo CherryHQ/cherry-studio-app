@@ -18,6 +18,7 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
+import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { fileContent } from '@/backend/services/file/fileContent';
@@ -51,6 +52,7 @@ import {
   type PaintingToolDependencies,
   resolveConfiguredPaintingModel,
 } from './painting';
+import { createReadFileTool } from './readFileTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
 
@@ -91,6 +93,8 @@ export type SystemCapabilitySource = {
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
     resources: TurnToolResources;
+    /** Attribution for provider calls a tool makes; read when the tool runs. */
+    resolveUsageAttribution?: AiUsageAttributionResolver;
   }): Promise<readonly RuntimeTool[]>;
 };
 
@@ -120,7 +124,7 @@ export function createSystemCapabilitySource(
   overrides: Partial<SystemCapabilitySourceDependencies> = {},
 ): SystemCapabilitySource {
   return {
-    async getTools({ disabledCapabilities, model, resources }) {
+    async getTools({ disabledCapabilities, model, resources, resolveUsageAttribution }) {
       const deps = resolveDependencies(services, overrides);
       if (!(await deps.supportsToolCalling(model))) {
         // Handing tools to a model that cannot call them fails the whole turn.
@@ -128,7 +132,7 @@ export function createSystemCapabilitySource(
       }
 
       const scope = await resolveScope(deps, new Set(disabledCapabilities));
-      const catalog = createCatalog(deps, scope, resources);
+      const catalog = createCatalog(deps, scope, resources, resolveUsageAttribution);
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
@@ -199,21 +203,27 @@ function createCatalog(
   deps: SystemCapabilitySourceDependencies,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
+  resolveUsageAttribution?: AiUsageAttributionResolver,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
-    createEditFileTool({
-      createTextEntry: fileContent.createTextEntry,
-      readAsBytes: managedFileResolver.readAsBytes,
-      resolveAvailable: managedFileResolver.resolveAvailable,
-    }),
+    createEditFileTool(
+      {
+        createTextEntry: fileContent.createTextEntry,
+        readAsBytes: managedFileResolver.readAsBytes,
+        resolveAvailable: managedFileResolver.resolveAvailable,
+        rewriteTextEntry: fileContent.rewriteTextEntry,
+      },
+      resources,
+    ),
+    createReadFileTool(managedFileResolver, resources),
     createWriteFileTool(fileContent),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
     ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
-    createGenerateImageTool(deps.painting, scope.paintingModel, resources),
+    createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),
   ];
   return new Map(
     tools.flatMap((tool) =>

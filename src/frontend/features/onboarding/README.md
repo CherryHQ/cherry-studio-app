@@ -1,8 +1,31 @@
 # OnboardingScreen
 
-Onboarding entry (route: `/onboarding`, registered headerless in
-`src/app/_layout.tsx`). Currently a skeleton that centers the brand-logo draw
-animation; the real onboarding content lands later.
+First-use setup lives in the `/onboarding` native stack: welcome → provider → connection →
+chat model. The welcome page is headerless; subsequent pages retain native back navigation.
+Buttons are available while the existing logo reveal runs.
+
+## Setup Ownership
+
+- App Shell's `FirstUseGate` checks `app.onboarding.status` before chat restoration. An unseen
+  installation with saved models or Sessions keeps its existing entry behavior. New users can
+  skip. Chat greetings and empty states contain no onboarding or provider-connection entry.
+  Later provider configuration stays in the regular settings flow, including its model import.
+- Provider catalog and connection routes reuse the provider page's saved entities and form
+  state through an explicit route-owned `setupIntent` prop, not a URL parameter. Presets show the
+  API key first and fold name/base URL into advanced settings. Custom services show one address
+  and a protocol picker; saved custom services remain selectable after leaving setup.
+- `model/` combines saved models and a cancellable remote preview, filters to supported chat
+  models, and accepts a manual model ID when listing is unavailable. Only the selected model
+  is imported. It calls `models.checkChat`, not the AI SDK health check.
+  Listing failures are separate from successful empty results: the screen shows a translated
+  error category and recovery action, never raw provider errors. Saved models remain selectable.
+- Completion requires an actual response from the bound conversation Runtime. It then enables
+  the model/provider, reuses the seeded Agent when possible, saves `agent.default_model_id` and
+  the completed status, and opens a draft chat. Fast/translation defaults are unchanged.
+- Cancellation/blur stops the probe and prevents subsequent navigation. Failed checks keep
+  saved connection/model data for retry without completing onboarding or changing defaults.
+  The probe sends no history or tools and may incur a small provider charge, disclosed beside
+  the start button. Credentials stay in the existing provider storage flow, never route params.
 
 ## LogoDraw
 

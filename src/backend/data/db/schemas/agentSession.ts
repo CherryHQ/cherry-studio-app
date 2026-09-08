@@ -24,16 +24,16 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
     // Protocol vocabulary (AgentSessionView.title), not a second synonym set
-    title: text().notNull().default(''),
+    title: text('name').notNull().default(''),
     // Whether the title was manually edited by user
-    titleIsManual: integer({ mode: 'boolean' }).notNull().default(false),
+    titleIsManual: integer('is_name_manually_edited', { mode: 'boolean' }).notNull().default(false),
     // Application intent (protocol AgentExecutionTarget), never a Runtime id
     executionTarget: text({ mode: 'json' })
       .$type<AgentExecutionTarget>()
       .notNull()
       .default({ kind: 'local' }),
-    // Dedicated conversation activity time: mirrors the relevant message's
-    // activityAt when a submission reserves, an assistant settles, or history forks.
+    // Dedicated conversation activity time: advances to reservation time or
+    // terminal stats.runtimeTiming.completedAt, and is inherited by history forks.
     // Administrative mutations such as renames and forks must not stamp "now".
     lastActivityAt: integer()
       .notNull()

@@ -52,6 +52,7 @@ export class ContentSearchService {
     const limit = Math.min(query.limit ?? CONTENT_SEARCH_DEFAULT_LIMIT, CONTENT_SEARCH_MAX_LIMIT);
     try {
       const result = await this.searchSessionMessages({
+        agentId: query.agentId,
         createdAtFrom: query.createdAtFrom,
         cursor: query.cursor,
         limit,
@@ -66,6 +67,7 @@ export class ContentSearchService {
   }
 
   private searchSessionMessages(query: {
+    agentId?: string;
     createdAtFrom?: string;
     cursor?: string;
     limit: number;
@@ -75,6 +77,7 @@ export class ContentSearchService {
     const sessionCondition = query.sessionId
       ? sql`message.session_id = ${query.sessionId}`
       : sql`1 = 1`;
+    const agentCondition = query.agentId ? sql`session.agent_id = ${query.agentId}` : sql`1 = 1`;
     return searchWithCursor<SessionMessageSearchRow, SessionMessageContentSearchItem>({
       buildSnippet: buildSearchSnippet,
       createdAtFrom: query.createdAtFrom,
@@ -95,7 +98,7 @@ export class ContentSearchService {
           SELECT
             message.id,
             message.session_id AS "sessionId",
-            session.title AS "sessionTitle",
+            session.name AS "sessionTitle",
             session.agent_id AS "agentId",
             agent.name AS "agentName",
             message.role,
@@ -107,6 +110,7 @@ export class ContentSearchService {
           LEFT JOIN agent ON agent.id = session.agent_id AND agent.deleted_at IS NULL
           WHERE message.searchable_text != ''
             AND ${sessionCondition}
+            AND ${agentCondition}
             AND ${createdAtCondition}
             AND ${sql.join(ftsConditions, sql` AND `)}
             AND ${

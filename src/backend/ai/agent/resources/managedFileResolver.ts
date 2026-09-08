@@ -1,18 +1,18 @@
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import {
+  type ExtractedDocumentText,
+  readDocumentUriText,
+} from '@/backend/services/file/documentText';
+import {
   getInternalFileUri,
   imageUriToDataUrl,
   readFileUriBytes,
 } from '@/backend/services/file/fileStorage';
+import type { FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-export type ManagedFileFact = {
-  fileEntryId: FileEntryId;
-  mediaType: string;
-  name: string;
-  size: number;
-};
+export type ManagedFileFact = FileAttachmentFact;
 
 export type TurnResourceLedger = {
   /** Managed ids explicitly referenced by the current input or Session transcript. */
@@ -21,6 +21,13 @@ export type TurnResourceLedger = {
   inputFiles: ReadonlyMap<string, ManagedFileFact>;
   /** Current and historical facts whose row and managed blob passed preflight. */
   availableFiles: ReadonlyMap<string, ManagedFileFact>;
+  /**
+   * Entries this turn produced. They are the turn's drafts: `edit_file` rewrites
+   * one in place instead of deriving a copy, so a turn ends with one artifact
+   * per file no matter how many edits it took. The set is a subset of
+   * `fileEntryIds` and is empty until the first artifact is granted.
+   */
+  draftFileEntryIds: ReadonlySet<string>;
   /**
    * Monotonic Host-side grant: an artifact produced during this turn joins the
    * ledger so the model may reference it later in the same turn. Only the Host
@@ -34,7 +41,10 @@ export type TurnResourceLedger = {
 export type TurnFileScope = Pick<TurnResourceLedger, 'fileEntryIds'>;
 
 /** Host-owned catalog capability: tools can consult membership; the wrapper grants outputs. */
-export type TurnToolResources = Pick<TurnResourceLedger, 'fileEntryIds' | 'grantFile'>;
+export type TurnToolResources = Pick<
+  TurnResourceLedger,
+  'availableFiles' | 'draftFileEntryIds' | 'fileEntryIds' | 'grantFile'
+>;
 
 /** Host-only managed-file boundary. It never exposes a device path to Pi. */
 export interface ManagedFileResolver {
@@ -43,6 +53,10 @@ export interface ManagedFileResolver {
   ): Promise<ReadonlyMap<string, ManagedFileFact>>;
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   readAsDataUrl(file: ManagedFileFact, signal: AbortSignal): Promise<string | undefined>;
+  readDocumentText(
+    file: ManagedFileFact,
+    signal: AbortSignal,
+  ): Promise<ExtractedDocumentText | undefined>;
 }
 
 type AvailableFileEntries = {
@@ -54,8 +68,17 @@ export function createManagedFileResolver(
   getUri: (entry: Pick<FileEntry, 'filename' | 'id'>) => string | undefined,
   readDataUrl: (uri: string, mediaType: string, signal: AbortSignal) => Promise<string>,
   readBytes: (uri: string, signal: AbortSignal) => Promise<Uint8Array>,
+  readDocument: typeof readDocumentUriText = readDocumentUriText,
 ): ManagedFileResolver {
   return {
+    async readDocumentText(file, signal) {
+      throwIfAborted(signal);
+      const uri = getUri({ filename: file.name, id: file.fileEntryId });
+      if (!uri) return undefined;
+      const result = await rejectOnAbort(readDocument(uri, file.mediaType, signal), signal);
+      throwIfAborted(signal);
+      return result;
+    },
     async resolveAvailable(fileEntryIds) {
       const uniqueIds = [...new Set(fileEntryIds)];
       const availableEntries = await entries.findAvailableByIds(uniqueIds);
@@ -118,6 +141,7 @@ export function createTurnResourceLedger(
   availableFiles: ReadonlyMap<string, ManagedFileFact> = inputFiles,
 ): TurnResourceLedger {
   const fileEntryIds = new Set<string>(inputFiles.keys());
+  const draftFileEntryIds = new Set<string>();
 
   for (const fileEntryId of authorizedFileEntryIds) {
     const parsed = FileEntryIdSchema.safeParse(fileEntryId);
@@ -128,10 +152,12 @@ export function createTurnResourceLedger(
 
   return {
     availableFiles,
+    draftFileEntryIds,
     fileEntryIds,
     inputFiles,
     grantFile(fileEntryId) {
       fileEntryIds.add(fileEntryId);
+      draftFileEntryIds.add(fileEntryId);
     },
   };
 }

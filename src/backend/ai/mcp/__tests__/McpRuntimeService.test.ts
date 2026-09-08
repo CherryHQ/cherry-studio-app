@@ -433,6 +433,24 @@ describe('Runtime tool adapter', () => {
 });
 
 describe('runtime lifecycle', () => {
+  it('connects runnable servers before returning settings summaries', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+
+    await expect(service.getRuntimeSummaries([server])).resolves.toMatchObject({
+      [server.id]: {
+        serverTitle: 'Test MCP',
+        serverVersion: '1.2.3',
+        state: 'connected',
+        toolCount: 1,
+      },
+    });
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.listTools).toHaveBeenCalledTimes(1);
+  });
+
   it('reports connection errors without rejecting summaries', async () => {
     const client = makeClient(makeRawTools([]));
     client.listTools.mockRejectedValue(new Error('401 unauthorized'));

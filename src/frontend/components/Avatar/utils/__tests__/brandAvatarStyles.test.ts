@@ -1,5 +1,6 @@
 import {
   DEFAULT_BRAND_ICON_SCALE,
+  PROVIDER_BRAND_ICON_SCALE,
   getBrandAvatarFallback,
   getBrandAvatarIconDisplayConfig,
 } from '../brandAvatarStyles';
@@ -10,15 +11,22 @@ describe('brand avatar styles', () => {
     (providerId) => {
       expect(getBrandAvatarIconDisplayConfig(providerId)).toEqual({
         borderRadius: 5,
-        scale: 5 / 7,
+        scale: PROVIDER_BRAND_ICON_SCALE,
       });
     },
   );
 
-  it('keeps trimmed brand assets at their native default scale', () => {
+  it('uses one normalized provider scale after transparent padding is trimmed', () => {
     expect(getBrandAvatarIconDisplayConfig('openai')).toEqual({
-      scale: DEFAULT_BRAND_ICON_SCALE,
+      scale: PROVIDER_BRAND_ICON_SCALE,
     });
+    expect(getBrandAvatarIconDisplayConfig('anthropic', 'provider')).toEqual({
+      scale: PROVIDER_BRAND_ICON_SCALE,
+    });
+  });
+
+  it('keeps the desktop SVG canvas at its native scale outside provider lists', () => {
+    expect(DEFAULT_BRAND_ICON_SCALE).toBe(1);
   });
 
   it('matches the desktop generated fallback colors and Unicode-safe initial', () => {

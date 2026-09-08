@@ -8,6 +8,7 @@ import {
   SelectionIndicator,
   Section,
   Spinner,
+  useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
@@ -16,7 +17,15 @@ import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
@@ -37,11 +46,16 @@ import {
   usePaintingGalleryEntries,
   usePaintings,
 } from '@/frontend/data/paintings/usePaintings';
+import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 
 import { usePaintingSelectionSource } from '../hooks/usePaintingSelectionSource';
-import { loadPhotoPreviewPage, type PhotoPreview } from '../utils/photoLibrary';
+import {
+  loadPhotoPreviewPage,
+  type PhotoPreview,
+  shouldRequestPhotoPreviewAccess,
+} from '../utils/photoLibrary';
 import {
   type PaintingTemplate,
   PaintingTemplateRow,
@@ -55,6 +69,7 @@ const galleryContentEdge = pageEdge - galleryGap / 2;
 
 export function DrawingList() {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
   const { isEditing, selectedIds } = useSelectionState();
@@ -64,8 +79,9 @@ export function DrawingList() {
   useRegisterSelectionSource('drawings', selectionSource);
   const bottomInset = useListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
-  // Mounted means visible now that the gallery owns a whole screen, so photo
-  // access is simply always armed here.
+  // Mounted means visible now that the gallery owns a whole screen. The hook
+  // reads existing access immediately, but only requests new access after the
+  // user presses the photo placeholder.
   const recentPhotos = useRecentPaintingPhotos(true);
   const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
@@ -112,12 +128,28 @@ export function DrawingList() {
     },
     [openPaintingWithAttachments, t, toast],
   );
+  const handleRequestPhotoAccess = useCallback(async () => {
+    const result = await requestPhotoAccess();
+    if (result === 'denied') {
+      toast.show({ label: t('painting.photos.accessDenied'), variant: 'danger' });
+      return;
+    }
+    if (result !== 'blocked') {
+      return;
+    }
+
+    alert.confirm({
+      confirmLabel: t('settings.permissions.openSystemSettings'),
+      description: t('painting.photos.accessRequired'),
+      onConfirm: () =>
+        Linking.openSettings().catch(() => {
+          toast.show({ label: t('painting.photos.openSettingsFailed'), variant: 'danger' });
+        }),
+      title: t('settings.permissions.accessRequired'),
+    });
+  }, [alert, requestPhotoAccess, t, toast]);
   const handleViewAllPress = useCallback(async () => {
     try {
-      const hasAccess = await requestPhotoAccess();
-      if (!hasAccess) {
-        return;
-      }
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
         mediaTypes: ['images'],
@@ -146,7 +178,7 @@ export function DrawingList() {
     } catch {
       toast.show({ label: t('painting.photos.openFailed'), variant: 'danger' });
     }
-  }, [openPaintingWithAttachments, requestPhotoAccess, t, toast]);
+  }, [openPaintingWithAttachments, t, toast]);
 
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: galleryContentEdge }),
@@ -154,15 +186,12 @@ export function DrawingList() {
   );
   const listExtraData = useMemo<DrawingListExtraData>(
     () => ({
-      generatingLabel: t('painting.status.generating'),
-      interruptedLabel: t('painting.status.interrupted'),
       isEditing,
-      label: t('painting.history.item'),
       onToggle: toggleId,
       selectedIds,
       width: columnWidth,
     }),
-    [columnWidth, isEditing, selectedIds, t, toggleId],
+    [columnWidth, isEditing, selectedIds, toggleId],
   );
   const listHeader = useMemo(
     () => (
@@ -174,7 +203,7 @@ export function DrawingList() {
         isRecentPhotosLoading={recentPhotos.isLoading}
         photos={recentPhotos.photos}
         onRecentPhotoPress={handleRecentPhotoPress}
-        onRequestPhotoAccess={requestPhotoAccess}
+        onRequestPhotoAccess={handleRequestPhotoAccess}
         onTemplateUse={handleTemplateUse}
         onViewAllPress={handleViewAllPress}
       />
@@ -182,13 +211,13 @@ export function DrawingList() {
     [
       gallery.isLoading,
       handleRecentPhotoPress,
+      handleRequestPhotoAccess,
       handleTemplateUse,
       handleViewAllPress,
       isEditing,
       paintings.isLoading,
       recentPhotos.isLoading,
       recentPhotos.photos,
-      requestPhotoAccess,
       visibleGalleryItems.length,
     ],
   );
@@ -264,10 +293,7 @@ export function DrawingList() {
 }
 
 type DrawingListExtraData = {
-  generatingLabel: string;
-  interruptedLabel: string;
   isEditing: boolean;
-  label: string;
   onToggle: (paintingId: string) => void;
   selectedIds: ReadonlySet<string>;
   width: number;
@@ -287,13 +313,10 @@ function renderDrawingGridItem({ extraData, item }: ListRenderItemInfo<PaintingG
   return (
     <View className="px-[3px] pb-1.5">
       <DrawingGridItem
-        generatingLabel={listData.generatingLabel}
         height={listData.width / item.aspectRatio}
-        interruptedLabel={listData.interruptedLabel}
         isEditing={listData.isEditing}
         isSelected={listData.selectedIds.has(item.painting.id)}
         item={item}
-        label={listData.label}
         onToggle={listData.onToggle}
         width={listData.width}
       />
@@ -306,7 +329,7 @@ type DrawingListHeaderProps = {
   isHistoryVisible: boolean;
   isRecentPhotosLoading: boolean;
   onRecentPhotoPress: (photo: PhotoPreview) => Promise<void>;
-  onRequestPhotoAccess: () => Promise<boolean>;
+  onRequestPhotoAccess: () => Promise<void>;
   onTemplateUse: (template: PaintingTemplate) => void;
   onViewAllPress: () => Promise<void>;
   photos: readonly PhotoPreview[];
@@ -403,35 +426,48 @@ function DrawingListHeader({
 }
 
 type DrawingGridItemProps = {
-  generatingLabel: string;
   height: number;
-  interruptedLabel: string;
   isEditing: boolean;
   isSelected: boolean;
   item: PaintingGalleryItem;
-  label: string;
   onToggle: (paintingId: string) => void;
   width: number;
 };
 
 function DrawingGridItem({
-  generatingLabel,
   height,
-  interruptedLabel,
   isEditing,
   isSelected,
   item,
-  label,
   onToggle,
   width,
 }: DrawingGridItemProps) {
-  const content = renderTileContent({ generatingLabel, height, interruptedLabel, item, width });
+  const { t } = useTranslation();
+  const statusLabel =
+    item.kind === 'generating'
+      ? t('painting.status.generating')
+      : item.kind === 'interrupted' && item.interruptionReason === 'failed'
+        ? t('painting.status.failed')
+        : t('painting.status.interrupted');
+  const statusHint =
+    item.kind === 'interrupted'
+      ? t(
+          item.interruptionReason === 'failed'
+            ? 'painting.status.failedHint'
+            : 'painting.status.interruptedHint',
+        )
+      : undefined;
+  const content = renderTileContent({ height, item, statusHint, statusLabel, width });
   const accessibilityLabel =
     item.kind === 'output'
-      ? label
-      : item.kind === 'generating'
-        ? generatingLabel
-        : interruptedLabel;
+      ? paintingOutputAccessibilityLabel(t, {
+          count: item.outputCount,
+          index: item.outputIndex,
+          prompt: item.painting.prompt,
+        })
+      : statusHint
+        ? `${statusLabel}. ${statusHint}`
+        : statusLabel;
   // A generating tile is the loader card itself — its own surface, rounding and
   // border. Wrapping that in the placeholder tile would show a card inside a
   // card, so the wrapper only carries the press feedback.
@@ -497,16 +533,16 @@ function DrawingGridItem({
 }
 
 function renderTileContent({
-  generatingLabel,
   height,
-  interruptedLabel,
   item,
+  statusHint,
+  statusLabel,
   width,
 }: {
-  generatingLabel: string;
   height: number;
-  interruptedLabel: string;
   item: PaintingGalleryItem;
+  statusHint: string | undefined;
+  statusLabel: string;
   width: number;
 }) {
   if (item.kind === 'output') {
@@ -531,7 +567,7 @@ function renderTileContent({
       <ImageGenerationLoader
         accessible={false}
         height={height}
-        label={generatingLabel}
+        label={statusLabel}
         resolution={item.resolution}
         testID={`painting-history-loader-${item.painting.id}`}
         width={width}
@@ -542,12 +578,10 @@ function renderTileContent({
   return (
     <View className="flex-1 items-center justify-center gap-1 px-2">
       <RotateCcwIcon className="size-5 text-foreground-tertiary" />
-      <Text className="text-center font-medium text-muted-foreground text-xs">
-        {interruptedLabel}
-      </Text>
-      {item.message ? (
+      <Text className="text-center font-medium text-muted-foreground text-xs">{statusLabel}</Text>
+      {statusHint ? (
         <Text className="text-center text-foreground-tertiary text-xs" numberOfLines={2}>
-          {item.message}
+          {statusHint}
         </Text>
       ) : null}
     </View>
@@ -560,14 +594,14 @@ function useRecentPaintingPhotos(enabled: boolean) {
   const isActiveRef = useRef(false);
 
   const refresh = useCallback(
-    async (requestPermission: boolean) => {
+    async (isUserInitiated: boolean): Promise<PhotoAccessResult> => {
       if (!enabled) {
-        return false;
+        return 'denied';
       }
 
       try {
         let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
-        if (!permission.granted && (requestPermission || permission.canAskAgain)) {
+        if (shouldRequestPhotoPreviewAccess(permission, isUserInitiated)) {
           permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
         }
         const nextPhotos = permission.granted
@@ -577,13 +611,13 @@ function useRecentPaintingPhotos(enabled: boolean) {
           setPhotos(nextPhotos);
           setLoading(false);
         }
-        return permission.granted;
+        return permission.granted ? 'granted' : permission.canAskAgain ? 'denied' : 'blocked';
       } catch {
         if (isActiveRef.current) {
           setPhotos([]);
           setLoading(false);
         }
-        return false;
+        return 'denied';
       }
     },
     [enabled],
@@ -610,6 +644,8 @@ function useRecentPaintingPhotos(enabled: boolean) {
     [enabled, isLoading, photos, requestAccess],
   );
 }
+
+type PhotoAccessResult = 'blocked' | 'denied' | 'granted';
 
 const styles = StyleSheet.create({
   empty: {

@@ -170,6 +170,45 @@ describe('usePaintingGalleryEntries', () => {
     ]);
   });
 
+  it('numbers multiple outputs for accessible gallery labels', async () => {
+    resolveFiles.mockResolvedValue({
+      inputs: [],
+      outputs: [
+        {
+          entry: { id: 'output-1' },
+          uri: 'file:///output-1.png',
+        },
+        {
+          entry: { id: 'output-2' },
+          uri: 'file:///output-2.png',
+        },
+      ],
+    } as never);
+    jest.mocked(ExpoImage.loadAsync).mockResolvedValue({ height: 1024, width: 1024 } as never);
+
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <BackendProvider backend={backend}>
+            <GalleryProbe />
+          </BackendProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await waitForCondition(() => entries?.items.length === 2);
+
+    expect(
+      entries?.items.map((item) =>
+        item.kind === 'output'
+          ? { outputCount: item.outputCount, outputIndex: item.outputIndex }
+          : undefined,
+      ),
+    ).toEqual([
+      { outputCount: 2, outputIndex: 1 },
+      { outputCount: 2, outputIndex: 2 },
+    ]);
+  });
+
   it('resolves and measures only paintings added by the next page', async () => {
     resolveFiles.mockImplementation(async (currentPainting) => ({
       inputs: [],

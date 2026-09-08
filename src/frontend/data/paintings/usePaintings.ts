@@ -29,7 +29,8 @@ import type { Painting } from '@/shared/data/types/painting';
 
 import { imageParamsAspectRatio, imageParamsResolutionLabel } from './imageGenerationParams';
 import {
-  paintingJobFailureMessage,
+  type PaintingJobInterruptionReason,
+  paintingJobInterruptionReason,
   paintingJobParamValues,
   usePaintingJobs,
 } from './usePaintingJobs';
@@ -42,6 +43,8 @@ export type PaintingOutputGalleryItem = {
   fileEntryId: FileEntryId;
   key: string;
   kind: 'output';
+  outputCount: number;
+  outputIndex: number;
   painting: Painting;
   uri: string;
 };
@@ -52,16 +55,19 @@ export type PaintingOutputGalleryItem = {
  * gallery — the tile is the only way back to a running generation and the only
  * handle on an abandoned one.
  */
-export type PaintingPendingGalleryItem = {
+type PaintingPendingGalleryItemBase = {
   aspectRatio: number;
   key: string;
-  kind: 'generating' | 'interrupted';
-  /** Provider failure text; absent when there is nothing user-facing to say. */
-  message?: string;
   painting: Painting;
   /** Requested size, when the params that asked for it name one. */
   resolution?: string;
 };
+
+export type PaintingPendingGalleryItem = PaintingPendingGalleryItemBase &
+  (
+    | { kind: 'generating' }
+    | { interruptionReason: PaintingJobInterruptionReason; kind: 'interrupted' }
+  );
 
 export type PaintingGalleryItem = PaintingOutputGalleryItem | PaintingPendingGalleryItem;
 
@@ -209,13 +215,15 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
               resolvedPaintingFilesQueryOptions(paintingsBackend, painting),
             );
             return await Promise.all(
-              resolved.outputs.map(async ({ entry, uri }) => ({
+              resolved.outputs.map(async ({ entry, uri }, index) => ({
                 aspectRatio: await queryClient.ensureQueryData(
                   imageAspectRatioQueryOptions(painting.id, entry.id, uri),
                 ),
                 fileEntryId: entry.id,
                 key: `${painting.id}:${entry.id}`,
                 kind: 'output' as const,
+                outputCount: resolved.outputs.length,
+                outputIndex: index + 1,
                 painting,
                 uri,
               })),
@@ -332,10 +340,14 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
           // a multi-image request still shows a single tile until its outputs
           // land and the real count is known.
           key: `${painting.id}:pending`,
-          kind: activeJob ? 'generating' : 'interrupted',
-          message: activeJob ? undefined : paintingJobFailureMessage(interruptedJob),
           painting,
           resolution: imageParamsResolutionLabel(paramValues),
+          ...(activeJob
+            ? { kind: 'generating' as const }
+            : {
+                interruptionReason: paintingJobInterruptionReason(interruptedJob),
+                kind: 'interrupted' as const,
+              }),
         },
       ];
     });

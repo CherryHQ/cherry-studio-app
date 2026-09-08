@@ -41,6 +41,14 @@ jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 52,
 }));
 
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 24 }),
+}));
+
+jest.mock('@/frontend/appShell/header', () => ({
+  mainHeaderRowHeight: 56,
+}));
+
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/ellipsis', () => () => null);
@@ -59,7 +67,10 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: mockTranslate }),
+  useTranslation: () => ({
+    t: mockTranslate,
+    i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
+  }),
 }));
 
 jest.mock('@/frontend/components/Message', () => ({
@@ -179,6 +190,7 @@ function createMessage(
     turnId: 'turn-1',
     updatedAt: '2026-08-09T00:00:00.000Z',
     usage: null,
+    stats: null,
     modelId: null,
     inferenceSnapshot: null,
   };

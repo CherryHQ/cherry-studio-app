@@ -3,6 +3,12 @@
 This guide defines the focused development loop, test-value rules, local pull request gates, and
 the remote CI boundary.
 
+Coding agents preparing application acceptance must also read
+[Parallel Device Testing](./parallel-device-testing.md) for configuration preparation,
+development-client reuse, and Conductor device isolation. That standard does not expand the user's
+active authorization for checks, builds, device actions, or external calls. Preparation capabilities
+marked as design must not be reported as implemented.
+
 ## Test The Owned Behavior
 
 - Put a test at the lowest layer that owns the behavior. Prefer pure functions and hooks over
@@ -74,12 +80,47 @@ pnpm typecheck
 ```
 
 Also rerun the behavior-related fixed suites and specialized checks selected above. Do not run the
-full local `pnpm test`; the complete suite belongs to remote PR CI.
+full local `pnpm test`; remote PR CI owns the application/package suite. The local-only tooling
+suites described below still run as focused checks when their behavior changes.
+
+### After Changing Dependencies
+
+Adding or removing a package makes pnpm rewrite the whole peer graph, which duplicates packages that
+were previously shared. Two copies of `expo` is enough to break Jest on its own: the copy `jest-expo`
+initializes defines `globalThis.expo`, so the other copy dials a non-existent dev server from
+`Expo.fx`, and the native-module mocks in `jest.setup.ts` stop matching the paths suites resolve.
+
+Collapse the duplicates before pushing, then rerun the gates:
+
+```bash
+pnpm dedupe
+```
+
+This is not a one-time cleanup — every dependency change re-splits the graph, so it belongs to the
+same commit as the change itself.
 
 ## Ready For Review
 
 Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
-final head before marking it ready. The existing GitHub workflow runs the complete tests, typecheck,
-lint, format check, package build, and documentation link check only after the PR is ready.
+final head before marking it ready. [PR CI](../../.github/workflows/pr-ci.yml) runs the configured
+application/package tests, typecheck, lint, format, package build, UI-boundary, skill, and documentation
+link checks for non-draft PRs targeting `v0.2`.
+
+### Remote Coverage And Local Exceptions
+
+- Root `pnpm test` builds workspace packages, runs the `ai-core`, `ai-runtime`, and
+  `ai-sdk-provider` package suites, then root Jest.
+- Root Jest includes `provider-registry` suites through `vitestJestShim.ts`. There is no root
+  `test:provider-registry` script; use the owning package filter for a focused local run.
+- With `PRCI` set, Jest excludes all `scripts/__tests__/` suites, including desktop-sync audit
+  fixtures and instruction-tooling regressions. Run the affected tooling suites locally without
+  `PRCI` when changing those tools; remote success does not cover them.
+- `skills:check` checks public skill entry points, whitelist files, and Claude symlinks.
+  `docs:check-links` checks relative file links in project docs, the
+  [Project Skills usage rules](../../.agents/skills/README.md), and public skill Markdown, including
+  linked skill prerequisites. One exact optional upstream reference is exempted as documented in
+  those usage rules; other missing links fail. The check does not validate Markdown anchors, remote
+  URLs, or dependencies mentioned only as plain text. Declare required local skill dependencies as
+  Markdown links in the project usage rules without editing upstream skill files.
 
 A PR is merge-ready only after its remote checks pass.

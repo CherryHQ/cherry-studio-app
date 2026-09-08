@@ -1,5 +1,5 @@
-export { AgentSessionList } from './components/AgentSessionList';
 export { SessionList } from './components/SessionList';
+export { SessionStatus } from './components/SessionStatus';
 export { useSessionActionAlerts } from './components/useSessionActionAlerts';
 export {
   SessionListProvider,
@@ -10,4 +10,4 @@ export {
   sessionSelectionScope,
   useSessionSelectionSource,
 } from './hooks/useSessionSelectionSource';
-export { parseSessionViewMode, type SessionViewMode } from './sessionViewMode';
+export type { SessionViewMode } from './sessionViewMode';

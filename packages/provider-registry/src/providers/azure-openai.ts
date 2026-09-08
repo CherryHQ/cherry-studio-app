@@ -1,4 +1,5 @@
 import { defineProvider } from './types';
+import { openaiResponsesSummaryWire } from './wires';
 
 export default defineProvider({
   id: 'azure-openai',
@@ -10,6 +11,7 @@ export default defineProvider({
     },
     'openai-responses': {
       adapterFamily: 'azure-responses',
+      reasoningFormat: { type: 'openai-responses', wire: openaiResponsesSummaryWire },
     },
   },
   metadata: {

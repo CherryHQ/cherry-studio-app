@@ -15,15 +15,21 @@ import {
 } from '@cherrystudio/provider-registry';
 import type { GenerateImageOutput } from '@cherrystudio/universal/ai/builtinTools';
 
-import type { AiService } from '@/backend/ai/AiService';
+import type { AiService, AiUsageAttribution } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ProviderRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import type { CreateInternalEntryInput } from '@/backend/services/file/fileStorage';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { type FileEntry, type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
+import {
+  type FileEntry,
+  type FileEntryId,
+  FileEntryIdSchema,
+  readableFilename,
+} from '@/shared/data/types/file';
 import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 import type { TurnFileScope } from '../../resources/managedFileResolver';
 import { type GenerateImageToolInput, limitGenerateImageInputIds } from './generateImageSchema';
@@ -103,6 +109,7 @@ export async function generateImageFromPrompt(
   signal: AbortSignal,
   configuredModel: ConfiguredPaintingModel | null,
   turnFiles: TurnFileScope,
+  usageAttribution?: AiUsageAttribution,
 ): Promise<PaintingResult> {
   throwIfAborted(signal);
   const resolvedModel = configuredModel ?? (await resolveConfiguredPaintingModel(dependencies));
@@ -151,14 +158,21 @@ export async function generateImageFromPrompt(
       prompt: input.prompt,
       requestOptions: { signal },
       uniqueModelId,
+      usageAttribution,
     });
     throwIfAborted(signal);
 
-    for (const image of result.images) {
+    for (const [index, image] of result.images.entries()) {
       createdFiles.push(
         await dependencies.files.createInternalEntry({
           data: image.base64,
           mediaType: image.mediaType,
+          // Named after the prompt so the library reads as what was drawn.
+          name: readableFilename(input.prompt, {
+            extension: generatedImageExtension(image.mediaType),
+            fallback: 'Image',
+            ordinal: index + 1,
+          }),
           provenance: 'generated',
           source: 'base64',
         }),

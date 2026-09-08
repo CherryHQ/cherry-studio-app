@@ -113,7 +113,7 @@ export function ProviderFormTextEndpoints() {
         </Text>
       ) : null}
       {meta.hasEditedEndpointUrls && !hasConfiguredEndpoint ? (
-        <Text className="text-destructive text-xs">
+        <Text className="text-error text-xs">
           {t('settings.provider.apiService.textEndpointRequired')}
         </Text>
       ) : null}
@@ -162,6 +162,7 @@ function ProviderFormTextEndpointField({ endpoint }: { endpoint: CustomProviderT
         keyboardType="url"
         onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
         placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+        testID={`provider-endpoint-${endpoint}-input`}
         value={value}
       />
       {requestUrl ? (
@@ -189,15 +190,19 @@ function ProviderFormEndpointField({ endpoint, label }: { endpoint: EndpointType
   const value = state.endpointUrls[endpoint] ?? '';
 
   return (
-    <Input
-      accessibilityLabel={label}
-      autoCapitalize="none"
-      autoCorrect={false}
-      disabled={meta.isSubmitting}
-      keyboardType="url"
-      onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
-      placeholder={label}
-      value={value}
-    />
+    <TextField disabled={meta.isSubmitting}>
+      <TextField.Label>{label}</TextField.Label>
+      <Input
+        accessibilityLabel={label}
+        autoCapitalize="none"
+        autoCorrect={false}
+        disabled={meta.isSubmitting}
+        keyboardType="url"
+        onChangeText={(next) => actions.setEndpointUrl(endpoint, next)}
+        placeholder={label}
+        testID="provider-base-url-input"
+        value={value}
+      />
+    </TextField>
   );
 }

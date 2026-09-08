@@ -1,6 +1,7 @@
 export type {
   AgentRuntime,
   AgentRuntimeSession,
+  MessageRuntimeTimingSink,
   RuntimeApproval,
   RuntimeArtifact,
   RuntimeCapabilities,

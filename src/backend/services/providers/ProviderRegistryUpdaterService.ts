@@ -1,6 +1,8 @@
 import {
   type CatalogManifest,
   CatalogManifestSchema,
+  isCatalogManifestCompatible,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
   REGISTRY_SCHEMA_VERSION,
   REMOTE_REGISTRY_FILES,
   type RemoteRegistryFileName,
@@ -138,7 +140,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
         return;
       }
 
-      this.assertCompatibleManifest(snapshot.manifest);
+      this.assertStructurallyCompatibleManifest(snapshot.manifest);
+      if (!isCatalogManifestCompatible(snapshot.manifest)) {
+        throw new Error('Cached registry snapshot requires unsupported runtime semantics');
+      }
       const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
       providerRegistryService.installRemoteSnapshot(parsed);
       this.activeManifest = snapshot.manifest;
@@ -172,6 +177,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
       try {
         const manifest = await this.fetchManifest(source);
         reachedSource = true;
+        if (!manifest) {
+          continue;
+        }
         if (this.isUpdateAvailable(manifest)) {
           this.availableUpdateSource = source;
           return;
@@ -265,7 +273,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
   private async fetchAndValidate(source: RegistryNetworkSource): Promise<StagedSnapshot | null> {
     const manifest = await this.fetchManifest(source);
-    if (!this.isUpdateAvailable(manifest)) {
+    if (!manifest || !this.isUpdateAvailable(manifest)) {
       return null;
     }
 
@@ -285,10 +293,18 @@ export class ProviderRegistryUpdaterService extends BaseService {
     };
   }
 
-  private async fetchManifest(source: RegistryNetworkSource): Promise<CatalogManifest> {
+  private async fetchManifest(source: RegistryNetworkSource): Promise<CatalogManifest | null> {
     const manifestBody = await this.fetchText(source, 'manifest.json', MAX_MANIFEST_BYTES);
     const manifest = CatalogManifestSchema.parse(JSON.parse(manifestBody));
-    this.assertCompatibleManifest(manifest);
+    this.assertStructurallyCompatibleManifest(manifest);
+    if (!isCatalogManifestCompatible(manifest)) {
+      logger.info('Registry snapshot requires unsupported runtime semantics; skipping', {
+        implementedDesktopVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+        minAppVersion: manifest.minAppVersion,
+        sourceAppVersion: manifest.sourceAppVersion,
+      });
+      return null;
+    }
     return manifest;
   }
 
@@ -310,7 +326,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     return { status: 'current' };
   }
 
-  private assertCompatibleManifest(manifest: CatalogManifest): void {
+  private assertStructurallyCompatibleManifest(manifest: CatalogManifest): void {
     if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
       throw new Error(
         `Unsupported registry schema ${manifest.schemaVersion}; expected ${REGISTRY_SCHEMA_VERSION}`,
@@ -322,10 +338,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
         throw new Error(`Registry manifest is missing ${file}`);
       }
     }
-
-    // Desktop and mobile have independent application-version lines. Mobile
-    // therefore gates semantic compatibility by its bundled schemas below,
-    // rather than comparing its 1.x app version to desktop's 2.x manifest.
   }
 
   private parseAndValidateFiles(

@@ -7,6 +7,7 @@ import type {
   AgentSessionView,
   AgentUsageView,
 } from '@/shared/contracts/agent';
+import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 
@@ -71,6 +72,12 @@ export type ForkSessionResult =
   | { status: 'message-not-found' }
   | { status: 'fork-point-unsettled' };
 
+export type UpdateStreamingAssistantMessageInput = {
+  assistantMessageId: string;
+  /** The Host's current in-memory projection of the assistant message parts. */
+  parts: AgentMessagePart[];
+};
+
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
@@ -83,6 +90,10 @@ export type FinalizeAssistantMessageInput = {
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
   contextCheckpoint: RuntimeContextCheckpoint | null;
+  /** Runtime-owned message statistics; terminal timing is required at this persistence boundary. */
+  runtimeStats: MessageRuntimeStatsInput & {
+    runtimeTiming: MessageRuntimeTiming & { completedAt: number };
+  };
 };
 
 /**
@@ -140,6 +151,13 @@ export interface AgentSessionStore {
 
   /** Returns the newest assistant row carrying an opaque checkpoint candidate. */
   getLatestContextCheckpoint(sessionId: string): Promise<StoredRuntimeContextCheckpoint | null>;
+
+  /**
+   * Durably records the parts an active turn has produced so far and marks the
+   * placeholder `streaming`. A no-op once the row has settled: the terminal
+   * write is the only authority for a settled message.
+   */
+  updateStreamingAssistantMessage(input: UpdateStreamingAssistantMessageInput): Promise<void>;
 
   /**
    * Atomically settles the assistant message's terminal state before terminal

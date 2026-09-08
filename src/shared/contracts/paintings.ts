@@ -6,16 +6,8 @@ import type { Painting } from '@/shared/data/types/painting';
 
 import type { ResolvedFile } from './file';
 
-export type PaintingSourceImage = {
-  fileEntryId?: FileEntryId;
-  id: string;
-  mediaType: string;
-  name: string;
-  uri: string;
-};
-
 export type PaintingGenerationInput = {
-  images: readonly PaintingSourceImage[];
+  fileEntryIds: readonly FileEntryId[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
   /** Display-name snapshot used by background presentation while the job runs. */
@@ -32,6 +24,9 @@ export type PaintingGenerationInput = {
 
 export type PaintingGenerationOutput = {
   fileEntryId: FileEntryId;
+  mediaType: string;
+  name: string;
+  size?: number;
   uri: string;
 };
 

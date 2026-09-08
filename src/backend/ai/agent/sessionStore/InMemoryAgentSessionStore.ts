@@ -18,6 +18,7 @@ import type {
   ReserveInitialSubmissionResult,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
+  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
@@ -37,7 +38,6 @@ function cloneJson<T>(value: T): T {
 
 /** One stored message: the view plus the turn-level error column. */
 type StoredMessage = {
-  activityAt: string;
   view: AgentMessageView;
   error: AgentErrorView | null;
   contextCheckpoint: unknown | null;
@@ -98,6 +98,7 @@ function reserveInTranscript(
     status: 'success',
     parts: cloneJson(input.userParts),
     usage: null,
+    stats: null,
     modelId: null,
     inferenceSnapshot: null,
     createdAt: timestamp,
@@ -111,6 +112,7 @@ function reserveInTranscript(
     status: 'pending',
     parts: [],
     usage: null,
+    stats: null,
     modelId: input.modelId,
     inferenceSnapshot: {
       status: 'supported',
@@ -120,8 +122,8 @@ function reserveInTranscript(
     updatedAt: timestamp,
   };
   transcript.push(
-    { activityAt: timestamp, view: userMessage, error: null, contextCheckpoint: null },
-    { activityAt: timestamp, view: assistantMessage, error: null, contextCheckpoint: null },
+    { view: userMessage, error: null, contextCheckpoint: null },
+    { view: assistantMessage, error: null, contextCheckpoint: null },
   );
   return { turnId, userMessage, assistantMessage };
 }
@@ -245,7 +247,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       .slice(0, anchorIndex + 1)
       .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))
       .map<StoredMessage>((stored) => ({
-        activityAt: stored.activityAt,
         // Runtime-private and anchored to a turn id this copy no longer
         // carries, so the fork replays full history instead.
         contextCheckpoint: null,
@@ -358,6 +359,27 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return null;
   }
 
+  async updateStreamingAssistantMessage(
+    input: UpdateStreamingAssistantMessageInput,
+  ): Promise<void> {
+    for (const transcript of this.messages.values()) {
+      const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
+      if (!stored) {
+        continue;
+      }
+      if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
+        return;
+      }
+      stored.view = {
+        ...stored.view,
+        status: 'streaming',
+        parts: cloneJson(input.parts),
+        updatedAt: nowIso(),
+      };
+      return;
+    }
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     for (const [sessionId, transcript] of this.messages) {
       const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
@@ -366,15 +388,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
       // Synchronous section: message terminal state settles atomically
       // (invariant 5).
-      const activityAt = nowIso();
+      const updatedAt = nowIso();
       stored.view = {
         ...stored.view,
         status: input.status,
         parts: cloneJson(input.parts),
         usage: input.usage === null ? null : cloneJson(input.usage),
-        updatedAt: activityAt,
+        stats: { ...stored.view.stats, ...cloneJson(input.runtimeStats) },
+        updatedAt,
       };
-      stored.activityAt = activityAt;
       stored.error = input.error === null ? null : cloneJson(input.error);
       stored.contextCheckpoint =
         input.status === 'success' && input.contextCheckpoint !== null
@@ -382,7 +404,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
           : null;
       const session = this.sessions.get(sessionId);
       if (session) {
-        this.sessions.set(sessionId, { ...session, updatedAt: stored.view.updatedAt });
+        this.sessions.set(sessionId, { ...session, updatedAt });
       }
       return cloneJson(stored.view);
     }

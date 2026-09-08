@@ -1,12 +1,11 @@
-import type { DocumentPickerAsset } from 'expo-document-picker';
-
+import type { FileUploadSelection } from '@/frontend/hooks/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
+import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import {
   AI_IMAGE_INPUT_MAX_COUNT,
   imageMediaTypeFromExtension,
-  isAiSupportedImageMediaType,
   isImageFileExtension,
 } from '@/shared/utils/imageFileTypes';
 
@@ -68,12 +67,23 @@ export function appendComposerAttachments(
   next: readonly ComposerAttachmentDraft[],
 ) {
   const seenIds = new Set(current.map((attachment) => attachment.id));
+  // Picker imports and library selections can give the same file different draft ids.
+  const seenFileEntryIds = new Set(
+    current.flatMap((attachment) =>
+      isComposerAttachmentReady(attachment) ? [attachment.fileEntryId] : [],
+    ),
+  );
   const additions = next.filter((attachment) => {
-    if (seenIds.has(attachment.id)) {
+    const fileEntryId = isComposerAttachmentReady(attachment) ? attachment.fileEntryId : undefined;
+    if (
+      seenIds.has(attachment.id) ||
+      (fileEntryId !== undefined && seenFileEntryIds.has(fileEntryId))
+    ) {
       return false;
     }
 
     seenIds.add(attachment.id);
+    if (fileEntryId !== undefined) seenFileEntryIds.add(fileEntryId);
     return true;
   });
 
@@ -127,9 +137,9 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAt
 }
 
 export function createDocumentAttachmentDraft(
-  asset: DocumentPickerAsset,
+  asset: FileUploadSelection,
 ): ComposerAttachmentSource {
-  const mediaType = asset.mimeType ?? fallbackFileMediaType;
+  const mediaType = resolveDocumentImportMediaType(asset.name, asset.mediaType);
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
   const extension = asset.name.trim().split('.').pop()?.toLowerCase();
   const resolvedMediaType =
@@ -145,10 +155,6 @@ export function createDocumentAttachmentDraft(
     size: asset.size,
     uri: asset.uri,
   };
-}
-
-export function isComposerAttachmentSupported(attachment: ComposerAttachmentDraft): boolean {
-  return attachment.kind !== 'image' || isAiSupportedImageMediaType(attachment.mediaType);
 }
 
 export function getPhotoAttachmentId(photoId: string) {

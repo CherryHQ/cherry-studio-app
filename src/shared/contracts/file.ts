@@ -1,5 +1,7 @@
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
+import type { FileAttachmentReport, FileAttachmentTarget } from './fileAttachment';
+
 export type ResolvedFile = {
   entry: FileEntry;
   uri: string;
@@ -19,10 +21,25 @@ export type CreateInternalEntryInput = {
   uri: string;
 };
 
+export type PrepareFileAttachmentsInput = {
+  fileEntryIds: readonly FileEntryId[];
+  target: FileAttachmentTarget;
+  signal?: AbortSignal;
+};
+
+export type PreparedFile = ResolvedFile & {
+  report: FileAttachmentReport;
+  text?: string;
+};
+
 export interface FileModule {
+  /** Subscribe to committed managed-file creates, rewrites, deletions, and discards. */
+  subscribeChanges(listener: () => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
-  /** Hard-delete: removes the entry row and its bytes (composer cancel-upload). */
+  /** Validates managed references and parses supported content only when the caller submits. */
+  prepareAttachments(input: PrepareFileAttachmentsInput): Promise<PreparedFile[]>;
+  /** Hard-delete: removes the entry row and its bytes. */
   delete(id: FileEntryId): Promise<boolean>;
   /** Generates or reads one image preview without re-reading its database row. */
   generatePreviewUri(entry: FileEntry): Promise<string | undefined>;

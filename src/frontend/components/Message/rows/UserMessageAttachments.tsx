@@ -7,11 +7,7 @@ type UserMessageAttachmentsProps = {
   attachments: readonly UserMessageAttachmentPart[];
 };
 
-/**
- * The same file strip the assistant side renders inline, pulled above the
- * bubble because the bubble is one visual unit that attachments cannot sit
- * inside, and aligned right to stay with the user's column.
- */
+/** Attached files sit above the user's bubble. */
 export function UserMessageAttachments({ attachments }: UserMessageAttachmentsProps) {
   return (
     <View className="max-w-full self-end">

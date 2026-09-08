@@ -4,14 +4,15 @@ This page owns `/sessions`, backed by the `/agent-sessions` Data API.
 
 ## Public Interface
 
-- `SessionListScreen` (`/sessions?view=sessions|agents`) is the management page. The default
-  recency-ordered view supports rename, delete, and multi-select batch deletion under the
-  `agent-sessions` selection scope. The Agent view expands each Agent into its own lazy Session
-  query and keeps soft-deleted Agents in a fallback group.
+- `SessionListScreen` is the management page. It always presents one recency-ordered Session list;
+  its filter menu selects all Sessions or one Agent through the optional `agentId` route parameter.
+  Rename, delete, and multi-select batch deletion remain available under the `agent-sessions`
+  selection scope for every filter.
 - Reusable list state and presentation shared with the App Shell sidebar live in
   `src/frontend/components/SessionList`.
 - Rows link to the Agent chat surface with a `sessionId` param.
-- Search opens the `/search` route rather than filtering the list in place. The list is a
+- Search opens the `/search` route rather than filtering the list in place. The current Agent filter
+  is applied to both title and message-content results. The list is a
   cursor-paginated infinite query, so filtering what happens to be loaded would silently miss
   sessions further down; the route queries `/search/entities` for titles and `/search/contents` for
   message text, and a result press navigates to that session in chat.

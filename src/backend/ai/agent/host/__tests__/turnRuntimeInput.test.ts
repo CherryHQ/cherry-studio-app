@@ -66,6 +66,7 @@ describe('Turn Runtime input assembly', () => {
       usage: null,
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -104,6 +105,7 @@ describe('Turn Runtime input assembly', () => {
         usage: null,
         modelId: null,
         inferenceSnapshot: null,
+        stats: null,
         createdAt: TIMESTAMP,
         updatedAt: TIMESTAMP,
       },
@@ -125,6 +127,7 @@ describe('Turn Runtime input assembly', () => {
         usage: null,
         modelId: null,
         inferenceSnapshot: null,
+        stats: null,
         createdAt: TIMESTAMP,
         updatedAt: TIMESTAMP,
       },
@@ -167,6 +170,7 @@ describe('Turn Runtime input assembly', () => {
       usage: null,
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -226,6 +230,7 @@ describe('Turn Runtime input assembly', () => {
       usage: null,
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -258,6 +263,7 @@ describe('Turn Runtime input assembly', () => {
       usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -298,6 +304,7 @@ describe('Turn Runtime input assembly', () => {
       usage: null,
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -345,6 +352,7 @@ describe('Turn Runtime input assembly', () => {
       usage: null,
       modelId: null,
       inferenceSnapshot: null,
+      stats: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };

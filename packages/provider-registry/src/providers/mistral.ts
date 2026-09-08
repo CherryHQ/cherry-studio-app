@@ -7,6 +7,7 @@ export default defineProvider({
   endpointConfigs: {
     'openai-chat-completions': {
       adapterFamily: 'mistral',
+      dialect: { streamOptions: false },
       baseUrl: 'https://api.mistral.ai',
     },
   },

@@ -1,13 +1,16 @@
 import { type PropsWithChildren, type RefObject, useCallback } from 'react';
-import { type LayoutChangeEvent, View } from 'react-native';
+import type { LayoutChangeEvent, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { withUniwind } from 'uniwind';
 
 import {
   composerHorizontalScreenInset,
   getComposerBottomPadding,
   getComposerKeyboardStickyOffset,
 } from '../utils/composer-dock-layout';
+
+const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
 
 export type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<View | null>;
@@ -37,10 +40,14 @@ export function ComposerDock({
     [onHeightChange, onLayout],
   );
 
+  // Move the dock boundary with its content: Android BlurTargetView clips
+  // children to their own bounds, so a stationary wrapper hides the lifted input.
   return (
-    <View
+    <StyledKeyboardStickyView
       ref={containerRef}
       className={layoutMode === 'flow' ? 'z-10 shrink-0' : 'absolute right-0 bottom-0 left-0 z-10'}
+      enabled={keyboardTrackingEnabled}
+      offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}
       onLayout={onHeightChange || onLayout ? handleLayout : undefined}
       pointerEvents="box-none"
       style={{
@@ -48,12 +55,7 @@ export function ComposerDock({
         paddingHorizontal: composerHorizontalScreenInset,
       }}
     >
-      <KeyboardStickyView
-        enabled={keyboardTrackingEnabled}
-        offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}
-      >
-        {children}
-      </KeyboardStickyView>
-    </View>
+      {children}
+    </StyledKeyboardStickyView>
   );
 }

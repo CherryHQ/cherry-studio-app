@@ -4,14 +4,14 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
-import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
-import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import {
   buildImageProviderOptions,
-  createAiUsageCaptureContext,
   mergeImageProviderOptions,
   splitImageParamValues,
-} from '@cherrystudio/ai-runtime/utils';
+} from '@cherrystudio/ai-runtime/image';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
+import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
@@ -41,8 +41,13 @@ import { VertexAuthClient } from './generation/VertexAuthClient';
 
 // ── Request types ──────────────────────────────────────────────────
 
+export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'messageRef'>;
+/** Read at call time by callers created before the attributed message exists. */
+export type AiUsageAttributionResolver = () => AiUsageAttribution;
+
 /** Non-streaming text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
+  usageAttribution?: AiUsageAttribution;
   system?: string;
   prompt?: string;
   messages?: ModelMessage[];
@@ -58,6 +63,7 @@ export interface AiGenerateResult {
 }
 
 export interface AiImageRequest extends AiBaseRequest {
+  usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
   paramValues: ParamValues;
@@ -83,7 +89,10 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
-  providerRegistry: Pick<ProviderRegistryService, 'listProviderRegistryModels'>;
+  providerRegistry: Pick<
+    ProviderRegistryService,
+    'getImageGenerationSupport' | 'listProviderRegistryModels'
+  >;
   vertexAuth: Pick<VertexAuthClient, 'getAuthorizationHeaders'>;
 }
 
@@ -112,6 +121,7 @@ function createCaptureContext(input: {
   model: Model;
   sdkModelId: string;
   credentialReceipt: ServingCredentialReceipt;
+  usageAttribution?: AiUsageAttribution;
 }): AiUsageCaptureContext {
   return createAiUsageCaptureContext({
     providerId: input.provider.id,
@@ -122,8 +132,8 @@ function createCaptureContext(input: {
     trustProviderReportedCost: input.provider.apiFeatures.reportsActualCost,
     reportedCostCurrency: input.provider.reportedCostCurrency,
     credentialReceipt: input.credentialReceipt,
-    source: null,
-    messageRef: null,
+    source: input.usageAttribution?.source,
+    messageRef: input.usageAttribution?.messageRef,
   });
 }
 
@@ -222,6 +232,7 @@ export class AiService extends BaseService {
         model,
         sdkModelId: sdkConfig.modelId,
         credentialReceipt,
+        usageAttribution: request.usageAttribution,
       }),
       this.services.aiUsageRecord,
     );
@@ -279,11 +290,27 @@ export class AiService extends BaseService {
     const { sdkConfig, credentialReceipt, model, options, provider } =
       await this.buildAgentParamsFor(request);
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
+    const registryProviderId = provider.presetProviderId ?? provider.id;
+    const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
+      registryProviderId,
+      model.apiModelId ?? model.modelId,
+    )?.modes?.[request.mode]?.vendorTransport;
+    const transportVendorBag = vendorTransport?.endpoint
+      ? {
+          ...vendorBag,
+          modelDescriptor: {
+            endpoint: vendorTransport.endpoint,
+            id: sdkConfig.modelId,
+            mode: request.mode,
+            ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
+          },
+        }
+      : vendorBag;
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
       paramValues: request.paramValues,
       provider,
-      vendorBag,
+      vendorBag: transportVendorBag,
     });
     const mergedProviderOptions = mergeImageProviderOptions(
       options.providerOptions,
@@ -299,6 +326,7 @@ export class AiService extends BaseService {
       model,
       sdkModelId: sdkConfig.modelId,
       credentialReceipt,
+      usageAttribution: request.usageAttribution,
     });
 
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(

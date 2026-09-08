@@ -17,9 +17,12 @@ import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
  * decide for itself: what a pasted image means, and what a link means. Holds the
  * ref that input-replacing surfaces blur and that the ＋ menu inserts through.
  */
-type ComposerFieldProps = Pick<ComposerInputProps, 'onBlur' | 'onFocus' | 'placeholder' | 'style'>;
+type ComposerFieldProps = Pick<
+  ComposerInputProps,
+  'onBlur' | 'onFocus' | 'placeholder' | 'style' | 'testID'
+>;
 
-export function ComposerField({ onBlur, onFocus, placeholder, style }: ComposerFieldProps) {
+export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: ComposerFieldProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
@@ -62,6 +65,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style }: ComposerF
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}
       style={style}
+      testID={testID}
     />
   );
 }

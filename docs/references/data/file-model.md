@@ -11,8 +11,10 @@ here. Terms follow [Domain Language](../domain-language.md).
 
 1. **Files are first-class.** A file is a peer of the Agent message or painting that uses it, not a
    dependent of it. Every entry belongs in the file library.
-2. **Content is immutable.** Bytes never change after creation. Any "edit" creates a new entry
-   (copy-on-write); nothing in the app rewrites a managed blob in place.
+2. **Content is immutable once its turn ends.** An entry produced by an Agent turn is that turn's
+   draft and may be rewritten in place by the same turn's `edit_file`; the moment the turn ends,
+   or for any entry the turn did not produce, bytes never change and an "edit" creates a new
+   version entry. Nothing else in the app rewrites a managed blob.
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
 4. **Import happens when the file enters the app.** Painting imports at generation time; the Agent
@@ -40,12 +42,14 @@ here. Terms follow [Domain Language](../domain-language.md).
 `updatedAt`, `deletedAt`, `provenance`.
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
-  extension-derived `File.type` second, `application/octet-stream` last. It is authoritative for
-  every consumer; nothing re-infers a type from the extension. It is also the filter key for the
+  extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
+  generic document type from the PDF/DOCX/PPTX/XLSX filename before persisting it. The stored type is
+  authoritative for every consumer; readers do not re-infer it from the extension. It is also the filter key for the
   library's category tabs (`image/%`, `application/pdf`, …), which is why extensions are not stored
   separately.
-- `updatedAt` equals `createdAt` on insert and has no writer today. A future metadata update
-  (library rename) is its first one; immutable content means it never tracks a content write.
+- `updatedAt` equals `createdAt` on insert. Its one writer today is the draft rewrite
+  (`rewriteInternalTextEntry`), which records the new `size` and bumps it; a future metadata update
+  (library rename) will be the second.
 - `provenance` is stable source identity: `imported` for a file brought in from a picker, camera,
   paste, or painting input; `generated` for a file written or produced for the user by Cherry;
   `unknown` when nothing proves either. Reattaching a generated file as an input does not change its
@@ -100,10 +104,29 @@ reservation, and converts managed bytes to a bounded temporary Data URL for the 
 text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
 UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
-unsupported binary media types fail closed before reservation. Extracted text remains request-local
-and is never persisted.
+unsupported binary media types fail closed before reservation. PDF, DOCX, PPTX, and XLSX inputs are
+also admitted through local text extraction, with a 20 MiB source limit. PDFs use the existing Expo
+native extractor (at most 100 pages); Office files use bounded in-memory ZIP/XML parsing and SheetJS
+for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
+part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office
+text is capped at one million UTF-16 units. Parser truncation is retained in the Runtime part.
+XLSX extraction checks local entry metadata against the ZIP directory and bounds actual XML output
+while decompressing. SheetJS receives a new uncompressed archive containing only the validated XML
+and relationship parts, so original headers and embedded binary entries cannot bypass those limits.
+All extracted documents share the text attachment budget (200,000 code points per file, 400,000
+per request, including repeated historical references). Word includes paragraphs and ancillary text,
+PowerPoint follows slide relationships and includes speaker notes while excluding notes-page layout
+fields such as slide numbers, dates, headers, and footers. These fields do not make an otherwise
+textless document readable. Excel includes sheet names,
+cell addresses, formatted values, and stored formulas without evaluating them. Embedded images,
+charts as images, scanned-document OCR, and legacy DOC/PPT/XLS inputs are not supported by this path.
+DOCX/PPTX XML decoding remains UTF-8 only.
+Empty documents fail with `ATTACHMENT_NO_TEXT`; damaged, encrypted, or over-limit documents fail
+before reservation. Unreadable historical documents are omitted without failing a new turn.
+Extracted text remains request-local, is encoded as untrusted user content, and is never persisted.
 
-Attachments are sent to providers as inlined base64 data URLs. The provider upload cache is deferred
+Image attachments are sent to providers as inlined base64 data URLs; documents are sent as extracted
+text and work with text-only models. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
 not to `file_entry`.
 
@@ -113,6 +136,12 @@ not to `file_entry`.
 just wrote. A crash between the two leaves an orphan blob, reclaimable by the future cache-cleanup
 sweep.
 
+**Rewrite** — `rewriteInternalTextEntry` overwrites a draft's bytes at the same path, then records
+the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
+reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
+held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
+calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
+
 **Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
 bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. The composer
 calls it when the user cancels an attachment; the future library calls it when the user empties the
@@ -121,6 +150,14 @@ trash.
 **Missing bytes** — a current submission fails before admission; an already-persisted reference
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
 without failing the turn. Nothing silently removes a historical reference.
+
+**File-list updates** — all managed-file writes go through `fileStorage`. Its create, rewrite,
+delete, and compensating-discard operations announce changes after entry persistence commits;
+failed writes do not announce a successful change. `FileModule.subscribeChanges` exposes this
+notification to the app-wide frontend `FileQueryBridge`, which invalidates every shared file-list
+page size. This also covers background painting and Agent writes while the library and composer
+are unmounted. Business callers do not refresh queries; URI and preview caches remain reusable
+under their existing file/version keys.
 
 ## Out of scope, deliberately
 
@@ -146,12 +183,26 @@ row).
 
 **Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text through the
 `'text'` source of `createInternalEntry`. `edit_file` strictly decodes a bounded UTF-8 source
-selected by active `fileEntryId`, applies exact replacement, and creates a same-name,
-same-media-type copy through the same text boundary. Both persist the new entry with
-`provenance: 'generated'` and return it in the Runtime artifact envelope; `generate_image` likewise
-imports generated image bytes with generated provenance. `write_file` reads no entry and does not
-consult the turn resource ledger. Knowledge of a valid id is sufficient for `edit_file` even outside
-that ledger, but it exposes no file listing or search. Neither tool rewrites a managed blob.
+selected by active `fileEntryId` and applies exact replacement. If the source is a draft of the
+current turn it rewrites that entry's bytes through `rewriteInternalTextEntry` (bytes first, then
+the row's `size`), so a turn ends with one artifact per file; otherwise it creates a
+same-media-type entry named for its version (`report.html` → `report v2.html`) through the same
+text boundary, and the source is history. New entries persist with `provenance: 'generated'` and return in the Runtime artifact
+envelope; `generate_image` likewise imports generated image bytes with generated provenance.
+`write_file` reads no entry and does not consult the turn resource ledger. Knowledge of a valid id
+is sufficient for `edit_file` even outside that ledger, but it exposes no file listing or search.
+`read_file` returns a bounded line window of a ledger member's UTF-8 text or locally extracted
+document content and creates nothing. Its `sourceTruncated` flag distinguishes an extraction cap
+from the pageable line window's `truncated` flag. Versions are
+carried in the filename rather than a lineage column; folding a version chain in the library is a
+future library concern and needs no schema change to start.
+
+**Readable names.** Every file Cherry produces is named for what it is, never for its id: an
+imported file keeps the name it arrived with (a camera photo, which has none, falls back to
+`Image`), a version carries its number, `write_file` uses the name the model chose, and a generated
+image is named after its prompt through `readableFilename` (`sunset over the bay.png`, with a
+numeric suffix for siblings from one request). The `painting-{id}` fallback in `fileStorage` is a
+last resort for a caller that supplies no name, not a naming scheme.
 
 Office inputs are imported before inspection or editing, and every edit patches a copy into a new
 entry while preserving the source. Office and image tools follow the same rule for newly generated

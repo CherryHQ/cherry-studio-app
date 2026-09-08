@@ -1,4 +1,4 @@
-import { loadPhotoPreviewPage } from '../photoLibrary';
+import { loadPhotoPreviewPage, shouldRequestPhotoPreviewAccess } from '../photoLibrary';
 
 const mockQueryExe = jest.fn();
 const mockQueryExeForMetadata = jest.fn();
@@ -75,5 +75,21 @@ describe('photo library paging', () => {
     expect(mockQueryExe).not.toHaveBeenCalled();
     expect(mockAssetGetFilename).not.toHaveBeenCalled();
     expect(mockAssetGetUri).not.toHaveBeenCalled();
+  });
+});
+
+describe('photo preview permission', () => {
+  test('does not prompt while the drawing gallery mounts', () => {
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: false }, false)).toBe(
+      false,
+    );
+  });
+
+  test('prompts only after an explicit action when permission can still be requested', () => {
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: false }, true)).toBe(true);
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: false, granted: false }, true)).toBe(
+      false,
+    );
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: true }, true)).toBe(false);
   });
 });

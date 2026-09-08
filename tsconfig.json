@@ -17,7 +17,7 @@
       "@shared/*": ["./packages/universal/src/*"],
       "@cherrystudio/ai-core/core": ["./packages/ai-core/src/core/index.ts"],
       "@cherrystudio/ai-core/core/*": ["./packages/ai-core/src/core/*"],
-      "@cherrystudio/ai-runtime/messages": ["./packages/ai-runtime/src/messages/index.ts"],
+      "@cherrystudio/ai-runtime/image": ["./packages/ai-runtime/src/image/index.ts"],
       "@cherrystudio/ai-runtime/provider": ["./packages/ai-runtime/src/provider/index.ts"],
       "@cherrystudio/ai-runtime/runtime": ["./packages/ai-runtime/src/runtime/index.ts"],
       "@cherrystudio/ai-runtime/tools": ["./packages/ai-runtime/src/tools/index.ts"],

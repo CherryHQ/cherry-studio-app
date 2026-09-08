@@ -31,5 +31,9 @@ export function useResolvedFile(entryId: FileEntryId) {
   return {
     data,
     isLoading: entryQuery.isLoading || (Boolean(entryQuery.data) && uriQuery.isLoading),
+    refetch: async () => {
+      await entryQuery.refetch();
+      await uriQuery.refetch();
+    },
   };
 }

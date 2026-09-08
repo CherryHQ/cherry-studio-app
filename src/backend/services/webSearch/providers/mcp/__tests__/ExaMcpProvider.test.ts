@@ -23,6 +23,14 @@ const SSE_RESULT_FRAME = readFileSync(
   path.join(__dirname, '../../__tests__/fixtures/exa-mcp-response.txt'),
   'utf8',
 );
+const HIGHLIGHTS_RESULT_FRAME = readFileSync(
+  path.join(__dirname, '../../__tests__/fixtures/exa-mcp-highlights-response.txt'),
+  'utf8',
+);
+const FETCH_RESULT_FRAME = readFileSync(
+  path.join(__dirname, '../../__tests__/fixtures/exa-mcp-fetch-response.txt'),
+  'utf8',
+);
 
 describe('ExaMcpProvider', () => {
   const originalFetch = global.fetch;
@@ -80,6 +88,79 @@ describe('ExaMcpProvider', () => {
     });
   });
 
+  test('keeps the source text from the hosted service current Highlights response', async () => {
+    mockTextResponse(HIGHLIGHTS_RESULT_FRAME);
+    const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+    const response = await provider.searchKeywords('React Native networking', runtimeConfig);
+
+    expect(response.results).toHaveLength(2);
+    expect(response.results[0]).toMatchObject({
+      url: 'https://reactnative.dev/docs/network',
+      content: expect.stringContaining('Using Fetch'),
+    });
+    expect(response.results.every((result) => result.content.trim().length > 0)).toBe(true);
+  });
+
+  test('fetches page text through hosted Exa without a user API key', async () => {
+    const fetchMock = mockTextResponse(FETCH_RESULT_FRAME);
+    const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+    const response = await provider.fetchUrls('https://example.com', runtimeConfig);
+
+    const request = fetchMock.mock.calls[0][1];
+    expect(JSON.parse(request.body)).toMatchObject({
+      method: 'tools/call',
+      params: { name: 'web_fetch_exa', arguments: { urls: ['https://example.com'] } },
+    });
+    expect((request.headers as Headers).has('x-api-key')).toBe(false);
+    expect(response).toMatchObject({
+      providerId: 'exa-mcp',
+      capability: 'fetchUrls',
+      results: [
+        {
+          title: 'Example Domain',
+          url: 'https://example.com',
+          sourceInput: 'https://example.com',
+          content: expect.stringContaining('This domain is for use in documentation examples'),
+        },
+      ],
+    });
+  });
+
+  test('preserves paragraph breaks inside a search result', async () => {
+    mockTextResponse(
+      JSON.stringify({
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: 'Title: Article\nURL: https://example.com/article\nText: First paragraph.\n\nSecond paragraph.\n\nTitle: Another\nURL: https://example.com/another\nText: Another body.',
+            },
+          ],
+        },
+      }),
+    );
+    const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+    const response = await provider.searchKeywords('articles', runtimeConfig);
+
+    expect(response.results).toHaveLength(2);
+    expect(response.results[0].content).toBe('First paragraph.\n\nSecond paragraph.');
+  });
+
+  test.each([
+    { result: { isError: true, content: [{ type: 'text', text: 'Rate limit exceeded' }] } },
+    { error: { code: -32603, message: 'Rate limit exceeded' } },
+  ])('does not turn a remote tool error into empty successful search results', async (payload) => {
+    mockTextResponse(`data: ${JSON.stringify(payload)}\n\n`);
+    const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+    await expect(provider.searchKeywords('query', runtimeConfig)).rejects.toThrow(
+      'Rate limit exceeded',
+    );
+  });
+
   test.each([
     { apiHost: '', code: 'api_host_missing' },
     { apiHost: 'not-a-url', code: 'api_host_invalid' },
@@ -96,6 +177,26 @@ describe('ExaMcpProvider', () => {
       code,
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('preserves HTTP status and retry hints while sending an optional configured key', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        new Response('Rate limit exceeded', { status: 429, headers: { 'retry-after': '60' } }),
+      );
+    const provider = new ExaMcpProvider(
+      createProvider({ apiKeys: ['configured-key'] }),
+      new ApiKeyRotationState(),
+    );
+
+    await expect(provider.fetchUrls('https://example.com', runtimeConfig)).rejects.toMatchObject({
+      kind: 'http',
+      status: 429,
+      retryAfter: '60',
+    });
+    const headers = jest.mocked(global.fetch).mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get('x-api-key')).toBe('configured-key');
   });
 
   test('skips malformed SSE frames and keeps parsing later frames', async () => {
@@ -119,10 +220,26 @@ describe('ExaMcpProvider', () => {
 
     const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
 
-    await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toThrow(
-      'Exa MCP response parsing failed: no parseable content found',
-    );
+    await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toMatchObject({
+      message: 'Exa MCP response parsing failed: no parseable content found',
+      kind: 'invalid_response',
+      code: 'MCP_INVALID_RESPONSE',
+    });
   });
+
+  test.each(['', 'Invalid API key'])(
+    'preserves HTTP rejection status in lookup diagnostics (%s)',
+    async (body) => {
+      global.fetch = jest.fn().mockResolvedValue(new Response(body, { status: 401 }));
+      const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
+
+      await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toMatchObject({
+        name: 'HttpError',
+        kind: 'http',
+        status: 401,
+      });
+    },
+  );
 
   test('surfaces the internal timeout as a TimeoutError rather than an AbortError', async () => {
     jest.useFakeTimers();
@@ -169,7 +286,10 @@ function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchPr
     name: 'Exa MCP',
     type: 'mcp',
     apiKeys: [],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' }],
+    capabilities: [
+      { feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' },
+      { feature: 'fetchUrls', apiHost: 'https://mcp.exa.ai/mcp' },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

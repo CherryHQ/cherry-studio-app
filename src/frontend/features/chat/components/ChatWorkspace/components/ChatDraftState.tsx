@@ -1,15 +1,20 @@
-import { Image } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-const CHERRY_STUDIO_LOGO = require('@/assets/cherry-studio-splash-logo.png');
+import { AgentAvatar } from '@/frontend/components/Avatar';
 
 type ChatDraftStateProps = {
+  assistantAvatarUri?: null | string;
+  assistantName?: string;
   contentBottomInset: number;
 };
 
-/** Quiet brand surface shown before the first message is sent. */
-export function ChatDraftState({ contentBottomInset }: ChatDraftStateProps) {
+/** Agent greeting shown before the first message is sent. */
+export function ChatDraftState({
+  assistantAvatarUri,
+  assistantName,
+  contentBottomInset,
+}: ChatDraftStateProps) {
   const { t } = useTranslation();
 
   return (
@@ -18,15 +23,9 @@ export function ChatDraftState({ contentBottomInset }: ChatDraftStateProps) {
       style={{ paddingBottom: contentBottomInset }}
     >
       <View className="items-center gap-6">
-        <View className="size-16 items-center justify-center rounded-full bg-primary/10">
-          <Image
-            accessibilityIgnoresInvertColors
-            accessible={false}
-            className="size-16"
-            contentFit="contain"
-            source={CHERRY_STUDIO_LOGO}
-          />
-        </View>
+        {assistantName ? (
+          <AgentAvatar name={assistantName} size={48} uri={assistantAvatarUri} />
+        ) : null}
         <Text className="text-center font-medium text-foreground text-xl" numberOfLines={2}>
           {t('chat.draft.greeting')}
         </Text>

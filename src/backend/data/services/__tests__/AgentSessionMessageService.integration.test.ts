@@ -39,6 +39,9 @@ describe('AgentSessionMessageService persistence', () => {
       modelId: null,
       parts: [{ state: 'done', text: 'C', type: 'text' }],
       sessionId: 'session-1',
+      stats: {
+        runtimeTiming: { startedAt: 300, completedAt: 300, spans: [] },
+      },
       status: 'success',
     });
 
@@ -78,7 +81,7 @@ function insertSession(database: DatabaseSync, id: string): void {
   database
     .prepare(
       `INSERT INTO agent_session (
-        id, agent_id, title, title_is_manual, execution_target,
+        id, agent_id, name, is_name_manually_edited, execution_target,
         last_activity_at, created_at, updated_at
       ) VALUES (?, 'agent-1', '', 0, '{"kind":"local"}', 1, 1, 1)`,
     )
@@ -92,7 +95,7 @@ function insertMessage(
   database
     .prepare(
       `INSERT INTO agent_session_message (
-        id, session_id, turn_id, role, data, status, activity_at, created_at, updated_at
+        id, session_id, turn_id, role, data, status, stats, created_at, updated_at
       ) VALUES (?, 'session-1', ?, 'assistant', ?, 'success', ?, ?, ?)`,
     )
     .run(
@@ -102,7 +105,13 @@ function insertMessage(
         version: 1,
         parts: [{ id: `part-${values.id}`, type: 'text', text: values.text, state: 'done' }],
       }),
-      values.createdAt,
+      JSON.stringify({
+        runtimeTiming: {
+          startedAt: values.createdAt,
+          completedAt: values.createdAt,
+          spans: [],
+        },
+      }),
       values.createdAt,
       values.createdAt,
     );

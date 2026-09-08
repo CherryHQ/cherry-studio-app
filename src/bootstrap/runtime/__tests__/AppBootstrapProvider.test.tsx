@@ -38,7 +38,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
     initialize,
     runPostReadyTasks,
     runtime: {
-      backend: {} as Backend,
+      backend: { file: { subscribeChanges: () => () => {} } } as unknown as Backend,
       dataApi: {} as ApiClient,
       preference: {} as PreferenceClient,
       dispose,

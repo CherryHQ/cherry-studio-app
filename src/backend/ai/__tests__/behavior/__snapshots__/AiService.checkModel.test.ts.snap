@@ -6,7 +6,7 @@ exports[`AiService.checkModel AI SDK contract probes language models through gen
     "aborted": false,
   },
   "headers": {
-    "user-agent": "ai/6.0.183",
+    "user-agent": "ai/6.0.185",
   },
   "prompt": [
     {

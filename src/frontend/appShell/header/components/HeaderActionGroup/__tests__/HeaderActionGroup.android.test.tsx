@@ -19,7 +19,7 @@ describe('HeaderActionGroup.android', () => {
     renderer = undefined;
   });
 
-  it('keeps adjacent actions in separate 48dp targets around the inset surface', () => {
+  it('keeps adjacent actions in separate 48dp targets around the 36dp inset surface', () => {
     const Icon = () => null;
 
     act(() => {
@@ -52,7 +52,8 @@ describe('HeaderActionGroup.android', () => {
       (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
     );
 
-    expect(surface.props.className).toContain('absolute inset-1');
+    expect(surface.props.className).toContain('absolute inset-1.5');
+    expect(surface.props.className).toContain('bg-card shadow-xs');
     expect(actions).toHaveLength(2);
     actions.forEach((action) => {
       expect(action.props.className.split(' ')).toContain('size-12');

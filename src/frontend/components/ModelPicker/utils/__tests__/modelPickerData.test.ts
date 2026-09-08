@@ -221,6 +221,7 @@ describe('model picker data helpers', () => {
         capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
         modelId: 'gpt-image-2',
         name: 'GPT Image 2',
+        outputModalities: [MODALITY.IMAGE],
         providerId: 'openai',
       }),
       createModel({
@@ -228,6 +229,7 @@ describe('model picker data helpers', () => {
         isEnabled: false,
         modelId: 'disabled-image',
         name: 'Disabled Image',
+        outputModalities: [MODALITY.IMAGE],
         providerId: 'openai',
       }),
     ];

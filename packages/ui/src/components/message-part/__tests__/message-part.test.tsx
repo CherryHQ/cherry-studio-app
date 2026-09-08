@@ -113,6 +113,15 @@ jest.mock('react-native-worklets', () => ({
 const findRenderedByTestId = (renderer: ReactTestRenderer, testID: string) =>
   renderer.root.findAllByType(View).filter((node) => node.props.testID === testID);
 
+const findPressableByTestId = (renderer: ReactTestRenderer, testID: string) => {
+  const pressable = renderer.root.findAll(
+    (node) => node.props?.accessibilityRole === 'button' && node.props.testID === testID,
+  )[0];
+
+  if (!pressable) throw new Error(`Pressable ${testID} was not rendered.`);
+  return pressable;
+};
+
 describe('MessagePart', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -200,6 +209,35 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'Reasoning and tools' })).toBeDefined();
   });
 
+  it('uses compact status rows only inside an expanded process', () => {
+    act(() => {
+      renderer = create(
+        <>
+          <MessagePart.Tool state="complete" testID="standalone-tool" title="Standalone tool">
+            <Text>Standalone details</Text>
+          </MessagePart.Tool>
+          <MessagePart.Process state="complete" testID="process" title="Took 16s">
+            <MessagePart.Tool state="complete" testID="nested-tool" title="Nested tool">
+              <Text>Nested details</Text>
+            </MessagePart.Tool>
+          </MessagePart.Process>
+        </>,
+      );
+    });
+
+    const standaloneTrigger = findPressableByTestId(renderer!, 'standalone-tool-trigger');
+    const processTrigger = findPressableByTestId(renderer!, 'process-trigger');
+    expect(standaloneTrigger.props.className).toContain('min-h-10');
+    expect(standaloneTrigger.props.hitSlop).toBe(4);
+    expect(processTrigger.props.className).toContain('min-h-10');
+
+    act(() => processTrigger.props.onPress());
+
+    const nestedTrigger = findPressableByTestId(renderer!, 'nested-tool-trigger');
+    expect(nestedTrigger.props.className).toContain('min-h-8');
+    expect(nestedTrigger.props.hitSlop).toBe(6);
+  });
+
   it('shimmers the running tool title without removing its status text', () => {
     act(() => {
       renderer = create(
@@ -271,7 +309,7 @@ describe('MessagePart', () => {
     act(() => renderer!.root.findByProps({ testID: 'group-trigger' }).props.onPress());
     expect(findRenderedByTestId(renderer!, 'group-steps')).toHaveLength(0);
     expect(renderer!.root.findByProps({ children: '1 failed' }).props.className).toContain(
-      'text-destructive',
+      'text-error',
     );
   });
 
@@ -301,13 +339,13 @@ describe('MessagePart', () => {
     const warning = renderer!.root.findAllByProps({ testID: 'unknown' }).at(-1);
     expect(warning?.props.accessibilityLabel).toBe('Unknown Part');
     expect(warning?.props.className).toBe(
-      'flex-row items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3',
+      'flex-row items-center gap-2 rounded-lg border border-warning-border bg-warning-subtle p-3',
     );
     expect(renderer!.root.findByProps({ testID: 'unknown-warning-icon' }).props.className).toBe(
-      'size-4 shrink-0 text-warning',
+      'size-4 shrink-0 text-warning-subtle-foreground',
     );
     expect(renderer!.root.findByProps({ children: 'Unknown Part' }).props.className).toBe(
-      'text-base text-warning',
+      'text-base text-warning-subtle-foreground',
     );
   });
 
@@ -359,6 +397,17 @@ describe('MessagePart', () => {
       renderer = create(<MessagePart.Error message="Could not complete." title="Quota exceeded" />);
     });
     expect(renderer!.root.findAllByProps({ accessibilityRole: 'button' })).toHaveLength(0);
+    expect(
+      renderer!.root.findByProps({
+        className: 'gap-1.5 rounded-lg border border-error-border bg-error-subtle p-3',
+      }),
+    ).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Quota exceeded' }).props.className).toContain(
+      'text-error-subtle-foreground',
+    );
+    expect(renderer!.root.findByProps({ children: 'Could not complete.' }).props.className).toBe(
+      'text-base text-error-subtle-foreground',
+    );
 
     const onPress = jest.fn();
     act(() => {

@@ -6,7 +6,7 @@ import type {
   ComposerAttachmentSource,
   ComposerInitialAttachment,
 } from '@/frontend/components/Composer/utils/composerAttachments';
-import type { FileEntryId } from '@/shared/data/types/file';
+import { type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 
 import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
 
@@ -97,7 +97,7 @@ describe('useManagedComposerAttachments', () => {
     expect(JSON.stringify(mockLoggerWarn.mock.calls)).not.toContain('file:///');
   });
 
-  it('deletes an import that finishes after its placeholder was removed', async () => {
+  it('keeps a completed import in the library after its placeholder was removed', async () => {
     const pending = deferred<ReturnType<typeof resolvedFile>>();
     mockCreateInternalEntry.mockReturnValue(pending.promise);
     await renderHook();
@@ -110,7 +110,7 @@ describe('useManagedComposerAttachments', () => {
     });
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
   it('detaches a borrowed ready attachment without deleting its file entry', async () => {
@@ -124,7 +124,7 @@ describe('useManagedComposerAttachments', () => {
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
   });
 
-  it('deletes a composer-owned ready attachment when the user removes it', async () => {
+  it('keeps an imported file when the user removes its draft reference', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000016', 'owned.pdf'),
     );
@@ -135,10 +135,10 @@ describe('useManagedComposerAttachments', () => {
     await act(async () => snapshot?.removeAttachment('source:owned.pdf'));
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000016');
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('deletes an import that finishes after the composer unmounts', async () => {
+  it('keeps an import that finishes after the composer unmounts', async () => {
     const pending = deferred<ReturnType<typeof resolvedFile>>();
     mockCreateInternalEntry.mockReturnValue(pending.promise);
     await renderHook();
@@ -151,10 +151,10 @@ describe('useManagedComposerAttachments', () => {
       await pending.promise;
     });
 
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000017');
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('deletes a composer-owned ready attachment when its Draft unmounts', async () => {
+  it('keeps a completed import when its draft unmounts', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000021', 'abandoned-ready.pdf'),
     );
@@ -165,7 +165,7 @@ describe('useManagedComposerAttachments', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
 
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000021');
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
   it('hands attachments to the sender without deleting them when cleared', async () => {
@@ -178,7 +178,7 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('relinquishes temporary ownership after a successful send clears the draft', async () => {
+  it('can reattach a sent library reference without copying or deleting it', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000019', 'sent.pdf'),
     );
@@ -195,7 +195,7 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('restores temporary ownership when a failed send restores the draft', async () => {
+  it('restores a failed-send reference only once when the same file was reselected from the library', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000020', 'retry.pdf'),
     );
@@ -204,15 +204,20 @@ describe('useManagedComposerAttachments', () => {
     await act(flushPromises);
     const restored = snapshot?.attachments[0];
     if (!restored || restored.status !== 'ready') throw new Error('missing ready attachment');
+    const reselected = { ...restored, id: `file-entry:${restored.fileEntryId}` };
 
     await act(async () => snapshot?.clearAttachments());
-    await act(async () => snapshot?.setAttachments([restored]));
-    await act(async () => snapshot?.removeAttachment(restored.id));
+    await act(async () => snapshot?.addAttachments([reselected]));
+    await act(async () => snapshot?.addAttachments([restored]));
 
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000020');
+    expect(snapshot?.attachments).toEqual([reselected]);
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(1);
+    await act(async () => snapshot?.removeAttachment(reselected.id));
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
-  it('deletes restored ownership when a failed send finishes after Draft unmount', async () => {
+  it('keeps files when a failed send finishes after draft unmount', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000022', 'abandoned-retry.pdf'),
     );
@@ -227,7 +232,7 @@ describe('useManagedComposerAttachments', () => {
     renderer = undefined;
     await act(async () => snapshot?.setAttachments([restored]));
 
-    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000022');
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
   it('imports transient initial attachments but mounts managed ones as ready', async () => {
@@ -269,17 +274,49 @@ describe('useManagedComposerAttachments', () => {
     ]);
   });
 
-  it('rejects unsupported images before importing them', async () => {
+  it('imports image formats before any send suitability check', async () => {
+    mockCreateInternalEntry.mockImplementation(
+      async ({ name, mediaType }: { name: string; mediaType: string }) => {
+        const resolved = resolvedFile(
+          name.endsWith('heic')
+            ? '00000000-0000-7000-8000-000000000035'
+            : '00000000-0000-7000-8000-000000000036',
+          name,
+        );
+        return { ...resolved, entry: { ...resolved.entry, mediaType } };
+      },
+    );
     await renderHook([imageSource('initial.heic', 'image/heic')]);
-
     await act(async () => snapshot?.addAttachments([imageSource('file.avif', 'image/avif')]));
+    await act(flushPromises);
+    expect(snapshot?.attachments.map(({ name, status }) => ({ name, status }))).toEqual([
+      { name: 'initial.heic', status: 'ready' },
+      { name: 'file.avif', status: 'ready' },
+    ]);
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(2);
+    expect(mockToastShow).not.toHaveBeenCalled();
+  });
 
-    expect(snapshot?.attachments).toEqual([]);
-    expect(mockCreateInternalEntry).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'chat.attachments.unsupportedImageFormat',
-      variant: 'danger',
+  it('does not let a removed import replace a newly added attachment with the same source id', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(resolvedFile('00000000-0000-7000-8000-000000000038', 'same.pdf'));
+    await renderHook();
+    await act(async () => snapshot?.addAttachments([source('same.pdf')]));
+    await act(async () => snapshot?.removeAttachment('source:same.pdf'));
+    await act(async () => snapshot?.addAttachments([source('same.pdf')]));
+    await act(async () => {
+      first.resolve(resolvedFile('00000000-0000-7000-8000-000000000037', 'same.pdf'));
+      await first.promise;
     });
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000038',
+        status: 'ready',
+      }),
+    ]);
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 });
 
@@ -333,14 +370,15 @@ function readyAttachment(entryId: FileEntryId, name: string): ComposerAttachment
 
 function resolvedFile(entryId: FileEntryId, name: string) {
   return {
-    entry: {
+    entry: FileEntrySchema.parse({
       createdAt: 1_754_611_200_000,
       filename: name,
       id: entryId,
       mediaType: 'application/pdf',
+      provenance: 'imported',
       size: 128,
       updatedAt: 1_754_611_200_000,
-    },
+    }),
     uri: `file:///managed/${name}`,
   };
 }

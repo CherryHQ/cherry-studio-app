@@ -1,9 +1,12 @@
+import type { TFunction } from 'i18next';
+
 import type { EndpointType, Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import {
   getProviderChatEndpointTypes,
+  getProviderModelEndpointLabelKey,
   type ProviderModelChatEndpointType,
   PROVIDER_MODEL_CHAT_ENDPOINT_TYPES,
 } from './providerModelAdd';
@@ -13,6 +16,25 @@ export const PROVIDER_DEFAULT_ENDPOINT_SELECTION = 'provider-default';
 export type ProviderModelEndpointSelection =
   | typeof PROVIDER_DEFAULT_ENDPOINT_SELECTION
   | EndpointType;
+
+export function getProviderModelEndpointOptions(
+  provider: Provider,
+  t: TFunction,
+): { label: string; value: ProviderModelEndpointSelection }[] {
+  const defaultEndpoint = provider.defaultChatEndpoint
+    ? t(getProviderModelEndpointLabelKey(provider.defaultChatEndpoint))
+    : t('settings.provider.models.endpoint.unavailable');
+  return [
+    {
+      label: t('settings.provider.models.endpoint.followDefault', { endpoint: defaultEndpoint }),
+      value: PROVIDER_DEFAULT_ENDPOINT_SELECTION,
+    },
+    ...getProviderChatEndpointTypes(provider).map((value) => ({
+      label: t(getProviderModelEndpointLabelKey(value)),
+      value,
+    })),
+  ];
+}
 
 export type ProviderModelEndpointState =
   | { endpointType: ProviderModelChatEndpointType; kind: 'default' | 'explicit' }

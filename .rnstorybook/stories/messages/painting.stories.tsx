@@ -12,6 +12,7 @@ const meta = {
     error: null,
     interruption: null,
     outputs: [],
+    prompt: 'Create a cinematic cherry-red city at twilight.',
     resolution: '1024 × 1024',
     status: 'idle',
   },

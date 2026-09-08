@@ -10,6 +10,8 @@ import type { ModelTypeFilter } from '../utils/modelTypeFilter';
 import { ModelPickerList } from './ModelPickerList';
 
 type ModelPickerDrawerProps = {
+  emptyText?: string;
+  isModelVisible?: (item: ModelPickerModelItem) => boolean;
   modelType: ModelTypeFilter;
   onAddProvider?: () => void;
   onClose: () => void;
@@ -22,6 +24,8 @@ type ModelPickerDrawerProps = {
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
+  emptyText,
+  isModelVisible,
   modelType,
   onAddProvider,
   onClose,
@@ -47,6 +51,8 @@ export function ModelPickerDrawer({
     >
       <ModelPickerDrawerContent
         deferredSearchText={deferredSearchText}
+        emptyText={emptyText}
+        isModelVisible={isModelVisible}
         modelType={modelType}
         onAddProvider={onAddProvider}
         onSelect={onSelect}
@@ -63,6 +69,8 @@ export function ModelPickerDrawer({
 
 function ModelPickerDrawerContent({
   deferredSearchText,
+  emptyText,
+  isModelVisible,
   modelType,
   onAddProvider,
   onSelect,
@@ -74,7 +82,14 @@ function ModelPickerDrawerContent({
   selectedModelId,
 }: Pick<
   ModelPickerDrawerProps,
-  'modelType' | 'onAddProvider' | 'onSelect' | 'open' | 'providerId' | 'selectedModelId'
+  | 'isModelVisible'
+  | 'emptyText'
+  | 'modelType'
+  | 'onAddProvider'
+  | 'onSelect'
+  | 'open'
+  | 'providerId'
+  | 'selectedModelId'
 > & {
   deferredSearchText: string;
   onSearchFocusChange: (isFocused: boolean) => void;
@@ -87,7 +102,17 @@ function ModelPickerDrawerContent({
     providerId,
     searchText: deferredSearchText,
   });
-  const listItems = useMemo(() => buildModelPickerListItems(groups), [groups]);
+  const visibleGroups = useMemo(
+    () =>
+      isModelVisible
+        ? groups.flatMap((group) => {
+            const items = group.items.filter(isModelVisible);
+            return items.length > 0 ? [{ ...group, items }] : [];
+          })
+        : groups,
+    [groups, isModelVisible],
+  );
+  const listItems = useMemo(() => buildModelPickerListItems(visibleGroups), [visibleGroups]);
   const hasSearch = deferredSearchText.trim().length > 0;
   const emptyAction =
     !hasSearch && onAddProvider
@@ -112,7 +137,11 @@ function ModelPickerDrawerContent({
       <View className="min-h-0 flex-1">
         <ModelPickerList
           emptyAction={emptyAction}
-          emptyText={t(hasSearch ? 'settings.provider.models.search.empty' : 'modelPicker.empty')}
+          emptyText={
+            hasSearch
+              ? t('settings.provider.models.search.empty')
+              : (emptyText ?? t('modelPicker.empty'))
+          }
           isLoading={isLoading}
           isOpen={open}
           listItems={listItems}

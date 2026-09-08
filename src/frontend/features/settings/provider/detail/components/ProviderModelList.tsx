@@ -12,13 +12,10 @@ import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderModelListContent } from '../../models/components/ProviderModelListContent';
 import { useProviderModelEndpointUpdate } from '../../models/hooks/useProviderModelEndpointUpdate';
-import {
-  getProviderChatEndpointTypes,
-  getProviderModelEndpointLabelKey,
-} from '../../models/utils/providerModelAdd';
+import type { useProviderModelManagement } from '../../models/hooks/useProviderModelManagement';
 import {
   getProviderModelEndpointSelection,
-  PROVIDER_DEFAULT_ENDPOINT_SELECTION,
+  getProviderModelEndpointOptions,
   type ProviderModelEndpointSelection,
 } from '../../models/utils/providerModelEndpoint';
 
@@ -27,7 +24,11 @@ type ProviderModelListProps = {
   isEndpointSelectionDisabled?: boolean;
   isFiltered?: boolean;
   isLoading: boolean;
+  supportedModelIds?: ReadonlySet<string>;
+  management?: ReturnType<typeof useProviderModelManagement>;
   models: Model[];
+  onAddModelManually?: () => void;
+  onPullModels?: () => void;
   provider: Provider | undefined;
 };
 
@@ -36,7 +37,11 @@ export function ProviderModelList({
   isEndpointSelectionDisabled = false,
   isFiltered = false,
   isLoading,
+  management,
+  supportedModelIds,
   models,
+  onAddModelManually,
+  onPullModels,
   provider,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
@@ -45,27 +50,10 @@ export function ProviderModelList({
   const hasNoVisibleModels = !isLoading && models.length === 0;
   const closeEndpointPicker = useCallback(() => setSelectedModel(undefined), []);
   const openEndpointPicker = useCallback((model: Model) => setSelectedModel(model), []);
-  const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(() => {
-    if (!provider) {
-      return [];
-    }
-
-    const defaultEndpointLabel = provider.defaultChatEndpoint
-      ? t(getProviderModelEndpointLabelKey(provider.defaultChatEndpoint))
-      : t('settings.provider.models.endpoint.unavailable');
-    return [
-      {
-        label: t('settings.provider.models.endpoint.followDefault', {
-          endpoint: defaultEndpointLabel,
-        }),
-        value: PROVIDER_DEFAULT_ENDPOINT_SELECTION,
-      },
-      ...getProviderChatEndpointTypes(provider).map((endpointType) => ({
-        label: t(getProviderModelEndpointLabelKey(endpointType)),
-        value: endpointType,
-      })),
-    ];
-  }, [provider, t]);
+  const endpointOptions = useMemo<OptionPickerOption<ProviderModelEndpointSelection>[]>(
+    () => (provider ? getProviderModelEndpointOptions(provider, t) : []),
+    [provider, t],
+  );
   const handleEndpointChange = useCallback(
     (selection: ProviderModelEndpointSelection) => {
       if (selectedModel) {
@@ -79,6 +67,8 @@ export function ProviderModelList({
     <>
       <ProviderModelListContent
         groupByPurpose={groupByPurpose}
+        management={management}
+        supportedModelIds={supportedModelIds}
         isEndpointSelectionDisabled={isEndpointSelectionDisabled}
         ListEmptyComponent={
           hasNoVisibleModels && isFiltered ? (
@@ -90,7 +80,27 @@ export function ProviderModelList({
               {isLoading ? (
                 <ContentState.Loading layout="row" title={t('settings.provider.models.loading')} />
               ) : (
-                <ContentState.Empty layout="leading" title={t('settings.provider.models.empty')} />
+                <ContentState.Empty
+                  description={t('settings.provider.models.emptyDescription')}
+                  layout="leading"
+                  primaryAction={
+                    onPullModels
+                      ? {
+                          children: t('settings.provider.models.emptyAction'),
+                          onPress: onPullModels,
+                        }
+                      : undefined
+                  }
+                  secondaryAction={
+                    onAddModelManually
+                      ? {
+                          children: t('settings.provider.models.addTitle'),
+                          onPress: onAddModelManually,
+                        }
+                      : undefined
+                  }
+                  title={t('settings.provider.models.empty')}
+                />
               )}
             </ProviderModelStateCard>
           )

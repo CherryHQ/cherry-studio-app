@@ -25,6 +25,18 @@ jest.mock('expo-glass-effect', () => ({
   isLiquidGlassAvailable: () => false,
 }));
 
+// expo-observe resolves the `ExpoObserve` native module the moment it is
+// imported, and the root layout imports it at module scope. `wrap` is an
+// identity here so route trees render exactly what they render in production,
+// and `markInteractive` is a spy so entry-screen suites can assert the call.
+jest.mock('expo-observe', () => ({
+  Observe: { configure: jest.fn() },
+  ObserveRoot: Object.assign(({ children }: { children: unknown }) => children, {
+    wrap: (Component: unknown) => Component,
+  }),
+  useObserve: () => ({ markInteractive: jest.fn() }),
+}));
+
 // expo-screen-corner-radius resolves its native module at import time, so any
 // suite reaching BottomSheet throws without this. `null` is the library's own
 // "display radius unknown" answer, which every caller already handles.

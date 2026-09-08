@@ -10,7 +10,10 @@ import type {
   ProviderRegistryUpdateResult,
   ProvidersModule,
 } from '@/shared/contracts';
-import type { Provider } from '@/shared/data/types/provider';
+import { ProviderSetupError, type ProviderSetupStatus } from '@/shared/contracts/providers';
+import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+
+import { getProviderConfigurationIssue } from './providerConfiguration';
 
 type ProviderAvatarStorage = {
   persist(providerId: string, sourceUri: string): Promise<string>;
@@ -28,7 +31,12 @@ export type ProvidersModuleDependencies = {
     create(input: ReturnType<typeof createPresetProviderInput>): Promise<Provider>;
     find(providerId: string): Promise<Provider | null>;
     list(): Promise<Provider[]>;
+    get(providerId: string): Promise<Provider>;
+    keys(providerId: string): Promise<ApiKeyEntry[]>;
+    auth(providerId: string): Promise<AuthConfig | null>;
+    enable(providerId: string): Promise<Provider>;
   };
+  hasAvailableModels(provider: Provider): Promise<boolean>;
   registryUpdates: {
     apply(): Promise<ProviderRegistryUpdateResult>;
     check(): Promise<ProviderRegistryUpdateCheck>;
@@ -41,8 +49,25 @@ export function createProvidersModule({
   catalog,
   providers,
   registryUpdates,
+  hasAvailableModels,
 }: ProvidersModuleDependencies): ProvidersModule {
+  const getSetupStatus = async (providerId: string): Promise<ProviderSetupStatus> => {
+    const provider = await providers.get(providerId);
+    const [keys, auth] = await Promise.all([
+      providers.keys(providerId),
+      providers.auth(providerId),
+    ]);
+    const issue = getProviderConfigurationIssue(provider, keys, auth);
+    return { provider, issue, hasModels: !issue && (await hasAvailableModels(provider)) };
+  };
   return {
+    getSetupStatus,
+    enable: async (providerId) => {
+      const status = await getSetupStatus(providerId);
+      if (status.issue) throw new ProviderSetupError(status.issue);
+      if (!status.hasModels) throw new ProviderSetupError('no-models');
+      return status.provider.isEnabled ? status.provider : providers.enable(providerId);
+    },
     applyRegistryUpdate: registryUpdates.apply,
     checkRegistryUpdate: registryUpdates.check,
     importPreset: async (providerId) => {
