@@ -26,6 +26,24 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `models/` owns provider model grouping, synchronization, health checks, and list UI.
 - `components/ProviderForm/` owns the compound form shared by provider creation and provider detail.
 
+## Provider List Motion
+
+The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows
+share one recycled `AnimatedLegendList`; only position changes animate, using the shared settle
+curve over 250 ms. The viewport fills its available space instead of resizing from content
+measurements. Header and provider rows use separate recycling pools.
+
+A toggle responds immediately through the shared platform switch, with pending feedback confined
+to that provider. Setup requirements and failed writes restore the persisted switch state. The
+list changes groups once the refreshed data supplies the final order, avoiding a second reorder
+after an optimistic move.
+
+`ProviderListRow` owns the enabled/disabled label crossfade (200 ms). Reversals continue from its
+current opacity. Only this small status subtree is keyed to the provider so recycling starts at
+the new provider's state without replaying an entrance. System Reduce Motion skips both the row
+movement and label crossfade, leaving the final switch, text, and group state intact. Colors use
+the shared theme tokens in both light and dark themes.
+
 ## Provider Catalog
 
 `catalog/ProviderCatalogScreen` owns the bundled provider catalog. A fixed custom-provider row is the first

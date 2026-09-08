@@ -1,10 +1,12 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { Section, Spinner, useToast } from '@cherrystudio/ui/components';
-import { SectionList } from '@legendapp/list/section-list';
+import { duration, easing } from '@cherrystudio/ui/motion';
+import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
+import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
@@ -12,35 +14,28 @@ import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
 import type { Provider } from '@/shared/data/types/provider';
 
-import { SettingsServiceRow, type SettingsServiceRowProps } from '../components/SettingsServiceRow';
-import { ProviderAvatar } from './components/ProviderAvatar';
+import { ProviderListRow } from './components/ProviderListRow';
 import { useProviderSetup } from './hooks/useProviderSetup';
 import { PROVIDER_LIST_PAGE_SIZE, PROVIDER_LIST_STALE_TIME } from './providerListQuery';
 
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;
-const PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT = 48;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 72;
+const providerListTransition = LinearTransition.duration(duration.base)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
 
-type ProviderListRow = SettingsServiceRowProps & {
-  isEnabled: boolean;
-};
-type ProviderListSection = { data: ProviderListRow[]; title: string };
+type ProviderListItem =
+  | { id: string; kind: 'header'; title: string }
+  | { id: string; kind: 'provider'; provider: Provider; isEnabled: boolean; isPending: boolean };
 
-const keyExtractor = (item: ProviderListRow) => item.id;
-const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
-  const { isEnabled: _isEnabled, ...row } = item;
-  return <SettingsServiceRow {...row} />;
-};
-const renderProviderSectionHeader = ({ section }: { section: ProviderListSection }) => (
-  <View className="h-12 justify-end px-4 pb-2">
-    <Text className="font-medium text-foreground-tertiary text-sm">{section.title}</Text>
-  </View>
-);
+const keyExtractor = (item: ProviderListItem) => `${item.kind}:${item.id}`;
+const getItemType = (item: ProviderListItem) => item.kind;
 
 export default function ProviderListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
   const { isPreparing, openSetup } = useProviderSetup();
+  const reducedMotion = useReducedMotion();
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
   const pendingProviderIdsRef = useRef(new Set<string>());
@@ -69,41 +64,43 @@ export default function ProviderListScreen() {
   const updateProviderEnabled = updateProviderEnabledMutation.trigger;
   const toggleProviderEnabled = useCallback(
     (provider: Provider, isEnabled: boolean) => {
-      if (provider.isEnabled === isEnabled || pendingProviderIdsRef.current.has(provider.id)) {
-        return;
-      }
-
-      if (isEnabled) {
-        void openSetup(provider.id, '/settings/provider');
+      if (
+        provider.isEnabled === isEnabled ||
+        pendingProviderIdsRef.current.has(provider.id) ||
+        (isEnabled && isPreparing)
+      ) {
         return;
       }
 
       pendingProviderIdsRef.current.add(provider.id);
       setPendingProviderStates((current) => new Map(current).set(provider.id, isEnabled));
 
-      void updateProviderEnabled({
-        body: { isEnabled },
-        params: { id: provider.id },
-      })
-        .then(() => {
-          toast.show({
-            label: t('settings.provider.toast.disabled', { name: provider.name }),
-            variant: 'success',
-          });
-        })
-        .catch(() => {
-          toast.show({ label: t('settings.provider.toast.toggleFailed'), variant: 'danger' });
-        })
-        .finally(() => {
-          pendingProviderIdsRef.current.delete(provider.id);
-          setPendingProviderStates((current) => {
-            const next = new Map(current);
-            next.delete(provider.id);
-            return next;
-          });
+      const update = isEnabled
+        ? openSetup(provider.id, '/settings/provider')
+        : updateProviderEnabled({
+            body: { isEnabled },
+            params: { id: provider.id },
+          })
+            .then(() => {
+              toast.show({
+                label: t('settings.provider.toast.disabled', { name: provider.name }),
+                variant: 'success',
+              });
+            })
+            .catch(() => {
+              toast.show({ label: t('settings.provider.toast.toggleFailed'), variant: 'danger' });
+            });
+
+      void update.finally(() => {
+        pendingProviderIdsRef.current.delete(provider.id);
+        setPendingProviderStates((current) => {
+          const next = new Map(current);
+          next.delete(provider.id);
+          return next;
         });
+      });
     },
-    [openSetup, t, toast, updateProviderEnabled],
+    [isPreparing, openSetup, t, toast, updateProviderEnabled],
   );
 
   const providersPageQuery = useInfiniteQuery('/providers/page', {
@@ -139,72 +136,52 @@ export default function ProviderListScreen() {
     },
     [router],
   );
-  const providerItems = useMemo<ProviderListRow[]>(
-    () =>
-      listedProviders.map((provider) => {
-        const displayedEnabled = pendingProviderStates.get(provider.id) ?? provider.isEnabled;
+  const providerItems = useMemo<ProviderListItem[]>(() => {
+    const items: ProviderListItem[] = [];
+    for (const isEnabled of [true, false]) {
+      // Move once, using the persisted order after refresh. The switch responds immediately.
+      const providers = listedProviders.filter((provider) => provider.isEnabled === isEnabled);
+      if (providers.length === 0) continue;
 
-        return {
-          avatar: (
-            <ProviderAvatar
-              displayContext="provider-list"
-              presetProviderId={provider.presetProviderId}
-              providerId={provider.id}
-              providerName={provider.name}
-            />
-          ),
-          enabledSwitch: {
-            accessibilityLabel: t(
-              displayedEnabled
-                ? 'settings.provider.disableProviderNamed'
-                : 'settings.provider.enableProviderNamed',
-              { name: provider.name },
-            ),
-            disabled: isPreparing || pendingProviderStates.has(provider.id),
-            onValueChange: (isEnabled) => toggleProviderEnabled(provider, isEnabled),
-            testID: `provider-enabled-switch-${provider.id}`,
-            value: displayedEnabled,
-          },
-          disabled: isPreparing,
+      items.push({
+        id: isEnabled ? 'enabled' : 'disabled',
+        kind: 'header',
+        title: t(
+          isEnabled ? 'settings.provider.section.enabled' : 'settings.provider.section.disabled',
+          { count: providers.length },
+        ),
+      });
+      for (const provider of providers) {
+        items.push({
           id: provider.id,
-          isEnabled: provider.isEnabled,
-          name: provider.name,
-          onPress: () => openProvider(provider),
-          testID: `provider-row-${provider.id}`,
-        };
-      }),
-    [isPreparing, listedProviders, openProvider, pendingProviderStates, t, toggleProviderEnabled],
+          kind: 'provider',
+          provider,
+          isEnabled: pendingProviderStates.get(provider.id) ?? provider.isEnabled,
+          isPending: pendingProviderStates.has(provider.id),
+        });
+      }
+    }
+    return items;
+  }, [listedProviders, pendingProviderStates, t]);
+  const renderProviderItem = useCallback(
+    ({ item }: { item: ProviderListItem }) =>
+      item.kind === 'header' ? (
+        <View className="min-h-12 justify-end px-4 pt-4 pb-2">
+          <Text accessibilityRole="header" className="font-medium text-foreground-tertiary text-sm">
+            {item.title}
+          </Text>
+        </View>
+      ) : (
+        <ProviderListRow
+          isEnabled={item.isEnabled}
+          isPending={item.isPending}
+          onOpen={openProvider}
+          onToggle={toggleProviderEnabled}
+          provider={item.provider}
+        />
+      ),
+    [openProvider, toggleProviderEnabled],
   );
-  const providerSections = useMemo<ProviderListSection[]>(() => {
-    const enabledProviders = providerItems.filter(({ isEnabled }) => isEnabled);
-    const disabledProviders = providerItems.filter(({ isEnabled }) => !isEnabled);
-
-    return [
-      {
-        data: enabledProviders,
-        title: t('settings.provider.section.enabled', {
-          count: enabledProviders.length,
-        }),
-      },
-      {
-        data: disabledProviders,
-        title: t('settings.provider.section.disabled', {
-          count: disabledProviders.length,
-        }),
-      },
-    ].filter(({ data }) => data.length > 0);
-  }, [providerItems, t]);
-  const measuredItemCount = providerItems.length + providerSections.length;
-  const [measuredList, setMeasuredList] = useState<{ height: number; itemCount: number }>();
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) => setMeasuredList({ height, itemCount: measuredItemCount }),
-    [measuredItemCount],
-  );
-  const cardHeight =
-    measuredList?.itemCount === measuredItemCount
-      ? measuredList.height
-      : providerItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
-        providerSections.length * PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT;
   const loadMoreProviders = useCallback(() => {
     if (!isFiltering && !hasPendingProviderUpdate) {
       void loadNextProviderPage();
@@ -243,28 +220,25 @@ export default function ProviderListScreen() {
       <View className="flex-1 px-4 pb-5">
         {providerItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">
-            <View style={{ height: cardHeight, maxHeight: '100%' }}>
-              <SectionList
-                alwaysBounceVertical={false}
-                estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
-                keyboardDismissMode="on-drag"
-                keyboardShouldPersistTaps="handled"
-                keyExtractor={keyExtractor}
-                ListFooterComponent={listFooter}
-                maintainVisibleContentPosition={false}
-                onContentSizeChange={handleContentSizeChange}
-                onEndReached={loadMoreProviders}
-                onEndReachedThreshold={0.7}
-                recycleItems
-                renderItem={renderProviderRow}
-                renderSectionHeader={renderProviderSectionHeader}
-                sections={providerSections}
-                showsVerticalScrollIndicator={false}
-                stickySectionHeadersEnabled={false}
-                style={styles.list}
-                testID="provider-list"
-              />
-            </View>
+            <AnimatedLegendList
+              alwaysBounceVertical={false}
+              data={providerItems}
+              estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
+              getItemType={getItemType}
+              itemLayoutAnimation={reducedMotion ? undefined : providerListTransition}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              keyExtractor={keyExtractor}
+              ListFooterComponent={listFooter}
+              maintainVisibleContentPosition={false}
+              onEndReached={loadMoreProviders}
+              onEndReachedThreshold={0.7}
+              recycleItems
+              renderItem={renderProviderItem}
+              showsVerticalScrollIndicator={false}
+              style={styles.list}
+              testID="provider-list"
+            />
           </View>
         ) : (
           <Section>
