@@ -4,6 +4,7 @@ import { PiRuntimeService } from '@/backend/ai/agent/runtime/pi/PiRuntimeService
 import { SqliteAgentSessionStore } from '@/backend/ai/agent/sessionStore/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
+import { TraceStorageService } from '@/backend/ai/observability/TraceStorageService';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
@@ -46,6 +47,7 @@ export const services = {
   WebSearchService,
   ProviderRegistryUpdaterService,
   McpRuntimeService,
+  TraceStorageService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

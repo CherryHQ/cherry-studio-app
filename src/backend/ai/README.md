@@ -37,6 +37,10 @@ boundaries around it.
   lives in `generation/`, and the Pi language compatibility decision lives in `agent/runtime/pi/`.
 - `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
   discovery used by MCP settings.
+- `observability/` owns local diagnostic traces: explicit span handles, bounded metadata capture,
+  retained JSONL files, and stable snapshots for future diagnostic packages. `TraceStorageService`
+  is lifecycle-owned and flushes on backgrounding and stop; the public instrumentation surface is
+  platform-independent. See [its contract](observability/README.md).
 
 Pure provider implementations, request types, and parameter policies must not be duplicated here.
 

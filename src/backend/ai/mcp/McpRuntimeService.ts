@@ -3,7 +3,7 @@ import { createMCPClient } from '@ai-sdk/mcp';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
-import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import type {
   McpConnectionConfig,
@@ -16,6 +16,8 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import { isSameMcpConnectionConfig, normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
+import type { TraceRecorder, TraceSpan } from '../observability';
+import { endMcpTrace } from './endMcpTrace';
 import {
   createBoundedSignal,
   createMcpRuntimeTools,
@@ -159,10 +161,15 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
  */
 @Injectable('McpRuntimeService')
 @ServicePhase(Phase.PostReady)
+@DependsOn(['TraceStorageService'])
 export class McpRuntimeService extends BaseService implements McpModule {
   private nextGeneration = 0;
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
+
+  constructor(private readonly traces?: TraceRecorder) {
+    super();
+  }
 
   /** Runtime metadata for the settings list, initializing any runnable server not yet observed. */
   async getRuntimeSummaries(
@@ -242,6 +249,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Adapt an already selected catalog without reading Agent bindings or injecting the Host. */
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[] {
     return createMcpRuntimeTools(selections, {
+      traces: this.traces,
       invoke: (ref, input, signal, discoveredEndpointUrl, discoveredGeneration) =>
         this.invokeTool(ref, input, signal, discoveredEndpointUrl, discoveredGeneration),
     });
@@ -353,6 +361,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     server: McpServer,
     state: ServerRuntimeState,
     signal: AbortSignal,
+    didTimeout?: () => boolean,
   ): Promise<MCPClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
@@ -366,6 +375,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     const generation = state.generation;
+    const trace = this.traces?.startTrace('mcp.connect', undefined, {
+      'mcp.server.id': state.serverId,
+      'mcp.connection.generation': generation,
+    });
     const initPromise: Promise<MCPClient> = createHttpClient(state.connectionConfig, signal)
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
@@ -373,7 +386,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
           throw new McpEvictedError(`MCP server ${server.name} was reconfigured while connecting`);
         }
         state.client = client;
+        trace?.end('ok');
         return client;
+      })
+      .catch((error: unknown) => {
+        endMcpTrace(trace, error, signal, didTimeout?.());
+        throw error;
       })
       .finally(() => {
         if (state.connectionPromise === initPromise) {
@@ -395,11 +413,16 @@ export class McpRuntimeService extends BaseService implements McpModule {
     operation: (client: MCPClient) => Promise<TValue> | TValue,
   ): Promise<TValue> {
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
+    const trace = this.traces?.startTrace('mcp.connect', undefined, {
+      'mcp.connection.temporary': true,
+    });
     let client: MCPClient | undefined;
     try {
       client = await createHttpClient(config, bound.signal);
+      trace?.end('ok');
       return await operation(client);
     } catch (error) {
+      endMcpTrace(trace, error, bound.signal, bound.didTimeout());
       if (bound.didTimeout()) {
         throw new McpTimeoutError(`${label} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`);
       }
@@ -560,10 +583,16 @@ export class McpRuntimeService extends BaseService implements McpModule {
     // ceiling. Eviction rides the same composed signal.
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS, state.abort.signal);
     let rawTools: ListToolsResult['tools'];
+    let trace: TraceSpan | undefined;
     try {
-      const client = await this.getClient(server, state, bound.signal);
+      const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
+      trace = this.traces?.startTrace('mcp.list_tools', undefined, {
+        'mcp.server.id': server.id,
+        'mcp.connection.generation': generation,
+      });
       rawTools = await listAllTools(client, bound.signal);
     } catch (error) {
+      endMcpTrace(trace, error, bound.signal, bound.didTimeout());
       if (error instanceof McpEvictedError) {
         throw error;
       }
@@ -581,8 +610,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
       bound.done();
     }
     if (!this.isCurrentState(state, generation)) {
+      trace?.end('cancelled', { 'error.category': 'cancelled' });
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
+
+    trace?.end('ok', { 'mcp.tools_count': rawTools.length });
 
     const client = state.client;
     state.runtimeError = undefined;

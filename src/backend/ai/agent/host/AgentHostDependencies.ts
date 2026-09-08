@@ -13,6 +13,7 @@ import { getLocales } from 'expo-localization';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
@@ -44,6 +45,7 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentH
   'PreferenceService',
   'McpRuntimeService',
   'WebSearchService',
+  'TraceStorageService',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   readonly files = managedFileResolver;
@@ -57,6 +59,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly preferenceService: PreferenceService,
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
+    readonly traces: TraceRecorder,
   ) {
     super();
     this.runtimeTools = createAgentRuntimeToolResolver({
