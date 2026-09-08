@@ -2,12 +2,13 @@ import { Button, ContentState, MessagePart, Spinner } from '@cherrystudio/ui/com
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { ModelAvatar } from '@/frontend/components/Avatar';
 import type { MessageListItem } from '@/frontend/components/Message';
 
 import { useMessageUsageRecords } from '../hooks/useMessageUsageRecords';
 import { formatMessageUsageCost, getMessageUsageDetails } from '../utils/messageUsage';
 
-const DETAIL_SIZES = ['compact', 'large'] as const;
+const DETAIL_SIZES = ['medium', 'large'] as const;
 
 export function MessageUsageDetail({
   message,
@@ -37,34 +38,19 @@ export function MessageUsageDetail({
   const formatDuration = (value: number | undefined) =>
     value === undefined ? undefined : seconds.format(value / 1000);
   const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
-  const metadata = {
-    ...(detail.requestCount !== undefined
-      ? {
-          [t('chat.messageUsage.requests')]: numbers.format(detail.requestCount),
-        }
-      : {}),
-    ...(message.model
-      ? {
-          [t('chat.messageUsage.model')]: message.model.name,
-          [t('chat.messageUsage.provider')]:
-            records.find((record) => record.providerId === message.model?.providerId)
-              ?.providerName ?? message.model.providerId,
-        }
-      : {}),
-    ...(createdAt && Number.isFinite(createdAt.getTime())
-      ? {
-          [t('chat.messageUsage.createdAt')]: new Intl.DateTimeFormat(locale, {
-            dateStyle: 'medium',
-            timeStyle: 'medium',
-          }).format(createdAt),
-        }
-      : {}),
-  };
-  const tokenDetails = [
+  const providerName = message.model
+    ? (records.find((record) => record.providerId === message.model?.providerId)?.providerName ??
+      message.model.providerId)
+    : undefined;
+  const tokenSum =
+    detail.inputTokens !== undefined && detail.outputTokens !== undefined
+      ? detail.inputTokens + detail.outputTokens
+      : 0;
+  const hasTokenDistribution = Number.isFinite(tokenSum) && tokenSum > 0;
+  const inputDetails = [
     ['chat.messageUsage.noCache', detail.noCacheTokens],
     ['chat.messageUsage.cacheRead', detail.cacheReadTokens],
     ['chat.messageUsage.cacheWrite', detail.cacheWriteTokens],
-    ['chat.messageUsage.reasoning', detail.reasoningTokens],
   ] as const;
   const performance = [
     ['chat.messageUsage.totalDuration', formatDuration(detail.durationMs)],
@@ -74,6 +60,23 @@ export function MessageUsageDetail({
     ['chat.messageUsage.toolDuration', formatDuration(detail.toolDurationMs)],
     ['chat.messageUsage.approvalDuration', formatDuration(detail.approvalDurationMs)],
   ] as const;
+  const visiblePerformance = performance.filter(([, value]) => value !== undefined);
+  const metadata = [
+    [
+      'chat.messageUsage.requests',
+      detail.requestCount === undefined ? undefined : numbers.format(detail.requestCount),
+    ],
+    [
+      'chat.messageUsage.createdAt',
+      createdAt && Number.isFinite(createdAt.getTime())
+        ? new Intl.DateTimeFormat(locale, {
+            dateStyle: 'medium',
+            timeStyle: 'medium',
+          }).format(createdAt)
+        : undefined,
+    ],
+  ] as const;
+  const visibleMetadata = metadata.filter(([, value]) => value !== undefined);
 
   return (
     <MessagePart.Detail
@@ -82,89 +85,201 @@ export function MessageUsageDetail({
       testID="message-usage-detail"
       title={t('chat.messageUsage.title')}
     >
-      <MessagePart.ValueSection title={t('chat.messageUsage.message')} value={metadata} />
-      <MessagePart.ValueSection
-        title={t('chat.messageUsage.tokens')}
-        value={{
-          [t('chat.messageUsage.input')]: formatTokens(detail.inputTokens),
-          [t('chat.messageUsage.output')]: formatTokens(detail.outputTokens),
-          [t('chat.messageUsage.total')]: formatTokens(detail.totalTokens),
-          ...Object.fromEntries(
-            tokenDetails
-              .filter(([, value]) => value !== undefined)
-              .map(([key, value]) => [t(key), formatTokens(value)]),
-          ),
-        }}
-      />
-      <MessagePart.ValueSection
-        title={t('chat.messageUsage.performance')}
-        value={Object.fromEntries(
-          performance
-            .filter(([, value]) => value !== undefined)
-            .map(([key, value]) => [t(key), value]),
-        )}
-      />
-      <Text className="text-muted-foreground text-xs">{t('chat.messageUsage.durationHint')}</Text>
-      <View className="gap-2">
-        <MessagePart.SectionTitle title={t('chat.messageUsage.cost')} />
-        {detail.costs.map((cost) => {
-          const sourceKey =
-            cost.providerReportedRequestCount > 0
-              ? cost.computedRequestCount > 0
-                ? 'chat.messageUsage.costMixed'
-                : 'chat.messageUsage.costBilled'
-              : cost.computedRequestCount > 0
-                ? 'chat.messageUsage.costEstimated'
-                : 'chat.messageUsage.cost';
-          return (
-            <View
-              className="flex-row flex-wrap items-center justify-between gap-2"
-              key={cost.currency}
-            >
-              <Text className="text-muted-foreground text-sm">
-                {t(sourceKey)} ({cost.currency})
-              </Text>
-              <Text className="text-foreground text-sm tabular-nums" selectable>
-                {formatMessageUsageCost(cost.amount, cost.currency, locale)}
-              </Text>
+      <View className="gap-8 px-1 pt-2 pb-4">
+        <View className="gap-6">
+          {message.model ? (
+            <View className="flex-row items-center gap-2.5">
+              <ModelAvatar model={message.model} size={28} />
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-medium text-foreground text-sm" selectable>
+                  {message.model.name}
+                </Text>
+                <Text className="text-muted-foreground text-xs" selectable>
+                  {providerName}
+                </Text>
+              </View>
             </View>
-          );
-        })}
-        {!isLoading && !error && detail.costs.length === 0 ? (
-          <Text className="text-muted-foreground text-sm">{unavailable}</Text>
+          ) : null}
+          <View className="gap-1">
+            <Text className="text-muted-foreground text-sm">
+              {t('chat.messageUsage.totalTokens')}
+            </Text>
+            <Text
+              adjustsFontSizeToFit
+              className="font-semibold text-4xl text-foreground tabular-nums"
+              minimumFontScale={0.6}
+              numberOfLines={1}
+              selectable
+            >
+              {detail.totalTokens === undefined ? '—' : numbers.format(detail.totalTokens)}
+            </Text>
+            {detail.totalTokens === undefined ? (
+              <Text className="text-muted-foreground text-xs">{unavailable}</Text>
+            ) : null}
+          </View>
+          <View className="gap-4">
+            {hasTokenDistribution ? (
+              <View
+                accessibilityElementsHidden
+                className="h-1.5 flex-row gap-1 overflow-hidden rounded-full"
+                importantForAccessibility="no-hide-descendants"
+              >
+                {detail.inputTokens ? (
+                  <View
+                    className="rounded-full bg-foreground"
+                    style={{ flex: detail.inputTokens / tokenSum }}
+                  />
+                ) : null}
+                {detail.outputTokens ? (
+                  <View
+                    className="rounded-full bg-muted-foreground"
+                    style={{ flex: detail.outputTokens / tokenSum }}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
+              <View className="min-w-32 flex-1 gap-3">
+                <View className="gap-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="size-1.5 rounded-full bg-foreground" />
+                    <Text className="text-muted-foreground text-sm">
+                      {t('chat.messageUsage.input')}
+                    </Text>
+                  </View>
+                  <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
+                    {formatTokens(detail.inputTokens)}
+                  </Text>
+                </View>
+                <View className="gap-2">
+                  {inputDetails.map(([key, value]) =>
+                    value === undefined ? null : (
+                      <MessageUsageRow key={key} label={t(key)} value={numbers.format(value)} />
+                    ),
+                  )}
+                </View>
+              </View>
+              <View className="min-w-32 flex-1 gap-3">
+                <View className="gap-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="size-1.5 rounded-full bg-muted-foreground" />
+                    <Text className="text-muted-foreground text-sm">
+                      {t('chat.messageUsage.output')}
+                    </Text>
+                  </View>
+                  <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
+                    {formatTokens(detail.outputTokens)}
+                  </Text>
+                </View>
+                {detail.reasoningTokens !== undefined ? (
+                  <MessageUsageRow
+                    label={t('chat.messageUsage.reasoning')}
+                    value={numbers.format(detail.reasoningTokens)}
+                  />
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View className="gap-3">
+          <MessagePart.SectionTitle title={t('chat.messageUsage.cost')} />
+          {detail.costs.map((cost) => {
+            const sourceKey =
+              cost.providerReportedRequestCount > 0
+                ? cost.computedRequestCount > 0
+                  ? 'chat.messageUsage.costMixed'
+                  : 'chat.messageUsage.costBilled'
+                : cost.computedRequestCount > 0
+                  ? 'chat.messageUsage.costEstimated'
+                  : 'chat.messageUsage.cost';
+            return (
+              <View
+                className="flex-row flex-wrap items-baseline justify-between gap-x-4 gap-y-1"
+                key={cost.currency}
+              >
+                <View className="min-w-0 shrink flex-row flex-wrap items-baseline gap-2">
+                  <Text className="font-medium text-foreground text-sm">{cost.currency}</Text>
+                  <Text className="text-muted-foreground text-xs">{t(sourceKey)}</Text>
+                </View>
+                <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
+                  {formatMessageUsageCost(cost.amount, cost.currency, locale)}
+                </Text>
+              </View>
+            );
+          })}
+          {detail.costs.length === 0 ? (
+            <Text className="text-muted-foreground text-sm">{unavailable}</Text>
+          ) : null}
+          {detail.hasUnpricedRecords && detail.costs.length > 0 ? (
+            <Text className="text-muted-foreground text-xs">
+              {t('chat.messageUsage.partialCost')}
+            </Text>
+          ) : null}
+        </View>
+
+        {visiblePerformance.length > 0 ? (
+          <View className="gap-4">
+            <MessagePart.SectionTitle title={t('chat.messageUsage.performance')} />
+            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
+              {visiblePerformance.map(([key, value]) => (
+                <View className="min-w-32 flex-1 gap-1" key={key}>
+                  <Text className="text-muted-foreground text-xs">{t(key)}</Text>
+                  <Text className="font-medium text-foreground text-lg tabular-nums" selectable>
+                    {value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text className="text-muted-foreground text-xs">
+              {t('chat.messageUsage.durationHint')}
+            </Text>
+          </View>
         ) : null}
-        {detail.hasUnpricedRecords && detail.costs.length > 0 ? (
-          <Text className="text-muted-foreground text-xs">
-            {t('chat.messageUsage.partialCost')}
-          </Text>
+
+        {visibleMetadata.length > 0 ? (
+          <View className="gap-3">
+            <MessagePart.SectionTitle title={t('chat.messageUsage.message')} />
+            {visibleMetadata.map(([key, value]) =>
+              value === undefined ? null : (
+                <MessageUsageRow key={key} label={t(key)} value={value} />
+              ),
+            )}
+          </View>
+        ) : null}
+
+        {error ? (
+          <ContentState.Error
+            primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+            title={t('chat.messageUsage.loadError')}
+          />
+        ) : isLoading ? (
+          <View className="flex-row items-center gap-2">
+            <Spinner accessibilityLabel={t('chat.messageUsage.loading')} size="sm" />
+            <Text className="text-muted-foreground text-xs">{t('chat.messageUsage.loading')}</Text>
+          </View>
+        ) : records.length === 0 ? (
+          <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <Text className="min-w-0 shrink text-muted-foreground text-xs">
+              {t('chat.messageUsage.noRecords')}
+            </Text>
+            <Button onPress={() => void refresh()} size="inline" variant="ghost">
+              <Text className="font-medium text-foreground text-xs">{t('common.retry')}</Text>
+            </Button>
+          </View>
         ) : null}
       </View>
-      {error ? (
-        <ContentState.Error
-          primaryAction={{
-            children: t('common.retry'),
-            onPress: () => {
-              void refresh();
-            },
-          }}
-          title={t('chat.messageUsage.loadError')}
-        />
-      ) : isLoading ? (
-        <Spinner accessibilityLabel={t('chat.messageUsage.loading')} size="sm" />
-      ) : records.length === 0 ? (
-        <View className="gap-1">
-          <Text className="text-muted-foreground text-xs">{t('chat.messageUsage.noRecords')}</Text>
-          <Button
-            onPress={() => {
-              void refresh();
-            }}
-            size="sm"
-            variant="ghost"
-          >
-            {t('common.retry')}
-          </Button>
-        </View>
-      ) : null}
     </MessagePart.Detail>
+  );
+}
+
+function MessageUsageRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <Text className="text-muted-foreground text-xs">{label}</Text>
+      <Text className="min-w-0 shrink text-foreground text-xs tabular-nums" selectable>
+        {value}
+      </Text>
+    </View>
   );
 }

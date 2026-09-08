@@ -308,6 +308,7 @@
   "chat.messageUsage.total": "Total",
   "chat.messageUsage.totalDuration": "Total time",
   "chat.messageUsage.totalSpeed": "Overall speed",
+  "chat.messageUsage.totalTokens": "Total tokens",
   "chat.messageUsage.unavailable": "Not available",
   "chat.media.photos": "Photos",
   "chat.model.select": "Select model",

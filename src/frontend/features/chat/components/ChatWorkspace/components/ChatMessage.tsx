@@ -63,9 +63,11 @@ function renderChatAssistantMessage(
       </View>
       <AssistantMessage isTextSelectionEnabled={isTextSelectionEnabled} message={message}>
         {message.status !== 'pending' ? (
-          <View className="w-full flex-row flex-wrap items-center justify-between gap-x-3">
+          <View className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
             <AssistantMessageToolbar message={message} />
-            <AssistantMessageUsage message={message} />
+            <View className="min-w-0 max-w-full flex-1 items-end">
+              <AssistantMessageUsage message={message} />
+            </View>
           </View>
         ) : null}
       </AssistantMessage>
