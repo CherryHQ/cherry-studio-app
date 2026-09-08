@@ -97,6 +97,10 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 - File-tool input appears inline in the message list while it is generated. `write_file` previews
   `content`; `edit_file` previews `new_string`. The tool's complete input remains authoritative for
   execution and saving.
+- Before preview coalescing, Pi parses each growing tool-argument prefix. The Pi AI patch lets
+  native `JSON.parse` close incomplete string values in root objects, avoiding JavaScript escape
+  repair and partial-parser scans for the common file-content path. Other shapes and malformed
+  input retain the existing fallback parser; complete arguments keep their original values.
 - Opted-in tool previews are coalesced in Pi at 150 ms, bounded to the latest 8,192 UTF-16 code
   units and 60 lines, and emitted as `tool.input.preview`. The Host retains the bounded preview in
   its snapshot; preview events do not request transcript persistence or background-reply updates.
@@ -106,6 +110,9 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
   generated portion. The full output remains in the managed file.
 - Code previews use CherryUI's existing native Markdown renderer. Their code fence stays open
   during generation so native progressive mode defers highlighting until input completes.
+- File-input generation uses static tool titles because the adjacent content already shows live
+  progress. This avoids a continuous masked-gradient animation beside the updating preview;
+  actual tool execution retains the running title animation.
 - File and error protocol parts map to the existing focused renderers.
 - User and assistant messages use the same `MessageList` surfaces as persisted history; system
   messages are omitted from the visible conversation list.

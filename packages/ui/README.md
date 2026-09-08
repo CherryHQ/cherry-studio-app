@@ -139,6 +139,10 @@ translations, file identifiers, or application navigation:
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
 
+`MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
+already communicates live progress. The running state, status text, and detail action remain intact;
+the default title animation is `shimmer`.
+
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
 `Message Parts/Playground` collects every public message-part primitive and state on one interactive
 page for visual debugging.

@@ -252,3 +252,5 @@ scroll, which avoids a second animation writing geometry during layout. Scroll-b
 uses the shared CherryUI motion vocabulary. Pending assistant and reasoning rows consume
 `PrismSweep` from the Cherry UI loading family. Running tool, tool-group, and reasoning rows sweep
 their label with the shared `ShimmerText` highlight instead of pulsing row opacity.
+File-input generation uses a static title while its adjacent content updates; the title resumes
+the normal running animation during tool execution.

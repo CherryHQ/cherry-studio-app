@@ -34,6 +34,9 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
       statusTone={isSettledByApp ? 'warning' : getToolStatusTone(part)}
       testID="tool-part"
       title={title}
+      titleAnimation={
+        part.state === 'input-streaming' && toolName === 'edit_file' ? 'none' : 'shimmer'
+      }
     >
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
       {part.state === 'output-error' && isSettledByApp ? (

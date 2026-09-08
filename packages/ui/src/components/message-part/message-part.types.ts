@@ -74,6 +74,8 @@ export type MessagePartSummaryProps = {
   statusTone?: MessagePartTone;
   testID?: string;
   title: string;
+  /** Use static text when adjacent content already shows live progress. */
+  titleAnimation?: 'none' | 'shimmer';
 };
 
 export type MessagePartToolProps = Omit<

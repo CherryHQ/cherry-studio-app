@@ -144,6 +144,35 @@ index f44c3c47c2ec6178836f6c56aaba24e5a9d79a1d..410238237ec83f4e461f89b893770078
  /**
   * Probe the HTTP status, first numeric hit wins, in SDK-field order:
   * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
+diff --git a/dist/utils/json-parse.js b/dist/utils/json-parse.js
+index 82e105cb676a2f4be16167023243aa73dd8cb2e4..00c08b0a8720c6766dee7d77bc2412617930d16c 100644
+--- a/dist/utils/json-parse.js
++++ b/dist/utils/json-parse.js
+@@ -91,6 +91,24 @@ export function parseStreamingJson(partialJson) {
+     if (!partialJson || partialJson.trim() === "") {
+         return {};
+     }
++    // File tools usually stream a string value in a root object. Let the native
++    // JSON parser close that value before scanning/rebuilding its growing body in JS.
++    const trimmed = partialJson.trim();
++    if (trimmed.startsWith("{")) {
++        try {
++            return JSON.parse(trimmed + '"}');
++        }
++        catch {
++            // A chunk can stop inside a string escape; partial-json omits it too.
++            const completeEscapePrefix = trimmed.replace(/\\(?:u[0-9a-fA-F]{0,3})?$/, "");
++            if (completeEscapePrefix !== trimmed) {
++                try {
++                    return JSON.parse(completeEscapePrefix + '"}');
++                }
++                catch {}
++            }
++        }
++    }
+     try {
+         return parseJsonWithRepair(partialJson);
+     }
 diff --git a/dist/utils/model-runtime.js b/dist/utils/model-runtime.js
 new file mode 100644
 index 0000000000000000000000000000000000000000..4eb056d97de3c83db96ba38254159f3f5b299bb8
