@@ -138,7 +138,7 @@ function RootStack() {
       <Stack.Screen
         name="paintings/index"
         options={{
-          contentStyle: { backgroundColor: 'transparent' },
+          contentStyle: { backgroundColor },
           headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}
@@ -160,7 +160,7 @@ function RootStack() {
       <Stack.Screen
         name="paintings/[paintingId]/conversation"
         options={{
-          contentStyle: { backgroundColor: 'transparent' },
+          contentStyle: { backgroundColor },
           headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}

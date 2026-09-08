@@ -1,5 +1,4 @@
-import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { type MenuItem } from '@cherrystudio/ui/components';
+import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,46 +18,31 @@ const paintingSelectionScope = 'drawings';
 
 /**
  * Drawings history (`/drawings`), the sidebar's drawings destination: the
- * gallery grid plus multi-select batch deletion. It is a drawer scene, not a
- * pushed page, so it leads with a hamburger and has nothing to go back to.
+ * gallery grid plus multi-select batch deletion. Back exits selection before
+ * leaving this root-stack page.
  * Creating and editing paintings stays on the root stack's `/paintings`, which
  * `DrawingList` pushes itself.
  */
 function DrawingsScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { enterEditing, exitEditing } = useSelectionActions();
+  const { exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
   const openNewPainting = useCallback(() => {
     router.push('/paintings');
   }, [router]);
-  const menuItems = useMemo<readonly MenuItem[]>(
+  const createActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        id: 'create-painting',
-        label: t('painting.history.createNew'),
+        accessibilityLabel: t('painting.history.createNew'),
+        icon: PlusIcon,
+        key: 'create-painting',
         onPress: openNewPainting,
-      },
-      {
-        disabled: isDeletionPending,
-        id: 'select-paintings',
-        label: t('painting.selection.start'),
-        onPress: enterEditing,
+        testID: 'painting-history-create-header',
+        type: 'icon',
       },
     ],
-    [enterEditing, isDeletionPending, openNewPainting, t],
-  );
-  const menuActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.more'),
-        icon: EllipsisIcon,
-        items: menuItems,
-        key: 'painting-actions',
-        type: 'menu',
-      },
-    ],
-    [menuItems, t],
+    [openNewPainting, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -77,7 +61,8 @@ function DrawingsScreenBody() {
   return (
     <>
       <RouteHeader
-        rightActions={isEditing ? doneActions : menuActions}
+        onBack={isEditing ? exitEditing : undefined}
+        rightActions={isEditing ? doneActions : createActions}
         title={t('painting.history.title')}
       />
       <View className="flex-1">

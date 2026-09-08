@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet } from 'react-native';
+import { View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
@@ -6,40 +6,18 @@ import { FilePart } from './FilePart';
 
 type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 
-/** One file card tall, matching `FilePreview`'s own default size. */
-const FILE_CARD_SIZE = 112;
-
 /**
- * User attachments laid out as one right-aligned, horizontally scrolling row.
- *
- * Files are the one part type that arrives several at a time, and stacking
- * full-size cards down a phone screen buries the rest of the message. The row
- * carries no heading: whether a file was attached or produced follows from the
- * message it sits in, so labelling it here would only restate the role.
+ * User attachments wrap inside the message column so every card stays visible.
+ * The container owns row spacing; cards keep their intrinsic size.
  */
 export function MessageFileStrip({ parts }: { parts: readonly MessageFilePart[] }) {
   return (
-    <ScrollView
-      alwaysBounceHorizontal={false}
-      className="max-w-full"
-      contentContainerClassName="grow justify-end gap-2"
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.strip}
-    >
+    <View className="w-full flex-row flex-wrap justify-end gap-2">
       {/* The URL carries the entry id, and every import or tool write mints a
           fresh one, so it identifies the card without falling back to position. */}
       {parts.map((part) => (
         <FilePart key={part.url} part={part} />
       ))}
-    </ScrollView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  strip: {
-    flexGrow: 0,
-    flexShrink: 0,
-    height: FILE_CARD_SIZE,
-  },
-});
