@@ -1,3 +1,4 @@
+import type { AiUsageAttribution } from '@/backend/ai/AiService';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
@@ -51,6 +52,23 @@ describe('createGenerateImageTool', () => {
         kind: 'created',
       },
     ]);
+  });
+
+  test('reads the reserved Agent message at execution rather than tool creation', async () => {
+    const deps = createDependencies();
+    const usageAttribution: AiUsageAttribution = {
+      source: { type: 'agent', id: 'agent-1', name: 'Agent One', icon: null },
+      messageRef: null,
+    };
+    const resolveUsageAttribution = jest.fn(() => ({ ...usageAttribution }));
+    const tool = createGenerateImageTool(deps, MODEL, TURN_FILES, resolveUsageAttribution);
+    expect(resolveUsageAttribution).not.toHaveBeenCalled();
+
+    usageAttribution.messageRef = { kind: 'agent-session', id: 'message-1' };
+    await execute(tool, { prompt: 'A cherry' });
+    expect(deps.ai.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ usageAttribution }),
+    );
   });
 
   test('tells the model to stop when no drawing model is configured', async () => {

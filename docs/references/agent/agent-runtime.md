@@ -63,7 +63,7 @@ non-standard adapter family, or authentication types fail before partial executi
 
 Pi receives the grouped structured transcript, an optional opaque context checkpoint, a frozen tool
 catalog, and Agent inference options on each execution. It maps text, reasoning, tool parts,
-approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
+approvals, cancellation, normalized failures, and per-invocation usage onto this contract.
 Before reservation, the Host combines the shared system catalog and the Agent's capability-group
 deny-list with the Agent's persisted, currently executable MCP bindings. It also resolves bounded
 managed images for registry-declared image-capable models supported by the selected Pi endpoint
@@ -309,8 +309,7 @@ summary. Checkpoint payloads store the redacted summary and an optional structur
 they do not duplicate attachment bodies or raw retained tool results. Anchors remain complete
 durable Turns. A split-turn cursor reconstructs the retained suffix from the Host-supplied complete
 Turn so tool calls and results remain paired after restart. Summary calls reuse the current model
-transport, credentials, timeout, and cancellation signal, and their usage is added to the active
-Turn.
+transport, credentials, timeout, and cancellation signal, and emit separate invocation usage reports attributed to the active Turn.
 
 Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
 Runtime re-estimates the live assistant request and tool-result messages together with system,
@@ -432,6 +431,7 @@ type RuntimeEvent =
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
   | {
       type: 'usage'
+      requestId: string
       usage: RuntimeUsage
       context: RuntimeUsageContext
       completedAt: number
@@ -555,15 +555,30 @@ the active execution and commits it atomically with a successful assistant termi
 cancelled, or interrupted turns never persist a candidate, and oversized payloads are rejected
 rather than truncated.
 
-`usage` values are cumulative for the execution; the last report before the terminal event is
-authoritative. Detailed cache and reasoning counts remain available for pricing even though the
-Agent Protocol message projects only the input, output, and total counts. `context` is the immutable
-provider, served-model, pricing, and credential-attribution snapshot captured when the provider is
-resolved, before execution starts. `completedAt` is recorded at the Runtime provider boundary. The
-Host adds the Agent source and Session message reference without re-reading mutable provider/model
-configuration. It does not synthesize provider timing from the broader Host turn lifetime. A
-Runtime that cannot report usage emits no `usage` event, and the assistant message's protocol
-`usage` stays `null`.
+Each `usage` event describes one successful provider invocation, including compaction calls.
+`requestId` is stable for redelivery and unique across distinct calls. Pi captures assistant responses
+at the provider stream result, before `message_end`, tool execution, or approval, and reports
+compaction at its completion boundary. Cancelling after the provider result does not erase a
+completed call. As in desktop Pi accounting, error/aborted responses are excluded even if the provider
+bills partial output; partial usage is not estimated.
+Detailed cache and reasoning counts remain available for pricing. `context` freezes provider,
+pricing, and credential attribution before execution; the served model is taken from the response
+when available. `completedAt` is recorded at the provider boundary.
+
+The Host adds the admitted Agent source and reserved Session message reference, deduplicates reports,
+and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
+event loop; the terminal write waits for the Host's tracked Runtime usage writes, so the finalized
+row carries those persisted calls. `AiUsageRecordService` inserts the fact and rebuilds message
+`stats` and protocol `usage` in the same transaction. The Host retains an aggregate for its in-memory
+message view and uses it at finalization only when no analytical projection was persisted. If some writes fail,
+an existing projection continues to reflect only persisted records. Tools that call providers on
+the Host's behalf (image generation) read the attribution when they run, because the tool catalog
+is built before the assistant message is reserved; source and bound message references remain
+immutable snapshots. Their independent usage writes can finish after message finalization,
+especially after cancellation. A usage write that updates a terminal message publishes its Session
+transcript path after commit, so mounted chat views also receive the late projection.
+Runtime and approval timing remain message-owned; they never stand in for provider latency. A
+Runtime that cannot report usage emits no `usage` event.
 
 ## Host execution flow
 

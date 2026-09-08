@@ -21,7 +21,7 @@ export async function checkChatModel(
   const session = await runtime.open();
   const turnId = uuid();
   const startedAt = performance.now();
-  let usage: RuntimeUsageReport | undefined;
+  const usage = new Map<string, RuntimeUsageReport>();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
   let timedOut = false;
@@ -41,7 +41,7 @@ export async function checkChatModel(
     const consume = async (): Promise<ChatModelCheckResult> => {
       let hasText = false;
       for await (const event of events) {
-        if (event.type === 'usage') usage = event;
+        if (event.type === 'usage') usage.set(event.requestId, event);
         if (event.type === 'text.delta' && event.text.trim()) hasText = true;
         if (
           (event.type === 'part.add' || event.type === 'part.replace') &&
@@ -77,7 +77,7 @@ export async function checkChatModel(
     if (timeout) clearTimeout(timeout);
     if (abort) options.signal?.removeEventListener('abort', abort);
     await session.close();
-    if (usage) await options.onUsage(usage, `chat-model-check:${turnId}`);
+    for (const report of usage.values()) await options.onUsage(report, report.requestId);
   }
 }
 

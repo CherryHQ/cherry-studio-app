@@ -327,13 +327,13 @@ export function mergePresetModel(
   const capabilities = reasoningSupport
     ? Array.from(new Set([...baseCapabilities, MODEL_CAPABILITY.REASONING]))
     : baseCapabilities;
+  const mergedPricing = presetModel.pricing
+    ? { ...presetModel.pricing, ...catalogOverride?.pricing }
+    : catalogOverride?.pricing;
   const pricing =
-    presetModel.pricing && catalogOverride?.pricing
-      ? {
-          ...presetModel.pricing,
-          ...catalogOverride.pricing,
-        }
-      : presetModel.pricing;
+    mergedPricing?.input && mergedPricing.output
+      ? { ...mergedPricing, input: mergedPricing.input, output: mergedPricing.output }
+      : undefined;
 
   return {
     apiModelId,

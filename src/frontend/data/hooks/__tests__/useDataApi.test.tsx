@@ -43,6 +43,55 @@ describe('Data API hooks', () => {
     queryClient.clear();
   });
 
+  it('invalidates only committed change paths and unsubscribes on unmount', async () => {
+    jest.useFakeTimers();
+    let onChange: ((paths: readonly string[]) => void) | undefined;
+    const unsubscribe = jest.fn();
+    dataApi.subscribeChanges = jest.fn((listener) => {
+      onChange = listener;
+      return unsubscribe;
+    });
+    queryClient.setQueryData(['/ai-usage-records/stats', { metric: 'tokens' }], { count: 1 });
+    queryClient.setQueryData(['/ai-usage-records/stats', { metric: 'cost' }], { count: 1 });
+    queryClient.setQueryData(['/agent-sessions/session-1/messages', { limit: 30 }], []);
+    queryClient.setQueryData(['/agent-sessions/session-2/messages', { limit: 30 }], []);
+    queryClient.setQueryData(['/providers'], []);
+    try {
+      await act(async () => {
+        renderer = create(<TestProviders>{null}</TestProviders>);
+      });
+      onChange?.(['/ai-usage-records/stats', '/agent-sessions/session-1/messages']);
+      onChange?.(['/ai-usage-records/stats']);
+      expect(
+        queryClient.getQueryState(['/ai-usage-records/stats', { metric: 'tokens' }])?.isInvalidated,
+      ).toBe(false);
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      expect(
+        queryClient.getQueryState(['/ai-usage-records/stats', { metric: 'tokens' }])?.isInvalidated,
+      ).toBe(true);
+      expect(
+        queryClient.getQueryState(['/ai-usage-records/stats', { metric: 'cost' }])?.isInvalidated,
+      ).toBe(true);
+      expect(queryClient.getQueryState(['/providers'])?.isInvalidated).toBe(false);
+      expect(
+        queryClient.getQueryState(['/agent-sessions/session-1/messages', { limit: 30 }])
+          ?.isInvalidated,
+      ).toBe(true);
+      expect(
+        queryClient.getQueryState(['/agent-sessions/session-2/messages', { limit: 30 }])
+          ?.isInvalidated,
+      ).toBe(false);
+      await act(async () => renderer?.unmount());
+      renderer = undefined;
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    } finally {
+      delete dataApi.subscribeChanges;
+      jest.useRealTimers();
+    }
+  });
+
   it('resolves a template path and forwards its typed query', async () => {
     dataApi.get.mockResolvedValueOnce({ id: 'provider-1', name: 'Provider' } as never);
 

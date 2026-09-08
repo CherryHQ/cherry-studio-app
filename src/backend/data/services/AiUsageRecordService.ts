@@ -18,7 +18,9 @@ import {
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
+import { agentSessionMessageTable } from '@/backend/data/db/schemas/agentSessionMessage';
 import {
   type AiUsageRecordRow,
   aiUsageRecordTable,
@@ -57,6 +59,7 @@ import type {
   ServingCredentialReceipt,
 } from '@/shared/data/types/aiUsageRecord';
 import { getAiUsageRecordTotalTokens } from '@/shared/data/types/aiUsageRecord';
+import type { MessageStats } from '@/shared/data/types/messageStats';
 import type { Currency } from '@/shared/data/types/model';
 
 import { timestampToISO } from './utils/rowMappers';
@@ -113,6 +116,20 @@ export interface RecordAiInvocationInput {
   completedAt: number;
 }
 
+export type MessageUsageProjection = Pick<
+  MessageStats,
+  | 'inputTokens'
+  | 'outputTokens'
+  | 'totalTokens'
+  | 'inputTokenDetails'
+  | 'outputTokenDetails'
+  | 'requestCount'
+  | 'estimatedRequestCount'
+  | 'unpricedRequestCount'
+  | 'costs'
+  | 'providerPerformance'
+>;
+
 const PER_MILLION = 1_000_000;
 const logger = loggerService.withContext('AiUsageRecordService');
 
@@ -135,29 +152,44 @@ function computeLanguageCost(
   usage: NonNullable<RecordAiInvocationInput['usage']>,
   pricing: AiUsagePricingSnapshot,
 ): { amount: number; breakdown: AiUsageCostBreakdown } | undefined {
+  const inputTokens =
+    usage.inputTokens ??
+    (usage.noCacheTokens !== undefined
+      ? usage.noCacheTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0)
+      : undefined);
+  let rates: Pick<
+    AiUsagePricingSnapshot,
+    | 'inputPerMillionTokens'
+    | 'outputPerMillionTokens'
+    | 'cacheReadPerMillionTokens'
+    | 'cacheWritePerMillionTokens'
+  > = pricing;
+  if (pricing.inputTokenTiers?.length) {
+    if (inputTokens === undefined) return undefined;
+    for (const tier of pricing.inputTokenTiers) {
+      if (inputTokens < tier.minInputTokens) break;
+      rates = tier;
+    }
+  }
   const cacheReadTokens = usage.cacheReadTokens;
   const cacheWriteTokens = usage.cacheWriteTokens;
   const hasCacheDetails = cacheReadTokens !== undefined || cacheWriteTokens !== undefined;
   const noCacheTokens =
     usage.noCacheTokens ??
-    (usage.inputTokens !== undefined
+    (inputTokens !== undefined
       ? hasCacheDetails
-        ? Math.max(0, usage.inputTokens - (cacheReadTokens ?? 0) - (cacheWriteTokens ?? 0))
-        : usage.inputTokens
+        ? Math.max(0, inputTokens - (cacheReadTokens ?? 0) - (cacheWriteTokens ?? 0))
+        : inputTokens
       : undefined);
   const buckets = [
-    ['input', noCacheTokens, pricing.inputPerMillionTokens],
-    [
-      'cacheRead',
-      cacheReadTokens,
-      pricing.cacheReadPerMillionTokens ?? pricing.inputPerMillionTokens,
-    ],
+    ['input', noCacheTokens, rates.inputPerMillionTokens],
+    ['cacheRead', cacheReadTokens, rates.cacheReadPerMillionTokens ?? rates.inputPerMillionTokens],
     [
       'cacheWrite',
       cacheWriteTokens,
-      pricing.cacheWritePerMillionTokens ?? pricing.inputPerMillionTokens,
+      rates.cacheWritePerMillionTokens ?? rates.inputPerMillionTokens,
     ],
-    ['output', usage.outputTokens, pricing.outputPerMillionTokens],
+    ['output', usage.outputTokens, rates.outputPerMillionTokens],
   ] as const;
 
   if (!buckets.some(([, tokens]) => tokens !== undefined)) return undefined;
@@ -882,7 +914,216 @@ async function getAiUsageRecordTimeline(
   return { buckets: [...selected, ...other], costTotals, dailyCosts };
 }
 
+function sumOptional(
+  rows: readonly AiUsageRecordRow[],
+  read: (row: AiUsageRecordRow) => number | null,
+): number | undefined {
+  let sawValue = false;
+  let total = 0;
+  for (const row of rows) {
+    const value = read(row);
+    if (value === null) continue;
+    sawValue = true;
+    total += value;
+  }
+  return sawValue ? total : undefined;
+}
+
+async function getMessageUsageProjectionTx(
+  db: Database,
+  ref: MessageRef,
+): Promise<MessageUsageProjection> {
+  const rows = await db
+    .select()
+    .from(aiUsageRecordTable)
+    .where(
+      and(eq(aiUsageRecordTable.messageKind, ref.kind), eq(aiUsageRecordTable.messageId, ref.id)),
+    );
+
+  const inputTokens = sumOptional(rows, (row) => row.inputTokens);
+  const outputTokens = sumOptional(rows, (row) => row.outputTokens);
+  const totalTokens = sumOptional(
+    rows,
+    (row) =>
+      row.totalTokens ??
+      (row.inputTokens !== null || row.outputTokens !== null
+        ? (row.inputTokens ?? 0) + (row.outputTokens ?? 0)
+        : null),
+  );
+  const noCacheTokens = sumOptional(rows, (row) => row.noCacheTokens);
+  const cacheReadTokens = sumOptional(rows, (row) => row.cacheReadTokens);
+  const cacheWriteTokens = sumOptional(rows, (row) => row.cacheWriteTokens);
+  const reasoningTokens = sumOptional(rows, (row) => row.reasoningTokens);
+  const textTokens = sumOptional(rows, (row) =>
+    row.outputTokens !== null ? Math.max(0, row.outputTokens - (row.reasoningTokens ?? 0)) : null,
+  );
+  let measuredOutputTokens = 0;
+  let generationDurationMs = 0;
+  let measuredInvocationCount = 0;
+  const costs = new Map<
+    string,
+    {
+      currency: NonNullable<MessageStats['costs']>[number]['currency'];
+      amount: number;
+      providerReportedRequestCount: number;
+      computedRequestCount: number;
+    }
+  >();
+
+  for (const row of rows) {
+    if (row.outputTokens !== null && row.timeCompletionMs !== null && row.timeCompletionMs > 0) {
+      const duration =
+        row.timeFirstTokenMs !== null && row.timeFirstTokenMs < row.timeCompletionMs
+          ? row.timeCompletionMs - row.timeFirstTokenMs
+          : row.timeCompletionMs;
+      if (duration > 0) {
+        measuredOutputTokens += row.outputTokens;
+        generationDurationMs += duration;
+        measuredInvocationCount += 1;
+      }
+    }
+
+    if (row.cost === null || row.costCurrency === null || row.costSource === null) continue;
+    const bucket = costs.get(row.costCurrency) ?? {
+      currency: row.costCurrency,
+      amount: 0,
+      providerReportedRequestCount: 0,
+      computedRequestCount: 0,
+    };
+    bucket.amount += row.cost;
+    if (row.costSource === 'provider') bucket.providerReportedRequestCount += row.requestCount;
+    else bucket.computedRequestCount += row.requestCount;
+    costs.set(row.costCurrency, bucket);
+  }
+
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(totalTokens !== undefined ? { totalTokens } : {}),
+    ...(noCacheTokens !== undefined ||
+    cacheReadTokens !== undefined ||
+    cacheWriteTokens !== undefined
+      ? {
+          inputTokenDetails: {
+            ...(noCacheTokens !== undefined ? { noCacheTokens } : {}),
+            ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+            ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+          },
+        }
+      : {}),
+    ...(textTokens !== undefined || reasoningTokens !== undefined
+      ? {
+          outputTokenDetails: {
+            ...(textTokens !== undefined ? { textTokens } : {}),
+            ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+          },
+        }
+      : {}),
+    requestCount: rows.reduce((sum, row) => sum + row.requestCount, 0),
+    estimatedRequestCount: rows.reduce(
+      (sum, row) => sum + (row.recordKind === 'legacy-aggregate' ? row.requestCount : 0),
+      0,
+    ),
+    unpricedRequestCount: rows.reduce(
+      (sum, row) => sum + (row.cost === null ? row.requestCount : 0),
+      0,
+    ),
+    costs: [...costs.values()].sort((left, right) => left.currency.localeCompare(right.currency)),
+    ...(measuredInvocationCount > 0
+      ? {
+          providerPerformance: {
+            measuredOutputTokens,
+            generationDurationMs,
+          },
+        }
+      : {}),
+  };
+}
+
+/**
+ * Materializes the message's usage columns from its records and returns the
+ * terminal message's Session for post-commit invalidation. Active messages still
+ * refresh through the Agent protocol; tool usage can arrive after finalization.
+ */
+async function rebuildMessageUsageProjectionTx(
+  db: Database,
+  ref: MessageRef,
+): Promise<string | undefined> {
+  // Mobile owns Agent Session messages; retired chat references remain valid analytical facts.
+  if (ref.kind !== 'agent-session') return;
+  const [message] = await db
+    .select({
+      sessionId: agentSessionMessageTable.sessionId,
+      stats: agentSessionMessageTable.stats,
+      status: agentSessionMessageTable.status,
+    })
+    .from(agentSessionMessageTable)
+    .where(eq(agentSessionMessageTable.id, ref.id))
+    .limit(1);
+  if (!message) return;
+  const projection = await getMessageUsageProjectionTx(db, ref);
+  const stats: MessageStats = {
+    ...(message.stats?.runtimeTiming
+      ? { runtimeTiming: message.stats.runtimeTiming }
+      : {
+          ...(message.stats?.timeFirstTokenMs !== undefined
+            ? { timeFirstTokenMs: message.stats.timeFirstTokenMs }
+            : {}),
+          ...(message.stats?.timeCompletionMs !== undefined
+            ? { timeCompletionMs: message.stats.timeCompletionMs }
+            : {}),
+          ...(message.stats?.timeThinkingMs !== undefined
+            ? { timeThinkingMs: message.stats.timeThinkingMs }
+            : {}),
+        }),
+    ...(message.stats?.contextTokens !== undefined
+      ? { contextTokens: message.stats.contextTokens }
+      : {}),
+    ...projection,
+  };
+  await db
+    .update(agentSessionMessageTable)
+    .set({
+      stats,
+      usage:
+        projection.inputTokens !== undefined ||
+        projection.outputTokens !== undefined ||
+        projection.totalTokens !== undefined
+          ? {
+              ...(projection.inputTokens !== undefined
+                ? { inputTokens: projection.inputTokens }
+                : {}),
+              ...(projection.outputTokens !== undefined
+                ? { outputTokens: projection.outputTokens }
+                : {}),
+              ...(projection.totalTokens !== undefined
+                ? { totalTokens: projection.totalTokens }
+                : {}),
+            }
+          : null,
+    })
+    .where(eq(agentSessionMessageTable.id, ref.id));
+  if (message.status !== 'pending' && message.status !== 'streaming') {
+    return message.sessionId;
+  }
+}
+
+/** Endpoint caches a newly committed usage record invalidates. */
+const USAGE_ANALYTICS_PATHS = [
+  '/ai-usage-records',
+  '/ai-usage-records/stats',
+  '/ai-usage-records/timeline',
+] as const;
+
 export class AiUsageRecordService {
+  async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
+    return getMessageUsageProjectionTx(this.dbService.getDb(), ref);
+  }
+
+  async refreshMessageProjection(ref: MessageRef): Promise<void> {
+    await this.dbService.withWriteTx((tx) => rebuildMessageUsageProjectionTx(tx, ref));
+  }
+
   /**
    * Resolved per call rather than injected once, so the instance holds no
    * reference to a particular host generation and a replaced host cannot leave
@@ -900,14 +1141,25 @@ export class AiUsageRecordService {
     if (inputs.length === 0) return;
     try {
       const rows = inputs.map(invocationToRow);
-      await this.dbService.withWriteTx(async (tx) => {
+      const { insertedCount, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
+        let inserted = 0;
+        const messageRefs = new Map<string, MessageRef>();
+        const messagePaths = new Set<string>();
         for (const row of rows) {
-          const inserted = await tx
+          const returned = await tx
             .insert(aiUsageRecordTable)
             .values(row)
             .onConflictDoNothing()
             .returning({ id: aiUsageRecordTable.id });
-          if (inserted.length > 0) continue;
+          if (returned.length > 0) {
+            inserted += 1;
+            if (row.messageKind && row.messageId)
+              messageRefs.set(`${row.messageKind}:${row.messageId}`, {
+                kind: row.messageKind,
+                id: row.messageId,
+              });
+            continue;
+          }
 
           const [existing] = await tx
             .select()
@@ -920,7 +1172,13 @@ export class AiUsageRecordService {
             });
           }
         }
+        for (const ref of messageRefs.values()) {
+          const sessionId = await rebuildMessageUsageProjectionTx(tx, ref);
+          if (sessionId) messagePaths.add(`/agent-sessions/${sessionId}/messages`);
+        }
+        return { insertedCount: inserted, messagePaths: [...messagePaths] };
       });
+      if (insertedCount > 0) publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
     } catch (error) {
       logger.error('Failed to record AI usage', error as Error, {
         requestIds: inputs.map(({ requestId }) => requestId),

@@ -8,6 +8,7 @@
  * and the stage is testable without a Host instance.
  */
 
+import type { AiUsageAttribution, AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import {
   AgentProtocolError,
   type AgentErrorView,
@@ -93,7 +94,37 @@ export type TurnPlan = {
   tools: readonly RuntimeTool[];
   /** The user message parts to reserve, projected from the canonical input. */
   userParts: AgentMessagePart[];
+  /** Source captured at admission; the Host binds the reserved message before execution. */
+  usageAttribution: TurnUsageAttribution;
 };
+
+/**
+ * Attribution for provider calls that turn tools make on the Host's behalf.
+ * Tools are created before the assistant message is reserved, so they hold a
+ * resolver rather than a snapshot and read the message reference at call time.
+ */
+type TurnUsageAttribution = {
+  /** Binds the reserved assistant message exactly once. */
+  bindMessage(ref: NonNullable<AiUsageAttribution['messageRef']>): void;
+  /** Reads the attribution as of now; before binding the message reference is null. */
+  resolve: AiUsageAttributionResolver;
+};
+
+function createTurnUsageAttribution(
+  source: NonNullable<AiUsageAttribution['source']>,
+): TurnUsageAttribution {
+  const capturedSource = Object.freeze({ ...source });
+  let messageRef: AiUsageAttribution['messageRef'] = null;
+  return {
+    bindMessage(ref) {
+      if (messageRef) {
+        throw new Error('The turn usage attribution is already bound to a message.');
+      }
+      messageRef = Object.freeze({ ...ref });
+    },
+    resolve: () => ({ source: capturedSource, messageRef }),
+  };
+}
 
 export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
@@ -191,6 +222,12 @@ async function prepareResolvedTurn(
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
+  const usageAttribution = createTurnUsageAttribution({
+    type: 'agent',
+    id: agent.id,
+    name: agent.name,
+    icon: null,
+  });
   const runtime = dependencies.routeExecutionTarget(session.executionTarget);
   if (
     !runtime.descriptor.capabilities.attachments &&
@@ -223,6 +260,7 @@ async function prepareResolvedTurn(
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
+          resolveUsageAttribution: usageAttribution.resolve,
         }),
         signal,
       );
@@ -315,6 +353,7 @@ async function prepareResolvedTurn(
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     userParts,
+    usageAttribution,
   };
 }
 

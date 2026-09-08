@@ -489,6 +489,136 @@ const harness: RuntimeConformanceHarness = {
   ],
 };
 
+describe('Pi invocation capture', () => {
+  test.each(['sync', 'async'] as const)(
+    'retains a completed %s provider stream when cancelled before message_end',
+    async (mode) => {
+      const runtime = createTestRuntime();
+      const stream = new AssistantMessageEventStream();
+      let markResponseReady!: () => void;
+      const responseReady = new Promise<void>((resolve) => {
+        markResponseReady = resolve;
+      });
+      const holder = arrange(runtime, async ({ options, signal }) => {
+        const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+        await responseStream.result();
+        markResponseReady();
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+      holder.resolution.streamFn = () => (mode === 'sync' ? stream : Promise.resolve(stream));
+      const session = await runtime.open();
+      const eventsPromise = collect(
+        session.execute(baseRequest(`cancel-before-message-end-${mode}`)),
+      );
+      stream.end(assistantMessage());
+      await responseReady;
+      await session.cancel(`cancel-before-message-end-${mode}`);
+
+      const events = await eventsPromise;
+      expect(events.filter((event) => event.type === 'usage')).toMatchObject([
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      ]);
+      expect(events.at(-1)?.type).toBe('cancelled');
+      await session.close();
+    },
+  );
+
+  test('retains a completed provider call when approval is cancelled before turn_end', async () => {
+    const runtime = createTestRuntime();
+    const { request } = await harness.arrangeApproval(runtime, 'cancel-after-response');
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    for await (const event of session.execute(request)) {
+      events.push(event);
+      if (event.type === 'approval.requested') await session.cancel(request.turnId);
+    }
+    expect(events.filter((event) => event.type === 'usage')).toHaveLength(1);
+    expect(events.findIndex((event) => event.type === 'usage')).toBeLessThan(
+      events.findIndex((event) => event.type === 'approval.requested'),
+    );
+    expect(events.at(-1)?.type).toBe('cancelled');
+    await session.close();
+  });
+
+  test('deduplicates responses while preserving distinct calls with the same timestamp', async () => {
+    const runtime = createTestRuntime();
+    const responses = [
+      assistantMessage({ timestamp: 1 }),
+      assistantMessage({ timestamp: 1, responseModel: 'served-model' }),
+    ];
+    const holder = arrange(runtime, async (context) => {
+      const firstStream = await context.options.streamFn(holder.resolution.model, { messages: [] });
+      const first = await firstStream.result();
+      await context.emit({ type: 'message_end', message: first });
+      await context.emit({ type: 'message_end', message: first });
+      const secondStream = await context.options.streamFn(holder.resolution.model, {
+        messages: [],
+      });
+      const second = await secondStream.result();
+      await context.emit({ type: 'message_end', message: second });
+      await context.emit({ type: 'turn_end', message: second, toolResults: [] });
+    });
+    holder.resolution.streamFn = () => {
+      const response = responses.shift();
+      if (!response) throw new Error('Unexpected provider call.');
+      const stream = new AssistantMessageEventStream();
+      stream.end(response);
+      return stream;
+    };
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('same-timestamp')));
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(reports[0]?.requestId).not.toBe(reports[1]?.requestId);
+    expect(reports[1]?.context.modelId).toBe('served-model');
+    await session.close();
+  });
+
+  test.each(['error', 'aborted'] as const)(
+    'does not record an unsuccessful %s response',
+    async (stopReason) => {
+      const runtime = createTestRuntime();
+      const stream = new AssistantMessageEventStream();
+      stream.end(assistantMessage({ stopReason }));
+      const holder = arrange(runtime, async (context) => {
+        const responseStream = await context.options.streamFn(holder.resolution.model, {
+          messages: [],
+        });
+        const response = await responseStream.result();
+        await context.emit({ type: 'message_end', message: response });
+        await context.emit({ type: 'turn_end', message: response, toolResults: [] });
+      });
+      holder.resolution.streamFn = () => stream;
+      const session = await runtime.open();
+      const events = await collect(session.execute(baseRequest(`failed-${stopReason}`)));
+      expect(events.some((event) => event.type === 'usage')).toBe(false);
+      await session.close();
+    },
+  );
+
+  test('leaves rejected provider results to the agent without recording usage', async () => {
+    const runtime = createTestRuntime();
+    const stream = new AssistantMessageEventStream();
+    jest.spyOn(stream, 'result').mockRejectedValue(new Error('Provider stream failed.'));
+    const holder = arrange(runtime, async ({ options }) => {
+      const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+      await responseStream.result();
+    });
+    holder.resolution.streamFn = () => stream;
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('rejected-provider-result')));
+
+    expect(events.some((event) => event.type === 'usage')).toBe(false);
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      error: { message: 'Provider stream failed.' },
+    });
+    await session.close();
+  });
+});
+
 describe('PiRuntime conformance', () => {
   describeRuntimeConformance(harness);
 });
@@ -1001,9 +1131,14 @@ describe('PiRuntime mapping', () => {
       'user',
       'assistant',
     ]);
-    expect(events.find((event) => event.type === 'usage')).toMatchObject({
-      usage: { inputTokens: 13, outputTokens: 5, totalTokens: 18 },
-    });
+    expect(events.filter((event) => event.type === 'usage')).toEqual([
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
+      }),
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 3, outputTokens: 2, totalTokens: 5 }),
+      }),
+    ]);
     await session.close();
 
     let restartSummaryCalls = 0;
@@ -1460,18 +1595,16 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('maps complete context, Agent options, stream parts, and usage', async () => {
+  test('maps context and preserves the cache breakdown of each provider invocation', async () => {
     const runtime = createTestRuntime();
     const holder = arrange(runtime, async (context) => {
-      await context.emit({
-        type: 'turn_end',
-        message: assistantMessage({
-          content: [],
-          stopReason: 'toolUse',
-          usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
-        }),
-        toolResults: [],
+      const response = assistantMessage({
+        content: [],
+        stopReason: 'toolUse',
+        usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
       });
+      await context.emit({ type: 'message_end', message: response });
+      await context.emit({ type: 'turn_end', message: response, toolResults: [] });
       await emitText(context, 'Pi answer.');
     });
     const session = await runtime.open();
@@ -1511,26 +1644,32 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
 
     expect(events.map((event) => event.type)).toEqual([
+      'usage',
       'part.add',
       'text.delta',
       'part.replace',
       'usage',
       'completed',
     ]);
-    expect(events.at(-2)).toEqual({
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(new Set(reports.map((report) => report.requestId)).size).toBe(2);
+    expect(reports[0]).toEqual({
       type: 'usage',
+      requestId: expect.any(String),
       completedAt: expect.any(Number),
       context: holder.resolution.usageContext,
       usage: {
         cacheReadTokens: 3,
         cacheWriteTokens: 1,
-        inputTokens: 9,
-        noCacheTokens: 5,
-        outputTokens: 3,
+        inputTokens: 6,
+        noCacheTokens: 2,
+        outputTokens: 1,
         reasoningTokens: 1,
-        totalTokens: 12,
+        totalTokens: 7,
       },
     });
+    expect(reports[1]?.usage).toMatchObject({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
     expect(holder.lastOptions?.initialState).toMatchObject({
       messages: [
         { role: 'user', content: 'Earlier question.' },
@@ -1574,7 +1713,7 @@ describe('PiRuntime mapping', () => {
       let providerSignal: AbortSignal | undefined;
       const providerStream: PiModelResolution['streamFn'] = (_model, _context, options) => {
         providerSignal = options?.signal;
-        return undefined as never;
+        return new AssistantMessageEventStream();
       };
       holder.resolution = { ...holder.resolution, streamFn: providerStream };
       let markStarted!: () => void;
@@ -2686,7 +2825,10 @@ describe('PiRuntime mapping', () => {
       const runtime = createTestRuntime(
         maxToolCalls === undefined ? undefined : { ...DEFAULT_PI_RUNTIME_LIMITS, maxToolCalls },
       );
-      const providerStream = jest.fn();
+      const providerStream = jest.fn<
+        ReturnType<PiModelResolution['streamFn']>,
+        Parameters<PiModelResolution['streamFn']>
+      >(() => new AssistantMessageEventStream());
       const allowedCalls = maxToolCalls ?? 64;
       let executionCount = 0;
       const tool: RuntimeTool = {
@@ -2709,8 +2851,8 @@ describe('PiRuntime mapping', () => {
           ...(payload as Record<string, unknown>),
           metadata: { trace: 'preserved' },
         }));
-        context.options.streamFn?.(model, { messages: [] }, { onPayload });
-        expect(providerStream.mock.lastCall?.[2].onPayload).toBe(onPayload);
+        await context.options.streamFn(model, { messages: [] }, { onPayload });
+        expect(providerStream.mock.lastCall?.[2]?.onPayload).toBe(onPayload);
         const calls = Array.from({ length: requests }, (_, index) => ({
           type: 'toolCall' as const,
           id: `call-${index + 1}`,
@@ -2721,6 +2863,8 @@ describe('PiRuntime mapping', () => {
           content: calls,
           stopReason: 'toolUse',
         });
+        // Pi completes the provider response before executing its tool calls.
+        await context.emit({ type: 'message_end', message });
         const toolResults = await Promise.all(
           calls.map(async (call, index): Promise<ToolResultMessage> => {
             const result = await piTool.execute(call.id, {}, context.signal);
@@ -2742,13 +2886,13 @@ describe('PiRuntime mapping', () => {
         expect(next.context.messages).toEqual([context.prompt, message, ...toolResults]);
         expect(next.context.systemPrompt).toContain('remaining uncertainty or unfinished work');
         expect(context.options.initialState?.tools).toHaveLength(1);
-        context.options.streamFn?.(
+        await context.options.streamFn(
           model,
           { ...next.context, messages: next.context.messages as PiMessage[] },
           { onPayload },
         );
         const payload = { tools: [{ name: piTool.name }], input: ['collected results'] };
-        const finalPayload = await providerStream.mock.lastCall?.[2].onPayload(payload, model);
+        const finalPayload = await providerStream.mock.lastCall?.[2]?.onPayload?.(payload, model);
         expect(finalPayload).toEqual({
           ...payload,
           metadata: { trace: 'preserved' },
@@ -2768,9 +2912,12 @@ describe('PiRuntime mapping', () => {
 
       expect(executionCount).toBe(allowedCalls);
       expect(events.at(-1)).toEqual({ type: 'completed' });
-      expect(events.find((event) => event.type === 'usage')).toMatchObject({
-        usage: { inputTokens: 6, outputTokens: 4, totalTokens: 10 },
-      });
+      const reports = events.filter((event) => event.type === 'usage');
+      expect(reports).toMatchObject([
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      ]);
+      expect(reports[0]?.requestId).not.toBe(reports[1]?.requestId);
       if (requests > allowedCalls) {
         expect(
           events.find(

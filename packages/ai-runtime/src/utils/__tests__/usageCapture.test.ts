@@ -31,6 +31,40 @@ describe('AI usage capture context', () => {
     ).toBeNull();
   });
 
+  it('freezes input tiers and rejects unordered thresholds and mixed tier currencies', () => {
+    const pricing = {
+      input: { currency: 'USD' as const, perMillionTokens: 1 },
+      output: { currency: 'USD' as const, perMillionTokens: 2 },
+      inputTokenTiers: [
+        {
+          minInputTokens: 200,
+          input: { currency: 'USD' as const, perMillionTokens: 4 },
+          output: { currency: 'USD' as const, perMillionTokens: 8 },
+        },
+      ],
+    };
+    const snapshot = createAiUsagePricingSnapshot(pricing);
+    pricing.inputTokenTiers[0].input.perMillionTokens = 99;
+    expect(snapshot?.inputTokenTiers).toEqual([
+      { minInputTokens: 200, inputPerMillionTokens: 4, outputPerMillionTokens: 8 },
+    ]);
+    expect(Object.isFrozen(snapshot?.inputTokenTiers?.[0])).toBe(true);
+    expect(
+      createAiUsagePricingSnapshot({
+        ...pricing,
+        inputTokenTiers: [pricing.inputTokenTiers[0], pricing.inputTokenTiers[0]],
+      }),
+    ).toBeNull();
+    expect(
+      createAiUsagePricingSnapshot({
+        ...pricing,
+        inputTokenTiers: [
+          { ...pricing.inputTokenTiers[0], output: { currency: 'CNY', perMillionTokens: 8 } },
+        ],
+      }),
+    ).toBeNull();
+  });
+
   it('deep-clones attribution before the provider call', () => {
     const source = { type: 'assistant' as const, id: 'assistant-1', name: 'Before', icon: 'A' };
     const credentialReceipt = {
