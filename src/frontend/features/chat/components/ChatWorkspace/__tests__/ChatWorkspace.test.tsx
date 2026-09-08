@@ -67,7 +67,10 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: mockTranslate }),
+  useTranslation: () => ({
+    t: mockTranslate,
+    i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
+  }),
 }));
 
 jest.mock('@/frontend/components/Message', () => ({
