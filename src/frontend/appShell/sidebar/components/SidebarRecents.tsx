@@ -11,6 +11,7 @@ import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import {
   SessionListProvider,
+  SessionStatus,
   type SessionViewMode,
   useSessionListActions,
   useSessionActionAlerts,
@@ -293,15 +294,17 @@ function SidebarSessionRow({ onCloseDrawer, onDelete, onRename, session }: Sideb
   return (
     <ContextMenuLink href={href} items={menuItems}>
       <Pressable
-        accessibilityLabel={session.title || t('session.list.untitled')}
         accessibilityRole="link"
         className="w-full active:bg-sidebar-accent"
         onPress={onCloseDrawer}
         testID={`sidebar-session-${session.id}`}
       >
-        <Text className="px-5 py-2.5 text-base text-sidebar-foreground" numberOfLines={1}>
-          {session.title || t('session.list.untitled')}
-        </Text>
+        <View className="flex-row items-center gap-2 px-5 py-2.5">
+          <Text className="min-w-0 flex-1 text-base text-sidebar-foreground" numberOfLines={1}>
+            {session.title || t('session.list.untitled')}
+          </Text>
+          <SessionStatus sessionId={session.id} />
+        </View>
       </Pressable>
     </ContextMenuLink>
   );

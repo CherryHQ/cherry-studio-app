@@ -44,6 +44,8 @@ export type ChatScrollAnchor = Readonly<{
  * Frontend memory cache schema (TTL-capable, lost on app restart).
  */
 export type UseCacheSchema = {
+  // Completion acknowledged by opening the Session, scoped to this app process.
+  'chat.last_seen_turn.${sessionId}': string | null;
   // Per-Session reading anchor. `null` means follow the current live edge.
   'chat.scroll_anchor.${sessionId}': ChatScrollAnchor;
   // Template-key probe keeps the generic string-value path covered independently.
@@ -54,6 +56,7 @@ export type UseCacheSchema = {
 // DefaultPreferences in the preference domain) so schema entries port with
 // zero rewrites — deliberate exception to the UPPER_SNAKE_CASE constant rule.
 export const DefaultUseCache: UseCacheSchema = {
+  'chat.last_seen_turn.${sessionId}': null,
   'chat.scroll_anchor.${sessionId}': null,
   'internal.memory_probe.${instanceId}': '',
 };

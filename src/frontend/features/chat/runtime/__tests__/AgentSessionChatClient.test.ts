@@ -80,6 +80,8 @@ function protocolWithObservation(
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
     forkSession: jest.fn(),
+    getSessionStatus: jest.fn(() => null),
+    subscribeSessionStatus: jest.fn(() => () => undefined),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),
