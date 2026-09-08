@@ -61,45 +61,9 @@ index 315ec083..93548a1d 100644
 +                                   font = [self defaultFont];
 +                                 }
 diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..0eb09773fd0b4ca792433944b3f84341754b4fba 100644
 --- a/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
 +++ b/android/src/main/java/com/swmansion/enriched/markdown/views/TableContainerView.kt
-@@ -17,6 +17,7 @@ import android.text.style.MetricAffectingSpan
- import android.view.Gravity
- import android.view.MotionEvent
- import android.view.View
-+import android.view.ViewConfiguration
- import android.widget.FrameLayout
- import android.widget.HorizontalScrollView
- import androidx.core.view.ViewCompat
-@@ -34,6 +35,7 @@ import com.swmansion.enriched.markdown.utils.text.view.LinkLongPressMovementMeth
- import com.swmansion.enriched.markdown.utils.text.view.cancelJSTouchForLinkTap
- import com.swmansion.enriched.markdown.utils.text.view.reallowParentInterceptIfLinkReleased
- import com.swmansion.enriched.markdown.views.ContextMenuPopup
-+import kotlin.math.abs
- import kotlin.math.ceil
- import kotlin.math.max
- import kotlin.math.min
-@@ -50,6 +52,18 @@ class TableContainerView(
-   private val density = resources.displayMetrics.density
-   private val isRtl = resources.isLayoutRTL()
- 
-+  private enum class TouchAxis {
-+    NONE,
-+    PENDING,
-+    HORIZONTAL,
-+    VERTICAL,
-+  }
-+
-+  private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
-+  private var touchAxis = TouchAxis.NONE
-+  private var touchStartX = 0f
-+  private var touchStartY = 0f
-+
-   var allowFontScaling = true
-   var maxFontSizeMultiplier = 0f
-   var onLinkPress: ((String) -> Unit)? = null
-@@ -67,6 +81,7 @@ class TableContainerView(
+@@ -67,6 +67,7 @@
    private val scrollView =
      HorizontalScrollView(context).apply {
        isHorizontalScrollBarEnabled = true
@@ -107,85 +71,7 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..0eb09773fd0b4ca792433944b3f84341
        overScrollMode = View.OVER_SCROLL_NEVER
        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
        addView(
-@@ -116,6 +131,77 @@ class TableContainerView(
-     addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-   }
- 
-+  override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-+    when (event.actionMasked) {
-+      MotionEvent.ACTION_DOWN -> {
-+        touchStartX = event.x
-+        touchStartY = event.y
-+        touchAxis =
-+          if (scrollView.canScrollHorizontally(-1) || scrollView.canScrollHorizontally(1)) TouchAxis.PENDING else TouchAxis.NONE
-+        if (touchAxis == TouchAxis.PENDING) {
-+          // Reserve only touches starting inside an overflowing table, before
-+          // ancestor pans activate. See Android's NestedScrollableHost pattern.
-+          parent?.requestDisallowInterceptTouchEvent(true)
-+        }
-+      }
-+
-+      MotionEvent.ACTION_MOVE -> {
-+        if (touchAxis == TouchAxis.PENDING) {
-+          val dx = abs(event.x - touchStartX)
-+          val dy = abs(event.y - touchStartY)
-+          if (max(dx, dy) > touchSlop) {
-+            if (dx >= dy) {
-+              // Keep the table's ownership through its edges until release.
-+              touchAxis = TouchAxis.HORIZONTAL
-+            } else {
-+              touchAxis = TouchAxis.VERTICAL
-+              // Cancel cells and the horizontal scroller before yielding, so
-+              // neither can reclaim a vertical drag or fire a link on release.
-+              val cancel = MotionEvent.obtain(event)
-+              cancel.action = MotionEvent.ACTION_CANCEL
-+              super.dispatchTouchEvent(cancel)
-+              cancel.recycle()
-+              parent?.requestDisallowInterceptTouchEvent(false)
-+            }
-+          }
-+        }
-+      }
-+
-+      MotionEvent.ACTION_POINTER_UP -> {
-+        if (touchAxis == TouchAxis.PENDING && event.actionIndex == 0) {
-+          touchStartX = event.getX(1)
-+          touchStartY = event.getY(1)
-+        }
-+      }
-+    }
-+
-+    val handled = if (touchAxis == TouchAxis.VERTICAL) true else super.dispatchTouchEvent(event)
-+    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-+      resetTouch()
-+    }
-+    return handled
-+  }
-+
-+  override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
-+    // Cell link handling releases interception on ordinary moves. It must not
-+    // release the table's ancestor lock while its axis is pending or horizontal.
-+    super.requestDisallowInterceptTouchEvent(
-+      disallowIntercept || touchAxis == TouchAxis.PENDING || touchAxis == TouchAxis.HORIZONTAL,
-+    )
-+  }
-+
-+  override fun onDetachedFromWindow() {
-+    resetTouch()
-+    super.onDetachedFromWindow()
-+  }
-+
-+  private fun resetTouch() {
-+    if (touchAxis != TouchAxis.NONE) {
-+      touchAxis = TouchAxis.NONE
-+      parent?.requestDisallowInterceptTouchEvent(false)
-+    }
-+  }
-+
-   fun applyTableNode(tableNode: MarkdownASTNode) {
-     rows =
-       tableNode.children.flatMap { section ->
-@@ -207,10 +293,7 @@ class TableContainerView(
+@@ -207,10 +208,7 @@
          val cellBg =
            CellBackgroundView(context).apply {
              configure(rowBg, tableStyle.borderColor, tableStyle.borderWidth)
@@ -197,7 +83,7 @@ index 736a0e8d04cf3018ddfd92aeb74e58113fecc07f..0eb09773fd0b4ca792433944b3f84341
              importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
            }
  
-@@ -288,10 +371,6 @@ class TableContainerView(
+@@ -288,10 +286,6 @@
              Layout.Alignment.ALIGN_OPPOSITE -> Gravity.END
              else -> Gravity.START
            }
