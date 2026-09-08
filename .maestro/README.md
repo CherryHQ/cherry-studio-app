@@ -26,13 +26,13 @@ Use the platform's application identifier:
 ```bash
 # iOS
 maestro --device "$DEVICE_ID" test \
-  -e APP_ID=com.cherry-ai.cherry-studio-app \
+  -e APP_ID=com.cherryai.cherrystudio-app.dev \
   -e DEV_CLIENT_URL="$DEV_CLIENT_URL" \
   .maestro/flows
 
 # Android
 maestro --device "$DEVICE_ID" test \
-  -e APP_ID=com.cherry_ai.cherry_studio_app \
+  -e APP_ID=com.cherryai.cherrystudio_app.dev \
   -e DEV_CLIENT_URL="$DEV_CLIENT_URL" \
   .maestro/flows
 ```
