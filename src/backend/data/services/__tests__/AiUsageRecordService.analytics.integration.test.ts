@@ -116,12 +116,11 @@ describe('AI usage analytics', () => {
     try {
       await service.recordInvocations([first, second, image]);
       expect(listener).toHaveBeenCalledTimes(1);
-      // Only analytics caches refresh. The transcript is refreshed by the Agent
-      // protocol when the message finalizes, so a per-call refetch would be waste.
       expect(listener).toHaveBeenCalledWith([
         '/ai-usage-records',
         '/ai-usage-records/stats',
         '/ai-usage-records/timeline',
+        '/agent-sessions/session-1/messages',
       ]);
       expect(listener.mock.results[0]?.value).toMatchObject({
         inTransaction: false,
@@ -173,6 +172,105 @@ describe('AI usage analytics', () => {
       unsubscribe();
     }
   });
+
+  test.each(['success', 'error', 'cancelled', 'interrupted'])(
+    'refreshes a %s message when an image call commits after finalization',
+    async (status) => {
+      sqlite.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
+      `);
+      const ref = { kind: 'agent-session' as const, id: 'message-1' };
+      const listener = jest.fn((paths: readonly string[]) => {
+        const row = sqlite
+          .prepare('SELECT stats, usage, status FROM agent_session_message WHERE id = ?')
+          .get(ref.id) as { stats: string; usage: string; status: string };
+        return {
+          paths,
+          inTransaction: sqlite.isTransaction,
+          stats: JSON.parse(row.stats),
+          usage: JSON.parse(row.usage),
+          status: row.status,
+        };
+      });
+      const unsubscribe = subscribeDataApiChanges(listener);
+      const analyticsPaths = [
+        '/ai-usage-records',
+        '/ai-usage-records/stats',
+        '/ai-usage-records/timeline',
+      ];
+      try {
+        await service.recordInvocation(
+          invocation(
+            'call-1',
+            1000,
+            { inputTokens: 100, outputTokens: 20 },
+            context('a', { messageRef: ref }),
+          ),
+        );
+        expect(listener).toHaveBeenLastCalledWith(analyticsPaths);
+        sqlite
+          .prepare('UPDATE agent_session_message SET status = ? WHERE id = ?')
+          .run('streaming', ref.id);
+        await service.recordInvocation(
+          invocation(
+            'call-2',
+            2000,
+            { inputTokens: 10, outputTokens: 2 },
+            context('a', { messageRef: ref }),
+          ),
+        );
+        expect(listener).toHaveBeenLastCalledWith(analyticsPaths);
+
+        // The Host has already committed and published this terminal message.
+        sqlite
+          .prepare('UPDATE agent_session_message SET status = ? WHERE id = ?')
+          .run(status, ref.id);
+        listener.mockClear();
+        const image = {
+          ...invocation(
+            'late-image',
+            3000,
+            undefined,
+            context('a', { messageRef: ref, pricingSnapshot: null }),
+            { amount: 0.25, currency: 'CNY' },
+          ),
+          modality: 'image' as const,
+          imageCount: 1,
+          metrics: undefined,
+        };
+        await service.recordInvocation(image);
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(listener).toHaveBeenCalledWith([
+          ...analyticsPaths,
+          '/agent-sessions/session-1/messages',
+        ]);
+        expect(listener.mock.results[0]?.value).toMatchObject({
+          inTransaction: false,
+          status,
+          stats: {
+            requestCount: 3,
+            costs: expect.arrayContaining([
+              {
+                currency: 'CNY',
+                amount: 0.25,
+                providerReportedRequestCount: 1,
+                computedRequestCount: 0,
+              },
+            ]),
+          },
+          usage: { inputTokens: 110, outputTokens: 22, totalTokens: 132 },
+        });
+        await service.recordInvocation(image);
+        expect(listener).toHaveBeenCalledTimes(1);
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
 
   test('uses stable keyset pagination for derived token and performance metrics', async () => {
     await service.recordInvocations([

@@ -1041,15 +1041,22 @@ async function getMessageUsageProjectionTx(
 }
 
 /**
- * Materializes the message's usage columns from its records. This does not
- * publish a transcript change: the Agent protocol refreshes the transcript when
- * the message finalizes, and the last record commits before that write.
+ * Materializes the message's usage columns from its records and returns the
+ * terminal message's Session for post-commit invalidation. Active messages still
+ * refresh through the Agent protocol; tool usage can arrive after finalization.
  */
-async function rebuildMessageUsageProjectionTx(db: Database, ref: MessageRef): Promise<void> {
+async function rebuildMessageUsageProjectionTx(
+  db: Database,
+  ref: MessageRef,
+): Promise<string | undefined> {
   // Mobile owns Agent Session messages; retired chat references remain valid analytical facts.
   if (ref.kind !== 'agent-session') return;
   const [message] = await db
-    .select({ stats: agentSessionMessageTable.stats })
+    .select({
+      sessionId: agentSessionMessageTable.sessionId,
+      stats: agentSessionMessageTable.stats,
+      status: agentSessionMessageTable.status,
+    })
     .from(agentSessionMessageTable)
     .where(eq(agentSessionMessageTable.id, ref.id))
     .limit(1);
@@ -1096,6 +1103,9 @@ async function rebuildMessageUsageProjectionTx(db: Database, ref: MessageRef): P
           : null,
     })
     .where(eq(agentSessionMessageTable.id, ref.id));
+  if (message.status !== 'pending' && message.status !== 'streaming') {
+    return message.sessionId;
+  }
 }
 
 /** Endpoint caches a newly committed usage record invalidates. */
@@ -1131,9 +1141,10 @@ export class AiUsageRecordService {
     if (inputs.length === 0) return;
     try {
       const rows = inputs.map(invocationToRow);
-      const insertedCount = await this.dbService.withWriteTx(async (tx) => {
+      const { insertedCount, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
         let inserted = 0;
         const messageRefs = new Map<string, MessageRef>();
+        const messagePaths = new Set<string>();
         for (const row of rows) {
           const returned = await tx
             .insert(aiUsageRecordTable)
@@ -1162,11 +1173,12 @@ export class AiUsageRecordService {
           }
         }
         for (const ref of messageRefs.values()) {
-          await rebuildMessageUsageProjectionTx(tx, ref);
+          const sessionId = await rebuildMessageUsageProjectionTx(tx, ref);
+          if (sessionId) messagePaths.add(`/agent-sessions/${sessionId}/messages`);
         }
-        return inserted;
+        return { insertedCount: inserted, messagePaths: [...messagePaths] };
       });
-      if (insertedCount > 0) publishDataApiChanges(USAGE_ANALYTICS_PATHS);
+      if (insertedCount > 0) publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
     } catch (error) {
       logger.error('Failed to record AI usage', error as Error, {
         requestIds: inputs.map(({ requestId }) => requestId),

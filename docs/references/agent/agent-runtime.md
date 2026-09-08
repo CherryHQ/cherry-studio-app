@@ -560,15 +560,18 @@ when available. `completedAt` is recorded at the provider boundary.
 
 The Host adds the admitted Agent source and reserved Session message reference, deduplicates reports,
 and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
-event loop; the terminal write waits for the turn's usage writes, so the finalized row carries every
-recorded call. `AiUsageRecordService` inserts the fact and rebuilds message `stats` and protocol
-`usage` in the same transaction. The Host retains an aggregate for its in-memory message view and
-uses it at finalization only when no analytical projection was persisted. If some writes fail,
+event loop; the terminal write waits for the Host's tracked Runtime usage writes, so the finalized
+row carries those persisted calls. `AiUsageRecordService` inserts the fact and rebuilds message
+`stats` and protocol `usage` in the same transaction. The Host retains an aggregate for its in-memory
+message view and uses it at finalization only when no analytical projection was persisted. If some writes fail,
 an existing projection continues to reflect only persisted records. Tools that call providers on
 the Host's behalf (image generation) read the attribution when they run, because the tool catalog
 is built before the assistant message is reserved; source and bound message references remain
-immutable snapshots. Runtime and approval timing remain message-owned; they never stand in for
-provider latency. A Runtime that cannot report usage emits no `usage` event.
+immutable snapshots. Their independent usage writes can finish after message finalization,
+especially after cancellation. A usage write that updates a terminal message publishes its Session
+transcript path after commit, so mounted chat views also receive the late projection.
+Runtime and approval timing remain message-owned; they never stand in for provider latency. A
+Runtime that cannot report usage emits no `usage` event.
 
 ## Host execution flow
 

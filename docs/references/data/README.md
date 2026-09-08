@@ -144,6 +144,10 @@ precedence. Migration `0018_usage-invocation-semantics` marks older `agent-sessi
 `legacy-aggregate`; original counts, costs, and snapshots are retained because their provider
 boundaries cannot be recovered.
 
+Tiered pricing is a data and calculation capability in this port, not a new configuration UI.
+Desktop reads `pricing.inputTokenTiers` from user-edited models; neither catalog currently supplies
+those tiers. Mobile's pricing editor and catalog tier ingestion remain separate follow-up features.
+
 New usage facts and their Agent message projections commit together. Message `stats` includes token
 details, request/estimated/unpriced counts, costs grouped by currency, and measured provider
 performance; the Session store owns runtime timing. Agent image tools carry the same source/message
@@ -154,9 +158,12 @@ Committed usage writes publish the `/ai-usage-records*` endpoint paths on the Da
 (`src/backend/data/dataApiChanges.ts`); `DataApiService` exposes it as `subscribeChanges`, and
 `DataApiProvider` coalesces invalidation for 300 ms so background execution refreshes mounted
 statistics. The bus is shared: any persistence service may publish the paths its committed write
-invalidated, and only published paths refresh. Usage writes do not publish transcript paths; the
-Agent protocol refreshes the transcript when the message finalizes, and the terminal write waits
-for the turn's usage writes, so that refresh already carries the projection. Table shape and
+invalidated, and only published paths refresh. Usage writes for terminal Agent messages also publish
+the affected `/agent-sessions/:sessionId/messages` paths. The Agent protocol still refreshes active
+messages at finalization, after the Host's tracked Runtime usage writes settle. Independently
+recorded tool calls can commit later, including after cancellation; post-commit transcript
+invalidation exposes their updated projections. The chat client releases a terminal live copy once
+the durable transcript has the same status and an equal or newer timestamp. Table shape and
 existing list/stats/timeline query contracts remain unchanged. No Desktop compatibility baseline is
 advanced by this selective port.
 

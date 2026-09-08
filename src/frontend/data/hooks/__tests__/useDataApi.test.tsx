@@ -53,12 +53,14 @@ describe('Data API hooks', () => {
     });
     queryClient.setQueryData(['/ai-usage-records/stats', { metric: 'tokens' }], { count: 1 });
     queryClient.setQueryData(['/ai-usage-records/stats', { metric: 'cost' }], { count: 1 });
+    queryClient.setQueryData(['/agent-sessions/session-1/messages', { limit: 30 }], []);
+    queryClient.setQueryData(['/agent-sessions/session-2/messages', { limit: 30 }], []);
     queryClient.setQueryData(['/providers'], []);
     try {
       await act(async () => {
         renderer = create(<TestProviders>{null}</TestProviders>);
       });
-      onChange?.(['/ai-usage-records/stats']);
+      onChange?.(['/ai-usage-records/stats', '/agent-sessions/session-1/messages']);
       onChange?.(['/ai-usage-records/stats']);
       expect(
         queryClient.getQueryState(['/ai-usage-records/stats', { metric: 'tokens' }])?.isInvalidated,
@@ -73,6 +75,14 @@ describe('Data API hooks', () => {
         queryClient.getQueryState(['/ai-usage-records/stats', { metric: 'cost' }])?.isInvalidated,
       ).toBe(true);
       expect(queryClient.getQueryState(['/providers'])?.isInvalidated).toBe(false);
+      expect(
+        queryClient.getQueryState(['/agent-sessions/session-1/messages', { limit: 30 }])
+          ?.isInvalidated,
+      ).toBe(true);
+      expect(
+        queryClient.getQueryState(['/agent-sessions/session-2/messages', { limit: 30 }])
+          ?.isInvalidated,
+      ).toBe(false);
       await act(async () => renderer?.unmount());
       renderer = undefined;
       expect(unsubscribe).toHaveBeenCalledTimes(1);
