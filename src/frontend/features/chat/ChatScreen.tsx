@@ -28,6 +28,7 @@ import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatDraftState, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
+import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import { useAgentChatDraftHandoff } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
@@ -83,6 +84,14 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <>
+      {!isPreview &&
+      sessionId &&
+      session.data &&
+      !session.error &&
+      !messageWindow.isLoadingInitial &&
+      !messageWindow.error ? (
+        <SessionReadReceipt sessionId={sessionId} />
+      ) : null}
       {sessionId && session.error ? (
         <View className="flex-1 justify-center px-8 py-16">
           <ContentState.Error
@@ -128,6 +137,11 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ) : null}
     </>
   );
+}
+
+function SessionReadReceipt({ sessionId }: { sessionId: string }) {
+  useSessionReadReceipt(sessionId);
+  return null;
 }
 
 function isNotFoundError(error: Error) {

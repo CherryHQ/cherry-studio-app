@@ -1,4 +1,5 @@
 export { SessionList } from './components/SessionList';
+export { SessionStatus } from './components/SessionStatus';
 export { useSessionActionAlerts } from './components/useSessionActionAlerts';
 export {
   SessionListProvider,

@@ -279,8 +279,9 @@ export class AgentSessionChatClient {
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
         persistedMessage.status === liveMessage.status &&
-        persistedMessage.updatedAt === liveMessage.updatedAt
+        Date.parse(persistedMessage.updatedAt) >= Date.parse(liveMessage.updatedAt)
       ) {
+        // Late usage can advance a terminal row beyond the finalized event.
         entry.liveMessages.delete(messageId);
         changed = true;
       }

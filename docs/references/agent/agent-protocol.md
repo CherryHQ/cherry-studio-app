@@ -286,6 +286,11 @@ Part ids are stable within a message. The protocol owns these normalized parts; 
 provider SDK shape leaks through the boundary. Text parts may contain Markdown, but tool calls and
 results remain structured protocol parts and are not flattened into display Markdown.
 
+Application tool failures use the ordinary error result envelope:
+`{ value: { status: 'error', error: { code, message, retryable }, details? }, artifacts: [] }`.
+Optional `details` retains the application's result, including successful sources and per-input
+lookup failures. Runtime-only stop policy is not persisted or replayed as execution authority.
+
 Every file part records a managed `fileEntryId` that existed when the part was written, together
 with stable display metadata such as name and media type; protocol values never use absolute device
 paths or transient import URIs as authority. The managed entry may later be deleted, in which case
@@ -379,6 +384,9 @@ Runtime identity.
 
 ```ts
 interface AgentProtocol {
+  getSessionStatus(sessionId: string): AgentSessionStatus | null
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void
+
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
   forkSession(input: {
@@ -421,7 +429,19 @@ type AgentSessionObservation = {
   snapshot: AgentSessionSnapshot
   unsubscribe(): void
 }
+
+type AgentSessionStatus = Readonly<{
+  turnId: string
+  status: AgentTurnView['status']
+}>
 ```
+
+`getSessionStatus` returns a stable, immutable snapshot of the latest turn run in the current Host
+generation, or `null` if there is none. `subscribeSessionStatus` notifies only when that snapshot
+changes; consumers subscribe and then read the snapshot. These in-process list observers do not
+load messages or open Runtime sessions. Terminal status remains available after chat observers
+unsubscribe, clears on Session deletion, and resets with the Host generation. Completion read
+receipts are frontend-owned, per turn, and live only for the app process, matching Desktop.
 
 `startSession` is the Draft-to-Session boundary. It performs the same write-free turn preparation
 as `submitMessage`, opens the Runtime, and then atomically creates the durable Session together with

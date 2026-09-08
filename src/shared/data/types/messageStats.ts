@@ -41,8 +41,8 @@ export type MessageRuntimeTiming = z.infer<typeof MessageRuntimeTimingSchema>;
 export type MessageRuntimeSpan = MessageRuntimeTiming['spans'][number];
 
 export const MessageStatsSchema = z.strictObject({
-  // Token and provider fields retain the desktop shape. Mobile currently
-  // writes runtimeTiming here and keeps its existing usage ledger unchanged.
+  // Token and provider fields are materialized from immutable usage records.
+  // The session owner writes runtimeTiming and contextTokens.
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
   totalTokens: z.number().optional(),

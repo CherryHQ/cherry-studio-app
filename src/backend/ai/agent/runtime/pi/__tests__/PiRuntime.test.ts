@@ -1,7 +1,10 @@
 import path from 'node:path';
 
-import type { AgentEvent as PiAgentEvent } from '@earendil-works/pi-agent-core';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import type {
+  AgentContext as PiAgentContext,
+  AgentEvent as PiAgentEvent,
+} from '@earendil-works/pi-agent-core';
+import { Agent, type AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type {
   AssistantMessage,
   Message as PiMessage,
@@ -9,7 +12,9 @@ import type {
   ToolResultMessage,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import { createWebTools } from '../../../tools/web/webTools';
 import {
   type ArrangedApprovalRequest,
   type ArrangedErrorRequest,
@@ -23,6 +28,7 @@ import type {
   RuntimeExecutionRequest,
   RuntimeJsonValue,
   RuntimeTool,
+  RuntimeToolResult,
 } from '../../types';
 import {
   estimatePiContextFixedCosts,
@@ -244,6 +250,35 @@ async function emitText(context: TestAgentContext, text: string): Promise<void> 
   await context.emit({ type: 'turn_end', message: final, toolResults: [] });
 }
 
+async function prepareTestNextTurn(
+  context: TestAgentContext,
+  message: AssistantMessage,
+  toolResults: ToolResultMessage[],
+  previousContext: PiAgentContext = {
+    messages: [context.prompt],
+    systemPrompt: context.options.initialState?.systemPrompt ?? '',
+    tools: context.options.initialState?.tools,
+  },
+) {
+  const turnContext = {
+    context: {
+      ...previousContext,
+      messages: [...previousContext.messages, message, ...toolResults],
+    },
+    message,
+    newMessages: [message, ...toolResults],
+    toolResults,
+  };
+  // Match Pi's hook order: the replacement context is applied before the stop decision.
+  const update = await context.options.prepareNextTurnWithContext?.(turnContext);
+  const nextContext = update?.context ?? turnContext.context;
+  const shouldStop = await context.options.shouldStopAfterTurn?.({
+    ...turnContext,
+    context: nextContext,
+  });
+  return { context: nextContext, shouldStop };
+}
+
 function baseRequest(
   turnId: string,
   overrides: Partial<RuntimeExecutionRequest> = {},
@@ -455,6 +490,136 @@ const harness: RuntimeConformanceHarness = {
     path.resolve(__dirname, '../piDeferredToolDiscovery.ts'),
   ],
 };
+
+describe('Pi invocation capture', () => {
+  test.each(['sync', 'async'] as const)(
+    'retains a completed %s provider stream when cancelled before message_end',
+    async (mode) => {
+      const runtime = createTestRuntime();
+      const stream = new AssistantMessageEventStream();
+      let markResponseReady!: () => void;
+      const responseReady = new Promise<void>((resolve) => {
+        markResponseReady = resolve;
+      });
+      const holder = arrange(runtime, async ({ options, signal }) => {
+        const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+        await responseStream.result();
+        markResponseReady();
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      });
+      holder.resolution.streamFn = () => (mode === 'sync' ? stream : Promise.resolve(stream));
+      const session = await runtime.open();
+      const eventsPromise = collect(
+        session.execute(baseRequest(`cancel-before-message-end-${mode}`)),
+      );
+      stream.end(assistantMessage());
+      await responseReady;
+      await session.cancel(`cancel-before-message-end-${mode}`);
+
+      const events = await eventsPromise;
+      expect(events.filter((event) => event.type === 'usage')).toMatchObject([
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      ]);
+      expect(events.at(-1)?.type).toBe('cancelled');
+      await session.close();
+    },
+  );
+
+  test('retains a completed provider call when approval is cancelled before turn_end', async () => {
+    const runtime = createTestRuntime();
+    const { request } = await harness.arrangeApproval(runtime, 'cancel-after-response');
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    for await (const event of session.execute(request)) {
+      events.push(event);
+      if (event.type === 'approval.requested') await session.cancel(request.turnId);
+    }
+    expect(events.filter((event) => event.type === 'usage')).toHaveLength(1);
+    expect(events.findIndex((event) => event.type === 'usage')).toBeLessThan(
+      events.findIndex((event) => event.type === 'approval.requested'),
+    );
+    expect(events.at(-1)?.type).toBe('cancelled');
+    await session.close();
+  });
+
+  test('deduplicates responses while preserving distinct calls with the same timestamp', async () => {
+    const runtime = createTestRuntime();
+    const responses = [
+      assistantMessage({ timestamp: 1 }),
+      assistantMessage({ timestamp: 1, responseModel: 'served-model' }),
+    ];
+    const holder = arrange(runtime, async (context) => {
+      const firstStream = await context.options.streamFn(holder.resolution.model, { messages: [] });
+      const first = await firstStream.result();
+      await context.emit({ type: 'message_end', message: first });
+      await context.emit({ type: 'message_end', message: first });
+      const secondStream = await context.options.streamFn(holder.resolution.model, {
+        messages: [],
+      });
+      const second = await secondStream.result();
+      await context.emit({ type: 'message_end', message: second });
+      await context.emit({ type: 'turn_end', message: second, toolResults: [] });
+    });
+    holder.resolution.streamFn = () => {
+      const response = responses.shift();
+      if (!response) throw new Error('Unexpected provider call.');
+      const stream = new AssistantMessageEventStream();
+      stream.end(response);
+      return stream;
+    };
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('same-timestamp')));
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(reports[0]?.requestId).not.toBe(reports[1]?.requestId);
+    expect(reports[1]?.context.modelId).toBe('served-model');
+    await session.close();
+  });
+
+  test.each(['error', 'aborted'] as const)(
+    'does not record an unsuccessful %s response',
+    async (stopReason) => {
+      const runtime = createTestRuntime();
+      const stream = new AssistantMessageEventStream();
+      stream.end(assistantMessage({ stopReason }));
+      const holder = arrange(runtime, async (context) => {
+        const responseStream = await context.options.streamFn(holder.resolution.model, {
+          messages: [],
+        });
+        const response = await responseStream.result();
+        await context.emit({ type: 'message_end', message: response });
+        await context.emit({ type: 'turn_end', message: response, toolResults: [] });
+      });
+      holder.resolution.streamFn = () => stream;
+      const session = await runtime.open();
+      const events = await collect(session.execute(baseRequest(`failed-${stopReason}`)));
+      expect(events.some((event) => event.type === 'usage')).toBe(false);
+      await session.close();
+    },
+  );
+
+  test('leaves rejected provider results to the agent without recording usage', async () => {
+    const runtime = createTestRuntime();
+    const stream = new AssistantMessageEventStream();
+    jest.spyOn(stream, 'result').mockRejectedValue(new Error('Provider stream failed.'));
+    const holder = arrange(runtime, async ({ options }) => {
+      const responseStream = await options.streamFn(holder.resolution.model, { messages: [] });
+      await responseStream.result();
+    });
+    holder.resolution.streamFn = () => stream;
+    const session = await runtime.open();
+    const events = await collect(session.execute(baseRequest('rejected-provider-result')));
+
+    expect(events.some((event) => event.type === 'usage')).toBe(false);
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      error: { message: 'Provider stream failed.' },
+    });
+    await session.close();
+  });
+});
 
 describe('PiRuntime conformance', () => {
   describeRuntimeConformance(harness);
@@ -863,62 +1028,57 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('stops before another provider request when tool results exhaust live context', async () => {
-    const runtime = createTestRuntime();
-    const holder = holders.get(runtime);
-    if (!holder) throw new Error('missing Runtime holder');
-    holder.resolution = {
-      ...holder.resolution,
-      model: { ...holder.resolution.model, contextWindow: 8_000, maxTokens: 512 },
-    };
-    arrange(runtime, async (context) => {
-      const toolMessage = assistantMessage({
-        content: [
-          {
-            type: 'toolCall',
-            id: 'large-result-call',
-            name: 'tool_search',
-            arguments: { query: 'large result' },
-          },
-        ],
-        stopReason: 'toolUse',
-      });
-      const toolResult: ToolResultMessage = {
-        role: 'toolResult',
-        toolCallId: 'large-result-call',
-        toolName: 'tool_search',
-        content: [{ type: 'text', text: 'x'.repeat(40_000) }],
-        details: { result: 'x'.repeat(40_000) },
-        isError: false,
-        timestamp: Date.now(),
+  test.each([20, 1])(
+    'stops on exhausted context even at the tool budget (%i steps)',
+    async (maxToolSteps) => {
+      const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, maxToolSteps });
+      const holder = holders.get(runtime);
+      if (!holder) throw new Error('missing Runtime holder');
+      holder.resolution = {
+        ...holder.resolution,
+        model: { ...holder.resolution.model, contextWindow: 8_000, maxTokens: 512 },
       };
-      await context.emit({ type: 'turn_end', message: toolMessage, toolResults: [toolResult] });
-      await context.options.prepareNextTurnWithContext?.({
-        message: toolMessage,
-        toolResults: [toolResult],
-        context: {
-          messages: [context.prompt, toolMessage, toolResult],
-          systemPrompt: 'Be helpful.',
-          tools: context.options.initialState?.tools,
-        },
-        newMessages: [toolMessage, toolResult],
+      arrange(runtime, async (context) => {
+        const toolMessage = assistantMessage({
+          content: [
+            {
+              type: 'toolCall',
+              id: 'large-result-call',
+              name: 'tool_search',
+              arguments: { query: 'large result' },
+            },
+          ],
+          stopReason: 'toolUse',
+        });
+        const toolResult: ToolResultMessage = {
+          role: 'toolResult',
+          toolCallId: 'large-result-call',
+          toolName: 'tool_search',
+          content: [{ type: 'text', text: 'x'.repeat(40_000) }],
+          details: { result: 'x'.repeat(40_000) },
+          isError: false,
+          timestamp: Date.now(),
+        };
+        await context.emit({ type: 'turn_end', message: toolMessage, toolResults: [toolResult] });
+        const next = await prepareTestNextTurn(context, toolMessage, [toolResult]);
+        expect(next.shouldStop).toBe(true);
       });
-    });
-    const session = await runtime.open();
+      const session = await runtime.open();
 
-    const events = await collect(session.execute(baseRequest('turn-live-context-overflow')));
+      const events = await collect(session.execute(baseRequest('turn-live-context-overflow')));
 
-    expect(events.at(-1)).toEqual({
-      type: 'failed',
-      error: {
-        code: 'context_window_exceeded',
-        message: 'The tool loop exhausted the model context window before the next request.',
-        retryable: false,
-        origin: 'runtime',
-      },
-    });
-    await session.close();
-  });
+      expect(events.at(-1)).toEqual({
+        type: 'failed',
+        error: {
+          code: 'context_window_exceeded',
+          message: 'The tool loop exhausted the model context window before the next request.',
+          retryable: false,
+          origin: 'runtime',
+        },
+      });
+      await session.close();
+    },
+  );
 
   test('compacts long history, reports summary usage, and replays the checkpoint after restart', async () => {
     let summaryCalls = 0;
@@ -973,9 +1133,14 @@ describe('PiRuntime mapping', () => {
       'user',
       'assistant',
     ]);
-    expect(events.find((event) => event.type === 'usage')).toMatchObject({
-      usage: { inputTokens: 13, outputTokens: 5, totalTokens: 18 },
-    });
+    expect(events.filter((event) => event.type === 'usage')).toEqual([
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 10, outputTokens: 3, totalTokens: 13 }),
+      }),
+      expect.objectContaining({
+        usage: expect.objectContaining({ inputTokens: 3, outputTokens: 2, totalTokens: 5 }),
+      }),
+    ]);
     await session.close();
 
     let restartSummaryCalls = 0;
@@ -1429,10 +1594,13 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('marks transient provider transport errors as retryable without an HTTP status', async () => {
+  test.each([
+    ['fetch failed: connection reset', 'ECONNRESET'],
+    ['Connection error.', 'runtime_error'],
+  ])('marks transport failure %s as retryable without an HTTP status', async (message, code) => {
     const runtime = createTestRuntime();
     arrange(runtime, () => {
-      throw Object.assign(new Error('fetch failed: connection reset'), { code: 'ECONNRESET' });
+      throw Object.assign(new Error(message), { code });
     });
     const session = await runtime.open();
 
@@ -1440,23 +1608,21 @@ describe('PiRuntime mapping', () => {
 
     expect(events.at(-1)).toMatchObject({
       type: 'failed',
-      error: { code: 'ECONNRESET', retryable: true },
+      error: { code, retryable: true },
     });
     await session.close();
   });
 
-  test('maps complete context, Agent options, stream parts, and usage', async () => {
+  test('maps context and preserves the cache breakdown of each provider invocation', async () => {
     const runtime = createTestRuntime();
     const holder = arrange(runtime, async (context) => {
-      await context.emit({
-        type: 'turn_end',
-        message: assistantMessage({
-          content: [],
-          stopReason: 'toolUse',
-          usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
-        }),
-        toolResults: [],
+      const response = assistantMessage({
+        content: [],
+        stopReason: 'toolUse',
+        usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
       });
+      await context.emit({ type: 'message_end', message: response });
+      await context.emit({ type: 'turn_end', message: response, toolResults: [] });
       await emitText(context, 'Pi answer.');
     });
     const session = await runtime.open();
@@ -1496,26 +1662,32 @@ describe('PiRuntime mapping', () => {
     const events = await collect(session.execute(request));
 
     expect(events.map((event) => event.type)).toEqual([
+      'usage',
       'part.add',
       'text.delta',
       'part.replace',
       'usage',
       'completed',
     ]);
-    expect(events.at(-2)).toEqual({
+    const reports = events.filter((event) => event.type === 'usage');
+    expect(reports).toHaveLength(2);
+    expect(new Set(reports.map((report) => report.requestId)).size).toBe(2);
+    expect(reports[0]).toEqual({
       type: 'usage',
+      requestId: expect.any(String),
       completedAt: expect.any(Number),
       context: holder.resolution.usageContext,
       usage: {
         cacheReadTokens: 3,
         cacheWriteTokens: 1,
-        inputTokens: 9,
-        noCacheTokens: 5,
-        outputTokens: 3,
+        inputTokens: 6,
+        noCacheTokens: 2,
+        outputTokens: 1,
         reasoningTokens: 1,
-        totalTokens: 12,
+        totalTokens: 7,
       },
     });
+    expect(reports[1]?.usage).toMatchObject({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
     expect(holder.lastOptions?.initialState).toMatchObject({
       messages: [
         { role: 'user', content: 'Earlier question.' },
@@ -1559,7 +1731,7 @@ describe('PiRuntime mapping', () => {
       let providerSignal: AbortSignal | undefined;
       const providerStream: PiModelResolution['streamFn'] = (_model, _context, options) => {
         providerSignal = options?.signal;
-        return undefined as never;
+        return new AssistantMessageEventStream();
       };
       holder.resolution = { ...holder.resolution, streamFn: providerStream };
       let markStarted!: () => void;
@@ -2285,6 +2457,289 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('finishes the real Pi loop with existing sources after a partial web failure', async () => {
+    const resolution = createResolution();
+    const seenTools: string[][] = [];
+    const seenErrors: boolean[] = [];
+    const seenResults: ToolResultMessage[] = [];
+    const seenToolChoices: unknown[] = [];
+    resolution.streamFn = async (model, context, options) => {
+      const payload = (await options?.onPayload?.({}, model)) as
+        | { tool_choice?: unknown }
+        | undefined;
+      seenToolChoices.push(payload?.tool_choice);
+      seenTools.push((context.tools ?? []).map((tool) => tool.name));
+      seenErrors.push(
+        ...context.messages
+          .filter((message) => message.role === 'toolResult')
+          .map((message) => message.isError),
+      );
+      seenResults.push(...context.messages.filter((message) => message.role === 'toolResult'));
+      // A model may switch from fetching to search if either web tool is still offered.
+      const nextTool =
+        payload?.tool_choice === 'none'
+          ? undefined
+          : (context.tools?.find((tool) => tool.name === 'web_fetch') ?? context.tools?.[0]);
+      const canCall = nextTool !== undefined;
+      const message = assistantMessage({
+        content: nextTool
+          ? [
+              {
+                type: 'toolCall',
+                id: `call-${seenTools.length}`,
+                name: nextTool.name,
+                arguments:
+                  nextTool.name === 'web_fetch'
+                    ? { urls: ['https://example.com/a', 'https://example.com/b'] }
+                    : { query: 'alternative source' },
+              },
+            ]
+          : [{ type: 'text', text: 'The source is unavailable; here is what I can explain.' }],
+        stopReason: canCall ? 'toolUse' : 'stop',
+      });
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'start', partial: message });
+      stream.push({ type: 'done', reason: canCall ? 'toolUse' : 'stop', message });
+      return stream;
+    };
+    const runtime = new PiRuntime(
+      {
+        preflightModel: () => ({
+          contextWindow: 128_000,
+          inputModalities: ['text'],
+          maxInputTokens: 120_000,
+          maxOutputTokens: 4096,
+          supportsTools: true,
+        }),
+        resolveModel: () => resolution,
+      },
+      (options) => new Agent(options),
+    );
+    const webSearch = {
+      fetchUrls: jest.fn(async ({ urls }: { urls: string[] }) => ({
+        providerId: 'jina' as const,
+        capability: 'fetchUrls' as const,
+        inputs: urls,
+        results: urls[0].endsWith('/a')
+          ? [
+              {
+                title: 'Available',
+                url: 'https://example.com/a',
+                content: 'Available page body',
+                sourceInput: 'https://example.com/a',
+              },
+            ]
+          : [],
+        failures: urls[0].endsWith('/b')
+          ? [
+              {
+                input: 'https://example.com/b',
+                kind: 'http' as const,
+                status: 404,
+                message: 'Page not found',
+              },
+            ]
+          : [],
+      })),
+      searchKeywords: jest.fn(async () => ({
+        providerId: 'exa-mcp' as const,
+        capability: 'searchKeywords' as const,
+        inputs: ['alternative source'],
+        results: [],
+      })),
+    };
+    const session = await runtime.open();
+    const events = await collect(
+      session.execute(baseRequest('real-loop', { tools: createWebTools({ webSearch }) })),
+    );
+
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    expect(seenTools).toEqual([
+      ['web_search', 'web_fetch'],
+      ['web_search', 'web_fetch'],
+    ]);
+    expect(seenToolChoices).toEqual([undefined, 'none']);
+    expect(seenErrors).toEqual([true]);
+    expect(webSearch.fetchUrls).toHaveBeenCalledTimes(2);
+    expect(webSearch.searchKeywords).not.toHaveBeenCalled();
+    expect(seenResults[0].details).toMatchObject({
+      value: {
+        status: 'partial',
+        results: [{ content: 'Available page body' }],
+        failures: [{ input: 'https://example.com/b', status: 404 }],
+      },
+    });
+    await session.close();
+  });
+
+  test('blocks sibling callbacks after a group failure but accepts in-flight results and resets next turn', async () => {
+    const runtime = createTestRuntime();
+    let finishRead!: (output: RuntimeToolResult) => void;
+    const read = jest.fn(
+      () =>
+        new Promise<RuntimeToolResult>((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    const failure: RuntimeToolResult = {
+      value: { status: 'error' },
+      artifacts: [],
+      failure: {
+        scope: 'tool',
+        error: { code: 'lookup_failed', message: 'Timed out', retryable: false },
+      },
+    };
+    const search = jest.fn(async () => failure);
+    const other = jest.fn(async () => ({ value: 'Other content', artifacts: [] }));
+    const tools: RuntimeTool[] = [
+      {
+        ...askTool(() => {}),
+        approval: 'auto',
+        providerName: 'search',
+        failureGroup: 'web',
+        execute: search,
+      },
+      {
+        ...askTool(() => {}),
+        approval: 'auto',
+        providerName: 'read',
+        failureGroup: 'web',
+        execute: read,
+      },
+      { ...askTool(() => {}), approval: 'auto', providerName: 'other', execute: other },
+    ];
+    arrange(runtime, async (context) => {
+      const [searchTool, readTool, otherTool] = context.options.initialState!.tools!;
+      const pendingRead = readTool.execute('in-flight', {}, context.signal);
+      await searchTool.execute('failure', {}, context.signal);
+      finishRead({ value: 'Already requested content', artifacts: [] });
+      expect(await pendingRead).toMatchObject({ details: { value: 'Already requested content' } });
+      await readTool.execute('blocked', {}, context.signal);
+      await otherTool.execute('other', {}, context.signal);
+      await emitText(context, 'Answer from existing content.');
+    });
+    const session = await runtime.open();
+    const first = await collect(session.execute(baseRequest('group-first', { tools })));
+    expect(first.at(-1)).toEqual({ type: 'completed' });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+
+    arrange(runtime, async (context) => {
+      const readTool = context.options.initialState!.tools![1];
+      const pendingRead = readTool.execute('new-turn', {}, context.signal);
+      finishRead({ value: 'Fresh content', artifacts: [] });
+      await pendingRead;
+      await emitText(context, 'Fresh answer.');
+    });
+    const later = await collect(session.execute(baseRequest('group-later', { tools })));
+    expect(later.at(-1)).toEqual({ type: 'completed' });
+    expect(read).toHaveBeenCalledTimes(2);
+    await session.close();
+  });
+
+  test.each(['tool', 'call', 'payload'] as const)(
+    'honors %s failure scope without disabling unrelated tools or later turns',
+    async (scope) => {
+      const runtime = createTestRuntime();
+      const failure = {
+        scope: scope === 'payload' ? ('tool' as const) : scope,
+        error: {
+          code: 'service_unavailable',
+          message: 'Service temporarily unavailable.',
+          retryable: false,
+        },
+      };
+      const output: RuntimeToolResult =
+        scope === 'payload'
+          ? { value: { failure }, artifacts: [] }
+          : { value: { status: 'error' }, artifacts: [], failure };
+      const execute = jest.fn(async () => output);
+      const tool: RuntimeTool = {
+        ref: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        description: 'Exercise classified results.',
+        inputSchema: { type: 'object' },
+        approval: 'auto',
+        execute,
+      };
+      const other: RuntimeTool = {
+        ...tool,
+        ref: { source: 'builtin', capabilityId: 'another_tool' },
+        providerName: 'another_tool',
+        execute: jest.fn(async () => ({ value: 'Available', artifacts: [] })),
+      };
+      arrange(runtime, async (context) => {
+        const [piTool, otherTool] = context.options.initialState!.tools!;
+        const toolCall = {
+          type: 'toolCall' as const,
+          id: 'first',
+          name: piTool.name,
+          arguments: {},
+        };
+        const result = await piTool.execute('first', {}, context.signal);
+        const agentContext = { systemPrompt: '', messages: [], tools: [piTool, otherTool] };
+        const marked = await context.options.afterToolCall?.({
+          assistantMessage: assistantMessage(),
+          toolCall,
+          args: {},
+          result,
+          isError: false,
+          context: agentContext,
+        });
+        expect(marked?.isError).toBe(scope === 'payload' ? undefined : true);
+        const next = await context.options.prepareNextTurnWithContext?.({
+          message: assistantMessage(),
+          context: agentContext,
+          newMessages: [],
+          toolResults: [
+            {
+              role: 'toolResult',
+              toolCallId: 'first',
+              toolName: piTool.name,
+              content: result.content,
+              details: result.details,
+              isError: marked?.isError ?? false,
+              timestamp: 1,
+            },
+          ],
+        });
+        const names = (next?.context?.tools ?? agentContext.tools).map((item) => item.name);
+        expect(names).toEqual(
+          scope === 'tool' ? ['another_tool'] : [TOOL_PROVIDER_NAME, 'another_tool'],
+        );
+        await piTool.execute('again', { changed: true }, context.signal);
+        await otherTool.execute('other', {}, context.signal);
+        await emitText(context, 'I can answer with the available information.');
+      });
+      const session = await runtime.open();
+      const events = await collect(
+        session.execute(baseRequest('failure-first', { tools: [tool, other] })),
+      );
+
+      expect(events.at(-1)?.type).toBe('completed');
+      expect(execute).toHaveBeenCalledTimes(scope === 'tool' ? 1 : 2);
+      expect(other.execute).toHaveBeenCalledTimes(1);
+      const settled = events
+        .filter(
+          (event) =>
+            event.type === 'part.replace' &&
+            event.part.type === 'tool' &&
+            event.part.toolCallId === 'first',
+        )
+        .at(-1);
+      expect(settled).toMatchObject({
+        part: { state: scope === 'payload' ? 'output-available' : 'error' },
+      });
+      const later = await collect(
+        session.execute(baseRequest('failure-later', { tools: [tool, other] })),
+      );
+      expect(later.at(-1)?.type).toBe('completed');
+      expect(execute).toHaveBeenCalledTimes(scope === 'tool' ? 2 : 4);
+      await session.close();
+    },
+  );
+
   test('normalizes callback failures into a classified result envelope', async () => {
     const runtime = createTestRuntime();
     const tool: RuntimeTool = {
@@ -2378,134 +2833,295 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test('stops new callback execution after the per-turn tool call limit', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 1,
-      maxToolSteps: 8,
-      turnTimeoutMs: 60_000,
-    });
-    let executionCount = 0;
-    const tool: RuntimeTool = {
-      ref: TOOL_REF,
-      providerName: TOOL_PROVIDER_NAME,
-      displayName: TOOL_DISPLAY_NAME,
-      description: 'Count executions.',
-      inputSchema: { type: 'object' },
-      approval: 'auto',
-      execute: async () => {
-        executionCount += 1;
-        return { value: { executionCount }, artifacts: [] };
-      },
-    };
+  test.each([
+    { maxToolCalls: 1, requests: 1 },
+    { maxToolCalls: 1, requests: 2 },
+    { maxToolCalls: undefined, requests: 65 },
+  ])(
+    'finishes without tools at the call budget ($requests requests)',
+    async ({ maxToolCalls, requests }) => {
+      const runtime = createTestRuntime(
+        maxToolCalls === undefined ? undefined : { ...DEFAULT_PI_RUNTIME_LIMITS, maxToolCalls },
+      );
+      const providerStream = jest.fn<
+        ReturnType<PiModelResolution['streamFn']>,
+        Parameters<PiModelResolution['streamFn']>
+      >(() => new AssistantMessageEventStream());
+      const allowedCalls = maxToolCalls ?? 64;
+      let executionCount = 0;
+      const tool: RuntimeTool = {
+        ref: TOOL_REF,
+        providerName: TOOL_PROVIDER_NAME,
+        displayName: TOOL_DISPLAY_NAME,
+        description: 'Count executions.',
+        inputSchema: { type: 'object' },
+        approval: 'auto',
+        execute: async () => {
+          executionCount += 1;
+          return { value: { executionCount }, artifacts: [] };
+        },
+      };
+      const holder = arrange(runtime, async (context) => {
+        const piTool = context.options.initialState?.tools?.[0];
+        if (!piTool) throw new Error('Tool limit program requires one tool.');
+        const model = holder.resolution.model;
+        const onPayload = jest.fn(async (payload: unknown) => ({
+          ...(payload as Record<string, unknown>),
+          metadata: { trace: 'preserved' },
+        }));
+        await context.options.streamFn(model, { messages: [] }, { onPayload });
+        expect(providerStream.mock.lastCall?.[2]?.onPayload).toBe(onPayload);
+        const calls = Array.from({ length: requests }, (_, index) => ({
+          type: 'toolCall' as const,
+          id: `call-${index + 1}`,
+          name: piTool.name,
+          arguments: {},
+        }));
+        const message = assistantMessage({
+          content: calls,
+          stopReason: 'toolUse',
+        });
+        // Pi completes the provider response before executing its tool calls.
+        await context.emit({ type: 'message_end', message });
+        const toolResults = await Promise.all(
+          calls.map(async (call, index): Promise<ToolResultMessage> => {
+            const result = await piTool.execute(call.id, {}, context.signal);
+            return {
+              role: 'toolResult',
+              toolCallId: call.id,
+              toolName: piTool.name,
+              content: result.content,
+              details: result.details,
+              isError: index >= allowedCalls,
+              timestamp: Date.now(),
+            };
+          }),
+        );
+        await context.emit({ type: 'turn_end', message, toolResults });
+        const next = await prepareTestNextTurn(context, message, toolResults);
+        expect(next.shouldStop).toBe(false);
+        expect(next.context.tools).toEqual([piTool]);
+        expect(next.context.messages).toEqual([context.prompt, message, ...toolResults]);
+        expect(next.context.systemPrompt).toContain('remaining uncertainty or unfinished work');
+        expect(context.options.initialState?.tools).toHaveLength(1);
+        await context.options.streamFn(
+          model,
+          { ...next.context, messages: next.context.messages as PiMessage[] },
+          { onPayload },
+        );
+        const payload = { tools: [{ name: piTool.name }], input: ['collected results'] };
+        const finalPayload = await providerStream.mock.lastCall?.[2]?.onPayload?.(payload, model);
+        expect(finalPayload).toEqual({
+          ...payload,
+          metadata: { trace: 'preserved' },
+          tool_choice: 'none',
+        });
+        expect(onPayload).toHaveBeenCalledWith(payload, model);
+        await emitText(context, 'Answer from the collected result.');
+        const finished = await prepareTestNextTurn(context, assistantMessage(), [], next.context);
+        expect(finished.shouldStop).toBe(true);
+      });
+      holder.resolution = { ...holder.resolution, streamFn: providerStream };
+      const session = await runtime.open();
+
+      const events = await collect(
+        session.execute(baseRequest('turn-call-limit', { tools: [tool] })),
+      );
+
+      expect(executionCount).toBe(allowedCalls);
+      expect(events.at(-1)).toEqual({ type: 'completed' });
+      const reports = events.filter((event) => event.type === 'usage');
+      expect(reports).toMatchObject([
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+        { usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      ]);
+      expect(reports[0]?.requestId).not.toBe(reports[1]?.requestId);
+      if (requests > allowedCalls) {
+        expect(
+          events.find(
+            (event) =>
+              event.type === 'part.replace' &&
+              event.part.type === 'tool' &&
+              event.part.toolCallId === `call-${allowedCalls + 1}`,
+          ),
+        ).toMatchObject({
+          part: { state: 'error', error: { code: 'tool_call_limit_exceeded' } },
+        });
+      }
+      await session.close();
+    },
+  );
+
+  test('allows twenty tool rounds by default and then one final answer', async () => {
+    const runtime = createTestRuntime();
+    const executed = jest.fn(async () => ({ value: {}, artifacts: [] }));
+    const tool = { ...askTool(() => undefined), approval: 'auto' as const, execute: executed };
     arrange(runtime, async (context) => {
       const piTool = context.options.initialState?.tools?.[0];
-      if (!piTool) throw new Error('Tool limit program requires one tool.');
-      const message = assistantMessage({
-        content: [
-          { type: 'toolCall', id: 'call-1', name: piTool.name, arguments: {} },
-          { type: 'toolCall', id: 'call-2', name: piTool.name, arguments: {} },
-        ],
-        stopReason: 'toolUse',
-      });
-      const first = await piTool.execute('call-1', {}, context.signal);
-      const second = await piTool.execute('call-2', {}, context.signal);
-      await context.emit({
-        type: 'turn_end',
-        message,
-        toolResults: [
-          {
-            role: 'toolResult',
-            toolCallId: 'call-1',
-            toolName: piTool.name,
-            content: first.content,
-            details: first.details,
-            isError: false,
-            timestamp: Date.now(),
-          },
-          {
-            role: 'toolResult',
-            toolCallId: 'call-2',
-            toolName: piTool.name,
-            content: second.content,
-            details: second.details,
-            isError: true,
-            timestamp: Date.now(),
-          },
-        ],
-      });
+      if (!piTool) throw new Error('Tool step program requires one tool.');
+      let nextContext: PiAgentContext | undefined;
+      for (let step = 1; step <= 20; step += 1) {
+        const callId = `step-${step}`;
+        const message = assistantMessage({
+          content: [{ type: 'toolCall', id: callId, name: piTool.name, arguments: {} }],
+          stopReason: 'toolUse',
+        });
+        const output = await piTool.execute(callId, {}, context.signal);
+        const result: ToolResultMessage = {
+          role: 'toolResult',
+          toolCallId: callId,
+          toolName: piTool.name,
+          content: output.content,
+          details: output.details,
+          isError: false,
+          timestamp: Date.now(),
+        };
+        await context.emit({ type: 'turn_end', message, toolResults: [result] });
+        const next = await prepareTestNextTurn(context, message, [result], nextContext);
+        expect(next.shouldStop).toBe(false);
+        expect(next.context.tools).toEqual([piTool]);
+        nextContext = next.context;
+      }
+      await emitText(context, 'Final answer after twenty rounds.');
+      const finished = await prepareTestNextTurn(context, assistantMessage(), [], nextContext);
+      expect(finished.shouldStop).toBe(true);
     });
     const session = await runtime.open();
 
     const events = await collect(
-      session.execute(baseRequest('turn-call-limit', { tools: [tool] })),
+      session.execute(baseRequest('turn-step-limit', { tools: [tool] })),
     );
 
-    expect(executionCount).toBe(1);
-    expect(events.at(-1)).toEqual({
-      type: 'failed',
-      error: {
-        code: 'tool_call_limit_exceeded',
-        message: 'The turn reached its tool call limit.',
-        retryable: false,
-        origin: 'runtime',
-      },
-    });
-    expect(
-      events.find(
-        (event) =>
-          event.type === 'part.replace' &&
-          event.part.type === 'tool' &&
-          event.part.toolCallId === 'call-2',
-      ),
-    ).toMatchObject({
-      part: { state: 'error', error: { code: 'tool_call_limit_exceeded' } },
-    });
+    expect(executed).toHaveBeenCalledTimes(20);
+    expect(events.at(-1)).toEqual({ type: 'completed' });
     await session.close();
   });
 
-  test('stops the model loop after the configured tool step limit', async () => {
-    const runtime = createTestRuntime({
-      maxToolCalls: 16,
-      maxToolSteps: 1,
-      turnTimeoutMs: 60_000,
-    });
-    let shouldStop = false;
-    arrange(runtime, async (context) => {
-      const message = assistantMessage({ content: [], stopReason: 'toolUse' });
-      const result: ToolResultMessage = {
-        role: 'toolResult',
-        toolCallId: 'call-1',
-        toolName: TOOL_PROVIDER_NAME,
-        content: [{ type: 'text', text: '{}' }],
-        details: { artifacts: [], value: {} },
-        isError: false,
-        timestamp: Date.now(),
-      };
-      await context.emit({ type: 'turn_end', message, toolResults: [result] });
-      shouldStop =
-        (await context.options.shouldStopAfterTurn?.({
-          context: { messages: [], systemPrompt: '', tools: [] },
-          message,
-          newMessages: [],
-          toolResults: [result],
-        })) ?? false;
-    });
-    const session = await runtime.open();
+  test.each(['toolUse', 'error'] as const)(
+    'preserves final response failure: %s',
+    async (stopReason) => {
+      const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, maxToolSteps: 1 });
+      const executed = jest.fn();
+      const tool = { ...askTool(executed), approval: 'auto' as const };
+      arrange(runtime, async (context) => {
+        const piTool = context.options.initialState?.tools?.[0];
+        if (!piTool) throw new Error('Final response program requires one tool.');
+        const message = assistantMessage({
+          content: [{ type: 'toolCall', id: 'first-call', name: piTool.name, arguments: {} }],
+          stopReason: 'toolUse',
+        });
+        const output = await piTool.execute('first-call', {}, context.signal);
+        const result: ToolResultMessage = {
+          role: 'toolResult',
+          toolCallId: 'first-call',
+          toolName: piTool.name,
+          content: output.content,
+          details: output.details,
+          isError: false,
+          timestamp: Date.now(),
+        };
+        await context.emit({ type: 'turn_end', message, toolResults: [result] });
+        const next = await prepareTestNextTurn(context, message, [result]);
+        expect(next.context.tools).toEqual([piTool]);
+        expect(next.shouldStop).toBe(false);
 
-    const events = await collect(session.execute(baseRequest('turn-step-limit')));
+        const final = assistantMessage({
+          content:
+            stopReason === 'toolUse'
+              ? [{ type: 'toolCall', id: 'extra-call', name: piTool.name, arguments: {} }]
+              : [],
+          stopReason,
+          errorMessage: stopReason === 'error' ? 'Final provider request failed.' : undefined,
+        });
+        const finalResults: ToolResultMessage[] = [];
+        if (stopReason === 'toolUse') {
+          // Retained definitions do not let a provider bypass the exhausted budget.
+          const rejected = await piTool.execute('extra-call', {}, context.signal);
+          expect(rejected.details).toMatchObject({
+            value: { error: { code: 'tool_step_limit_exceeded' } },
+          });
+          finalResults.push({ ...result, toolCallId: 'extra-call', ...rejected, isError: true });
+        }
+        await context.emit({ type: 'turn_end', message: final, toolResults: finalResults });
+        if (stopReason === 'toolUse') {
+          const finished = await prepareTestNextTurn(context, final, finalResults, next.context);
+          expect(finished.shouldStop).toBe(true);
+        }
+      });
+      const session = await runtime.open();
+      const events = await collect(
+        session.execute(baseRequest('turn-final-error', { tools: [tool] })),
+      );
 
-    expect(shouldStop).toBe(true);
-    expect(events.at(-1)).toEqual({
-      type: 'failed',
-      error: {
-        code: 'tool_step_limit_exceeded',
-        message: 'The turn reached its tool loop step limit.',
-        retryable: false,
-        origin: 'runtime',
-      },
-    });
-    await session.close();
-  });
+      expect(executed).toHaveBeenCalledTimes(1);
+      expect(events.at(-1)).toMatchObject({
+        type: 'failed',
+        error:
+          stopReason === 'toolUse'
+            ? { code: 'tool_step_limit_exceeded' }
+            : { code: 'runtime_error', message: 'Final provider request failed.' },
+      });
+      await session.close();
+    },
+  );
+
+  test.each(['timeout', 'cancel'] as const)(
+    'keeps the final response subject to %s',
+    async (ending) => {
+      jest.useFakeTimers();
+      try {
+        const runtime = createTestRuntime({
+          ...DEFAULT_PI_RUNTIME_LIMITS,
+          maxToolSteps: 1,
+          turnTimeoutMs: 100,
+        });
+        let agentSignal: AbortSignal | undefined;
+        let finalResponseReady!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          finalResponseReady = resolve;
+        });
+        arrange(runtime, async (context) => {
+          agentSignal = context.signal;
+          // Most of the original deadline has elapsed before tool execution ends.
+          await jest.advanceTimersByTimeAsync(90);
+          const message = assistantMessage({ content: [], stopReason: 'toolUse' });
+          const result: ToolResultMessage = {
+            role: 'toolResult',
+            toolCallId: 'last-call',
+            toolName: TOOL_PROVIDER_NAME,
+            content: [{ type: 'text', text: '{}' }],
+            isError: false,
+            timestamp: Date.now(),
+          };
+          await context.emit({ type: 'turn_end', message, toolResults: [result] });
+          const next = await prepareTestNextTurn(context, message, [result]);
+          expect(next.shouldStop).toBe(false);
+          expect(next.context.tools).toEqual([]);
+          const aborted = new Promise<void>((resolve) => {
+            context.signal.addEventListener('abort', () => resolve(), { once: true });
+          });
+          finalResponseReady();
+          await aborted;
+        });
+        const session = await runtime.open();
+        const eventsPromise = collect(session.execute(baseRequest('turn-final-ending')));
+        await ready;
+        if (ending === 'timeout') await jest.advanceTimersByTimeAsync(10);
+        else await session.cancel('turn-final-ending');
+        const events = await eventsPromise;
+
+        expect(agentSignal?.aborted).toBe(true);
+        expect(events.at(-1)).toMatchObject(
+          ending === 'timeout'
+            ? { type: 'failed', error: { code: 'turn_timeout' } }
+            : { type: 'cancelled' },
+        );
+        await session.close();
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test('aborts the model and reports a classified whole-turn timeout', async () => {
     const runtime = createTestRuntime({

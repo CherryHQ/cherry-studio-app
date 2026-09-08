@@ -442,6 +442,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .select({
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
+          usage: agentSessionMessageTable.usage,
         })
         .from(agentSessionMessageTable)
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
@@ -454,7 +455,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({
           status: input.status,
           data: { version: 1, parts: input.parts },
-          usage: input.usage,
+          usage: existing.stats?.requestCount !== undefined ? existing.usage : input.usage,
           stats: { ...existing.stats, ...input.runtimeStats },
           error: input.error,
           contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,

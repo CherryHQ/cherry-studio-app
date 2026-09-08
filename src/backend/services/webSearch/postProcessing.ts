@@ -23,16 +23,15 @@ export async function postProcessWebSearchResponse(
     return { response };
   }
 
+  if (response.capability === 'fetchUrls') {
+    return { response: { ...response, results: boundWebFetchResults(response.results) } };
+  }
+
   const { compression } = runtimeConfig;
   const perResultLimit =
-    response.capability === 'fetchUrls'
-      ? Math.min(
-          FETCH_PAGE_TOKEN_LIMIT,
-          Math.floor(FETCH_TOTAL_TOKEN_LIMIT / response.results.length),
-        )
-      : compression.method === 'cutoff'
-        ? Math.floor(compression.cutoffLimit / response.results.length)
-        : undefined;
+    compression.method === 'cutoff'
+      ? Math.floor(compression.cutoffLimit / response.results.length)
+      : undefined;
 
   if (perResultLimit !== undefined) {
     return {
@@ -46,7 +45,21 @@ export async function postProcessWebSearchResponse(
   return { response };
 }
 
-function applyCutoff(results: WebSearchResult[], perResultLimit: number): WebSearchResult[] {
+/** Reapply the shared page and batch limits when cached page results are combined. */
+export function boundWebFetchResults<
+  TResult extends Pick<WebSearchResult, 'content' | 'truncated'>,
+>(results: TResult[]): TResult[] {
+  if (results.length === 0) return results;
+  return applyCutoff(
+    results,
+    Math.min(FETCH_PAGE_TOKEN_LIMIT, Math.floor(FETCH_TOTAL_TOKEN_LIMIT / results.length)),
+  );
+}
+
+function applyCutoff<TResult extends Pick<WebSearchResult, 'content' | 'truncated'>>(
+  results: TResult[],
+  perResultLimit: number,
+): TResult[] {
   return results.map((result) => {
     const boundedContent = result.content.slice(0, perResultLimit * MAX_CHARS_PER_TOKEN);
     const sliced = sliceByTokens(boundedContent, 0, perResultLimit).replace(/[\uD800-\uDBFF]$/, '');

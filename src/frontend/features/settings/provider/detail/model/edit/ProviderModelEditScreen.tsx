@@ -122,7 +122,7 @@ function ModelEditor({ model, provider }: { model: Model; provider: Provider }) 
         mode="layout"
       >
         <View className="gap-5">
-          <Text className="font-mono text-foreground-secondary text-sm">{model.modelId}</Text>
+          <Text className="font-mono text-muted-foreground text-sm">{model.modelId}</Text>
           <Text className="text-foreground-tertiary text-sm">
             {t('settings.provider.models.detail.identityReadOnly', { provider: provider.name })}
           </Text>

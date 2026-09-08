@@ -32,6 +32,7 @@ import {
   sessionSelectionScope,
   useSessionSelectionSource,
 } from '../hooks/useSessionSelectionSource';
+import { SessionStatus } from './SessionStatus';
 import { useSessionActionAlerts } from './useSessionActionAlerts';
 
 type SessionRowProps = {
@@ -259,7 +260,7 @@ const SessionRow = memo(function SessionRow({
   const row = (
     <Pressable
       accessibilityActions={isEditing ? EDITING_ACCESSIBILITY_ACTIONS : undefined}
-      accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityLabel={isEditing ? session.title || t('session.list.untitled') : undefined}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
@@ -285,9 +286,12 @@ const SessionRow = memo(function SessionRow({
                 {activityLabel}
               </Text>
             </View>
-            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-              {agentName ?? t('session.list.deletedAgent')}
-            </Text>
+            <View className="min-w-0 flex-row items-center gap-2">
+              <Text className="min-w-0 flex-1 text-foreground-tertiary text-xs" numberOfLines={1}>
+                {agentName ?? t('session.list.deletedAgent')}
+              </Text>
+              {!isEditing ? <SessionStatus sessionId={session.id} /> : null}
+            </View>
           </View>
         </View>
       </View>

@@ -25,3 +25,6 @@ behavior. Structured message rendering is shared with painting through
   through `Backend.agent`, and owns frontend navigation and query invalidation effects. On first
   send it changes the route only after the new Session has accepted the submission, and carries the
   originating Agent across that one route handoff while Session detail loads.
+
+The visible, focused chat acknowledges the current completed turn through `useSessionReadReceipt`.
+Previews, an open drawer, and background routes do not clear the list's unread completion indicator.

@@ -103,7 +103,31 @@ describe('turn preparation', () => {
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
+      resolveUsageAttribution: plan.usageAttribution.resolve,
     });
+    // Tools read the attribution when they run; the Host binds the message after reservation.
+    expect(plan.usageAttribution.resolve()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: AGENT.name, icon: null },
+      messageRef: null,
+    });
+    const messageRef = { kind: 'agent-session' as const, id: 'assistant-1' };
+    plan.usageAttribution.bindMessage(messageRef);
+    messageRef.id = 'changed-after-binding';
+    const resolvedAttribution = plan.usageAttribution.resolve();
+    expect(resolvedAttribution.messageRef).toEqual({
+      kind: 'agent-session',
+      id: 'assistant-1',
+    });
+    // Failed writes need not throw in Expo's non-strict test transform.
+    expect(Reflect.set(resolvedAttribution.source!, 'name', 'Changed by a tool')).toBe(false);
+    expect(Reflect.set(resolvedAttribution.messageRef!, 'id', 'changed-by-a-tool')).toBe(false);
+    expect(plan.usageAttribution.resolve()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: AGENT.name, icon: null },
+      messageRef: { kind: 'agent-session', id: 'assistant-1' },
+    });
+    expect(() =>
+      plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
+    ).toThrow('already bound');
     expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID);
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);

@@ -27,6 +27,51 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('keeps successful sources citable when the same web call also failed', () => {
+    const error = { code: 'web_lookup_failed', message: 'Page B not found', retryable: false };
+    const item = toAgentMessageListItem(
+      message('partial-web', {
+        status: 'success',
+        parts: [
+          {
+            id: 'web-call',
+            type: 'tool',
+            toolCallId: 'call-1',
+            toolRef: { source: 'builtin', capabilityId: 'web_fetch' },
+            providerName: 'web_fetch',
+            displayName: 'Fetch web page',
+            state: 'error',
+            error: { code: 'EXECUTION_FAILED', message: error.message, retryable: false },
+            output: {
+              value: {
+                status: 'error',
+                error,
+                details: {
+                  status: 'partial',
+                  results: [
+                    {
+                      id: 'source-1',
+                      title: 'Page A',
+                      content: 'Body',
+                      url: 'https://example.com/a',
+                    },
+                  ],
+                  failures: [{ input: 'https://example.com/b', message: 'Not found' }],
+                },
+              },
+              artifacts: [],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(item?.data.parts).toEqual([
+      expect.objectContaining({ state: 'output-error', errorText: 'Page B not found' }),
+      { type: 'source-url', sourceId: 'source-1', title: 'Page A', url: 'https://example.com/a' },
+    ]);
+  });
+
   test('keeps attachment reports keyed by persisted part identity and leaves old reports unknown', () => {
     const report = {
       mode: 'document-text' as const,

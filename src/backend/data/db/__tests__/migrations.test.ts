@@ -19,6 +19,32 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test('marks historical turn aggregates as estimated without rewriting their usage or cost', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(({ tag }) => tag === '0018_usage-invocation-semantics');
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      const insert = database.prepare(`INSERT INTO ai_usage_record
+        (id, request_id, record_kind, request_count, message_kind, message_id, provider_id, model_id,
+         modality, api_key_attribution, input_tokens, output_tokens, total_tokens, cost, cost_currency, cost_source, created_at)
+        VALUES (?, ?, 'invocation', 1, 'agent-session', 'message-1', 'provider-1', 'model-1', 'language', 'unknown', 100, 20, 120, 0.25, 'USD', 'computed', 1000)`);
+      insert.run('old', 'agent-session-turn:old-turn');
+      insert.run('new', 'pi-agent:new-turn:call-0:model-1');
+      const before = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
+      applyMigrationSql(database, entries[target]!.sql);
+      const after = database.prepare('SELECT * FROM ai_usage_record ORDER BY id').all();
+      expect(after).toEqual(
+        before.map((row) => ({
+          ...row,
+          record_kind: row.id === 'old' ? 'legacy-aggregate' : 'invocation',
+        })),
+      );
+    } finally {
+      database.close();
+    }
+  });
+
   test('replays the journal into the schema the services are typed against', () => {
     const database = new DatabaseSync(':memory:');
 

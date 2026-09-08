@@ -1,0 +1,24 @@
+diff --git a/lib/module/views/Drawer.native.js b/lib/module/views/Drawer.native.js
+index 5fb761c4140881cbb19d40597e2d6e33e870748b..0b2b7966dd28dfcb6dcf830a0cd1f75999c4eaec 100644
+--- a/lib/module/views/Drawer.native.js
++++ b/lib/module/views/Drawer.native.js
+@@ -285,6 +285,7 @@ export function Drawer({
+             children: [/*#__PURE__*/_jsxs(Animated.View, {
+               style: [styles.content, contentAnimatedStyle],
+               children: [/*#__PURE__*/_jsx(View, {
++                collapsable: false,
+                 "aria-hidden": isOpen && drawerType !== 'permanent',
+                 style: styles.content,
+                 children: children
+diff --git a/src/views/Drawer.native.tsx b/src/views/Drawer.native.tsx
+index ff41791d2c3b4fa498dc3f22877d226db120f2f7..cc1e015ec40cc765ee92eb4f7f89c0c0ac37ab88 100644
+--- a/src/views/Drawer.native.tsx
++++ b/src/views/Drawer.native.tsx
+@@ -468,6 +468,7 @@ export function Drawer({
+             >
+               <Animated.View style={[styles.content, contentAnimatedStyle]}>
+                 <View
++                  collapsable={false}
+                   aria-hidden={isOpen && drawerType !== 'permanent'}
+                   style={styles.content}
+                 >

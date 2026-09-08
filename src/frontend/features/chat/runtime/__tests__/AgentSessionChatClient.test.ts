@@ -80,6 +80,14 @@ function protocolWithObservation(
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
     forkSession: jest.fn(),
+    getSessionStatus: jest.fn<
+      ReturnType<AgentProtocol['getSessionStatus']>,
+      Parameters<AgentProtocol['getSessionStatus']>
+    >(() => null),
+    subscribeSessionStatus: jest.fn<
+      ReturnType<AgentProtocol['subscribeSessionStatus']>,
+      Parameters<AgentProtocol['subscribeSessionStatus']>
+    >(() => () => undefined),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),
@@ -345,6 +353,76 @@ describe('AgentSessionChatClient', () => {
 
     expect(client.getState('session-1').liveMessages).toEqual([]);
   });
+
+  test('releases a terminal live copy when late usage advances the durable message', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const finalized: AgentMessageView = {
+      ...assistantMessage(),
+      status: 'cancelled',
+      stats: { requestCount: 1 },
+      updatedAt: '2026-08-25T00:00:01.000Z',
+    };
+    const persisted: AgentMessageView = {
+      ...finalized,
+      stats: { requestCount: 2, unpricedRequestCount: 1 },
+      updatedAt: '2026-08-25T00:00:02.000Z',
+    };
+    listener?.({ type: 'message.finalized', message: finalized });
+
+    client.reconcilePersistedMessages('session-1', [persisted]);
+
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+  });
+
+  test.each([
+    {
+      liveStatus: 'cancelled',
+      persistedStatus: 'cancelled',
+      updatedAt: '2026-08-25T00:00:00.000Z',
+    },
+    {
+      liveStatus: 'cancelled',
+      persistedStatus: 'streaming',
+      updatedAt: '2026-08-25T00:00:02.000Z',
+    },
+    { liveStatus: 'cancelled', persistedStatus: 'error', updatedAt: '2026-08-25T00:00:02.000Z' },
+    { liveStatus: 'streaming', persistedStatus: 'success', updatedAt: '2026-08-25T00:00:02.000Z' },
+  ] satisfies {
+    liveStatus: AgentMessageView['status'];
+    persistedStatus: AgentMessageView['status'];
+    updatedAt: string;
+  }[])(
+    'keeps a $liveStatus live copy for incompatible durable state $persistedStatus at $updatedAt',
+    async ({ liveStatus, persistedStatus, updatedAt }) => {
+      let listener: ((event: AgentEvent) => void) | undefined;
+      const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+        listener = nextListener;
+        return { snapshot: snapshot(), unsubscribe: jest.fn() };
+      });
+      const client = new AgentSessionChatClient(protocol);
+      await client.observe('session-1');
+      const live: AgentMessageView = {
+        ...assistantMessage(),
+        status: liveStatus,
+        updatedAt: '2026-08-25T00:00:01.000Z',
+      };
+      listener?.({ type: 'message.created', message: live });
+      const state = client.getState('session-1');
+
+      client.reconcilePersistedMessages('session-1', [
+        { ...live, status: persistedStatus, updatedAt },
+      ]);
+
+      expect(client.getState('session-1')).toBe(state);
+      expect(state.liveMessages).toEqual([live]);
+    },
+  );
 
   test('applies Session title events and invalidates Session queries', async () => {
     let listener: ((event: AgentEvent) => void) | undefined;

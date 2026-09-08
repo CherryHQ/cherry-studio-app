@@ -144,7 +144,7 @@ export function ProviderNewFormContent({
     >
       {issue || disabledKeys ? (
         <View className="gap-3 px-4 py-3">
-          <Text className="text-foreground-secondary text-sm">
+          <Text className="text-muted-foreground text-sm">
             {t(`settings.provider.setup.issues.${disabledKeys ? 'disabled-api-keys' : issue}`)}
           </Text>
           {disabledKeys && onEnableKeys ? (

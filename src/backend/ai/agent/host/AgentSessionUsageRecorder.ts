@@ -20,7 +20,7 @@ type RecordAgentSessionUsageInput = {
 
 const logger = loggerService.withContext('AgentSessionUsageRecorder');
 
-/** Best-effort analytical projection for the single provider call in a V1 Agent turn. */
+/** Records each completed provider invocation before terminal message publication. */
 export class AgentSessionUsageRecorder {
   private readonly inFlight = new Set<Promise<void>>();
 
@@ -30,7 +30,7 @@ export class AgentSessionUsageRecorder {
     },
   ) {}
 
-  record(input: RecordAgentSessionUsageInput): void {
+  record(input: RecordAgentSessionUsageInput): Promise<void> {
     const operation = this.recordNow(input).catch((error: unknown) => {
       logger.warn('Failed to record Agent Session usage', error as Error, {
         turnId: input.turnId,
@@ -38,6 +38,7 @@ export class AgentSessionUsageRecorder {
     });
     this.inFlight.add(operation);
     void operation.finally(() => this.inFlight.delete(operation));
+    return operation;
   }
 
   async drain(): Promise<void> {
@@ -53,7 +54,7 @@ export class AgentSessionUsageRecorder {
         source: { icon: null, id: input.agent.id, name: input.agent.name, type: 'agent' },
       },
       modality: 'language',
-      requestId: `agent-session-turn:${input.turnId}`,
+      requestId: input.report.requestId,
       usage: input.report.usage,
     });
   }

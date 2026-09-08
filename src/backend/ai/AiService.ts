@@ -41,8 +41,13 @@ import { VertexAuthClient } from './generation/VertexAuthClient';
 
 // ── Request types ──────────────────────────────────────────────────
 
+export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'messageRef'>;
+/** Read at call time by callers created before the attributed message exists. */
+export type AiUsageAttributionResolver = () => AiUsageAttribution;
+
 /** Non-streaming text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
+  usageAttribution?: AiUsageAttribution;
   system?: string;
   prompt?: string;
   messages?: ModelMessage[];
@@ -58,6 +63,7 @@ export interface AiGenerateResult {
 }
 
 export interface AiImageRequest extends AiBaseRequest {
+  usageAttribution?: AiUsageAttribution;
   inputImages?: string[];
   mode: ImageGenerationMode;
   paramValues: ParamValues;
@@ -115,6 +121,7 @@ function createCaptureContext(input: {
   model: Model;
   sdkModelId: string;
   credentialReceipt: ServingCredentialReceipt;
+  usageAttribution?: AiUsageAttribution;
 }): AiUsageCaptureContext {
   return createAiUsageCaptureContext({
     providerId: input.provider.id,
@@ -125,8 +132,8 @@ function createCaptureContext(input: {
     trustProviderReportedCost: input.provider.apiFeatures.reportsActualCost,
     reportedCostCurrency: input.provider.reportedCostCurrency,
     credentialReceipt: input.credentialReceipt,
-    source: null,
-    messageRef: null,
+    source: input.usageAttribution?.source,
+    messageRef: input.usageAttribution?.messageRef,
   });
 }
 
@@ -225,6 +232,7 @@ export class AiService extends BaseService {
         model,
         sdkModelId: sdkConfig.modelId,
         credentialReceipt,
+        usageAttribution: request.usageAttribution,
       }),
       this.services.aiUsageRecord,
     );
@@ -318,6 +326,7 @@ export class AiService extends BaseService {
       model,
       sdkModelId: sdkConfig.modelId,
       credentialReceipt,
+      usageAttribution: request.usageAttribution,
     });
 
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
