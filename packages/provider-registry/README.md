@@ -6,6 +6,17 @@ Bundled AI provider and model catalog for Cherry Studio: static JSON data files 
 
 > **Contributing?** The `data/*.json` files are **generated** — never hand-edit them. Edit `src/creators/` / `src/providers/` and run `pnpm generate`. See [CLAUDE.md](CLAUDE.md) and [docs/architecture.md](docs/architecture.md).
 
+For a change limited to specific creator models, update only their generated base-model rows:
+
+```bash
+pnpm exec tsx scripts/generate-catalog.ts --write --model=gemini-3-1-flash-image --model=kolors
+pnpm exec oxfmt data/models.json
+```
+
+Repeat `--model=<canonical-id>` for each model. This still enriches the selected rows from upstream,
+preserves all other bundled rows, and updates the model catalog's content version. Provider overrides,
+provider definitions, and reasoning patterns stay untouched; changes to those require full generation.
+
 ## Data Files
 
 ```
