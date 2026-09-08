@@ -80,6 +80,14 @@ function protocolWithObservation(
     cancelTurn: jest.fn(),
     deleteSession: jest.fn(),
     forkSession: jest.fn(),
+    getSessionStatus: jest.fn<
+      ReturnType<AgentProtocol['getSessionStatus']>,
+      Parameters<AgentProtocol['getSessionStatus']>
+    >(() => null),
+    subscribeSessionStatus: jest.fn<
+      ReturnType<AgentProtocol['subscribeSessionStatus']>,
+      Parameters<AgentProtocol['subscribeSessionStatus']>
+    >(() => () => undefined),
     observeSession: jest.fn(observeSession),
     renameSession: jest.fn(),
     respondApproval: jest.fn(),

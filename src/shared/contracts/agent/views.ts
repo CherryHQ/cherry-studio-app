@@ -255,6 +255,15 @@ export const AgentTurnViewSchema = z.strictObject({
 });
 export type AgentTurnView = z.infer<typeof AgentTurnViewSchema>;
 
+/** Latest turn status in this Host generation, retained after the turn settles. */
+export const AgentSessionStatusSchema = z
+  .strictObject({
+    turnId: AgentTurnViewSchema.shape.id,
+    status: AgentTurnViewSchema.shape.status,
+  })
+  .readonly();
+export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
+
 export const AgentToolResultSchema = z.strictObject({
   value: JsonValueSchema,
   artifacts: z.array(
