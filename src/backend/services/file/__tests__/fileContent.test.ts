@@ -61,7 +61,7 @@ describe('fileContent attachment boundary', () => {
     expect(prepared).toEqual([
       {
         ...resolvedFile(),
-        text: 'hello',
+        content: { kind: 'text', text: 'hello' },
         report: {
           mode: 'text',
           sourceTruncated: false,

@@ -1,4 +1,7 @@
-import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
+import type {
+  FileAttachmentContent,
+  FileAttachmentReport,
+} from '@/shared/contracts/fileAttachment';
 /**
  * Agent Runtime contract types.
  *
@@ -125,14 +128,30 @@ export type RuntimeTextAttachmentPart = {
   attachmentReport?: FileAttachmentReport;
 };
 
+/** Original parser JSON plus prepared image channels; never a persisted protocol part. */
+export type RuntimeDocumentAttachmentPart = Omit<
+  Extract<FileAttachmentContent, { kind: 'document' }>,
+  'kind' | 'assets'
+> & {
+  type: 'document-attachment';
+  fileEntryId: string;
+  mediaType: string;
+  name: string;
+  trust: 'untrusted-user-content';
+  images: { assetRef: string; mediaType: string; uri: string }[];
+  attachmentReport?: FileAttachmentReport;
+};
+
 export type RuntimeInputPart =
   | { type: 'text'; text: string }
   | RuntimeTextAttachmentPart
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string };
 
 export type RuntimeMessagePart =
   | { type: 'text' | 'reasoning'; text: string }
   | RuntimeTextAttachmentPart
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
   | {
       type: 'tool-call';

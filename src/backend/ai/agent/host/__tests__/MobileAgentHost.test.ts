@@ -147,6 +147,7 @@ function createHost(
     {
       agents: overrides.agents ?? agents,
       appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
+      documentParserMode: () => 'builtin',
       files,
       inferenceModel: resolveInferenceModel,
       naming: () => naming,
@@ -851,6 +852,7 @@ describe('MobileAgentHost', () => {
 
     expect(getTools).toHaveBeenCalledWith({
       disabledCapabilities: ['health'],
+      documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
       resolveUsageAttribution: expect.any(Function),

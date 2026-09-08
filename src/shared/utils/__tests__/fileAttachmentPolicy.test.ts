@@ -6,6 +6,7 @@ import {
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import {
+  fileAttachmentMode,
   validateFileAttachments,
   IMAGE_CONTEXT_TOKEN_RESERVE,
   MAX_IMAGE_ATTACHMENT_BYTES,
@@ -21,6 +22,10 @@ const MODEL: FileAttachmentTarget = {
 };
 
 describe('image attachment limits', () => {
+  test('classifies RTF as a document before generic text while leaving CSV as text', () => {
+    expect(fileAttachmentMode({ mediaType: 'text/rtf', name: 'document.rtf' })).toBe('document');
+    expect(fileAttachmentMode({ mediaType: 'text/csv', name: 'data.csv' })).toBe('text');
+  });
   test('accepts values exactly on every byte and count boundary', () => {
     const files = Array.from({ length: MAX_IMAGE_ATTACHMENT_COUNT }, (_, index) =>
       imageFact(index, Math.floor(MAX_IMAGE_ATTACHMENT_TOTAL_BYTES / MAX_IMAGE_ATTACHMENT_COUNT)),

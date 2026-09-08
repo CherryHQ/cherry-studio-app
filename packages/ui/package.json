@@ -119,6 +119,6 @@
     "uniwind": "*"
   },
   "devDependencies": {
-    "nitrogen": "0.35.9"
+    "nitrogen": "0.36.4"
   }
 }

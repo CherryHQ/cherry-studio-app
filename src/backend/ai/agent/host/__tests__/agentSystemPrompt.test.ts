@@ -120,6 +120,21 @@ describe('buildAgentSystemPrompt', () => {
     expect(withMcp).not.toContain('tool_call');
   });
 
+  test('offers parser-specific continuation only with the controlled reader, without requiring a file write', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('read_file')],
+    });
+    expect(prompt).toContain('## Reading Attachments');
+    expect(prompt).toContain('nextOffset');
+    expect(prompt).toContain('only assets marked sent');
+    expect(prompt).not.toContain('## Managed Files');
+    expect(
+      buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
+    ).not.toContain('## Reading Attachments');
+  });
+
   test('resolves the effective App language from preferences before the device fallback', () => {
     expect(resolveAgentAppLanguage('ja-JP', 'zh')).toBe('ja-JP');
     expect(resolveAgentAppLanguage(null, 'zh')).toBe('zh-CN');

@@ -16,7 +16,7 @@ import {
   assertAttachmentRequestSupported,
   materializeRuntimeAttachments,
   resolveManagedInput,
-  resolveRuntimeTextAttachments,
+  resolveRuntimeContentAttachments,
 } from '../turnAttachments';
 
 const FIRST_ID = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
@@ -53,12 +53,14 @@ describe('turn attachments', () => {
         readDocumentText: async () => ({ text: 'Document content', truncated: false }),
       });
       assertAttachmentRequestSupported(new FakeRuntime(), input, [], resources, TEXT_MODEL);
-      const textAttachments = await resolveRuntimeTextAttachments(
+      const textAttachments = await resolveRuntimeContentAttachments(
         files,
         input,
         [],
         resources,
         new AbortController().signal,
+        TEXT_MODEL,
+        'builtin',
       );
       const attachments = await materializeRuntimeAttachments({
         files,
@@ -67,7 +69,7 @@ describe('turn attachments', () => {
         modelPreflight: TEXT_MODEL,
         resources,
         signal: new AbortController().signal,
-        textAttachments,
+        contentAttachments: textAttachments,
       });
       expect(attachments.get(FIRST_ID)).toMatchObject({
         type: 'text-attachment',
@@ -87,7 +89,7 @@ describe('turn attachments', () => {
     const document = fact(FIRST_ID, 'scan.pdf', 'application/pdf');
     const facts = new Map([[FIRST_ID, document]]);
     await expect(
-      resolveRuntimeTextAttachments(
+      resolveRuntimeContentAttachments(
         resolver(facts, {
           readDocumentText: async () => {
             throw new DocumentTextError('empty');
@@ -97,6 +99,8 @@ describe('turn attachments', () => {
         [],
         createTurnResourceLedger(facts, []),
         new AbortController().signal,
+        TEXT_MODEL,
+        'builtin',
       ),
     ).rejects.toMatchObject({ view: { code: 'ATTACHMENT_NO_TEXT' } });
   });
@@ -255,12 +259,14 @@ describe('turn attachments', () => {
     ];
 
     await expect(
-      resolveRuntimeTextAttachments(
+      resolveRuntimeContentAttachments(
         files,
         input,
         [],
         createTurnResourceLedger(new Map([[FIRST_ID, text]]), []),
         new AbortController().signal,
+        TEXT_MODEL,
+        'builtin',
       ),
     ).rejects.toMatchObject({
       view: {
@@ -286,7 +292,7 @@ describe('turn attachments', () => {
       modelPreflight: TEXT_MODEL,
       resources,
       signal: new AbortController().signal,
-      textAttachments: new Map(),
+      contentAttachments: new Map(),
     });
 
     const omitted = {

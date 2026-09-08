@@ -1,6 +1,9 @@
 import { File } from 'expo-file-system';
 
-import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
+import {
+  documentFileTypeFromMediaType,
+  isBuiltinOfficeFileType,
+} from '@/shared/utils/documentFileTypes';
 import {
   MAX_DOCUMENT_ATTACHMENT_BYTES,
   MAX_PDF_ATTACHMENT_PAGES,
@@ -27,7 +30,8 @@ export async function readDocumentUriText(
 ): Promise<ExtractedDocumentText> {
   signal.throwIfAborted();
   const type = documentFileTypeFromMediaType(mediaType);
-  if (!type) throw new DocumentTextError('invalid');
+  if (!type || (type !== 'pdf' && !isBuiltinOfficeFileType(type)))
+    throw new DocumentTextError('invalid');
   if (new File(uri).size > MAX_DOCUMENT_ATTACHMENT_BYTES) throw new DocumentTextError('file-bytes');
 
   let result: ExtractedDocumentText;
