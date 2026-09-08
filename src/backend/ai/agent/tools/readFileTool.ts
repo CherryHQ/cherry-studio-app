@@ -87,7 +87,7 @@ export function createReadFileTool(
     } PDF and ordinary text always use start_line and limit, never JSON offsets. Lines start at 1; when truncated, use startLine + lineCount. A line larger than one window is cut and flagged with lineTruncated. sourceTruncated means the extractor reached its own limit. No image pixels are returned by this tool.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
-    async execute({ input, signal }) {
+    async execute({ input, signal }): Promise<RuntimeToolResult> {
       const parsed = readFileInputSchema.safeParse(input);
       if (!parsed.success) {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
