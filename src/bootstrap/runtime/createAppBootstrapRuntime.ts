@@ -4,7 +4,6 @@ import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
 import type { AgentRuntime } from '@/backend/ai/agent/runtime';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
-import type { TraceRecorder } from '@/backend/ai/observability';
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
@@ -64,7 +63,6 @@ export function createAppBootstrapRuntime(
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
-  const traces = host.container.get<TraceRecorder>('TraceStorageService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
@@ -82,7 +80,6 @@ export function createAppBootstrapRuntime(
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
     languageServing,
-    traces,
     providerRegistryUpdater,
   });
   let disposePromise: Promise<void> | undefined;

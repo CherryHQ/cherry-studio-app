@@ -16,7 +16,7 @@ import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-re
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import {
   aiUsageRecordService,
   type AiUsageCaptureContext,
@@ -34,12 +34,10 @@ import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { AiSdkGenerator, buildAgentParams } from './generation';
-import { createAiTracePlugin, createAiTraceToolHooks } from './generation/aiTracePlugin';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
 import { VertexAuthClient } from './generation/VertexAuthClient';
-import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from './observability';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -176,18 +174,16 @@ function createProviderCallHandler(
  * Mobile keeps the desktop service name but does not register IPC handlers
  * or depend on Electron main-process lifecycle services.
  *
- * Data collaborators remain module singletons; tracing outlives the service's callers.
+ * It declares no `@DependsOn`: its data collaborators are module singletons,
+ * and this service initializes and stops no runtime of its own.
  */
 @Injectable('AiService')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['TraceStorageService'])
 export class AiService extends BaseService {
   private vertexAuthClient: VertexAuthClient | undefined;
 
-  constructor(
-    private readonly traces?: TraceRecorder,
-    private readonly overrides: Partial<AiServiceDependencies> = {},
-  ) {
+  /** Every entry is optional so the container can construct this with no arguments. */
+  constructor(private readonly overrides: Partial<AiServiceDependencies> = {}) {
     super();
   }
 
@@ -216,181 +212,150 @@ export class AiService extends BaseService {
   // ── Non-streaming text generation (agent.generate) ──
 
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
-    return this.traceRequest('ai.generate_text', request, async (span) => {
-      const signal = request.requestOptions?.signal;
+    const signal = request.requestOptions?.signal;
 
-      const repairUsagePlugins: { current?: AiPlugin[] } = {};
-      const {
-        context,
-        credentialReceipt,
-        model,
-        options,
-        plugins,
-        provider,
-        repairToolCall,
-        sdkConfig,
-        tools,
-      } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
-      const usagePlugin = createAiUsagePlugin(
-        createCaptureContext({
-          provider,
-          model,
-          sdkModelId: sdkConfig.modelId,
-          credentialReceipt,
-          usageAttribution: request.usageAttribution,
-        }),
-        this.services.aiUsageRecord,
-      );
-      span?.setAttributes({
-        'gen_ai.provider.id': provider.id,
-        'gen_ai.request.model': sdkConfig.modelId,
-        'request.id': context.requestId,
-      });
-      const capturePlugins = [usagePlugin, ...(span ? [createAiTracePlugin(span)] : [])];
-      repairUsagePlugins.current = capturePlugins;
-
-      const generator = new AiSdkGenerator({
-        providerId: sdkConfig.providerId,
-        providerSettings: sdkConfig.providerSettings,
-        modelId: sdkConfig.modelId,
-        plugins: [...plugins, ...capturePlugins],
-        context,
-        repairToolCall,
-        system: request.system,
-        tools,
-        toolExecutionHooks: span ? createAiTraceToolHooks(span) : undefined,
-        options,
-      });
-
-      // prompt and messages are mutually exclusive in AI SDK; preserve that.
-      const result = await generator.generate(
-        request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
-        signal,
-      );
-      span?.setAttributes({
-        'gen_ai.usage.input_tokens': result.usage.inputTokens,
-        'gen_ai.usage.output_tokens': result.usage.outputTokens,
-        'gen_ai.usage.total_tokens': result.usage.totalTokens,
-      });
-      return result;
-    });
-  }
-
-  // ── Model listing ──
-
-  async listModels(request: ListModelsRequest): Promise<Partial<Model>[]> {
-    return this.traceRequest('ai.list_models', request, async (span) => {
-      const provider = await this.getProviderForListModels(request);
-      const registryModels = this.services.providerRegistry.listProviderRegistryModels({
-        presetProviderId: provider.presetProviderId ?? null,
-        providerId: provider.id,
-      });
-      if (provider.modelListSource === 'registry') {
-        span?.setAttributes({ 'models.source': 'registry', 'models.count': registryModels.length });
-        return registryModels;
-      }
-
-      const remoteModels = await listProviderModels(
-        provider,
-        {
-          getAuthConfig: async (providerId) =>
-            (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
-          getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
-          getVertexAuthHeaders: (input) => this.services.vertexAuth.getAuthorizationHeaders(input),
-        },
-        request.requestOptions?.signal,
-        { throwOnError: request.throwOnError },
-      );
-      const models = mergeProviderModelsWithRegistry(remoteModels, registryModels);
-      span?.setAttributes({ 'models.source': 'provider', 'models.count': models.length });
-      return models;
-    });
-  }
-
-  // ── Image generation ──
-
-  async generateImage(request: AiImageRequest): Promise<AiImageResult> {
-    return this.traceRequest('ai.generate_image', request, async (span) => {
-      const signal = request.requestOptions?.signal;
-      const { sdkConfig, credentialReceipt, model, options, provider } =
-        await this.buildAgentParamsFor(request);
-      span?.setAttributes({
-        'gen_ai.provider.id': provider.id,
-        'gen_ai.request.model': sdkConfig.modelId,
-        'gen_ai.image.mode': request.mode,
-      });
-      const { structured, vendorBag } = splitImageParamValues(request.paramValues);
-      const registryProviderId = provider.presetProviderId ?? provider.id;
-      const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
-        registryProviderId,
-        model.apiModelId ?? model.modelId,
-      )?.modes?.[request.mode]?.vendorTransport;
-      const transportVendorBag = vendorTransport?.endpoint
-        ? {
-            ...vendorBag,
-            modelDescriptor: {
-              endpoint: vendorTransport.endpoint,
-              id: sdkConfig.modelId,
-              mode: request.mode,
-              ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
-            },
-          }
-        : vendorBag;
-      const imageProviderOptions = buildImageProviderOptions({
-        aiSdkProviderId: sdkConfig.providerId,
-        paramValues: request.paramValues,
-        provider,
-        vendorBag: transportVendorBag,
-      });
-      const mergedProviderOptions = mergeImageProviderOptions(
-        options.providerOptions,
-        imageProviderOptions,
-      );
-      const inputImages = request.inputImages ?? [];
-      const hasInputImages = inputImages.length > 0;
-      const providerSettings = hasInputImages
-        ? { ...sdkConfig.providerSettings, fetch: expoFetch }
-        : sdkConfig.providerSettings;
-      const usageCaptureContext = createCaptureContext({
+    const repairUsagePlugins: { current?: AiPlugin[] } = {};
+    const {
+      context,
+      credentialReceipt,
+      model,
+      options,
+      plugins,
+      provider,
+      repairToolCall,
+      sdkConfig,
+      tools,
+    } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
+    const usagePlugin = createAiUsagePlugin(
+      createCaptureContext({
         provider,
         model,
         sdkModelId: sdkConfig.modelId,
         credentialReceipt,
         usageAttribution: request.usageAttribution,
-      });
+      }),
+      this.services.aiUsageRecord,
+    );
+    repairUsagePlugins.current = [usagePlugin];
 
-      const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
-        sdkConfig.providerId,
-        providerSettings as never,
-        {
-          model: sdkConfig.modelId,
-          prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
-          n: structured.n ?? 1,
-          size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
-          aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
-          seed: structured.seed,
-          maxRetries: request.requestOptions?.maxRetries ?? 0,
-          abortSignal: signal,
-          ...(mergedProviderOptions && { providerOptions: mergedProviderOptions }),
-          ...(request.requestOptions?.headers && {
-            headers: stripUndefinedHeaders(request.requestOptions.headers),
-          }),
-          onProviderCall: createProviderCallHandler(
-            usageCaptureContext,
-            this.services.aiUsageRecord,
-          ),
-        },
-      );
-
-      span?.setAttributes({ 'gen_ai.response.images_count': result.images.length });
-      return {
-        images: result.images.map((image) => ({
-          base64: image.base64,
-          mediaType: image.mediaType,
-        })),
-        usage: result.usage,
-      };
+    const generator = new AiSdkGenerator({
+      providerId: sdkConfig.providerId,
+      providerSettings: sdkConfig.providerSettings,
+      modelId: sdkConfig.modelId,
+      plugins: [...plugins, usagePlugin],
+      context,
+      repairToolCall,
+      system: request.system,
+      tools,
+      options,
     });
+
+    // prompt and messages are mutually exclusive in AI SDK; preserve that.
+    return generator.generate(
+      request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
+      signal,
+    );
+  }
+
+  // ── Model listing ──
+
+  async listModels(request: ListModelsRequest): Promise<Partial<Model>[]> {
+    const provider = await this.getProviderForListModels(request);
+    const registryModels = this.services.providerRegistry.listProviderRegistryModels({
+      presetProviderId: provider.presetProviderId ?? null,
+      providerId: provider.id,
+    });
+    if (provider.modelListSource === 'registry') {
+      return registryModels;
+    }
+
+    const remoteModels = await listProviderModels(
+      provider,
+      {
+        getAuthConfig: async (providerId) =>
+          (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
+        getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
+        getVertexAuthHeaders: (input) => this.services.vertexAuth.getAuthorizationHeaders(input),
+      },
+      request.requestOptions?.signal,
+      { throwOnError: request.throwOnError },
+    );
+    return mergeProviderModelsWithRegistry(remoteModels, registryModels);
+  }
+
+  // ── Image generation ──
+
+  async generateImage(request: AiImageRequest): Promise<AiImageResult> {
+    const signal = request.requestOptions?.signal;
+    const { sdkConfig, credentialReceipt, model, options, provider } =
+      await this.buildAgentParamsFor(request);
+    const { structured, vendorBag } = splitImageParamValues(request.paramValues);
+    const registryProviderId = provider.presetProviderId ?? provider.id;
+    const vendorTransport = this.services.providerRegistry.getImageGenerationSupport(
+      registryProviderId,
+      model.apiModelId ?? model.modelId,
+    )?.modes?.[request.mode]?.vendorTransport;
+    const transportVendorBag = vendorTransport?.endpoint
+      ? {
+          ...vendorBag,
+          modelDescriptor: {
+            endpoint: vendorTransport.endpoint,
+            id: sdkConfig.modelId,
+            mode: request.mode,
+            ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
+          },
+        }
+      : vendorBag;
+    const imageProviderOptions = buildImageProviderOptions({
+      aiSdkProviderId: sdkConfig.providerId,
+      paramValues: request.paramValues,
+      provider,
+      vendorBag: transportVendorBag,
+    });
+    const mergedProviderOptions = mergeImageProviderOptions(
+      options.providerOptions,
+      imageProviderOptions,
+    );
+    const inputImages = request.inputImages ?? [];
+    const hasInputImages = inputImages.length > 0;
+    const providerSettings = hasInputImages
+      ? { ...sdkConfig.providerSettings, fetch: expoFetch }
+      : sdkConfig.providerSettings;
+    const usageCaptureContext = createCaptureContext({
+      provider,
+      model,
+      sdkModelId: sdkConfig.modelId,
+      credentialReceipt,
+      usageAttribution: request.usageAttribution,
+    });
+
+    const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
+      sdkConfig.providerId,
+      providerSettings as never,
+      {
+        model: sdkConfig.modelId,
+        prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
+        n: structured.n ?? 1,
+        size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
+        aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
+        seed: structured.seed,
+        maxRetries: request.requestOptions?.maxRetries ?? 0,
+        abortSignal: signal,
+        ...(mergedProviderOptions && { providerOptions: mergedProviderOptions }),
+        ...(request.requestOptions?.headers && {
+          headers: stripUndefinedHeaders(request.requestOptions.headers),
+        }),
+        onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
+      },
+    );
+
+    return {
+      images: result.images.map((image) => ({
+        base64: image.base64,
+        mediaType: image.mediaType,
+      })),
+      usage: result.usage,
+    };
   }
 
   // ── API validation ──
@@ -448,30 +413,6 @@ export class AiService extends BaseService {
           controller.abort(requestSignal.reason);
         }
       }
-    }
-  }
-
-  private async traceRequest<Result>(
-    name: string,
-    request: AiBaseRequest & { providerId?: string },
-    operation: (span: TraceSpan | undefined) => Promise<Result>,
-  ): Promise<Result> {
-    const span = this.traces?.startTrace(name, undefined, {
-      'gen_ai.provider.id': request.providerId,
-      'gen_ai.request.model': request.uniqueModelId,
-    });
-    try {
-      const result = await operation(span);
-      span?.end(request.requestOptions?.signal?.aborted ? 'cancelled' : 'ok');
-      return result;
-    } catch (error) {
-      span?.end(
-        request.requestOptions?.signal?.aborted ? 'cancelled' : 'error',
-        traceErrorAttributes(error),
-      );
-      throw error;
-    } finally {
-      void this.traces?.flush();
     }
   }
 

@@ -207,8 +207,10 @@ not query Cherry provider or model tables.
 `backend/ai/observability`. It provides explicit child spans, bounded metadata attributes, and
 terminal status. Its methods never throw into execution. The Host owns the root and storage;
 Runtime code never resolves a storage service or imports a native tracing SDK. Pi records provider
-calls (including context-compaction calls), context preparation, and actual tool execution. Closing
-the Host root closes unfinished children, and late callbacks cannot reopen a settled trace. See
+requests, including context-compaction requests. Tool and approval timing stay in message runtime
+statistics, and token usage stays in the invocation ledger. MCP owns its connection, catalog, and
+tool-call diagnostics, including work before a turn is admitted. Closing the Host root closes
+unfinished provider records, and late callbacks cannot reopen a settled trace. See
 [AI diagnostic tracing](../../../src/backend/ai/observability/README.md).
 
 The Host resolves protocol-level turn snapshots before this boundary. `default` and the current Pi

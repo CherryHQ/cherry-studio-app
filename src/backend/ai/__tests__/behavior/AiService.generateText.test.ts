@@ -3,7 +3,6 @@ import { MockLanguageModelV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
-import { createTraceRecorder } from '@/backend/ai/observability/__tests__/_traceRecorder';
 
 import { projectContractValue, projectLanguageCall } from '../_harness/contracts';
 import { installMockProvider, textGenerateResult } from '../_harness/mockProvider';
@@ -33,7 +32,6 @@ describe('AiService.generateText AI SDK contract', () => {
   });
 
   test('uses the explicit system prompt and returns text with recorded usage', async () => {
-    const { traces, records } = createTraceRecorder();
     const fixture = createContractFixture();
     const languageModel = new MockLanguageModelV3({
       doGenerate: textGenerateResult('Contract title'),
@@ -42,7 +40,7 @@ describe('AiService.generateText AI SDK contract', () => {
     });
     restoreProvider = installMockProvider({ language: languageModel });
 
-    const result = await new AiService(traces, fixture.services).generateText({
+    const result = await new AiService(fixture.services).generateText({
       prompt: 'Name this conversation.',
       system: 'Return a short title.',
       uniqueModelId: fixture.model.id,
@@ -51,20 +49,6 @@ describe('AiService.generateText AI SDK contract', () => {
     expect(projectLanguageCall(languageModel.doGenerateCalls[0])).toMatchSnapshot('prompt call');
     expect(projectContractValue(result)).toMatchSnapshot('prompt result');
     expect(result.text).toBe('Contract title');
-    expect(records.filter((record) => record.revision === 2)).toEqual([
-      expect.objectContaining({
-        name: 'ai.sdk.generate',
-        status: 'ok',
-        attributes: expect.objectContaining({
-          'gen_ai.usage.input_tokens': 10,
-          'gen_ai.usage.output_tokens': 5,
-        }),
-      }),
-      expect.objectContaining({ name: 'ai.generate_text', status: 'ok' }),
-    ]);
-    expect(JSON.stringify(records)).not.toMatch(
-      /Contract title|Name this conversation|Return a short title/,
-    );
     expect(fixture.spies.recordInvocation).toHaveBeenCalledWith(
       expect.objectContaining({
         context: expect.objectContaining({ messageRef: null }),
@@ -88,7 +72,7 @@ describe('AiService.generateText AI SDK contract', () => {
       { content: [{ text: 'Summarize', type: 'text' }], role: 'user' },
     ];
 
-    await new AiService(undefined, fixture.services).generateText({
+    await new AiService(fixture.services).generateText({
       messages,
       uniqueModelId: fixture.model.id,
     });
@@ -97,7 +81,6 @@ describe('AiService.generateText AI SDK contract', () => {
   });
 
   test('preserves model failures and rejects pre-aborted requests without calling the model', async () => {
-    const { traces, records } = createTraceRecorder();
     const fixture = createContractFixture();
     const modelError = new Error('generation failed');
     const languageModel = new MockLanguageModelV3({
@@ -108,7 +91,7 @@ describe('AiService.generateText AI SDK contract', () => {
       provider: 'contract-provider',
     });
     restoreProvider = installMockProvider({ language: languageModel });
-    const service = new AiService(traces, fixture.services);
+    const service = new AiService(fixture.services);
 
     await expect(
       service.generateText({ prompt: 'Fail', uniqueModelId: fixture.model.id }),
@@ -125,11 +108,5 @@ describe('AiService.generateText AI SDK contract', () => {
       }),
     ).rejects.toBe(abortReason);
     expect(languageModel.doGenerateCalls).toHaveLength(1);
-    expect(
-      records
-        .filter((record) => record.parentSpanId === null && record.revision === 2)
-        .map((record) => record.status),
-    ).toEqual(['error', 'cancelled']);
-    expect(JSON.stringify(records)).not.toContain('generation failed');
   });
 });

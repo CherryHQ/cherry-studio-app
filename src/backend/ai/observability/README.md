@@ -5,8 +5,8 @@ is no developer-mode gate, frontend viewer, upload request, or external telemetr
 
 ## Ownership and coverage
 
-`TraceStorageService` is a PostReady lifecycle service. `AgentHostDependencies` and `AiService`
-depend on it so Agent turns, naming, and painting jobs settle before trace storage stops. Creation
+`TraceStorageService` is a PostReady lifecycle service. `AgentHostDependencies` and
+`McpRuntimeService` depend on it so conversation turns and MCP clients stop before storage. Creation
 opens no files. A one-second flush timer and an AppState listener are released by the lifecycle
 owner. Backgrounding requests a flush; the OS does not guarantee time to finish that write.
 
@@ -18,18 +18,32 @@ handles prevent concurrent Sessions from adopting each other's spans.
 Current producers are:
 
 - `MobileAgentHost`: one `ai.turn` root per reserved turn, with Agent, Session, turn, and assistant
-  message ids; approval waiting; final usage and outcome, including terminal persistence failures.
-- Pi: `pi.context_prepare`, every provider stream as `pi.generate_content` (including compaction),
-  and actual tool execution as `pi.execute_tool`. Provider observation uses the existing result
-  promise and does not read, tee, or replace the response stream.
-- `AiService`: text generation, image generation, and model listing roots. Text-generation
-  middleware records provider attempts, including SDK retries and tool-repair calls, and existing
-  tool hooks record tool execution. Image roots cover the complete generation call.
-- Conversation model checks use an `ai.check_chat_model` root and the same instrumented Pi path,
-  without creating a Session or transcript.
+  message ids and terminal outcome, including terminal persistence failures.
+- Pi: conversation provider requests as `pi.generate_content`, including compaction. Observation
+  uses the existing result promise and does not read, tee, or replace the response stream.
+- MCP: `mcp.connect` for each new connection, `mcp.list_tools` for each complete catalog request
+  (including pagination), and `mcp.call_tool` for each attempted tool execution. A reconnect produces
+  separate records with a new connection generation. Reusing a client adds no connection record.
 
-Span records contain ids, timestamps, elapsed time, model/provider/tool identifiers, counts, token
-usage, finish reasons, and safe error facts. They never receive prompts, message text, tool
+MCP diagnostics start in the client/adapter, so connection and catalog failures are retained even
+when turn preparation fails before a conversation is admitted. Correlate MCP records by process id,
+server id, and connection generation. `tool.call.id` helps locate existing message parts, but a
+provider may reuse call ids across turns; use the server and time window to disambiguate. These
+records do not share the conversation trace tree. Temporary pre-save connections have no
+server id and are marked `mcp.connection.temporary`; endpoint URLs are never stored.
+
+The MCP adapter captures safe transport facts before replacing the error returned to callers.
+Categories distinguish timeout, cancellation, HTTP rejection, protocol errors, stable adapter error
+codes, and tool-reported `isError` results. Unknown failures remain unknown; messages are not parsed
+to guess a cause. Transport responses and caller-visible errors keep their existing behavior.
+
+Tool/approval timing remains in message runtime statistics, and token usage remains in the existing
+invocation ledger. Diagnostics do not duplicate those records or instrument generic text/image
+generation, model listing/checks, context preparation, approvals, or built-in tools. This is a
+request-failure diagnostic surface, not a second analytics pipeline.
+
+Span records contain ids, timestamps, elapsed time, model/provider/tool identifiers, catalog counts,
+finish reasons, and safe error facts. They never receive prompts, message text, tool
 arguments/results, request/response bodies, headers, credentials, stacks, or device file paths.
 Error messages and causes are deliberately omitted; the error type, code, origin, retryability,
 and HTTP status remain diagnosable. Known sensitive attribute keys are excluded, and attribute
@@ -43,7 +57,7 @@ completion so a later diagnostic package can identify unfinished work after a cr
 
 Group records by `(processId, traceId, spanId)` and retain the highest `revision`, not the last file
 encountered. A start has revision 1; a terminal record has revision 2. `parentSpanId` reconstructs
-the tree, and `context` on every record carries application correlation. A remaining `running`
+the tree, and `context` carries application correlation when available. A remaining `running`
 record means no terminal record was retained; it must not be interpreted as success. Retention may
 remove an older parent or start record. The stored format is mobile-owned JSONL, not OTLP or a
 byte-for-byte Desktop schema.

@@ -189,7 +189,6 @@ type ActiveTurnState = {
   resources: TurnResourceLedger;
   runtimeTiming: MessageRuntimeTimingCollector;
   trace?: TraceSpan;
-  approvalTraces: Map<string, TraceSpan>;
   sessionTurnIds: Set<string>;
   /** Set by a durable-value event; cleared when a snapshot write picks it up. */
   snapshotDirty: boolean;
@@ -707,7 +706,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           'gen_ai.request.model': plan.agent.model.modelId,
         },
       ),
-      approvalTraces: new Map(),
       sessionTurnIds: new Set([...plan.sessionTurnIds, reserved.turnId]),
       snapshotDirty: false,
       snapshotFlush: null,
@@ -897,11 +895,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         // survive a restart (agent-persistence.md).
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.runtimeTiming.startApproval(approval.id, approval.toolCallId, approval.displayName);
-        const approvalTrace = state.trace?.startSpan('agent.approval_wait', {
-          'tool.call.id': approval.toolCallId,
-          'approval.id': approval.id,
-        });
-        if (approvalTrace) state.approvalTraces.set(approval.id, approvalTrace);
         state.pendingApprovals.set(approval.id, approval);
         state.turn = { ...state.turn, status: 'awaiting-approval' };
         state.backgroundReply.awaitApproval(state.assistantMessage);
@@ -912,8 +905,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       case 'approval.resolved': {
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.runtimeTiming.finishApproval({ approvalId: approval.id });
-        state.approvalTraces.get(approval.id)?.end('ok', { 'approval.decision': approval.status });
-        state.approvalTraces.delete(approval.id);
         state.pendingApprovals.set(approval.id, approval);
         const hasPending = [...state.pendingApprovals.values()].some(
           (entry) => entry.status === 'pending',
@@ -1057,12 +1048,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     state.trace?.end(
       outcome === 'completed' ? 'ok' : outcome === 'failed' ? 'error' : 'cancelled',
-      {
-        'gen_ai.usage.input_tokens': state.usage?.inputTokens,
-        'gen_ai.usage.output_tokens': state.usage?.outputTokens,
-        'gen_ai.usage.total_tokens': state.usage?.totalTokens,
-        ...(error ? { 'host.error.code': error.code } : {}),
-      },
+      error ? { 'host.error.code': error.code } : undefined,
     );
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });

@@ -28,7 +28,10 @@ export function traceErrorAttributes(error: unknown): TraceAttributes {
         : undefined;
     return sanitizeTraceAttributes({
       'error.type': typeof source.name === 'string' ? source.name : undefined,
-      'error.code': typeof source.code === 'string' ? source.code : undefined,
+      'error.code':
+        typeof source.code === 'string' || typeof source.code === 'number'
+          ? source.code
+          : undefined,
       'error.origin': typeof source.origin === 'string' ? source.origin : undefined,
       'error.retryable': typeof source.retryable === 'boolean' ? source.retryable : undefined,
       'http.status_code':

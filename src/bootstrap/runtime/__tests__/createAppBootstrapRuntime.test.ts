@@ -117,7 +117,6 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       languageServing: mockAgentRuntime,
-      traces: mockTraces,
       providerRegistryUpdater: mockProviderRegistryUpdater,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);

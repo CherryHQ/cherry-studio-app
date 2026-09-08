@@ -282,11 +282,6 @@ describe('MobileAgentHost', () => {
     const root = records.find((record) => record.name === 'ai.turn' && record.revision === 2)!;
     expect(root).toMatchObject({
       status: 'ok',
-      attributes: {
-        'gen_ai.usage.input_tokens': 6,
-        'gen_ai.usage.output_tokens': 4,
-        'gen_ai.usage.total_tokens': 10,
-      },
       context: {
         agentId: AGENT_ID,
         sessionId: session.id,
@@ -300,6 +295,7 @@ describe('MobileAgentHost', () => {
       context: root.context,
     });
     expect(JSON.stringify(records)).not.toContain('private input');
+    expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
   });
 
   test('creates the durable Session together with an admitted first submission', async () => {

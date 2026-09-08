@@ -36,7 +36,7 @@ const message: AssistantMessage = {
 };
 
 describe('tracePiStream', () => {
-  it('preserves the stream and every event while recording provider usage without content', async () => {
+  it('preserves the stream and every event while capturing only request diagnostics', async () => {
     const { traces, records } = createTraceRecorder();
     const root = traces.startTrace('turn');
     const source = new AssistantMessageEventStream();
@@ -58,9 +58,10 @@ describe('tracePiStream', () => {
     ).toMatchObject({
       status: 'ok',
       parentSpanId: root?.spanId,
-      attributes: { 'gen_ai.usage.input_tokens': 8, 'gen_ai.usage.output_tokens': 2 },
+      attributes: { 'gen_ai.response.finish_reason': 'stop' },
     });
     expect(JSON.stringify(records)).not.toContain('private');
+    expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
   });
 
   it('keeps cancellation terminal when a provider resolves late', async () => {

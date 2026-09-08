@@ -3,7 +3,6 @@ import { v4 as uuid } from 'uuid';
 import type { ChatModelCheckFailure, ChatModelCheckResult } from '@/shared/contracts/models';
 import type { Model } from '@/shared/data/types/model';
 
-import { traceErrorAttributes, type TraceRecorder } from '../../observability';
 import type { AgentRuntime, RuntimeError, RuntimeUsageReport } from '../runtime';
 
 const CHAT_CHECK_TIMEOUT_MS = 20_000;
@@ -16,22 +15,11 @@ export async function checkChatModel(
     onUsage: (report: RuntimeUsageReport, requestId: string) => Promise<void>;
     signal?: AbortSignal;
     timeoutMs?: number;
-    traces?: TraceRecorder;
   },
 ): Promise<ChatModelCheckResult> {
   options.signal?.throwIfAborted();
   const session = await runtime.open();
   const turnId = uuid();
-  const trace = options.traces?.startTrace(
-    'ai.check_chat_model',
-    {
-      requestId: `chat-model-check:${turnId}`,
-    },
-    {
-      'gen_ai.provider.id': model.providerId,
-      'gen_ai.request.model': model.modelId,
-    },
-  );
   const startedAt = performance.now();
   const usage = new Map<string, RuntimeUsageReport>();
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -49,7 +37,6 @@ export async function checkChatModel(
       options: { maxOutputTokens: 64, reasoningEffort: 'off' },
       tools: [],
       turnId,
-      trace,
     });
     const consume = async (): Promise<ChatModelCheckResult> => {
       let hasText = false;
@@ -62,10 +49,8 @@ export async function checkChatModel(
           event.part.text.trim()
         )
           hasText = true;
-        if (event.type === 'failed') {
-          trace?.setAttributes(traceErrorAttributes(event.error));
+        if (event.type === 'failed')
           return { status: 'failed', reason: classifyChatModelFailure(event.error) };
-        }
         if (event.type === 'completed')
           return hasText
             ? { status: 'success', latency: performance.now() - startedAt }
@@ -84,22 +69,14 @@ export async function checkChatModel(
     });
     const result = await Promise.race([consume(), cancelled]);
     options.signal?.throwIfAborted();
-    trace?.end(result.status === 'success' ? 'ok' : 'error', {
-      ...(result.status === 'failed' ? { 'check.failure': result.reason } : {}),
-    });
     return result;
-  } catch (error) {
-    trace?.end(options.signal?.aborted ? 'cancelled' : 'error', {
-      ...traceErrorAttributes(error),
-      ...(timedOut ? { 'error.code': 'model_check_timeout' } : {}),
-    });
+  } catch {
     options.signal?.throwIfAborted();
     return { status: 'failed', reason: timedOut ? 'timeout' : 'unknown' };
   } finally {
     if (timeout) clearTimeout(timeout);
     if (abort) options.signal?.removeEventListener('abort', abort);
     await session.close();
-    void options.traces?.flush();
     for (const report of usage.values()) await options.onUsage(report, report.requestId);
   }
 }
