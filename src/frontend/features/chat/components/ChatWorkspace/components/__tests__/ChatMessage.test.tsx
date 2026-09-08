@@ -45,6 +45,10 @@ jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));
 
+jest.mock('../AssistantMessageUsage', () => ({
+  AssistantMessageUsage: () => null,
+}));
+
 describe('ChatMessage', () => {
   let renderer: ReactTestRenderer | undefined;
 

@@ -285,13 +285,19 @@ export function toAgentMessageListItem(
   }
 
   const model = resolveMessageModel(message);
+  const stats =
+    message.stats?.requestCount !== undefined
+      ? message.stats
+      : message.usage
+        ? { ...message.usage, ...message.stats }
+        : message.stats;
   const item = {
     createdAt: message.createdAt,
     data: toDisplayParts(message.parts, cache),
     id: message.id,
     ...(model ? { model } : {}),
     role: message.role,
-    ...(message.stats ? { stats: message.stats } : {}),
+    ...(stats ? { stats } : {}),
     status: toDisplayStatus(message.status),
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });

@@ -27,6 +27,35 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('keeps persisted usage alongside runtime timing in the message presentation', () => {
+    const stats = { runtimeTiming: { startedAt: 1_000, completedAt: 3_000, spans: [] } };
+    const source = message('usage', {
+      status: 'success',
+      usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+      stats,
+    });
+    const cache = createAgentMessageListProjectionCache();
+    const item = toAgentMessageListItem(source, cache);
+
+    expect(item?.stats).toEqual({ ...stats, inputTokens: 100, outputTokens: 20, totalTokens: 120 });
+    expect(toAgentMessageListItem(source, cache)).toBe(item);
+    expect(source.stats).toBe(stats);
+    expect(toAgentMessageListItem(message('unknown'))).not.toHaveProperty('stats');
+  });
+
+  test('prefers materialized statistics over the basic usage projection', () => {
+    const stats = { requestCount: 2, inputTokens: 200, totalTokens: 220 };
+    const item = toAgentMessageListItem(
+      message('materialized', {
+        usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+        stats,
+      }),
+    );
+
+    expect(item?.stats).toBe(stats);
+    expect(item?.stats).not.toHaveProperty('outputTokens');
+  });
+
   test('keeps successful sources citable when the same web call also failed', () => {
     const error = { code: 'web_lookup_failed', message: 'Page B not found', retryable: false };
     const item = toAgentMessageListItem(
