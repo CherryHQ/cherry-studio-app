@@ -270,6 +270,23 @@ OS-sanctioned continuation mechanisms described in
 
 ## Capability Rules
 
+### Web Search And Fetch
+
+The Host's web guidance targets one search round and, when source text is needed, one page-read
+round for ordinary lookups. Independent queries and page reads should run together. Further
+research must address a material evidence gap or an explicit request for broader research; the
+model should otherwise answer from the available sources and state limitations. Citation ids resolve
+within the message that collected them. Sourced follow-ups read relevant known URLs again to obtain
+ids for the current turn; they do not reuse earlier turns' citation ids. This is model guidance, not
+a separate hard execution limit.
+
+The turn-local web tools reuse identical pending and completed requests, including citation ids.
+Search keys normalize whitespace; page reads cache each URL independently, including across
+overlapping batches, and reset with the next turn's catalog. A partially successful batch keeps its
+successful pages alongside all failed inputs and stops both web tools for the turn. Combining cached
+pages still applies the shared page and batch content limits. Failed requests are cached without
+retry; cancellation still propagates without becoming a cached failure.
+
 ### Streamable HTTP MCP
 
 - Persistence retains desktop-compatible `stdio`, `sse`, `streamableHttp`, `inMemory`, and unknown
@@ -397,7 +414,9 @@ credentials and private payloads from errors, and returns portable values. Cance
 through MCP, provider, device, and file operations where their APIs support it; non-abortable native
 work must discard late results after the turn is terminal.
 
-Pi caps each turn at eight tool-loop steps, sixteen requested tool calls, and ten minutes. The MCP
+Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
+one final response with all tools disabled, using the current results and disclosing remaining gaps.
+This response remains subject to the context limit and the same ten-minute turn deadline. The MCP
 adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
 limits are application constants rather than user settings in Version 1.
 

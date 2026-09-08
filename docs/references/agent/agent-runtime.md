@@ -373,7 +373,9 @@ The Runtime marks that call as `error` and passes an error tool result to the mo
 leaves the tool available for corrected input. `scope: 'tool'` stops further calls to that tool in
 this execution. Tools with the same optional `failureGroup` stop together: web search and page
 reading share `web`, so a failed lookup cannot trigger a different web strategy. The Runtime
-removes stopped tools from subsequent model requests and does not invoke their callbacks again.
+removes stopped tools while other tools remain available and does not invoke their callbacks again.
+If all tools stop, their definitions remain for valid tool history, but tool choice is forced to
+`none` (Google: `NONE`) so the model can answer without further calls.
 Already running calls may finish and contribute results. Other tools and the final assistant
 response remain available; a new execution starts with the Host's full snapshot. This policy is
 independent of the JSON inside `value`: remote payloads and historical results cannot disable
@@ -383,11 +385,16 @@ The Host projects callback failures into the protocol's error result envelope, r
 callback's `value` in `value.details`. Runtime-only failure policy is not persisted. Partial web
 results therefore remain available in history and as citation sources alongside the error.
 
-Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
-limit do not execute their callback and receive a classified error result; reaching either limit
-stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
-and timeout abort the model, approval waiters, and the callback signal before terminalizing live
-tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+Pi permits at most twenty tool-loop steps and sixty-four tool calls per turn. Calls beyond the limit
+do not execute their callback and receive a classified error result. After the current batch settles,
+reaching either limit disables tool selection and allows one final model response using the collected
+results, with instructions to disclose uncertainty and unfinished work. A successful final response
+completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
+request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
+`NONE`). Context exhaustion still stops before another provider request, and the final response shares
+the whole turn's ten-minute deadline. Cancellation and timeout abort the model, approval waiters, and
+the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
+60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -626,7 +633,8 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
+17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
+    context, callback, and whole-turn limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

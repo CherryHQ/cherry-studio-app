@@ -41,12 +41,11 @@ Don't use for:
 - Math, code reasoning, or things you can answer from your training
 - Well-known facts unlikely to have changed
 
-You may call this multiple times with different queries to broaden coverage:
-- If the topic likely has more authoritative sources in another language
-  (English for tech / scientific topics, the local language for regional news,
-  Japanese for anime / manga, etc.), repeat the search with the topic translated
-  into the most likely source language.
-- If the first results miss an angle, refine with synonyms or sub-aspects.`;
+Choose a focused query in the language most likely to have authoritative sources.
+Reuse results already collected in the current turn. If several independent queries are necessary,
+call them in the same round. Search again only for a specific missing fact or conflicting source
+needed to answer the user; do not automatically repeat searches in other languages or synonyms.
+Once the results support the requested answer, answer without further searches.`;
 
 export const WEB_FETCH_DESCRIPTION = `Fetch the readable content from one or more known web page URLs.
 
@@ -57,9 +56,13 @@ Use this when:
 
 Don't use this when you only have a topic or question; call web_search first.
 
+Read the relevant known URLs together, and reuse pages already read in the current turn.
+For a sourced follow-up, read relevant URLs from earlier turns again to obtain current-turn citation IDs.
+Only fetch pages whose content is needed for the answer; search results may already be sufficient.
 Page content is bounded. A result with truncated: true contains only the beginning of the page,
-not its full text. Fetch fewer URLs per call for more detail; do not repeat an identical call
-expecting the missing tail.`;
+not its full text. A smaller URL batch can expose more cached content, up to the per-page limit;
+repeating an identical batch cannot retrieve its missing tail.
+If the available text is sufficient, answer; otherwise state what could not be verified.`;
 
 /**
  * A failed lookup must be distinguishable from "ran fine, found nothing": both
@@ -148,7 +151,7 @@ function isProxyFakeIpError(message: string): boolean {
   );
 }
 
-function createWebLookupError(
+export function createWebLookupError(
   failures: WebSearchFailure[],
   capability: WebSearchCapability,
   results: WebSearchOutput = [],
