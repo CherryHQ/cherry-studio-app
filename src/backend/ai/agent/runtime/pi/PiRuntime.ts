@@ -40,6 +40,7 @@ import type {
   RuntimeModelPreflight,
   RuntimeOutputPart,
   RuntimeTool,
+  RuntimeToolInputPreview,
   RuntimeToolResult,
   RuntimeTextAttachmentPart,
   RuntimeUsage,
@@ -62,6 +63,7 @@ import {
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
+import { PiToolInputPreviewBuffer } from './PiToolInputPreviewBuffer';
 import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
@@ -193,6 +195,7 @@ type ToolPartBase = {
   displayName: string;
   id: string;
   input?: RuntimeJsonValue;
+  inputPreview?: RuntimeToolInputPreview;
   providerName: string;
   toolCallId: string;
   toolRef: RuntimeMessageToolRef;
@@ -234,6 +237,7 @@ type ActiveTurn = {
   runtimeTimingSink?: MessageRuntimeTimingSink;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
+  inputPreviews: PiToolInputPreviewBuffer;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
@@ -694,6 +698,19 @@ class PiRuntimeSession implements AgentRuntimeSession {
       runtimeTimingSink: request.runtimeTimingSink,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
+      inputPreviews: new PiToolInputPreviewBuffer((toolCallId, preview) => {
+        if (turn.phase !== 'running' || !turn.streamingToolCalls.has(toolCallId)) return;
+        const part = turn.toolParts.get(toolCallId);
+        if (!part) return;
+        if (
+          part.inputPreview?.text === preview.text &&
+          part.inputPreview.name === preview.name &&
+          part.inputPreview.truncated === preview.truncated
+        )
+          return;
+        turn.toolParts.set(toolCallId, { ...part, inputPreview: preview });
+        this.emit(turn, { type: 'tool.input.preview', partId: part.id, preview });
+      }),
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
@@ -1114,12 +1131,17 @@ class PiRuntimeSession implements AgentRuntimeSession {
         }
         break;
       }
-      case 'toolcall_delta':
-        // The lifecycle is already visible. Keep the growing provider payload
-        // inside Pi so a large file body is not copied through Host/UI state on
-        // every token; toolcall_end publishes the complete JSON-safe input once.
+      case 'toolcall_delta': {
+        const call = event.partial.content[event.contentIndex];
+        if (call?.type !== 'toolCall') break;
+        const binding = turn.toolBindingsByProviderName.get(call.name);
+        if (binding?.kind === 'runtime' && binding.runtimeTool.inputPreview) {
+          turn.inputPreviews.update(call.id, binding.runtimeTool.inputPreview, call.arguments);
+        }
         break;
+      }
       case 'toolcall_end':
+        turn.inputPreviews.flush(event.toolCall.id);
         this.ensureToolPartFromProviderCall(
           turn,
           event.toolCall.id,
@@ -1709,6 +1731,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
+      turn.inputPreviews.dispose();
       turn.abortController.abort();
       this.interruptUnsettledToolParts(turn);
       turn.phase = 'terminated';

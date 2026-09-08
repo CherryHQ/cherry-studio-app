@@ -111,6 +111,7 @@
   "chat.builtinTool.file.edited": "文件已编辑",
   "chat.builtinTool.file.filename": "文件",
   "chat.builtinTool.file.generating": "正在生成文件内容",
+  "chat.builtinTool.file.latestContent": "最新生成的内容",
   "chat.builtinTool.file.lines": "行",
   "chat.builtinTool.file.read": "读取文件",
   "chat.builtinTool.file.readDone": "文件已读取",

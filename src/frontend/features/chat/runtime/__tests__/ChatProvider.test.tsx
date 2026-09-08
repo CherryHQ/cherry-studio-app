@@ -31,6 +31,10 @@ jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({}),
 }));
 
+jest.mock('@/frontend/components/Message', () => ({
+  ToolInputPreviewProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 jest.mock('../AgentSessionChatClient', () => ({
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     dispose: mockDispose,

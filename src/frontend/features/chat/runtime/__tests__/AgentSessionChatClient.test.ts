@@ -289,6 +289,129 @@ describe('AgentSessionChatClient', () => {
     }
   });
 
+  test('publishes tool previews only to the matching content subscriber and preserves list identity', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const message = {
+      ...assistantMessage(),
+      parts: [
+        {
+          id: 'tool-1',
+          type: 'tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'write_file' },
+          providerName: 'write_file',
+          displayName: 'Write file',
+          state: 'input-streaming',
+        },
+      ],
+    } as AgentMessageView;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: { ...snapshot(), streamingMessage: message }, unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const onListChange = jest.fn();
+    const onPreviewChange = jest.fn();
+    const onOtherPreviewChange = jest.fn();
+    const release = client.subscribe('session-1', onListChange);
+    const releasePreview = client.toolInputPreviews.subscribe(
+      'assistant-1',
+      'call-1',
+      onPreviewChange,
+    );
+    const releaseOther = client.toolInputPreviews.subscribe(
+      'assistant-1',
+      'call-2',
+      onOtherPreviewChange,
+    );
+    const stateBefore = client.getState('session-1');
+    try {
+      for (const text of ['first', 'newest']) {
+        listener?.({
+          type: 'message.delta',
+          messageId: 'assistant-1',
+          delta: {
+            op: 'tool.input.preview',
+            partId: 'tool-1',
+            preview: { text, truncated: false },
+          },
+        });
+      }
+      expect(client.toolInputPreviews.getSnapshot('assistant-1', 'call-1')).toEqual({
+        text: 'newest',
+        truncated: false,
+      });
+      expect(onPreviewChange).toHaveBeenCalledTimes(2);
+      expect(onOtherPreviewChange).not.toHaveBeenCalled();
+      expect(onListChange).not.toHaveBeenCalled();
+      expect(client.getState('session-1')).toBe(stateBefore);
+
+      listener?.({
+        type: 'message.delta',
+        messageId: 'assistant-1',
+        delta: {
+          op: 'part.replace',
+          part: {
+            ...message.parts[0],
+            state: 'input-available',
+            input: { content: 'complete' },
+          } as AgentMessageView['parts'][number],
+        },
+      });
+      listener?.({
+        type: 'message.delta',
+        messageId: 'assistant-1',
+        delta: {
+          op: 'tool.input.preview',
+          partId: 'tool-1',
+          preview: { text: 'late stale content', truncated: false },
+        },
+      });
+      expect(client.toolInputPreviews.getSnapshot('assistant-1', 'call-1')).toBeUndefined();
+      expect(client.getState('session-1').liveMessages[0]?.parts[0]).toMatchObject({
+        input: { content: 'complete' },
+      });
+    } finally {
+      releasePreview();
+      releaseOther();
+      release();
+      client.dispose();
+    }
+  });
+
+  test('restores a preview from an observation snapshot and releases it with the session', async () => {
+    const preview = { text: 'already generated', name: 'page.html', truncated: false };
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: {
+        ...snapshot(),
+        streamingMessage: {
+          ...assistantMessage(),
+          parts: [
+            {
+              id: 'tool-1',
+              type: 'tool',
+              toolCallId: 'call-1',
+              toolRef: { source: 'builtin', capabilityId: 'write_file' },
+              providerName: 'write_file',
+              displayName: 'Write file',
+              state: 'input-streaming',
+              inputPreview: preview,
+            },
+          ],
+        },
+      },
+      unsubscribe: jest.fn(),
+    }));
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const release = client.subscribe('session-1', () => {});
+    expect(client.toolInputPreviews.getSnapshot('assistant-1', 'call-1')).toEqual(preview);
+    release();
+    expect(client.toolInputPreviews.getSnapshot('assistant-1', 'call-1')).toBeUndefined();
+    client.dispose();
+  });
+
   test('publishes a terminal message immediately and cancels its pending text flush', async () => {
     jest.useFakeTimers();
     let release = () => {};

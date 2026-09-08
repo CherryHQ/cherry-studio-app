@@ -111,6 +111,7 @@
   "chat.builtinTool.file.edited": "File edited",
   "chat.builtinTool.file.filename": "File",
   "chat.builtinTool.file.generating": "Generating file content",
+  "chat.builtinTool.file.latestContent": "Latest generated content",
   "chat.builtinTool.file.lines": "Lines",
   "chat.builtinTool.file.read": "Read file",
   "chat.builtinTool.file.readDone": "File read",

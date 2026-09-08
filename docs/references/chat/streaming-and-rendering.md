@@ -94,6 +94,18 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 
 - Text and reasoning remain Markdown-capable shared message parts.
 - Tool and approval state remains structured and uses the shared tool renderer and approval sheet.
+- File-tool input appears inline in the message list while it is generated. `write_file` previews
+  `content`; `edit_file` previews `new_string`. The tool's complete input remains authoritative for
+  execution and saving.
+- Opted-in tool previews are coalesced in Pi at 150 ms, bounded to the latest 8,192 UTF-16 code
+  units and 60 lines, and emitted as `tool.input.preview`. The Host retains the bounded preview in
+  its snapshot; preview events do not request transcript persistence or background-reply updates.
+- The chat client routes preview events to the matching content subscriber without replacing the
+  live message/list projection. Final input and interrupted snapshots supply the settled preview.
+  The inline region has a maximum height; large previews identify their content as the latest
+  generated portion. The full output remains in the managed file.
+- Code previews use CherryUI's existing native Markdown renderer. Their code fence stays open
+  during generation so native progressive mode defers highlighting until input completes.
 - File and error protocol parts map to the existing focused renderers.
 - User and assistant messages use the same `MessageList` surfaces as persisted history; system
   messages are omitted from the visible conversation list.
@@ -102,7 +114,7 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 
 - Attachment submission while the Host capability is false.
 - Follow-up queues, steering, autonomous turns, or more than one execution per turn.
-- A separate token throttle store or per-token SQLite checkpoint scheduler.
+- A general-purpose token store or per-token SQLite checkpoint scheduler.
 - Background continuation or recoverable stream resume.
 
 ## Acceptance

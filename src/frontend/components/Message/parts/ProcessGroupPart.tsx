@@ -43,6 +43,7 @@ export function ProcessGroupPart({
           isStreaming={false}
           isTextSelectionEnabled={isTextSelectionEnabled}
           key={key}
+          messageId={message.id}
           messageParts={messageParts}
           part={part}
           renderMode={renderMode}

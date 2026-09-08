@@ -8,6 +8,7 @@ import * as z from 'zod';
 
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
+import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
 
@@ -298,6 +299,13 @@ const InterruptedToolResultSchema = z.strictObject({
   artifacts: z.tuple([]),
 });
 
+export const AgentToolInputPreviewSchema = z.strictObject({
+  text: z.string().max(TEXT_PREVIEW_MAX_CHARACTERS),
+  truncated: z.boolean(),
+  name: z.string().max(255).optional(),
+});
+export type AgentToolInputPreview = z.infer<typeof AgentToolInputPreviewSchema>;
+
 const AgentToolMessagePartSchema = z
   .strictObject({
     id: z.string().min(1),
@@ -317,6 +325,7 @@ const AgentToolMessagePartSchema = z
       'interrupted',
     ]),
     input: JsonValueSchema.optional(),
+    inputPreview: AgentToolInputPreviewSchema.optional(),
     output: JsonValueSchema.optional(),
     approvalId: z.string().optional(),
     error: AgentErrorViewSchema.optional(),

@@ -53,6 +53,7 @@ export function MessageParts({
               isStreaming
               isTextSelectionEnabled={isTextSelectionEnabled}
               key={getMessagePartKey(message, part, index)}
+              messageId={message.id}
               messageParts={parts}
               part={part}
               renderMode={renderMode}
@@ -79,6 +80,7 @@ export function MessageParts({
           isStreaming={isStreaming}
           isTextSelectionEnabled={isTextSelectionEnabled}
           key={getMessagePartKey(message, item.part, item.index)}
+          messageId={message.id}
           messageParts={parts}
           part={item.part}
           renderMode={renderMode}

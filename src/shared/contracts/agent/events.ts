@@ -11,6 +11,7 @@ import {
   AgentMessagePartSchema,
   AgentMessageViewSchema,
   AgentSessionViewSchema,
+  AgentToolInputPreviewSchema,
   AgentTurnViewSchema,
   AgentViewSchema,
 } from './views';
@@ -25,6 +26,11 @@ export const AgentMessageDeltaSchema = z.union([
     op: z.literal('text.append'),
     partId: z.string().min(1),
     text: z.string(),
+  }),
+  z.strictObject({
+    op: z.literal('tool.input.preview'),
+    partId: z.string().min(1),
+    preview: AgentToolInputPreviewSchema,
   }),
   z.strictObject({
     op: z.literal('part.replace'),
