@@ -58,6 +58,7 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentSessionSnapshotSchema,
+  AgentSessionStatusSchema,
   AgentProtocolError,
   type AgentApprovalView,
   type AgentCapabilities,
@@ -70,6 +71,7 @@ import {
   type AgentMessageView,
   type AgentProtocol,
   type AgentSessionObservation,
+  type AgentSessionStatus,
   type AgentSessionView,
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
@@ -258,6 +260,8 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  private readonly sessionStatuses = new Map<string, AgentSessionStatus>();
+  private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
   private readonly initialAdmissions = new Set<AdmissionState>();
@@ -360,6 +364,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   protected override onDestroy(): void {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
+    this.sessionStatuses.clear();
+    this.sessionStatusListeners.clear();
     this.observingSessions.clear();
   }
 
@@ -375,6 +381,22 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   // ── Protocol operations ──
+
+  getSessionStatus(sessionId: string): AgentSessionStatus | null {
+    return this.sessionStatuses.get(sessionId) ?? null;
+  }
+
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void {
+    const listeners = this.sessionStatusListeners.get(sessionId) ?? new Set();
+    this.sessionStatusListeners.set(sessionId, listeners);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0 && this.sessionStatusListeners.get(sessionId) === listeners) {
+        this.sessionStatusListeners.delete(sessionId);
+      }
+    };
+  }
 
   async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
     const parsed = AgentStartSessionInputSchema.parse(input);
@@ -502,6 +524,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
       this.deletingSessions.delete(sessionId);
@@ -1246,6 +1269,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private publish(sessionId: string, event: AgentEvent): void {
+    if (event.type === 'turn.updated') {
+      this.updateSessionStatus(
+        sessionId,
+        AgentSessionStatusSchema.parse({ turnId: event.turn.id, status: event.turn.status }),
+      );
+    }
     const sessionListeners = this.listeners.get(sessionId);
     if (!sessionListeners || sessionListeners.size === 0) {
       return;
@@ -1258,6 +1287,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         listener(cloned);
       } catch (error) {
         logger.warn('Agent event listener threw', error as Error);
+      }
+    }
+  }
+
+  private updateSessionStatus(sessionId: string, status: AgentSessionStatus | null): void {
+    const previous = this.getSessionStatus(sessionId);
+    if (previous?.turnId === status?.turnId && previous?.status === status?.status) {
+      return;
+    }
+    if (status) {
+      this.sessionStatuses.set(sessionId, status);
+    } else {
+      this.sessionStatuses.delete(sessionId);
+    }
+    for (const listener of this.sessionStatusListeners.get(sessionId) ?? []) {
+      try {
+        listener();
+      } catch (error) {
+        logger.warn('Agent Session status listener threw', error as Error);
       }
     }
   }

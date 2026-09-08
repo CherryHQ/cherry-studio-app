@@ -384,6 +384,9 @@ Runtime identity.
 
 ```ts
 interface AgentProtocol {
+  getSessionStatus(sessionId: string): AgentSessionStatus | null
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void
+
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
   forkSession(input: {
@@ -426,7 +429,19 @@ type AgentSessionObservation = {
   snapshot: AgentSessionSnapshot
   unsubscribe(): void
 }
+
+type AgentSessionStatus = Readonly<{
+  turnId: string
+  status: AgentTurnView['status']
+}>
 ```
+
+`getSessionStatus` returns a stable, immutable snapshot of the latest turn run in the current Host
+generation, or `null` if there is none. `subscribeSessionStatus` notifies only when that snapshot
+changes; consumers subscribe and then read the snapshot. These in-process list observers do not
+load messages or open Runtime sessions. Terminal status remains available after chat observers
+unsubscribe, clears on Session deletion, and resets with the Host generation. Completion read
+receipts are frontend-owned, per turn, and live only for the app process, matching Desktop.
 
 `startSession` is the Draft-to-Session boundary. It performs the same write-free turn preparation
 as `submitMessage`, opens the Runtime, and then atomically creates the durable Session together with

@@ -9,6 +9,7 @@ import {
   AgentProtocolError,
   type AgentEvent,
   type AgentMessagePart,
+  type AgentSessionStatus,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
@@ -296,6 +297,59 @@ describe('MobileAgentHost', () => {
     });
     expect(JSON.stringify(records)).not.toContain('private input');
     expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
+  });
+
+  test('retains each latest turn without transcript observers and only notifies status changes', async () => {
+    const host = hostWithText(['First streamed answer', 'Second streamed answer']);
+    const session = await createStoredSession();
+    const otherSession = await createStoredSession();
+    const statuses: (AgentSessionStatus | null)[] = [];
+    const otherStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribe = host.subscribeSessionStatus(session.id, () => {
+      statuses.push(host.getSessionStatus(session.id));
+    });
+    const unsubscribeOther = host.subscribeSessionStatus(otherSession.id, () => {
+      otherStatuses.push(host.getSessionStatus(otherSession.id));
+    });
+    expect(host.getSessionStatus(session.id)).toBeNull();
+
+    const firstTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First question' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'first status');
+
+    expect(statuses).toEqual([
+      { status: 'running', turnId: firstTurn.turnId },
+      { status: 'completed', turnId: firstTurn.turnId },
+    ]);
+    expect(otherStatuses).toEqual([]);
+    expect(host.getSessionStatus(session.id)).toBe(statuses[1]);
+    expect(Object.isFrozen(host.getSessionStatus(session.id))).toBe(true);
+    unsubscribe();
+    unsubscribeOther();
+
+    const secondTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Another question while the list is unmounted' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'second status');
+
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: secondTurn.turnId,
+    });
+    expect(secondTurn.turnId).not.toBe(firstTurn.turnId);
+    expect(statuses).toHaveLength(2);
+
+    const deletedStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribeDeleted = host.subscribeSessionStatus(session.id, () => {
+      deletedStatuses.push(host.getSessionStatus(session.id));
+    });
+    await host.deleteSession({ sessionId: session.id });
+    expect(deletedStatuses).toEqual([null]);
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    unsubscribeDeleted();
   });
 
   test('creates the durable Session together with an admitted first submission', async () => {
@@ -1579,6 +1633,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'cancelling', 'cancelled']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'cancelled',
+      turnId: submitted.turnId,
+    });
     assertJsonRoundTrip(events);
 
     const transcript = await store.listMessages(session.id);
@@ -2073,6 +2131,10 @@ describe('MobileAgentHost', () => {
     // A snapshot taken now carries the live approval and turn state (invariant 8).
     const midStream = await host.observeSession(session.id, () => {});
     expect(midStream.snapshot.activeTurn?.status).toBe('awaiting-approval');
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'awaiting-approval',
+      turnId: submitted.turnId,
+    });
     expect(midStream.snapshot.pendingApprovals).toEqual([requested.approval]);
 
     // Wrong correlation fails closed (invariant 7).
@@ -2097,6 +2159,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'awaiting-approval', 'running', 'completed']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: submitted.turnId,
+    });
     expect(events.some((event) => event.type === 'approval.resolved')).toBe(true);
     assertJsonRoundTrip(events);
 

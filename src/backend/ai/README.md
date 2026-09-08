@@ -22,6 +22,8 @@ boundaries around it.
   (`@/shared/contracts/agent`) and the Runtime contract, plus Agent definition and protocol
   projection policy. The concrete Runtime enters through the composition root's `AgentRuntime`
   registration; the Host never constructs one.
+  It also retains a small status snapshot for each Session that runs in the current generation,
+  with status-only subscriptions for lists; transcript observation remains route-scoped.
 - `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound
   Runtime, without a persisted Session, history, or tools. Bootstrap injects it into the models
   workflow and records usage; only a closed failure category reaches the setup UI.

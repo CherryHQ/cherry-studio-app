@@ -9,7 +9,7 @@ import type {
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
-import type { AgentErrorView, AgentSessionView } from './views';
+import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
 
 /**
  * Protocol operation failure. The `view` is the JSON-safe protocol value; the
@@ -23,6 +23,11 @@ export class AgentProtocolError extends Error {
 }
 
 export interface AgentProtocol {
+  /** Stable, immutable snapshot; null until this generation runs a turn in the Session. */
+  getSessionStatus(sessionId: string): AgentSessionStatus | null;
+  /** Status-only observation: does not load or subscribe to the transcript. */
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
+
   renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 
