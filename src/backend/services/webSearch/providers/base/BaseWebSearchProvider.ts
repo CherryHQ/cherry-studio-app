@@ -1,7 +1,6 @@
 import type * as z from 'zod';
 
-import type { HttpHeaders } from '@/backend/services/http';
-import { HttpError } from '@/backend/services/http';
+import { HttpError, type HttpHeaders } from '@/backend/services/http';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types/webSearch';
 

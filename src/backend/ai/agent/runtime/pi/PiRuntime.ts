@@ -1,4 +1,5 @@
 import type {
+  AgentContext as PiAgentContext,
   AgentEvent as PiAgentEvent,
   AgentMessage as PiAgentMessage,
   AgentTool as PiAgentTool,
@@ -58,6 +59,7 @@ import {
   type PiMetaToolActivity,
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
+import { disablePiToolCalls } from './piToolChoice';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -111,10 +113,15 @@ export type PiRuntimeLimits = {
 };
 
 export const DEFAULT_PI_RUNTIME_LIMITS: PiRuntimeLimits = Object.freeze({
-  maxToolCalls: 16,
-  maxToolSteps: 8,
+  maxToolCalls: 64,
+  maxToolSteps: 20,
   turnTimeoutMs: 10 * 60 * 1000,
 });
+
+const TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS =
+  'The tool budget for this turn is exhausted. Tools are now unavailable. ' +
+  'Give your final answer using the information already collected. ' +
+  'Clearly state any remaining uncertainty or unfinished work; do not invent results or request more tools.';
 
 const TOOL_CALL_LIMIT_ERROR: RuntimeError = {
   code: 'tool_call_limit_exceeded',
@@ -227,6 +234,7 @@ type ActiveTurn = {
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
+  toolBudgetError?: RuntimeError;
   toolBindingsByProviderName: Map<string, PiToolBinding>;
   toolParts: Map<string, ToolPartBase>;
   tools: readonly RuntimeTool[];
@@ -717,12 +725,21 @@ class PiRuntimeSession implements AgentRuntimeSession {
               systemPrompt: `${baseConversation.systemPrompt}\n\n${PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT}`,
             }
           : baseConversation;
+      const hasAvailableTools = () => piTools.some((tool) => !turn.unavailableTools.has(tool.name));
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
       const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
         const stream = await resolution.streamFn(model, context, {
           ...options,
+          onPayload:
+            turn.toolBudgetError || (turn.unavailableTools.size > 0 && !hasAvailableTools())
+              ? async (payload, model) =>
+                  disablePiToolCalls(
+                    (await options?.onPayload?.(payload, model)) ?? payload,
+                    model.api,
+                  )
+              : options?.onPayload,
           signal: options?.signal
             ? AbortSignal.any([options.signal, turn.abortController.signal])
             : turn.abortController.signal,
@@ -781,13 +798,18 @@ class PiRuntimeSession implements AgentRuntimeSession {
         this.emit(turn, { type: 'context.checkpoint', checkpoint: contextPlan.checkpoint });
       }
       const outputReserveTokens = request.options.maxOutputTokens ?? resolution.model.maxTokens;
+      let modelContext: Pick<PiAgentContext, 'systemPrompt' | 'tools'> = {
+        systemPrompt: conversation.systemPrompt,
+        tools: piTools,
+      };
+      let responsePhase: 'tools' | 'final-response' | 'done' = 'tools';
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         turn.modelContextHeadroomTokens = estimatePiLoopContextHeadroomTokens({
           contextWindow: resolution.model.contextWindow,
           messages,
           outputReserveTokens,
-          systemPrompt: conversation.systemPrompt,
-          tools: piTools,
+          systemPrompt: modelContext.systemPrompt,
+          tools: modelContext.tools ?? [],
         });
       };
       updateModelContextHeadroom([...contextPlan.messages, conversation.prompt]);
@@ -802,28 +824,50 @@ class PiRuntimeSession implements AgentRuntimeSession {
           tools: piTools,
         },
         prepareNextTurnWithContext: ({ context, toolResults }) => {
+          if (responsePhase === 'final-response') {
+            responsePhase = 'done';
+            if (toolResults.length > 0) turn.limitError = turn.toolBudgetError;
+            return undefined;
+          }
+          if (toolResults.length === 0 || turn.phase !== 'running') return undefined;
+
+          turn.toolStepCount += 1;
+          if (turn.toolCallCount >= this.limits.maxToolCalls) {
+            turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+          } else if (turn.toolStepCount >= this.limits.maxToolSteps) {
+            turn.toolBudgetError ??= TOOL_STEP_LIMIT_ERROR;
+          }
+          const nextContext: PiAgentContext = {
+            ...context,
+            systemPrompt: turn.toolBudgetError
+              ? `${context.systemPrompt}\n\n${TOOL_BUDGET_FINAL_RESPONSE_INSTRUCTIONS}`
+              : context.systemPrompt,
+            // A tool-free answer still needs definitions for its tool history.
+            // streamFn disables selection; runtime guards reject further calls.
+            tools:
+              turn.toolBudgetError || !hasAvailableTools()
+                ? piTools
+                : context.tools?.filter((tool) => !turn.unavailableTools.has(tool.name)),
+          };
+          modelContext = nextContext;
           updateModelContextHeadroom(context.messages);
-          if (toolResults.length > 0 && turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
+          if (turn.modelContextHeadroomTokens < 0 && !turn.limitError) {
             turn.limitError = TOOL_LOOP_CONTEXT_ERROR;
           }
-          if (turn.unavailableTools.size > 0) {
-            return {
-              context: {
-                ...context,
-                tools: context.tools?.filter((tool) => !turn.unavailableTools.has(tool.name)),
-              },
-            };
+          if (turn.limitError) return undefined;
+
+          // Pi prepares the next context before asking whether to stop. Allow
+          // this one response, then stop even if the model asks for more tools.
+          if (turn.toolBudgetError) responsePhase = 'final-response';
+          if (turn.toolBudgetError || turn.unavailableTools.size > 0) {
+            return { context: nextContext };
           }
           return undefined;
         },
-        shouldStopAfterTurn: ({ toolResults }) => {
-          if (toolResults.length > 0) {
-            turn.toolStepCount += 1;
-            if (turn.toolStepCount >= this.limits.maxToolSteps && !turn.limitError) {
-              turn.limitError = TOOL_STEP_LIMIT_ERROR;
-            }
-          }
-          return turn.limitError !== undefined || turn.phase !== 'running';
+        shouldStopAfterTurn: () => {
+          return (
+            responsePhase === 'done' || turn.limitError !== undefined || turn.phase !== 'running'
+          );
         },
         streamFn,
         toolExecution: 'parallel',
@@ -887,7 +931,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         case 'pending':
           this.emit(turn, {
             type: 'failed',
-            error: {
+            error: turn.toolBudgetError ?? {
               code: 'runtime_error',
               message: `Pi ended with unsupported stop reason: ${terminal.stopReason}.`,
               retryable: false,
@@ -1050,12 +1094,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     turn.toolCallCount += 1;
-    if (turn.toolCallCount > this.limits.maxToolCalls) {
-      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
-      turn.limitError = TOOL_CALL_LIMIT_ERROR;
+    if (turn.toolBudgetError || turn.toolCallCount > this.limits.maxToolCalls) {
+      turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+      const output = createErrorToolResult(turn.toolBudgetError);
       this.replaceToolPart(turn, part, {
         state: 'error',
-        error: TOOL_CALL_LIMIT_ERROR,
+        error: turn.toolBudgetError,
         output,
       });
       turn.failedToolCalls.add(toolCallId);
@@ -1135,12 +1179,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     turn.toolCallCount += 1;
-    if (turn.toolCallCount > this.limits.maxToolCalls) {
-      const output = createErrorToolResult(TOOL_CALL_LIMIT_ERROR);
-      turn.limitError = TOOL_CALL_LIMIT_ERROR;
+    if (turn.toolBudgetError || turn.toolCallCount > this.limits.maxToolCalls) {
+      turn.toolBudgetError ??= TOOL_CALL_LIMIT_ERROR;
+      const output = createErrorToolResult(turn.toolBudgetError);
       this.replaceToolPart(turn, part, {
         state: 'error',
-        error: TOOL_CALL_LIMIT_ERROR,
+        error: turn.toolBudgetError,
         output,
       });
       turn.failedToolCalls.add(toolCallId);
