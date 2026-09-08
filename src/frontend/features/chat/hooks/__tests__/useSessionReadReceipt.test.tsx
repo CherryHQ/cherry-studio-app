@@ -28,7 +28,7 @@ function Probe() {
 }
 
 function changeAppState(state: AppStateStatus) {
-  jest.replaceProperty(AppState, 'currentState', state);
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: state });
   act(() => appStateListeners.forEach((listener) => listener(state)));
 }
 
@@ -36,7 +36,7 @@ beforeEach(() => {
   mockFocused = true;
   mockDrawerStatus = 'closed';
   mockMarkSeen = jest.fn();
-  jest.replaceProperty(AppState, 'currentState', 'active');
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
     appStateListeners.add(listener);
     return { remove: () => appStateListeners.delete(listener) };
@@ -62,7 +62,7 @@ test('acknowledges on opening the chat and when another reply completes while it
 });
 
 test('keeps background completions unread until the app returns and releases the listener on blur', () => {
-  jest.replaceProperty(AppState, 'currentState', 'background');
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
   act(() => {
     renderer = create(<Probe />);
   });
