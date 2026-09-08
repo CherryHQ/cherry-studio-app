@@ -10,7 +10,10 @@ surfaces.
   adapters.
 - The list header's plus action opens the create-Agent route.
 - Tapping a list row opens that Agent's editor.
-- The row context menu opens the editor or deletes the Agent — agents have no detail screen.
+- Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
+  across the mode change, so releasing the long press cannot open the editor or toggle it again.
+  The shared selection toolbar selects all current search results or confirms batch deletion;
+  back and Done exit selection. Changing the search clears selection. Agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
