@@ -8,6 +8,8 @@ const mockDataApiHandlers = { kind: 'handlers' };
 const mockAgent = { kind: 'agent' };
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
+const mockTraces = { kind: 'traces' };
+const mockEventTraces = { kind: 'event-traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockDiagnostics = { kind: 'diagnostics' };
@@ -71,6 +73,8 @@ const createRuntime = () =>
   createAppBootstrapRuntime({
     AgentRuntime: mockAgentRuntime,
     AiService: mockAi,
+    TraceStorageService: mockTraces,
+    AgentEventTraceRuntime: mockEventTraces,
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     DbService: mockDb,

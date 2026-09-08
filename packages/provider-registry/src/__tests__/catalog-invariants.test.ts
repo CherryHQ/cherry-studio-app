@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { canonOf, prefixHit } from '../../scripts/canonicalize';
 import { CREATORS } from '../creators';
-import { ModelListSchema } from '../schemas/model';
+import { type ImageGenerationSupport, ModelListSchema } from '../schemas/model';
 import { ProviderListSchema } from '../schemas/provider';
 import { ProviderModelListSchema } from '../schemas/provider-models';
 import { ReasoningWireProfileSchema } from '../schemas/reasoningWire';
@@ -30,6 +30,7 @@ const models = modelsRaw.models as Array<{
   inputModalities?: string[];
   outputModalities?: string[];
   ownedBy?: string;
+  imageGeneration?: ImageGenerationSupport;
 }>;
 const overrides = providerModelsRaw.overrides as Array<{
   providerId: string;
@@ -64,6 +65,53 @@ describe('catalog invariants (data/*.json)', () => {
       });
     },
   );
+
+  it('keeps smart aspect ratios and resolution controls for Nano Banana 2', () => {
+    const supports = models.find((model) => model.id === 'gemini-3-1-flash-image')?.imageGeneration
+      ?.modes.generate?.supports;
+
+    expect(supports?.aspectRatio).toEqual({
+      default: 'auto',
+      options: [
+        'auto',
+        'ASPECT_1_1',
+        'ASPECT_1_4',
+        'ASPECT_1_8',
+        'ASPECT_2_3',
+        'ASPECT_3_2',
+        'ASPECT_3_4',
+        'ASPECT_4_1',
+        'ASPECT_4_3',
+        'ASPECT_4_5',
+        'ASPECT_5_4',
+        'ASPECT_8_1',
+        'ASPECT_9_16',
+        'ASPECT_16_9',
+        'ASPECT_21_9',
+      ],
+      render: 'chips',
+      type: 'enum',
+    });
+    expect(supports?.imageResolution).toEqual({
+      default: 'auto',
+      options: ['auto', '1K', '2K', '4K'],
+      render: 'chips',
+      type: 'enum',
+    });
+  });
+
+  it('keeps fractional guidance scale controls for Kolors', () => {
+    const supports = models.find((model) => model.id === 'kolors')?.imageGeneration?.modes.generate
+      ?.supports;
+
+    expect(supports?.guidanceScale).toEqual({
+      default: 4.5,
+      max: 20,
+      min: 1,
+      step: 0.1,
+      type: 'range',
+    });
+  });
 
   it('base model ids are unique', () => {
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);

@@ -4,6 +4,8 @@ import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
+import type { TraceRecorder } from '../../observability';
+import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -115,7 +117,7 @@ function makeClient(tools: ListToolsResult['tools']): FakeClient {
   return client;
 }
 
-function makeService(servers: McpServer[]) {
+function makeService(servers: McpServer[], traces?: TraceRecorder) {
   const getById = jest.spyOn(mcpServerService, 'getById').mockImplementation(async (id) => {
     const found = servers.find((server) => server.id === id);
     if (!found) throw DataApiErrorFactory.notFound('McpServer', id);
@@ -124,7 +126,7 @@ function makeService(servers: McpServer[]) {
   jest
     .spyOn(mcpServerService, 'list')
     .mockImplementation(async () => ({ items: servers, total: servers.length }) as never);
-  return { getById, service: new McpRuntimeService() };
+  return { getById, service: new McpRuntimeService(traces) };
 }
 
 beforeEach(() => {
@@ -173,9 +175,10 @@ describe('getServerInfo', () => {
     jest.useFakeTimers({ doNotFake: ['setImmediate'] });
     try {
       const connection = deferred<FakeClient>();
+      const { traces, records } = createTraceRecorder();
       const client = makeClient(makeRawTools(['a']));
       mockCreateMCPClient.mockReturnValue(connection.promise);
-      const { service } = makeService([]);
+      const { service } = makeService([], traces);
 
       const request = service.getServerInfo({ endpointUrl: 'https://x.example/mcp' });
       const assertion = expect(request).rejects.toThrow('MCP server info timed out after 15000ms');
@@ -185,6 +188,16 @@ describe('getServerInfo', () => {
       connection.resolve(client);
       await flush();
       expect(client.close).toHaveBeenCalled();
+      expect(records.filter((record) => record.revision === 2)).toEqual([
+        expect.objectContaining({
+          name: 'mcp.connect',
+          status: 'error',
+          attributes: expect.objectContaining({
+            'error.category': 'timeout',
+          }),
+        }),
+      ]);
+      expect(JSON.stringify(records)).not.toContain('x.example');
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
@@ -193,6 +206,34 @@ describe('getServerInfo', () => {
 });
 
 describe('listTools', () => {
+  it('retains connection failures even when tool preparation never admits a conversation turn', async () => {
+    const { traces, records } = createTraceRecorder();
+    const failure = Object.assign(new Error('private endpoint and credential'), {
+      statusCode: 401,
+    });
+    mockCreateMCPClient.mockRejectedValue(failure);
+    const server = makeServer();
+    const { service } = makeService([server], traces);
+
+    await expect(service.listExecutableToolDescriptors(server.id)).rejects.toMatchObject({
+      code: 'mcp_tool_unavailable',
+    });
+    const failures = records.filter((record) => record.revision === 2);
+    expect(failures).toHaveLength(2);
+    for (const record of failures) {
+      expect(record).toMatchObject({
+        name: 'mcp.connect',
+        status: 'error',
+        attributes: {
+          'mcp.server.id': server.id,
+          'http.status_code': 401,
+          'error.category': 'http',
+        },
+      });
+    }
+    expect(JSON.stringify(records)).not.toMatch(/private|a\.example|credential/);
+  });
+
   it('rejects a non-http endpoint before opening a connection', async () => {
     const server = makeServer({ endpointUrl: 'ftp://a.example/mcp' });
     const { service } = makeService([server]);
@@ -213,18 +254,33 @@ describe('listTools', () => {
   });
 
   it('reconnects once when a pooled client has gone stale', async () => {
+    const { traces, records } = createTraceRecorder();
     const stale = makeClient(makeRawTools(['search']));
-    stale.listTools.mockRejectedValue(new Error('session expired'));
+    stale.listTools.mockRejectedValue(
+      Object.assign(new Error('session expired'), { statusCode: 503 }),
+    );
     const fresh = makeClient(makeRawTools(['search']));
     mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(fresh);
     const server = makeServer();
-    const { service } = makeService([server]);
+    const { service } = makeService([server], traces);
 
     await expect(service.listTools(server.id)).resolves.toEqual([
       { description: 'desc search', name: 'search' },
     ]);
     expect(stale.close).toHaveBeenCalled();
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
+    expect(
+      records.filter((record) => record.revision === 2).map(({ name, status }) => [name, status]),
+    ).toEqual([
+      ['mcp.connect', 'ok'],
+      ['mcp.list_tools', 'error'],
+      ['mcp.connect', 'ok'],
+      ['mcp.list_tools', 'ok'],
+    ]);
+    expect(
+      records.find((record) => record.status === 'error')?.attributes['http.status_code'],
+    ).toBe(503);
+    expect(JSON.stringify(records)).not.toContain('session expired');
   });
 
   it('loads every tools/list page and records the complete count', async () => {
@@ -481,6 +537,7 @@ describe('runtime lifecycle', () => {
   });
 
   it('invalidates an in-flight listing and permits a replacement', async () => {
+    const { traces, records } = createTraceRecorder();
     const stalled = makeClient(makeRawTools(['old']));
     stalled.listTools.mockImplementation((args?: { options?: { signal?: AbortSignal } }) =>
       abortable(new Promise(() => undefined), args?.options?.signal, 'Request was aborted'),
@@ -488,7 +545,7 @@ describe('runtime lifecycle', () => {
     const replacement = makeClient(makeRawTools(['new']));
     mockCreateMCPClient.mockResolvedValueOnce(stalled).mockResolvedValue(replacement);
     const server = makeServer();
-    const { service } = makeService([server]);
+    const { service } = makeService([server], traces);
 
     const first = service.listTools(server.id);
     const firstAssertion = expect(first).rejects.toThrow('was invalidated');
@@ -500,6 +557,11 @@ describe('runtime lifecycle', () => {
       { description: 'desc new', name: 'new' },
     ]);
     expect(stalled.close).toHaveBeenCalled();
+    expect(
+      records
+        .filter((record) => record.name === 'mcp.list_tools' && record.revision === 2)
+        .map((record) => record.status),
+    ).toEqual(['cancelled', 'ok']);
   });
 
   it('closes pooled clients and clears retained snapshots on stop', async () => {

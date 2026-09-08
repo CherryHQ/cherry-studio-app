@@ -1,5 +1,6 @@
 import type { RuntimeJsonValue } from '@/backend/ai/agent';
 
+import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import {
   createMcpProviderName,
   createMcpRuntimeTools,
@@ -123,9 +124,11 @@ describe('MCP Runtime adapter', () => {
   });
 
   it('propagates cancellation and discards a late result', async () => {
+    const { traces, records } = createTraceRecorder();
     let resolveInvocation!: (value: unknown) => void;
     let invocationSignal: AbortSignal | undefined;
     const capability = {
+      traces,
       invoke: jest.fn(
         (
           _ref: Parameters<McpToolInvocationCapability['invoke']>[0],
@@ -153,12 +156,24 @@ describe('MCP Runtime adapter', () => {
     expect(invocationSignal?.aborted).toBe(true);
     resolveInvocation({ content: [{ text: 'late', type: 'text' }] });
     await Promise.resolve();
+    expect(records.filter((record) => record.revision === 2)).toEqual([
+      expect.objectContaining({
+        name: 'mcp.call_tool',
+        status: 'cancelled',
+        attributes: expect.objectContaining({
+          'error.category': 'cancelled',
+          'tool.call.id': 'call-1',
+        }),
+      }),
+    ]);
   });
 
   it('terminates a stalled call at the fixed timeout', async () => {
     jest.useFakeTimers();
     try {
+      const { traces, records } = createTraceRecorder();
       const capability = {
+        traces,
         invoke: jest.fn(() => new Promise(() => undefined)),
       } satisfies McpToolInvocationCapability;
       const execution = createTool(capability).execute({
@@ -172,37 +187,88 @@ describe('MCP Runtime adapter', () => {
         code: 'mcp_tool_timeout',
         retryable: true,
       });
+      expect(records.at(-1)).toMatchObject({
+        status: 'error',
+        attributes: {
+          'error.category': 'timeout',
+        },
+      });
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
     }
   });
 
-  it('redacts native invocation failures into a stable error', async () => {
-    const capability = {
-      invoke: jest.fn(async () => {
-        throw new Error(
-          'POST https://private.example/mcp Authorization: Bearer secret-token\n at nativeCall',
-        );
+  it.each([
+    ['http', { statusCode: 401 }, { 'http.status_code': 401 }],
+    ['protocol', { code: -32602 }, { 'error.code': -32602 }],
+  ] as const)(
+    'retains safe %s facts while redacting the error returned to callers',
+    async (category, facts, attributes) => {
+      const { traces, records } = createTraceRecorder();
+      const capability = {
+        traces,
+        invoke: jest.fn(async () => {
+          throw Object.assign(
+            new Error(
+              'POST https://private.example/mcp Authorization: Bearer secret-token\n at nativeCall',
+            ),
+            facts,
+          );
+        }),
+      };
+
+      const error = await createTool(capability)
+        .execute({
+          input: { query: 'cherry' },
+          signal: new AbortController().signal,
+          toolCallId: 'call-1',
+        })
+        .catch((failure: unknown) => failure);
+
+      expect(error).toMatchObject({
+        code: 'mcp_tool_call_failed',
+        message: 'The MCP tool call failed.',
+        retryable: true,
+        stack: undefined,
+      });
+      expect(JSON.stringify(error)).not.toContain('private.example');
+      expect(JSON.stringify(error)).not.toContain('secret-token');
+      expect(records.at(-1)).toMatchObject({
+        name: 'mcp.call_tool',
+        status: 'error',
+        attributes: {
+          ...attributes,
+          'error.category': category,
+          'tool.call.id': 'call-1',
+        },
+      });
+      expect(JSON.stringify(records)).not.toMatch(
+        /private\.example|secret-token|nativeCall|cherry/,
+      );
+    },
+  );
+
+  it('records a tool-reported failure even when the result preview is truncated', async () => {
+    const { traces, records } = createTraceRecorder();
+    const tool = createTool({
+      traces,
+      invoke: async () => ({
+        isError: true,
+        content: [{ type: 'text', text: 'private'.repeat(MCP_TOOL_RESULT_MAX_BYTES) }],
       }),
-    };
-
-    const error = await createTool(capability)
-      .execute({
-        input: { query: 'cherry' },
-        signal: new AbortController().signal,
-        toolCallId: 'call-1',
-      })
-      .catch((failure: unknown) => failure);
-
-    expect(error).toMatchObject({
-      code: 'mcp_tool_call_failed',
-      message: 'The MCP tool call failed.',
-      retryable: true,
-      stack: undefined,
     });
-    expect(JSON.stringify(error)).not.toContain('private.example');
-    expect(JSON.stringify(error)).not.toContain('secret-token');
+    const result = await tool.execute({
+      input: { query: 'private query' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+    });
+    expect(result.value).toMatchObject({ truncated: true });
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: { 'error.category': 'tool_result' },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
   });
 
   const remotePayloads: RuntimeJsonValue[] = [

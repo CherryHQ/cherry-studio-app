@@ -4,14 +4,15 @@ import { PiRuntimeService } from '@/backend/ai/agent/runtime/pi/PiRuntimeService
 import { SqliteAgentSessionStore } from '@/backend/ai/agent/sessionStore/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
+import { TraceStorageService } from '@/backend/ai/observability/TraceStorageService';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
+import { AgentEventTraceRuntime } from '@/backend/services/diagnostics/AgentEventTraceRuntime';
 import { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
-import { TraceStorageService } from '@/backend/services/diagnostics/TraceStorageService';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -42,7 +43,7 @@ export const services = {
   DbService,
   DiagnosticBundleService,
   PreferenceService,
-  TraceStorageService,
+  AgentEventTraceRuntime,
   BackgroundActivityEnvironment,
   KeepAliveCoordinator,
   BackgroundActivityManager,
@@ -50,6 +51,7 @@ export const services = {
   WebSearchService,
   ProviderRegistryUpdaterService,
   McpRuntimeService,
+  TraceStorageService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

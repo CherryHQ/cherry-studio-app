@@ -226,7 +226,8 @@ dismissal, then scrolls to the live edge after the keyboard inset clears. A data
 committed drag during dismissal cancels that pending scroll.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
-horizontally scrollable attachment strip sits above the optional bubble. This is a presentation
+wrapping attachment group sits above the optional bubble, keeping every card inside the user
+column without clipping or horizontal gestures. This is a presentation
 projection only; files remain parts of the same message for model input, persistence, references,
 and stable render identity.
 

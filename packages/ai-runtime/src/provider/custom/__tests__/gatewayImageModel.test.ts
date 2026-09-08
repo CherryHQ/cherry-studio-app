@@ -1,6 +1,10 @@
 import type { ImageModelV3CallOptions, LanguageModelV3 } from '@ai-sdk/provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { splitParamValues } from '../../../utils/imageOptions';
+import { buildVendorProviderOptions } from '../wire/buildImageRequest';
+import { DEFAULT_DIFFUSION_REGISTRATION } from '../wire/wireProfile';
+
 const baseImageModel = vi.fn();
 const languageModel = vi.fn();
 
@@ -89,7 +93,59 @@ describe('createGatewayGeminiImageModel', () => {
     });
   });
 
-  it('preserves other provider options and deep-merges existing imageConfig', async () => {
+  it.each(['1K', '2K', '4K'])(
+    'sends the selected %s resolution to Google while preserving Gateway routing',
+    async (imageResolution) => {
+      const doGenerate = vi.fn().mockResolvedValue({
+        content: [{ type: 'file', mediaType: 'image/png', data: 'IMG' }],
+        finishReason: 'stop',
+        usage: {},
+        response: { headers: {} },
+      });
+      const model = createGatewayGeminiImageModel(
+        fakeLanguageModel(doGenerate),
+        'google/gemini-3.1-flash-image',
+      );
+      const paramValues = { imageResolution };
+      const { vendorBag } = splitParamValues(paramValues);
+      const providerOptions = buildVendorProviderOptions(
+        'gateway',
+        paramValues,
+        DEFAULT_DIFFUSION_REGISTRATION,
+        vendorBag,
+      );
+      providerOptions.gateway.only = ['google'];
+
+      await model.doGenerate(callOptions({ providerOptions }));
+
+      const sent = doGenerate.mock.calls[0][0];
+      expect(sent.providerOptions.gateway).toEqual({ only: ['google'] });
+      expect(sent.providerOptions.google.imageConfig).toEqual({ imageSize: imageResolution });
+    },
+  );
+
+  it('omits automatic resolution from both Google and Gateway options', async () => {
+    const doGenerate = vi.fn().mockResolvedValue({
+      content: [{ type: 'file', mediaType: 'image/png', data: 'IMG' }],
+      finishReason: 'stop',
+      usage: {},
+      response: { headers: {} },
+    });
+    const model = createGatewayGeminiImageModel(
+      fakeLanguageModel(doGenerate),
+      'google/gemini-3.1-flash-image',
+    );
+
+    await model.doGenerate(
+      callOptions({ providerOptions: { gateway: { imageResolution: 'auto' } } }),
+    );
+
+    expect(doGenerate.mock.calls[0][0].providerOptions).toEqual({
+      google: { responseModalities: ['IMAGE'] },
+    });
+  });
+
+  it('preserves explicit Google imageSize over the inherited Gateway resolution', async () => {
     const doGenerate = vi.fn().mockResolvedValue({
       content: [{ type: 'file', mediaType: 'image/png', data: 'IMG' }],
       finishReason: 'stop',
@@ -105,7 +161,7 @@ describe('createGatewayGeminiImageModel', () => {
       callOptions({
         aspectRatio: '16:9',
         providerOptions: {
-          gateway: { only: ['google'] },
+          gateway: { imageResolution: '4K', only: ['google'] },
           google: { imageConfig: { imageSize: '2K' } },
         },
       }),

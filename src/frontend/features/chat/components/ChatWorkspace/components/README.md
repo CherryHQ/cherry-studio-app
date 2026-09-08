@@ -45,7 +45,8 @@ shows the relative input/output counts only when both are known and their sum is
 performance, and message metadata follow as separate typographic groups, using theme tokens and
 scalable text. Missing counts stay unavailable and a measured zero remains visible.
 
-The usage button uses CherryUI's release-time press action under the existing message context menu.
-Scrolling, a committed long press, and system cancellation must cancel that tap; accessibility
+Message rows do not register a long-press copy menu. Copy is an explicit assistant toolbar action.
+The usage button uses CherryUI's release-time press action.
+Scrolling and system cancellation must cancel that tap; accessibility
 activation opens the same detail. The maintained sheet owns scrolling and dismissal. No feature-local
 gesture recognizer is added.

@@ -13,12 +13,13 @@ import { getLocales } from 'expo-localization';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import type { TraceStorageService } from '@/backend/services/diagnostics/TraceStorageService';
+import type { AgentEventTraceRuntime } from '@/backend/services/diagnostics/AgentEventTraceRuntime';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { AgentEvent } from '@/shared/contracts/agent';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
@@ -47,6 +48,7 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentH
   'McpRuntimeService',
   'WebSearchService',
   'TraceStorageService',
+  'AgentEventTraceRuntime',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   readonly files = managedFileResolver;
@@ -60,7 +62,8 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly preferenceService: PreferenceService,
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
-    private readonly traces: TraceStorageService,
+    readonly traces: TraceRecorder,
+    private readonly eventTraces: AgentEventTraceRuntime,
   ) {
     super();
     this.runtimeTools = createAgentRuntimeToolResolver({
@@ -88,7 +91,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   }
 
   recordTrace(sessionId: string, event: AgentEvent): void {
-    this.traces.record(sessionId, event);
+    this.eventTraces.record(sessionId, event);
   }
 
   appLanguage(): LanguageVarious {

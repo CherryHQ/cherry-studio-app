@@ -10,7 +10,7 @@ type UserMessageAttachmentsProps = {
 /** Attached files sit above the user's bubble. */
 export function UserMessageAttachments({ attachments }: UserMessageAttachmentsProps) {
   return (
-    <View className="max-w-full self-end">
+    <View className="w-full self-end">
       <MessageFileStrip parts={attachments.map(({ part }) => part)} />
     </View>
   );

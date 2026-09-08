@@ -9,11 +9,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.cherry-ai.cherry-studio-app",
+      "bundleIdentifier": "com.cherryai.cherrystudio-app",
       "appleTeamId": "87242QY66T",
       "entitlements": {
         "com.apple.developer.healthkit": true,
-        "com.apple.security.application-groups": ["group.com.cherry-ai.cherry-studio-app"]
+        "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add and update calendar events when you ask the assistant.",
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F65D5D"
       },
-      "package": "com.cherry_ai.cherry_studio_app",
+      "package": "com.cherryai.cherrystudio_app",
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -148,11 +148,9 @@
               "appExtensions": [
                 {
                   "targetName": "ExpoWidgetsTarget",
-                  "bundleIdentifier": "com.cherry-ai.cherry-studio-app.ExpoWidgetsTarget",
+                  "bundleIdentifier": "com.cherryai.cherrystudio-app.ExpoWidgetsTarget",
                   "entitlements": {
-                    "com.apple.security.application-groups": [
-                      "group.com.cherry-ai.cherry-studio-app"
-                    ]
+                    "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
                   }
                 }
               ]

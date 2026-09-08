@@ -14,7 +14,7 @@ import {
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,7 +28,6 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerInitialAttachment,
@@ -72,9 +71,9 @@ export function DrawingList() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
-  const { isEditing, selectedIds } = useSelectionState();
+  const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
   const pendingDeletionIds = usePendingDeletionIds('drawings');
-  const { toggleId } = useSelectionActions();
+  const { enterEditing, toggleId } = useSelectionActions();
   const selectionSource = usePaintingSelectionSource(isEditing);
   useRegisterSelectionSource('drawings', selectionSource);
   const bottomInset = useListBottomInset();
@@ -93,6 +92,16 @@ export function DrawingList() {
         ? gallery.items
         : gallery.items.filter((item) => !pendingDeletionIds.has(item.painting.id)),
     [gallery.items, pendingDeletionIds],
+  );
+  const handleStartSelection = useCallback(
+    (paintingId: string) => {
+      if (isEditing || isDeletionPending) {
+        return;
+      }
+      enterEditing();
+      toggleId(paintingId);
+    },
+    [enterEditing, isDeletionPending, isEditing, toggleId],
   );
 
   const openPainting = useCallback(
@@ -187,11 +196,12 @@ export function DrawingList() {
   const listExtraData = useMemo<DrawingListExtraData>(
     () => ({
       isEditing,
+      onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
       width: columnWidth,
     }),
-    [columnWidth, isEditing, selectedIds, toggleId],
+    [columnWidth, handleStartSelection, isEditing, selectedIds, toggleId],
   );
   const listHeader = useMemo(
     () => (
@@ -294,6 +304,7 @@ export function DrawingList() {
 
 type DrawingListExtraData = {
   isEditing: boolean;
+  onStartSelection: (paintingId: string) => void;
   onToggle: (paintingId: string) => void;
   selectedIds: ReadonlySet<string>;
   width: number;
@@ -317,6 +328,7 @@ function renderDrawingGridItem({ extraData, item }: ListRenderItemInfo<PaintingG
         isEditing={listData.isEditing}
         isSelected={listData.selectedIds.has(item.painting.id)}
         item={item}
+        onStartSelection={listData.onStartSelection}
         onToggle={listData.onToggle}
         width={listData.width}
       />
@@ -430,6 +442,7 @@ type DrawingGridItemProps = {
   isEditing: boolean;
   isSelected: boolean;
   item: PaintingGalleryItem;
+  onStartSelection: (paintingId: string) => void;
   onToggle: (paintingId: string) => void;
   width: number;
 };
@@ -439,10 +452,12 @@ function DrawingGridItem({
   isEditing,
   isSelected,
   item,
+  onStartSelection,
   onToggle,
   width,
 }: DrawingGridItemProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const statusLabel =
     item.kind === 'generating'
       ? t('painting.status.generating')
@@ -476,20 +491,42 @@ function DrawingGridItem({
       ? 'active:opacity-75'
       : 'overflow-hidden rounded-md bg-secondary active:opacity-75';
 
-  // A Link navigates on tap regardless of onPress, so editing mode must drop
-  // the link wrapper entirely to turn taps into selection.
-  if (isEditing) {
-    return (
-      <Pressable
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isSelected }}
-        className={surfaceClassName}
-        onPress={() => onToggle(item.painting.id)}
-        style={{ height }}
-        testID={`painting-history-${item.key}`}
-      >
-        {content}
+  // Keep one press target across the mode change. Pressable cancels its tap
+  // after a long press and yields to the list when scrolling takes over.
+  // Retaining onLongPress in selection mode preserves that cancellation on release.
+  return (
+    <Pressable
+      accessibilityActions={
+        isEditing ? undefined : [{ name: 'longpress', label: t('painting.selection.start') }]
+      }
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={isEditing ? 'checkbox' : 'button'}
+      accessibilityState={isEditing ? { checked: isSelected } : undefined}
+      className={surfaceClassName}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') {
+          onStartSelection(item.painting.id);
+        }
+      }}
+      onLongPress={() => onStartSelection(item.painting.id)}
+      onPress={() => {
+        if (isEditing) {
+          onToggle(item.painting.id);
+        } else if (item.kind === 'output') {
+          router.push({
+            pathname: '/paintings/[paintingId]',
+            params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
+          });
+        } else {
+          // Receipts without images reopen the composer for progress or retry.
+          router.push({ pathname: '/paintings', params: { paintingId: item.painting.id } });
+        }
+      }}
+      style={{ height }}
+      testID={`painting-history-${item.key}`}
+    >
+      {content}
+      {isEditing ? (
         <Animated.View
           className="absolute top-1.5 right-1.5"
           entering={FadeIn.duration(160)}
@@ -497,38 +534,8 @@ function DrawingGridItem({
         >
           <SelectionIndicator selected={isSelected} variant="overlay" />
         </Animated.View>
-      </Pressable>
-    );
-  }
-
-  const tile = (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      className={surfaceClassName}
-      style={{ height }}
-      testID={`painting-history-${item.key}`}
-    >
-      {content}
+      ) : null}
     </Pressable>
-  );
-
-  // A receipt without images has nothing for the viewer to zoom into: tapping
-  // it goes back to the composer, which is where its progress — or its retry —
-  // lives.
-  return item.kind === 'output' ? (
-    <ArtifactPreviewLink
-      href={{
-        pathname: '/paintings/[paintingId]',
-        params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
-      }}
-    >
-      {tile}
-    </ArtifactPreviewLink>
-  ) : (
-    <Link asChild href={{ pathname: '/paintings', params: { paintingId: item.painting.id } }}>
-      {tile}
-    </Link>
   );
 }
 

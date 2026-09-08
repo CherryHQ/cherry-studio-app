@@ -39,12 +39,16 @@ development rejection-reporting callbacks are preserved. Explicit bootstrap fail
 Pi provider failures are recorded with their original diagnostics and response details before
 the runtime converts them to the existing public error contract.
 
-`TraceStorageService` reads `app.developer_mode.enabled` once at startup. It persists actual
+`AgentEventTraceRuntime` reads `app.developer_mode.enabled` once at startup. It persists actual
 Mobile Agent events in Desktop's span envelope, including the complete event attribute, even
 when no chat screen subscribes. These are mobile Agent observations, not Desktop provider or
 Claude Code OTLP spans. There is no reconstruction of historical traces during export. The
 initial mobile producer stores daily event files; Desktop's per-container trace rewriting and
 viewer are not mobile capabilities.
+
+The AI layer's `TraceStorageService` separately captures model and MCP request metadata under
+`Runtime/trace/v1`. Both owners are registered independently; this bundle's `traces/` selection
+continues to collect Agent event files under `Diagnostics/traces`.
 
 `modules/diagnostics` supplies file identity, SHA-256, signing, native crash inventory sources,
 document export, and file-backed upload. Expo's current FormData implementation materializes

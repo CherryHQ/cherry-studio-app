@@ -8,10 +8,10 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { appendBytes, diagnosticDirectory, serializeDiagnosticRecord } from './diagnosticFiles';
 
-@Injectable('TraceStorageService')
+@Injectable('AgentEventTraceRuntime')
 @ServicePhase(Phase.PostReady)
 @DependsOn(['PreferenceService'])
-export class TraceStorageService extends BaseService {
+export class AgentEventTraceRuntime extends BaseService {
   private enabled = false;
 
   constructor(private readonly preference: PreferenceService) {
@@ -66,7 +66,7 @@ export class TraceStorageService extends BaseService {
       );
     } catch (error) {
       loggerService
-        .withContext('TraceStorageService')
+        .withContext('AgentEventTraceRuntime')
         .warn('Failed to persist Agent trace', { error });
     }
   }

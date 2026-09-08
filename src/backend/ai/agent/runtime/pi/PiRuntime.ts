@@ -62,6 +62,7 @@ import {
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
+import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -810,7 +811,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
-      const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
+      const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const stream = await resolution.streamFn(model, context, {
           ...options,
           onPayload:
@@ -833,6 +834,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         );
         return stream;
       };
+      const streamFn = tracePiStream(providerStream, request.trace);
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           const response = this.contextOptions.completeSimple
