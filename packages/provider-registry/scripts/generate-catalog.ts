@@ -8,6 +8,7 @@
  *     OPENROUTER_IMAGE_CACHE=/tmp/or-images.json \
  *     tsx scripts/generate-catalog.ts            # dry run (prints summary)
  *     tsx scripts/generate-catalog.ts --write    # write both JSON files
+ *     tsx scripts/generate-catalog.ts --write --model=kolors # update only this base model
  *     tsx scripts/generate-catalog.ts --report   # also dump /tmp/gen-*.txt review files
  */
 import { createHash } from 'node:crypto';
@@ -31,6 +32,7 @@ import { ReasoningFamilyRuleSchema } from '../src/schemas/model';
 import { stripHostReprefix } from '../src/utils/normalize';
 import { deriveLegacyReasoningFields } from '../src/utils/reasoningControls';
 import { canonOf, prefixHit } from './canonicalize';
+import { mergeSelectedModels } from './merge-selected-models';
 import {
   type CherryMeta,
   finalizeMeta,
@@ -57,6 +59,9 @@ const REASONING_FAMILIES_GEN_PATH = path.join(
 const WRITE = process.argv.includes('--write');
 const REPORT = process.argv.includes('--report');
 const PROVIDERS_ONLY = process.argv.includes('--providers-only');
+const SELECTED_MODEL_IDS = process.argv
+  .filter((argument) => argument.startsWith('--model='))
+  .map((argument) => argument.slice('--model='.length));
 // Each artifact's `version` is a hash of its own (version-less, key-sorted) content: equal content ⇒
 // equal version, ANY content change ⇒ new version. Seeders (`PresetProviderSeeder` via `SeedRunner`)
 // skip when the journal version matches, so a date stamp would let a same-day regeneration change
@@ -146,6 +151,7 @@ const sortKeys = (v: any): any =>
 
 /** Load an upstream source (cache file or live URL) and validate its top-level shape with zod. */
 async function load<T>(env: string, url: string, schema: ZodType<T>): Promise<T> {
+  // eslint-disable-next-line expo/no-dynamic-env-var -- This Node generator reads cache paths at runtime.
   const cache = process.env[env];
   let raw: unknown;
   if (cache) {
@@ -533,6 +539,9 @@ function buildProviderModels(
 }
 
 void (async () => {
+  if (SELECTED_MODEL_IDS.length > 0 && PROVIDERS_ONLY) {
+    throw new Error('--model cannot be combined with --providers-only');
+  }
   if (PROVIDERS_ONLY) {
     const providers = buildProviders();
     if (!WRITE) {
@@ -586,7 +595,15 @@ void (async () => {
     return;
   }
 
-  const list = [...models.values()]
+  const modelsToWrite =
+    SELECTED_MODEL_IDS.length > 0
+      ? mergeSelectedModels(
+          JSON.parse(fs.readFileSync(MODELS_PATH, 'utf8')).models,
+          [...models.values()],
+          SELECTED_MODEL_IDS,
+        )
+      : [...models.values()];
+  const list = modelsToWrite
     .sort((a, b) => {
       const aKey = `${a.ownedBy ?? ''}\0${a.id}`;
       const bKey = `${b.ownedBy ?? ''}\0${b.id}`;
@@ -598,6 +615,8 @@ void (async () => {
     });
   fs.writeFileSync(MODELS_PATH, stampAndSerialize({ models: list }));
   console.log(`\nWROTE ${MODELS_PATH} (${list.length} models).`);
+
+  if (SELECTED_MODEL_IDS.length > 0) return;
 
   const providers = buildProviders();
   fs.writeFileSync(PROVIDERS_PATH, stampAndSerialize({ providers }));
