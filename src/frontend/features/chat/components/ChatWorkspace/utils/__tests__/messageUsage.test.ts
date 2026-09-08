@@ -54,45 +54,21 @@ describe('messageUsage', () => {
   test('distinguishes unknown usage from a measured zero without adding cache or reasoning twice', () => {
     expect(getMessageTokenUsage(undefined).totalTokens).toBeUndefined();
     expect(getMessageTokenUsage({ inputTokens: 100 }).totalTokens).toBeUndefined();
-    expect(getMessageTokenUsage({ inputTokens: 0, outputTokens: 0 }).totalTokens).toBe(0);
     expect(
-      getMessageTokenUsage({ inputTokens: 100, outputTokens: 20, totalTokens: 0 }).totalTokens,
-    ).toBe(120);
-    const detail = getMessageUsageDetails(undefined, [
-      record({ cacheReadTokens: 60, reasoningTokens: 10 }),
-    ]);
+      getMessageTokenUsage({ inputTokens: 0, outputTokens: 0, totalTokens: 0 }).totalTokens,
+    ).toBe(0);
+    const detail = getMessageUsageDetails(
+      {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        inputTokenDetails: { cacheReadTokens: 60 },
+        outputTokenDetails: { reasoningTokens: 10 },
+      },
+      [],
+    );
     expect(detail).toMatchObject({ totalTokens: 120, cacheReadTokens: 60, reasoningTokens: 10 });
     expect(detail.noCacheTokens).toBeUndefined();
-  });
-
-  test('retains reported token details when another provider omits that field', () => {
-    const detail = getMessageUsageDetails(undefined, [record({ cacheReadTokens: 40 }), record()]);
-    expect(detail.totalTokens).toBe(240);
-    expect(detail.cacheReadTokens).toBe(40);
-    expect(detail.reasoningTokens).toBeUndefined();
-  });
-
-  test('includes image costs without losing language tokens and derives missing totals per call', () => {
-    const detail = getMessageUsageDetails(undefined, [
-      record({ totalTokens: 500 }),
-      record({ totalTokens: null }),
-      record({
-        modality: 'image',
-        inputTokens: null,
-        outputTokens: null,
-        totalTokens: null,
-        cost: 1,
-        costCurrency: 'CNY',
-        costSource: 'provider',
-      }),
-    ]);
-    expect(detail).toMatchObject({
-      inputTokens: 200,
-      outputTokens: 40,
-      totalTokens: 620,
-      requestCount: 3,
-    });
-    expect(detail.costs).toMatchObject([{ amount: 1, currency: 'CNY' }]);
   });
 
   test('uses the persisted message aggregate without filling it from another ledger snapshot', () => {
@@ -125,46 +101,12 @@ describe('messageUsage', () => {
     expect(detail.cacheReadTokens).toBeUndefined();
   });
 
-  test('identifies historical request estimates without counting a message as one new invocation', () => {
-    const detail = getMessageUsageDetails(undefined, [
-      record({ recordKind: 'legacy-aggregate', requestCount: 2 }),
-      record(),
-    ]);
-    expect(detail).toMatchObject({ requestCount: 3, estimatedRequestCount: 2 });
-    expect(getMessageUsageDetails(undefined, []).requestCount).toBeUndefined();
-  });
-
   test('does not use an image call as the first language-token measurement', () => {
     const detail = getMessageUsageDetails(undefined, [
       record({ modality: 'image', timeFirstTokenMs: 2 }),
       record({ timeFirstTokenMs: 90 }),
     ]);
     expect(detail.firstTokenMs).toBe(90);
-  });
-
-  test('keeps currencies and price sources separate and identifies unpriced usage', () => {
-    const detail = getMessageUsageDetails(undefined, [
-      record({ cost: 0.1, costCurrency: 'USD', costSource: 'provider' }),
-      record({ cost: 0.2, costCurrency: 'USD', costSource: 'computed' }),
-      record({ cost: 1, costCurrency: 'CNY', costSource: 'computed' }),
-      record(),
-    ]);
-    expect(detail.costs).toHaveLength(2);
-    const usd = detail.costs.find((cost) => cost.currency === 'USD');
-    expect(usd).toMatchObject({
-      currency: 'USD',
-      providerReportedRequestCount: 1,
-      computedRequestCount: 1,
-    });
-    expect(usd?.amount).toBeCloseTo(0.3);
-    expect(detail.costs.find((cost) => cost.currency === 'CNY')).toMatchObject({ amount: 1 });
-    expect(detail.hasUnpricedRecords).toBe(true);
-    expect(getMessageUsageDetails(undefined, []).costs).toEqual([]);
-    expect(
-      getMessageUsageDetails(undefined, [
-        record({ cost: 0, costCurrency: 'USD', costSource: 'computed' }),
-      ]).costs[0].amount,
-    ).toBe(0);
   });
 
   test('does not round a small positive charge to free', () => {
@@ -206,7 +148,13 @@ describe('messageUsage', () => {
       getMessageDurationMs({ runtimeTiming: { startedAt: 1_000, spans: [] } }),
     ).toBeUndefined();
     expect(
-      getMessageUsageDetails({ outputTokens: 10, timeCompletionMs: 0 }, []).endToEndTokensPerSecond,
+      getMessageUsageDetails(
+        {
+          outputTokens: 10,
+          runtimeTiming: { startedAt: 1_000, completedAt: 1_000, spans: [] },
+        },
+        [],
+      ).endToEndTokensPerSecond,
     ).toBeUndefined();
   });
 });

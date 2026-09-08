@@ -20,7 +20,6 @@ export function useMessageUsageRecords(messageId: string) {
   return {
     error,
     isLoading: query.isLoading || hasNext || isRefreshing,
-    // A partial page set must never be presented as a message total.
     records: !hasNext && !error ? query.pages.flatMap((page) => page.items) : [],
     refresh: query.refresh,
   };

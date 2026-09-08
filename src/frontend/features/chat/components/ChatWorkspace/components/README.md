@@ -19,11 +19,11 @@ control are owned and documented by `@/frontend/components/Message`.
 
 Settled assistant messages show total tokens and elapsed time beside their actions. The usage
 button opens `MessagePart.Detail`; only that mounted detail reads the message's local usage ledger.
-New messages use the backend's persisted usage projection (`stats.requestCount` marks its presence)
-as one authoritative snapshot, including attributed image calls. Older messages retain basic totals
-from the transcript and use all ledger pages for additional details. Historical aggregate request
-counts are labelled as estimates. The Data API change bus refreshes both the ledger and transcript
-when late usage arrives; reopening the sheet uses the normal query cache policy.
+Messages use the backend's persisted `stats` for token totals, breakdowns, request counts, costs,
+and provider performance, including attributed image calls. The ledger supplies provider names and
+the first language invocation's first-token measurement. Elapsed time comes from `runtimeTiming`.
+The Data API change bus refreshes both the ledger and transcript when late usage arrives; reopening
+the sheet uses the normal query cache policy.
 Missing measurements stay unavailable, while an image call without token fields does not erase
 reported language usage. Total throughput includes tool execution and approval waits and is not
 labelled as model generation speed.

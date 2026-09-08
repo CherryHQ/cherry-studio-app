@@ -40,12 +40,7 @@ export function MessageUsageDetail({
   const metadata = {
     ...(detail.requestCount !== undefined
       ? {
-          [t('chat.messageUsage.requests')]:
-            (detail.estimatedRequestCount ?? 0) > 0
-              ? t('chat.messageUsage.estimatedRequestsValue', {
-                  value: numbers.format(detail.requestCount),
-                })
-              : numbers.format(detail.requestCount),
+          [t('chat.messageUsage.requests')]: numbers.format(detail.requestCount),
         }
       : {}),
     ...(message.model

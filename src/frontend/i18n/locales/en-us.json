@@ -284,7 +284,6 @@
   "chat.messageUsage.costMixed": "Reported + estimated",
   "chat.messageUsage.createdAt": "Created at",
   "chat.messageUsage.durationHint": "Total time includes model responses, tool execution, and approval waits. Overall speed is output tokens divided by total time; overlapping tool calls are counted once in tool time.",
-  "chat.messageUsage.estimatedRequestsValue": "≈{{value}} (includes historical estimates)",
   "chat.messageUsage.firstToken": "First token",
   "chat.messageUsage.input": "Input",
   "chat.messageUsage.loadError": "Could not load usage details.",
