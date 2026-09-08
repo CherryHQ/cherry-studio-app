@@ -231,8 +231,11 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 
 Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The
 chat-only drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); non-chat
-routes live above it in the root Stack and cannot expose it. On Android, the chat gesture still
-coexists with system edge back and must be re-validated whenever predictive back is enabled.
+routes live above it in the root Stack and cannot expose it. The drawer pan commits only after
+the platform scroll threshold, so native horizontal scroll surfaces inside chat (markdown tables,
+code blocks, math) claim their own touches first and cancel the drawer. On Android, the chat
+gesture still coexists with system edge back and must be re-validated whenever predictive back is
+enabled.
 
 ## Acceptance
 
