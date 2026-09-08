@@ -196,28 +196,11 @@ export function PaintingComposer({
   );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
-  const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
-  const composerInitialAttachments = firstOutput
-    ? [
-        {
-          fileEntryId: firstOutput.fileEntryId,
-          id: `painting-file:${firstOutput.fileEntryId}`,
-          kind: 'image' as const,
-          mediaType: firstOutput.mediaType,
-          name: firstOutput.name,
-          size: firstOutput.size,
-          status: 'ready' as const,
-          uri: firstOutput.uri,
-        },
-      ]
-    : initialAttachments.length > 0
-      ? initialAttachments
-      : receiptId
-        ? initialFiles.inputs
-        : [];
-  const composerInitialDraft = firstOutput
-    ? ''
-    : initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
+  // Results belong to the message list. Only an explicit handoff or an
+  // unfinished receipt seeds the draft; finishing a job must not remount it.
+  const composerInitialAttachments =
+    initialAttachments.length > 0 ? initialAttachments : receiptId ? initialFiles.inputs : [];
+  const composerInitialDraft = initialDraft || (receiptId ? (painting?.prompt ?? '') : '');
 
   return (
     <View className="flex-1">
@@ -234,7 +217,6 @@ export function PaintingComposer({
       <ComposerSessionProvider
         initialAttachments={composerInitialAttachments}
         initialDraft={composerInitialDraft}
-        key={composerKey}
       >
         <ComposerDock onHeightChange={handleInputHeightChange}>
           <PaintingInput

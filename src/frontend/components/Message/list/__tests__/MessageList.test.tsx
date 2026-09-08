@@ -1,6 +1,7 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
 import { Platform, Pressable, type LayoutChangeEvent } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -47,8 +48,9 @@ type MockLegendListProps = {
 };
 
 let mockLatestListProps: MockLegendListProps | undefined;
-const mockFreeze = { get: jest.fn(), set: jest.fn(), value: false };
-const mockScrollMessageToEnd = jest.fn(async () => undefined);
+const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
+  typeof KeyboardController.dismiss
+>;
 const mockListScrollToEnd = jest.fn(async () => undefined);
 const mockListScrollToIndex = jest.fn(async () => undefined);
 let mockListState = {
@@ -123,10 +125,6 @@ jest.mock('@legendapp/list/keyboard', () => {
         </View>
       );
     },
-    useKeyboardScrollToEnd: () => ({
-      freeze: mockFreeze,
-      scrollMessageToEnd: mockScrollMessageToEnd,
-    }),
   };
 });
 
@@ -584,13 +582,17 @@ describe('MessageList scroll-controller ownership', () => {
     });
   });
 
-  test('a local send owns one keyboard-aware animated scroll', async () => {
+  test('a local send keeps keyboard insets active and waits for dismissal before scrolling', async () => {
     const messages = [createMessage('user-1', 'user')];
     act(() => {
       renderer = create(<MessageList {...listProps(messages)} />);
     });
     await loadList();
     mockListScrollToEnd.mockClear();
+    let finishDismiss!: () => void;
+    mockKeyboardDismiss.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishDismiss = resolve)),
+    );
 
     const nextMessages = [...messages, createMessage('user-2', 'user')];
     act(() => {
@@ -600,13 +602,58 @@ describe('MessageList scroll-controller ownership', () => {
     });
     act(flushAnimationFrames);
 
-    expect(mockScrollMessageToEnd).toHaveBeenCalledTimes(1);
-    expect(mockScrollMessageToEnd).toHaveBeenCalledWith({
-      animated: true,
-      closeKeyboard: true,
-    });
+    expect(mockLatestListProps?.freeze).toBeUndefined();
+    expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
+
+    await act(async () => finishDismiss());
+
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
   });
+
+  test.each(['drag', 'dataset switch'] as const)(
+    'cancels the pending send scroll when a %s occurs during keyboard dismissal',
+    async (interruption) => {
+      const messages = [createMessage('user-1', 'user')];
+      act(() => {
+        renderer = create(<MessageList {...listProps(messages)} />);
+      });
+      await loadList();
+      mockListScrollToEnd.mockClear();
+      let finishDismiss!: () => void;
+      mockKeyboardDismiss.mockImplementationOnce(
+        () => new Promise<void>((resolve) => (finishDismiss = resolve)),
+      );
+
+      const nextMessages = [...messages, createMessage('user-2', 'user')];
+      act(() => {
+        renderer?.update(
+          <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
+        );
+      });
+      act(flushAnimationFrames);
+
+      act(() => {
+        if (interruption === 'drag') {
+          mockLatestListProps?.onScrollBeginDrag?.();
+        } else {
+          renderer?.update(
+            <MessageList
+              {...listProps([createMessage('other-user', 'user')], {
+                dataKey: 'session-2',
+                initialLayoutReady: false,
+              })}
+            />,
+          );
+        }
+      });
+      await act(async () => finishDismiss());
+      act(flushAnimationFrames);
+
+      expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    },
+  );
 
   test('the explicit scroll button returns reading mode to the live edge', async () => {
     const messages = [createMessage('user-1', 'user')];

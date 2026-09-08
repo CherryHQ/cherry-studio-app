@@ -65,6 +65,7 @@ function successProgram(): FakeRuntimeProgram {
     });
     controller.emit({
       type: 'usage',
+      requestId: `invocation:${controller.request.turnId}`,
       completedAt: 1_000,
       context: USAGE_CONTEXT,
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },

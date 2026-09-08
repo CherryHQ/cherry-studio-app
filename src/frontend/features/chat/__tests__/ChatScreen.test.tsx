@@ -77,6 +77,8 @@ jest.mock('../runtime', () => ({
   useAgentChatDraftHandoff: () => undefined,
 }));
 
+jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
+
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;

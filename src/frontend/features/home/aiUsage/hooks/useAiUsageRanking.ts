@@ -3,10 +3,7 @@ import { useQuery } from '@/frontend/data';
 import type { AiUsageRankingGroup } from '../types';
 import { buildAiUsageRanking, getAiUsageDayStatsQuery } from '../utils/aiUsageDetail';
 
-/**
- * Day stats only change when new usage is recorded, which cannot happen while this
- * screen is focused. Refreshing on focus is handled by the detail hook instead.
- */
+/** Committed usage writes invalidate this cache, including background Agent turns. */
 const RANKING_STALE_TIME = 1000 * 60;
 
 type UseAiUsageRankingOptions = {

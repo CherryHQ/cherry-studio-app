@@ -346,7 +346,7 @@ function ProviderDetailSettings({
         <>
           {managedModels.length > 0 ? (
             <View className="px-4 py-2">
-              <Text className="text-foreground-secondary text-sm">
+              <Text className="text-muted-foreground text-sm">
                 {t(
                   management.isSelecting
                     ? 'settings.provider.models.management.scope'

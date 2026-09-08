@@ -9,6 +9,7 @@ import {
   AgentProtocolError,
   type AgentEvent,
   type AgentMessagePart,
+  type AgentSessionStatus,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
@@ -181,6 +182,7 @@ function hostWithText(
       });
       controller.emit({
         type: 'usage',
+        requestId: `invocation:${controller.request.turnId}`,
         completedAt: 1_500,
         context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -246,6 +248,59 @@ describe('MobileAgentHost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
+  });
+
+  test('retains each latest turn without transcript observers and only notifies status changes', async () => {
+    const host = hostWithText(['First streamed answer', 'Second streamed answer']);
+    const session = await createStoredSession();
+    const otherSession = await createStoredSession();
+    const statuses: (AgentSessionStatus | null)[] = [];
+    const otherStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribe = host.subscribeSessionStatus(session.id, () => {
+      statuses.push(host.getSessionStatus(session.id));
+    });
+    const unsubscribeOther = host.subscribeSessionStatus(otherSession.id, () => {
+      otherStatuses.push(host.getSessionStatus(otherSession.id));
+    });
+    expect(host.getSessionStatus(session.id)).toBeNull();
+
+    const firstTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First question' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'first status');
+
+    expect(statuses).toEqual([
+      { status: 'running', turnId: firstTurn.turnId },
+      { status: 'completed', turnId: firstTurn.turnId },
+    ]);
+    expect(otherStatuses).toEqual([]);
+    expect(host.getSessionStatus(session.id)).toBe(statuses[1]);
+    expect(Object.isFrozen(host.getSessionStatus(session.id))).toBe(true);
+    unsubscribe();
+    unsubscribeOther();
+
+    const secondTurn = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Another question while the list is unmounted' }],
+    });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'second status');
+
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: secondTurn.turnId,
+    });
+    expect(secondTurn.turnId).not.toBe(firstTurn.turnId);
+    expect(statuses).toHaveLength(2);
+
+    const deletedStatuses: (AgentSessionStatus | null)[] = [];
+    const unsubscribeDeleted = host.subscribeSessionStatus(session.id, () => {
+      deletedStatuses.push(host.getSessionStatus(session.id));
+    });
+    await host.deleteSession({ sessionId: session.id });
+    expect(deletedStatuses).toEqual([null]);
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    unsubscribeDeleted();
   });
 
   test('creates the durable Session together with an admitted first submission', async () => {
@@ -465,6 +520,7 @@ describe('MobileAgentHost', () => {
         agent: expect.objectContaining({ id: AGENT_ID }),
         assistantMessageId: submitted.assistantMessageId,
         report: {
+          requestId: `invocation:${submitted.turnId}`,
           completedAt: 1_500,
           context: USAGE_CONTEXT,
           usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
@@ -511,6 +567,50 @@ describe('MobileAgentHost', () => {
     expect(
       requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
     ).toEqual(['user', 'assistant']);
+  });
+
+  test('records unique invocations before a failed terminal and sums their message usage', async () => {
+    const runtime = new FakeRuntime();
+    runtime.script((controller) => {
+      const report = {
+        type: 'usage' as const,
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      };
+      controller.emit(report);
+      controller.emit(report);
+      controller.emit({
+        ...report,
+        requestId: 'call-2',
+        usage: { inputTokens: 10, outputTokens: 1, totalTokens: 11 },
+      });
+      controller.emit({
+        type: 'failed',
+        error: {
+          code: 'provider_error',
+          message: 'Later call failed',
+          retryable: true,
+          origin: 'provider',
+        },
+      });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the failed turn to settle');
+    expect(usage.record).toHaveBeenCalledTimes(2);
+    expect(usage.record.mock.calls.map(([input]) => input.report.requestId)).toEqual([
+      'call-1',
+      'call-2',
+    ]);
+    const finalized = events.find((event) => event.type === 'message.finalized');
+    expect(finalized).toMatchObject({
+      message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
+    });
   });
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
@@ -704,6 +804,12 @@ describe('MobileAgentHost', () => {
       disabledCapabilities: ['health'],
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
+      resolveUsageAttribution: expect.any(Function),
+    });
+    // Tools are built before reservation; by execution the resolver sees the reserved message.
+    expect(getTools.mock.calls[0]![0].resolveUsageAttribution?.()).toEqual({
+      source: { type: 'agent', id: AGENT_ID, name: 'Test Agent', icon: null },
+      messageRef: { kind: 'agent-session', id: (await store.listMessages(session.id))[1]!.id },
     });
     expect([...getTools.mock.calls[0]![0].resources.fileEntryIds]).toEqual([]);
     expect(requests[0]?.tools).toEqual([stubTool]);
@@ -1116,6 +1222,57 @@ describe('MobileAgentHost', () => {
     });
   });
 
+  test('keeps the event loop moving while a usage write is pending and settles it before the terminal write', async () => {
+    const releaseUsageWrite = createDeferred();
+    usage.record.mockImplementationOnce(() => releaseUsageWrite.promise);
+    const finalizeMessage = jest.spyOn(store, 'finalizeAssistantMessage');
+    const runtime = new FakeRuntime().script((controller) => {
+      controller.emit({
+        type: 'usage',
+        requestId: 'call-1',
+        completedAt: 1000,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'After usage', state: 'done' },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+
+    try {
+      await waitFor(
+        () =>
+          events.some(
+            (event) =>
+              event.type === 'message.delta' &&
+              event.delta.op === 'part.add' &&
+              event.delta.part.id === 'text-1',
+          ),
+        'the part after the usage event to reach observers',
+      );
+      // The analytical write is still blocked, yet later events were forwarded.
+      expect(usage.record).toHaveBeenCalledTimes(1);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      expect(finalizeMessage).not.toHaveBeenCalled();
+      expect(terminalTurnEvent(events)).toBeUndefined();
+    } finally {
+      releaseUsageWrite.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+    expect(finalizeMessage).toHaveBeenCalledTimes(1);
+    expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
+      message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+    });
+  });
+
   test('runs the turn tool-less when the catalog cannot be resolved', async () => {
     const requests: RuntimeExecutionRequest[] = [];
     const host = hostWithText(['Hi'], requests, {
@@ -1427,6 +1584,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'cancelling', 'cancelled']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'cancelled',
+      turnId: submitted.turnId,
+    });
     assertJsonRoundTrip(events);
 
     const transcript = await store.listMessages(session.id);
@@ -1921,6 +2082,10 @@ describe('MobileAgentHost', () => {
     // A snapshot taken now carries the live approval and turn state (invariant 8).
     const midStream = await host.observeSession(session.id, () => {});
     expect(midStream.snapshot.activeTurn?.status).toBe('awaiting-approval');
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'awaiting-approval',
+      turnId: submitted.turnId,
+    });
     expect(midStream.snapshot.pendingApprovals).toEqual([requested.approval]);
 
     // Wrong correlation fails closed (invariant 7).
@@ -1945,6 +2110,10 @@ describe('MobileAgentHost', () => {
       .filter((event) => event.type === 'turn.updated')
       .map((event) => (event.type === 'turn.updated' ? event.turn.status : ''));
     expect(statuses).toEqual(['running', 'awaiting-approval', 'running', 'completed']);
+    expect(host.getSessionStatus(session.id)).toEqual({
+      status: 'completed',
+      turnId: submitted.turnId,
+    });
     expect(events.some((event) => event.type === 'approval.resolved')).toBe(true);
     assertJsonRoundTrip(events);
 

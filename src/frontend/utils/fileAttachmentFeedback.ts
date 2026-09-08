@@ -27,33 +27,7 @@ export function fileAttachmentIssueDescription(issue: FileAttachmentIssue, t: TF
 export function fileAttachmentNoticeKeys(report: FileAttachmentReport | undefined): string[] {
   if (!report) return [];
   const notices: string[] = [];
-  if (report.mode === 'document-text') {
-    const parserNotices = {
-      builtin: 'attachments.notice.builtinText',
-      'native-pdf': 'attachments.notice.nativePdfText',
-    };
-    notices.push(
-      report.parser === 'builtin' || report.parser === 'native-pdf'
-        ? parserNotices[report.parser]
-        : 'attachments.notice.documentText',
-    );
-  }
-  if (report.mode === 'document-ir' && report.delivery) {
-    notices.push(
-      report.delivery === 'deferred'
-        ? 'attachments.notice.documentDeferred'
-        : 'attachments.notice.documentIr',
-    );
-  }
-  if (report.images?.sent) notices.push('attachments.notice.documentImagesSent');
-  if (report.images?.omitted) {
-    const reasons = report.images.omittedReasons ?? [];
-    notices.push(
-      ...(reasons.length
-        ? [...new Set(reasons)].map((reason) => `attachments.notice.imageOmitted.${reason}`)
-        : ['attachments.notice.documentImagesOmitted']),
-    );
-  }
+  if (report.mode === 'document-text') notices.push('attachments.notice.documentText');
   if (report.sourceTruncated) notices.push('attachments.notice.sourceTruncated');
   if (report.requestTruncated) notices.push('attachments.notice.requestTruncated');
   return notices;

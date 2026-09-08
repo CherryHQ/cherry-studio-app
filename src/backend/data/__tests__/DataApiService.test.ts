@@ -1,5 +1,6 @@
 import { ErrorCode } from '@/shared/data/api/errors';
 
+import { publishDataApiChanges } from '../dataApiChanges';
 import { DataApiService } from '../DataApiService';
 
 function createService(handlers: Record<string, Record<string, jest.Mock>>) {
@@ -7,6 +8,24 @@ function createService(handlers: Record<string, Record<string, jest.Mock>>) {
 }
 
 describe('DataApiService', () => {
+  it('receives published changes until its subscriber unsubscribes', () => {
+    const service = createService({});
+    const listener = jest.fn();
+    const unsubscribe = service.subscribeChanges(listener);
+    try {
+      publishDataApiChanges([]);
+      expect(listener).not.toHaveBeenCalled();
+
+      publishDataApiChanges(['/ai-usage-records/stats']);
+      expect(listener).toHaveBeenCalledWith(['/ai-usage-records/stats']);
+      unsubscribe();
+      publishDataApiChanges(['/ai-usage-records/stats']);
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it('prefers a static route over a path parameter', async () => {
     const ids = jest.fn(async () => ['painting-1']);
     const detail = jest.fn(async () => ({ id: 'painting-1' }));

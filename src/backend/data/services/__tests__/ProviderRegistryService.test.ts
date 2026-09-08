@@ -58,6 +58,16 @@ describe('provider-registry-service', () => {
     });
   });
 
+  test('keeps a provider-only price, including explicit free pricing', () => {
+    const pricing = { input: { perMillionTokens: 0 }, output: { perMillionTokens: 0 } };
+    const model = mergePresetModel(
+      { id: 'unpriced-model', name: 'Unpriced Model', metadata: {} },
+      { providerId: 'github', modelId: 'unpriced-model', pricing },
+      'github',
+    );
+    expect(model.pricing).toEqual(pricing);
+  });
+
   test('synthesizes standalone provider-model rows from desktop registry data', () => {
     const registryData = providerRegistryService.lookupModel('302ai', 'chatgpt-4o-latest');
 

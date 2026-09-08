@@ -39,6 +39,7 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## MCP Tool Discovery');
     expect(prompt).not.toContain('## Web Citations');
+    expect(prompt).not.toContain('## Web Research');
     expect(prompt).not.toContain('## Managed Files');
   });
 
@@ -72,6 +73,17 @@ describe('buildAgentSystemPrompt', () => {
     expect(withWeb).toContain('## Web Citations');
     expect(withWeb).toContain('`mobile_web_search`');
     expect(withWeb).toContain('[cite:ID]');
+    expect(withWeb).toContain('## Web Research');
+    expect(withWeb).toContain('one search round');
+    expect(withWeb).toContain('Run independent searches in the same round');
+    expect(withWeb).toContain('Stop as soon as the available evidence supports');
+    expect(withWeb).toContain('Reuse relevant results already collected in the current turn');
+    expect(withWeb).toContain(
+      'fetch the relevant known URLs to obtain citation IDs for the current turn',
+    );
+    expect(withWeb).toContain('never reuse citation IDs from earlier turns');
+    expect(withWeb).toContain('After any lookup failure, stop using both web tools for this turn');
+    expect(withMcp).not.toContain('## Web Research');
     expect(withMcp).not.toContain('## Web Citations');
   });
 

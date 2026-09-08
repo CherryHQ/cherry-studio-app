@@ -9,6 +9,7 @@ import { DefaultBackendPersistCache, DefaultPersistCache, DefaultUseCache } from
 describe('cache schema defaults', () => {
   test('every memory schema key has a default entry', () => {
     expect(Object.keys(DefaultUseCache)).toEqual([
+      'chat.last_seen_turn.${sessionId}',
       'chat.scroll_anchor.${sessionId}',
       'internal.memory_probe.${instanceId}',
     ]);

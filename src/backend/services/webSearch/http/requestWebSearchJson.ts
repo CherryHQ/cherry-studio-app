@@ -2,6 +2,7 @@ import * as z from 'zod';
 
 import {
   createHttpClient,
+  HttpError,
   type HttpErrorDecoder,
   type HttpHeaders,
   type HttpQuery,
@@ -28,6 +29,7 @@ export type WebSearchJsonRequest<TResponse, TBody = unknown> = {
   readonly providerId: string;
   readonly responseSchema: z.ZodType<TResponse>;
   readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
   readonly url: string;
 };
 
@@ -106,6 +108,7 @@ export const requestWebSearchJson: WebSearchJsonRequester = async <TResponse, TB
     path: target.pathname || '/',
     query: toHttpQuery(target.searchParams),
     signal: request.signal,
+    ...(request.timeoutMs !== undefined ? { timeoutMs: request.timeoutMs } : {}),
   } as const;
 
   const response =
@@ -118,13 +121,15 @@ export const requestWebSearchJson: WebSearchJsonRequester = async <TResponse, TB
         });
 
   if (typeof response.data === 'string') {
-    throw new Error(`${request.providerId} ${request.operation} returned invalid JSON`);
+    throw new HttpError(`${request.providerId} ${request.operation} returned invalid JSON`, {
+      kind: 'invalid_response',
+    });
   }
 
   const parsed = request.responseSchema.safeParse(response.data);
   if (!parsed.success) {
-    throw new Error(`${request.providerId} ${request.operation} response validation failed`, {
-      cause: parsed.error,
+    throw new HttpError(`${request.providerId} ${request.operation} response validation failed`, {
+      kind: 'invalid_response',
     });
   }
 

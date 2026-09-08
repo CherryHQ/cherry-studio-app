@@ -32,7 +32,7 @@ export function buildAiUsageCalendarData(
   const selectedBuckets = buckets
     .filter((bucket) => bucket.date >= firstDateKey && bucket.date <= lastDateKey)
     .sort((left, right) => left.date.localeCompare(right.date));
-  const tokensByDate = new Map(selectedBuckets.map((bucket) => [bucket.date, bucket.totalTokens]));
+  const bucketsByDate = new Map(selectedBuckets.map((bucket) => [bucket.date, bucket]));
   const positiveTokenValues = selectedBuckets
     .map((bucket) => bucket.totalTokens)
     .filter((value) => value > 0)
@@ -50,7 +50,10 @@ export function buildAiUsageCalendarData(
     date = addCalendarDays(date, 1)
   ) {
     const dateKey = toLocalDateKey(date);
-    data[dateKey] = getAiUsageLevel(tokensByDate.get(dateKey) ?? 0, thresholds);
+    const bucket = bucketsByDate.get(dateKey);
+    const tokenLevel = getAiUsageLevel(bucket?.totalTokens ?? 0, thresholds);
+    // Image-only calls and responses without token usage still make this an active day.
+    data[dateKey] = tokenLevel || ((bucket?.requestCount ?? 0) > 0 ? 1 : 0);
   }
 
   return data;

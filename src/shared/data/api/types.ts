@@ -45,6 +45,12 @@ export type InferPaginationMode<R> =
       : never;
 
 export interface ApiClient {
+  /**
+   * Endpoint paths whose cached reads a committed backend write invalidated.
+   * Publishing is opt-in per writer; only paths that were published refresh.
+   */
+  subscribeChanges?(listener: (paths: readonly string[]) => void): () => void;
+
   delete<TPath extends ConcreteApiPaths>(
     path: TPath,
     options?: { query?: QueryParamsForPath<TPath, 'DELETE'> },

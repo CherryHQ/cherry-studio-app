@@ -63,7 +63,7 @@ non-standard adapter family, or authentication types fail before partial executi
 
 Pi receives the grouped structured transcript, an optional opaque context checkpoint, a frozen tool
 catalog, and Agent inference options on each execution. It maps text, reasoning, tool parts,
-approvals, cancellation, normalized failures, and cumulative multi-call usage onto this contract.
+approvals, cancellation, normalized failures, and per-invocation usage onto this contract.
 Before reservation, the Host combines the shared system catalog and the Agent's capability-group
 deny-list with the Agent's persisted, currently executable MCP bindings. It also resolves bounded
 managed images for registry-declared image-capable models supported by the selected Pi endpoint
@@ -151,6 +151,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  failure?: {
+    error: RuntimeError
+    scope: 'call' | 'tool'
+  }
 }
 
 type RuntimeToolCall = {
@@ -339,8 +343,7 @@ summary. Checkpoint payloads store the redacted summary and an optional structur
 they do not duplicate attachment bodies or raw retained tool results. Anchors remain complete
 durable Turns. A split-turn cursor reconstructs the retained suffix from the Host-supplied complete
 Turn so tool calls and results remain paired after restart. Summary calls reuse the current model
-transport, credentials, timeout, and cancellation signal, and their usage is added to the active
-Turn.
+transport, credentials, timeout, and cancellation signal, and emit separate invocation usage reports attributed to the active Turn.
 
 Initial compaction is not the last admission check. Before Pi continues after a tool batch, the
 Runtime re-estimates the live assistant request and tool-result messages together with system,
@@ -358,6 +361,7 @@ type RuntimeTool = {
   description: string
   inputSchema: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
+  failureGroup?: string
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
 }
 ```
@@ -397,11 +401,33 @@ Runtime-generated failures use the same outer envelope. An `error` result uses
 uses that interrupted shape as well. Native errors, stack traces, and late callback results never
 enter these envelopes.
 
-Pi permits at most eight tool-loop steps and sixteen requested tool calls per turn. Calls beyond the
-limit do not execute their callback and receive a classified error result; reaching either limit
-stops the loop with a stable terminal failure. A whole turn is bounded to ten minutes. Cancellation
-and timeout abort the model, approval waiters, and the callback signal before terminalizing live
-tool parts. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+Application callbacks may return a trusted outer `failure` alongside their model-facing `value`.
+The Runtime marks that call as `error` and passes an error tool result to the model. `scope: 'call'`
+leaves the tool available for corrected input. `scope: 'tool'` stops further calls to that tool in
+this execution. Tools with the same optional `failureGroup` stop together: web search and page
+reading share `web`, so a failed lookup cannot trigger a different web strategy. The Runtime
+removes stopped tools while other tools remain available and does not invoke their callbacks again.
+If all tools stop, their definitions remain for valid tool history, but tool choice is forced to
+`none` (Google: `NONE`) so the model can answer without further calls.
+Already running calls may finish and contribute results. Other tools and the final assistant
+response remain available; a new execution starts with the Host's full snapshot. This policy is
+independent of the JSON inside `value`: remote payloads and historical results cannot disable
+capabilities.
+
+The Host projects callback failures into the protocol's error result envelope, retaining the
+callback's `value` in `value.details`. Runtime-only failure policy is not persisted. Partial web
+results therefore remain available in history and as citation sources alongside the error.
+
+Pi permits at most twenty tool-loop steps and sixty-four tool calls per turn. Calls beyond the limit
+do not execute their callback and receive a classified error result. After the current batch settles,
+reaching either limit disables tool selection and allows one final model response using the collected
+results, with instructions to disclose uncertainty and unfinished work. A successful final response
+completes the turn; further tool requests fail with the budget error. Tool definitions remain in the
+request to keep tool history valid; the final provider payload forces tool choice to `none` (Google:
+`NONE`). Context exhaustion still stops before another provider request, and the final response shares
+the whole turn's ten-minute deadline. Cancellation and timeout abort the model, approval waiters, and
+the callback signal before terminalizing live tool parts. Streamable HTTP MCP callbacks add their own
+60-second invocation bound.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -439,6 +465,7 @@ type RuntimeEvent =
   | { type: 'context.checkpoint'; checkpoint: RuntimeContextCheckpoint }
   | {
       type: 'usage'
+      requestId: string
       usage: RuntimeUsage
       context: RuntimeUsageContext
       completedAt: number
@@ -562,15 +589,30 @@ the active execution and commits it atomically with a successful assistant termi
 cancelled, or interrupted turns never persist a candidate, and oversized payloads are rejected
 rather than truncated.
 
-`usage` values are cumulative for the execution; the last report before the terminal event is
-authoritative. Detailed cache and reasoning counts remain available for pricing even though the
-Agent Protocol message projects only the input, output, and total counts. `context` is the immutable
-provider, served-model, pricing, and credential-attribution snapshot captured when the provider is
-resolved, before execution starts. `completedAt` is recorded at the Runtime provider boundary. The
-Host adds the Agent source and Session message reference without re-reading mutable provider/model
-configuration. It does not synthesize provider timing from the broader Host turn lifetime. A
-Runtime that cannot report usage emits no `usage` event, and the assistant message's protocol
-`usage` stays `null`.
+Each `usage` event describes one successful provider invocation, including compaction calls.
+`requestId` is stable for redelivery and unique across distinct calls. Pi captures assistant responses
+at the provider stream result, before `message_end`, tool execution, or approval, and reports
+compaction at its completion boundary. Cancelling after the provider result does not erase a
+completed call. As in desktop Pi accounting, error/aborted responses are excluded even if the provider
+bills partial output; partial usage is not estimated.
+Detailed cache and reasoning counts remain available for pricing. `context` freezes provider,
+pricing, and credential attribution before execution; the served model is taken from the response
+when available. `completedAt` is recorded at the provider boundary.
+
+The Host adds the admitted Agent source and reserved Session message reference, deduplicates reports,
+and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
+event loop; the terminal write waits for the Host's tracked Runtime usage writes, so the finalized
+row carries those persisted calls. `AiUsageRecordService` inserts the fact and rebuilds message
+`stats` and protocol `usage` in the same transaction. The Host retains an aggregate for its in-memory
+message view and uses it at finalization only when no analytical projection was persisted. If some writes fail,
+an existing projection continues to reflect only persisted records. Tools that call providers on
+the Host's behalf (image generation) read the attribution when they run, because the tool catalog
+is built before the assistant message is reserved; source and bound message references remain
+immutable snapshots. Their independent usage writes can finish after message finalization,
+especially after cancellation. A usage write that updates a terminal message publishes its Session
+transcript path after commit, so mounted chat views also receive the late projection.
+Runtime and approval timing remain message-owned; they never stand in for provider latency. A
+Runtime that cannot report usage emits no `usage` event.
 
 ## Host execution flow
 
@@ -640,7 +682,8 @@ Every Runtime implementation passes the same suite:
 15. Skills cannot become executable capabilities or expand a turn's tool snapshot or resource ledger.
 16. Image preflight happens before reservation, and Runtime image payloads contain only bounded,
     request-local managed content accepted by the model and endpoint.
-17. Tool-step, tool-call, callback, and whole-turn limits stop new work with classified outcomes.
+17. Tool-step and tool-call budgets stop new tool execution and allow one response with tools disabled;
+    context, callback, and whole-turn limits retain classified failure outcomes.
 18. History is grouped by durable Turn id, and flattening it without a checkpoint preserves the
     previous complete-history model input.
 19. Checkpoint events round-trip as JSON; only successful terminals persist a valid bounded

@@ -9,6 +9,7 @@ import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
+import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
   avatarUri?: null | string;
@@ -61,7 +62,12 @@ function renderChatAssistantMessage(
         </View>
       </View>
       <AssistantMessage isTextSelectionEnabled={isTextSelectionEnabled} message={message}>
-        <AssistantMessageToolbar message={message} />
+        {message.status !== 'pending' ? (
+          <View className="w-full flex-row flex-wrap items-center justify-between gap-x-3">
+            <AssistantMessageToolbar message={message} />
+            <AssistantMessageUsage message={message} />
+          </View>
+        ) : null}
       </AssistantMessage>
     </View>
   );

@@ -58,6 +58,7 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentSessionSnapshotSchema,
+  AgentSessionStatusSchema,
   AgentProtocolError,
   type AgentApprovalView,
   type AgentCapabilities,
@@ -70,6 +71,7 @@ import {
   type AgentMessageView,
   type AgentProtocol,
   type AgentSessionObservation,
+  type AgentSessionStatus,
   type AgentSessionView,
   type AgentStartSessionInput,
   type AgentSubmitMessageInput,
@@ -85,7 +87,7 @@ import type {
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
-  RuntimeUsageReport,
+  RuntimeUsage,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
@@ -193,7 +195,11 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
-  usage: RuntimeUsageReport | null;
+  /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
+  usage: RuntimeUsage | null;
+  recordedInvocations: Set<string>;
+  /** Analytical writes started by this turn; the terminal write waits for them, the loop does not. */
+  usageWrites: Promise<void>[];
   runtimeSession: AgentRuntimeSession;
 };
 
@@ -253,6 +259,8 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
+  private readonly sessionStatuses = new Map<string, AgentSessionStatus>();
+  private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
   private readonly initialAdmissions = new Set<AdmissionState>();
@@ -356,6 +364,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   protected override onDestroy(): void {
     this.runningTurnsBySession.clear();
     this.listeners.clear();
+    this.sessionStatuses.clear();
+    this.sessionStatusListeners.clear();
     this.observingSessions.clear();
   }
 
@@ -371,6 +381,22 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   // ── Protocol operations ──
+
+  getSessionStatus(sessionId: string): AgentSessionStatus | null {
+    return this.sessionStatuses.get(sessionId) ?? null;
+  }
+
+  subscribeSessionStatus(sessionId: string, listener: () => void): () => void {
+    const listeners = this.sessionStatusListeners.get(sessionId) ?? new Set();
+    this.sessionStatusListeners.set(sessionId, listeners);
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0 && this.sessionStatusListeners.get(sessionId) === listeners) {
+        this.sessionStatusListeners.delete(sessionId);
+      }
+    };
+  }
 
   async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
     const parsed = AgentStartSessionInputSchema.parse(input);
@@ -498,6 +524,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
       this.deletingSessions.delete(sessionId);
@@ -655,6 +682,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     runtimeSession: AgentRuntimeSession,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
+    plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
     // Match desktop timing ownership: execution starts when the Host launches
     // the Runtime, independently from the placeholder row's creation time.
     const runtimeStartedAt = Date.now();
@@ -691,6 +719,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       snapshotDirty: false,
       snapshotFlush: null,
       usage: null,
+      recordedInvocations: new Set(),
+      usageWrites: [],
       runtimeSession,
     };
     this.activeTurns.set(sessionId, state);
@@ -891,12 +921,29 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'usage': {
-        // Cumulative; the last report before the terminal event is authoritative.
-        state.usage = {
-          completedAt: event.completedAt,
-          context: event.context,
-          usage: event.usage,
-        };
+        if (state.recordedInvocations.has(event.requestId)) return false;
+        state.recordedInvocations.add(event.requestId);
+        const usage = { ...state.usage };
+        for (const key of Object.keys(event.usage) as (keyof RuntimeUsage)[]) {
+          const value = event.usage[key];
+          if (value !== undefined) usage[key] = (usage[key] ?? 0) + value;
+        }
+        state.usage = usage;
+        // Same rule as snapshots: the event loop never waits on the store. The
+        // write settles before the terminal write so the finalized row carries it.
+        state.usageWrites.push(
+          this.usage.record({
+            agent: state.agent,
+            assistantMessageId: state.assistantMessage.id,
+            report: {
+              requestId: event.requestId,
+              completedAt: event.completedAt,
+              context: event.context,
+              usage: event.usage,
+            },
+            turnId: state.turn.id,
+          }),
+        );
         return false;
       }
       case 'context.checkpoint': {
@@ -952,7 +999,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
     // No event follows a terminal one, so nothing can request another snapshot
     // once this wait ends: the terminal write is the last write to the row.
-    await state.snapshotFlush;
+    // The recorder logs write failures without rejecting. Finalization preserves
+    // any persisted projection, using the Host aggregate only when none exists.
+    await Promise.all([state.snapshotFlush, ...state.usageWrites]);
     // Invariant 5: the terminal message state (including the turn-level error)
     // commits before the terminal events publish. The terminal turn view is a
     // projection of that committed message.
@@ -960,7 +1009,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
+      usage: state.usage ? toAgentUsageView(state.usage) : null,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
       runtimeStats: { runtimeTiming },
@@ -996,15 +1045,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sourceCode: error.failure?.source.code,
         sourceLayer: error.failure?.source.layer,
         statusCode: error.failure?.context?.statusCode,
-        totalTokens: state.usage?.usage.totalTokens,
-        turnId: state.turn.id,
-      });
-    }
-    if (state.usage) {
-      this.usage.record({
-        agent: state.agent,
-        assistantMessageId: finalized.id,
-        report: state.usage,
+        totalTokens: state.usage?.totalTokens,
         turnId: state.turn.id,
       });
     }
@@ -1204,6 +1245,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private publish(sessionId: string, event: AgentEvent): void {
+    if (event.type === 'turn.updated') {
+      this.updateSessionStatus(
+        sessionId,
+        AgentSessionStatusSchema.parse({ turnId: event.turn.id, status: event.turn.status }),
+      );
+    }
     const sessionListeners = this.listeners.get(sessionId);
     if (!sessionListeners || sessionListeners.size === 0) {
       return;
@@ -1216,6 +1263,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         listener(cloned);
       } catch (error) {
         logger.warn('Agent event listener threw', error as Error);
+      }
+    }
+  }
+
+  private updateSessionStatus(sessionId: string, status: AgentSessionStatus | null): void {
+    const previous = this.getSessionStatus(sessionId);
+    if (previous?.turnId === status?.turnId && previous?.status === status?.status) {
+      return;
+    }
+    if (status) {
+      this.sessionStatuses.set(sessionId, status);
+    } else {
+      this.sessionStatuses.delete(sessionId);
+    }
+    for (const listener of this.sessionStatusListeners.get(sessionId) ?? []) {
+      try {
+        listener();
+      } catch (error) {
+        logger.warn('Agent Session status listener threw', error as Error);
       }
     }
   }

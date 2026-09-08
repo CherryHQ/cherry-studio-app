@@ -10,7 +10,7 @@ type MessageFilePart = Extract<CherryMessagePart, { type: 'file' }>;
 const FILE_CARD_SIZE = 112;
 
 /**
- * A run of managed files laid out as one horizontally scrolling row.
+ * User attachments laid out as one right-aligned, horizontally scrolling row.
  *
  * Files are the one part type that arrives several at a time, and stacking
  * full-size cards down a phone screen buries the rest of the message. The row
@@ -22,7 +22,7 @@ export function MessageFileStrip({ parts }: { parts: readonly MessageFilePart[] 
     <ScrollView
       alwaysBounceHorizontal={false}
       className="max-w-full"
-      contentContainerClassName="gap-2"
+      contentContainerClassName="grow justify-end gap-2"
       horizontal
       showsHorizontalScrollIndicator={false}
       style={styles.strip}

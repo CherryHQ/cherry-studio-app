@@ -134,6 +134,44 @@ MCP, file, painting, job, and AI usage tables. Agent Session messages are linear
 protocol message ids. The retired `assistant`, `topic`, `message`, and `assistant_mcp_server`
 tables, plus message FTS triggers and indexes, are removed by migration `0005_remove_legacy_chat`.
 
+Usage behavior was compared against Desktop commit `ea2f6bc3befd7a028c2e2b2a4310e5cceba1b676`
+on 2026-09-07. AI usage keeps Desktop's 37-column `ai_usage_record` contract, including immutable pricing and
+credential snapshots, per-currency cost, cache/reasoning counts, and optional provider metrics.
+Each successful provider call is one `invocation`; tool loops and context compaction contribute
+separate records. Input-token tiers select one rate set for the entire request using all-in input
+(including cached tokens). Missing rates remain unpriced, and trusted provider-reported cost takes
+precedence. Migration `0018_usage-invocation-semantics` marks older `agent-session-turn:*` rows as
+`legacy-aggregate`; original counts, costs, and snapshots are retained because their provider
+boundaries cannot be recovered.
+
+Tiered pricing is a data and calculation capability in this port, not a new configuration UI.
+Desktop reads `pricing.inputTokenTiers` from user-edited models; neither catalog currently supplies
+those tiers. Mobile's pricing editor and catalog tier ingestion remain separate follow-up features.
+
+New usage facts and their Agent message projections commit together. Message `stats` includes token
+details, request/estimated/unpriced counts, costs grouped by currency, and measured provider
+performance; the Session store owns runtime timing. Agent image tools carry the same source/message
+attribution, so a message's `usage` and `stats` sum every record attributed to it, including image
+calls its tools made, rather than the language-model calls alone.
+
+Committed usage writes publish the `/ai-usage-records*` endpoint paths on the Data API change bus
+(`src/backend/data/dataApiChanges.ts`); `DataApiService` exposes it as `subscribeChanges`, and
+`DataApiProvider` coalesces invalidation for 300 ms so background execution refreshes mounted
+statistics. The bus is shared: any persistence service may publish the paths its committed write
+invalidated, and only published paths refresh. Usage writes for terminal Agent messages also publish
+the affected `/agent-sessions/:sessionId/messages` paths. The Agent protocol still refreshes active
+messages at finalization, after the Host's tracked Runtime usage writes settle. Independently
+recorded tool calls can commit later, including after cancellation; post-commit transcript
+invalidation exposes their updated projections. The chat client releases a terminal live copy once
+the durable transcript has the same status and an equal or newer timestamp. Table shape and
+existing list/stats/timeline query contracts remain unchanged. No Desktop compatibility baseline is
+advanced by this selective port.
+
+`ai_usage_record` grows by one row per provider call, including compaction and image calls,
+and every row carries pricing and credential snapshots. There is no retention or rollup policy yet.
+Follow-up product work must define the retention window and which historical totals remain
+available before automatic deletion or aggregation is introduced.
+
 `MobileAgentHost` persists Agent Session reservations and terminal messages through
 `AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to
 the frontend. Live deltas are protocol events and do not write every token to SQLite.

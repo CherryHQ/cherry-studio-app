@@ -172,10 +172,10 @@ existing messages, attachment reports, and tool results are not rewritten.
 
 Settings exposes **Document parser** as a local preference with AnyDoc selected by default and
 Built-in available for comparison. Its picker describes both formats and the next-turn/PDF rules;
-a failed preference save reports through the existing toast gateway. Transcript notices consume
-the persisted report, showing the actual parser, complete versus deferred IR delivery, and image
-omission reasons. Older messages without those facts remain unspecified rather than inferred from
-today's preference.
+a failed preference save reports through the existing toast gateway. The transcript displays file
+attachments without processing notices. Reports still persist the actual parser, complete versus
+deferred IR delivery, and image omission reasons; older messages without those facts remain
+unspecified rather than inferred from today's preference.
 
 Image attachments are sent to providers as inlined base64 data URLs; documents send text or raw
 JSON and also work with text-only models, with embedded pixels explicitly marked unsent. The provider upload cache is deferred
