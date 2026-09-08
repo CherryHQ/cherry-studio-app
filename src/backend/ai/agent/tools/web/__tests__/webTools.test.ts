@@ -193,12 +193,13 @@ describe('createWebTools', () => {
     expect(webSearch.fetchUrls).toHaveBeenCalledTimes(1);
   });
 
-  test('propagates cancellation without manufacturing a provider failure', async () => {
+  test('propagates the caller cancellation reason instead of the provider abort error', async () => {
     const controller = new AbortController();
+    const reason = new Error('Turn cancelled');
     const abort = new DOMException('Cancelled', 'AbortError');
     const webSearch = createWebSearch({
       fetchUrls: async () => {
-        controller.abort();
+        controller.abort(reason);
         throw abort;
       },
     });
@@ -209,6 +210,19 @@ describe('createWebTools', () => {
         signal: controller.signal,
         toolCallId: 'cancelled',
       }),
+    ).rejects.toBe(reason);
+  });
+
+  test('propagates a provider AbortError without manufacturing a lookup failure', async () => {
+    const abort = new DOMException('Cancelled', 'AbortError');
+    const webSearch = createWebSearch({
+      fetchUrls: async () => {
+        throw abort;
+      },
+    });
+
+    await expect(
+      execute(toolNamed(webSearch, 'web_fetch'), { urls: ['https://example.com'] }),
     ).rejects.toBe(abort);
   });
 
