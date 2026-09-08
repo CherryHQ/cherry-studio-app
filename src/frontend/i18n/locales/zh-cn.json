@@ -306,6 +306,7 @@
   "chat.messageUsage.total": "总计",
   "chat.messageUsage.totalDuration": "总耗时",
   "chat.messageUsage.totalSpeed": "整体响应速度",
+  "chat.messageUsage.totalTokens": "总 Token 用量",
   "chat.messageUsage.unavailable": "暂无数据",
   "chat.media.photos": "照片",
   "chat.model.select": "选择模型",
