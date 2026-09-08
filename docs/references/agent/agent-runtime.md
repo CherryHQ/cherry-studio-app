@@ -173,6 +173,7 @@ type RuntimeExecutionRequest = {
   input: RuntimeInputPart[]
   tools: RuntimeTool[]
   options: RuntimeOptions
+  trace?: TraceSpan
 }
 
 type RuntimeModel = {
@@ -201,6 +202,14 @@ type RuntimeInputPart =
 
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
+
+`trace` is an optional process-local instrumentation handle from
+`backend/ai/observability`. It provides explicit child spans, bounded metadata attributes, and
+terminal status. Its methods never throw into execution. The Host owns the root and storage;
+Runtime code never resolves a storage service or imports a native tracing SDK. Pi records provider
+calls (including context-compaction calls), context preparation, and actual tool execution. Closing
+the Host root closes unfinished children, and late callbacks cannot reopen a settled trace. See
+[AI diagnostic tracing](../../../src/backend/ai/observability/README.md).
 
 The Host resolves protocol-level turn snapshots before this boundary. `default` and the current Pi
 `auto` fallback become an absent `reasoningEffort`, while `none` becomes `off`; Runtime

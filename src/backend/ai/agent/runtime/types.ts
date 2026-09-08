@@ -21,6 +21,8 @@ import type {
 } from '@/shared/data/types/aiUsageRecord';
 import type { Currency } from '@/shared/data/types/model';
 
+import type { TraceSpan } from '../../observability';
+
 /** A JSON-safe value. Tool schemas, tool input/output, and history payloads use it. */
 export type RuntimeJsonValue =
   | null
@@ -210,6 +212,8 @@ export type RuntimeExecutionRequest = {
   tools: RuntimeTool[];
   options: RuntimeOptions;
   runtimeTimingSink?: MessageRuntimeTimingSink;
+  /** Optional, best-effort instrumentation; the Host owns collection and storage. */
+  trace?: TraceSpan;
 };
 
 export type RuntimeOutputPart =

@@ -16,6 +16,7 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
+import { traceErrorAttributes, type TraceSpan } from '../../../observability';
 import { raceAbort, settleWithin } from '../raceAbort';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
 import {
@@ -60,6 +61,7 @@ import {
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
+import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -229,6 +231,7 @@ type ActiveTurn = {
   nextPartIndex: number;
   phase: TurnPhase;
   runtimeTimingSink?: MessageRuntimeTimingSink;
+  trace?: TraceSpan;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
   terminalMessage?: AssistantMessage;
@@ -612,6 +615,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       nextPartIndex: 0,
       phase: 'running',
       runtimeTimingSink: request.runtimeTimingSink,
+      trace: request.trace,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
       toolCallCount: 0,
@@ -664,6 +668,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
     let secrets: readonly string[] = [];
+    let contextSpan: TraceSpan | undefined;
     try {
       const resolution = await raceAbort(
         this.dependencies.resolveModel(request.model, request.options),
@@ -729,7 +734,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
-      const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
+      const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const stream = await resolution.streamFn(model, context, {
           ...options,
           onPayload:
@@ -752,11 +757,17 @@ class PiRuntimeSession implements AgentRuntimeSession {
         );
         return stream;
       };
+      const streamFn = tracePiStream(providerStream, turn.trace);
+      contextSpan = turn.trace?.startSpan('pi.context_prepare', {
+        'gen_ai.context.history_count': request.history.length,
+        'gen_ai.context.has_checkpoint': request.contextCheckpoint !== null,
+      });
+      const compactionStream = tracePiStream(providerStream, contextSpan ?? turn.trace);
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           const response = this.contextOptions.completeSimple
             ? await this.contextOptions.completeSimple(model, context, options)
-            : await (await streamFn(model, context, options)).result();
+            : await (await compactionStream(model, context, options)).result();
           this.recordInvocation(turn, response);
           return response;
         },
@@ -782,6 +793,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
         }),
         turn.abortController.signal,
       );
+      contextSpan?.end(contextPlan.ok ? 'ok' : 'error', {
+        'gen_ai.context.compacted': contextPlan.ok && contextPlan.checkpoint !== null,
+        ...(!contextPlan.ok ? { 'error.code': contextPlan.code } : {}),
+      });
       if (this.settleIfEnding(turn)) return;
       if (!contextPlan.ok) {
         this.emit(turn, {
@@ -950,6 +965,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         });
       }
     } finally {
+      contextSpan?.end(turn.abortController.signal.aborted ? 'cancelled' : 'error');
       unsubscribe?.();
     }
   }
@@ -1109,6 +1125,11 @@ class PiRuntimeSession implements AgentRuntimeSession {
     }
 
     const toolStartedAt = performance.now();
+    const toolSpan = turn.trace?.startSpan('pi.execute_tool', {
+      'tool.call.id': toolCallId,
+      'tool.name': activity.providerName,
+      'tool.source': 'meta',
+    });
     turn.runtimeTimingSink?.onToolExecutionStart({
       callId: toolCallId,
       toolName: activity.providerName,
@@ -1150,6 +1171,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
       this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
       return output;
     } finally {
+      toolSpan?.end(
+        turn.phase !== 'running' || signal?.aborted
+          ? 'cancelled'
+          : turn.failedToolCalls.has(toolCallId)
+            ? 'error'
+            : 'ok',
+      );
       turn.runtimeTimingSink?.onToolExecutionEnd({
         callId: toolCallId,
         toolName: activity.providerName,
@@ -1267,6 +1295,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
     this.replaceToolPart(turn, part, { state: 'running' });
     const toolStartedAt = performance.now();
+    const toolSpan = turn.trace?.startSpan('pi.execute_tool', {
+      'tool.call.id': toolCallId,
+      'tool.name': runtimeTool.providerName,
+      'tool.source': runtimeTool.ref.source,
+      ...(runtimeTool.ref.source === 'mcp' ? { 'mcp.server.id': runtimeTool.ref.serverId } : {}),
+    });
     turn.runtimeTimingSink?.onToolExecutionStart({
       callId: toolCallId,
       toolName: runtimeTool.providerName,
@@ -1284,6 +1318,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return this.interruptToolCall(turn, part);
       }
       if (output.failure) {
+        toolSpan?.setAttributes(traceErrorAttributes(output.failure.error));
         this.replaceToolPart(turn, part, { state: 'error', error: output.failure.error, output });
         turn.failedToolCalls.add(toolCallId);
         if (output.failure.scope === 'tool') {
@@ -1309,6 +1344,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return this.interruptToolCall(turn, part);
       }
       const executionError = normalizeToolExecutionError(error);
+      toolSpan?.setAttributes(traceErrorAttributes(executionError));
       const output = createErrorToolResult(executionError);
       this.replaceToolPart(turn, part, {
         state: 'error',
@@ -1319,6 +1355,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
       turn.settledToolCalls.add(toolCallId);
       return output;
     } finally {
+      toolSpan?.end(
+        turn.phase !== 'running' || signal?.aborted
+          ? 'cancelled'
+          : turn.failedToolCalls.has(toolCallId)
+            ? 'error'
+            : 'ok',
+      );
       turn.runtimeTimingSink?.onToolExecutionEnd({
         callId: toolCallId,
         toolName: runtimeTool.providerName,

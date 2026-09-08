@@ -115,10 +115,24 @@ describe('service registry', () => {
   });
 
   test('declares the background policy of long-running and native-surface owners', () => {
+    expect(getAppStatePolicy(services.TraceStorageService)).toBe('continue');
     expect(getAppStatePolicy(services.JobRuntime)).toBe('continue');
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
     expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
     expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('background-presentation');
     expect(getAppStatePolicy(services.ProviderRegistryUpdaterService)).toBe('not-applicable');
+  });
+
+  test('keeps trace storage alive until its AI producers have stopped', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.PostReady),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+    expect(layerOf('TraceStorageService')).toBeGreaterThanOrEqual(0);
+    for (const producer of ['AiService', 'MobileAgentHost', 'JobRuntime']) {
+      expect(layerOf('TraceStorageService')).toBeLessThan(layerOf(producer));
+    }
   });
 });

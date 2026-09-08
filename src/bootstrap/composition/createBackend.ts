@@ -1,5 +1,6 @@
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
 import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { TraceRecorder } from '@/backend/ai/observability';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -54,6 +55,7 @@ export function createBackend(
   infrastructure: {
     dbService: DbService;
     languageServing: LanguageServingSupport & AgentRuntime;
+    traces?: TraceRecorder;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
   },
 ): BackendComposition {
@@ -70,6 +72,7 @@ export function createBackend(
     checkChatModel: (model, signal) =>
       checkChatModel(infrastructure.languageServing, model, {
         signal,
+        traces: infrastructure.traces,
         onUsage: async (report, requestId) => {
           try {
             await services.aiUsageRecord.recordInvocation({

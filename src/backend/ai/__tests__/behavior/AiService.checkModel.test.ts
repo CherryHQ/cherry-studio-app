@@ -41,7 +41,7 @@ describe('AiService.checkModel AI SDK contract', () => {
     });
     restoreProvider = installMockProvider({ language: languageModel });
 
-    const result = await new AiService(fixture.services).checkModel({
+    const result = await new AiService(undefined, fixture.services).checkModel({
       requestOptions: { maxRetries: 2 },
       timeout: 1000,
       uniqueModelId: fixture.model.id,
@@ -77,7 +77,7 @@ describe('AiService.checkModel AI SDK contract', () => {
     });
 
     await expect(
-      new AiService(fixture.services).checkModel({
+      new AiService(undefined, fixture.services).checkModel({
         timeout: 1000,
         uniqueModelId: fixture.model.id,
       }),
@@ -101,7 +101,7 @@ describe('AiService.checkModel AI SDK contract', () => {
     const abortReason = new Error('caller cancelled model check');
 
     const rejection = captureRejection(
-      new AiService(fixture.services).checkModel({
+      new AiService(undefined, fixture.services).checkModel({
         requestOptions: { signal: controller.signal },
         timeout: 1000,
         uniqueModelId: fixture.model.id,
@@ -126,7 +126,7 @@ describe('AiService.checkModel AI SDK contract', () => {
     restoreProvider = installMockProvider({ language: languageModel });
 
     const rejection = captureRejection(
-      new AiService(fixture.services).checkModel({
+      new AiService(undefined, fixture.services).checkModel({
         timeout: 25,
         uniqueModelId: fixture.model.id,
       }),

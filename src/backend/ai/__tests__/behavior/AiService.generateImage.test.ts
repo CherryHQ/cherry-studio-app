@@ -44,7 +44,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     });
     restoreProvider = installMockProvider({ image: imageModel });
 
-    const result = await new AiService(fixture.services).generateImage({
+    const result = await new AiService(undefined, fixture.services).generateImage({
       mode: 'generate',
       paramValues: {
         background: 'transparent',
@@ -79,7 +79,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     });
     restoreProvider = installMockProvider({ image: imageModel });
 
-    await new AiService(fixture.services).generateImage({
+    await new AiService(undefined, fixture.services).generateImage({
       inputImages: [`data:image/png;base64,${PNG_BASE64}`],
       mode: 'edit',
       paramValues: {},
@@ -110,7 +110,7 @@ describe('AiService.generateImage AI SDK contract', () => {
       },
     }));
 
-    await new AiService(fixture.services).generateImage({
+    await new AiService(undefined, fixture.services).generateImage({
       mode: 'generate',
       paramValues: {},
       prompt: 'Route this request.',
@@ -146,7 +146,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     restoreProvider = installMockProvider({ image: imageModel });
 
     const error = await captureRejection(
-      new AiService(fixture.services).generateImage({
+      new AiService(undefined, fixture.services).generateImage({
         mode: 'generate',
         paramValues: {},
         prompt: 'Fail.',
@@ -183,7 +183,7 @@ describe('AiService.generateImage AI SDK contract', () => {
     const abortReason = new Error('cancelled image generation');
 
     const rejection = captureRejection(
-      new AiService(fixture.services).generateImage({
+      new AiService(undefined, fixture.services).generateImage({
         mode: 'generate',
         paramValues: {},
         prompt: 'Wait.',

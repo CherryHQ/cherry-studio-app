@@ -51,7 +51,10 @@ describe('AiService.listModels', () => {
         async () => new Response(JSON.stringify({ publisherModels: [] }), { status: 200 }),
       );
 
-    await new AiService(services).listModels({ providerId: provider.id, throwOnError: true });
+    await new AiService(undefined, services).listModels({
+      providerId: provider.id,
+      throwOnError: true,
+    });
 
     expect(services.vertexAuth.getAuthorizationHeaders).toHaveBeenCalledWith({
       projectId: 'project-id',
@@ -69,9 +72,9 @@ describe('AiService.listModels', () => {
     const services = createServices({ provider, registryModels: [registryModel] });
     const fetchSpy = jest.spyOn(globalThis, 'fetch');
 
-    await expect(new AiService(services).listModels({ providerId: provider.id })).resolves.toEqual([
-      registryModel,
-    ]);
+    await expect(
+      new AiService(undefined, services).listModels({ providerId: provider.id }),
+    ).resolves.toEqual([registryModel]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -92,6 +95,7 @@ describe('AiService.listModels', () => {
         }),
     );
     const service = new AiService(
+      undefined,
       createServices({ provider, registryModels: [registryTwin, registryOnly] }),
     );
 
@@ -101,9 +105,9 @@ describe('AiService.listModels', () => {
   });
 
   it('requires an explicit provider id', async () => {
-    await expect(new AiService(createServices({})).listModels({} as never)).rejects.toThrow(
-      'listModels requires providerId',
-    );
+    await expect(
+      new AiService(undefined, createServices({})).listModels({} as never),
+    ).rejects.toThrow('listModels requires providerId');
   });
 });
 
@@ -128,7 +132,7 @@ describe('AiService.checkModel', () => {
         endpointTypes: [...endpointTypes],
       });
       const provider = createProvider({ defaultChatEndpoint });
-      const service = new AiService(createServices({ model, provider }));
+      const service = new AiService(undefined, createServices({ model, provider }));
 
       await expect(service.checkModel({ timeout: 1000, uniqueModelId: model.id })).rejects.toThrow(
         `Mobile AI runtime does not support embedding or rerank models: ${model.id}`,
@@ -139,7 +143,7 @@ describe('AiService.checkModel', () => {
 
   it('checks language models with a generateText probe', async () => {
     const model = createModel('gpt-4o-mini');
-    const service = new AiService(createServices({ model }));
+    const service = new AiService(undefined, createServices({ model }));
 
     await service.checkModel({
       requestOptions: { maxRetries: 2 },
@@ -156,9 +160,9 @@ describe('AiService.checkModel', () => {
   it('requires an explicit model id', async () => {
     const untypedRequest = { timeout: 1000 } as unknown as Parameters<AiService['checkModel']>[0];
 
-    await expect(new AiService(createServices({})).checkModel(untypedRequest)).rejects.toThrow(
-      'AiService requires uniqueModelId',
-    );
+    await expect(
+      new AiService(undefined, createServices({})).checkModel(untypedRequest),
+    ).rejects.toThrow('AiService requires uniqueModelId');
   });
 });
 
