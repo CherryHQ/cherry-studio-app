@@ -23,10 +23,17 @@ model renders 5–6 detents.
   `getEffortSliderTrackGeometry`, so two-stop and six-stop models stay aligned.
   The chat overlay centers its label-and-track panel in the live viewport, so
   keyboard and composer movement do not shift its resting position.
-- **Visuals** — the neutral outer capsule and its exposed stop dots use the
-  theme's `secondary`/`secondary-foreground` pair, so the track is light in the
-  light theme and near-black in the dark theme. The progress pill and gauge
-  pointer use the shared `brand` token with translucent white dots over the pill.
+- **Visuals** — the opaque outer capsule and its exposed stop dots use the
+  theme's `popover`/`popover-foreground` pair: white in the light theme and a
+  raised dark surface in the dark theme. The overlay adds a soft shadow outside
+  its animated clip, keeping the capsule distinct from the blurred content.
+  A local focus field extends 96dp above the label and below the track, fading
+  into the surrounding content at both edges. iOS adds nested native blur bands
+  toward the panel without masking the blur; Android uses the same theme-colored
+  dissolve over its scrim fallback. App and keyboard backdrops share the field's
+  screen coordinates, with the keyboard portion clipped to its own window.
+  The progress pill and gauge pointer use the shared `brand` token with
+  translucent white dots over the pill.
 
 ## Theming & accessibility
 
