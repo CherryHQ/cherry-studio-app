@@ -28,7 +28,6 @@ import { usePreference } from '@/frontend/data/hooks';
 import {
   useAgentApiById,
   useAgentMutations,
-  useAgentToolBindingMutations,
   useAgentToolBindingsApi,
 } from '@/frontend/hooks/agent';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
@@ -44,6 +43,7 @@ import { type AgentFormState, buildAgentDto, createAgentFormState } from './agen
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
+import { useAgentAutoSave } from './useAgentAutoSave';
 
 const agentFormAvatarSize = 104;
 const agentFormContentPadding = 20;
@@ -130,9 +130,8 @@ function AgentEditForm({
   const { alert } = useAlert();
   const { toast } = useToast();
   const isEditing = Boolean(agentId);
-  const { createAgent, isCreating, isSettingAvatar, isUpdating, setAgentAvatar, updateAgent } =
-    useAgentMutations();
-  const { isReplacing, replaceAgentToolBindings } = useAgentToolBindingMutations();
+  const { createAgent, isCreating, isSettingAvatar, setAgentAvatar } = useAgentMutations();
+  const { flush, hasFailedSave, retry, saveField, saveToolBindings } = useAgentAutoSave(agentId);
   const modelPickerData = useModelPickerData({ modelType: 'text' });
   const openProviderSetup = useOpenProviderSetup();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
@@ -150,7 +149,8 @@ function AgentEditForm({
   // user has since removed) from being seeded, which the create endpoint would
   // reject as an unregistered model.
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
-  const isSaving = isCreating || isReplacing || isSettingAvatar || isUpdating;
+  const isSaving = isCreating || isSettingAvatar;
+  const isNameInvalid = isEditing && !form.name.trim();
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -166,8 +166,9 @@ function AgentEditForm({
   const updateForm = useCallback(
     <TKey extends keyof AgentFormState>(key: TKey, value: AgentFormState[TKey]) => {
       setForm((current) => ({ ...current, [key]: value }));
+      saveField(key, value);
     },
-    [],
+    [saveField],
   );
   const openModelSelect = useCallback(() => {
     Keyboard.dismiss();
@@ -178,16 +179,25 @@ function AgentEditForm({
     setIsModelPickerOpen(false);
     openProviderSetup();
   }, [openProviderSetup]);
-  const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
-    setHasPickedModel(true);
-    setForm((current) => ({ ...current, modelId: item.modelId }));
-    setIsModelPickerOpen(false);
-  }, []);
-  // Draft only. The file write needs an agent row to point at, which on create
-  // does not exist until Save returns an id.
-  const handleAvatarSelect = useCallback((sourceUri: string) => {
-    setForm((current) => ({ ...current, avatarUri: sourceUri }));
-  }, []);
+  const handleModelSelect = useCallback(
+    (item: ModelPickerModelItem) => {
+      setHasPickedModel(true);
+      updateForm('modelId', item.modelId);
+      setIsModelPickerOpen(false);
+    },
+    [updateForm],
+  );
+  const handleAvatarSelect = useCallback(
+    (sourceUri: string) => updateForm('avatarUri', sourceUri),
+    [updateForm],
+  );
+  const handleToolBindingsChange = useCallback(
+    (bindings: WriteAgentToolBinding[]) => {
+      setToolBindings(bindings);
+      saveToolBindings(bindings);
+    },
+    [saveToolBindings],
+  );
   const openToolApprovalModePicker = useCallback(() => {
     Keyboard.dismiss();
     setIsToolApprovalModePickerOpen(true);
@@ -221,8 +231,10 @@ function AgentEditForm({
     [t, toast],
   );
   const handleSave = useCallback(async () => {
+    if (isEditing) return;
+
     const dto = buildAgentDto(form, {
-      inheritDefaultModel: !agentId && !hasPickedModel,
+      inheritDefaultModel: !hasPickedModel,
     });
 
     if (!dto.ok) {
@@ -230,15 +242,10 @@ function AgentEditForm({
       return;
     }
 
-    let savedAgentId = agentId;
+    let savedAgentId: string;
 
     try {
-      if (agentId) {
-        await updateAgent(agentId, dto.value);
-        await replaceAgentToolBindings(agentId, toolBindings);
-      } else {
-        savedAgentId = (await createAgent(dto.value)).id;
-      }
+      savedAgentId = (await createAgent(dto.value)).id;
     } catch {
       toast.show({ label: t('agent.toast.saveFailed'), variant: 'danger' });
       return;
@@ -261,18 +268,15 @@ function AgentEditForm({
     router.back();
   }, [
     agent?.avatarUri,
-    agentId,
     alert,
     createAgent,
     form,
     hasPickedModel,
-    replaceAgentToolBindings,
+    isEditing,
     router,
     setAgentAvatar,
     t,
     toast,
-    toolBindings,
-    updateAgent,
   ]);
   // The header is opaque here, so the only inset left to clear is the home
   // indicator — and that one is owned rather than left to
@@ -304,7 +308,7 @@ function AgentEditForm({
 
   return (
     <>
-      <RouteHeader rightActions={saveActions} title={title} />
+      <RouteHeader rightActions={isEditing ? undefined : saveActions} title={title} />
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}
@@ -333,18 +337,28 @@ function AgentEditForm({
             is the one the `Input` already draws. The model row borrows that same
             outline so the three read as one set. */}
         <View className="gap-3">
-          <Input
-            accessibilityLabel={t('agent.form.name')}
-            autoCorrect={false}
-            onChangeText={(value) => updateForm('name', value)}
-            placeholder={t('agent.form.namePlaceholder')}
-            returnKeyType="next"
-            value={form.name}
-          />
+          <View className="gap-1">
+            <Input
+              accessibilityLabel={t('agent.form.name')}
+              autoCorrect={false}
+              invalid={isNameInvalid}
+              onBlur={flush}
+              onChangeText={(value) => updateForm('name', value)}
+              placeholder={t('agent.form.namePlaceholder')}
+              returnKeyType="next"
+              value={form.name}
+            />
+            {isNameInvalid ? (
+              <Text accessibilityLiveRegion="polite" className="px-1 text-error text-sm">
+                {t('agent.form.nameRequired')}
+              </Text>
+            ) : null}
+          </View>
           <Input
             accessibilityLabel={t('agent.form.instructions')}
             autoCorrect
             multiline
+            onBlur={flush}
             onChangeText={(value) => updateForm('instructions', value)}
             placeholder={t('agent.form.instructionsPlaceholder')}
             value={form.instructions}
@@ -396,10 +410,15 @@ function AgentEditForm({
         {isEditing && (servers.length > 0 || toolBindings.length > 0) ? (
           <AgentToolsSection
             bindings={toolBindings}
-            onChange={setToolBindings}
+            onChange={handleToolBindingsChange}
             originalBindings={originalToolBindings}
             servers={servers}
           />
+        ) : null}
+        {hasFailedSave ? (
+          <Button onPress={retry} size="sm" variant="secondary">
+            {t('agent.actions.retry')}
+          </Button>
         ) : null}
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
