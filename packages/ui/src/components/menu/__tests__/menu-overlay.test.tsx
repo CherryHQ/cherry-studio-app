@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { Modal, Platform, Pressable, View } from 'react-native';
+import { Modal, Platform, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { focusMenuTarget } from '../menu-focus';
@@ -56,7 +56,9 @@ describe('menu overlay native boundary', () => {
       return nextFrame;
     });
     jest.spyOn(global, 'cancelAnimationFrame').mockImplementation((id) => {
-      frames.delete(id);
+      if (id != null) {
+        frames.delete(id);
+      }
     });
     jest.replaceProperty(Platform, 'OS', 'ios');
     act(() => {
@@ -78,7 +80,7 @@ describe('menu overlay native boundary', () => {
       visible: true,
     });
     act(() => modal.props.onRequestClose());
-    act(() => renderer.root.findByType(Pressable).props.onPress());
+    act(() => renderer.root.findByProps({ testID: 'menu-backdrop' }).props.onPress());
     expect(close).toHaveBeenCalledTimes(2);
     act(() => renderer.update(render(false, false)));
     expect(closed).not.toHaveBeenCalled();

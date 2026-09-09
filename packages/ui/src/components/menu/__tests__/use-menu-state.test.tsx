@@ -30,7 +30,9 @@ describe('menu lifecycle', () => {
       return nextFrame;
     });
     jest.spyOn(global, 'cancelAnimationFrame').mockImplementation((id) => {
-      frames.delete(id);
+      if (id != null) {
+        frames.delete(id);
+      }
     });
     act(() => {
       renderer = create(<Harness />);
@@ -109,10 +111,10 @@ describe('menu lifecycle', () => {
   });
 
   it('subscribes to viewport changes only while a presentation exists', () => {
-    const remove = jest.fn();
-    const subscribe = jest.spyOn(Dimensions, 'addEventListener').mockReturnValue({ remove });
+    const subscribe = jest.spyOn(Dimensions, 'addEventListener');
     expect(subscribe).not.toHaveBeenCalled();
     act(() => state().open(anchor));
+    const remove = jest.spyOn(subscribe.mock.results[0].value, 'remove');
     act(() =>
       subscribe.mock.calls[0][1]({
         window: { ...Dimensions.get('window'), width: Dimensions.get('window').width + 1 },
