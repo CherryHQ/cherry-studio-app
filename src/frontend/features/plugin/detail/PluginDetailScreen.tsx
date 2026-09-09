@@ -3,13 +3,14 @@ import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/compo
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { useAgentsApi } from '@/frontend/hooks/agent';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { PluginIdSchema, type PluginConnection, type PluginId } from '@/shared/contracts/plugins';
 import type { Agent } from '@/shared/data/types/agent';
 
@@ -48,12 +49,6 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
     } finally {
       setIsDisconnecting(false);
     }
-  }
-
-  function openLink(url: string) {
-    void Linking.openURL(url).catch(() =>
-      toast.show({ label: t('plugins.linkFailed'), variant: 'danger' }),
-    );
   }
 
   return (
@@ -131,14 +126,14 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
             <Button
               variant="link"
               size="inline"
-              onPress={() => openLink(PLUGIN_LINKS[pluginId].website)}
+              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].website)}
             >
               {t('plugins.website')}
             </Button>
             <Button
               variant="link"
               size="inline"
-              onPress={() => openLink(PLUGIN_LINKS[pluginId].privacy)}
+              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].privacy)}
             >
               {t('plugins.privacyPolicy')}
             </Button>

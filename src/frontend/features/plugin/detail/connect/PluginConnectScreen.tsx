@@ -2,12 +2,13 @@ import { Button, ContentState, Input, TextField, useToast } from '@cherrystudio/
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Linking, Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
   ConnectPluginSchema,
   PluginIdSchema,
@@ -120,11 +121,7 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
           <Button
             variant="link"
             size="inline"
-            onPress={() =>
-              void Linking.openURL(PLUGIN_LINKS[pluginId].credentials).catch(() =>
-                toast.show({ label: t('plugins.linkFailed'), variant: 'danger' }),
-              )
-            }
+            onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].credentials)}
           >
             {t(`plugins.catalog.${pluginId}.getCredential`)}
           </Button>
