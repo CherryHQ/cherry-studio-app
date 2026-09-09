@@ -51,8 +51,9 @@ restore catalog or app defaults through the existing nullable storage columns.
 
 Manual creation accepts one model at a time. Multiple or duplicate IDs and conflicting interfaces
 produce field errors. The mobile forms keep identity fields first and use bottom-sheet pickers for type and endpoint.
-Capabilities, token limits, pricing, and organization use separate collapsible sections with summaries
-and visible validation errors. Pricing expands one tier at a time and opens newly added tiers; notes
+Capabilities, token limits, pricing, and organization use plain collapsible rows with optional
+one-line values and visible validation errors. Persistent copy is limited to labels, pricing units,
+and contextual constraints; empty-state descriptions and repeated guidance are omitted. Pricing expands one tier at a time and opens newly added tiers; notes
 use a multiline input. Keyboard scrolling follows the focused input without section-level jumps.
 Numeric fields preserve raw input for validation; context/output checks share the
 runtime's mobile fallback constants. Failed writes keep the draft, and immediate duplicate saves are

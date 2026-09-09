@@ -79,9 +79,6 @@ export function ProviderModelManualForm({
     { field: 'maxOutputTokens', onChange: updateMaxOutputTokens },
   ] as const;
   const limitError = limitFields.map(({ field }) => fieldErrors[field]).find(Boolean);
-  const configuredLimits = limitFields.filter(
-    ({ field }) => formState[field] || baseline?.[field],
-  ).length;
   const defaultGroup =
     baseline?.group ?? getDefaultProviderModelGroupName(formState.modelId, provider.id);
   const supportsStreaming = formState.supportsStreaming ?? baseline?.supportsStreaming ?? true;
@@ -225,17 +222,10 @@ export function ProviderModelManualForm({
             {!capabilities.drawing ? (
               <ProviderModelFormSection
                 title={t('settings.provider.models.form.limits')}
-                summary={
-                  configuredLimits
-                    ? t('settings.provider.models.form.limitsConfigured', {
-                        value: configuredLimits,
-                      })
-                    : t('settings.provider.models.detail.useDefault')
-                }
                 errorMessage={limitError}
                 disabled={isSubmitting}
               >
-                <View className="gap-4 p-4">
+                <View className="gap-4 px-4 pb-4">
                   {limitFields.map(({ field, onChange }) => (
                     <ProviderModelNumberField
                       key={field}
@@ -263,18 +253,16 @@ export function ProviderModelManualForm({
 
             <ProviderModelFormSection
               title={t('settings.provider.models.detail.group')}
-              summary={
-                formState.group.trim() ||
-                defaultGroup ||
-                t('settings.provider.models.form.optional')
-              }
+              summary={formState.group.trim() || defaultGroup || undefined}
               disabled={isSubmitting}
             >
-              <View className="p-4">
-                <ProviderModelAddTextField
+              <View className="px-4 pb-4">
+                <Input
                   accessibilityLabel={t('settings.provider.models.detail.group')}
-                  isDisabled={isSubmitting}
-                  label={t('settings.provider.models.detail.group')}
+                  disabled={isSubmitting}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
                   placeholder={defaultGroup}
                   value={formState.group}
                   onChangeText={updateGroup}
@@ -337,7 +325,7 @@ function ProviderModelAddTextField({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    gap: 20,
+    gap: 16,
     paddingBottom: 32,
     paddingHorizontal: 16,
     paddingTop: 20,

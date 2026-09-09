@@ -34,7 +34,7 @@ export function ProviderModelClassificationFields({
   return (
     <ProviderModelFormSection
       title={t('settings.provider.models.classification.capabilities')}
-      summary={selectedLabels.join(' · ') || t('settings.provider.models.form.noExtraCapabilities')}
+      summary={selectedLabels.join(' · ') || undefined}
       disabled={disabled}
     >
       {(['reasoning', 'functionCall'] as const).map((capability) => (
@@ -58,19 +58,22 @@ export function ProviderModelClassificationFields({
               className="min-h-11"
               disabled={disabled || (capability === 'vision' && requiresImageInput)}
               accessibilityRole="checkbox"
-              accessibilityLabel={t(`settings.provider.models.classification.${capability}`)}
+              accessibilityLabel={t(
+                capability === 'vision' && requiresImageInput
+                  ? 'settings.provider.models.classification.imageInputRequired'
+                  : `settings.provider.models.classification.${capability}`,
+              )}
               selected={capabilities[capability] || (capability === 'vision' && requiresImageInput)}
               onSelectedChange={(selected) => onCapabilityChange(capability, selected)}
             >
-              {t(`settings.provider.models.classification.${capability}`)}
+              {t(
+                capability === 'vision' && requiresImageInput
+                  ? 'settings.provider.models.classification.imageInputRequired'
+                  : `settings.provider.models.classification.${capability}`,
+              )}
             </Chip.Selectable>
           ))}
         </View>
-        {requiresImageInput ? (
-          <Text className="text-muted-foreground text-xs">
-            {t('settings.provider.models.classification.imageInputRequired')}
-          </Text>
-        ) : null}
       </View>
     </ProviderModelFormSection>
   );

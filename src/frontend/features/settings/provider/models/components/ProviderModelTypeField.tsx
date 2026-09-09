@@ -34,11 +34,6 @@ export function ProviderModelTypeField({
         label={title}
         value={valueLabel}
         accessibilityLabel={`${title}, ${valueLabel}`}
-        description={
-          value === 'embedding' || value === 'rerank'
-            ? t('settings.provider.models.classification.managementOnly')
-            : undefined
-        }
         disabled={disabled}
         onPress={() => {
           Keyboard.dismiss();

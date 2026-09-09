@@ -44,19 +44,18 @@ export function ProviderModelPricingFields({
       title={t('settings.provider.models.pricing.title')}
       summary={
         hasPrices || draft.tiers.length > 1
-          ? t('settings.provider.models.pricing.summary', {
-              currency: draft.currency,
-              value: draft.tiers.length,
-            })
-          : t('settings.provider.models.pricing.unset')
+          ? draft.tiers.length > 1
+            ? t('settings.provider.models.pricing.summary', {
+                currency: draft.currency,
+                value: draft.tiers.length - 1,
+              })
+            : draft.currency
+          : undefined
       }
       errorMessage={hasErrors ? t('settings.provider.models.pricing.invalidFields') : undefined}
       disabled={disabled}
     >
-      <View className="gap-3 p-4">
-        <Text className="text-muted-foreground text-sm">
-          {t('settings.provider.models.pricing.help')}
-        </Text>
+      <View className="flex-row flex-wrap items-center gap-3 px-4 pb-3">
         <View
           className="flex-row flex-wrap gap-2"
           accessibilityRole="radiogroup"
@@ -77,48 +76,60 @@ export function ProviderModelPricingFields({
             </Chip.Selectable>
           ))}
         </View>
+        <Text className="text-muted-foreground text-sm">
+          {t('settings.provider.models.pricing.unit')}
+        </Text>
       </View>
       {draft.tiers.map((tier, index) => {
         const isExpanded = expandedTierId === tier.id;
         const hasTierErrors = Object.keys(errors[index] ?? {}).length > 0;
-        const rateSummary = t('settings.provider.models.pricing.rateSummary', {
-          input: tier.input.trim() || t('settings.provider.models.detail.unknown'),
-          output: tier.output.trim() || t('settings.provider.models.detail.unknown'),
-        });
+        const rateSummary = (['input', 'output'] as const)
+          .filter((field) => tier[field].trim())
+          .map((field) => `${t(`settings.provider.models.pricing.${field}`)} ${tier[field].trim()}`)
+          .join(' · ');
         const tierLabel = t(
           index === 0
             ? 'settings.provider.models.pricing.baseTier'
             : 'settings.provider.models.pricing.tier',
           { index },
         );
-        const tierSummary = hasTierErrors
+        const tierError = hasTierErrors
           ? t('settings.provider.models.pricing.checkTier')
-          : index === 0
+          : undefined;
+        const tierSummary =
+          index === 0
             ? rateSummary
-            : `${t('settings.provider.models.pricing.thresholdSummary', {
-                tokens: tier.minInputTokens,
-              })} · ${rateSummary}`;
+            : tier.minInputTokens.trim()
+              ? t('settings.provider.models.pricing.thresholdSummary', {
+                  tokens: tier.minInputTokens.trim(),
+                })
+              : undefined;
         return (
           <View key={tier.id}>
             <Section.Item
               label={tierLabel}
-              accessibilityLabel={`${tierLabel}, ${tierSummary}`}
+              accessibilityLabel={[tierLabel, tierError ?? tierSummary].filter(Boolean).join(', ')}
               description={
-                <Text
-                  className={hasTierErrors ? 'text-error text-sm' : 'text-muted-foreground text-sm'}
-                  numberOfLines={2}
-                >
-                  {tierSummary}
-                </Text>
+                tierError ? <Text className="text-error text-sm">{tierError}</Text> : undefined
               }
               accessibilityState={{ expanded: isExpanded }}
               disabled={disabled}
               trailing={
-                isExpanded ? (
-                  <ChevronUpIcon className="size-5 text-muted-foreground" />
-                ) : (
-                  <ChevronDownIcon className="size-5 text-muted-foreground" />
-                )
+                <View className="min-w-0 flex-row items-center gap-2">
+                  {!isExpanded && !hasTierErrors && tierSummary ? (
+                    <Text
+                      className="min-w-0 shrink text-right text-sm text-muted-foreground"
+                      numberOfLines={1}
+                    >
+                      {tierSummary}
+                    </Text>
+                  ) : null}
+                  {isExpanded ? (
+                    <ChevronUpIcon className="size-5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
+                  )}
+                </View>
               }
               onPress={() => {
                 Keyboard.dismiss();
@@ -128,16 +139,21 @@ export function ProviderModelPricingFields({
             {isExpanded ? (
               <View className="gap-4 px-4 pb-4">
                 {index > 0 ? (
-                  <ProviderModelNumberField
-                    disabled={disabled}
-                    label={t('settings.provider.models.pricing.minInputTokens')}
-                    placeholder="200000"
-                    value={tier.minInputTokens}
-                    onChangeText={(value) => updateTier(tier.id, 'minInputTokens', value)}
-                    errorMessage={
-                      errors[index]?.minInputTokens ? t(errors[index].minInputTokens) : undefined
-                    }
-                  />
+                  <View className="gap-1">
+                    <ProviderModelNumberField
+                      disabled={disabled}
+                      label={t('settings.provider.models.pricing.minInputTokens')}
+                      placeholder="200000"
+                      value={tier.minInputTokens}
+                      onChangeText={(value) => updateTier(tier.id, 'minInputTokens', value)}
+                      errorMessage={
+                        errors[index]?.minInputTokens ? t(errors[index].minInputTokens) : undefined
+                      }
+                    />
+                    <Text className="text-muted-foreground text-xs">
+                      {t('settings.provider.models.pricing.tierHelp')}
+                    </Text>
+                  </View>
                 ) : null}
                 {modelPriceFields.map((field) => (
                   <TextField
@@ -149,14 +165,12 @@ export function ProviderModelPricingFields({
                       {t(`settings.provider.models.pricing.${field}`)}
                     </TextField.Label>
                     <Input
-                      accessibilityLabel={
-                        index === 0
-                          ? t(`settings.provider.models.pricing.${field}`)
-                          : t('settings.provider.models.pricing.tierField', {
-                              index,
-                              field: t(`settings.provider.models.pricing.${field}`),
-                            })
-                      }
+                      accessibilityLabel={[
+                        tierLabel,
+                        t(`settings.provider.models.pricing.${field}`),
+                        draft.currency,
+                        t('settings.provider.models.pricing.unit'),
+                      ].join(', ')}
                       autoCorrect={false}
                       inputMode="decimal"
                       keyboardType="decimal-pad"

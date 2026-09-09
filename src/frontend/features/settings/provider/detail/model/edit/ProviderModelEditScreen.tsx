@@ -80,7 +80,6 @@ function ModelEditor({ model: sourceModel, provider }: { model: Model; provider:
   const pricingErrors = settings.pricing
     ? buildModelPricing(settings.pricing, model.pricing).errors
     : [];
-  const configuredLimits = modelLimitFields.filter((field) => draft[field].trim()).length;
   const supportsStreaming = settings.supportsStreaming ?? model.supportsStreaming;
   const hasPricingErrors = pricingErrors.some((tier) => Object.keys(tier).length > 0);
   const limitError =
@@ -179,14 +178,12 @@ function ModelEditor({ model: sourceModel, provider }: { model: Model; provider:
         keyboardDismissMode="on-drag"
         mode="layout"
       >
-        <View className="gap-5">
+        <View className="gap-4">
           <View className="gap-1">
             <Text selectable className="font-mono text-sm text-foreground">
               {model.modelId}
             </Text>
-            <Text className="text-muted-foreground text-xs">
-              {t('settings.provider.models.detail.identityReadOnly', { provider: provider.name })}
-            </Text>
+            <Text className="text-muted-foreground text-xs">{provider.name}</Text>
           </View>
           <TextField disabled={isSaving} required invalid={!draft.name.trim()}>
             <TextField.Label>{t('settings.provider.models.detail.name')}</TextField.Label>
@@ -258,15 +255,10 @@ function ModelEditor({ model: sourceModel, provider }: { model: Model; provider:
           </ProviderModelClassificationFields>
           <ProviderModelFormSection
             title={t('settings.provider.models.form.limits')}
-            summary={
-              configuredLimits
-                ? t('settings.provider.models.form.limitsConfigured', { value: configuredLimits })
-                : t('settings.provider.models.detail.useDefault')
-            }
             errorMessage={limitError}
             disabled={isSaving}
           >
-            <View className="gap-4 p-4">
+            <View className="gap-4 px-4 pb-4">
               {modelLimitFields.map((field) => (
                 <ProviderModelNumberField
                   key={field}
@@ -277,9 +269,6 @@ function ModelEditor({ model: sourceModel, provider }: { model: Model; provider:
                   placeholder={t('settings.provider.models.detail.useDefault')}
                 />
               ))}
-              <Text className="text-muted-foreground text-xs">
-                {t('settings.provider.models.detail.clearLimitsHelp')}
-              </Text>
             </View>
           </ProviderModelFormSection>
           <ProviderModelPricingFields
@@ -297,17 +286,10 @@ function ModelEditor({ model: sourceModel, provider }: { model: Model; provider:
           />
           <ProviderModelFormSection
             title={t('settings.provider.models.form.organization')}
-            summary={
-              [
-                draft.group.trim(),
-                draft.notes.trim() ? t('settings.provider.models.form.hasNotes') : '',
-              ]
-                .filter(Boolean)
-                .join(' · ') || t('settings.provider.models.form.optional')
-            }
+            summary={draft.group.trim() || draft.notes.trim() || undefined}
             disabled={isSaving}
           >
-            <View className="gap-4 p-4">
+            <View className="gap-4 px-4 pb-4">
               {(['group', 'notes'] as const).map((field) => (
                 <TextField key={field} disabled={isSaving}>
                   <TextField.Label>{t(`settings.provider.models.detail.${field}`)}</TextField.Label>
