@@ -4,6 +4,8 @@ import { type ReactElement, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useCameraAccess } from '@/frontend/hooks/useCameraAccess';
+
 type AvatarImagePickerProps = {
   accessibilityLabel: string;
   children: ReactElement;
@@ -35,6 +37,7 @@ export function AvatarImagePicker({
 }: AvatarImagePickerProps) {
   const { t } = useTranslation();
   const isSelectingRef = useRef(false);
+  const requestCameraAccess = useCameraAccess();
 
   const selectImage = useCallback(
     async (source: PickerSource) => {
@@ -44,13 +47,7 @@ export function AvatarImagePicker({
 
       isSelectingRef.current = true;
       try {
-        if (source === 'camera') {
-          const permission = await ImagePicker.requestCameraPermissionsAsync();
-
-          if (!permission.granted) {
-            return;
-          }
-        }
+        if (source === 'camera' && !(await requestCameraAccess())) return;
 
         const commonOptions = {
           allowsEditing: true,
@@ -76,7 +73,7 @@ export function AvatarImagePicker({
         isSelectingRef.current = false;
       }
     },
-    [onError, onSelect],
+    [onError, onSelect, requestCameraAccess],
   );
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [

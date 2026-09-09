@@ -1,14 +1,10 @@
-import { useMemo } from 'react';
-
 import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
 
-import { permissionConfig, permissionKinds } from '../permissionConfig';
+import { visiblePermissionKinds } from '../components/PermissionListPresentation/PermissionListPresentation';
+import { permissionConfig } from '../permissionConfig';
 
-/** Every scope this screen lists, watched together. */
+const scopes = visiblePermissionKinds.flatMap((kind) => permissionConfig[kind].scopes);
+
 export function usePermissionSystemStatuses() {
-  const scopes = useMemo(
-    () => permissionKinds.flatMap((kind) => permissionConfig[kind].scopes),
-    [],
-  );
   return useDevicePermissionStatuses(scopes);
 }

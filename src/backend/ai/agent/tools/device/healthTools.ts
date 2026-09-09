@@ -6,6 +6,7 @@ import {
   healthMetricNames,
   listHealthWorkouts,
 } from '@/backend/services/device';
+import { canUseDevicePermission, healthPermissionScope } from '@/shared/contracts';
 
 import { createDeviceRuntimeTool, type DeviceToolDependencies } from './deviceRuntimeTool';
 import { limit, optionalIsoDate } from './deviceToolSchemas';
@@ -43,25 +44,42 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
       description: 'Read selected health metrics as a range summary or daily aggregates.',
       displayName: 'Health summary',
       inputSchema: summarySchema,
-      permissionScopes: ['health.read'],
-      run: (input) =>
-        getHealthSummary(
+      permissionScopes: (input) =>
+        (input.metrics.length ? input.metrics : healthMetricNames).map(healthPermissionScope),
+      permissionMatch: 'any',
+      run: async (input, _signal, permissions) => {
+        const requested = input.metrics.length ? input.metrics : healthMetricNames;
+        const metrics = requested.filter((metric) =>
+          canUseDevicePermission(
+            healthPermissionScope(metric),
+            permissions[healthPermissionScope(metric)],
+          ),
+        );
+        const result = await getHealthSummary(
           {
             endDate: input.endDate || undefined,
             granularity: input.granularity,
-            metrics: input.metrics.length > 0 ? input.metrics : undefined,
+            metrics,
             startDate: input.startDate || undefined,
           },
           loadHealthKit,
-        ),
+        );
+        return {
+          ...result,
+          unavailableMetrics: requested.filter((metric) => !metrics.includes(metric)),
+          accessNote:
+            'Only available, authorized data is included. Missing data does not mean a zero value; HealthKit does not disclose read denials.',
+        };
+      },
     }),
     createDeviceRuntimeTool({
       capabilityId: HEALTH_TOOL_IDS.listWorkouts,
       deps,
-      description: 'List workouts from a date range of at most 90 days.',
+      description:
+        'List workouts from a date range of at most 90 days, subject to system history access. An empty result may mean no records or no read access; never infer zero activity from it.',
       displayName: 'List workouts',
       inputSchema: workoutsSchema,
-      permissionScopes: ['health.read'],
+      permissionScopes: ['health.workouts.read'],
       run: (input) =>
         listHealthWorkouts(
           {

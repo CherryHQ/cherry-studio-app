@@ -12,11 +12,12 @@ suffix.
 
 ## Ownership
 
-- `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` expose mobile workflow
+- `models`, `paintings`, `mcp`, `providers`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.
 - `webSearch` retains the desktop-aligned `WebSearchService`. Device permissions are adapted by
-  `DevicePermissions`; avatar storage remains a set of domain functions.
+  `DevicePermissions`, which directly implements the shared `PermissionsModule` contract;
+  avatar storage remains a set of domain functions.
 - `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
   file maintenance orchestration. File-entry and reference persistence remain in
   `src/backend/data/services`.

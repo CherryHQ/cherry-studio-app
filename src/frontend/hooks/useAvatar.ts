@@ -3,9 +3,9 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
-const defaultAvatarSource = require('@/assets/icon.png');
+const defaultAvatarSource = require('@/assets/default-user-avatar.svg');
 
-/** The user avatar as an Expo Image source, with the bundled icon as fallback. */
+/** The user avatar as an Expo Image source, with the bundled user silhouette as fallback. */
 export function useAvatar(): string | number {
   const [avatar] = usePreference('app.user.avatar');
   const profile = useBackendModule('profile');

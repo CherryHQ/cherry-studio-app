@@ -32,7 +32,7 @@ export function DocumentParserSetting() {
 
   return (
     <>
-      <Section footer={t('settings.documentParser.description')}>
+      <Section>
         <Section.SelectItem
           label={t('settings.documentParser.title')}
           onPress={() => setIsPickerOpen(true)}
@@ -41,7 +41,6 @@ export function DocumentParserSetting() {
         />
       </Section>
       <OptionPickerBottomSheet<DocumentParserMode>
-        helperText={t('settings.documentParser.noFallback')}
         onClose={() => setIsPickerOpen(false)}
         onValueChange={changeMode}
         open={isPickerOpen}

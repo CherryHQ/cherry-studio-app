@@ -7,10 +7,9 @@
  * 1. OS permission is not an approval substitute. The catalog only offers a
  *    tool whose scopes were grantable when the turn was admitted; this wrapper
  *    rechecks them again immediately before the side effect, because the user
- *    can revoke access in Settings while a turn is running. A scope that was
- *    never asked for triggers the one-shot system prompt here — the tool
- *    entered the catalog as `ask`, so the user has already consented in-app
- *    before the OS dialog appears.
+ *    can revoke access in Settings while a turn is running. Requestable scopes
+ *    trigger a system prompt here, after the in-app approval. Health summaries
+ *    can proceed with a subset of their requested metrics.
  * 2. A failure the model could act on is a value, not a throw. A thrown error
  *    reaches the model as an opaque "tool execution failed", which tells it
  *    nothing about whether retrying could work.
@@ -21,10 +20,21 @@
 import * as z from 'zod';
 
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
-import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import {
+  canRequestDevicePermission,
+  canUseDevicePermission,
+  type DevicePermissionScope,
+  type PermissionStatuses,
+  type PermissionsModule,
+} from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../runtime';
+import {
+  raceAbort,
+  type RuntimeJsonValue,
+  type RuntimeTool,
+  type RuntimeToolResult,
+} from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 
 const logger = loggerService.withContext('DeviceRuntimeTool');
@@ -32,10 +42,7 @@ const logger = loggerService.withContext('DeviceRuntimeTool');
 /** Messages that cannot become truthy by trying again with the same input. */
 const PERMANENT_FAILURE_PATTERN = /denied|permission|read-only|not found|unavailable|no writable/i;
 
-export type DevicePermissionReader = {
-  getStatusForScope(scope: DevicePermissionScope): Promise<SystemPermissionState>;
-  requestForScope(scope: DevicePermissionScope): Promise<SystemPermissionState>;
-};
+export type DevicePermissionReader = Pick<PermissionsModule, 'getStatuses' | 'request'>;
 
 export type DeviceToolDependencies = {
   devicePermissions: DevicePermissionReader;
@@ -47,8 +54,15 @@ type DeviceRuntimeToolInput<TSchema extends z.ZodType> = {
   description: string;
   displayName: string;
   inputSchema: TSchema;
-  permissionScopes: readonly DevicePermissionScope[];
-  run(input: z.output<TSchema>, signal: AbortSignal): Promise<unknown>;
+  permissionScopes:
+    | readonly DevicePermissionScope[]
+    | ((input: z.output<TSchema>) => readonly DevicePermissionScope[]);
+  permissionMatch?: 'any';
+  run(
+    input: z.output<TSchema>,
+    signal: AbortSignal,
+    permissions: PermissionStatuses,
+  ): Promise<unknown>;
 };
 
 export function createDeviceRuntimeTool<TSchema extends z.ZodType>(
@@ -79,8 +93,19 @@ export function createDeviceRuntimeTool<TSchema extends z.ZodType>(
 
       try {
         throwIfAborted(signal);
-        await assertPermissions(input.deps, input.permissionScopes, input.capabilityId);
-        const value = await input.run(parsed.data, signal);
+        const scopes =
+          typeof input.permissionScopes === 'function'
+            ? input.permissionScopes(parsed.data)
+            : input.permissionScopes;
+        const permissions = await assertPermissions(
+          input.deps,
+          scopes,
+          input.capabilityId,
+          signal,
+          input.permissionMatch,
+        );
+        throwIfAborted(signal);
+        const value = await input.run(parsed.data, signal, permissions);
         throwIfAborted(signal);
         return { value: (value ?? null) as RuntimeJsonValue, artifacts: [] };
       } catch (error) {
@@ -116,18 +141,23 @@ async function assertPermissions(
   deps: DeviceToolDependencies,
   scopes: readonly DevicePermissionScope[],
   capabilityId: string,
-): Promise<void> {
-  // Sequential on purpose: one system dialog at a time, and a denial makes
-  // requesting the remaining scopes pointless.
-  for (const scope of scopes) {
-    let status = await deps.devicePermissions.getStatusForScope(scope);
-    if (status === 'undetermined') {
-      status = await deps.devicePermissions.requestForScope(scope);
-    }
-    if (status !== 'granted') {
-      throw new Error(`System permission for ${capabilityId} is not granted`);
-    }
+  signal: AbortSignal,
+  match?: 'any',
+): Promise<PermissionStatuses> {
+  let statuses = await deps.devicePermissions.getStatuses(scopes);
+  const requestable = scopes.filter((scope) => canRequestDevicePermission(statuses[scope]));
+  throwIfAborted(signal);
+  if (requestable.length) {
+    statuses = {
+      ...statuses,
+      ...(await raceAbort(deps.devicePermissions.request(requestable, signal), signal)),
+    };
   }
+  const allowed = scopes.map((scope) => canUseDevicePermission(scope, statuses[scope]));
+  if (match === 'any' ? !allowed.some(Boolean) : !allowed.every(Boolean)) {
+    throw new Error(`System permission for ${capabilityId} is not available`);
+  }
+  return statuses;
 }
 
 function throwIfAborted(signal: AbortSignal): void {

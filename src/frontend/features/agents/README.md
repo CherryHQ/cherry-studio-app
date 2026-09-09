@@ -19,6 +19,11 @@ surfaces.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   its two-mode tool-approval preference, and Agent-specific MCP extensions. Inference parameters
   and system capability switches are not part of the Agent editor surface.
+- Existing agents save edits automatically without a Save action. Name and instructions wait for
+  600 ms of idle input, then save; blur, leaving the page, and backgrounding flush pending text.
+  Other fields save immediately. Writes run in order and retain only the latest queued change per
+  field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
+  replaces the stored name. New agents still require an explicit Save to create the record.
 - Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
   selection; image generation is selected for one submission. Neither is saved on the Agent.
@@ -27,8 +32,9 @@ surfaces.
   system permission and managed-resource checks.
 - The avatar is a managed file, not a mutable Agent field, so it has its own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
-  returns an id. Picking one only updates the draft; Save commits it. An avatar can be set and
-  replaced but not cleared. Unset avatars render the name's first character over a generated colour,
+  returns an id. Picking one saves immediately when editing; on create, Save commits the draft.
+  An avatar can be set and replaced but not cleared. Unset avatars render the name's first character
+  over a generated colour,
   falling back to a neutral badge while the name is still blank.
 
 ## Organization
