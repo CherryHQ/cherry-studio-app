@@ -28,7 +28,7 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
     occurrenceById.set(segment.id, occurrence + 1);
 
     return (
-      <Text className="text-brand" key={`${segment.id}-${occurrence}`}>
+      <Text className="text-link" key={`${segment.id}-${occurrence}`}>
         {segment.text}
       </Text>
     );
@@ -36,7 +36,7 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
 }
 
 /**
- * Plain text with its tool mentions picked out in the brand color, showing the
+ * Plain text with its tool mentions picked out in the link color, showing the
  * name the sender saw rather than the link syntax carrying it. Nested `Text`
  * rather than a markdown renderer: the mention is the only thing to style, and
  * reaching for a renderer would start parsing everything else the user typed

@@ -61,11 +61,7 @@
   --inline-code: var(--gray-alpha-100);
   --inline-code-foreground: var(--red-900);
 
-  /* 产品自己的 Logo 红。`--primary` 现在直接读它（见 shadcn.css），所以两者暂时是同一个
-   * 值 —— 但仍是两个名字：`--brand` 说「这里必须是产品的颜色」，`--primary` 说「这里
-   * 是主色，将来可能由用户决定」。真做了主题色界面时，只有后者会开始变。
-   *
-   * #ff5757 直接取自 Cherry Studio Logo SVG，在明暗主题中保持一致。 */
+  /* Fixed logo artwork color. Actions and content must use their semantic roles. */
   --brand: #ff5757;
 
   /* Stable product domain: user-message surface (UserMessageItem) */
