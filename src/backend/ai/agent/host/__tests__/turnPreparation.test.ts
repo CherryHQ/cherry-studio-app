@@ -208,8 +208,7 @@ describe('turn preparation', () => {
       const plan = await prepareTurn(
         harness.dependencies,
         {
-          sessionId: SESSION_ID,
-          parts: [{ type: 'text', text: 'Hello.' }],
+          ...textInput(),
           reasoningEffort,
         },
         new AbortController().signal,
