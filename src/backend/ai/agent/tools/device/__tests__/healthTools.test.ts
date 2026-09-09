@@ -49,7 +49,10 @@ describe('health tool permission selection', () => {
     );
     await execute(['steps']);
     expect(permissions.getStatuses).toHaveBeenCalledWith(['health.steps.read']);
-    expect(permissions.request).toHaveBeenCalledWith(['health.steps.read']);
+    expect(permissions.request).toHaveBeenCalledWith(
+      ['health.steps.read'],
+      expect.any(AbortSignal),
+    );
     expect(native.getQuantityData.mock.calls.map(([identifier]) => identifier)).toEqual([
       'HKQuantityTypeIdentifierStepCount',
     ]);

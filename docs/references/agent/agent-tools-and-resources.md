@@ -314,7 +314,9 @@ retry; cancellation still propagates without becoming a cached failure.
   from side effects.
 - iOS add-only calendar authorization is separate from full access. Reading, updating, and deleting
   events require full access; adding can use add-only access. Android uses its calendar permission
-  group. Settings retain the upgrade path from add-only to full access.
+  group. The Expo Calendar requester patch persists completed full-access inquiries, so Settings
+  offer the initial add-only upgrade and switch to system management after refusal, including
+  after an app restart. A system privacy reset clears that inquiry history.
 - OS permission is not an approval substitute. The callback checks both current OS permission and
   the Runtime approval decision immediately before access.
 - A missing platform API or denied permission returns a normalized unavailable/permission result;
@@ -323,12 +325,20 @@ retry; cancellation still propagates without becoming a cached failure.
   always failing.
 - A device failure settles as a `{ status: 'error', message, retryable }` value rather than a throw,
   because a thrown error reaches the model only as an opaque failure it cannot act on.
+- `DevicePermissions` directly implements `PermissionsModule` and serializes system prompts.
+  Tool cancellation reaches the queue, which skips cancelled requests and remaining prompts in a
+  batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
+  until its native callback settles.
 
 ### System Health
 
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
+- The Nitro HealthKit Android patch propagates record-read failures after quota retries and native
+  aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
+  marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
+  calendar requester patch require a new native build.
 - Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
   result on earlier versions, then reads grants per data type. Settings open Health Connect
   management even when all permissions are already granted.

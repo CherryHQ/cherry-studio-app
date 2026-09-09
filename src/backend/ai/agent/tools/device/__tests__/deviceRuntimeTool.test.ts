@@ -52,7 +52,7 @@ describe('createDeviceRuntimeTool', () => {
       value: { ok: true },
       artifacts: [],
     });
-    expect(request).toHaveBeenCalledWith(['calendar.write']);
+    expect(request).toHaveBeenCalledWith(['calendar.write'], expect.any(AbortSignal));
   });
 
   test('settles as a terminal failure when the user denies the system prompt', async () => {
@@ -84,6 +84,38 @@ describe('createDeviceRuntimeTool', () => {
     await expect(
       tool.execute({ input: { id: 'event-1' }, signal: controller.signal, toolCallId: 'call-1' }),
     ).rejects.toThrow();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  test('forwards cancellation and releases the tool without waiting for an open native sheet', async () => {
+    const controller = new AbortController();
+    const run = jest.fn();
+    let finishRequest!: (statuses: PermissionStatuses) => void;
+    let requestStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const request = jest.fn(
+      () =>
+        new Promise<PermissionStatuses>((resolve) => {
+          finishRequest = resolve;
+          requestStarted();
+        }),
+    );
+    const tool = build({ run, status: 'undetermined', request });
+    const result = tool.execute({
+      input: { id: 'event-1' },
+      signal: controller.signal,
+      toolCallId: 'call-1',
+    });
+    const cancelled = expect(result).rejects.toThrow();
+    await started;
+    controller.abort();
+
+    await cancelled;
+    expect(request).toHaveBeenCalledWith(['calendar.write'], controller.signal);
+    finishRequest({ 'calendar.write': { state: 'granted', canAskAgain: false } });
+    await Promise.resolve();
     expect(run).not.toHaveBeenCalled();
   });
 

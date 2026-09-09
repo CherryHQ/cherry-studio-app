@@ -59,6 +59,24 @@ describe('health summaries with incomplete data', () => {
     );
   });
 
+  test('reports a raw query failure as an error instead of missing records', async () => {
+    const native = {
+      getQuantityData: jest.fn(async (identifier: string) => {
+        if (identifier.includes('StepCount')) throw new Error('Read access revoked');
+        return [sample];
+      }),
+      getAggregatedQuantity: jest.fn(async () => 80),
+    };
+    const result = await getHealthSummary(
+      { ...range, granularity: 'summary', metrics: ['steps', 'heartRate'] },
+      async () => native as unknown as HealthKit,
+    );
+    expect(result).toMatchObject({
+      data: { steps: { value: null }, heartRate: { value: 80 } },
+      metricStates: { steps: 'error', heartRate: 'available' },
+    });
+  });
+
   test('daily results retain available days without inventing absent values', async () => {
     const native = {
       getQuantityData: jest.fn(async (identifier: string) => {

@@ -52,7 +52,11 @@ export type PermissionStatuses = Partial<Record<DevicePermissionScope, DevicePer
 export interface PermissionsModule {
   getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses>;
   openSystemSettings(permission?: DevicePermission): Promise<void>;
-  request(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses>;
+  /** Cancellation skips queued and subsequent prompts; an open system sheet must still settle. */
+  request(
+    scopes: readonly DevicePermissionScope[],
+    signal?: AbortSignal,
+  ): Promise<PermissionStatuses>;
 }
 
 /** Availability for execution, not a claim that HealthKit disclosed its read grants. */

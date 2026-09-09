@@ -62,9 +62,14 @@ export class DevicePermissions implements PermissionsModule {
     return { ...Object.fromEntries(entries), ...healthStatuses };
   }
 
-  request(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
+  request(
+    scopes: readonly DevicePermissionScope[],
+    signal?: AbortSignal,
+  ): Promise<PermissionStatuses> {
     // Only one system authorization sheet at a time, including requests from an Agent.
-    const result = this.requestQueue.then(() => this.requestPermissions([...new Set(scopes)]));
+    // Keep the queue locked until an already-open native sheet settles, even after cancellation.
+    const unique = [...new Set(scopes)];
+    const result = this.requestQueue.then(() => this.requestPermissions(unique, signal));
     this.requestQueue = result.then(
       () => undefined,
       () => undefined,
@@ -111,19 +116,8 @@ export class DevicePermissions implements PermissionsModule {
             }),
         };
       }
-      case 'calendar.read': {
-        const permission = toPermissionStatus(await Calendar.getCalendarPermissions(false));
-        // EventKit can upgrade write-only access to full access. Expo reports the read
-        // side of write-only as denied, which must not conceal this upgrade path.
-        if (
-          Platform.OS === 'ios' &&
-          permission.state === 'denied' &&
-          (await Calendar.getCalendarPermissions(true)).granted
-        ) {
-          return { ...permission, canAskAgain: true };
-        }
-        return permission;
-      }
+      case 'calendar.read':
+        return toPermissionStatus(await Calendar.getCalendarPermissions(false));
       case 'calendar.write':
         return toPermissionStatus(await Calendar.getCalendarPermissions(true));
       case 'reminders.read':
@@ -148,8 +142,11 @@ export class DevicePermissions implements PermissionsModule {
 
   private async requestPermissions(
     scopes: readonly DevicePermissionScope[],
+    signal?: AbortSignal,
   ): Promise<PermissionStatuses> {
+    signal?.throwIfAborted();
     const before = await this.getStatuses(scopes);
+    signal?.throwIfAborted();
     const requestable = scopes.filter((scope) => canRequestDevicePermission(before[scope]));
     const healthTypes = healthTypesForScopes(requestable);
     if (healthTypes.length) {
@@ -158,8 +155,10 @@ export class DevicePermissions implements PermissionsModule {
       await health.request(healthTypes);
     }
     for (const scope of requestable.filter((scope) => !scope.startsWith('health.'))) {
+      signal?.throwIfAborted();
       // An earlier request may have already granted both scopes (calendar/reminders).
       if (!canRequestDevicePermission(await this.getStatus(scope))) continue;
+      signal?.throwIfAborted();
       switch (scope) {
         case 'location.read':
           await Location.requestForegroundPermissionsAsync();
@@ -185,7 +184,10 @@ export class DevicePermissions implements PermissionsModule {
           break;
       }
     }
-    return this.getStatuses(scopes);
+    signal?.throwIfAborted();
+    const statuses = await this.getStatuses(scopes);
+    signal?.throwIfAborted();
+    return statuses;
   }
 
   private async getHealthStatuses(types: readonly HealthDataType[]): Promise<PermissionStatuses> {

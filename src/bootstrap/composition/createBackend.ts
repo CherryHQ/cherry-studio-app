@@ -20,7 +20,6 @@ import {
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
-import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
   replaceUserAvatar,
@@ -157,9 +156,6 @@ export function createBackend(
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },
   });
-  const permissions = createPermissionsModule({
-    device: services.devicePermissions,
-  });
   const agentAvatars = createAgentAvatars({
     agents: services.agentData,
     images: agentAvatarImages,
@@ -192,7 +188,7 @@ export function createBackend(
       mcp: services.mcpRuntime,
       models,
       paintings,
-      permissions,
+      permissions: services.devicePermissions,
       profile,
       providers,
       webSearch: services.webSearch,

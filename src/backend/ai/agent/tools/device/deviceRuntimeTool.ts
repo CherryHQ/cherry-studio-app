@@ -29,7 +29,12 @@ import {
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../runtime';
+import {
+  raceAbort,
+  type RuntimeJsonValue,
+  type RuntimeTool,
+  type RuntimeToolResult,
+} from '../../runtime';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 
 const logger = loggerService.withContext('DeviceRuntimeTool');
@@ -143,7 +148,10 @@ async function assertPermissions(
   const requestable = scopes.filter((scope) => canRequestDevicePermission(statuses[scope]));
   throwIfAborted(signal);
   if (requestable.length) {
-    statuses = { ...statuses, ...(await deps.devicePermissions.request(requestable)) };
+    statuses = {
+      ...statuses,
+      ...(await raceAbort(deps.devicePermissions.request(requestable, signal), signal)),
+    };
   }
   const allowed = scopes.map((scope) => canUseDevicePermission(scope, statuses[scope]));
   if (match === 'any' ? !allowed.some(Boolean) : !allowed.every(Boolean)) {
