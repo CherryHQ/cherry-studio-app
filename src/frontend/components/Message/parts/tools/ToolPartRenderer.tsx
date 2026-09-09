@@ -41,7 +41,7 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isWriteFileToolPart(part)) {
     return (
-      <View className="gap-1.5">
+      <View className="gap-2">
         <WriteFileToolPart part={part} />
         <FileToolContent messageId={messageId} part={part} />
       </View>
@@ -50,7 +50,7 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isEditFileToolPart(part)) {
     return (
-      <View className="gap-1.5">
+      <View className="gap-2">
         <EditFileToolPart part={part} />
         <FileToolContent messageId={messageId} part={part} />
       </View>

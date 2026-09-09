@@ -1,6 +1,7 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import { createTextPreview } from '@/shared/utils/textPreview';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
 export const STORY_WRITTEN_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000102';
@@ -134,6 +135,51 @@ const writeFileParts: CherryMessagePart[] = [
     toolName: 'write_file',
     type: 'dynamic-tool',
   },
+];
+
+const FILE_PROCESS_INPUT = {
+  filename: '雷霆战机.html',
+  content: [
+    '<script>',
+    'const enemies = [',
+    ...Array.from({ length: 64 }, (_, index) => `  { x: ${index * 12}, y: 0 },`),
+    '];',
+    'function loop() {',
+    '  enemies.forEach(drawEnemy);',
+    '  drawPlayer();',
+    '  requestAnimationFrame(loop);',
+    '}',
+    'loop();',
+    '</script>',
+  ].join('\n'),
+};
+
+const fileProcessParts: CherryMessagePart[] = [
+  { state: 'done', text: '先创建游戏页面，再检查绘制循环。', type: 'reasoning' },
+  {
+    input: FILE_PROCESS_INPUT,
+    output: { filename: FILE_PROCESS_INPUT.filename, status: 'created' },
+    state: 'output-available',
+    toolCallId: 'file-process-write',
+    toolName: 'write_file',
+    type: 'dynamic-tool',
+  },
+  { state: 'done', text: '检查游戏结束时的画面更新。', type: 'reasoning' },
+  { state: 'done', text: '游戏结束后仍在绘制玩家，需要修复这一处。', type: 'text' },
+  {
+    input: {
+      file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID,
+      old_string: '  drawPlayer();',
+      new_string: "  if (state !== 'over') drawPlayer();",
+      replace_all: false,
+    },
+    output: { filename: FILE_PROCESS_INPUT.filename, replacements: 1, status: 'edited' },
+    state: 'output-available',
+    toolCallId: 'file-process-edit',
+    toolName: 'edit_file',
+    type: 'dynamic-tool',
+  },
+  { state: 'done', text: '已完成游戏页面，并修复结束状态的绘制逻辑。', type: 'text' },
 ];
 
 const editFileParts: CherryMessagePart[] = [
@@ -333,6 +379,50 @@ export const messageExamples: readonly MessageExample[] = [
   {
     label: 'Edited file',
     message: createMessage('assistant-edit-file', 'assistant', editFileParts),
+  },
+  {
+    label: 'File generation — live preview',
+    message: createMessage(
+      'assistant-file-streaming',
+      'assistant',
+      [
+        fileProcessParts[0]!,
+        {
+          input: { filename: FILE_PROCESS_INPUT.filename },
+          inputPreview: createTextPreview(FILE_PROCESS_INPUT.content),
+          state: 'input-streaming',
+          toolCallId: 'file-streaming-write',
+          toolName: 'write_file',
+          type: 'dynamic-tool',
+        },
+      ],
+      'pending',
+    ),
+  },
+  {
+    label: 'File generation — single-line source stays passive',
+    message: createMessage(
+      'assistant-file-minified',
+      'assistant',
+      [
+        {
+          input: { filename: 'game.js' },
+          inputPreview: createTextPreview('requestAnimationFrame(loop);'.repeat(400)),
+          state: 'input-streaming',
+          toolCallId: 'file-minified-write',
+          toolName: 'write_file',
+          type: 'dynamic-tool',
+        },
+      ],
+      'pending',
+    ),
+  },
+  {
+    label: 'File generation — expand process to inspect step spacing',
+    message: {
+      ...createMessage('assistant-file-process', 'assistant', fileProcessParts),
+      stats: { runtimeTiming: { startedAt: 0, completedAt: 94_000, spans: [] } },
+    },
   },
   {
     label: 'Meta tools',

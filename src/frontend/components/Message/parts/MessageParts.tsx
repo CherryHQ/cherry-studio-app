@@ -45,7 +45,7 @@ export function MessageParts({
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
 
   return (
-    <View className="gap-2">
+    <View className="gap-4">
       {process.length > 0 ? (
         isStreaming ? (
           process.map(({ index, part }) => (

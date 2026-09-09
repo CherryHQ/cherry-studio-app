@@ -53,7 +53,7 @@ export function MessagePartProcess({
   };
 
   return (
-    <View className={`gap-1.5 border-border-subtle border-b ${isOpen ? 'pb-2' : ''}`}>
+    <View className={`gap-3 border-border-subtle border-b ${isOpen ? 'pb-4' : ''}`}>
       <MessagePartStatus
         accessibilityLabel={title}
         expanded={isOpen}
@@ -75,7 +75,7 @@ export function MessagePartProcess({
           <MessagePartDisclosureIcon isOpen={isOpen} />
         </View>
       </MessagePartStatus>
-      <MessagePartCollapsible className="gap-0.5" isOpen={isOpen} testID={`${testID}-detail`}>
+      <MessagePartCollapsible className="gap-4" isOpen={isOpen} testID={`${testID}-detail`}>
         <MessagePartStatusDensityScope density="compact">{children}</MessagePartStatusDensityScope>
       </MessagePartCollapsible>
     </View>

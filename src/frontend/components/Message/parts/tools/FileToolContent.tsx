@@ -1,13 +1,11 @@
-import { useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
-
-import { MarkdownText } from '@/frontend/components/MarkdownText';
-import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
+import { Text, View } from 'react-native';
 
 import { getFileToolContent } from './fileToolContentPresentation';
 import { useToolInputPreview } from './ToolInputPreviewContext';
 import type { ToolMessagePart } from './toolPartState';
+
+const PREVIEW_LINE_COUNT = 4;
+const PREVIEW_LINE_CHARACTERS = 160;
 
 /** Only this leaf subscribes to file-generation ticks; native work stays bounded by the preview. */
 export function FileToolContent({
@@ -19,54 +17,50 @@ export function FileToolContent({
 }) {
   const live = useToolInputPreview(messageId, part.toolCallId);
   const content = getFileToolContent(part, live);
-  const scroll = useRef<ScrollView>(null);
-  const followsContent = useRef(true);
-  const { t } = useTranslation();
   if (!content) return null;
 
-  const markdown =
-    content.variant === 'code'
-      ? createCodeBlockMarkdown(content.text, content.language, content.isStreaming)
-      : content.text;
+  const lines = content.isStreaming
+    ? content.text.trimEnd().split(/\r?\n/).slice(-PREVIEW_LINE_COUNT)
+    : [];
 
   return (
-    <View className="gap-1" testID="file-tool-content">
+    <View className="gap-2" pointerEvents="none" testID="file-tool-content">
       {content.name ? (
-        <Text className="font-mono text-muted-foreground text-xs" numberOfLines={1}>
+        <Text
+          className="font-mono text-muted-foreground text-xs"
+          ellipsizeMode="middle"
+          numberOfLines={1}
+          selectable={false}
+        >
           {content.name}
         </Text>
       ) : null}
-      {content.truncated ? (
-        <Text className="text-muted-foreground text-xs">
-          {t('chat.builtinTool.file.latestContent')}
-        </Text>
+      {content.isStreaming ? (
+        <View
+          accessibilityElementsHidden
+          className="rounded-lg bg-code-block px-3 py-2"
+          importantForAccessibility="no-hide-descendants"
+          testID="file-tool-generation-preview"
+        >
+          {Array.from({ length: PREVIEW_LINE_COUNT }, (_, index) => {
+            const line = lines[index - (PREVIEW_LINE_COUNT - lines.length)] ?? '';
+            // Keep the newest characters, including for minified source. Never begin on half
+            // a surrogate pair. Stable line slots reserve space without fixed font dimensions.
+            const text = line.slice(-PREVIEW_LINE_CHARACTERS).replace(/^[\uDC00-\uDFFF]/, '');
+            return (
+              <Text
+                className={`text-foreground-tertiary text-xs ${content.isCode ? 'font-mono' : ''}`}
+                ellipsizeMode="head"
+                key={index}
+                numberOfLines={1}
+                selectable={false}
+              >
+                {text || '\u00A0'}
+              </Text>
+            );
+          })}
+        </View>
       ) : null}
-      <ScrollView
-        className="max-h-64"
-        nestedScrollEnabled
-        onContentSizeChange={() => {
-          if (content.isStreaming && followsContent.current)
-            scroll.current?.scrollToEnd({ animated: false });
-        }}
-        onScrollBeginDrag={() => {
-          followsContent.current = false;
-        }}
-        ref={scroll}
-        showsVerticalScrollIndicator
-        testID="file-tool-content-scroll"
-      >
-        {content.variant === 'text' ? (
-          <Text className="text-foreground text-sm" selectable={!content.isStreaming}>
-            {content.text}
-          </Text>
-        ) : (
-          <MarkdownText
-            isStreaming={content.isStreaming}
-            markdown={markdown}
-            selectable={!content.isStreaming}
-          />
-        )}
-      </ScrollView>
     </View>
   );
 }

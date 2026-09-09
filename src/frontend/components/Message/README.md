@@ -87,6 +87,13 @@ stay in their own message parts and are never duplicated in the tool sheet. A su
 may summarize user-facing metadata such as its filename and size, but it does not expose internal
 entry ids or repeat the file body.
 
+Inline file content is a passive generation indicator. While input streams, it shows four stable
+line slots containing the latest source text, with a small per-line character budget and no Markdown
+parsing or syntax highlighting. It does not select text, open links, or own a scroll gesture; the
+message list owns scrolling across it. The preview text is hidden from accessibility navigation
+because the tool summary already announces its state. Once input generation ends, the preview
+disappears and only the filename remains alongside the tool's result or execution status.
+
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
 its process parts remain visible without a total-duration wrapper. Once the response settles, every

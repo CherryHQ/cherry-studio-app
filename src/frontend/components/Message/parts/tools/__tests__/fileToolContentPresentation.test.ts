@@ -16,8 +16,7 @@ test('displays partial content without requiring executable input', () => {
     getFileToolContent(tool(), { text: '<html>', name: 'page.html', truncated: false }),
   ).toMatchObject({
     text: '<html>',
-    variant: 'code',
-    language: 'html',
+    isCode: true,
     isStreaming: true,
   });
 });
@@ -33,7 +32,7 @@ test('uses authoritative final input instead of a stale live preview', () => {
     ),
   ).toMatchObject({
     text: '# Complete',
-    variant: 'markdown',
+    isCode: false,
     isStreaming: false,
   });
 });
@@ -62,13 +61,13 @@ test('retains the visible partial content after an interrupted call', () => {
   ).toMatchObject({ text: 'partial', isStreaming: false });
 });
 
-test('bounds final/history rendering too and does not parse a cut Markdown fragment', () => {
+test('bounds final/history content and classifies Markdown as prose', () => {
   const content = getFileToolContent(
     tool({
       state: 'input-available',
       input: { filename: 'report.md', content: 'body\n'.repeat(10_000) },
     }),
   );
-  expect(content).toMatchObject({ truncated: true, variant: 'text' });
+  expect(content).toMatchObject({ truncated: true, isCode: false });
   expect(content?.text.length).toBeLessThanOrEqual(8_192);
 });
