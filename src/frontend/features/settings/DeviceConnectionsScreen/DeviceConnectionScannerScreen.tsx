@@ -1,12 +1,15 @@
 import { Button, ContentState, Input, useAlert, useToast } from '@cherrystudio/ui/components';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { useBackendModule } from '@/frontend/data';
 import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
+import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
+import { canRequestDevicePermission } from '@/shared/contracts';
 import {
   type DesktopPairingQr,
   DesktopPairingQrSchema,
@@ -14,16 +17,45 @@ import {
 
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 
+const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
+
 export function DeviceConnectionScannerScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId?: string }>();
   const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const [permission, requestPermission] = useCameraPermissions();
+  const permissions = useBackendModule('permissions');
+  const { refresh, statuses } = useDevicePermissionStatuses(CAMERA_PERMISSION_SCOPES);
+  const permission = statuses['camera.read'];
+  const hasRequestedPermission = useRef(false);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
   const { isPairing, pair } = useDesktopConnectionActions();
+
+  const requestCameraPermission = useCallback(async () => {
+    setIsRequestingPermission(true);
+    try {
+      await permissions.request(CAMERA_PERMISSION_SCOPES);
+      await refresh();
+    } catch {
+      toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
+    } finally {
+      setIsRequestingPermission(false);
+    }
+  }, [permissions, refresh, t, toast]);
+
+  useEffect(() => {
+    if (
+      permission?.state === 'undetermined' &&
+      canRequestDevicePermission(permission) &&
+      !hasRequestedPermission.current
+    ) {
+      hasRequestedPermission.current = true;
+      void requestCameraPermission();
+    }
+  }, [permission, requestCameraPermission]);
 
   const submit = useCallback(
     async (qr: DesktopPairingQr) => {
@@ -63,9 +95,9 @@ export function DeviceConnectionScannerScreen() {
     <View className="flex-1 bg-grouped-background">
       <RouteHeader title={t('settings.deviceConnections.scan.title')} />
       <View className="min-h-0 flex-1 overflow-hidden bg-black">
-        {!permission ? (
+        {!permission || isRequestingPermission ? (
           <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
-        ) : permission.granted ? (
+        ) : permission.state === 'granted' ? (
           <>
             <CameraView
               active={!isPairing}
@@ -89,12 +121,23 @@ export function DeviceConnectionScannerScreen() {
             <ContentState.Empty
               description={t('settings.deviceConnections.scan.permissionDescription')}
               primaryAction={
-                permission.canAskAgain
+                canRequestDevicePermission(permission)
                   ? {
                       children: t('settings.deviceConnections.scan.allowCamera'),
-                      onPress: () => void requestPermission(),
+                      onPress: () => void requestCameraPermission(),
                     }
-                  : undefined
+                  : permission.state === 'denied'
+                    ? {
+                        children: t('settings.permissions.openSystemSettings'),
+                        onPress: () =>
+                          void permissions.openSystemSettings('camera').catch(() => {
+                            toast.show({
+                              label: t('settings.permissions.actionFailed'),
+                              variant: 'danger',
+                            });
+                          }),
+                      }
+                    : undefined
               }
               title={t('settings.deviceConnections.scan.permissionTitle')}
             />

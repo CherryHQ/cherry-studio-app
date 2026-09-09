@@ -719,7 +719,7 @@
   "settings.provider.desktopSync.continue": "Continue",
   "settings.provider.desktopSync.credentialsNotice": "Authentication information such as provider API keys will be stored on this device.",
   "settings.provider.desktopSync.empty": "No providers to sync",
-  "settings.provider.desktopSync.emptyDescription": "This PC has no enabled model providers.",
+  "settings.provider.desktopSync.emptyDescription": "This PC has no enabled model providers available to sync to mobile.",
   "settings.provider.desktopSync.fetchFailed": "Could not fetch model provider configuration from the PC",
   "settings.provider.desktopSync.fetching": "Fetching enabled providers…",
   "settings.provider.desktopSync.loadDevicesFailed": "Could not load connected devices",

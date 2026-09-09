@@ -40,6 +40,13 @@ import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
 const REQUEST_TIMEOUT_MS = 4_000;
+const DESKTOP_SYNC_EXCLUDED_PROVIDER_IDS = new Set([
+  'cherryai',
+  'gpustack',
+  'lmstudio',
+  'ollama',
+  'ovms',
+]);
 const TOKEN_KEY_PREFIX = 'desktop-connection-token.';
 const TOKEN_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
@@ -607,7 +614,15 @@ export class DesktopConnectionService {
         })
         .where(eq(desktopConnectionTable.id, id)),
     );
-    return parsed.data;
+    return {
+      ...parsed.data,
+      providers: parsed.data.providers.filter(
+        (provider) =>
+          ![provider.id, provider.presetProviderId, provider.type].some(
+            (id) => id && DESKTOP_SYNC_EXCLUDED_PROVIDER_IDS.has(id.toLowerCase()),
+          ),
+      ),
+    };
   }
 
   private async markNeedsRepair(id: string): Promise<void> {

@@ -59,6 +59,8 @@ The provider list's overflow menu owns the collection-level entry for synchroniz
 PC. Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
 ones to synchronize, and refreshes provider/model queries after the import transaction succeeds.
+Preview and import both exclude CherryAI and local providers (Ollama, LM Studio, GPUStack, and
+OpenVINO Model Server), including copies identified by their preset provider ID or legacy type.
 
 ## Provider Form
 
