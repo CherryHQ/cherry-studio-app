@@ -21,7 +21,6 @@ import { EffortSlider } from '../effortSlider';
 import {
   type ChatInputEffortFrame,
   type ChatInputEffortOverlayLayout,
-  chatInputEffortTrackHeight,
   getChatInputEffortOverlayLayout,
 } from '../utils/chatInputEffortLayout';
 import type { ChatInputReasoningEffort } from '../utils/chatInputReasoning';
@@ -31,6 +30,7 @@ import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
 const closeDurationMs = 120;
+const EFFORT_BACKDROP_FADE_INSET = 96;
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
   keyboardHeight: number;
@@ -224,6 +224,20 @@ export function ChatInputEffortOverlay({
       />
     ) : null;
   const keyboardOverlayVisible = Boolean(layout?.keyboardVisible && layout.keyboardHeight > 0);
+  const focusFrame = layout
+    ? {
+        height:
+          layout.sliderFrame.top +
+          layout.sliderFrame.height -
+          layout.labelFrame.top +
+          EFFORT_BACKDROP_FADE_INSET * 2,
+        top: layout.labelFrame.top - EFFORT_BACKDROP_FADE_INSET,
+      }
+    : null;
+  const keyboardFocusFrame =
+    focusFrame && layout
+      ? { ...focusFrame, top: focusFrame.top - (viewportHeight - layout.keyboardHeight) }
+      : null;
   const overlayControls = layout ? (
     <>
       <Pressable
@@ -245,14 +259,20 @@ export function ChatInputEffortOverlay({
         }
       />
 
-      <Animated.View style={[sliderContainerStyle, sliderStyle]} testID="chat-input-effort-slider">
-        <EffortSlider
-          accessibilityLabel={t('chat.reasoning.title')}
-          onChange={handleChange}
-          options={options}
-          testID="chat-input-effort-slider-control"
-          value={reasoningEffort}
-        />
+      <Animated.View
+        className="rounded-full bg-popover"
+        style={[sliderContainerStyle, { shadowColor: scrimColor }, sliderStyle]}
+        testID="chat-input-effort-slider"
+      >
+        <View className="absolute inset-0 justify-center overflow-hidden rounded-full">
+          <EffortSlider
+            accessibilityLabel={t('chat.reasoning.title')}
+            onChange={handleChange}
+            options={options}
+            testID="chat-input-effort-slider-control"
+            value={reasoningEffort}
+          />
+        </View>
       </Animated.View>
 
       <Animated.View
@@ -290,7 +310,12 @@ export function ChatInputEffortOverlay({
             pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
             style={StyleSheet.absoluteFill}
           >
-            <ChatInputEffortBackdrop progress={progress} scrimColor={scrimColor} variant="app" />
+            <ChatInputEffortBackdrop
+              focusFrame={focusFrame}
+              progress={progress}
+              scrimColor={scrimColor}
+              variant="app"
+            />
             {keyboardOverlayVisible ? null : overlayControls}
           </View>
         </Portal>
@@ -310,6 +335,7 @@ export function ChatInputEffortOverlay({
             style={[keyboardBackdropContainerStyle, { height: layout?.keyboardHeight ?? 0 }]}
           >
             <ChatInputEffortBackdrop
+              focusFrame={keyboardFocusFrame}
               progress={progress}
               scrimColor={scrimColor}
               tint={keyboard.appearance}
@@ -324,11 +350,13 @@ export function ChatInputEffortOverlay({
 }
 
 const emptyFrame: ChatInputEffortFrame = { height: 0, left: 0, top: 0, width: 0 };
+// Keep the floating shadow outside the clip used by the gauge-to-slider morph.
 const sliderContainerStyle = {
-  borderRadius: chatInputEffortTrackHeight / 2,
-  justifyContent: 'center',
-  overflow: 'hidden',
+  elevation: 8,
   position: 'absolute',
+  shadowOffset: { height: 8, width: 0 },
+  shadowOpacity: 0.16,
+  shadowRadius: 20,
   zIndex: 2,
 } as const;
 const labelContainerStyle = {
@@ -340,6 +368,7 @@ const labelContainerStyle = {
 const keyboardBackdropContainerStyle = {
   bottom: 0,
   left: 0,
+  overflow: 'hidden',
   position: 'absolute',
   right: 0,
 } as const;
