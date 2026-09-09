@@ -44,6 +44,7 @@ type StoredMessage = {
 };
 
 function createSessionView(input: {
+  id?: string;
   agentId: string;
   executionTarget?: AgentSessionView['executionTarget'];
   forkedFromSessionId?: string;
@@ -52,7 +53,7 @@ function createSessionView(input: {
 }): AgentSessionView {
   const timestamp = nowIso();
   return {
-    id: uuidv7(),
+    id: input.id ?? uuidv7(),
     agentId: input.agentId,
     executionTarget: input.executionTarget ?? { kind: 'local' },
     title: input.title ?? '',
@@ -91,7 +92,7 @@ function reserveInTranscript(
   const timestamp = nowIso();
   const turnId = uuidv7();
   const userMessage: AgentMessageView = {
-    id: uuidv7(),
+    id: input.userMessageId,
     sessionId: input.sessionId,
     turnId,
     role: 'user',
@@ -105,7 +106,7 @@ function reserveInTranscript(
     updatedAt: timestamp,
   };
   const assistantMessage: AgentMessageView = {
-    id: uuidv7(),
+    id: input.assistantMessageId,
     sessionId: input.sessionId,
     turnId,
     role: 'assistant',
@@ -273,13 +274,20 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   async reserveInitialSubmission(
     input: ReserveInitialSubmissionInput,
   ): Promise<ReserveInitialSubmissionResult> {
+    if (this.sessions.has(input.sessionId)) {
+      throw new Error(`Session already exists: ${input.sessionId}`);
+    }
+    this.assertNewMessageIds(input);
     const session = createSessionView({
+      id: input.sessionId,
       agentId: input.agentId,
       executionTarget: input.executionTarget,
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
       sessionId: session.id,
+      userMessageId: input.userMessageId,
+      assistantMessageId: input.assistantMessageId,
       userParts: input.userParts,
       modelId: input.modelId,
       inferenceSnapshot: input.inferenceSnapshot,
@@ -295,6 +303,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     if (!transcript) {
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
     }
+    this.assertNewMessageIds(input);
     const reserved = reserveInTranscript(transcript, input);
     const session = this.sessions.get(input.sessionId);
     if (session) {
@@ -308,6 +317,16 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
     return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
+  }
+
+  private assertNewMessageIds(input: ReserveSubmissionInput): void {
+    const ids = new Set([input.userMessageId, input.assistantMessageId]);
+    if (
+      ids.size !== 2 ||
+      [...this.messages.values()].some((messages) => messages.some(({ view }) => ids.has(view.id)))
+    ) {
+      throw new Error('Submission message IDs must be new and distinct.');
+    }
   }
 
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {

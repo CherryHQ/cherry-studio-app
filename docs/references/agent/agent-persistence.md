@@ -149,6 +149,11 @@ Skill configuration remains deferred. Pi reads neither tool nor Skill persistenc
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
 store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (like `assistant`);
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
+For chat sends, the send action allocates these IDs before asynchronous preparation so the displayed
+rows and persisted rows have identical identities. The store inserts those supplied IDs inside the
+existing reservation transaction; it still creates a new Session together with its first message
+pair. Record timestamps and turn IDs remain store-generated. Primary-key collisions reject the
+transaction without overwriting records or leaving a partial Session.
 Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
 transaction. The composer can therefore use it as a strict row version when reconciling optimistic
 model selection with Agent definition edits and inactive query caches.

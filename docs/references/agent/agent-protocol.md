@@ -396,6 +396,9 @@ interface AgentProtocol {
   }): Promise<AgentSessionView>
 
   startSession(input: {
+    sessionId: string
+    userMessageId: string
+    assistantMessageId: string
     agentId: string
     executionTarget: AgentExecutionTarget
     parts: AgentInputPart[]
@@ -405,6 +408,8 @@ interface AgentProtocol {
 
   submitMessage(input: {
     sessionId: string
+    userMessageId: string
+    assistantMessageId: string
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
@@ -448,6 +453,18 @@ as `submitMessage`, opens the Runtime, and then atomically creates the durable S
 the first user message and assistant placeholder. A failed Draft submission therefore leaves no
 empty Session. The client observes and navigates to the returned Session only after this operation
 succeeds. The chat Draft does not create a Session directly.
+
+The chat send action allocates UUID v7 message IDs, and a Session ID for a new conversation,
+before awaiting either operation. It immediately displays the submitted text, files, and assistant
+waiting row with those IDs. The store uses the supplied IDs only after preparation succeeds;
+allocating an ID does not create a record. Turn IDs and record timestamps remain backend-owned.
+
+Normal return means admission succeeded; execution continues through the existing events. Events
+and history use the same IDs as the immediate rows, so the UI merges them regardless of whether an
+event arrives before or after the function returns. The current composer keeps one pending send
+until both messages have formal data. Its preallocated Session ID also keeps the first message list
+mounted through navigation and history loading. Admission rejection restores the draft; execution
+errors belong to the accepted transcript.
 
 `modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
 The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning

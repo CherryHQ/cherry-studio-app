@@ -9,6 +9,7 @@ import {
   type AgentErrorView,
   type AgentMessagePart,
   type AgentMessageView,
+  type AgentSubmitMessageInput,
   AgentToolResultSchema,
 } from '@/shared/contracts/agent';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
@@ -297,6 +298,35 @@ export function toAgentMessageListItem(
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });
   return item;
+}
+
+/** Immediate display of a send, using the same row IDs that persistence will receive. */
+export function createPendingChatMessages(
+  input: Pick<AgentSubmitMessageInput, 'parts' | 'userMessageId' | 'assistantMessageId'>,
+): readonly [MessageListItem, MessageListItem] {
+  const createdAt = new Date().toISOString();
+  const parts = input.parts.map(
+    (part, index): AgentMessagePart =>
+      part.type === 'file'
+        ? { ...part, id: `input-${index}`, purpose: 'input-attachment' }
+        : { ...part, id: `input-${index}`, state: 'done' },
+  );
+  return [
+    {
+      createdAt,
+      data: toDisplayParts(parts),
+      id: input.userMessageId,
+      role: 'user',
+      status: 'pending',
+    },
+    {
+      createdAt,
+      data: { parts: [] },
+      id: input.assistantMessageId,
+      role: 'assistant',
+      status: 'pending',
+    },
+  ];
 }
 
 export function mergeAgentMessageViews(

@@ -1,7 +1,6 @@
 import type {
   AgentApprovalView,
   AgentEvent,
-  AgentInputPart,
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
@@ -189,7 +188,7 @@ export class AgentSessionChatClient {
 
         const observationError = error instanceof Error ? error : new Error(String(error));
         this.updateState(entry, {
-          ...createSessionState(sessionId),
+          ...entry.state,
           error: observationError,
           status: 'error',
         });
@@ -216,17 +215,8 @@ export class AgentSessionChatClient {
     );
   }
 
-  async startSession(
-    agentId: string,
-    parts: AgentInputPart[],
-    overrides: Pick<AgentStartSessionInput, 'modelId' | 'reasoningEffort'> = {},
-  ): Promise<AgentSessionView> {
-    const session = await this.protocol.startSession({
-      agentId,
-      executionTarget: { kind: 'local' },
-      parts,
-      ...overrides,
-    });
+  async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
+    const session = await this.protocol.startSession(input);
     // The destination route observes after navigation. Its atomic Host snapshot
     // reconstructs any live turn state without leaving an ownerless listener here.
     return session;
@@ -246,15 +236,12 @@ export class AgentSessionChatClient {
     return session;
   }
 
-  async submitMessage(
-    sessionId: string,
-    parts: AgentInputPart[],
-    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
-  ) {
+  async submitMessage(input: AgentSubmitMessageInput) {
+    const { sessionId } = input;
     const entry = this.getEntry(sessionId);
     await this.observe(sessionId);
     try {
-      return await this.protocol.submitMessage({ parts, sessionId, ...overrides });
+      return await this.protocol.submitMessage(input);
     } finally {
       // Non-React callers may submit without ever installing a subscriber. The
       // Host snapshot makes a later observation lossless, so do not retain an

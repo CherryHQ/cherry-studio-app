@@ -112,6 +112,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
       try {
         if (options.closeKeyboard) {
+          // Make the submitted row visible before keyboard dismissal changes the viewport.
+          await inputsRef.current.listRef.current?.scrollToEnd({ animated: false });
+          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+            return;
+          }
           // Keep keyboard geometry updates active so dismissal clears its bottom
           // inset before we resolve the list's new live edge.
           await KeyboardController.dismiss();
@@ -119,7 +124,9 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
             return;
           }
         }
-        await inputsRef.current.listRef.current?.scrollToEnd({ animated: options.animated });
+        await inputsRef.current.listRef.current?.scrollToEnd({
+          animated: options.animated && !options.closeKeyboard,
+        });
       } catch (error) {
         scrollLog.warn('[SCROLL] liveEdgeScroll failed', error as Error, { reason });
       } finally {

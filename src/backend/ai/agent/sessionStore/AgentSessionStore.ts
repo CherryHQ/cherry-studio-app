@@ -38,12 +38,14 @@ export type ReserveSubmissionResult = {
 
 export type ReserveSubmissionInput = {
   sessionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
   userParts: AgentMessagePart[];
   modelId: AgentInferenceSnapshotV1['model']['uniqueModelId'];
   inferenceSnapshot: AgentInferenceSnapshotV1;
 };
 
-export type ReserveInitialSubmissionInput = Omit<ReserveSubmissionInput, 'sessionId'> & {
+export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
   agentId: string;
   executionTarget: AgentExecutionTarget;
 };
