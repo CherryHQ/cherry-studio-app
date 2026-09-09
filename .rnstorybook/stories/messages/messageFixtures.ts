@@ -1,6 +1,7 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { AgentToolInputPreview } from '@/shared/contracts/agent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
@@ -11,6 +12,12 @@ export type MessageExample = {
   label: string;
   message: MessageListItem;
 };
+
+type MessageExamplePart =
+  | CherryMessagePart
+  | (Extract<CherryMessagePart, { type: 'dynamic-tool' }> & {
+      inputPreview: AgentToolInputPreview;
+    });
 
 const markdown = [
   '## Messages',
@@ -535,7 +542,7 @@ export const messageExamples: readonly MessageExample[] = [
 function createMessage(
   id: string,
   role: MessageListItem['role'],
-  parts: CherryMessagePart[],
+  parts: MessageExamplePart[],
   status: MessageListItem['status'] = 'success',
 ): MessageListItem {
   return { data: { parts }, id, role, status };
