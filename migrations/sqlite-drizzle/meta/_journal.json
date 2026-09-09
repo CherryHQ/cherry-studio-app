@@ -148,6 +148,27 @@
       "when": 1788945191867,
       "tag": "0020_desktop-connection",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788949862518,
+      "tag": "0021_plugin-authorizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1788966000000,
+      "tag": "0022_official-cloud-plugins",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1788970800000,
+      "tag": "0023_reconcile-desktop-connection",
+      "breakpoints": true
     }
   ]
 }

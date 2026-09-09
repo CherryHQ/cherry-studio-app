@@ -18,6 +18,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createPluginsModule } from '@/backend/services/builtInMcp';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
@@ -194,6 +195,7 @@ export function createBackend(
       models,
       paintings,
       permissions: services.devicePermissions,
+      plugins: createPluginsModule(services.mcpRuntime),
       profile,
       providers,
       webSearch: services.webSearch,

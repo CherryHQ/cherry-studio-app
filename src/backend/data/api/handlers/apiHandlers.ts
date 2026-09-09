@@ -12,6 +12,7 @@ import type { FileEntryService } from '../../services/FileEntryService';
 import type { JobService } from '../../services/JobService';
 import type { McpServerService } from '../../services/McpServerService';
 import type { PaintingService } from '../../services/PaintingService';
+import type { PluginAuthorizationService } from '../../services/PluginAuthorizationService';
 import type { ProviderService } from '../../services/ProviderService';
 import { type AgentAvatars, createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
@@ -24,6 +25,7 @@ import { createJobHandlers } from './jobs';
 import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
 import { createModelHandlers, type SystemModelSupportFilter } from './models';
 import { createPaintingHandlers } from './paintings';
+import { createPluginConnectionHandlers } from './pluginConnections';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
 
@@ -45,6 +47,7 @@ export type DataApiDependencies = {
   models: import('../../services/ModelService').ModelService;
   systemModelSupport: SystemModelSupportFilter;
   paintings: PaintingService;
+  pluginConnections: Pick<PluginAuthorizationService, 'listConnections'>;
   providers: ProviderService;
 };
 
@@ -61,6 +64,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createModelHandlers(dependencies.models, dependencies.systemModelSupport),
     ...createPaintingHandlers(dependencies.paintings),
+    ...createPluginConnectionHandlers(dependencies.pluginConnections),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
   };

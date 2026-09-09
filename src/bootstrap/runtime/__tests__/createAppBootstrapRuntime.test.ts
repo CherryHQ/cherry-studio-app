@@ -49,6 +49,14 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown, dependencies: unknown) =>
     mockCreateBackend(services, dependencies),
 }));
+// The real registry imports device tools, but this suite only exercises runtime wiring.
+jest.mock('@/backend/services/permissions', () => ({
+  devicePermissions: {
+    getStatuses: jest.fn(),
+    openSystemSettings: jest.fn(),
+    request: jest.fn(),
+  },
+}));
 // The real layouts touch the ExpoWidgets native module at import time.
 jest.mock('@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity', () => ({
   __esModule: true,

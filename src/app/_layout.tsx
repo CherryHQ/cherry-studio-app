@@ -121,6 +121,7 @@ function RootStack() {
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="library" options={{ headerShown: false }} />
       <Stack.Screen name="agents" options={{ headerShown: false }} />
+      <Stack.Screen name="plugins" options={{ headerShown: false }} />
       <Stack.Screen name="drawings" options={{ headerShown: false }} />
       <Stack.Screen
         name="search"

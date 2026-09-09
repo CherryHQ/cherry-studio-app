@@ -54,6 +54,11 @@ changing the Agent's configured behavior.
 
 ## Deferred Design
 
+The next plugin-specific slice is tracked in
+[Plugin Instruction Resources](./built-in-mcp-design.md#follow-up-pr-plugin-instruction-resources).
+It will first bundle plain-text guides with built-in plugins and prepare them through the Host;
+it does not imply a general Skill manager, importer, or executable extension system.
+
 The physical schema, revision model, instruction loading strategy, prompt projection, history
 behavior, ordering, size limits, and import/export contract land with implementation. Those details
 must not be inferred from this direction document.

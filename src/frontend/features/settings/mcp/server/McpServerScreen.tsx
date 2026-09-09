@@ -6,7 +6,7 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -77,6 +77,14 @@ export function McpServerScreen() {
       <McpServerStateScreen>
         <ContentState.Empty title={t('settings.mcp.detail.notFound')} />
       </McpServerStateScreen>
+    );
+  }
+
+  if (server?.origin === 'builtin') {
+    return (
+      <Redirect
+        href={{ pathname: '/plugins/[pluginId]', params: { pluginId: server.builtinId } }}
+      />
     );
   }
 

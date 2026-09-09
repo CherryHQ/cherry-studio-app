@@ -532,6 +532,25 @@ describe('tool message detail sheets', () => {
     expect(findText('Registry request timed out')).toHaveLength(1);
   });
 
+  it.each([
+    ['tool_schema_not_inspected', 'chat.metaToolInvoke.schemaRequired'],
+    ['tool_input_invalid', 'chat.metaToolInvoke.invalidInput'],
+  ])('translates %s without showing the model-only signature', async (errorCode, messageKey) => {
+    const errorText = 'Invalid arguments. Expected signature: declare function tool_call(...)';
+    await render(
+      <MetaToolPartRenderer
+        part={makeToolPart({ errorCode, errorText, state: 'output-error', toolName: 'tool_call' })}
+      />,
+    );
+
+    await act(async () => {
+      findByTestID('meta-tool-part-trigger').props.onPress();
+    });
+
+    expect(findText(messageKey)).toHaveLength(1);
+    expect(findText(errorText)).toHaveLength(0);
+  });
+
   it('renders tool_search matches as separate rows', async () => {
     await render(
       <MetaToolPartRenderer

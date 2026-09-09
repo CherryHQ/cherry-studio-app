@@ -23,7 +23,11 @@ export function McpScreen() {
   // The same mark the settings list uses for this row, so the empty state names
   // the thing it is empty of rather than standing in for it with a glyph.
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
-  const { error, isLoading, refetch, servers } = useMcpServersApi();
+  const { error, isLoading, refetch, servers: allServers } = useMcpServersApi();
+  const servers = useMemo(
+    () => allServers.filter((server) => server.origin !== 'builtin'),
+    [allServers],
+  );
   const { summaries } = useMcpServerRuntimeSummaries(servers);
   const [pressedServerId, setPressedServerId] = useState<string>();
   // The endpoint is searchable alongside the name: a server is often easier to

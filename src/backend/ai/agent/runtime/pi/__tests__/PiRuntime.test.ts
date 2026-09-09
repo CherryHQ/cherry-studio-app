@@ -2366,6 +2366,87 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('keeps input correction details in the model loop and executes only the corrected call', async () => {
+    const runtime = createTestRuntime();
+    const execute = jest.fn(async () => ({ value: { total: 1 }, artifacts: [] }));
+    const targetTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_repositories' },
+      providerName: 'mcp_search_repositories_a1b2',
+      displayName: 'Search repositories',
+      description: 'Search GitHub repositories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          page: { type: 'integer', minimum: 1, maximum: 100, default: 1 },
+        },
+        required: ['query'],
+      },
+      approval: 'auto',
+      execute,
+    };
+    const corrections: unknown[] = [];
+    arrange(runtime, async (context) => {
+      const call = context.options.initialState?.tools?.find(
+        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+      );
+      if (!call) throw new Error('Missing tool_call.');
+      for (const [id, params] of [
+        ['uninspected-call', { query: 'private-query-marker' }],
+        ['invalid-call', { query: 'private-query-marker', page: 0 }],
+      ] as const) {
+        corrections.push(
+          (await call.execute(id, { name: targetTool.providerName, params }, context.signal))
+            .details,
+        );
+      }
+      await call.execute(
+        'corrected-call',
+        { name: targetTool.providerName, params: { query: 'cherry' } },
+        context.signal,
+      );
+      await emitText(context, 'Found one repository.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-tool-input-correction', { tools: [targetTool] })),
+    );
+
+    expect(corrections).toMatchObject([
+      { value: { error: { code: 'tool_schema_not_inspected' } } },
+      {
+        value: {
+          error: { code: 'tool_input_invalid', message: expect.stringContaining('params.page:') },
+        },
+      },
+    ]);
+    expect(JSON.stringify(corrections)).toContain('Expected signature:');
+    expect(JSON.stringify(corrections)).toContain('page?: number');
+    for (const toolCallId of ['uninspected-call', 'invalid-call']) {
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'part.replace',
+          part: expect.objectContaining({
+            toolCallId,
+            toolRef: { source: 'meta', name: PI_TOOL_CALL_TOOL_NAME },
+            state: 'error',
+            input: { name: targetTool.providerName },
+          }),
+        }),
+      );
+    }
+    expect(JSON.stringify(events)).not.toContain('Expected signature:');
+    expect(JSON.stringify(events)).not.toContain('params.page:');
+    expect(JSON.stringify(events)).not.toContain('private-query-marker');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { query: 'cherry' }, toolCallId: 'corrected-call' }),
+    );
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
   test('shows a deferred dispatch rejected before execution as failed meta activity', async () => {
     const runtime = createTestRuntime();
     const targetTool: RuntimeTool = {

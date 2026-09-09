@@ -13,6 +13,14 @@ export function MetaToolInvokePart({ part, toolName }: MetaToolInvokePartProps) 
   const { t } = useTranslation();
   const input = isRecord(part.input) ? part.input : undefined;
   const params = isRecord(input?.params) ? input.params : undefined;
+  let errorText = part.state === 'output-error' ? part.errorText : '';
+  if (toolName === 'tool_call') {
+    if (part.errorCode === 'tool_schema_not_inspected') {
+      errorText = t('chat.metaToolInvoke.schemaRequired');
+    } else if (part.errorCode === 'tool_input_invalid') {
+      errorText = t('chat.metaToolInvoke.invalidInput');
+    }
+  }
 
   return (
     <MetaToolFrame part={part} toolName={toolName}>
@@ -24,11 +32,7 @@ export function MetaToolInvokePart({ part, toolName }: MetaToolInvokePartProps) 
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.tool.error')}
-          value={part.errorText}
-        />
+        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={errorText} />
       ) : null}
       {toolName === 'tool_invoke' ? (
         <MessagePart.ValueSection title={t('chat.tool.arguments')} value={params ?? input} />

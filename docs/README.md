@@ -41,6 +41,7 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
+| [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | Proposed six-platform catalog, authorization persistence, HTTP reuse, local MCP transport, module boundaries and delivery plan (`Status: design`) |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |
 | [Backend AI Target Architecture](./references/ai/target-architecture.md) | As-built local AI structure and the planned PC Agent Controller boundary |
 | [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Selective semantic ports, provider admission, Pi boundaries, and image-runtime reuse |

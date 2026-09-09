@@ -1235,11 +1235,18 @@ class PiRuntimeSession implements AgentRuntimeSession {
         this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
         return output;
       }
-      const { activityOutput, modelOutput } = operation(modelOutputCharacterLimit);
+      const { activityError, activityOutput, modelOutput } = operation(modelOutputCharacterLimit);
       if (turn.phase !== 'running' || signal?.aborted) {
         return this.interruptToolCall(turn, part);
       }
-      this.replaceToolPart(turn, part, { state: 'output-available', output: activityOutput });
+      this.replaceToolPart(
+        turn,
+        part,
+        activityError
+          ? { state: 'error', error: activityError, output: activityOutput }
+          : { state: 'output-available', output: activityOutput },
+      );
+      if (activityError) turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, modelOutput);
       return modelOutput;

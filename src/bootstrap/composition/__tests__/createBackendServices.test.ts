@@ -26,6 +26,15 @@ jest.mock('../createDataServices', () => ({
   createDataServices: (dependencies: unknown) => mockCreateDataServices(dependencies),
 }));
 
+// Preserve the singleton identity without loading native permission providers in this wiring test.
+jest.mock('@/backend/services/permissions', () => ({
+  devicePermissions: {
+    getStatuses: jest.fn(),
+    openSystemSettings: jest.fn(),
+    request: jest.fn(),
+  },
+}));
+
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
     const agent = { kind: 'agent' } as unknown as MobileAgentHost;

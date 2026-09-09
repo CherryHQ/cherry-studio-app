@@ -4,7 +4,11 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 export type ToolMessagePart = Extract<
   CherryMessagePart,
   { type: 'dynamic-tool' | `tool-${string}` }
-> & { inputPreview?: AgentToolInputPreview };
+> & {
+  inputPreview?: AgentToolInputPreview;
+  /** Original failure code retained by the chat's presentation projection. */
+  errorCode?: string;
+};
 
 const WEB_SEARCH_TOOL_NAMES = new Set([
   'web_search',

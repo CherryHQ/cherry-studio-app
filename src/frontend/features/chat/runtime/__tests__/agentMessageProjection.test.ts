@@ -27,6 +27,42 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('preserves the original tool failure code for localized correction hints', () => {
+    const item = toAgentMessageListItem(
+      message('tool-correction', {
+        parts: [
+          {
+            id: 'correction',
+            type: 'tool',
+            toolCallId: 'call-1',
+            toolRef: { source: 'meta', name: 'tool_call' },
+            providerName: 'tool_call',
+            displayName: 'Call tool',
+            state: 'error',
+            error: {
+              code: 'EXECUTION_FAILED',
+              message: 'Invalid arguments. Expected signature: ...',
+              retryable: false,
+              failure: {
+                version: 1,
+                reasonCode: 'invalid_input',
+                source: { layer: 'tool', code: 'tool_input_invalid' },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(item?.data.parts).toEqual([
+      expect.objectContaining({
+        state: 'output-error',
+        errorCode: 'tool_input_invalid',
+        errorText: 'Invalid arguments. Expected signature: ...',
+      }),
+    ]);
+  });
+
   test('prefers materialized statistics over the basic usage projection', () => {
     const stats = { requestCount: 2, inputTokens: 200, totalTokens: 220 };
     const item = toAgentMessageListItem(

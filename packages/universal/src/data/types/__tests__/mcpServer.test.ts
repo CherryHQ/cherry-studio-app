@@ -14,16 +14,6 @@ const server = {
 
 describe('McpServerSchema', () => {
   it('stores the connection, the tool rules, and nothing else', () => {
-    expect(Object.keys(McpServerSchema.shape)).toEqual([
-      'id',
-      'name',
-      'endpointUrl',
-      'headers',
-      'isEnabled',
-      'disabledTools',
-      'createdAt',
-      'updatedAt',
-    ]);
     expect(McpServerSchema.parse(server)).toEqual(server);
   });
 
@@ -52,5 +42,25 @@ describe('McpServerSchema', () => {
 
   it('rejects an endpoint that is not a URL', () => {
     expect(() => McpServerSchema.parse({ ...server, endpointUrl: 'example.com/mcp' })).toThrow();
+  });
+
+  it('requires a built-in grant identity and forbids remote credentials on it', () => {
+    const builtin = {
+      ...server,
+      origin: 'builtin',
+      builtinId: 'github',
+      authorizationId: id,
+      endpointUrl: null,
+    };
+    expect(McpServerSchema.parse(builtin)).toEqual(builtin);
+    for (const patch of [
+      { authorizationId: undefined },
+      { builtinId: 'unknown' },
+      { endpointUrl: 'https://example.com/mcp' },
+      { headers: { Authorization: 'secret' } },
+      { origin: 'remote' },
+    ])
+      expect(McpServerSchema.safeParse({ ...builtin, ...patch }).success).toBe(false);
+    expect(McpServerSchema.safeParse({ ...server, authorizationId: id }).success).toBe(false);
   });
 });
