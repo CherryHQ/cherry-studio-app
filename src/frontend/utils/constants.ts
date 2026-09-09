@@ -83,7 +83,5 @@ export const appSidebar = {
   dockMinInset: 16, // floor for the dock's concentric inset (see SidebarDock)
   headerRowHeight: 40, // brand row's height below the status bar; the body scrolls under it
   headerGapY: 8, // header's breathing room above and below the brand row
-  scrollShadowSize: 112, // ScrollShadow's top dissolve depth below the header
-  headerBlurSize: 124, // progressive-blur depth behind the fixed header controls
   recentSessionLimit: 10, // most-recent sessions shown before the "view all" row
 } as const;
