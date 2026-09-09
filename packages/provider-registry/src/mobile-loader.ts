@@ -94,16 +94,28 @@ export type MobileRemoteRegistrySnapshot = {
 };
 
 /**
- * Preset providers whose only authentication path is a provider OAuth login.
- * The app has no OAuth sign-in, so these rows can never be configured and are
- * projected out of every provider read. The bundled catalog stays intact — this
- * is the app-side answer to "can a mobile user actually use this", not a claim
- * about what the desktop catalog contains.
+ * OAuth-only presets excluded from runtime reads, including saved providers.
+ * Mobile has no OAuth sign-in. Keep temporary setup or product limitations
+ * in the catalog-only exclusions below so existing
+ * records remain readable. The bundled catalog stays intact in both cases.
  */
-const MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
   'copilot',
   'grok-cli',
   'openai-codex',
+]);
+
+/** Presets hidden from new-provider setup while Mobile lacks the required support. */
+const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  // Requires the external Claude Code CLI runtime.
+  'claude-code',
+  // Require credential fields and adapters that Mobile does not support yet.
+  'azure-openai',
+  'vertexai',
+  'aws-bedrock',
+  // Embedding/rerank catalogs have no consuming Mobile feature yet.
+  'jina',
+  'voyageai',
 ]);
 
 /**
@@ -171,11 +183,19 @@ export class MobileRegistryLoader {
   }
 
   isProviderExcluded(providerId: string): boolean {
-    return MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS.has(providerId);
+    return MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS.has(providerId);
   }
 
   getExcludedProviderIds(): readonly string[] {
-    return [...MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS];
+    return [...MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS];
+  }
+
+  /** Controls catalog listing and preset import, not reads of saved providers. */
+  isProviderExcludedFromCatalog(providerId: string): boolean {
+    return (
+      this.isProviderExcluded(providerId) ||
+      MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS.has(providerId)
+    );
   }
 
   getModelsVersion(): string {

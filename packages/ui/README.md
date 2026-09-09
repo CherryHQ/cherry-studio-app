@@ -82,8 +82,9 @@ above a multiline filename on a compact neutral tile; `card` puts the filename f
 at the bottom on a roomier surface. The `icon`, `attachment`, and `card` variants retain image
 thumbnails and caller-controlled opening. An
 optional `badge` slot sits beside the document icon or over an image; callers own its meaning and
-localized content. The complete filename remains the accessible label when its extension is
-omitted from the visible title.
+localized content. Library cards show the complete filename so its type remains visible; compact
+attachment tiles may omit the extension from the title while retaining the complete accessible
+label and type metadata.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
@@ -563,6 +564,10 @@ const dock = useComposerDockLayout();
   <ComposerSurface />
 </Composer.Dock>;
 ```
+
+`getComposerActionCenterOffset(bottomInset)` exposes the toolbar action center's distance from the
+screen bottom with the keyboard closed, so adjacent controls can align without duplicating composer
+padding.
 
 `Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
 what it does — the model in use, a mode. Same height and material, but sized to its label, and it is

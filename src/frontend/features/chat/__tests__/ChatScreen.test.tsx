@@ -4,6 +4,7 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import { ChatScreen } from '../ChatScreen';
 
+let chatControlsInput: { agentId?: string; composerKey: number; sessionId?: string } | undefined;
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
 let dockProps: Record<string, unknown> | undefined;
@@ -73,7 +74,22 @@ jest.mock('@/frontend/hooks/agent', () => ({
   }),
 }));
 
+const mockChatControls = {
+  cancel: jest.fn(),
+  canSend: undefined,
+  completePendingSend: jest.fn(),
+  enteringUserMessageId: undefined,
+  isApprovalPending: false,
+  isBusy: false,
+  pendingSend: undefined,
+  sendMessage: jest.fn(),
+};
+
 jest.mock('../runtime', () => ({
+  useAgentChatControls: (input: { agentId?: string; composerKey: number; sessionId?: string }) => {
+    chatControlsInput = input;
+    return mockChatControls;
+  },
   useAgentChatDraftHandoff: () => undefined,
 }));
 
@@ -106,6 +122,7 @@ describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    chatControlsInput = undefined;
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
     dockProps = undefined;
@@ -138,8 +155,35 @@ describe('ChatScreen composer dock wiring', () => {
     expect(dockProps?.onHeightChange).toBeUndefined();
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
+      controls: mockChatControls,
       dismissKeyboardOnSend: false,
       sessionId: 'session-1',
+    });
+    expect(chatWorkspaceProps).toMatchObject({
+      onPendingSendDisplayed: mockChatControls.completePendingSend,
+    });
+  });
+
+  it('keys the chat controls by the composer identity', () => {
+    act(() => {
+      renderer = create(<ChatScreen />);
+    });
+    expect(chatControlsInput).toEqual({
+      agentId: 'agent-1',
+      composerKey: 0,
+      sessionId: 'session-1',
+    });
+
+    mockRouteParams = { agentId: 'agent-1', sessionId: 'session-2' };
+    mockSessionData = { agentId: 'agent-1', id: 'session-2' };
+    act(() => {
+      renderer?.update(<ChatScreen />);
+    });
+
+    expect(chatControlsInput).toEqual({
+      agentId: 'agent-1',
+      composerKey: 1,
+      sessionId: 'session-2',
     });
   });
 

@@ -108,6 +108,7 @@ describe('MobileRegistryLoader', () => {
 
     for (const providerId of ['copilot', 'grok-cli', 'openai-codex']) {
       expect(loader.isProviderExcluded(providerId)).toBe(true);
+      expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(true);
       expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });
       expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
       expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
@@ -119,9 +120,28 @@ describe('MobileRegistryLoader', () => {
 
     for (const providerId of ['302ai', 'aihubmix', 'aionly', 'cherryin', 'ppio', 'silicon']) {
       expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(false);
       expect(loader.findProvider(providerId)?.authMethods).toEqual(
         expect.arrayContaining(['api-key', 'oauth']),
       );
+    }
+  });
+
+  it('hides unsupported setup presets without excluding saved providers or catalog metadata', () => {
+    const loader = new MobileRegistryLoader();
+
+    for (const providerId of [
+      'claude-code',
+      'azure-openai',
+      'vertexai',
+      'aws-bedrock',
+      'jina',
+      'voyageai',
+    ]) {
+      expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(true);
+      expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(loader.getExcludedProviderIds()).not.toContain(providerId);
+      expect(loader.findProvider(providerId)).toMatchObject({ id: providerId });
     }
   });
 

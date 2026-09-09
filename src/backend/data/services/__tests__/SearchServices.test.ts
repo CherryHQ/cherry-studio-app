@@ -81,7 +81,7 @@ describe('ContentSearchService', () => {
       ])
       .mockResolvedValueOnce([]);
     await installTestHost({
-      DbService: { getDb: () => ({ all }) } as unknown as DbService,
+      DbService: { getSqlite: () => ({ getAllAsync: all }) } as unknown as DbService,
     });
     const service = new ContentSearchService();
 
@@ -96,7 +96,7 @@ describe('ContentSearchService', () => {
 
   test('rejects a malformed cursor as a field validation error', async () => {
     await installTestHost({
-      DbService: { getDb: () => ({ all: jest.fn() }) } as unknown as DbService,
+      DbService: { getSqlite: () => ({ getAllAsync: jest.fn() }) } as unknown as DbService,
     });
     const service = new ContentSearchService();
 

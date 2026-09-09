@@ -26,10 +26,10 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
-import { ChatDraftState, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
-import { useAgentChatDraftHandoff } from './runtime';
+import { useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -66,8 +66,16 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const composerSession = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
   const resolvedAgentId = session.data?.agentId ?? composerSession.draftAgentId ?? agentId;
+  const controls = useAgentChatControls({
+    agentId: resolvedAgentId,
+    sessionId,
+    composerKey: composerSession.key,
+  });
   const agent = useAgentApiById(resolvedAgentId);
-  const messageWindow = useAgentMessageHistoryWindow(sessionId);
+  const messageWindow = useAgentMessageHistoryWindow(
+    sessionId,
+    target.kind === 'session' ? target : undefined,
+  );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
   const isNewAgentAvailable =
@@ -106,23 +114,21 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               title={t('navigation.chatsLoadFailed')}
             />
           </View>
-        ) : isSessionAvailable && sessionId ? (
+        ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
           <ChatWorkspace
+            pendingSend={controls.pendingSend}
+            enteringUserMessageId={controls.enteringUserMessageId}
+            onPendingSendDisplayed={controls.completePendingSend}
+            assistantAvatar={agent.agent?.avatar}
             assistantAvatarUri={agent.agent?.avatarUri}
             assistantName={agent.agent?.name}
-            isAssistantToolbarEnabled={!isPreview}
+            isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
             contentBottomInset={contentBottomInset}
             forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
             forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
             keyboardOffset={keyboardOffset}
             messageWindow={messageWindow}
             sessionId={sessionId}
-          />
-        ) : target.kind === 'draft' ? (
-          <ChatDraftState
-            assistantAvatarUri={agent.agent?.avatarUri}
-            assistantName={agent.agent?.name}
-            contentBottomInset={contentBottomInset}
           />
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
@@ -133,6 +139,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           <ComposerDock layoutMode="flow">
             <ChatInput
               agentId={resolvedAgentId}
+              controls={controls}
               dismissKeyboardOnSend={false}
               sessionId={sessionId}
             />

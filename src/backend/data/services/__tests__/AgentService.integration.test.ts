@@ -89,9 +89,24 @@ describe('AgentService persistence', () => {
   it('creates one localized initial Agent only for a never-used Agent store', async () => {
     const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
 
-    expect(initial).toMatchObject({ name: 'Cherry Agent' });
+    expect(initial).toMatchObject({ avatar: '🍒', name: 'Cherry Agent' });
     await expect(agentService.createInitialAgent({ name: 'Cherry 小助手' })).resolves.toBeNull();
     expect((await agentService.list()).items).toHaveLength(1);
+
+    await agentService.update(initial!.id, { name: 'My Assistant' });
+    expect(await agentService.getById(initial!.id)).toMatchObject({
+      avatar: '🍒',
+      name: 'My Assistant',
+    });
+  });
+
+  it('persists the Cherry avatar when onboarding creates a replacement Agent', async () => {
+    const agent = await agentService.create({ avatar: '🍒', name: 'Cherry 小助手' });
+
+    expect(await agentService.getById(agent.id)).toMatchObject({
+      avatar: '🍒',
+      avatarUri: null,
+    });
   });
 
   it('keeps an existing user-created Agent instead of adding the initial Agent', async () => {

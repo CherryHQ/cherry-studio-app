@@ -1,14 +1,13 @@
 import * as z from 'zod';
 
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { type Agent, AgentSchema } from '@/shared/data/types/agent';
+import { type Agent, AgentSchema, CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 
 import { type OrderEndpoints } from './endpointHelpers';
 
 /**
- * `avatar` is deliberately not mutable here: it is a managed file reference
- * written by the avatar workflow (create-new → update-db → delete-old), not a
- * value a caller may set directly.
+ * Managed avatar references are written only by the image workflow.
+ * Creation may select the built-in Cherry emoji without creating a file.
  */
 const AGENT_MUTABLE_FIELDS = {
   disabledCapabilities: true,
@@ -21,6 +20,7 @@ const AGENT_MUTABLE_FIELDS = {
 export const CreateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
+  .extend({ avatar: z.literal(CHERRY_AGENT_AVATAR).optional() })
   .strict();
 export type CreateAgentDto = z.infer<typeof CreateAgentSchema>;
 
@@ -28,7 +28,7 @@ export const UpdateAgentSchema = AgentSchema.pick(AGENT_MUTABLE_FIELDS).partial(
 export type UpdateAgentDto = z.infer<typeof UpdateAgentSchema>;
 
 /**
- * The avatar's own write channel, kept off the CRUD DTOs because setting one is
+ * The image avatar's own write channel, kept off the CRUD DTOs because setting one is
  * a workflow (normalize → store → update column → drop the previous file)
  * rather than a field assignment.
  */

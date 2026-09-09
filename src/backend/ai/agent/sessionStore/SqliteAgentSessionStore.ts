@@ -139,12 +139,15 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [sessionRow] = await tx
         .insert(agentSessionTable)
         .values({
+          id: input.sessionId,
           agentId: input.agentId,
           executionTarget: input.executionTarget,
         })
         .returning();
       const { reservedAt, ...reserved } = await insertSubmission(tx, {
         sessionId: sessionRow.id,
+        userMessageId: input.userMessageId,
+        assistantMessageId: input.assistantMessageId,
         userParts: input.userParts,
         modelId: input.modelId,
         inferenceSnapshot: input.inferenceSnapshot,
@@ -552,6 +555,7 @@ async function insertSubmission(
   const [userRow] = await tx
     .insert(agentSessionMessageTable)
     .values({
+      id: input.userMessageId,
       sessionId: input.sessionId,
       turnId,
       role: 'user',
@@ -562,6 +566,7 @@ async function insertSubmission(
   const [assistantRow] = await tx
     .insert(agentSessionMessageTable)
     .values({
+      id: input.assistantMessageId,
       sessionId: input.sessionId,
       turnId,
       role: 'assistant',

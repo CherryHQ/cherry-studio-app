@@ -26,9 +26,13 @@ describe('agent session handlers', () => {
       mutations as unknown as AgentSessionMutations,
     );
 
-    await handlers['/agent-sessions'].GET({ query: { agentId: 'agent-1', limit: '25' as never } });
+    const signal = new AbortController().signal;
+    await handlers['/agent-sessions'].GET({
+      query: { agentId: 'agent-1', limit: '25' as never },
+      signal,
+    });
 
-    expect(service.listByCursor).toHaveBeenCalledWith({ agentId: 'agent-1', limit: 25 });
+    expect(service.listByCursor).toHaveBeenCalledWith({ agentId: 'agent-1', limit: 25 }, signal);
   });
 
   test('routes rename and delete through the Host mutation boundary', async () => {

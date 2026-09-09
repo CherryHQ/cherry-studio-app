@@ -17,7 +17,11 @@ import {
 } from '@/shared/data/api/schemas/agents';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { type Agent, DEFAULT_AGENT_TOOL_APPROVAL_MODE } from '@/shared/data/types/agent';
+import {
+  type Agent,
+  CHERRY_AGENT_AVATAR,
+  DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+} from '@/shared/data/types/agent';
 import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -158,7 +162,7 @@ export class AgentService {
 
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx.select({ id: agentTable.id }).from(agentTable).limit(1);
-      return existing ? null : this.insertTx(tx, dto);
+      return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 
     return row ? rowToAgent(row, await this.getModelName(row.modelId)) : null;
@@ -213,8 +217,8 @@ export class AgentService {
    * The column half of the avatar workflow — the file half lives in
    * `agentAvatarStorage`, which calls this between storing the new image and
    * dropping the old one. Kept off `update()` because the CRUD DTOs
-   * deliberately refuse `avatar`: a caller must not be able to point the column
-   * at an arbitrary string.
+   * deliberately refuse managed file references: a caller must not be able to
+   * point the column at an arbitrary string.
    */
   async setAvatar(id: string, avatar: string): Promise<Agent> {
     const row = await this.dbService.withWriteTx(async (tx) => {

@@ -2,6 +2,7 @@ import { loggerService } from '@logger';
 import { sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
 import { toDataApiError } from '@/shared/data/api/errors';
 import {
   CONTENT_SEARCH_DEFAULT_LIMIT,
@@ -44,36 +45,40 @@ export class ContentSearchService {
     return application.get('DbService');
   }
 
-  private get db() {
-    return this.dbService.getDb();
-  }
-
-  async search(query: ContentSearchQuery): Promise<ContentSearchResponse> {
+  async search(query: ContentSearchQuery, signal?: AbortSignal): Promise<ContentSearchResponse> {
     const limit = Math.min(query.limit ?? CONTENT_SEARCH_DEFAULT_LIMIT, CONTENT_SEARCH_MAX_LIMIT);
     try {
-      const result = await this.searchSessionMessages({
-        agentId: query.agentId,
-        createdAtFrom: query.createdAtFrom,
-        cursor: query.cursor,
-        limit,
-        q: query.q,
-        sessionId: query.sessionId,
-      });
+      const result = await this.searchSessionMessages(
+        {
+          agentId: query.agentId,
+          createdAtFrom: query.createdAtFrom,
+          cursor: query.cursor,
+          limit,
+          q: query.q,
+          sessionId: query.sessionId,
+        },
+        signal,
+      );
       return { ...result, query: query.q };
     } catch (error) {
+      signal?.throwIfAborted();
       logger.error('content search failed', error as Error);
       throw toDataApiError(error, 'content search');
     }
   }
 
-  private searchSessionMessages(query: {
-    agentId?: string;
-    createdAtFrom?: string;
-    cursor?: string;
-    limit: number;
-    q: string;
-    sessionId?: string;
-  }) {
+  private searchSessionMessages(
+    query: {
+      agentId?: string;
+      createdAtFrom?: string;
+      cursor?: string;
+      limit: number;
+      q: string;
+      sessionId?: string;
+    },
+    signal?: AbortSignal,
+  ) {
+    const sqlite = this.dbService.getSqlite();
     const sessionCondition = query.sessionId
       ? sql`message.session_id = ${query.sessionId}`
       : sql`1 = 1`;
@@ -88,13 +93,14 @@ export class ContentSearchService {
         createdAtFromMs,
         cursor,
         ftsConditions,
-        offset,
       }: SearchFetchContext) => {
         const createdAtCondition =
           createdAtFromMs !== undefined
             ? sql`message.created_at >= ${createdAtFromMs}`
             : sql`1 = 1`;
-        return await this.db.all<SessionMessageSearchRow>(sql`
+        return readSqliteRows<SessionMessageSearchRow>(
+          sqlite,
+          sql`
           SELECT
             message.id,
             message.session_id AS "sessionId",
@@ -105,25 +111,31 @@ export class ContentSearchService {
             message.searchable_text AS "searchableText",
             message.created_at AS "createdAt"
           FROM agent_session_message message
-          JOIN agent_session_message_fts fts ON message.fts_rowid = fts.rowid
+          ${
+            ftsConditions.length > 0
+              ? sql`JOIN agent_session_message_fts fts ON message.fts_rowid = fts.rowid`
+              : sql``
+          }
           JOIN agent_session session ON session.id = message.session_id
           LEFT JOIN agent ON agent.id = session.agent_id AND agent.deleted_at IS NULL
-          WHERE message.searchable_text != ''
-            AND ${sessionCondition}
+          WHERE ${sessionCondition}
             AND ${agentCondition}
             AND ${createdAtCondition}
-            AND ${sql.join(ftsConditions, sql` AND `)}
+            AND ${ftsConditions.length > 0 ? sql.join(ftsConditions, sql` AND `) : sql`1 = 1`}
             AND ${
               cursor
-                ? sql`(message.created_at < ${cursor.createdAt} OR (message.created_at = ${cursor.createdAt} AND message.id < ${cursor.id}))`
+                ? sql`(message.created_at, message.id) < (${cursor.createdAt}, ${cursor.id})`
                 : sql`1 = 1`
             }
           ORDER BY message.created_at DESC, message.id DESC
           LIMIT ${chunkSize}
-          OFFSET ${offset}
-        `);
+        `,
+          signal,
+        );
       },
-      getSearchableText: (row) => row.searchableText,
+      getCursor: (row) => ({ createdAt: Number(row.createdAt), id: row.id }),
+      getSearchableText: (row) =>
+        row.role === 'user' || row.role === 'assistant' ? row.searchableText : '',
       limit: query.limit,
       mapRow: (row, { snippet }) => ({
         item: {
@@ -139,6 +151,7 @@ export class ContentSearchService {
         sort: { createdAt: Number(row.createdAt), id: row.id },
       }),
       q: query.q,
+      signal,
     });
   }
 }

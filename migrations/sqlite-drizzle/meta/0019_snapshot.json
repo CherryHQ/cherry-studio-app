@@ -1,8 +1,8 @@
 {
-  "id": "23d31c3c-c0b0-4fb5-a864-462b1213d903",
-  "prevId": "c182e418-6ea2-447e-b251-e1f731154423",
   "version": "6",
   "dialect": "sqlite",
+  "id": "290afc04-cc1a-49db-8691-4e9ab59dd339",
+  "prevId": "c182e418-6ea2-447e-b251-e1f731154423",
   "tables": {
     "app_state": {
       "name": "app_state",
@@ -273,11 +273,11 @@
         "agent_model_user_model_id_fk": {
           "name": "agent_model_user_model_id_fk",
           "tableFrom": "agent",
-          "columnsFrom": ["model"],
           "tableTo": "user_model",
+          "columnsFrom": ["model"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -381,31 +381,31 @@
         "agent_tool_binding_builtin_uniq": {
           "name": "agent_tool_binding_builtin_uniq",
           "columns": ["agent_id", "capability_id"],
-          "where": "\"agent_tool_binding\".\"source\" = 'builtin'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"agent_tool_binding\".\"source\" = 'builtin'"
         },
         "agent_tool_binding_mcp_server_default_uniq": {
           "name": "agent_tool_binding_mcp_server_default_uniq",
           "columns": ["agent_id", "mcp_server_id"],
-          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NULL"
         },
         "agent_tool_binding_mcp_tool_uniq": {
           "name": "agent_tool_binding_mcp_tool_uniq",
           "columns": ["agent_id", "mcp_server_id", "raw_tool_name"],
-          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NOT NULL",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"agent_tool_binding\".\"source\" = 'mcp' AND \"agent_tool_binding\".\"raw_tool_name\" IS NOT NULL"
         }
       },
       "foreignKeys": {
         "agent_tool_binding_agent_id_agent_id_fk": {
           "name": "agent_tool_binding_agent_id_agent_id_fk",
           "tableFrom": "agent_tool_binding",
-          "columnsFrom": ["agent_id"],
           "tableTo": "agent",
+          "columnsFrom": ["agent_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -514,20 +514,20 @@
         "agent_session_agent_id_agent_id_fk": {
           "name": "agent_session_agent_id_agent_id_fk",
           "tableFrom": "agent_session",
-          "columnsFrom": ["agent_id"],
           "tableTo": "agent",
+          "columnsFrom": ["agent_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "agent_session_forked_from_session_id_agent_session_id_fk": {
           "name": "agent_session_forked_from_session_id_agent_session_id_fk",
           "tableFrom": "agent_session",
-          "columnsFrom": ["forked_from_session_id"],
           "tableTo": "agent_session",
+          "columnsFrom": ["forked_from_session_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -657,6 +657,11 @@
           "columns": ["session_id", "created_at"],
           "isUnique": false
         },
+        "agent_session_message_created_id_idx": {
+          "name": "agent_session_message_created_id_idx",
+          "columns": ["created_at", "id"],
+          "isUnique": false
+        },
         "agent_session_message_turn_id_idx": {
           "name": "agent_session_message_turn_id_idx",
           "columns": ["turn_id"],
@@ -670,8 +675,8 @@
         "agent_session_message_active_turn_uniq": {
           "name": "agent_session_message_active_turn_uniq",
           "columns": ["session_id"],
-          "where": "\"agent_session_message\".\"role\" = 'assistant' and \"agent_session_message\".\"status\" in ('pending', 'streaming')",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"agent_session_message\".\"role\" = 'assistant' and \"agent_session_message\".\"status\" in ('pending', 'streaming')"
         },
         "agent_session_message_fts_rowid_uniq": {
           "name": "agent_session_message_fts_rowid_uniq",
@@ -683,20 +688,20 @@
         "agent_session_message_session_id_agent_session_id_fk": {
           "name": "agent_session_message_session_id_agent_session_id_fk",
           "tableFrom": "agent_session_message",
-          "columnsFrom": ["session_id"],
           "tableTo": "agent_session",
+          "columnsFrom": ["session_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "agent_session_message_model_id_user_model_id_fk": {
           "name": "agent_session_message_model_id_user_model_id_fk",
           "tableFrom": "agent_session_message",
-          "columnsFrom": ["model_id"],
           "tableTo": "user_model",
+          "columnsFrom": ["model_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1261,19 +1266,19 @@
         "job_idempotency_key_partial_uq": {
           "name": "job_idempotency_key_partial_uq",
           "columns": ["idempotency_key"],
-          "where": "\"job\".\"idempotency_key\" IS NOT NULL AND \"job\".\"status\" NOT IN ('completed','failed','cancelled')",
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"job\".\"idempotency_key\" IS NOT NULL AND \"job\".\"status\" NOT IN ('completed','failed','cancelled')"
         }
       },
       "foreignKeys": {
         "job_parent_id_job_id_fk": {
           "name": "job_parent_id_job_id_fk",
           "tableFrom": "job",
-          "columnsFrom": ["parent_id"],
           "tableTo": "job",
+          "columnsFrom": ["parent_id"],
           "columnsTo": ["id"],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1648,11 +1653,11 @@
         "user_model_provider_id_user_provider_provider_id_fk": {
           "name": "user_model_provider_id_user_provider_provider_id_fk",
           "tableFrom": "user_model",
-          "columnsFrom": ["provider_id"],
           "tableTo": "user_provider",
+          "columnsFrom": ["provider_id"],
           "columnsTo": ["provider_id"],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1789,88 +1794,14 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "desktop_connection": {
-      "name": "desktop_connection",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "base_urls": {
-          "name": "base_urls",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "active_base_url": {
-          "name": "active_base_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "desktop_version": {
-          "name": "desktop_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'paired'"
-        },
-        "last_fetched_at": {
-          "name": "last_fetched_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     }
   },
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

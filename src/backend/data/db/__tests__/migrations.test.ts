@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { tag: string }[];
+  entries: { tag: string; when: number }[];
 };
 
 describe('bundled SQLite migrations', () => {
@@ -45,15 +45,17 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
-  test('preserves paired desktops when upgrading from the former 0016 development migration', () => {
-    const database = new DatabaseSync(':memory:');
+  test.each([16, 19])(
+    'preserves paired desktops from the former %i development migration',
+    (migrationIndex) => {
+      const database = new DatabaseSync(':memory:');
 
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const entries = readMigrationEntries();
-      applyMigrationsAsDrizzleWould(database, entries.slice(0, 16));
-      // This is the table already installed by the branch's original 0016 migration.
-      database.exec(`
+      try {
+        database.exec('PRAGMA foreign_keys = ON');
+        const entries = readMigrationEntries();
+        applyMigrationsAsDrizzleWould(database, entries.slice(0, migrationIndex));
+        // Both former development migrations installed this same table.
+        database.exec(`
         CREATE TABLE desktop_connection (
           id text PRIMARY KEY NOT NULL,
           name text NOT NULL,
@@ -71,18 +73,26 @@ describe('bundled SQLite migrations', () => {
           ('desktop-1', 'My Desktop', '["http://desktop.local:23333"]',
            'http://desktop.local:23333', '1.0.0', 2, 1, 2);
       `);
-      const before = database.prepare('SELECT * FROM desktop_connection').all();
+        const before = database.prepare('SELECT * FROM desktop_connection').all();
 
-      applyMigrationsAsDrizzleWould(database, entries.slice(16));
+        const lastAppliedAt = migrationIndex === 19 ? 1788769828081 : entries[15]!.when;
+        applyMigrationsAsDrizzleWould(
+          database,
+          entries.filter(({ when }) => when > lastAppliedAt),
+        );
 
-      expect(database.prepare('SELECT * FROM desktop_connection').all()).toEqual(before);
-      expect(columnNames(database, 'agent_session_message')).toContain('stats');
-      expect(columnNames(database, 'job')).toContain('cancel_requested_at');
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
+        expect(database.prepare('SELECT * FROM desktop_connection').all()).toEqual(before);
+        expect(columnNames(database, 'agent_session_message')).toContain('stats');
+        expect(columnNames(database, 'job')).toContain('cancel_requested_at');
+        expect(indexNames(database, 'agent_session_message')).toContain(
+          'agent_session_message_created_id_idx',
+        );
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      } finally {
+        database.close();
+      }
+    },
+  );
 
   test('replays the journal into the schema the services are typed against', () => {
     const database = new DatabaseSync(':memory:');
@@ -175,6 +185,12 @@ describe('bundled SQLite migrations', () => {
         'files',
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
+      expect(
+        database
+          .prepare("PRAGMA index_info('agent_session_message_created_id_idx')")
+          .all()
+          .map((column) => column.name),
+      ).toEqual(['created_at', 'id']);
 
       // Agent persistence (docs/references/agent/agent-persistence.md): four
       // tables, no turn or pending-approval table, no workspace or runtime id.
@@ -877,13 +893,14 @@ function readMigrationSqlFiles(): string[] {
   return readMigrationEntries().map(({ sql }) => sql);
 }
 
-function readMigrationEntries(): { sql: string; tag: string }[] {
+function readMigrationEntries(): { sql: string; tag: string; when: number }[] {
   const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
   const journal = readMigrationJournal();
 
-  return journal.entries.map(({ tag }) => ({
+  return journal.entries.map(({ tag, when }) => ({
     sql: readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
     tag,
+    when,
   }));
 }
 

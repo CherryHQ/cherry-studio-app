@@ -94,7 +94,7 @@ check, platform exports, and device acceptance before the registry compatibility
 | Remote manifest compatibility | Implemented with an independent registry compatibility version | Shared catalog loading; accepted line remains `2.0.8` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
-| Reasoning wire dialects | Implemented for the AI SDK request serializer | Does not change Pi's request serializer |
+| Reasoning wire dialects | Implemented for AI SDK and Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
 | Service tiers | Implemented for the AI SDK request path | Does not add service-tier delivery to Pi conversation requests |
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |

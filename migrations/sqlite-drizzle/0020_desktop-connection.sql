@@ -1,4 +1,4 @@
--- Development installs may already have this table from the former 0016 migration.
+-- Development installs may already have this table from the former 0016 or 0019 migration.
 CREATE TABLE IF NOT EXISTS `desktop_connection` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,

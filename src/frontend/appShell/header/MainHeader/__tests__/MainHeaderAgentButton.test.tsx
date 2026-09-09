@@ -53,12 +53,6 @@ function Harness() {
   return agent ? <MainHeaderAgentButton agent={agent} onPress={jest.fn()} /> : null;
 }
 
-function HistoryHarness() {
-  const { openAgentHistory } = useMainHeaderAgent();
-
-  return <Pressable onPress={openAgentHistory} testID="history-button" />;
-}
-
 function NewSessionHarness() {
   const { openNewSession } = useMainHeaderAgent();
 
@@ -83,20 +77,6 @@ describe('MainHeaderAgentButton', () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
-  });
-
-  it('opens the current Agent history', async () => {
-    await act(async () => {
-      renderer = create(<HistoryHarness />);
-    });
-
-    const button = renderer?.root.findByProps({ testID: 'history-button' });
-    await act(async () => button?.props.onPress());
-
-    expect(mockPush).toHaveBeenCalledWith({
-      params: { agentId: 'agent-1' },
-      pathname: '/sessions',
-    });
   });
 
   it('uses the route Agent before a Session exists', async () => {

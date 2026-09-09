@@ -108,9 +108,17 @@ describe('Pi model resolver', () => {
       reasoning: true,
     });
     expect(resolution.model.compat).toEqual(
-      testCase.api === 'openai-completions' || testCase.api === 'openai-responses'
-        ? { supportsDeveloperRole: false }
-        : undefined,
+      testCase.api === 'openai-completions'
+        ? {
+            maxTokensField: 'max_tokens',
+            supportsDeveloperRole: false,
+            supportsStore: false,
+            supportsStrictMode: false,
+            supportsUsageInStreaming: provider.apiFeatures.streamOptions,
+          }
+        : testCase.api === 'openai-responses'
+          ? { supportsDeveloperRole: false }
+          : undefined,
     );
     expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
@@ -136,6 +144,33 @@ describe('Pi model resolver', () => {
         timeoutMs: 600_000,
       }),
     );
+  });
+
+  test('uses endpoint usage declarations and preserves the materialized effort vocabulary', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://proxy.test/v1',
+      'openai-compatible',
+    );
+    provider.apiFeatures.streamOptions = true;
+    provider.endpointConfigs![ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]!.dialect = {
+      streamOptions: false,
+    };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS));
+
+    const resolution = await resolve(resolver, { reasoningEffort: 'auto' });
+    expect(resolution.model.compat).toMatchObject({
+      supportsUsageInStreaming: false,
+      maxTokensField: 'max_tokens',
+    });
+    const parameters = mockBindPiStream.mock.calls[0][1].requestParameters;
+    expect(parameters?.selection).toBe('auto');
+    expect(parameters?.model.reasoning?.selectableEfforts).toEqual(['high']);
+    expect(parameters?.profile.effort?.operations).toContainEqual({
+      target: 'reasoningEffort',
+      value: { source: 'effort' },
+    });
   });
 
   test('preflights image input from the model registry without selecting credentials', async () => {
