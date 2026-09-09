@@ -1,6 +1,6 @@
 import type { SQL } from 'drizzle-orm';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteBindValue, SQLiteDatabase } from 'expo-sqlite';
 
 // The dialect only compiles SQL. Execution deliberately uses Expo's async API;
 // Drizzle's expo-sqlite driver executes reads synchronously even when awaited.
@@ -13,7 +13,8 @@ export async function readSqliteRows<TRow>(
 ): Promise<TRow[]> {
   signal?.throwIfAborted();
   const compiled = DIALECT.sqlToQuery(query);
-  const rows = await sqlite.getAllAsync<TRow>(compiled.sql, compiled.params);
+  // Drizzle's generic SQL type erases the SQLite bind-value types at this driver boundary.
+  const rows = await sqlite.getAllAsync<TRow>(compiled.sql, compiled.params as SQLiteBindValue[]);
   signal?.throwIfAborted();
   return rows;
 }
