@@ -9,7 +9,7 @@
 
 ## First Delivery: Plugins
 
-The product entry is **Plugins** in the chat drawer. Each plugin has a detail page, examples,
+The product entry is **Plugins** in the chat drawer. Each plugin has a detail page,
 capability and privacy information, and an explicit **Add** action before authorization. Connecting
 does not enable every Agent: the user selects an Agent to enable the plugin and start a conversation.
 Remote MCP servers remain in Settings; connected plugins also participate in Agent tool settings.
@@ -85,6 +85,36 @@ Amap quota/access restrictions remain upstream authority. No device-location gra
 The `development-simulator` EAS profile builds an ARM64 development client: the currently pinned
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
 not an installable physical-device IPA.
+
+## Follow-Up PR: Plugin Instruction Resources
+
+The current PR delivers the basic plugin UI, authorization lifecycle, official cloud tool integration,
+and required migrations. It does not deliver plugin workflow guides, Markdown resource loading,
+dynamic instruction injection, or task shortcuts. Implement the instruction layer in a separate PR,
+following the existing [Agent Skills boundary](./agent-skills.md), without expanding MCP permissions.
+
+Follow-up TODOs:
+
+- [ ] Define one plugin-owned instruction resource contract and directory convention. Keep stable
+  plugin metadata and its Markdown resource together, with one source of truth; settle exact paths
+  and file naming during implementation rather than creating a parallel registry.
+- [ ] Specify the mobile Markdown subset, bundled-resource delivery, source/revision attribution,
+  encoding, size limits, ordering, and handling of missing or invalid content. Start with bundled
+  instruction text, not downloaded code, scripts, hooks, arbitrary file access, or a general importer.
+- [ ] Resolve guides when a plugin enters the current Agent's available capabilities for a turn,
+  not when the app starts or an MCP connection happens to open. The Host prepares an immutable
+  instruction snapshot alongside the tool snapshot; it does not mutate the Agent's saved prompt or
+  repeatedly append guides to chat history.
+- [ ] Define disablement, disconnection, unavailable-tool, and update behavior. Re-evaluate selection
+  on the next turn, preserve current-turn isolation, and retain existing immediate tool-revocation
+  checks. Guides cannot grant capabilities or override application safety rules or user instructions.
+- [ ] Ship concise GitHub and Amap workflow guides through the shared loader, with coverage for
+  Agent isolation, duplicate injection, resource validation, updates, and disabled/unavailable
+  plugins. Keep the first delivery independent of a general Skill manager or new persistence tables.
+
+Task shortcuts are a separate optional follow-up; they are not a prerequisite for instruction loading.
+Visual workflow editing, background scheduling, executable extensions, and a third-party plugin
+marketplace are outside this follow-up's initial scope.
 
 ## Broader Roadmap And Scope
 
