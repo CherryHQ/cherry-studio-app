@@ -158,11 +158,7 @@ export function createBackend(
     },
   });
   const permissions = createPermissionsModule({
-    device: {
-      getStatus: (scope) => services.devicePermissions.getStatusForScope(scope),
-      openSystemSettings: (permission) => services.devicePermissions.openSystemSettings(permission),
-      request: (scope) => services.devicePermissions.requestForScope(scope),
-    },
+    device: services.devicePermissions,
   });
   const agentAvatars = createAgentAvatars({
     agents: services.agentData,

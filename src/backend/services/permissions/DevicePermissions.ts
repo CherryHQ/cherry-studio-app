@@ -1,202 +1,231 @@
 import * as Calendar from 'expo-calendar';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { AppState, Linking, Platform } from 'react-native';
-import type { HealthKit } from 'react-native-nitro-healthkit';
+import * as MediaLibrary from 'expo-media-library';
+import { Linking, Platform } from 'react-native';
 
-import type {
-  DevicePermission,
-  DevicePermissionAccess,
-  DevicePermissionScope,
-  SystemPermissionState,
+import {
+  canRequestDevicePermission,
+  type DevicePermission,
+  type DevicePermissionScope,
+  type DevicePermissionStatus,
+  HEALTH_DATA_TYPES,
+  type HealthDataType,
+  healthPermissionScope,
+  type PermissionStatuses,
+  type PermissionsModule,
 } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
-const HEALTH_AUTHORIZATION_TYPES = [
-  'HKQuantityTypeIdentifierStepCount',
-  'HKQuantityTypeIdentifierActiveEnergyBurned',
-  'HKQuantityTypeIdentifierDistanceWalkingRunning',
-  'HKQuantityTypeIdentifierHeartRate',
-  'HKQuantityTypeIdentifierRestingHeartRate',
-  'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-  'HKCategoryTypeIdentifierSleepAnalysis',
-  'HKWorkoutTypeIdentifier',
-] as const;
-const ANDROID_HEALTH_RETURN_TIMEOUT_MS = 2 * 60 * 1000;
-type HealthKitLoader = () => Promise<HealthKit>;
+import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 
-const permissionByScope: Record<
-  DevicePermissionScope,
-  { access: DevicePermissionAccess; permission: DevicePermission }
-> = {
-  'calendar.read': { access: 'read', permission: 'calendar' },
-  'calendar.write': { access: 'write', permission: 'calendar' },
-  'health.read': { access: 'read', permission: 'health' },
-  'location.read': { access: 'read', permission: 'location' },
-  'reminders.read': { access: 'read', permission: 'reminders' },
-  'reminders.write': { access: 'write', permission: 'reminders' },
+const logger = loggerService.withContext('DevicePermissions');
+const unsupported: DevicePermissionStatus = {
+  state: 'unavailable',
+  canAskAgain: false,
+  reason: 'unsupported',
+};
+const failed: DevicePermissionStatus = { state: 'error', canAskAgain: false };
+
+type ExpoPermission = {
+  granted: boolean;
+  status: string;
+  canAskAgain: boolean;
+  accessPrivileges?: 'all' | 'limited' | 'none';
 };
 
-export class DevicePermissions {
-  constructor(private readonly loadHealthKit: HealthKitLoader = loadHealthKitModule) {}
+export class DevicePermissions implements PermissionsModule {
+  private requestQueue = Promise.resolve();
 
-  async getStatus(
-    permission: DevicePermission,
-    access: DevicePermissionAccess = 'read',
-  ): Promise<SystemPermissionState> {
-    try {
-      switch (permission) {
-        case 'location':
-          return toSystemPermissionState(await Location.getForegroundPermissionsAsync());
-        case 'calendar':
-          return toSystemPermissionState(await Calendar.getCalendarPermissions(access === 'write'));
-        case 'reminders':
-          if (Platform.OS !== 'ios') {
-            return 'unavailable';
-          }
-          return toSystemPermissionState(await Calendar.getRemindersPermissions());
-        case 'health':
-          return this.getHealthStatus();
-        default:
-          return assertNever(permission, access);
-      }
-    } catch {
-      return 'unavailable';
-    }
+  constructor(
+    private readonly loadHealthAccess: () => HealthAccessModule | null = getHealthAccess,
+  ) {}
+
+  async getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
+    const unique = [...new Set(scopes)];
+    const healthTypes = healthTypesForScopes(unique);
+    const [healthStatuses, entries] = await Promise.all([
+      healthTypes.length ? this.getHealthStatuses(healthTypes) : {},
+      Promise.all(
+        unique
+          .filter((scope) => !scope.startsWith('health.'))
+          .map(async (scope) => {
+            try {
+              return [scope, await this.getStatus(scope)] as const;
+            } catch (error) {
+              logger.warn('Permission lookup failed', { scope, error });
+              return [scope, failed] as const;
+            }
+          }),
+      ),
+    ]);
+    return { ...Object.fromEntries(entries), ...healthStatuses };
   }
 
-  async getStatusForScope(scope: DevicePermissionScope): Promise<SystemPermissionState> {
-    const target = permissionByScope[scope];
-    return this.getStatus(target.permission, target.access);
-  }
-
-  async request(
-    permission: DevicePermission,
-    access: DevicePermissionAccess = 'read',
-  ): Promise<SystemPermissionState> {
-    try {
-      switch (permission) {
-        case 'location':
-          return toSystemPermissionState(await Location.requestForegroundPermissionsAsync());
-        case 'calendar':
-          return toSystemPermissionState(
-            await Calendar.requestCalendarPermissions(access === 'write'),
-          );
-        case 'reminders':
-          if (Platform.OS !== 'ios') {
-            return 'unavailable';
-          }
-          return toSystemPermissionState(await Calendar.requestRemindersPermissions());
-        case 'health':
-          return this.requestHealth();
-        default:
-          return assertNever(permission, access);
-      }
-    } catch {
-      return 'denied';
-    }
-  }
-
-  async requestForScope(scope: DevicePermissionScope): Promise<SystemPermissionState> {
-    const target = permissionByScope[scope];
-    return this.request(target.permission, target.access);
+  request(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
+    // Only one system authorization sheet at a time, including requests from an Agent.
+    const result = this.requestQueue.then(() => this.requestPermissions([...new Set(scopes)]));
+    this.requestQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   async openSystemSettings(permission?: DevicePermission): Promise<void> {
+    if (
+      permission === 'location' &&
+      Platform.OS === 'android' &&
+      !(await Location.hasServicesEnabledAsync())
+    ) {
+      const { ActivityAction, startActivityAsync } = await import('expo-intent-launcher');
+      await startActivityAsync(ActivityAction.LOCATION_SOURCE_SETTINGS);
+      return;
+    }
     if (permission === 'health' && Platform.OS === 'android') {
-      await this.requestHealth();
+      const health = this.loadHealthAccess();
+      if (!health) throw new Error('Health access native module is missing');
+      await health.openSettings();
       return;
     }
     await Linking.openSettings();
   }
 
-  private async getHealthStatus(): Promise<SystemPermissionState> {
-    try {
-      const healthKit = await this.loadHealthKit();
-      if (!(await healthKit.isHealthKitAvailable())) {
-        return 'unavailable';
+  private async getStatus(scope: DevicePermissionScope): Promise<DevicePermissionStatus> {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return unsupported;
+    switch (scope) {
+      case 'location.read': {
+        const [permission, enabled] = await Promise.all([
+          Location.getForegroundPermissionsAsync(),
+          Location.hasServicesEnabledAsync(),
+        ]);
+        if (!enabled)
+          return { state: 'unavailable', canAskAgain: false, reason: 'service-disabled' };
+        const accuracy = permission.ios?.accuracy ?? permission.android?.accuracy;
+        return {
+          ...toPermissionStatus(permission),
+          ...(permission.granted &&
+            accuracy &&
+            accuracy !== 'none' && {
+              accuracy: accuracy === 'full' || accuracy === 'fine' ? 'precise' : 'approximate',
+            }),
+        };
       }
-
-      const statuses = await Promise.all(
-        HEALTH_AUTHORIZATION_TYPES.map((type) => healthKit.checkAuthorizationStatus(type)),
-      );
-      if (statuses.every((status) => status === 'sharingAuthorized')) {
-        return 'granted';
+      case 'calendar.read': {
+        const permission = toPermissionStatus(await Calendar.getCalendarPermissions(false));
+        // EventKit can upgrade write-only access to full access. Expo reports the read
+        // side of write-only as denied, which must not conceal this upgrade path.
+        if (
+          Platform.OS === 'ios' &&
+          permission.state === 'denied' &&
+          (await Calendar.getCalendarPermissions(true)).granted
+        ) {
+          return { ...permission, canAskAgain: true };
+        }
+        return permission;
       }
-      return statuses.some((status) => status === 'notDetermined') ? 'undetermined' : 'denied';
-    } catch {
-      return 'unavailable';
+      case 'calendar.write':
+        return toPermissionStatus(await Calendar.getCalendarPermissions(true));
+      case 'reminders.read':
+      case 'reminders.write':
+        return Platform.OS === 'ios'
+          ? toPermissionStatus(await Calendar.getRemindersPermissions())
+          : unsupported;
+      case 'camera.read':
+        return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
+      case 'photos.read':
+        return toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
+      case 'photos.write':
+        // Expo's modern MediaStore writer starts at Android 11; its older writer
+        // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
+        return Platform.OS === 'android' && Number(Platform.Version) >= 30
+          ? { state: 'granted', canAskAgain: false }
+          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(true, ['photo']));
+      default:
+        throw new Error(`Unexpected permission scope: ${scope}`);
     }
   }
 
-  private async requestHealth(): Promise<SystemPermissionState> {
+  private async requestPermissions(
+    scopes: readonly DevicePermissionScope[],
+  ): Promise<PermissionStatuses> {
+    const before = await this.getStatuses(scopes);
+    const requestable = scopes.filter((scope) => canRequestDevicePermission(before[scope]));
+    const healthTypes = healthTypesForScopes(requestable);
+    if (healthTypes.length) {
+      const health = this.loadHealthAccess();
+      if (!health) throw new Error('Health access native module is missing');
+      await health.request(healthTypes);
+    }
+    for (const scope of requestable.filter((scope) => !scope.startsWith('health.'))) {
+      // An earlier request may have already granted both scopes (calendar/reminders).
+      if (!canRequestDevicePermission(await this.getStatus(scope))) continue;
+      switch (scope) {
+        case 'location.read':
+          await Location.requestForegroundPermissionsAsync();
+          break;
+        case 'calendar.read':
+          await Calendar.requestCalendarPermissions(false);
+          break;
+        case 'calendar.write':
+          await Calendar.requestCalendarPermissions(true);
+          break;
+        case 'reminders.read':
+        case 'reminders.write':
+          await Calendar.requestRemindersPermissions();
+          break;
+        case 'camera.read':
+          await ImagePicker.requestCameraPermissionsAsync();
+          break;
+        case 'photos.read':
+          await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+          break;
+        case 'photos.write':
+          await MediaLibrary.requestPermissionsAsync(true, ['photo']);
+          break;
+      }
+    }
+    return this.getStatuses(scopes);
+  }
+
+  private async getHealthStatuses(types: readonly HealthDataType[]): Promise<PermissionStatuses> {
+    const fill = (status: DevicePermissionStatus): PermissionStatuses =>
+      Object.fromEntries(types.map((type) => [healthPermissionScope(type), status]));
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return fill(unsupported);
     try {
-      const healthKit = await this.loadHealthKit();
-      if (!(await healthKit.isHealthKitAvailable())) {
-        return 'unavailable';
+      const health = this.loadHealthAccess();
+      if (!health) return fill({ ...failed, reason: 'native-unavailable' });
+      const availability = await health.getAvailability();
+      if (availability !== 'available') {
+        return fill({ state: 'unavailable', canAskAgain: false, reason: availability });
       }
-
-      const returnWaiter = Platform.OS === 'android' ? createAppReturnWaiter() : undefined;
-      const authorized = await healthKit.requestAuthorization();
-      if (authorized) {
-        returnWaiter?.cancel();
-        return 'granted';
-      }
-
-      if (returnWaiter) {
-        await returnWaiter.promise;
-      }
-      return this.getHealthStatus();
-    } catch {
-      return 'denied';
+      const statuses = await health.getStatuses(types);
+      return Object.fromEntries(
+        types.map((type) => [healthPermissionScope(type), statuses[type] ?? failed]),
+      );
+    } catch (error) {
+      logger.warn('Health permission lookup failed', error);
+      return fill(failed);
     }
   }
 }
 
-/**
- * Shared instance. The class carries no per-instance state — its only field is
- * the HealthKit loader test seam, and the Android return waiter is scoped to the
- * call that creates it — so one instance is as good as many.
- */
 export const devicePermissions = new DevicePermissions();
 
-async function loadHealthKitModule() {
-  const { getHealthKit } = await import('react-native-nitro-healthkit');
-  return getHealthKit();
+function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthDataType[] {
+  return HEALTH_DATA_TYPES.filter((type) => scopes.includes(healthPermissionScope(type)));
 }
 
-function createAppReturnWaiter() {
-  let leftApp = AppState.currentState !== 'active';
-  let resolvePromise = () => {};
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve;
-  });
-  const timeout = setTimeout(resolvePromise, ANDROID_HEALTH_RETURN_TIMEOUT_MS);
-  const subscription = AppState.addEventListener('change', (state) => {
-    if (state !== 'active') {
-      leftApp = true;
-    } else if (leftApp) {
-      resolvePromise();
-    }
-  });
-  const settle = () => {
-    clearTimeout(timeout);
-    subscription.remove();
-    resolvePromise();
+function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
+  return {
+    state:
+      response.accessPrivileges === 'limited'
+        ? 'limited'
+        : response.granted
+          ? 'granted'
+          : response.status === 'undetermined'
+            ? 'undetermined'
+            : 'denied',
+    canAskAgain: response.canAskAgain,
   };
-  promise.finally(settle).catch(() => undefined);
-
-  return { cancel: settle, promise };
-}
-
-function toSystemPermissionState(response: {
-  granted: boolean;
-  status: string;
-}): SystemPermissionState {
-  if (response.granted) {
-    return 'granted';
-  }
-  return response.status === 'undetermined' ? 'undetermined' : 'denied';
-}
-
-function assertNever(value: never, access: DevicePermissionAccess): never {
-  throw new Error(`Unsupported ${access} permission: ${String(value)}`);
 }

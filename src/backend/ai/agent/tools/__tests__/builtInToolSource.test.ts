@@ -90,6 +90,19 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
+  test('offers health summaries with just one granted metric without enabling workouts', async () => {
+    const tools = await resolve({
+      deviceAccess: { 'health.steps.read': 'granted', 'health.workouts.read': 'denied' },
+    });
+    expect(capabilityIds(tools)).toContain('health_get_summary');
+    expect(capabilityIds(tools)).not.toContain('health_list_workouts');
+  });
+
+  test('allows HealthKit read attempts after an inquiry without requiring a fictitious read grant', async () => {
+    const tools = await resolve({ deviceAccess: { 'health.steps.read': 'requested' } });
+    expect(capabilityIds(tools)).toContain('health_get_summary');
+  });
+
   test('offers each web tool only when its provider is configured', async () => {
     const unconfigured = await resolve({});
     expect(capabilityIds(unconfigured)).not.toContain('web_search');
@@ -390,8 +403,14 @@ const SERVICES: SystemCapabilityServices = {
 function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDependencies> {
   return {
     devicePermissions: {
-      getStatusForScope: async (scope) => scenario.deviceAccess?.[scope] ?? 'denied',
-      requestForScope: async () => 'denied',
+      getStatuses: async (scopes) =>
+        Object.fromEntries(
+          scopes.map((scope) => {
+            const state = scenario.deviceAccess?.[scope] ?? 'denied';
+            return [scope, { state, canAskAgain: state === 'undetermined' }];
+          }),
+        ),
+      request: async () => ({}),
     },
     painting: {
       ai: { generateImage: jest.fn() },

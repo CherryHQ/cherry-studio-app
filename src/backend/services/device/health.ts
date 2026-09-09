@@ -5,17 +5,14 @@ import type {
   WorkoutDataPoint,
 } from 'react-native-nitro-healthkit';
 
+import { HEALTH_DATA_TYPES } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import { normalizeOptionalDateRange, toIso, withNativeToolTimeout } from './utils';
 
-export const healthMetricNames = [
-  'steps',
-  'activeEnergy',
-  'distance',
-  'heartRate',
-  'restingHeartRate',
-  'hrv',
-  'sleep',
-] as const;
+const logger = loggerService.withContext('HealthData');
+export const healthMetricNames = HEALTH_DATA_TYPES.filter((type) => type !== 'workouts');
+type MetricState = 'available' | 'no-data' | 'error';
 export type HealthMetricName = (typeof healthMetricNames)[number];
 export type HealthKitLoader = () => Promise<HealthKit>;
 
@@ -67,12 +64,12 @@ export async function getHealthSummary(
   const range = normalizeOptionalDateRange(input.startDate, input.endDate);
   const healthKit = await loadHealthKit();
   const metrics = input.metrics?.length ? input.metrics : [...healthMetricNames];
-  const data =
+  const result =
     input.granularity === 'day'
       ? await getDailyHealthData(healthKit, metrics, range.start, range.end)
       : await getRangeHealthSummary(healthKit, metrics, range.start, range.end);
   return {
-    data,
+    ...result,
     endDate: range.end.toISOString(),
     granularity: input.granularity,
     startDate: range.start.toISOString(),
@@ -103,24 +100,44 @@ async function getRangeHealthSummary(
   start: Date,
   end: Date,
 ) {
+  const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
   const entries = await Promise.all(
     metrics.map(async (metric) => {
-      if (metric === 'sleep') {
+      const unit = metric === 'sleep' ? 'hours' : quantityMetrics[metric].unit;
+      try {
+        if (metric === 'sleep') {
+          const samples = await withNativeToolTimeout(
+            healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
+            'Sleep query',
+          );
+          metricStates[metric] = samples.length ? 'available' : 'no-data';
+          return [metric, { unit, value: samples.length ? sumSleepHours(samples) : null }] as const;
+        }
+        const config = quantityMetrics[metric];
+        // The native aggregate collapses absent samples into zero. Check existence
+        // without replacing HealthKit/Health Connect's aggregation with raw sums.
         const samples = await withNativeToolTimeout(
-          healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
-          'Sleep query',
+          healthKit.getQuantityData(config.identifier, start, end, 1, false),
+          `${metric} availability query`,
         );
-        return [metric, { unit: 'hours', value: sumSleepHours(samples) }] as const;
+        if (!samples.length) {
+          metricStates[metric] = 'no-data';
+          return [metric, { unit, value: null }] as const;
+        }
+        const value = await withNativeToolTimeout(
+          healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
+          `${metric} query`,
+        );
+        metricStates[metric] = 'available';
+        return [metric, { unit, value }] as const;
+      } catch (error) {
+        logger.warn('Health metric query failed', { metric, error });
+        metricStates[metric] = 'error';
+        return [metric, { unit, value: null }] as const;
       }
-      const config = quantityMetrics[metric];
-      const value = await withNativeToolTimeout(
-        healthKit.getAggregatedQuantity(config.identifier, start, end, config.aggregation, false),
-        `${metric} query`,
-      );
-      return [metric, { unit: config.unit, value }] as const;
     }),
   );
-  return Object.fromEntries(entries);
+  return { data: Object.fromEntries(entries), metricStates };
 }
 
 async function getDailyHealthData(
@@ -130,33 +147,38 @@ async function getDailyHealthData(
   end: Date,
 ) {
   const daily = new Map<string, Record<string, { unit: string; value: number }>>();
+  const metricStates: Partial<Record<HealthMetricName, MetricState>> = {};
   await Promise.all(
     metrics.map(async (metric) => {
-      if (metric === 'sleep') {
-        applyDailySleep(
-          daily,
-          await withNativeToolTimeout(
+      try {
+        if (metric === 'sleep') {
+          const samples = await withNativeToolTimeout(
             healthKit.getCategoryData('HKCategoryTypeIdentifierSleepAnalysis', start, end, false),
             'Sleep query',
-          ),
-        );
-        return;
+          );
+          metricStates[metric] = samples.length ? 'available' : 'no-data';
+          applyDailySleep(daily, samples);
+        } else {
+          const config = quantityMetrics[metric];
+          const samples = await withNativeToolTimeout(
+            healthKit.getQuantityData(config.identifier, start, end, null, false),
+            `${metric} query`,
+          );
+          metricStates[metric] = samples.length ? 'available' : 'no-data';
+          applyDailyQuantity(daily, metric, config, samples);
+        }
+      } catch (error) {
+        logger.warn('Daily health metric query failed', { metric, error });
+        metricStates[metric] = 'error';
       }
-      const config = quantityMetrics[metric];
-      applyDailyQuantity(
-        daily,
-        metric,
-        config,
-        await withNativeToolTimeout(
-          healthKit.getQuantityData(config.identifier, start, end, null, false),
-          `${metric} query`,
-        ),
-      );
     }),
   );
-  return [...daily.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([date, metrics]) => ({ date, metrics }));
+  return {
+    data: [...daily.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([date, metrics]) => ({ date, metrics })),
+    metricStates,
+  };
 }
 
 function applyDailyQuantity(

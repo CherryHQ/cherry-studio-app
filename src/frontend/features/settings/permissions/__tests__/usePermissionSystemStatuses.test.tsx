@@ -9,7 +9,9 @@ import { usePermissionSystemStatuses } from '../hooks/usePermissionSystemStatuse
 
 const mockGetStatuses = jest.fn(
   async (keys: readonly string[]) =>
-    Object.fromEntries(keys.map((key) => [key, 'granted'])) as PermissionStatuses,
+    Object.fromEntries(
+      keys.map((key) => [key, { state: 'granted', canAskAgain: false }]),
+    ) as PermissionStatuses,
 );
 const backend = {
   permissions: { getStatuses: mockGetStatuses },
@@ -62,7 +64,17 @@ describe('usePermissionSystemStatuses', () => {
       'calendar.write',
       'reminders.read',
       'reminders.write',
-      'health.read',
+      'health.steps.read',
+      'health.activeEnergy.read',
+      'health.distance.read',
+      'health.heartRate.read',
+      'health.restingHeartRate.read',
+      'health.hrv.read',
+      'health.sleep.read',
+      'health.workouts.read',
+      'camera.read',
+      'photos.read',
+      'photos.write',
     ]);
 
     await act(async () => appStateListener?.('background'));

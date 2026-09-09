@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "ios/HealthAccess.podspec",
+    "modules": ["HealthAccessModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.healthaccess.HealthAccessModule"]
+  }
+}
