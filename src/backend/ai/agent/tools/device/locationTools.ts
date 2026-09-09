@@ -17,7 +17,29 @@ export function createLocationTools(deps: DeviceToolDependencies) {
       displayName: 'Current location',
       inputSchema: currentLocationSchema,
       permissionScopes: ['location.read'],
-      run: (input) => getCurrentLocation({ includeAddress: input.includeAddress }),
+      run: async (input, signal) => {
+        try {
+          return await getCurrentLocation({ includeAddress: input.includeAddress }, signal);
+        } catch (error) {
+          const code =
+            error && typeof error === 'object' && 'code' in error
+              ? String(error.code)
+              : 'E_LOCATION_FAILED';
+          if (signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+            throw error;
+          }
+          if (code === 'E_LOCATION_CANCELLED') {
+            throw Object.assign(new Error('Location request cancelled'), { name: 'AbortError' });
+          }
+          return {
+            status: 'error',
+            stage: 'position',
+            code,
+            message: `${error instanceof Error ? error.message : String(error)} Tell the user the reported reason; do not automatically repeat this location request.`,
+            retryable: false,
+          };
+        }
+      },
     }),
   ];
 }
