@@ -201,6 +201,24 @@ describe('turn preparation', () => {
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
   });
 
+  test.each(['default', 'none', 'auto', 'xhigh', 'max'] as const)(
+    'preserves the explicit %s reasoning selection over the agent default',
+    async (reasoningEffort) => {
+      const harness = createHarness();
+      const plan = await prepareTurn(
+        harness.dependencies,
+        {
+          sessionId: SESSION_ID,
+          parts: [{ type: 'text', text: 'Hello.' }],
+          reasoningEffort,
+        },
+        new AbortController().signal,
+      );
+      expect(plan.agent.options.reasoningEffort).toBe(reasoningEffort);
+      expect(AGENT.options.reasoningEffort).toBe('low');
+    },
+  );
+
   test('builds a canonical turn plan from frozen model, tool, and attachment facts', async () => {
     const harness = createHarness();
     const input: AgentSubmitMessageInput = {
@@ -259,7 +277,7 @@ describe('turn preparation', () => {
     expect(plan.agent).toEqual({
       ...AGENT,
       model: OVERRIDE_MODEL,
-      options: { maxOutputTokens: 512, temperature: 0.2 },
+      options: { maxOutputTokens: 512, reasoningEffort: 'default', temperature: 0.2 },
     });
     expect(plan.inputParts).toEqual([
       { type: 'text', text: 'Review this file.' },

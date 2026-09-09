@@ -4,6 +4,7 @@ import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { FetchFunction } from '@earendil-works/pi-ai';
 
 import type { PiLanguageEndpointType } from './piLanguageBinding';
+import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
 export type SupportedPiApi =
   | 'anthropic-messages'
@@ -65,6 +66,7 @@ type PiStreamBinding = {
   headers: Record<string, string>;
   maxRetries: number;
   maxTokens: number;
+  requestParameters?: PiRequestParameters;
   temperature?: number;
   timeoutMs: number;
 };
@@ -75,16 +77,32 @@ export async function bindPiStream(
 ): Promise<PiStreamFn> {
   const streamSimple = await adapter.loadStreamSimple();
 
-  return (model, context, options) =>
-    streamSimple(model, context, {
+  return (model, context, options) => {
+    const maxTokens = options?.maxTokens ?? binding.maxTokens;
+    const temperature = options?.temperature ?? binding.temperature;
+    return streamSimple(model, context, {
       ...options,
       apiKey: binding.apiKey,
       fetch: adapter.supportsCustomFetch ? binding.fetch : undefined,
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
-      maxTokens: options?.maxTokens ?? binding.maxTokens,
+      maxTokens,
+      onPayload: async (payload, requestModel) => {
+        const previous = await options?.onPayload?.(payload, requestModel);
+        const resolvedPayload = previous === undefined ? payload : previous;
+        return binding.requestParameters
+          ? applyPiRequestParameters(
+              resolvedPayload,
+              adapter.api,
+              binding.requestParameters,
+              maxTokens,
+              temperature,
+            )
+          : resolvedPayload;
+      },
       signal: options?.signal,
-      temperature: options?.temperature ?? binding.temperature,
+      temperature,
       timeoutMs: binding.timeoutMs,
     });
+  };
 }

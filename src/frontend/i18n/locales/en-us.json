@@ -328,6 +328,7 @@
   "chat.reasoning.off": "Off",
   "chat.reasoning.smarter": "Smarter",
   "chat.reasoning.title": "Reasoning effort",
+  "chat.reasoning.xhigh": "Extra high",
   "chat.reasoningStatus.thinking": "Thinking",
   "chat.reasoningStatus.thought": "Thought it through",
   "chat.sources.count_one": "{{count}} source",
