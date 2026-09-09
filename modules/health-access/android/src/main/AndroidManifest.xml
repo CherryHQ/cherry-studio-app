@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <queries>
+    <package android:name="com.google.android.apps.healthdata" />
+    <package android:name="com.android.vending" />
+  </queries>
+  <application>
+    <activity android:name=".HealthPermissionUsageActivity" android:exported="true">
+      <intent-filter>
+        <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </activity>
+    <activity-alias
+      android:name=".HealthPermissionUsageAlias"
+      android:targetActivity=".HealthPermissionUsageActivity"
+      android:exported="true"
+      android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+        <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+      </intent-filter>
+    </activity-alias>
+  </application>
+</manifest>

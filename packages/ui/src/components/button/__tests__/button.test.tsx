@@ -293,6 +293,19 @@ describe('Button', () => {
     expect(tree.root.findByProps({ testID: 'spinner' }).props.size).toBe('default');
   });
 
+  test('explicitly clears busy state when loading finishes', () => {
+    const tree = render('Save', { loading: true, accessibilityState: { selected: true } });
+
+    act(() => {
+      tree.update(<Button accessibilityState={{ selected: true }}>Save</Button>);
+    });
+
+    const pressable = findPressable(tree);
+    expect(pressable.props.disabled).toBe(false);
+    expect(pressable.props.accessibilityState).toEqual({ busy: false, selected: true });
+    expect(tree.root.findAllByProps({ testID: 'spinner' })).toHaveLength(0);
+  });
+
   test('merges disabled state with caller accessibility state', () => {
     const pressable = findPressable(
       render('Delete', {
@@ -302,6 +315,10 @@ describe('Button', () => {
     );
 
     expect(pressable.props.disabled).toBe(true);
-    expect(pressable.props.accessibilityState).toEqual({ checked: true, disabled: true });
+    expect(pressable.props.accessibilityState).toEqual({
+      busy: false,
+      checked: true,
+      disabled: true,
+    });
   });
 });

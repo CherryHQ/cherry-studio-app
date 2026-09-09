@@ -1,56 +1,71 @@
-import type { PermissionStatuses } from '@/shared/contracts';
+import { type DevicePermissionStatus, HEALTH_PERMISSION_SCOPES } from '@/shared/contracts';
 
-import { getPermissionAction, getPermissionStatus } from '../permissionConfig';
+import {
+  getPermissionAction,
+  getPermissionStatus,
+  isPermissionSupported,
+} from '../permissionConfig';
 
-const grantedStatuses: PermissionStatuses = {
-  'calendar.read': 'granted',
-  'calendar.write': 'granted',
-  'health.read': 'granted',
-  'location.read': 'granted',
-  'reminders.read': 'granted',
-  'reminders.write': 'granted',
-};
+const granted: DevicePermissionStatus = { state: 'granted', canAskAgain: false };
+const denied: DevicePermissionStatus = { state: 'denied', canAskAgain: false };
 
-describe('getPermissionStatus', () => {
-  it('returns the system state for a single-scope permission', () => {
+describe('permission settings', () => {
+  test('shows add-only calendar access instead of rejecting the whole capability', () => {
     expect(
-      getPermissionStatus('location', {
-        ...grantedStatuses,
-        'location.read': 'undetermined',
-      }),
-    ).toBe('undetermined');
+      getPermissionStatus('calendar', { 'calendar.read': denied, 'calendar.write': granted }),
+    ).toMatchObject({ state: 'limited' });
   });
-
-  it('requires every scope of a grouped system permission', () => {
+  test('does not infer add-only access when checking full access failed', () => {
     expect(
       getPermissionStatus('calendar', {
-        ...grantedStatuses,
-        'calendar.read': 'denied',
+        'calendar.read': { state: 'error', canAskAgain: false },
+        'calendar.write': granted,
       }),
-    ).toBe('denied');
+    ).toMatchObject({ state: 'error' });
   });
-
-  it('keeps the initial state loading until every scope has been checked', () => {
-    expect(getPermissionStatus('calendar', { 'calendar.read': 'granted' })).toBeUndefined();
+  test('keeps partial Android health access distinct from all granted or all denied', () => {
+    expect(
+      getPermissionStatus('health', {
+        ...Object.fromEntries(HEALTH_PERMISSION_SCOPES.map((scope) => [scope, denied])),
+        'health.steps.read': granted,
+      }),
+    ).toMatchObject({ state: 'limited' });
   });
-});
-
-describe('getPermissionAction', () => {
-  it('requests an undetermined permission', () => {
-    expect(getPermissionAction('undetermined')).toBe('request');
+  test('saving photos does not imply permission to browse the library', () => {
+    expect(
+      getPermissionStatus('photos', { 'photos.read': denied, 'photos.write': granted }),
+    ).toEqual(denied);
   });
-
-  it.each(['denied', 'granted'] as const)(
-    'opens system settings for an already determined %s permission',
-    (status) => {
-      expect(getPermissionAction(status)).toBe('open-settings');
-    },
-  );
-
-  it.each([undefined, 'unavailable'] as const)(
-    'does not offer an action for an unavailable permission state',
-    (status) => {
-      expect(getPermissionAction(status)).toBeUndefined();
-    },
-  );
+  test('waits for all scopes needed to summarize a permission', () => {
+    expect(getPermissionStatus('calendar', { 'calendar.read': granted })).toBeUndefined();
+  });
+  test('only hides proven unsupported capabilities, not loading or service failures', () => {
+    expect(isPermissionSupported('location', {})).toBe(true);
+    expect(
+      isPermissionSupported('location', {
+        'location.read': { state: 'error', canAskAgain: false },
+      }),
+    ).toBe(true);
+    expect(
+      isPermissionSupported('location', {
+        'location.read': { state: 'unavailable', canAskAgain: false, reason: 'unsupported' },
+      }),
+    ).toBe(false);
+  });
+  test('offers another system request only when the OS can still ask', () => {
+    expect(getPermissionAction({ ...denied, canAskAgain: true })).toBe('request');
+    expect(getPermissionAction(denied)).toBe('open-settings');
+  });
+  test('keeps install, retry, and unsupported outcomes distinct', () => {
+    expect(
+      getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'install-required' }),
+    ).toBe('open-settings');
+    expect(getPermissionAction({ state: 'error', canAskAgain: false })).toBe('retry');
+    expect(
+      getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'unsupported' }),
+    ).toBeUndefined();
+    expect(
+      getPermissionAction({ state: 'error', canAskAgain: false, reason: 'native-unavailable' }),
+    ).toBeUndefined();
+  });
 });

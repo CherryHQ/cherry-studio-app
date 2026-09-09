@@ -18,6 +18,13 @@
         "gradleCommand": ":app:assembleDebug -PreactNativeArchitectures=arm64-v8a"
       }
     },
+    "development-simulator": {
+      "extends": "development",
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Debug"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "node": "24.19.0",

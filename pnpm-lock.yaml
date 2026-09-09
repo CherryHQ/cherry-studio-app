@@ -134,6 +134,7 @@ patchedDependencies:
   '@openrouter/ai-sdk-provider@2.10.0': fe61d9ff590828fc0fd3f8b3b8b88a4a1b736a99b595a276c8df9e12c9498009
   '@opeoginni/github-copilot-openai-compatible@1.0.0': 4bea0e526136ed32d0be4849ec5cbb41bd5de7b7418dd6920598357438cfef25
   ai@6.0.185: 61fc175c652267f39ec01df738fc61d1639faa19b980441005f7e9cd645d1711
+  expo-calendar@57.0.1: 8beef60fa807954dcb90cbafcc54ede98c1da48a9236c2ca4755a4ee53e51df1
   expo-router@57.0.6: 36b45ad1cfe874395609f849cd53644b41e58ff77d4d9f033ae548ad2af5cd83
   metro-runtime@0.84.4: 7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a
   metro@0.84.4: bc3c69aec12bccf391b5180caffd62a4043c81bcf5848949a4b50e79184be6f7
@@ -141,7 +142,7 @@ patchedDependencies:
   react-native-drawer-layout@4.2.4: 5d567d547b418913c11d2dfe413fc9c1caa72027b12a4a212d23447fc3efe934
   react-native-enriched-markdown@1.0.1: aecbc83a655ff7a9f74344b9f11e82f399198c490fdce1cfe17bc6ee1460ea4c
   react-native-keyboard-controller@1.21.13: 6f5bed7a836aae55a44a2b0a97532e6d73d9dfb87032457499dfe3ff2c239186
-  react-native-nitro-healthkit@1.0.0: c1231cd559844fba1fa13c5d09d4f9a84ecd4211707055a1ea2c3ba9930108e7
+  react-native-nitro-healthkit@1.0.0: 7cf6de1a057d10ee9606b9dc88a45d7c8e1e13b97806b1baf1a2fc19dfb28f31
   react-native-reanimated@4.5.0: 98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1
   uniwind@1.6.5: 791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb
 
@@ -304,7 +305,7 @@ importers:
         version: 57.0.5(expo@57.0.6)
       expo-calendar:
         specifier: ~57.0.1
-        version: 57.0.1(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))
+        version: 57.0.1(patch_hash=8beef60fa807954dcb90cbafcc54ede98c1da48a9236c2ca4755a4ee53e51df1)(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))
       expo-camera:
         specifier: ~57.0.4
         version: 57.0.4(@types/emscripten@1.41.5)(expo@57.0.6)(react-native-web@0.21.2(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -451,7 +452,7 @@ importers:
         version: 4.3.2(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-nitro-healthkit:
         specifier: 1.0.0
-        version: 1.0.0(patch_hash=c1231cd559844fba1fa13c5d09d4f9a84ecd4211707055a1ea2c3ba9930108e7)(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
+        version: 1.0.0(patch_hash=7cf6de1a057d10ee9606b9dc88a45d7c8e1e13b97806b1baf1a2fc19dfb28f31)(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-nitro-image:
         specifier: 0.15.1
         version: 0.15.1(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -472,7 +473,7 @@ importers:
         version: 4.25.2(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-streamdown:
         specifier: 0.2.0
-        version: 0.2.0(5509fb1cce70cb40e1cb5de667d97c40)
+        version: 0.2.0(b0f14ae949a048080a645852f5f97901)
       react-native-svg:
         specifier: 15.15.4
         version: 15.15.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
@@ -914,7 +915,7 @@ importers:
         version: 5.7.0(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)
       react-native-streamdown:
         specifier: '*'
-        version: 0.2.0(5509fb1cce70cb40e1cb5de667d97c40)
+        version: 0.2.0(b0f14ae949a048080a645852f5f97901)
       react-native-worklets:
         specifier: '*'
         version: 0.10.2(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)
@@ -15314,7 +15315,7 @@ snapshots:
       resolve-from: 5.0.0
       semver: 7.8.5
 
-  expo-calendar@57.0.1(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)):
+  expo-calendar@57.0.1(patch_hash=8beef60fa807954dcb90cbafcc54ede98c1da48a9236c2ca4755a4ee53e51df1)(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)):
     dependencies:
       expo: 57.0.6(d5f991ac186e51872435ca0bcd5a72a5)
       react-native: 0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
@@ -18013,7 +18014,7 @@ snapshots:
       prop-types: 15.8.1
       react-native: 0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
 
-  react-native-nitro-healthkit@1.0.0(patch_hash=c1231cd559844fba1fa13c5d09d4f9a84ecd4211707055a1ea2c3ba9930108e7)(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3):
+  react-native-nitro-healthkit@1.0.0(patch_hash=7cf6de1a057d10ee9606b9dc88a45d7c8e1e13b97806b1baf1a2fc19dfb28f31)(react-native-nitro-modules@0.36.4(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)
@@ -18064,7 +18065,7 @@ snapshots:
 
   react-native-skia-apple-tvos@147.1.0: {}
 
-  react-native-streamdown@0.2.0(5509fb1cce70cb40e1cb5de667d97c40):
+  react-native-streamdown@0.2.0(b0f14ae949a048080a645852f5f97901):
     dependencies:
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)

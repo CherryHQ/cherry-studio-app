@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
@@ -18,10 +18,19 @@ import type { DevicePermissionScope, PermissionStatuses } from '@/shared/contrac
 export function useDevicePermissionStatuses(scopes: readonly DevicePermissionScope[]) {
   const permissions = useBackendModule('permissions');
   const [statuses, setStatuses] = useState<PermissionStatuses>({});
+  const refreshVersion = useRef(0);
 
   const refresh = useCallback(async () => {
-    const nextStatuses = await permissions.getStatuses(scopes);
-    setStatuses((current) => ({ ...current, ...nextStatuses }));
+    const version = ++refreshVersion.current;
+    const nextStatuses = await permissions
+      .getStatuses(scopes)
+      .catch(
+        () =>
+          Object.fromEntries(
+            scopes.map((scope) => [scope, { state: 'error', canAskAgain: false }]),
+          ) as PermissionStatuses,
+      );
+    if (version === refreshVersion.current) setStatuses(nextStatuses);
   }, [permissions, scopes]);
 
   useFocusEffect(
@@ -34,7 +43,10 @@ export function useDevicePermissionStatuses(scopes: readonly DevicePermissionSco
         }
       });
 
-      return () => subscription.remove();
+      return () => {
+        refreshVersion.current++;
+        subscription.remove();
+      };
     }, [refresh]),
   );
 

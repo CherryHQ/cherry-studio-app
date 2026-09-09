@@ -6,9 +6,9 @@
  * that this model can call, this platform implements, this Agent has enabled,
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
- * present and broken. The one deliberate exception is an OS permission that was
- * never asked for: the tool is offered as `ask`, and its execution triggers the
- * one-shot system prompt after the user approves the call in-app.
+ * present and broken. A permission the OS can still request keeps the tool
+ * offered as `ask`; execution prompts after in-app approval. HealthKit read
+ * access remains unknown after prompting, so queries can return no data.
  *
  * Resolution is per turn on purpose. Permissions and the drawing-model setting
  * change outside Cherry, so a catalog cached across turns would offer tools the
@@ -24,7 +24,11 @@ import { providerRegistryService } from '@/backend/data/services/ProviderRegistr
 import { fileContent } from '@/backend/services/file/fileContent';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
-import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import {
+  canRequestDevicePermission,
+  canUseDevicePermission,
+  type PermissionStatuses,
+} from '@/shared/contracts';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
@@ -59,21 +63,12 @@ import { createWriteFileTool } from './writeFileTool';
 
 const logger = loggerService.withContext('BuiltInToolSource');
 
-const DEVICE_PERMISSION_SCOPES = [
-  'calendar.read',
-  'calendar.write',
-  'health.read',
-  'location.read',
-  'reminders.read',
-  'reminders.write',
-] as const satisfies readonly DevicePermissionScope[];
-
 const WEB_SEARCH_PROVIDER_PREFERENCE_KEYS = {
   fetchUrls: 'chat.web_search.default_fetch_urls_provider',
   searchKeywords: 'chat.web_search.default_search_keywords_provider',
 } as const;
 
-export type DeviceAccess = Readonly<Record<DevicePermissionScope, SystemPermissionState>>;
+export type DeviceAccess = Readonly<PermissionStatuses>;
 
 type WebSearchAvailability = Readonly<Record<WebSearchCapability, boolean>>;
 
@@ -164,9 +159,8 @@ export type ResolvedToolPolicy = {
 /**
  * Application policy is shared by every Agent; the Agent contributes only its
  * capability-group deny-list. `null` means the tool is absent for this turn.
- * A permission that was never asked for keeps the tool present as `ask` — the
- * in-app approval is the consent moment before execution fires the one-shot
- * system prompt — and stays ineligible for the global auto mode.
+ * A requestable permission keeps the tool present as `ask`, so in-app approval
+ * precedes the system prompt and cannot be bypassed by global auto mode.
  */
 export function resolveApproval(
   descriptor: BuiltInToolDescriptor,
@@ -188,11 +182,19 @@ export function resolveApproval(
     return null;
   }
 
-  const statuses = descriptor.permissionScopes.map((permission) => scope.deviceAccess[permission]);
-  if (statuses.some((status) => status !== 'granted' && status !== 'undetermined')) {
+  const available = descriptor.permissionScopes.map(
+    (permission) =>
+      canUseDevicePermission(permission, scope.deviceAccess[permission]) ||
+      canRequestDevicePermission(scope.deviceAccess[permission]),
+  );
+  if (descriptor.permissionMatch === 'any' ? !available.some(Boolean) : !available.every(Boolean)) {
     return null;
   }
-  if (statuses.some((status) => status === 'undetermined')) {
+  if (
+    descriptor.permissionScopes.some((permission) =>
+      canRequestDevicePermission(scope.deviceAccess[permission]),
+    )
+  ) {
     return { approval: 'ask', autoApprovalEligible: false };
   }
   return {
@@ -270,7 +272,7 @@ async function resolveScope(
   disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<BuiltInToolScope> {
   const [deviceAccess, paintingModel, webSearchAvailability] = await Promise.all([
-    resolveDeviceAccess(deps),
+    resolveDeviceAccess(deps, disabledCapabilities),
     disabledCapabilities.has('image')
       ? null
       : resolveConfiguredPaintingModel(deps.painting).catch((error: unknown) => {
@@ -325,21 +327,23 @@ async function readWebSearchProvider(
 
 async function resolveDeviceAccess(
   deps: SystemCapabilitySourceDependencies,
+  disabledCapabilities: ReadonlySet<AgentCapability>,
 ): Promise<DeviceAccess> {
-  const entries = await Promise.all(
-    DEVICE_PERMISSION_SCOPES.map(async (scope) => {
-      try {
-        return [scope, await deps.devicePermissions.getStatusForScope(scope)] as const;
-      } catch (error) {
-        logger.warn('Device access lookup failed; omitting the affected tools', {
-          error,
-          scope,
-        });
-        return [scope, 'unavailable' as const] as const;
-      }
-    }),
-  );
-  return Object.fromEntries(entries) as DeviceAccess;
+  const scopes = [
+    ...new Set(
+      BUILT_IN_TOOL_DESCRIPTORS.filter(
+        (descriptor) =>
+          isPlatformSupported(descriptor, deps.platform) &&
+          (!descriptor.agentCapability || !disabledCapabilities.has(descriptor.agentCapability)),
+      ).flatMap((descriptor) => descriptor.permissionScopes),
+    ),
+  ];
+  try {
+    return await deps.devicePermissions.getStatuses(scopes);
+  } catch (error) {
+    logger.warn('Device access lookup failed; omitting device tools', { error });
+    return {};
+  }
 }
 
 function resolveDependencies(
