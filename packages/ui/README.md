@@ -476,10 +476,17 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. `ActionMenu` keeps native presentation on both platforms; iOS context menus also remain
-native. Android `ContextMenu` uses a Cherry-styled popover with a 208-point width cap, 48-point
-minimum rows, wrapping labels, checkmarks, destructive text, bounded scrolling, safe-area positioning,
-and outside-tap/system-back dismissal. Selecting an enabled item closes it before running the action.
+unchanged. Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded
+rows, expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
+lists throughout the app instead of adding another menu presentation. iOS retains native action
+and context menus.
+
+The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
+bounded scrolling, and safe-area positioning. They open above or below the trigger according to
+available space. Outside taps and system back close them; closing immediately disables interaction
+and retains the panel until its animation finishes. Reduced motion opens and closes immediately.
+Selecting an enabled item closes it before running the action. Searchable pickers, selection
+sheets, forms, and system media/share interfaces retain their own interaction contracts.
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing an Android `ContextMenu` in one
@@ -601,9 +608,9 @@ only when a conditional row should animate the surface height:
 ```
 
 The package deliberately ships no attachment strip; callers compose their own row and pass its
-presence through `canSend`. `Composer.Menu` is private to the composer and supports nested content:
-use `closeOnPress={false}` for an item that replaces the panel contents. `width` is a floor, and
-callers that need most of the screen must bound their children to the window.
+presence through `canSend`. `Composer.Menu` owns the add-button trigger and shares its private panel
+and motion with Android action/context menus. Its items close before invoking their action.
+`width` is a floor, and callers that need most of the screen must bound their children to the window.
 
 ## Motion
 

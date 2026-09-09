@@ -1,4 +1,3 @@
-import { Popover, usePopover } from 'heroui-native/popover';
 import { cloneElement, type ReactElement, useCallback, useMemo, useState } from 'react';
 import { type AccessibilityActionEvent, type AccessibilityActionInfo, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -6,6 +5,7 @@ import { callback } from 'react-native-nitro-modules';
 
 import { MenuContent } from '../menu-content';
 import type { ContextMenuProps, MenuItem } from '../menu.types';
+import { useMenuState } from '../use-menu-state';
 import { type NativeCherryMenuRef, NativeCherryMenuView } from '../use-native-menu';
 import { useContextMenuInteraction } from './context-menu-scroll-boundary.android';
 
@@ -36,16 +36,11 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
     return children;
   }
 
-  return (
-    <Popover>
-      <ContextMenuAnchor items={items}>{children}</ContextMenuAnchor>
-      <MenuContent items={items} />
-    </Popover>
-  );
+  return <ContextMenuAnchor items={items}>{children}</ContextMenuAnchor>;
 }
 
 function ContextMenuAnchor({ children, items }: ContextMenuProps) {
-  const { onOpenChange, setTriggerPosition } = usePopover();
+  const { anchor, close, finishClose, isOpen, open } = useMenuState();
   const [anchorView, setAnchorView] = useState<View | null>(null);
   const interaction = useContextMenuInteraction();
   const [menuBinding, setMenuBinding] = useState<NativeMenuBinding | null>(null);
@@ -61,11 +56,10 @@ function ContextMenuAnchor({ children, items }: ContextMenuProps) {
   const handleLongPress = useCallback(() => {
     if (!interaction.isRecognitionBlocked()) {
       anchorView?.measure((_x, _y, width, height, pageX, pageY) => {
-        setTriggerPosition({ height, pageX, pageY, width });
-        onOpenChange(true);
+        open({ height, pageX, pageY, width });
       });
     }
-  }, [anchorView, interaction, onOpenChange, setTriggerPosition]);
+  }, [anchorView, interaction, open]);
   const longPress = useMemo(() => {
     const gesture = Gesture.LongPress().runOnJS(true);
     if (menuBinding) {
@@ -79,18 +73,29 @@ function ContextMenuAnchor({ children, items }: ContextMenuProps) {
   }, [handleLongPress, menuBinding]);
 
   return (
-    <GestureDetector gesture={longPress}>
-      <NativeCherryMenuView
-        hybridRef={hybridRef}
-        items={EMPTY_NATIVE_ITEMS}
-        onAction={IGNORE_NATIVE_ACTION}
-        trigger="longPress"
-      >
-        <View collapsable={false} ref={setAnchorView}>
-          {withMenuAccessibilityActions(children, items)}
-        </View>
-      </NativeCherryMenuView>
-    </GestureDetector>
+    <>
+      <GestureDetector gesture={longPress}>
+        <NativeCherryMenuView
+          hybridRef={hybridRef}
+          items={EMPTY_NATIVE_ITEMS}
+          onAction={IGNORE_NATIVE_ACTION}
+          trigger="longPress"
+        >
+          <View collapsable={false} ref={setAnchorView}>
+            {withMenuAccessibilityActions(children, items)}
+          </View>
+        </NativeCherryMenuView>
+      </GestureDetector>
+      {anchor ? (
+        <MenuContent
+          anchor={anchor}
+          isOpen={isOpen}
+          items={items}
+          onClose={close}
+          onClosed={finishClose}
+        />
+      ) : null}
+    </>
   );
 }
 

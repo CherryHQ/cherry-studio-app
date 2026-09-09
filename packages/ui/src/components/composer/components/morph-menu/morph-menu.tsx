@@ -26,19 +26,24 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useResolveClassNames } from 'uniwind';
 
+import {
+  menuBlurRadius,
+  menuCloseMotion,
+  menuFadeMotion,
+  menuOpenMotion,
+  menuRestingScale,
+  menuSlideDistance,
+} from '../../../menu/menu-motion';
+import { MenuPanel, menuPanelRadius, menuRowClassName } from '../../../menu/menu-panel';
 import { Portal } from '../../../portal';
-import { SurfaceFrame } from '../../../surface/surface-frame';
 import { Switch } from '../../../switch';
 import { composerActionSize } from '../../utils/composer-layout';
-import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../utils/composer-motion';
 import type { MorphMenuItemProps, MorphMenuProps, MorphMenuToggleProps } from './morph-menu.types';
 
 // It sits in the composer's toolbar, so it defaults to the same circle as the
 // tools beside it.
 const defaultTriggerSize = composerActionSize;
-const openRadius = 20;
 // A floor, not a size: a menu of three short labels would otherwise hug them and
 // read as a tooltip. Content wider than this drives the panel instead.
 //
@@ -48,12 +53,6 @@ const openRadius = 20;
 const defaultPanelWidthRatio = 0.6;
 // Only ever on screen for the frame before the first measurement lands.
 const fallbackPanelHeight = 172;
-
-// How far the plus slides left and the panel slides in from the right. The two
-// move in opposite directions so they read as one swap, not two fades.
-const slideDistance = 40;
-const restingScale = 0.97;
-const blurRadius = 2;
 
 type MorphMenuContextValue = { close: () => void };
 
@@ -113,9 +112,6 @@ function MorphMenuRoot({
   // menu is portalled, `anchor` stays set through the closing animation, so
   // the expanded panel keeps its popover surface until it is fully collapsed.
   const surfaceClassName = anchor ? 'bg-popover' : 'bg-secondary';
-  const surfaceFill = useResolveClassNames(surfaceClassName);
-  const tintColor =
-    typeof surfaceFill.backgroundColor === 'string' ? surfaceFill.backgroundColor : undefined;
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
     [triggerSize],
@@ -133,7 +129,7 @@ function MorphMenuRoot({
     }
 
     progress.set(
-      withTiming(0, settleMotion, (finished) => {
+      withTiming(0, menuCloseMotion, (finished) => {
         // A re-open cancels this one; landing the portal teardown then would
         // yank the menu back inline mid-animation.
         if (finished) {
@@ -178,7 +174,7 @@ function MorphMenuRoot({
   const contextValue = useMemo(() => ({ close }), [close]);
 
   const containerStyle = useAnimatedStyle(() => ({
-    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, openRadius]),
+    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, menuPanelRadius]),
     height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight.value]),
     width: interpolate(progress.value, [0, 1], [triggerSize, panelWidth.value]),
   }));
@@ -188,23 +184,15 @@ function MorphMenuRoot({
     const fade = Math.min(progress.value / (menuFadeMotion.duration / menuOpenMotion.duration), 1);
 
     return {
-      filter: [{ blur: fade * blurRadius }],
+      filter: [{ blur: fade * menuBlurRadius }],
       opacity: 1 - fade,
       transform: [
-        { translateX: -slideDistance * progress.value },
+        { translateX: -menuSlideDistance * progress.value },
         { rotate: `${45 * progress.value}deg` },
-        { scale: 1 - (1 - restingScale) * progress.value },
+        { scale: 1 - (1 - menuRestingScale) * progress.value },
       ],
     };
   });
-  const panelStyle = useAnimatedStyle(() => ({
-    filter: [{ blur: (1 - progress.value) * blurRadius }],
-    opacity: progress.value,
-    transform: [
-      { translateX: slideDistance * (1 - progress.value) },
-      { scale: restingScale + (1 - restingScale) * progress.value },
-    ],
-  }));
 
   // The panel lays out inline before it ever opens, so these land while nothing
   // is on screen at that size and there are no frames to animate through. The
@@ -230,24 +218,16 @@ function MorphMenuRoot({
   const menu = (
     <MorphMenuContext value={contextValue}>
       <Animated.View style={[panelAnchorStyle, containerStyle]}>
-        {/* The panel stays inside the surface: an empty `GlassView` draws no
-            material at all, so the two cannot be split into siblings to fade
-            them separately. */}
-        <SurfaceFrame
-          className={surfaceClassName}
-          cornerRadius={openRadius}
-          style={fillStyle}
-          tintColor={tintColor}
+        <MenuPanel
+          contentStyle={[panelContentStyle, { minWidth: minPanelWidth }]}
+          isOpen={isOpen}
+          onLayout={handlePanelLayout}
+          progress={progress}
+          surfaceClassName={surfaceClassName}
+          testID={testID ? `${testID}-panel` : undefined}
         >
-          <Animated.View
-            onLayout={handlePanelLayout}
-            pointerEvents={isOpen ? 'auto' : 'none'}
-            style={[panelContentStyle, { minWidth: minPanelWidth }, panelStyle]}
-            testID={testID ? `${testID}-panel` : undefined}
-          >
-            {children}
-          </Animated.View>
-        </SurfaceFrame>
+          {children}
+        </MenuPanel>
       </Animated.View>
 
       <Pressable
@@ -304,7 +284,7 @@ function MorphMenuRoot({
   );
 }
 
-const rowClassName = 'h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-secondary-active';
+const rowClassName = `${menuRowClassName} h-11`;
 
 function MorphMenuItem({ icon, label, onPress, selected, testID, trailing }: MorphMenuItemProps) {
   const { close } = useComposerMenu();
@@ -387,8 +367,7 @@ export const MorphMenu = Object.assign(MorphMenuRoot, {
   Toggle: MorphMenuToggle,
 });
 
-const fillStyle = { height: '100%', width: '100%' } as const;
 // Pinned bottom-left so the panel grows up and to the right out of the button,
 // which is where the composer's add button sits.
 const panelAnchorStyle = { bottom: 0, left: 0, position: 'absolute' } as const;
-const panelContentStyle = { gap: 2, left: 0, padding: 8, position: 'absolute', bottom: 0 } as const;
+const panelContentStyle = { left: 0, position: 'absolute', bottom: 0 } as const;

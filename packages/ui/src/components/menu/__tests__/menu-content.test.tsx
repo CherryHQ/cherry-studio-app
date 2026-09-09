@@ -1,23 +1,58 @@
-import { Pressable } from 'react-native';
+import { BackHandler, Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MenuContent } from '../menu-content';
 
 const mockOpenChange = jest.fn();
+const mockClosed = jest.fn();
+const anchor = { height: 48, pageX: 16, pageY: 120, width: 200 };
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    Easing: { bezier: () => 'bezier' },
+    interpolate: (value: number, _input: number[], output: number[]) =>
+      output[0] + (output[1] - output[0]) * value,
+    runOnJS: (fn: unknown) => fn,
+    useAnimatedStyle: (factory: () => object) => factory(),
+    useReducedMotion: () => false,
+    useSharedValue: (initial: number) => {
+      const ref = React.useRef({
+        value: initial,
+        set(next: number) {
+          this.value = next;
+        },
+      });
+      return ref.current;
+    },
+    withTiming: (value: number) => value,
+  };
+});
 
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = jest.requireActual('tailwind-merge');
   return { cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')) };
 });
 
-jest.mock('heroui-native/popover', () => {
+jest.mock('../../portal', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
   const component = (props: object) => React.createElement(View, props);
 
   return {
-    Popover: { Content: component, Overlay: component, Portal: component },
-    usePopover: () => ({ isOpen: true, onOpenChange: mockOpenChange }),
+    Portal: component,
+  };
+});
+
+jest.mock('../menu-panel', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    MenuPanel: (props: object) => React.createElement(View, props),
+    menuRowClassName: '',
   };
 });
 
@@ -48,13 +83,21 @@ describe('MenuContent', () => {
 
     act(() => {
       renderer = create(
-        <MenuContent items={[{ destructive: true, id: 'delete', label: 'Delete', onPress }]} />,
+        <MenuContent
+          anchor={anchor}
+          isOpen
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+          items={[{ destructive: true, id: 'delete', label: 'Delete', onPress }]}
+        />,
       );
     });
 
-    expect(() => renderer!.root.findByType(Pressable).props.onPress()).toThrow('Action failed');
+    expect(() =>
+      renderer!.root.findByProps({ accessibilityLabel: 'Delete' }).props.onPress(),
+    ).toThrow('Action failed');
     expect(order).toEqual(['close', 'action']);
-    expect(mockOpenChange).toHaveBeenCalledWith(false);
+    expect(mockOpenChange).toHaveBeenCalledTimes(1);
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -63,11 +106,17 @@ describe('MenuContent', () => {
 
     act(() => {
       renderer = create(
-        <MenuContent items={[{ disabled: true, id: 'delete', label: 'Delete', onPress }]} />,
+        <MenuContent
+          anchor={anchor}
+          isOpen
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+          items={[{ disabled: true, id: 'delete', label: 'Delete', onPress }]}
+        />,
       );
     });
 
-    const item = renderer!.root.findByType(Pressable);
+    const item = renderer!.root.findByProps({ accessibilityLabel: 'Delete' });
     expect(item.props.disabled).toBe(true);
     act(() => item.props.onPress());
     expect(onPress).not.toHaveBeenCalled();
@@ -79,11 +128,17 @@ describe('MenuContent', () => {
 
     act(() => {
       renderer = create(
-        <MenuContent items={[{ checked: true, id: 'pin', label: 'Pin', onPress }]} />,
+        <MenuContent
+          anchor={anchor}
+          isOpen
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+          items={[{ checked: true, id: 'pin', label: 'Pin', onPress }]}
+        />,
       );
     });
 
-    const item = renderer!.root.findByType(Pressable);
+    const item = renderer!.root.findByProps({ accessibilityLabel: 'Pin' });
     expect(item.props).toMatchObject({
       accessibilityLabel: 'Pin',
       accessibilityRole: 'checkbox',
@@ -92,5 +147,44 @@ describe('MenuContent', () => {
     act(() => item.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(item.props.accessibilityState.checked).toBe(true);
+  });
+
+  it('dismisses on Android back and releases the subscription when closing', () => {
+    const remove = jest.fn();
+    const subscribe = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+    const items = [{ id: 'rename', label: 'Rename', onPress: jest.fn() }];
+    act(() => {
+      renderer = create(
+        <MenuContent
+          anchor={anchor}
+          isOpen
+          items={items}
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+        />,
+      );
+    });
+    const handler = subscribe.mock.calls[0][1];
+    act(() => expect(handler()).toBe(true));
+    expect(mockOpenChange).toHaveBeenCalledTimes(1);
+    act(() =>
+      renderer!.update(
+        <MenuContent
+          anchor={anchor}
+          isOpen={false}
+          items={items}
+          onClose={mockOpenChange}
+          onClosed={mockClosed}
+        />,
+      ),
+    );
+    expect(remove).toHaveBeenCalledTimes(1);
+    const backdrop = renderer!.root
+      .findAllByType(Pressable)
+      .find((node) => node.props.accessibilityElementsHidden);
+    expect(backdrop!.props.pointerEvents).toBe('none');
+    act(() => renderer!.root.findByProps({ accessibilityLabel: 'Rename' }).props.onPress());
+    expect(items[0].onPress).not.toHaveBeenCalled();
+    subscribe.mockRestore();
   });
 });

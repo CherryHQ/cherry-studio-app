@@ -33,19 +33,13 @@ type MockLongPressGesture = {
 };
 
 const mockShowMenu = jest.fn();
-const mockOpenMenu = jest.fn();
-const mockSetTriggerPosition = jest.fn();
-
-jest.mock('heroui-native/popover', () => {
+jest.mock('../../menu-content', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
   return {
-    Popover: (props: object) => React.createElement(View, props),
-    usePopover: () => ({ onOpenChange: mockOpenMenu, setTriggerPosition: mockSetTriggerPosition }),
+    MenuContent: (props: object) => React.createElement(View, { ...props, testID: 'menu-content' }),
   };
 });
-
-jest.mock('../../menu-content', () => ({ MenuContent: () => null }));
 
 function createWithAnchor(element: ReactElement) {
   return create(element, {
@@ -129,8 +123,6 @@ describe('ContextMenu.android', () => {
 
   beforeEach(() => {
     mockShowMenu.mockClear();
-    mockOpenMenu.mockClear();
-    mockSetTriggerPosition.mockClear();
     mockGetLongPressMaxDistance.mockClear();
     mockGetLongPressMinDuration.mockClear();
     mockLatestLongPressGesture = undefined;
@@ -159,10 +151,10 @@ describe('ContextMenu.android', () => {
     expect(mockLatestLongPressGesture?.maxDistanceValue).toBe(16);
 
     act(() => mockLatestLongPressGesture?.onStartCallback?.());
-    expect(mockOpenMenu).toHaveBeenCalledWith(true);
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
     expect(mockShowMenu).not.toHaveBeenCalled();
 
-    expect(mockSetTriggerPosition).toHaveBeenCalledWith({
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.anchor).toEqual({
       height: 48,
       pageX: 16,
       pageY: 120,
@@ -195,13 +187,13 @@ describe('ContextMenu.android', () => {
       scrollOwner.props.onMomentumScrollEnd(scrollEvent());
       mockLatestLongPressGesture?.onStartCallback?.();
     });
-    expect(mockOpenMenu).not.toHaveBeenCalled();
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
 
     act(() => {
       scrollOwner.props.onTouchEnd(touchEvent());
       mockLatestLongPressGesture?.onStartCallback?.();
     });
-    expect(mockOpenMenu).toHaveBeenCalledWith(true);
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
     expect(mockShowMenu).not.toHaveBeenCalled();
   });
 

@@ -7,9 +7,11 @@ feature component into the package.
 
 ## The Platform Rule
 
-Android `Switch`, `Slider`, and `ContextMenu` use CherryUI-owned presentation with desktop-informed
-geometry and mobile touch targets. Their existing iOS native adapters remain supported. This
-product-control choice does not change the presentation of other component families.
+Android `Switch`, `Slider`, `ActionMenu`, and `ContextMenu` use CherryUI-owned presentation.
+Switches and sliders follow desktop-informed geometry with mobile touch targets. Anchored action
+lists use `ActionMenu` or `ContextMenu`, sharing the composer add menu's private panel and motion.
+Their existing iOS native adapters remain supported. Pickers, forms, and system media/share
+interfaces keep their own interaction contracts.
 
 One rule governs every platform decision:
 
@@ -178,8 +180,8 @@ behavior or presentation where it differs:
 | Window insets | layout and spacing rules | safe-area and system-bar inset values |
 | Share and pickers | trigger and surrounding product flow | share sheet, photo picker, and document picker |
 | File preview | metadata, loading, error, and fallback states | Quick Look or the available Android viewer |
-| System alerts and action menus | semantic content, actions, roles, and state | native presentation, dismissal, and gesture dispatch |
-| Context menus | semantic content, actions, roles, state, and Android CherryUI presentation | iOS native presentation; Android long-press configuration and back handling |
+| System alerts | semantic content, actions, roles, and state | native presentation and dismissal |
+| Action and context menus | semantic content, actions, roles, state, and Android composer-style presentation | iOS native presentation; Android long-press configuration and back events |
 | Permissions | pre-permission explanation and denied-state recovery | the system authorization prompt |
 | Haptics and accessibility | intent, labels, state, and reduced-motion behavior | supported feedback and accessibility APIs |
 
