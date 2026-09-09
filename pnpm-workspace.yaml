@@ -67,6 +67,7 @@ patchedDependencies:
   expo-router@57.0.6: patches/expo-router@57.0.6.patch
   react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
   react-native-drawer-layout@4.2.4: patches/react-native-drawer-layout@4.2.4.patch
+  expo-calendar@57.0.1: patches/expo-calendar@57.0.1.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

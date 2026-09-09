@@ -4,6 +4,9 @@ import { type ReactNode, useEffect } from 'react';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data';
+import type { Backend } from '@/shared/contracts';
+
 import {
   ComposerProvider,
   useComposerMeta,
@@ -28,6 +31,15 @@ const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
 const mockPickDocument = jest.fn();
 const mockRequestCameraPermission = jest.fn();
+const mockGetCameraPermission = jest.fn();
+const mockAlertConfirm = jest.fn();
+const mockToastShow = jest.fn();
+const backend = {
+  permissions: {
+    getStatuses: mockGetCameraPermission,
+    request: mockRequestCameraPermission,
+  },
+} as unknown as Backend;
 const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
@@ -58,14 +70,17 @@ jest.mock('@cherrystudio/ui/components', () => {
     return React.createElement(View, null, props.children);
   }
 
-  return { Composer: { Dock: MockDock, Menu: Object.assign(MockMenu, { Item: MockMenuItem }) } };
+  return {
+    Composer: { Dock: MockDock, Menu: Object.assign(MockMenu, { Item: MockMenuItem }) },
+    useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
+    useToast: () => ({ toast: { show: mockToastShow } }),
+  };
 });
 
 jest.mock('expo-image-picker', () => ({
   UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
   launchCameraAsync: (...args: unknown[]) => mockLaunchCamera(...args),
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
-  requestCameraPermissionsAsync: (...args: unknown[]) => mockRequestCameraPermission(...args),
 }));
 
 jest.mock('expo-document-picker', () => ({
@@ -99,7 +114,12 @@ describe('ComposerMenu', () => {
         return frameCallbacks.length;
       });
     mockKeyboardDismiss.mockResolvedValue(undefined);
-    mockRequestCameraPermission.mockResolvedValue({ granted: true });
+    mockGetCameraPermission.mockResolvedValue({
+      'camera.read': { state: 'undetermined', canAskAgain: true },
+    });
+    mockRequestCameraPermission.mockResolvedValue({
+      'camera.read': { state: 'granted', canAskAgain: false },
+    });
     mockLaunchCamera.mockResolvedValue({ canceled: true });
     mockLaunchImageLibrary.mockResolvedValue({ canceled: true });
     mockPickDocument.mockResolvedValue({ canceled: true });
@@ -203,6 +223,40 @@ describe('ComposerMenu', () => {
     expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
   });
 
+  it('does not open the camera after a denial that can still be requested again', async () => {
+    mockRequestCameraPermission.mockResolvedValue({
+      'camera.read': { state: 'denied', canAskAgain: true },
+    });
+    render();
+    act(() => press('chat.media.camera'));
+    await act(flushInputReplacement);
+
+    expect(mockLaunchCamera).not.toHaveBeenCalled();
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'settings.permissions.camera.notAllowed',
+      variant: 'danger',
+    });
+    expect(mockAlertConfirm).not.toHaveBeenCalled();
+  });
+
+  it('offers Settings instead of prompting again after a permanent camera denial', async () => {
+    mockGetCameraPermission.mockResolvedValue({
+      'camera.read': { state: 'denied', canAskAgain: false },
+    });
+    render();
+    act(() => press('chat.media.camera'));
+    await act(flushInputReplacement);
+
+    expect(mockRequestCameraPermission).not.toHaveBeenCalled();
+    expect(mockLaunchCamera).not.toHaveBeenCalled();
+    expect(mockAlertConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmLabel: 'settings.permissions.openSystemSettings',
+        description: 'settings.permissions.camera.denied',
+      }),
+    );
+  });
+
   it('does not dismiss the field when a caller-owned tool is selected', () => {
     const onToolPress = jest.fn();
     render(<Composer.Menu.Item label="Web search" onPress={onToolPress} />);
@@ -228,11 +282,13 @@ describe('ComposerMenu', () => {
   function render(children?: ReactNode, media: 'all' | 'images' = 'all') {
     act(() => {
       renderer = create(
-        <ComposerProvider>
-          <ComposerDock onHeightChange={jest.fn()} />
-          <FieldProbe />
-          <ComposerMenu media={media}>{children}</ComposerMenu>
-        </ComposerProvider>,
+        <BackendProvider backend={backend}>
+          <ComposerProvider>
+            <ComposerDock onHeightChange={jest.fn()} />
+            <FieldProbe />
+            <ComposerMenu media={media}>{children}</ComposerMenu>
+          </ComposerProvider>
+        </BackendProvider>,
       );
     });
   }
