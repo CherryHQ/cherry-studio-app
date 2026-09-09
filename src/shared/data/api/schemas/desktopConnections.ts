@@ -273,9 +273,9 @@ export type DesktopImportSelectionsDto = z.infer<typeof DesktopImportSelectionsS
 
 export type DesktopImportPreview = {
   providers: {
-    action: 'add' | 'update';
+    action: 'add' | 'skip';
     id: string;
-    models: { action: 'add' | 'update'; modelId: string; name: string }[];
+    models: { action: 'add' | 'skip'; modelId: string; name: string }[];
     name: string;
     unavailableReason?: DesktopImportUnavailableReason;
   }[];
@@ -283,28 +283,16 @@ export type DesktopImportPreview = {
 
 export type DesktopImportResult = {
   modelsAdded: number;
-  modelsUpdated: number;
+  modelsSkipped: number;
   providersAdded: number;
-  providersUpdated: number;
+  providersSkipped: number;
 };
 
 export type DesktopConnectionSchemas = {
   '/desktop-connections': {
     GET: { response: { items: DesktopConnection[]; total: number } };
-    POST: { body: PairDesktopConnectionDto; response: DesktopConnection };
   };
   '/desktop-connections/:id': {
-    DELETE: { params: { id: string }; response: undefined };
     GET: { params: { id: string }; response: DesktopConnection };
-  };
-  '/desktop-connections/:id/import': {
-    POST: {
-      body: DesktopImportSelectionsDto;
-      params: { id: string };
-      response: DesktopImportResult;
-    };
-  };
-  '/desktop-connections/:id/preview': {
-    POST: { params: { id: string }; response: DesktopImportPreview };
   };
 };

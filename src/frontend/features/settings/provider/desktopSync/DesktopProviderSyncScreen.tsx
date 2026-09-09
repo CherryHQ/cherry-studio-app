@@ -11,14 +11,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
+import {
+  useDesktopConnectionActions,
+  useDesktopConnections,
+} from '@/frontend/hooks/useDesktopConnections';
 import type { DesktopImportPreview } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../../desktopConnectionError';
 import { ProviderAvatar } from '../components/ProviderAvatar';
-import { useDesktopProviderSync } from './hooks/useDesktopProviderSync';
 
 type LoadedPreview = {
   connection: DesktopConnection;
@@ -31,7 +33,7 @@ export default function DesktopProviderSyncScreen() {
   const { alert } = useAlert();
   const { toast } = useToast();
   const { connections, error, isLoading, refetch } = useDesktopConnections();
-  const { importSelected, isImporting, isPreviewing, preview } = useDesktopProviderSync();
+  const { importSelected, isImporting, isPreviewing, preview } = useDesktopConnectionActions();
   const availableConnections = useMemo(
     () => connections.filter((connection) => connection.status === 'paired'),
     [connections],
@@ -51,11 +53,12 @@ export default function DesktopProviderSyncScreen() {
       setPreviewError(undefined);
       try {
         const nextPreview = await preview(connection.id);
+        if (!nextPreview) return;
         setLoadedPreview({ connection, preview: nextPreview });
         setSelectedProviderIds(
           new Set(
             nextPreview.providers
-              .filter((provider) => !provider.unavailableReason)
+              .filter((provider) => !provider.unavailableReason && hasNewData(provider))
               .map((provider) => provider.id),
           ),
         );
@@ -77,6 +80,9 @@ export default function DesktopProviderSyncScreen() {
     }
     automaticPreviewConnectionId.current = connection.id;
     void loadPreview(connection);
+    return () => {
+      automaticPreviewConnectionId.current = undefined;
+    };
   }, [availableConnections, isLoading, loadPreview, loadedPreview, previewError]);
 
   const openDeviceConnections = useCallback(() => {
@@ -117,10 +123,13 @@ export default function DesktopProviderSyncScreen() {
           providerId,
         })),
       });
+      if (!result) return;
       toast.show({
         label: t('settings.provider.desktopSync.success', {
-          models: result.modelsAdded + result.modelsUpdated,
-          providers: result.providersAdded + result.providersUpdated,
+          models: result.modelsAdded,
+          providers: result.providersAdded,
+          modelsSkipped: result.modelsSkipped,
+          providersSkipped: result.providersSkipped,
         }),
         variant: 'success',
       });
@@ -232,18 +241,19 @@ function ProviderSelection({
         })}
       >
         {loadedPreview.preview.providers.map((provider) => {
-          const isUnavailable = Boolean(provider.unavailableReason);
+          const isUnavailable = Boolean(provider.unavailableReason) || !hasNewData(provider);
           const isSelected = selectedProviderIds.has(provider.id);
           return (
             <Section.Item
               accessibilityRole="checkbox"
               accessibilityState={{ checked: isSelected, disabled: isUnavailable }}
               description={
-                isUnavailable
+                provider.unavailableReason
                   ? t('settings.provider.desktopSync.unsupportedAuth')
                   : t('settings.provider.desktopSync.providerDescription', {
                       action: t(`settings.provider.desktopSync.action.${provider.action}`),
-                      count: provider.models.length,
+                      count: provider.models.filter((model) => model.action === 'add').length,
+                      skipped: provider.models.filter((model) => model.action === 'skip').length,
                     })
               }
               disabled={isUnavailable}
@@ -265,4 +275,8 @@ function ProviderSelection({
       </Text>
     </>
   );
+}
+
+function hasNewData(provider: DesktopImportPreview['providers'][number]) {
+  return provider.action === 'add' || provider.models.some((model) => model.action === 'add');
 }

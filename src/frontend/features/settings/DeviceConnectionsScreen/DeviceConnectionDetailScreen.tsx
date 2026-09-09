@@ -30,7 +30,9 @@ export function DeviceConnectionDetailScreen() {
       description: t('settings.deviceConnections.remove.message', { name: connection.name }),
       onConfirm: () => {
         void remove(connectionId)
-          .then(() => router.dismissTo('/settings/device-connections'))
+          .then((removed) => {
+            if (removed) router.dismissTo('/settings/device-connections');
+          })
           .catch((removeError) => {
             alert.show({ title: desktopConnectionErrorMessage(removeError, t) });
           });

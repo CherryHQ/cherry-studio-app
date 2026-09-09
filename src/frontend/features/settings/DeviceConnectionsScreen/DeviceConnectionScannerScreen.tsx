@@ -32,6 +32,7 @@ export function DeviceConnectionScannerScreen() {
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
   const [manualValue, setManualValue] = useState('');
   const [hasScanned, setHasScanned] = useState(false);
+  const scanInFlight = useRef(false);
   const { isPairing, pair } = useDesktopConnectionActions();
 
   const requestCameraPermission = useCallback(async () => {
@@ -61,12 +62,14 @@ export function DeviceConnectionScannerScreen() {
     async (qr: DesktopPairingQr) => {
       try {
         const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
+        if (!connection) return;
         toast.show({
           label: t('settings.deviceConnections.scan.connected', { name: connection.name }),
           variant: 'success',
         });
         router.dismissTo('/settings/device-connections');
       } catch (error) {
+        scanInFlight.current = false;
         alert.show({ title: desktopConnectionErrorMessage(error, t) });
         setHasScanned(false);
       }
@@ -76,6 +79,8 @@ export function DeviceConnectionScannerScreen() {
 
   const parseAndSubmit = useCallback(
     (value: string) => {
+      if (scanInFlight.current) return;
+      scanInFlight.current = true;
       try {
         const parsed = DesktopPairingQrSchema.safeParse(JSON.parse(value));
         if (!parsed.success) {
@@ -84,6 +89,7 @@ export function DeviceConnectionScannerScreen() {
         setHasScanned(true);
         void submit(parsed.data);
       } catch {
+        scanInFlight.current = false;
         alert.show({ title: t('settings.deviceConnections.scan.invalidQr') });
         setHasScanned(false);
       }

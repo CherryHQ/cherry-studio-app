@@ -8,17 +8,9 @@ export function createDesktopConnectionHandlers(
   return {
     '/desktop-connections': {
       GET: () => service.list(),
-      POST: ({ body }) => service.pair(body),
     },
     '/desktop-connections/:id': {
-      DELETE: ({ params }) => service.remove(params.id),
       GET: ({ params }) => service.getById(params.id),
-    },
-    '/desktop-connections/:id/import': {
-      POST: ({ body, params }) => service.import(params.id, body),
-    },
-    '/desktop-connections/:id/preview': {
-      POST: ({ params }) => service.preview(params.id),
     },
   };
 }
