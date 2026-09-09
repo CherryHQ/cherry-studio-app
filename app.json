@@ -82,7 +82,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Cherry Studio to scan a PC pairing QR code.",
+          "cameraPermission": "Allow Cherry Studio to scan desktop pairing QR codes and take photos for chat messages and drawings.",
+          "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
@@ -118,7 +119,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
-          "cameraPermission": "Allow Cherry Studio to open the camera for drawings and chat messages.",
+          "cameraPermission": "Allow Cherry Studio to scan desktop pairing QR codes and take photos for chat messages and drawings.",
           "microphonePermission": false
         }
       ],
