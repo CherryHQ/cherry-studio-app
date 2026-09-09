@@ -22,8 +22,20 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
   MockButton.Label = MockText;
 
-  function MockBottomSheet({ children, ...props }: { children?: ReactNode }) {
-    return <MockView {...props}>{children}</MockView>;
+  function MockBottomSheet({
+    children,
+    footer,
+    ...props
+  }: {
+    children?: ReactNode;
+    footer?: ReactNode;
+  }) {
+    return (
+      <MockView {...props}>
+        {children}
+        {footer}
+      </MockView>
+    );
   }
 
   return {
@@ -139,7 +151,7 @@ describe('ToolApprovalSheet', () => {
     expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
   });
 
-  test('hides the arguments preview scroll indicator', () => {
+  test('hides the approval details scroll indicator', () => {
     render();
 
     expect(renderer.root.findByType(ScrollView).props.showsVerticalScrollIndicator).toBe(false);
