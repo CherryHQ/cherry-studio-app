@@ -2,7 +2,8 @@
  * Column helper utilities for Drizzle schemas
  *
  * USAGE RULES:
- * - DO NOT manually set id, createdAt, or updatedAt. State with a documented row-version
+ * - IDs default to insert-time generation. File storage and Agent sends may supply preallocated IDs.
+ * - DO NOT manually set createdAt or updatedAt. State with a documented row-version
  *   contract may set `updatedAt` only through `monotonicUpdateTimestamp`.
  * - Use .returning() to get inserted/updated rows instead of re-querying
  * - See db/README.md for detailed field generation rules

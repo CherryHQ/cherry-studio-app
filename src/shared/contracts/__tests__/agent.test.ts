@@ -66,9 +66,17 @@ describe('Agent tool and managed-file contracts', () => {
     const input = {
       parts: [{ text: 'Draw it.', type: 'text' }],
       sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
     } as const;
 
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, userMessageId: undefined }).success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, assistantMessageId: '' }).success,
+    ).toBe(false);
     expect(
       AgentSubmitMessageInputSchema.safeParse({
         ...input,
@@ -77,17 +85,20 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
   });
 
-  test('validates a Draft submission without requiring a durable Session id', () => {
+  test('requires preallocated identities for a Draft submission', () => {
     const input = {
       agentId: 'agent-1',
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello.', type: 'text' }],
     } as const;
 
     expect(AgentStartSessionInputSchema.parse(roundTrip(input))).toEqual(input);
-    expect(
-      AgentStartSessionInputSchema.safeParse({ ...input, sessionId: 'session-1' }).success,
-    ).toBe(false);
+    expect(AgentStartSessionInputSchema.safeParse({ ...input, sessionId: undefined }).success).toBe(
+      false,
+    );
   });
 
   test('round-trips the active first exchange used for Session handoff', () => {

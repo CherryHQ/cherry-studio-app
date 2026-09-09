@@ -4,8 +4,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessageListItem, MessageListProps } from '@/frontend/components/Message';
 import type { AgentApprovalView, AgentMessageView } from '@/shared/contracts/agent';
 
+import type { PendingChatSend } from '../../../runtime';
 import { ChatWorkspace } from '../ChatWorkspace';
 
+const mockPendingSendDisplayed = jest.fn();
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
 const mockReconcilePersistedMessages = jest.fn();
@@ -231,6 +233,7 @@ function createWorkspaceElement(
 ) {
   return (
     <ChatWorkspace
+      onPendingSendDisplayed={mockPendingSendDisplayed}
       contentBottomInset={isPreview ? 12 : 96}
       forkBoundaryMessageId={fork?.boundaryMessageId}
       forkedFromSessionId={fork?.sourceSessionId}
@@ -281,6 +284,99 @@ describe('ChatWorkspace message rendering integration', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     requestAnimationFrameSpy.mockRestore();
+  });
+
+  test('keeps the first exchange visible through a terminal snapshot and merges partial history by the same IDs', () => {
+    const pendingSend: PendingChatSend = {
+      sessionId: 'session-1',
+      isNewSession: true,
+      isSubmitting: true,
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'pending',
+          data: { parts: [{ type: 'text', text: 'Hello' }] },
+        },
+        { id: 'assistant-1', role: 'assistant', status: 'pending', data: { parts: [] } },
+      ],
+    };
+    const props = {
+      pendingSend,
+      enteringUserMessageId: 'user-1',
+      onPendingSendDisplayed: mockPendingSendDisplayed,
+      contentBottomInset: 96,
+      isAssistantToolbarEnabled: false,
+      keyboardOffset: 26,
+      messageWindow: {
+        hasNewerMessages: false,
+        isLoadingInitial: true,
+        isLoadingNewer: false,
+        isLoadingOlder: false,
+        loadNewer: mockLoadOlder,
+        loadOlder: mockLoadOlder,
+        messages: [],
+        retry: mockRetry,
+      },
+    };
+    act(() => {
+      renderer = create(<ChatWorkspace {...props} />);
+    });
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(mockMessageListProps).toMatchObject({
+      dataKey: 'session-1',
+      enteringMessageId: 'user-1',
+      initialLayoutReady: true,
+    });
+    expect(mockCoverVisible).toBe(false);
+
+    // The initial snapshot can already be terminal and carry no live pair.
+    act(() => {
+      renderer?.update(<ChatWorkspace {...props} sessionId="session-1" />);
+    });
+    expect(mockMessageListProps?.messages).toEqual(pendingSend.messages);
+    expect(mockCoverVisible).toBe(false);
+    expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
+
+    const user = createMessage('user-1', 'user');
+    const assistant = createMessage('assistant-1', 'assistant');
+    act(() => {
+      renderer?.update(
+        <ChatWorkspace
+          {...props}
+          sessionId="session-1"
+          messageWindow={{ ...props.messageWindow, messages: [assistant] }}
+        />,
+      );
+    });
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(mockMessageListProps?.messages[0]).toBe(pendingSend.messages[0]);
+    expect(mockMessageListProps?.messages[1].status).toBe('success');
+    expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
+    act(() => {
+      renderer?.update(
+        <ChatWorkspace
+          {...props}
+          sessionId="session-1"
+          messageWindow={{
+            ...props.messageWindow,
+            messages: [user, assistant],
+            isLoadingInitial: false,
+          }}
+        />,
+      );
+    });
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(mockPendingSendDisplayed).toHaveBeenCalledWith('user-1');
   });
 
   test('merges live rows with displayable history and passes list layout', () => {

@@ -95,12 +95,24 @@ describe('turn preparation', () => {
         kind === 'initial'
           ? await prepareInitialTurn(
               harness.dependencies,
-              { agentId: AGENT_ID, executionTarget: { kind: 'local' }, parts },
+              {
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
               new AbortController().signal,
             )
           : await prepareTurn(
               harness.dependencies,
-              { sessionId: SESSION_ID, parts },
+              {
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
               new AbortController().signal,
             );
       expect(mode).toBe('builtin');
@@ -172,6 +184,9 @@ describe('turn preparation', () => {
       harness.dependencies,
       {
         agentId: AGENT_ID,
+        sessionId: SESSION_ID,
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
         executionTarget: { kind: 'local' },
         parts: [{ text: 'Hello.', type: 'text' }],
       },
@@ -190,6 +205,8 @@ describe('turn preparation', () => {
     const harness = createHarness();
     const input: AgentSubmitMessageInput = {
       sessionId: SESSION_ID,
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       parts: [
         { type: 'text', text: 'Review this file.' },
         {
@@ -451,7 +468,12 @@ function createHarness() {
 }
 
 function textInput(): AgentSubmitMessageInput {
-  return { sessionId: SESSION_ID, parts: [{ type: 'text', text: 'Continue.' }] };
+  return {
+    sessionId: SESSION_ID,
+    userMessageId: 'user-1',
+    assistantMessageId: 'assistant-1',
+    parts: [{ type: 'text', text: 'Continue.' }],
+  };
 }
 
 function fact(

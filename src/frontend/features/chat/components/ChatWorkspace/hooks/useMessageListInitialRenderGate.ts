@@ -1,12 +1,13 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 export type MessageListInitialRenderGateOptions = {
-  renderGateKey: string;
+  /** Identity of the rendered list; undefined while no list is shown. */
+  renderGateKey: string | undefined;
   requiresInitialHistoryLayout: boolean;
 };
 
 type RenderToken = Readonly<{
-  renderGateKey: string;
+  renderGateKey: string | undefined;
 }>;
 
 type PendingReadyFrame = {

@@ -36,7 +36,7 @@ export function FileCardPreview({
       ellipsizeMode="tail"
       numberOfLines={3}
     >
-      {fileDisplayStem(file.displayName)}
+      {variant === 'card' ? file.displayName : fileDisplayStem(file.displayName)}
     </Text>
   );
   const icon = (

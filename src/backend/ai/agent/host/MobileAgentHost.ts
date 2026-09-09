@@ -420,6 +420,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       const reserved = await this.store.reserveInitialSubmission({
         agentId: parsed.agentId,
+        sessionId: parsed.sessionId,
+        userMessageId: parsed.userMessageId,
+        assistantMessageId: parsed.assistantMessageId,
         executionTarget: parsed.executionTarget,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
@@ -563,6 +566,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       // Invariant 2: reservation commits before execution starts.
       const reserved = await this.store.reserveSubmission({
         sessionId,
+        userMessageId: parsed.userMessageId,
+        assistantMessageId: parsed.assistantMessageId,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
