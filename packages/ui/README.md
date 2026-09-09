@@ -94,8 +94,9 @@ where the current native Lucide version has renamed or redrawn them. They need n
 `MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
 native renderer. A part that has streamed keeps the streaming renderer for its full mounted
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
-the same theme tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the
-active font size step and decides how links open:
+the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
+with each part, releasing pending tail blocks and requesting a final layout even when the text
+itself is unchanged. Product code supplies the active font size step and decides how links open:
 
 ```tsx
 <MarkdownText
