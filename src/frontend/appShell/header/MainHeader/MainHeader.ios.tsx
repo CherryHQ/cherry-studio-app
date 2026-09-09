@@ -22,6 +22,13 @@ export function MainHeader() {
           ...headerScreenOptions,
           title: '',
           headerTransparent: true,
+          unstable_nativeProps: {
+            headerConfig: {
+              // Uniwind owns the window appearance. Native-stack's light/dark
+              // override cannot update the visible iOS header dynamically.
+              experimental_userInterfaceStyle: 'unspecified',
+            },
+          },
         }}
       />
       {agent ? (
