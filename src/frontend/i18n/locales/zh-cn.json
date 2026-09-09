@@ -1216,7 +1216,7 @@
   "plugins.hideCredential": "隐藏密钥",
   "plugins.showCredential": "显示密钥",
   "plugins.invalidCredential": "请输入完整的密钥，不要包含空格或换行",
-  "plugins.credentialPrivacy": "密钥加密保存在此设备，不会发送给模型或出现在聊天中。连接时会向服务提供方验证密钥。",
+  "plugins.credentialPrivacy": "密钥仅保存在此设备，不会发送给模型或出现在聊天中。连接时会向服务提供方验证密钥。",
   "plugins.authorize": "验证并连接",
   "plugins.catalog.github.name": "GitHub",
   "plugins.catalog.github.summary": "查看代码，跟进 Issue 和 PR",

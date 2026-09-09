@@ -7,7 +7,6 @@ import {
   type PluginsModule,
 } from '@/shared/contracts/plugins';
 
-import { encryptPluginCredential, removePluginCredentialKey } from './credentialEncryption';
 import { createAmapClient } from './providers/amap';
 import { createGitHubClient } from './providers/github';
 
@@ -25,9 +24,6 @@ export function createPluginsModule(runtime: {
       .catch(() => {});
     return result;
   }
-  // Database deletion is authoritative. Orphaned keys cannot authorize calls and
-  // keychain cleanup failure must not falsely report a completed disconnect as failed.
-  const removeKey = (keyId: string) => removePluginCredentialKey(keyId).catch(() => {});
   return {
     listConnections: () => pluginAuthorizationService.listConnections(),
     connect(input, signal) {
@@ -44,35 +40,20 @@ export function createPluginsModule(runtime: {
           accountLabel = 'Web Service';
         }
         signal?.throwIfAborted();
-        const encrypted = await encryptPluginCredential(parsed.pluginId, parsed.credential).catch(
-          () => {
-            throw new PluginError(
-              'storage',
-              'Could not encrypt plugin authorization on this device.',
-            );
-          },
-        );
-        let result: Awaited<ReturnType<typeof pluginAuthorizationService.connect>>;
+        let connection: Awaited<ReturnType<typeof pluginAuthorizationService.connect>>;
         try {
-          signal?.throwIfAborted();
-          result = await pluginAuthorizationService.connect(
-            {
-              pluginId: parsed.pluginId,
-              accountLabel,
-              ...encrypted,
-            },
+          connection = await pluginAuthorizationService.connect(
+            { pluginId: parsed.pluginId, accountLabel, credential: parsed.credential },
             signal,
           );
         } catch {
-          await removeKey(encrypted.credentialKeyId);
           throw new PluginError(
             'storage',
             'Could not save plugin authorization. Try connecting again.',
           );
         }
-        runtime.invalidateServer(result.connection.serverId);
-        if (result.oldKeyId) await removeKey(result.oldKeyId);
-        return result.connection;
+        runtime.invalidateServer(connection.serverId);
+        return connection;
       });
     },
     disconnect(pluginId) {
@@ -82,8 +63,7 @@ export function createPluginsModule(runtime: {
           (item) => item.pluginId === pluginId,
         );
         if (connection) runtime.invalidateServer(connection.serverId);
-        const deleted = await pluginAuthorizationService.disconnect(pluginId);
-        if (deleted?.keyId) await removeKey(deleted.keyId);
+        await pluginAuthorizationService.disconnect(pluginId);
       });
     },
   };

@@ -9,7 +9,7 @@ import {
 } from '@/backend/data/db/schemas';
 import type { PluginConnection, PluginId } from '@/shared/contracts/plugins';
 
-/** Owns grant rows and their MCP identities; it never exposes ciphertext to UI. */
+/** Owns grant rows and their MCP identities; it never exposes credentials to UI. */
 export class PluginAuthorizationService {
   private get dbService() {
     return application.get('DbService');
@@ -53,14 +53,9 @@ export class PluginAuthorizationService {
   }
 
   async connect(
-    input: {
-      pluginId: PluginId;
-      accountLabel: string;
-      credentialCiphertext: string;
-      credentialKeyId: string;
-    },
+    input: { pluginId: PluginId; accountLabel: string; credential: string },
     signal?: AbortSignal,
-  ) {
+  ): Promise<PluginConnection> {
     return this.dbService.withWriteTx(async (tx) => {
       signal?.throwIfAborted();
       const [previous] = await tx
@@ -68,13 +63,6 @@ export class PluginAuthorizationService {
         .from(mcpServerTable)
         .where(eq(mcpServerTable.builtinId, input.pluginId))
         .limit(1);
-      const [oldGrant] = previous?.authorizationId
-        ? await tx
-            .select()
-            .from(pluginAuthorizationTable)
-            .where(eq(pluginAuthorizationTable.id, previous.authorizationId))
-            .limit(1)
-        : [];
       const [grant] = await tx
         .insert(pluginAuthorizationTable)
         .values({
@@ -98,19 +86,16 @@ export class PluginAuthorizationService {
               isEnabled: true,
             })
             .returning();
-      if (oldGrant)
+      if (previous?.authorizationId)
         await tx
           .delete(pluginAuthorizationTable)
-          .where(eq(pluginAuthorizationTable.id, oldGrant.id));
+          .where(eq(pluginAuthorizationTable.id, previous.authorizationId));
       signal?.throwIfAborted();
       return {
-        connection: {
-          pluginId: input.pluginId,
-          serverId: server.id,
-          accountLabel: input.accountLabel,
-          connectedAt: new Date(grant.createdAt).toISOString(),
-        } satisfies PluginConnection,
-        oldKeyId: oldGrant?.credentialKeyId,
+        pluginId: input.pluginId,
+        serverId: server.id,
+        accountLabel: input.accountLabel,
+        connectedAt: new Date(grant.createdAt).toISOString(),
       };
     });
   }
@@ -123,11 +108,6 @@ export class PluginAuthorizationService {
         .where(eq(mcpServerTable.builtinId, pluginId))
         .limit(1);
       if (!server?.authorizationId) return undefined;
-      const [grant] = await tx
-        .select()
-        .from(pluginAuthorizationTable)
-        .where(eq(pluginAuthorizationTable.id, server.authorizationId))
-        .limit(1);
       await tx
         .update(agentToolBindingTable)
         .set({
@@ -139,7 +119,7 @@ export class PluginAuthorizationService {
       await tx
         .delete(pluginAuthorizationTable)
         .where(eq(pluginAuthorizationTable.id, server.authorizationId));
-      return { serverId: server.id, keyId: grant?.credentialKeyId };
+      return { serverId: server.id };
     });
   }
 }

@@ -138,8 +138,7 @@ describe('bundled SQLite migrations', () => {
         'plugin_id',
         'auth_method',
         'account_label',
-        'credential_ciphertext',
-        'credential_key_id',
+        'credential',
         'created_at',
         'updated_at',
       ]);

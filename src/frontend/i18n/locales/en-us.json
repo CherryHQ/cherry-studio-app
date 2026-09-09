@@ -1219,7 +1219,7 @@
   "plugins.hideCredential": "Hide credential",
   "plugins.showCredential": "Show credential",
   "plugins.invalidCredential": "Enter a complete credential without spaces or line breaks",
-  "plugins.credentialPrivacy": "Credentials are encrypted on this device and never sent to the model or included in chat. Connecting validates the credential with the service.",
+  "plugins.credentialPrivacy": "Credentials stay on this device and are never sent to the model or included in chat. Connecting validates the credential with the service.",
   "plugins.authorize": "Verify and connect",
   "plugins.catalog.github.name": "GitHub",
   "plugins.catalog.github.summary": "Explore code, issues, and pull requests",
@@ -1252,5 +1252,5 @@
   "plugins.errors.request": "The service could not complete the request. Check your configuration.",
   "plugins.errors.unknown-write": "The outcome is unknown. Check the service before retrying.",
   "plugins.errors.cancelled": "Connection cancelled.",
-  "plugins.errors.storage": "Could not securely save authorization. Try connecting again."
+  "plugins.errors.storage": "Could not save authorization. Try connecting again."
 }

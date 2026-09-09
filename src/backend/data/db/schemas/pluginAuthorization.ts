@@ -5,7 +5,10 @@ import type { PluginId } from '@/shared/contracts/plugins';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 
-/** Native Keychain/Keystore owns the encryption key; SQLite owns the grant. */
+/**
+ * Plugin grants. The credential is stored as entered, matching how provider
+ * API keys and remote MCP headers live in this same sandboxed database.
+ */
 export const pluginAuthorizationTable = sqliteTable(
   'plugin_authorization',
   {
@@ -13,8 +16,7 @@ export const pluginAuthorizationTable = sqliteTable(
     pluginId: text().$type<PluginId>().notNull(),
     authMethod: text().$type<'personal_token' | 'api_key'>().notNull(),
     accountLabel: text().notNull(),
-    credentialCiphertext: text().notNull(),
-    credentialKeyId: text().notNull(),
+    credential: text().notNull(),
     ...createUpdateTimestamps,
   },
   (t) => [

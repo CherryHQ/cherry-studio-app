@@ -4,7 +4,6 @@ import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthor
 import type { PluginId } from '@/shared/contracts/plugins';
 
 import { BuiltInMcpTransport } from './BuiltInMcpTransport';
-import { decryptPluginCredential } from './credentialEncryption';
 import { createAmapClient } from './providers/amap';
 import { createGitHubClient } from './providers/github';
 
@@ -13,9 +12,7 @@ export function createBuiltInMcpTransport(
   authorizationId: string,
 ): MCPTransport {
   const getCredential = async () =>
-    decryptPluginCredential(
-      await pluginAuthorizationService.getCredentialGrant(pluginId, authorizationId),
-    );
+    (await pluginAuthorizationService.getCredentialGrant(pluginId, authorizationId)).credential;
   const provider =
     pluginId === 'github' ? createGitHubClient(getCredential) : createAmapClient(getCredential);
   return new BuiltInMcpTransport(pluginId, provider.tools, async () => {

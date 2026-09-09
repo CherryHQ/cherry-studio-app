@@ -19,10 +19,12 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | Amap | User-supplied Web Service key, validated with district lookup | `search_places`, `search_nearby`, `geocode`, `reverse_geocode`, `driving_route`, `walking_route`, `transit_route`, `weather`, `search_district` |
 
 The current `plugin_authorization` table stores the integration, static authorization method,
-account label, AES-GCM ciphertext, secure-store key identifier, and timestamps. The key is stored
-with `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; authenticated encryption binds the ciphertext to its
-integration and key identity. No refresh-token or expiry behavior is claimed for this first delivery.
-The larger authorization schema below is the target for later OAuth slices, not the current schema.
+account label, the credential as entered, and timestamps. The credential is not encrypted at rest:
+provider API keys and remote MCP headers already live unencrypted in the same sandboxed SQLite
+database, and a plugin-only encryption layer would not raise that baseline while adding a native
+dependency and a second store to keep consistent. No refresh-token or expiry behavior is claimed
+for this first delivery. The larger authorization schema below is the target for later OAuth
+slices, not the current schema.
 
 `PluginAuthorizationService` commits each grant and its MCP reference together. Updating authorization
 preserves the server UUID but allocates a new grant identity; disconnecting disables existing Agent
@@ -92,8 +94,8 @@ turn, and MCP tools already use `tool_search`, `tool_describe`, and `tool_call`.
 
 The server schema and Runtime accept both remote HTTP endpoints and explicit built-in identities.
 `@ai-sdk/mcp@1.0.71` provides the custom `MCPTransport` used by GitHub and Amap. Its
-`OAuthClientProvider` remains a future integration point. `expo-crypto` and `expo-secure-store`
-provide the first delivery's encryption and device key storage.
+`OAuthClientProvider` remains a future integration point. The first delivery adds no native
+dependency for credential storage.
 
 ## Architecture
 
@@ -101,8 +103,7 @@ provide the first delivery's encryption and device key storage.
 flowchart TD
   Settings["Plugins: catalog and connected accounts"] --> Workflow["PluginsModule: connect and disconnect"]
   Workflow --> Auth["PluginAuthorizationRuntime"]
-  Auth --> AuthTable["plugin_authorization: metadata and encrypted credentials"]
-  Auth --> Keys["Device secure storage: encryption keys"]
+  Auth --> AuthTable["plugin_authorization: metadata and credentials"]
   Workflow --> Server["mcp_server: connected integration instance"]
   Server --> Binding["agent_tool_binding: Agent access"]
   Binding --> Host["MobileAgentHost: frozen tool catalog"]
@@ -205,8 +206,7 @@ existing user-configured MCP headers into a new universal credential system.
 | `authMethod` | `api-key`, `personal-token`, `oauth-device`, `oauth-pkce`, or `platform-sdk` |
 | `grantedScopes` | Actual returned/verified permissions as a JSON string array; unknown permissions are not treated as granted |
 | `status` | `connected`, `needs_reauth`, or `disconnected`; not a live network-health indicator |
-| `credentialCiphertext` | Nullable versioned encrypted credential envelope, including nonce and authentication tag |
-| `keyRef` | Nullable identifier of the encryption key in device secure storage |
+| `credential` | Nullable versioned credential envelope stored in the row |
 | `accessExpiresAt`, `refreshExpiresAt` | Nullable absolute epoch milliseconds derived from the provider response |
 | `authorizationVersion` | Monotonic grant identity version; changes on reconnect, revocation, account/permission changes or disconnect |
 | `credentialVersion` | Monotonic version for compare-and-set credential renewal |
@@ -225,17 +225,14 @@ this table.
 
 ### Credential Storage And Atomic Renewal
 
-Store credential ciphertext in the authorization row and only its encryption key in device secure
-storage. Keeping the token bundle and expiry metadata in one SQLite transaction avoids a
-refresh-token/expiry split across two stores. It also avoids placing potentially large token bundles
-in a native key-value slot. SecureStore documents
-platform-dependent payload limits. [SecureStore](https://docs.expo.dev/versions/latest/sdk/securestore/)
+Store the credential envelope in the authorization row. Keeping the token bundle and expiry
+metadata in one SQLite transaction avoids a refresh-token/expiry split across two stores, and
+ordinary refresh updates the envelope, expiries and credential version together.
 
-Use the installed Expo AES-GCM implementation with a generated key per saved authorization, a fresh
-nonce for each encryption, and authenticated context binding the envelope to its authorization,
-integration and credential version. Use the library's encryption primitives, not application-made
-cryptography. Create and persist a new key before committing a grant; ordinary refresh reuses that
-key and updates ciphertext, expiries and credential version together. [Expo Crypto](https://docs.expo.dev/versions/latest/sdk/crypto/)
+Encryption at rest is a database-wide decision, not a per-table one. Provider API keys and
+user-entered remote MCP headers are stored unencrypted in the same file, so the plugin table follows
+the same rule. If the project later adopts at-rest protection for secrets, apply it to every secret
+column in one migration rather than to plugin grants alone.
 
 The backend-only envelope has provider-specific validated variants: an API key; a personal token;
 OAuth access/refresh tokens and client-registration data; or a native SDK account reference. Feishu
@@ -243,22 +240,20 @@ may need per-user app credentials. Android Google authorization may be SDK-manag
 produce an application-readable refresh token. Do not manufacture missing refresh tokens or an
 expiry for a non-expiring credential.
 
-`PluginAuthorizationService` persists ciphertext and safe metadata. `PluginAuthorizationRuntime`
-owns decryption and platform authorization logic. Frontend resource reads expose safe metadata;
-neither plaintext credentials, ciphertext nor `keyRef` enter model arguments, tool results or the
-general read API. Secret entry travels through the explicit connect workflow and is never echoed.
+`PluginAuthorizationService` persists credentials and safe metadata. `PluginAuthorizationRuntime`
+owns platform authorization logic. Frontend resource reads expose safe metadata; credentials never
+enter model arguments, tool results or the general read API. Secret entry travels through the
+explicit connect workflow and is never echoed.
 
 Disconnect first commits `disconnected`, clears the credential envelope, and advances the grant
 version; invalidate/abort the affected MCP generations before the workflow returns. Keep a bounded
-in-memory revocation capability before clearing storage, perform best-effort upstream revocation
-when supported, then remove the key regardless of the remote outcome. Recheck grant state when an
-in-flight refresh finishes so it cannot recreate a disconnected grant. Failed key cleanup remains
-cleanup work and never reconnects the account. Clear abandoned keys after failed initial commits.
+in-memory revocation capability before clearing storage and perform best-effort upstream revocation
+when supported. Recheck grant state when an in-flight refresh finishes so it cannot recreate a
+disconnected grant.
 
-Credentials are device-local in this version. Ordinary export does not include decrypted grants or
-their encryption keys. Restore on a different device, a missing key, or an unavailable SDK account
-requires reconnecting; a transient locked-device error is not automatically treated as revocation.
-Do not promise continuous execution while the OS suspends the application.
+Grants travel with the database: a backup restored to another device keeps working, the same way
+provider keys do. Ordinary export does not include grants. An unavailable SDK account requires
+reconnecting. Do not promise continuous execution while the OS suspends the application.
 
 ### Extend The Existing MCP Server Table
 
@@ -456,7 +451,7 @@ src/backend/
   data/
     db/schemas/pluginAuthorization.ts       new table
     db/schemas/mcpServer.ts                 extend existing source variant
-    services/PluginAuthorizationService.ts ciphertext persistence and safe projections
+    services/PluginAuthorizationService.ts credential persistence and safe projections
     api/handlers/pluginAuthorizations.ts    credential-free resource reads
 
 src/shared/
@@ -528,7 +523,7 @@ state in settings. Do not present a platform as connected merely because its bun
 | Slice | Deliverable | Completion evidence to obtain during implementation |
 | --- | --- | --- |
 | A: Admission and contracts | Confirm six definitions, native redirect/client setup, Canva allowlist/CIMD requirements and Feishu authorization support | Recorded platform setup decisions; confirmed local transport and authorization contract compatibility |
-| B: Shared infrastructure and GitHub | Authorization schema/encryption; built-in server variant; local MCP transport; settings connection workflow; GitHub read tools and bounded writes | Existing remote MCP behavior preserved; account-bound Agent call works through normal discovery/approval/history |
+| B: Shared infrastructure and GitHub | Authorization schema; built-in server variant; local MCP transport; settings connection workflow; GitHub read tools and bounded writes | Existing remote MCP behavior preserved; account-bound Agent call works through normal discovery/approval/history |
 | C: Amap and Yuque | Reuse the same infrastructure for API-key and personal-token grants | Useful place/document workflows with pagination, bounded results and actionable credential failures |
 | D: Gmail and Feishu | Native/interactive authorization, renewal, account identity checks and selected business tools | Read/write permissions distinguished; renewal, revoked grants and platform-specific availability handled |
 | E: Canva | Bundled remote connection through the same authorization table, server identity and Agent bindings | Approved redirect setup; search/read and candidate-to-design/export workflows using admitted upstream tools |

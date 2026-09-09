@@ -4,14 +4,13 @@ This module owns bundled platform adapters and the connect/disconnect workflow f
 GitHub and Amap are the first providers. The broader roadmap is in the
 [integration design](../../../../docs/references/agent/built-in-mcp-design.md).
 
-- `createPluginsModule` exposes credential-free connection metadata and coordinates validation,
-  encryption, atomic persistence, runtime invalidation, and key cleanup. Mutations serialize per
-  plugin. Cancelling a connection before commit removes its staged encryption key.
+- `createPluginsModule` exposes credential-free connection metadata and coordinates upstream
+  validation, atomic persistence, and runtime invalidation. Mutations serialize per plugin.
 - `PluginAuthorizationService`, under the data layer, owns the independent authorization table and
   changes its MCP reference in the same SQLite transaction. It resolves the current database per call.
-- `credentialEncryption` uses Expo AES-GCM and device-only SecureStore keys. Ciphertext is bound to
-  its provider and key identifier with authenticated additional data. Decrypted credentials are
-  short-lived request inputs, never frontend query data, tool arguments, or connection headers.
+  Credentials are stored as entered, the same way provider API keys and remote MCP headers already
+  live in the sandboxed database. They are read per request and never become frontend query data,
+  tool arguments, or connection headers.
 - `BuiltInMcpTransport` implements the installed SDK's custom transport interface. The SDK remains
   the MCP client; there is no HTTP listener, subprocess, downloaded code, or parallel tool runtime.
 - `providers/github` and `providers/amap` own fixed-authority HTTP routes, upstream request/response

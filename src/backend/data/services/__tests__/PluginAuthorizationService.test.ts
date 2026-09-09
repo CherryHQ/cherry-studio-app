@@ -16,8 +16,7 @@ let service: PluginAuthorizationService;
 const input = {
   pluginId: 'github' as const,
   accountLabel: 'cherry',
-  credentialCiphertext: 'sealed',
-  credentialKeyId: 'plugin.key-1',
+  credential: 'ghp_first',
 };
 beforeEach(async () => {
   db = createTestDb(new DatabaseSync(':memory:'));
@@ -30,7 +29,7 @@ afterEach(async () => {
 });
 
 it('stores a grant and built-in identity atomically while exposing no credentials', async () => {
-  const { connection } = await service.connect(input);
+  const connection = await service.connect(input);
   expect(connection).toEqual({
     pluginId: 'github',
     accountLabel: 'cherry',
@@ -47,21 +46,22 @@ it('stores a grant and built-in identity atomically while exposing no credential
     isEnabled: true,
   });
   expect(server.headers).toBeUndefined();
-  expect(JSON.stringify(connection)).not.toContain('sealed');
+  expect(JSON.stringify(connection)).not.toContain('ghp_first');
+  expect(JSON.stringify(server)).not.toContain('ghp_first');
 });
 
 it('rotates grant identity without retargeting an old credential reference', async () => {
   const first = await service.connect(input);
-  const oldServer = await new McpServerService().getById(first.connection.serverId);
+  const oldServer = await new McpServerService().getById(first.serverId);
   if (oldServer.origin !== 'builtin') throw new Error('Expected a plugin');
-  const second = await service.connect({
-    ...input,
-    credentialKeyId: 'plugin.key-2',
-    credentialCiphertext: 'new-sealed',
-  });
-  expect(second.connection.serverId).toBe(first.connection.serverId);
-  expect(second.oldKeyId).toBe('plugin.key-1');
+  const second = await service.connect({ ...input, credential: 'ghp_second' });
+  expect(second.serverId).toBe(first.serverId);
   await expect(service.getCredentialGrant('github', oldServer.authorizationId)).rejects.toThrow();
+  const newServer = await new McpServerService().getById(second.serverId);
+  if (newServer.origin !== 'builtin') throw new Error('Expected a plugin');
+  expect((await service.getCredentialGrant('github', newServer.authorizationId)).credential).toBe(
+    'ghp_second',
+  );
   expect(db.sqlite.prepare('SELECT count(*) AS count FROM plugin_authorization').get()).toEqual({
     count: 1,
   });
@@ -69,19 +69,19 @@ it('rotates grant identity without retargeting an old credential reference', asy
 
 it('rolls back both the grant and server when committing a credential change fails', async () => {
   const first = await service.connect(input);
-  const oldServer = await new McpServerService().getById(first.connection.serverId);
+  const oldServer = await new McpServerService().getById(first.serverId);
   db.failWriteTxCommit(new Error('disk full'));
-  await expect(service.connect({ ...input, credentialKeyId: 'plugin.key-2' })).rejects.toThrow(
+  await expect(service.connect({ ...input, credential: 'ghp_second' })).rejects.toThrow(
     'disk full',
   );
-  expect(await new McpServerService().getById(first.connection.serverId)).toEqual(oldServer);
-  expect(db.sqlite.prepare('SELECT credential_key_id FROM plugin_authorization').all()).toEqual([
-    { credential_key_id: 'plugin.key-1' },
+  expect(await new McpServerService().getById(first.serverId)).toEqual(oldServer);
+  expect(db.sqlite.prepare('SELECT credential FROM plugin_authorization').all()).toEqual([
+    { credential: 'ghp_first' },
   ]);
 });
 
 it('disables existing assistant bindings when disconnecting, and does not revive them on reconnect', async () => {
-  const { connection } = await service.connect(input);
+  const connection = await service.connect(input);
   const agent = await new AgentService().create({ name: 'Plugin test', modelId: null });
   const bindings = new AgentToolBindingService();
   await bindings.upsert(agent.id, {
@@ -90,20 +90,17 @@ it('disables existing assistant bindings when disconnecting, and does not revive
     approval: 'ask',
     enabled: true,
   });
-  await expect(service.disconnect('github')).resolves.toEqual({
-    serverId: connection.serverId,
-    keyId: 'plugin.key-1',
-  });
+  await expect(service.disconnect('github')).resolves.toEqual({ serverId: connection.serverId });
   expect(await service.listConnections()).toEqual([]);
   expect((await bindings.list(agent.id)).items).toEqual([
     expect.objectContaining({ enabled: false, serverId: connection.serverId }),
   ]);
   const next = await service.connect(input);
-  expect(next.connection.serverId).not.toBe(connection.serverId);
+  expect(next.serverId).not.toBe(connection.serverId);
 });
 
 it('rejects remote retargeting and generic deletion of a plugin server', async () => {
-  const { connection } = await service.connect(input);
+  const connection = await service.connect(input);
   const servers = new McpServerService();
   await expect(
     servers.update(connection.serverId, { endpointUrl: 'https://other.example/mcp' }),
@@ -118,7 +115,7 @@ it('rejects remote retargeting and generic deletion of a plugin server', async (
 });
 
 it('enforces remote/built-in storage constraints and referenced grant deletion', async () => {
-  const { connection } = await service.connect(input);
+  const connection = await service.connect(input);
   const update = db.sqlite.prepare('UPDATE mcp_server SET base_url = ? WHERE id = ?');
   expect(() => update.run('https://remote.example/mcp', connection.serverId)).toThrow();
   expect(() => db.sqlite.exec('DELETE FROM plugin_authorization')).toThrow();

@@ -136,8 +136,7 @@
         }
       ],
       "./scripts/with-health-connect",
-      "expo-status-bar",
-      "expo-secure-store"
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,

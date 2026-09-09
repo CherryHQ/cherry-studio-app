@@ -5,8 +5,6 @@ const mockDisconnect = jest.fn();
 const mockList = jest.fn();
 const mockGetAccount = jest.fn();
 const mockValidateAmap = jest.fn();
-const mockEncrypt = jest.fn();
-const mockRemoveKey = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
     connect: (...args: unknown[]) => mockConnect(...args),
@@ -20,10 +18,6 @@ jest.mock('../providers/github', () => ({
 jest.mock('../providers/amap', () => ({
   createAmapClient: () => ({ validateCredential: mockValidateAmap }),
 }));
-jest.mock('../credentialEncryption', () => ({
-  encryptPluginCredential: (...args: unknown[]) => mockEncrypt(...args),
-  removePluginCredentialKey: (...args: unknown[]) => mockRemoveKey(...args),
-}));
 
 const input = { pluginId: 'github' as const, credential: 'test-token' };
 const connection = {
@@ -35,42 +29,35 @@ const connection = {
 beforeEach(() => {
   jest.resetAllMocks();
   mockGetAccount.mockResolvedValue({ login: 'cherry' });
-  mockEncrypt.mockResolvedValue({ credentialCiphertext: 'sealed', credentialKeyId: 'new-key' });
-  mockConnect.mockResolvedValue({ connection, oldKeyId: 'old-key' });
-  mockRemoveKey.mockResolvedValue(undefined);
+  mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
-  mockDisconnect.mockResolvedValue({ serverId: 'server-1', keyId: 'new-key' });
+  mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
 });
 
-it('validates credentials before storage and removes only the newly staged key on commit failure', async () => {
+it('validates credentials upstream before storing anything', async () => {
   const invalidateServer = jest.fn();
   const plugins = createPluginsModule({ invalidateServer });
   mockGetAccount.mockRejectedValueOnce(new Error('invalid token'));
   await expect(plugins.connect(input)).rejects.toThrow('invalid token');
-  expect(mockEncrypt).not.toHaveBeenCalled();
+  expect(mockConnect).not.toHaveBeenCalled();
   mockConnect.mockRejectedValueOnce(new Error('storage error'));
   await expect(plugins.connect(input)).rejects.toThrow('Could not save');
-  expect(mockRemoveKey.mock.calls).toEqual([['new-key']]);
   expect(invalidateServer).not.toHaveBeenCalled();
 });
 
-it('retires the old connection and key only after the new grant commits', async () => {
+it('invalidates the runtime only after the new grant commits', async () => {
   const operations: string[] = [];
   mockConnect.mockImplementation(async () => {
     operations.push('commit');
-    return { connection, oldKeyId: 'old-key' };
-  });
-  mockRemoveKey.mockImplementation(async () => {
-    operations.push('remove-old-key');
+    return connection;
   });
   const plugins = createPluginsModule({ invalidateServer: () => operations.push('invalidate') });
   await expect(plugins.connect(input)).resolves.toEqual(connection);
-  expect(operations).toEqual(['commit', 'invalidate', 'remove-old-key']);
+  expect(operations).toEqual(['commit', 'invalidate']);
   expect(mockConnect.mock.calls[0][0]).toEqual({
     pluginId: 'github',
     accountLabel: 'cherry',
-    credentialCiphertext: 'sealed',
-    credentialKeyId: 'new-key',
+    credential: 'test-token',
   });
 });
 
@@ -85,11 +72,11 @@ it('serializes disconnect behind an in-progress connect and leaves it disconnect
   const operations: string[] = [];
   mockConnect.mockImplementation(async () => {
     operations.push('connect');
-    return { connection };
+    return connection;
   });
   mockDisconnect.mockImplementation(async () => {
     operations.push('disconnect');
-    return { serverId: 'server-1', keyId: 'new-key' };
+    return { serverId: 'server-1' };
   });
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   const connect = plugins.connect(input);
@@ -101,14 +88,13 @@ it('serializes disconnect behind an in-progress connect and leaves it disconnect
   expect(operations).toEqual(['connect', 'disconnect']);
 });
 
-it('removes staged credentials when the authorization form is cancelled before commit', async () => {
+it('does not commit when the authorization form is cancelled after validation', async () => {
   const controller = new AbortController();
-  mockEncrypt.mockImplementation(async () => {
+  mockGetAccount.mockImplementation(async () => {
     controller.abort();
-    return { credentialCiphertext: 'sealed', credentialKeyId: 'new-key' };
+    return { login: 'cherry' };
   });
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   await expect(plugins.connect(input, controller.signal)).rejects.toThrow();
   expect(mockConnect).not.toHaveBeenCalled();
-  expect(mockRemoveKey).toHaveBeenCalledWith('new-key');
 });
