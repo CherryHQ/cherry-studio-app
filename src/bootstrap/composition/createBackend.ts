@@ -135,7 +135,7 @@ export function createBackend(
       resolve: getProviderAvatarUri,
     },
     catalog: {
-      isExcluded: (providerId) => providerRegistryService.isProviderExcluded(providerId),
+      isExcluded: (providerId) => providerRegistryService.isProviderExcludedFromCatalog(providerId),
       list: () => providerRegistryService.loadProviders(),
     },
     providers: {
