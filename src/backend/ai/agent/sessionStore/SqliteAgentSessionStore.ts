@@ -8,6 +8,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
@@ -99,7 +100,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     expectedTitle: string,
     title: string,
   ): Promise<AgentSessionView | null> {
-    return this.dbService.withWriteTx(async (tx) => {
+    const session = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentSessionTable)
         .set({ title, titleIsManual: false })
@@ -113,6 +114,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning();
       return row ? toAgentSessionView(row) : null;
     });
+    if (session) {
+      publishDataApiChanges(['/agent-sessions', `/agent-sessions/${sessionId}`]);
+    }
+    return session;
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
@@ -440,7 +445,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
-    return this.dbService.withWriteTx(async (tx) => {
+    const message = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select({
           sessionId: agentSessionMessageTable.sessionId,
@@ -479,6 +484,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .where(eq(agentSessionTable.id, existing.sessionId));
       return toAgentMessageView(row);
     });
+    publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
+    return message;
   }
 
   async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {

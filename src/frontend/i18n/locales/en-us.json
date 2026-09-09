@@ -399,6 +399,7 @@
   "navigation.library": "Files",
   "library.title": "Files",
   "library.empty": "No files yet",
+  "library.loadFailed": "Could not load files",
   "library.filter.label": "File type",
   "library.filter.all": "All",
   "library.filter.images": "Images",

@@ -143,6 +143,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
 
       return {
         defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
+        maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: collectRedactionValues(selectedApiKey.value, headers),
         streamFn,

@@ -146,6 +146,26 @@ describe('Pi model resolver', () => {
     );
   });
 
+  test('keeps the independent input cap separate from the default output reservation', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    const model = makeModel(endpoint, {
+      contextWindow: 128_000,
+      maxInputTokens: 120_000,
+      maxOutputTokens: 32_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://chat.test/v1', 'openai-compatible'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
+
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(resolution.maxInputTokens).toBe(120_000);
+    expect(resolution.model.contextWindow).toBe(128_000);
+    expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
   test('uses endpoint usage declarations and preserves the materialized effort vocabulary', async () => {
     const provider = makeProvider(
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,

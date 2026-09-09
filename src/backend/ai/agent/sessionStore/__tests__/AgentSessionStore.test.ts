@@ -14,6 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { v7 as uuidv7 } from 'uuid';
 
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
@@ -973,6 +974,89 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
   afterEach(() => {
     harness.cleanup();
+  });
+
+  test('publishes a committed automatic title without an active session observer', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        row: raw.prepare('SELECT name AS title FROM agent_session WHERE id = ?').get(session.id),
+      });
+    });
+    try {
+      await store.autoRenameSession(session.id, '', 'Background title');
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
+          inTransaction: false,
+          row: { title: 'Background title' },
+        },
+      ]);
+      await store.autoRenameSession(session.id, '', 'Stale title');
+      expect(notices).toHaveLength(1);
+      await store.renameSession(session.id, 'Manual title');
+      notices.length = 0;
+      await store.autoRenameSession(session.id, 'Manual title', 'Unwanted title');
+      expect(notices).toEqual([]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test('publishes background completion activity after commit and skips failed writes', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+    });
+    const completedAt = Date.now() + 1_000;
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        row: raw.prepare('SELECT last_activity_at FROM agent_session WHERE id = ?').get(session.id),
+      });
+    });
+    const finalization = {
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success' as const,
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming(completedAt) },
+    };
+    try {
+      await store.finalizeAssistantMessage(finalization);
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
+          inTransaction: false,
+          row: { last_activity_at: completedAt },
+        },
+      ]);
+      await expect(
+        store.finalizeAssistantMessage({
+          ...finalization,
+          assistantMessageId: uuidv7(),
+        }),
+      ).rejects.toThrow();
+      expect(notices).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
   });
 
   test('rolls back the Session when its initial message reservation fails', async () => {

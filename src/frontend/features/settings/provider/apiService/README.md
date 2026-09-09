@@ -12,7 +12,8 @@ This module owns provider API key, auth, endpoint validation, query, and save he
   and success feedback. Setup additionally requires usable credentials before continuing.
 - The same save path protects referenced endpoints and confirms default-endpoint changes that
   affect existing models. Provider enabled state belongs to the explicit setup workflow.
-- Save is explicit. After provider and API-key mutations finish, the mounted form resets its
+- Save is explicit. Provider configuration and changed API keys commit together through one
+  provider update transaction. After that save finishes, the mounted form resets its
   baseline to the saved values; leaving with a dirty draft asks for confirmation.
 
 ## Public Interface
