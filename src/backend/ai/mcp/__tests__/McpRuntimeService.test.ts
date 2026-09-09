@@ -380,7 +380,7 @@ describe('Runtime tool adapter', () => {
     const descriptors = await service.listExecutableToolDescriptors(server.id);
     expect(descriptors).toEqual([
       {
-        description: 'Search issues',
+        description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
         generation: expect.any(Number),
@@ -592,6 +592,38 @@ function retainedSnapshotCount(service: McpRuntimeService): number {
 }
 
 describe('built-in plugin identities', () => {
+  it.each([
+    ['github', 'GitHub'],
+    ['amap', '高德地图'],
+  ] as const)(
+    'includes the %s platform name and id in the executable catalog',
+    async (builtinId, name) => {
+      const client = makeClient(makeRawTools(['lookup']));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server: McpServer = {
+        ...makeServer(),
+        origin: 'builtin',
+        endpointUrl: null,
+        headers: undefined,
+        builtinId,
+        authorizationId: 'grant-1',
+        name,
+      };
+      const { service } = makeService([server]);
+
+      const descriptors = await service.listExecutableToolDescriptors(server.id);
+
+      expect(descriptors).toEqual([
+        expect.objectContaining({
+          description: `${name} (${builtinId}): desc lookup`,
+          rawToolName: 'lookup',
+          serverId: server.id,
+        }),
+      ]);
+      service.invalidateServer(server.id);
+    },
+  );
+
   it('uses an in-process transport and rejects a frozen catalog after grant rotation', async () => {
     const client = makeClient(makeRawTools(['search']));
     mockCreateMCPClient.mockResolvedValue(client);

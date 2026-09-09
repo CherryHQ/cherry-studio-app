@@ -254,10 +254,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (!state) {
       throw unavailableToolError();
     }
+    const sourceName =
+      server.origin === 'builtin' ? `${server.name} (${server.builtinId})` : server.name;
     return definitions
       .filter((tool) => !disabledTools.has(tool.name))
       .map((tool) => ({
-        description: tool.description ?? '',
+        description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
         displayName: tool.title ?? tool.annotations?.title ?? tool.name,
         // Pin the catalog to both its endpoint and live connection generation;
         // edits, invalidation, or reconnects cannot retarget a frozen tool.

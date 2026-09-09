@@ -17,7 +17,10 @@ export function definePluginTool<TSchema extends z.ZodObject>(
     definition: {
       name,
       description,
-      inputSchema: z.toJSONSchema(schema) as ListToolsResult['tools'][number]['inputSchema'],
+      // Describe what callers may supply, before parsing fills defaults.
+      inputSchema: z.toJSONSchema(schema, {
+        io: 'input',
+      }) as ListToolsResult['tools'][number]['inputSchema'],
       annotations: {
         readOnlyHint: readOnly,
         destructiveHint: !readOnly,

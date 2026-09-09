@@ -27,6 +27,10 @@ server's existing Agent bindings.
 Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval, deferred discovery,
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.
 Connecting a plugin does not grant all Agents access. Upstream credentials never grant tool approval.
+Executable catalog descriptions include the saved server name and builtin id so deferred discovery
+can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`.
+Tool schemas describe provider inputs (`io: 'input'`), not parsed outputs: fields with defaults
+remain optional in discovery, and the provider's original Zod schema fills them at execution.
 
 The first version supports one connection per bundled provider and only static personal tokens or
 API keys. OAuth, refresh tokens, multiple accounts, and additional platforms remain future slices.

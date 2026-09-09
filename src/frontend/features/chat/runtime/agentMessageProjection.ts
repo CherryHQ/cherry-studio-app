@@ -118,6 +118,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
       // the status and fall back to app copy when no detail exists.
       return {
         ...base,
+        errorCode: part.error?.failure?.source.code ?? part.error?.code,
         errorText: part.error?.message ?? '',
         state: 'output-error',
       } as CherryMessagePart;

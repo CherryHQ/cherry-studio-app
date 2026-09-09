@@ -22,6 +22,64 @@ beforeEach(() => {
   mockRoutes.length = 0;
 });
 
+it.each([
+  ['github', 'get_me', []],
+  ['github', 'search_repositories', ['query']],
+  ['github', 'search_issues', ['query']],
+  ['github', 'get_file_contents', ['owner', 'repo']],
+  ['github', 'list_pull_requests', ['owner', 'repo']],
+  ['github', 'get_issue', ['owner', 'repo', 'issue_number']],
+  ['github', 'create_issue', ['owner', 'repo', 'title']],
+  ['github', 'add_issue_comment', ['owner', 'repo', 'issue_number', 'body']],
+  ['github', 'create_pull_request', ['owner', 'repo', 'title', 'head', 'base']],
+  ['amap', 'search_places', ['keywords']],
+  ['amap', 'search_nearby', ['location', 'keywords']],
+  ['amap', 'geocode', ['address']],
+  ['amap', 'reverse_geocode', ['location']],
+  ['amap', 'driving_route', ['origin', 'destination']],
+  ['amap', 'walking_route', ['origin', 'destination']],
+  ['amap', 'transit_route', ['origin', 'destination', 'city']],
+  ['amap', 'weather', ['city']],
+  ['amap', 'search_district', ['keywords']],
+] as const)('advertises only caller-required inputs for %s.%s', (pluginId, name, required) => {
+  const provider =
+    pluginId === 'github'
+      ? createGitHubClient(async () => 'secret')
+      : createAmapClient(async () => 'secret');
+  const tool = provider.tools.find((candidate) => candidate.definition.name === name)!;
+
+  const requiredInputs = tool.definition.inputSchema.required ?? [];
+  expect(requiredInputs).toHaveLength(required.length);
+  expect(requiredInputs).toEqual(expect.arrayContaining([...required]));
+  expect(tool.definition.inputSchema.additionalProperties).toBe(false);
+});
+
+it('fills omitted pagination defaults in GitHub and Amap requests', async () => {
+  mockRequest.mockResolvedValueOnce({
+    data: JSON.stringify({ total_count: 0, incomplete_results: false, items: [] }),
+  });
+  const githubTool = createGitHubClient(async () => 'secret').tools.find(
+    (tool) => tool.definition.name === 'search_repositories',
+  )!;
+  await githubTool.execute({ query: 'cherry' }, signal);
+  expect(mockRequest).toHaveBeenLastCalledWith(
+    expect.objectContaining({ query: { q: 'cherry', page: 1, per_page: 10 } }),
+  );
+
+  mockRequest.mockResolvedValueOnce({
+    data: JSON.stringify({ status: '1', infocode: '10000', pois: [] }),
+  });
+  const amapTool = createAmapClient(async () => 'secret').tools.find(
+    (tool) => tool.definition.name === 'search_places',
+  )!;
+  await amapTool.execute({ keywords: 'coffee' }, signal);
+  expect(mockRequest).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      query: { keywords: 'coffee', page: 1, offset: 10, extensions: 'base' },
+    }),
+  );
+});
+
 it('keeps GitHub bearer headers and Amap query credentials on separate HTTP routes', async () => {
   createGitHubClient(async () => 'github-secret');
   createAmapClient(async () => 'amap-secret');

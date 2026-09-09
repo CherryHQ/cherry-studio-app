@@ -168,7 +168,9 @@ The Pi binding keeps a per-turn inspected-name ledger. Each tool whose signature
 approval or execution boundary: the failed meta result returns the bounded signature and records
 the name so a corrected retry can proceed. Before dispatch, `tool_call` also validates `params`
 against the frozen MCP JSON Schema; a mismatch returns the same bounded signature without invoking
-the target.
+the target, together with bounded field paths and validation reasons. The model receives these
+correction details, while failed meta activity retains only the failure code and a short summary.
+The message detail sheet translates the correction code rather than displaying the model's signature.
 
 These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
 and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives

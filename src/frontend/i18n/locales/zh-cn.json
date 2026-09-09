@@ -138,6 +138,8 @@
   "chat.webSearch.searching": "搜索中",
   "chat.metaToolExec.title": "运行代码",
   "chat.metaToolInspect.title": "检查工具",
+  "chat.metaToolInvoke.invalidInput": "本次未执行工具。已将具体参数错误返回给模型，供其修正后重试。",
+  "chat.metaToolInvoke.schemaRequired": "本次未执行工具。已将参数说明返回给模型，供其查看后重试。",
   "chat.metaToolInvoke.title": "调用工具",
   "chat.metaToolSearch.noResults": "没有匹配的工具",
   "chat.metaToolSearch.resultCount": "{{count}} 个工具",

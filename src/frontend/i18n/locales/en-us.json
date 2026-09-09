@@ -138,6 +138,8 @@
   "chat.webSearch.searching": "Searching",
   "chat.metaToolExec.title": "Run code",
   "chat.metaToolInspect.title": "Inspect tool",
+  "chat.metaToolInvoke.invalidInput": "The tool was not executed. Argument errors were returned to the model so it can correct the request and try again.",
+  "chat.metaToolInvoke.schemaRequired": "The tool was not executed. Its argument requirements were returned to the model so it can inspect them and try again.",
   "chat.metaToolInvoke.title": "Invoke tool",
   "chat.metaToolSearch.noResults": "No tools matched",
   "chat.metaToolSearch.resultCount": "{{count}} tools",
