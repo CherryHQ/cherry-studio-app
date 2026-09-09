@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 
 type ChatDraftStateProps = {
+  assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
   assistantName?: string;
   contentBottomInset: number;
@@ -11,6 +12,7 @@ type ChatDraftStateProps = {
 
 /** Agent greeting shown before the first message is sent. */
 export function ChatDraftState({
+  assistantAvatar,
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
@@ -24,7 +26,12 @@ export function ChatDraftState({
     >
       <View className="items-center gap-6">
         {assistantName ? (
-          <AgentAvatar name={assistantName} size={48} uri={assistantAvatarUri} />
+          <AgentAvatar
+            avatar={assistantAvatar}
+            name={assistantName}
+            size={48}
+            uri={assistantAvatarUri}
+          />
         ) : null}
         <Text className="text-center font-medium text-foreground text-xl" numberOfLines={2}>
           {t('chat.draft.greeting')}

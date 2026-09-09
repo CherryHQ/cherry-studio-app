@@ -14,9 +14,9 @@ export type AgentAvatars = {
 };
 
 /**
- * Both halves of an Agent's avatar, which the data layer can express neither of:
- * the column is only meaningful next to a file on disk, and the file lives under
- * a directory `backend/data` must not reach into.
+ * Owns uploaded avatar files and their read-time URI projection, which require
+ * a directory `backend/data` must not reach into. Built-in emoji pass through
+ * unchanged with no image URI.
  *
  * Writes go create-file → write-column → drop-previous-file, so a failure never
  * leaves an orphaned image or a column pointing at nothing. Reads project the

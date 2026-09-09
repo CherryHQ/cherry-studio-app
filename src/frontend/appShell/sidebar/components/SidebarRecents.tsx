@@ -254,6 +254,7 @@ function SidebarAgentRow({ agent }: { agent: Agent }) {
         <View className="flex-row items-center gap-3 px-5 py-2.5">
           <AgentAvatar
             accessibilityLabel={agent.name}
+            avatar={agent.avatar}
             name={agent.name}
             size={28}
             uri={agent.avatarUri}
