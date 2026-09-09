@@ -32,6 +32,7 @@ import {
 } from './hooks/useMessageListInitialRenderGate';
 
 const logger = loggerService.withContext('AgentChatWorkspace');
+const MESSAGE_TIME_INTERVAL_MS = 5 * 60 * 1000;
 
 type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
@@ -108,6 +109,10 @@ export function ChatWorkspace({
     else result.push(user, assistant);
     return result;
   }, [mergedMessages, pendingSend, projectionCache]);
+  const timestampMessageIds = useMemo(
+    () => getTimestampMessageIds(projectedMessages),
+    [projectedMessages],
+  );
   const listMessages = useMemo(() => {
     if (!forkBoundaryMessageId || !forkedFromSessionId) {
       return projectedMessages;
@@ -159,14 +164,15 @@ export function ChatWorkspace({
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           message={message}
+          shouldShowTimestamp={timestampMessageIds.has(message.id)}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled],
+    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
   );
   const messageListExtraData = useMemo(
-    () => ({ assistantPresentation, isAssistantToolbarEnabled }),
-    [assistantPresentation, isAssistantToolbarEnabled],
+    () => ({ assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds }),
+    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
   );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>
@@ -279,4 +285,26 @@ export function ChatWorkspace({
       />
     </View>
   );
+}
+
+function getTimestampMessageIds(messages: readonly MessageListItem[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  let previousTimestamp: number | undefined;
+
+  for (const message of messages) {
+    if (message.role === 'system' || !message.createdAt) continue;
+
+    const timestamp = new Date(message.createdAt).getTime();
+    if (Number.isNaN(timestamp)) continue;
+
+    if (
+      previousTimestamp === undefined ||
+      timestamp - previousTimestamp >= MESSAGE_TIME_INTERVAL_MS
+    ) {
+      ids.add(message.id);
+    }
+    previousTimestamp = timestamp;
+  }
+
+  return ids;
 }
