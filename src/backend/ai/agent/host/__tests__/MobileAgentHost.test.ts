@@ -1483,9 +1483,8 @@ describe('MobileAgentHost', () => {
     await waitFor(() => completedTurnCount() === 2, 'the default-effort turn');
     expect(requests[1]).toMatchObject({
       model: { modelId: 'mock-model', providerId: 'mock-provider' },
-      options: { maxOutputTokens: 512, temperature: 0.2 },
+      options: { maxOutputTokens: 512, reasoningEffort: 'default', temperature: 0.2 },
     });
-    expect(requests[1]?.options).not.toHaveProperty('reasoningEffort');
 
     await host.submitMessage({
       parts: [{ type: 'text', text: 'Use the Agent configuration again.' }],
@@ -1514,6 +1513,7 @@ describe('MobileAgentHost', () => {
         status: 'supported',
         snapshot: {
           model: { uniqueModelId: 'mock-provider::mock-model' },
+          reasoningEffort: 'default',
           parameters: { maxOutputTokens: 512, temperature: 0.2 },
           tools: [],
         },

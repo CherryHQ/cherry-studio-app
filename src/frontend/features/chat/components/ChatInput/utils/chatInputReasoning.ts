@@ -43,6 +43,10 @@ export const chatInputReasoningEffortOptions = [
     value: REASONING_EFFORT.HIGH,
   },
   {
+    labelKey: 'chat.reasoning.xhigh',
+    value: REASONING_EFFORT.XHIGH,
+  },
+  {
     labelKey: 'chat.reasoning.max',
     value: REASONING_EFFORT.MAX,
   },
@@ -59,6 +63,7 @@ const chatInputReasoningEffortCycleOrder = [
   REASONING_EFFORT.LOW,
   REASONING_EFFORT.MEDIUM,
   REASONING_EFFORT.HIGH,
+  REASONING_EFFORT.XHIGH,
   REASONING_EFFORT.MAX,
   REASONING_EFFORT.AUTO,
 ] as const satisfies readonly ChatInputReasoningEffort[];
@@ -148,10 +153,6 @@ function normalizeChatInputReasoningEfforts(values: readonly string[]): ChatInpu
 function normalizeChatInputReasoningEffort(value: string): ChatInputReasoningEffort | undefined {
   if (value === CHAT_INPUT_DEFAULT_REASONING_EFFORT) {
     return CHAT_INPUT_DEFAULT_REASONING_EFFORT;
-  }
-
-  if (value === 'xhigh') {
-    return REASONING_EFFORT.MAX;
   }
 
   return reasoningEffortValueSet.has(value) ? (value as ReasoningEffort) : undefined;

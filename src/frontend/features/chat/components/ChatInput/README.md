@@ -28,10 +28,11 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.
-- The reasoning gauge inherits the Agent setting until the user picks a value. A pick is local to
-  the current Agent composer and is snapshotted into each submission; it never updates Agent
-  configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
-  the selected model's default.
+- The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
+  `xhigh` and `max` as distinct values. It starts at the provider default. A pick is local to the
+  current Agent composer and is snapshotted into each submission; it never updates Agent
+  configuration. Switching models projects that pick to the closest supported stop. `default`
+  bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
 - The composer menu offers media only. Web search and create-image were removed from it, so the
   composer no longer requests any turn-local capability; tool availability comes from Agent
   configuration alone.

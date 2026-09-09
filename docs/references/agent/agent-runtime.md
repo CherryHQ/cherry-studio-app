@@ -188,7 +188,7 @@ type RuntimeModel = {
 }
 
 type RuntimeOptions = {
-  reasoningEffort?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+  reasoningEffort?: 'default' | 'none' | 'auto' | 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   maxOutputTokens?: number
   temperature?: number
 }
@@ -238,9 +238,12 @@ tool-call diagnostics, including work before a turn is admitted. Closing the Hos
 unfinished provider records, and late callbacks cannot reopen a settled trace. See
 [AI diagnostic tracing](../../../src/backend/ai/observability/README.md).
 
-The Host resolves protocol-level turn snapshots before this boundary. `default` and the current Pi
-`auto` fallback become an absent `reasoningEffort`, while `none` becomes `off`; Runtime
-implementations therefore receive only an executable effort level.
+The Host preserves the canonical `ReasoningEffortOption` (`default`, `none`, `auto`, `minimal`,
+`low`, `medium`, `high`, `xhigh`, or `max`) in each turn snapshot. An explicit `default` overrides
+the Agent setting; an absent selection also leaves request behavior to the provider. The legacy
+`off` value remains accepted as `none`. Pi rehydrates the selected endpoint's registry reasoning
+profile and translates its emissions at the final request-payload boundary, so model defaults,
+automatic thinking, supported effort tiers, and token budgets retain their distinct meanings.
 
 File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
 file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates the
