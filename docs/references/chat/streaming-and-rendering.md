@@ -93,6 +93,10 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 ## Rendering
 
 - Text and reasoning remain Markdown-capable shared message parts.
+- Each text or reasoning part leaves native streaming mode when its own state reaches `done`,
+  even if the turn continues with tools or another part. Turn completion, cancellation, and failure
+  also end streaming mode. This releases pending Markdown tail blocks and finalizes layout without
+  remounting a renderer that has streamed.
 - Tool and approval state remains structured and uses the shared tool renderer and approval sheet.
 - File-tool input appears inline in the message list while it is generated. `write_file` previews
   `content`; `edit_file` previews `new_string`. The tool's complete input remains authoritative for

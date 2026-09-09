@@ -1,7 +1,7 @@
 # effortSlider
 
 Discrete effort-level slider used by the chat composer's gauge overlay. Its
-two-layer capsule, brand fill, stop dots, and circular thumb follow the ChatGPT
+two-layer capsule, stop dots, and circular thumb follow the ChatGPT
 iOS interaction reference.
 
 The number of stops is entirely driven by `options` — i.e. by how many
@@ -18,7 +18,7 @@ model renders 5–6 detents.
   selection tick on every crossed stop. Commit fires as soon as the active
   stop changes.
 - **Geometry** — the sampled reference is a 64dp outer capsule with a centered
-  44dp progress pill, a 36dp white thumb, and 10dp stop dots. Stop
+  44dp progress pill, a 36dp thumb, and 10dp stop dots. Stop
   dots share the thumb's endpoint centers, derived by
   `getEffortSliderTrackGeometry`, so two-stop and six-stop models stay aligned.
   The chat overlay centers its label-and-track panel in the live viewport, so
@@ -32,8 +32,8 @@ model renders 5–6 detents.
   toward the panel without masking the blur; Android uses the same theme-colored
   dissolve over its scrim fallback. App and keyboard backdrops share the field's
   screen coordinates, with the keyboard portion clipped to its own window.
-  The progress pill and gauge pointer use the shared `brand` token with
-  translucent white dots over the pill.
+  The progress pill uses `primary`; the thumb and translucent dots use its
+  paired `primary-foreground`.
 
 ## Theming & accessibility
 

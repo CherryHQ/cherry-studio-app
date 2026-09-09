@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { MessagePartRenderer } from '../MessagePartRenderer';
+import { ReasoningPart } from '../ReasoningPart';
 import { TextPart } from '../TextPart';
 
 jest.mock('../CodePart', () => ({ CodePart: () => null }));
@@ -78,4 +79,40 @@ describe('MessagePartRenderer', () => {
 
     expect(mockTextPart).not.toHaveBeenCalled();
   });
+
+  test.each(['text', 'reasoning'] as const)(
+    'settles a %s block while the next block is still streaming',
+    (type) => {
+      const part = { state: 'streaming', text: '我来帮', type } as const;
+      const completePart = { ...part, state: 'done', text: '我来帮你查看日历。' } as const;
+      const component = type === 'text' ? TextPart : ReasoningPart;
+      let renderer: ReactTestRenderer | undefined;
+
+      act(() => {
+        renderer = create(<MessagePartRenderer isStreaming isTextSelectionEnabled part={part} />);
+      });
+      const block = renderer!.root.findByType(component);
+      expect(block.props.isStreaming).toBe(true);
+
+      act(() => {
+        renderer!.update(
+          <MessagePartRenderer
+            isStreaming
+            isTextSelectionEnabled
+            messageParts={[
+              completePart,
+              { state: 'streaming', text: '正在查询', type: 'reasoning' },
+            ]}
+            part={completePart}
+          />,
+        );
+      });
+
+      expect(renderer!.root.findByType(component)).toBe(block);
+      expect(block.props.isStreaming).toBe(false);
+      expect(block.props.part.text).toBe('我来帮你查看日历。');
+
+      act(() => renderer!.unmount());
+    },
+  );
 });

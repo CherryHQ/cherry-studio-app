@@ -37,7 +37,7 @@ product.css                46 Cherry product semantics
         ↓
 native.css                 Generated. Never edit by hand.
         ↓
-components                 className="bg-card text-foreground"  or  useThemeColor('brand')
+components                 className="bg-card text-foreground"  or  useThemeColor('primary')
 ```
 
 Two ways to take a colour, and only two:
@@ -47,7 +47,7 @@ Two ways to take a colour, and only two:
 
 ```tsx
 const scrimColor = useThemeColor('scrim');
-const [accent, ring] = useThemeColor(['primary', 'constant-white']);
+const [primary, primaryForeground] = useThemeColor(['primary', 'primary-foreground']);
 ```
 
 `useThemeColor` takes contract names without the `--color-` prefix. A string returns a string; an array returns a tuple of the same length.
@@ -80,20 +80,29 @@ There is no fifth. A new literal must state in its commit which case it falls un
 
 ### `--brand` vs `--primary`
 
-Both currently resolve to the same value, but they mean different things:
+Mobile follows desktop's neutral-first interface with green action emphasis. These roles are independent:
 
-- `--brand` — "this must be the Cherry logo red (`#ff5757`)."
-- `--primary` — "this is the accent, and would follow a theme-colour setting if one existed."
+- `--primary` uses `--green-900`: dark green in light mode, bright green in dark mode. The mode-aware
+  steps preserve readable text and icons; they follow desktop's green direction rather than copying
+  its fixed `#00b96b` preference value onto every surface.
+- `--primary-foreground` uses `--background-100`: white on the light-mode green, black on the dark-mode green.
+- `--brand` is the fixed Cherry logo red (`#ff5757`), reserved for brand artwork. Actions, selections,
+  links, and tool mentions must not consume it.
 
-The test: **if the user set the accent to purple, should this turn purple?**
+Use `primary` for emphasized actions and adjustable progress, `link` for links and tool mentions,
+and neutral `secondary` / `border-selected` for ordinary selection. Default buttons remain neutral.
+HeroUI's `accent` adapter follows `primary`; the underlying Shadcn `accent` remains a neutral overlay.
 
-The `--theme-primary` runtime-input layer was removed (`beccaa2e`); mobile has never shipped a screen that writes an accent preference. The preference key stays in `packages/universal` because it is persisted data shared with desktop. Building the feature means adding the screen first, then reintroducing the pair.
+Mobile currently exposes no custom action-color setting. Keep defaults in the token package;
+introduce runtime color inputs together with a real setting and its paired foreground.
 
 ### Contrast
 
 Body text (`text-sm` / `text-base`, including semibold) needs **4.5:1**. Graphics and borders need **3:1**.
 
-This is enforced, not aspirational. `--brand` moved off `#00b96b` because that measures 2.58:1 on white while `text-brand` lands on body copy. Compute before choosing.
+Check the actual foreground/background pair before choosing. Desktop's fixed `#00b96b` has only
+2.58:1 contrast on white, so Mobile uses the existing mode-aware green emphasis step for `primary`.
+Logo artwork is not a substitute for a readable text or interaction color.
 
 ### The Gray Ramp Is Not Monotonic
 

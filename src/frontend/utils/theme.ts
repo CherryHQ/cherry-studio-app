@@ -3,20 +3,7 @@ import { Uniwind } from 'uniwind';
 
 import { type FontSizeStep, ThemeMode } from '@/shared/data/preference';
 
-/**
- * The primary-colour half of this module used to live here: `DEFAULT_PRIMARY_COLOR`,
- * hex normalization, a WCAG relative-luminance test picking black or white ink,
- * and `applyPrimaryColorPreference` writing the resulting pair into
- * `--theme-primary{,-foreground}` on both themes at startup.
- *
- * All of it fed `ui.theme_user.color_primary`, a preference no mobile screen
- * ever wrote — bootstrap read it once and nothing else touched it — so the
- * machinery let the user recolour the app through a control that does not
- * exist. `--primary` reads `--brand` directly now (see shadcn.css). The
- * preference key stays in packages/universal because it is persisted data
- * shared with desktop; reviving the feature means adding the screen and
- * re-introducing this pair, not resurrecting a dead default.
- */
+// Action colors are authored in shadcn.css; Mobile currently exposes only mode and font-size settings.
 
 function updateBothThemes(variables: Record<string, string | number>) {
   const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
