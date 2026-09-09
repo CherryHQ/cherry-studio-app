@@ -17,8 +17,10 @@ import {
   toAgentMessageListItems,
   useAgentChatActions,
   useAgentChatSession,
+  type PendingChatSend,
 } from '../../runtime';
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
+import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
@@ -32,6 +34,9 @@ import {
 const logger = loggerService.withContext('AgentChatWorkspace');
 
 type ChatWorkspaceProps = {
+  enteringUserMessageId?: string;
+  pendingSend?: PendingChatSend;
+  onPendingSendDisplayed: (userMessageId: string) => void;
   assistantAvatarUri?: null | string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
@@ -42,10 +47,13 @@ type ChatWorkspaceProps = {
   forkedFromSessionId?: string;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
-  sessionId: string;
+  sessionId?: string;
 };
 
 export function ChatWorkspace({
+  enteringUserMessageId,
+  pendingSend,
+  onPendingSendDisplayed,
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
@@ -58,24 +66,46 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
   const live = useAgentChatSession(sessionId);
+  const listKey = sessionId ?? pendingSend?.sessionId;
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
   const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
   const { toast } = useToast();
   useEffect(() => {
-    client.reconcilePersistedMessages(sessionId, messages);
+    if (sessionId) {
+      client.reconcilePersistedMessages(sessionId, messages);
+    }
   }, [client, messages, sessionId]);
   const mergedMessages = useMemo(
     () => mergeAgentMessageViews(messages, live.liveMessages),
     [live.liveMessages, messages],
   );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId keys the cache lifetime, not its contents
-  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [sessionId]);
-  const projectedMessages = useMemo(
-    () => toAgentMessageListItems(mergedMessages, projectionCache),
-    [mergedMessages, projectionCache],
-  );
+  useEffect(() => {
+    if (
+      pendingSend &&
+      pendingSend.messages.every((pending) =>
+        mergedMessages.some((message) => message.id === pending.id),
+      )
+    ) {
+      onPendingSendDisplayed(pendingSend.messages[0].id);
+    }
+  }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- listKey keys the cache lifetime, not its contents
+  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [listKey]);
+  const projectedMessages = useMemo(() => {
+    const projected = toAgentMessageListItems(mergedMessages, projectionCache);
+    if (!pendingSend) return projected;
+    const [user, assistant] = pendingSend.messages;
+    const userIndex = projected.findIndex((message) => message.id === user.id);
+    const assistantIndex = projected.findIndex((message) => message.id === assistant.id);
+    if (userIndex >= 0 && assistantIndex >= 0) return projected;
+    const result = [...projected];
+    if (userIndex >= 0) result.splice(userIndex + 1, 0, assistant);
+    else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
+    else result.push(user, assistant);
+    return result;
+  }, [mergedMessages, pendingSend, projectionCache]);
   const listMessages = useMemo(() => {
     if (!forkBoundaryMessageId || !forkedFromSessionId) {
       return projectedMessages;
@@ -148,6 +178,9 @@ export function ChatWorkspace({
   );
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean }) => {
+      if (!sessionId) {
+        return;
+      }
       try {
         await client.respondApproval(
           sessionId,
@@ -162,6 +195,9 @@ export function ChatWorkspace({
     [client, sessionId, t, toast],
   );
   const handleApprovalCancel = useCallback(async () => {
+    if (!sessionId) {
+      return;
+    }
     try {
       await client.cancelTurn(sessionId);
     } catch (cancelError) {
@@ -169,19 +205,32 @@ export function ChatWorkspace({
       toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
     }
   }, [client, sessionId, t, toast]);
-  const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
-    isLoadingInitial,
-    messageCount: messages.length,
-  });
+  const requiresInitialHistoryLayout =
+    Boolean(sessionId) &&
+    !pendingSend?.isNewSession &&
+    shouldWaitForInitialHistoryLayout({
+      hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
+      isLoadingInitial,
+      messageCount: messages.length,
+    });
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey: sessionId,
+    renderGateKey: listKey,
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(
     headerHeight,
     safeAreaTop + mainHeaderRowHeight,
   );
+
+  if (!sessionId && listMessages.length === 0) {
+    return (
+      <ChatDraftState
+        assistantAvatarUri={assistantAvatarUri}
+        assistantName={assistantName}
+        contentBottomInset={contentBottomInset}
+      />
+    );
+  }
 
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
@@ -198,15 +247,15 @@ export function ChatWorkspace({
     <View className="flex-1 bg-chat-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
-        key={`assistant-actions-${sessionId}`}
+        key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         sessionId={sessionId}
       >
         <MessageList
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
-          dataKey={sessionId}
-          enteringMessageId={live.enteringUserMessageId}
+          dataKey={listKey}
+          enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
           extraData={messageListExtraData}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
           keyboardOffset={keyboardOffset}

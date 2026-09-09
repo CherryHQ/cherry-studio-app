@@ -1,6 +1,7 @@
 export { type AgentChatDraftHandoff } from './agentChatDraftHandoff';
 export {
   ChatProvider,
+  type PendingChatSend,
   useAgentChatActions,
   useAgentChatControls,
   useAgentChatDraftHandoff,

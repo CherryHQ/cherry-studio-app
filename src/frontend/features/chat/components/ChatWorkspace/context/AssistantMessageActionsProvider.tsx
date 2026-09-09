@@ -40,7 +40,7 @@ const AssistantMessageActionsContext = createContext<AssistantMessageActions | n
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
-  sessionId: string;
+  sessionId?: string;
 }>;
 
 export function AssistantMessageActionsProvider({
@@ -96,6 +96,9 @@ export function AssistantMessageActionsProvider({
 
   const forkFromAssistantMessage = useCallback(
     ({ messageId }: { messageId: string }) => {
+      if (!sessionId) {
+        return;
+      }
       // An unnamed source stays unnamed, so the fork keeps the empty title that
       // lets auto-naming name it from its own first message. A prefix alone
       // would block that forever.

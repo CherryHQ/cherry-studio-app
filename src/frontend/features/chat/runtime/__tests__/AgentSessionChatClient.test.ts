@@ -105,11 +105,21 @@ describe('AgentSessionChatClient', () => {
     protocol.startSession.mockResolvedValue(snapshot().session);
     const client = new AgentSessionChatClient(protocol);
 
-    await client.startSession('agent-1', [{ text: 'Hello', type: 'text' }]);
+    await client.startSession({
+      agentId: 'agent-1',
+      executionTarget: { kind: 'local' },
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ text: 'Hello', type: 'text' }],
+    });
 
     expect(protocol.startSession).toHaveBeenCalledWith({
       agentId: 'agent-1',
       executionTarget: { kind: 'local' },
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       parts: [{ text: 'Hello', type: 'text' }],
     });
     expect(protocol.observeSession).not.toHaveBeenCalled();
@@ -123,7 +133,14 @@ describe('AgentSessionChatClient', () => {
     const client = new AgentSessionChatClient(protocol);
 
     await expect(
-      client.startSession('agent-1', [{ text: 'Hello', type: 'text' }]),
+      client.startSession({
+        agentId: 'agent-1',
+        executionTarget: { kind: 'local' },
+        sessionId: 'session-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        parts: [{ text: 'Hello', type: 'text' }],
+      }),
     ).resolves.toEqual(snapshot().session);
     expect(protocol.observeSession).not.toHaveBeenCalled();
   });
@@ -135,13 +152,19 @@ describe('AgentSessionChatClient', () => {
     }));
     const client = new AgentSessionChatClient(protocol);
 
-    await client.submitMessage('session-1', [{ text: 'Hello', type: 'text' }], {
+    await client.submitMessage({
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ text: 'Hello', type: 'text' }],
       modelId: 'provider::model-b',
       reasoningEffort: 'high',
     });
 
     expect(protocol.submitMessage).toHaveBeenCalledWith({
       modelId: 'provider::model-b',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       parts: [{ text: 'Hello', type: 'text' }],
       reasoningEffort: 'high',
       sessionId: 'session-1',

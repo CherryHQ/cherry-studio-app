@@ -1,7 +1,7 @@
 # Chat Input Behavior
 
 This directory owns the Agent Session composer at the bottom of the chat surface. `ChatInput` is
-exported through `index.ts` and receives the current `agentId` and optional `sessionId`.
+exported through `index.ts` and receives the current Agent/Session and the content leaf’s chat controls.
 
 ## Current Contract
 
@@ -9,6 +9,10 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
   admits the message before atomically creating the Session and first message pair; observation and
   navigation begin only after that succeeds.
 - Existing Sessions submit through the live `AgentProtocol` client owned by `ChatProvider`.
+- Clearing the composer synchronously hands text and attachments to local message rows. During
+  admission the send action is disabled and the assistant row shows waiting feedback. Persistence and events
+  reuse the IDs allocated by the send action; rejected sends restore the draft and attachments,
+  including content added while waiting. Draft-to-Session handoff preserves the list and composer.
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
   presentation. Draft and existing-Session composers use separate keyed sessions, so navigation
   cannot reuse one Session's draft in another.
