@@ -35,7 +35,7 @@ can find tools by platform names such as `GitHub`, `github`, `高德地图`, and
 New upstream tools are not automatically admitted: discovery and invocation both enforce the
 allowlist. The existing runtime validates discovered input schemas and applies result-size limits.
 
-Migration `0021_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
+Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
 preserving credentials, server IDs, approval settings and history. Official names are not silently
 substituted for old per-tool grants. After reviewing the cloud capabilities, users explicitly
 re-enable the plugin and select any replacement tools. GitHub covers the previous workflows;

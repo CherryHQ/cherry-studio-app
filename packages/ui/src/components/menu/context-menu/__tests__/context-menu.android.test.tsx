@@ -33,6 +33,17 @@ type MockLongPressGesture = {
 };
 
 const mockShowMenu = jest.fn();
+jest.mock('../../menu-content', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  return {
+    MenuContent: (props: object) => React.createElement(View, { ...props, testID: 'menu-content' }),
+  };
+});
+
+// The preset renders View as a class, so its measurement lives on the
+// instance prototype rather than a host node supplied by createNodeMock.
+const viewPrototype = View.prototype as View;
 const mockGetLongPressMaxDistance = jest.fn(() => 16);
 const mockGetLongPressMinDuration = jest.fn(() => 625);
 const mockNativeMenuRef = {
@@ -107,6 +118,9 @@ describe('ContextMenu.android', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    jest
+      .spyOn(viewPrototype, 'measureInWindow')
+      .mockImplementation((callback) => callback(16, 120, 200, 48));
     mockShowMenu.mockClear();
     mockGetLongPressMaxDistance.mockClear();
     mockGetLongPressMinDuration.mockClear();
@@ -116,9 +130,10 @@ describe('ContextMenu.android', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
-  it('uses Android system long-press configuration before presenting the native menu', () => {
+  it('uses system long-press configuration to open the Cherry menu at its anchor', () => {
     const onRename = jest.fn();
 
     act(() => {
@@ -131,24 +146,21 @@ describe('ContextMenu.android', () => {
 
     const menu = renderer!.root.findByProps({ mockComponent: 'native-menu' });
     expect(menu.props.trigger).toBe('longPress');
-    expect(menu.props.items).toEqual([
-      {
-        checked: 'none',
-        destructive: false,
-        disabled: false,
-        icon: 'none',
-        id: 'rename',
-        label: 'Rename',
-      },
-    ]);
+    expect(menu.props.items).toEqual([]);
     expect(mockLatestLongPressGesture?.minDurationValue).toBe(625);
     expect(mockLatestLongPressGesture?.maxDistanceValue).toBe(16);
 
     act(() => mockLatestLongPressGesture?.onStartCallback?.());
-    expect(mockShowMenu).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+    expect(mockShowMenu).not.toHaveBeenCalled();
 
-    act(() => menu.props.onAction('rename'));
-    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.anchor).toEqual({
+      height: 48,
+      pageX: 16,
+      pageY: 120,
+      width: 200,
+    });
+    expect(onRename).not.toHaveBeenCalled();
   });
 
   it('keeps a touch that stops momentum blocked for its complete sequence', () => {
@@ -175,13 +187,14 @@ describe('ContextMenu.android', () => {
       scrollOwner.props.onMomentumScrollEnd(scrollEvent());
       mockLatestLongPressGesture?.onStartCallback?.();
     });
-    expect(mockShowMenu).not.toHaveBeenCalled();
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
 
     act(() => {
       scrollOwner.props.onTouchEnd(touchEvent());
       mockLatestLongPressGesture?.onStartCallback?.();
     });
-    expect(mockShowMenu).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+    expect(mockShowMenu).not.toHaveBeenCalled();
   });
 
   it('exposes enabled items as accessibility actions on the child and dispatches them', () => {

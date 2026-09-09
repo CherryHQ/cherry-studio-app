@@ -40,6 +40,12 @@ suffix.
   resource primitives remain independent of persistence, Expo modules, and product domains.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
+- `desktopConnections` owns pairing, device-only credentials, and one-way incremental imports.
+  `DesktopConnectionRuntime` implements the shared workflow contract directly, serializes
+  credential operations, and cancels/drains requests before its host's database closes.
+  Bootstrap injects a persistence service bound to that same database; list/detail reads remain
+  in Data API. Its private Expo transport rejects redirects and keeps the deadline active through
+  response-body consumption.
 - `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
   provider adaptation, and MCP connection behavior.
 - `http` owns non-streaming HTTP(S) request/response infrastructure for external services. It

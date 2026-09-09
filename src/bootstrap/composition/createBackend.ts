@@ -10,6 +10,7 @@ import {
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { DbService } from '@/backend/data/db/DbService';
+import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
@@ -18,6 +19,7 @@ import {
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
 import { createPluginsModule } from '@/backend/services/builtInMcp';
+import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -53,11 +55,13 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService));
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
   );
@@ -177,6 +181,7 @@ export function createBackend(
   return {
     backend: {
       agent: services.agent,
+      desktopConnections: infrastructure.desktopConnections,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,

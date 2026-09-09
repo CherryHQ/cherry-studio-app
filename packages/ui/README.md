@@ -269,9 +269,10 @@ value and persistence. The default grouped `Section` supplies its surface and se
 </Section>
 ```
 
-`Switch` and `Slider` keep one controlled CherryUI contract while private platform adapters render
-native SwiftUI controls on iOS and native Android controls on Android. Feature code never imports a
-platform UI SDK or branches on the operating system. Web keeps the CherryUI fallback controls.
+`Switch` and `Slider` keep one controlled CherryUI contract. Android and Web use Cherry-owned
+controls with circular switch thumbs, thin slider tracks, and mobile touch targets. Their geometry
+follows the desktop visual direction while colors use Mobile theme tokens. iOS retains its private
+SwiftUI adapters. Feature code never imports a platform UI SDK or branches on the operating system.
 
 `Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
 press target and switch accessibility node; its trailing switch is a package-private visual
@@ -439,8 +440,8 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
-`ActionMenu` and `ContextMenu` are the shared native action menus. Each accepts one trigger element
-and a flat, stable `items` array; the package owns Nitro wiring, native action dispatch, and the
+`ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
+and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
 component instead of configuring a trigger:
 
@@ -475,9 +476,30 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMenuInteraction`, while
-Android uses `PopupMenu`. Each keeps the system style for destructive items. Expo Router page
-previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
+unchanged. Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded
+rows, expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
+lists throughout the app instead of adding another menu presentation. iOS retains native action
+and context menus.
+
+Android tap menus own one press target even when their trigger contains a `Button` or `Pressable`.
+The child remains presentation-only; `disabled`, accessibility disabled state, and
+`pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
+tap and accessibility actions.
+
+The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
+bounded scrolling, and safe-area positioning. They open above or below the trigger according to
+available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
+`MenuOverlay`, `MenuRow`, `MenuPanel`, and lifecycle hooks. The transparent system modal isolates
+background accessibility, preserves the caller's theme/context, and owns Back/Escape. Opening
+focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
+change dismisses the measured presentation instead of retaining a stale anchor.
+
+Outside taps and system back close them; closing immediately disables item interaction and retains
+the modal until its animation and native dismissal finish. Reduced motion skips the animation.
+An enabled selection is accepted once and runs after native dismissal, so actions can safely open
+a system picker or navigate; it does not restore old focus over the destination. Searchable pickers,
+selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
+Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing an Android `ContextMenu` in one
 `ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
@@ -492,8 +514,9 @@ target.
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
 on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
 ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
-gesture arena, so committed scrolling and pan gestures cancel it, and the native view only presents
-the already-arbitrated menu. Recognition timing and touch slop come from Android
+gesture arena, so committed scrolling and pan gestures cancel it. Its native view is only a system
+configuration bridge with no menu items and never presents a popup. Recognition timing and touch
+slop come from Android
 `ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
 are also exposed as accessibility custom actions on the trigger child, so the contextual operations
 do not depend on long press; iOS accessibility stays with the system interaction. Verify changed
@@ -597,9 +620,12 @@ only when a conditional row should animate the surface height:
 ```
 
 The package deliberately ships no attachment strip; callers compose their own row and pass its
-presence through `canSend`. `Composer.Menu` is private to the composer and supports nested content:
-use `closeOnPress={false}` for an item that replaces the panel contents. `width` is a floor, and
-callers that need most of the screen must bound their children to the window.
+presence through `canSend`. `Composer.Menu` owns the add-button trigger and its morph. Its menu rows,
+bounded scrolling, panel material, motion lifecycle, dismissal, and action dispatch are shared with
+Android action/context menus. Labels wrap and grow with text size. Toggle rows own one accessible
+switch action and render a private decorative indicator. `width` is a floor bounded by the viewport.
+Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel, including when its
+content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
 ## Motion
 

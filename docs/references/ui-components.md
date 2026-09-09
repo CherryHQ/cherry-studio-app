@@ -7,6 +7,17 @@ feature component into the package.
 
 ## The Platform Rule
 
+Android `Switch`, `Slider`, `ActionMenu`, and `ContextMenu` use CherryUI-owned presentation.
+Switches and sliders follow desktop-informed geometry with mobile touch targets. Anchored action
+lists use `ActionMenu` or `ContextMenu`, sharing the composer add menu's private panel and motion.
+Their existing iOS native adapters remain supported. Pickers, forms, and system media/share
+interfaces keep their own interaction contracts.
+
+Cherry-rendered menus share their row, bounded panel, and lifecycle owners. Their private
+`MenuOverlay` uses a transparent system modal for background accessibility isolation and native
+Back/Escape, while CherryUI owns content, focus, motion, and action dispatch after dismissal.
+The composer's trigger morph is a placement variant, not a separate menu interaction implementation.
+
 One rule governs every platform decision:
 
 > Respect a platform difference the platform imposes. Do not introduce one it does not.
@@ -77,9 +88,8 @@ switch/
 ├── switch.tsx                 shared behavior, events, and composition
 ├── switch.types.ts            public product contract
 ├── switch-control.types.ts    private adapter props shared by every implementation
-├── switch-control.tsx         extensionless fallback for Web and tooling
+├── switch-control.tsx         Cherry control for Android, Web, and tooling
 ├── switch-control.ios.tsx     iOS provider or system primitive
-├── switch-control.android.tsx Android provider or system primitive
 └── switch-indicator.tsx       private shared implementation helper
 ```
 
@@ -175,7 +185,8 @@ behavior or presentation where it differs:
 | Window insets | layout and spacing rules | safe-area and system-bar inset values |
 | Share and pickers | trigger and surrounding product flow | share sheet, photo picker, and document picker |
 | File preview | metadata, loading, error, and fallback states | Quick Look or the available Android viewer |
-| System alerts and action or context menus | semantic content, actions, roles, and state | native presentation, dismissal, and gesture dispatch |
+| System alerts | semantic content, actions, roles, and state | native presentation and dismissal |
+| Action and context menus | semantic content, actions, roles, state, and Android composer-style presentation | iOS native presentation; Android long-press configuration and back events |
 | Permissions | pre-permission explanation and denied-state recovery | the system authorization prompt |
 | Haptics and accessibility | intent, labels, state, and reduced-motion behavior | supported feedback and accessibility APIs |
 

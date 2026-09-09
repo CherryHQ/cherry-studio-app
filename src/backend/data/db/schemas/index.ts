@@ -4,6 +4,7 @@ import { agentSessionMessageTable } from './agentSessionMessage';
 import { agentToolBindingTable } from './agentToolBinding';
 import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
+import { desktopConnectionTable } from './desktopConnection';
 import { fileEntryTable } from './file';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
@@ -18,6 +19,7 @@ export * from './agentToolBinding';
 export * from './agentSession';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
+export * from './desktopConnection';
 export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
@@ -44,6 +46,7 @@ export const schema = {
   agentSessionMessageTable,
   aiUsageRecordTable,
   appStateTable,
+  desktopConnectionTable,
   fileEntryTable,
   jobTable,
   mcpServerTable,

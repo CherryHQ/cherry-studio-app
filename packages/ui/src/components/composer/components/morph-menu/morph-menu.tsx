@@ -1,44 +1,29 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  Keyboard,
-  type LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import Animated, {
-  interpolate,
-  runOnJS,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
-import { useResolveClassNames } from 'uniwind';
+import { useMemo, useRef } from 'react';
+import { type LayoutChangeEvent, Pressable, useWindowDimensions, View } from 'react-native';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Portal } from '../../../portal';
-import { SurfaceFrame } from '../../../surface/surface-frame';
-import { Switch } from '../../../switch';
+import { MenuInteraction, useMenuInteraction } from '../../../menu/menu-interaction';
+import {
+  menuBlurRadius,
+  menuFadeMotion,
+  menuOpenMotion,
+  menuRestingScale,
+  menuSlideDistance,
+} from '../../../menu/menu-motion';
+import { MenuOverlay } from '../../../menu/menu-overlay';
+import { MenuPanel, useMenuPanelRadius } from '../../../menu/menu-panel';
+import { MenuRow } from '../../../menu/menu-row';
+import { useMenuMotion } from '../../../menu/use-menu-motion';
+import { useMenuState } from '../../../menu/use-menu-state';
+import { SwitchIndicator } from '../../../switch/switch-indicator';
 import { composerActionSize } from '../../utils/composer-layout';
-import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../utils/composer-motion';
 import type { MorphMenuItemProps, MorphMenuProps, MorphMenuToggleProps } from './morph-menu.types';
 
 // It sits in the composer's toolbar, so it defaults to the same circle as the
 // tools beside it.
 const defaultTriggerSize = composerActionSize;
-const openRadius = 20;
 // A floor, not a size: a menu of three short labels would otherwise hug them and
 // read as a tooltip. Content wider than this drives the panel instead.
 //
@@ -49,16 +34,6 @@ const defaultPanelWidthRatio = 0.6;
 // Only ever on screen for the frame before the first measurement lands.
 const fallbackPanelHeight = 172;
 
-// How far the plus slides left and the panel slides in from the right. The two
-// move in opposite directions so they read as one swap, not two fades.
-const slideDistance = 40;
-const restingScale = 0.97;
-const blurRadius = 2;
-
-type MorphMenuContextValue = { close: () => void };
-
-const MorphMenuContext = createContext<MorphMenuContextValue | null>(null);
-
 /**
  * The open menu's own controls, for content rendered inside it. Anything that
  * finishes what the menu was opened for — a picker's confirm button, a second
@@ -66,15 +41,8 @@ const MorphMenuContext = createContext<MorphMenuContextValue | null>(null);
  * be sure it is talking to the menu it lives in.
  */
 export function useComposerMenu() {
-  const context = use(MorphMenuContext);
-
-  // Named for the composition surface, not the file: callers only ever see this
-  // as `Composer.Menu`.
-  if (!context) {
-    throw new Error('useComposerMenu must be called inside a Composer.Menu');
-  }
-
-  return context;
+  const { close } = useMenuInteraction();
+  return { close };
 }
 
 /**
@@ -96,65 +64,31 @@ function MorphMenuRoot({
   triggerSize = defaultTriggerSize,
   width,
 }: MorphMenuProps) {
-  const windowWidth = useWindowDimensions().width;
-  const minPanelWidth = width ?? Math.round(windowWidth * defaultPanelWidthRatio);
-  const [isOpen, setIsOpen] = useState(false);
-  // Where the trigger sat when the menu opened. Non-null means the menu is
-  // floating in the portal; it stays there until the close animation lands, so
-  // the collapse doesn't play back under the composer.
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
-  const isReducedMotion = useReducedMotion();
-  const progress = useSharedValue(0);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const maxPanelWidth = Math.max(0, windowWidth - insets.left - insets.right - 32);
+  const minPanelWidth = Math.min(
+    width ?? Math.round(windowWidth * defaultPanelWidthRatio),
+    maxPanelWidth,
+  );
+  const triggerRef = useRef<View>(null);
+  const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
+  const { progress, isVisible } = useMenuMotion(isOpen);
+  const cornerRadius = useMenuPanelRadius();
+  const maxPanelHeight = Math.max(
+    0,
+    (anchor ? anchor.pageY + triggerSize : windowHeight - insets.bottom - 16) - insets.top - 16,
+  );
   const panelHeight = useSharedValue(fallbackPanelHeight);
   const panelWidth = useSharedValue(minPanelWidth);
   const footprintRef = useRef<View>(null);
-  const portalName = useId();
-  // The closed trigger shares the toolbar actions' circular fill. Once the
-  // menu is portalled, `anchor` stays set through the closing animation, so
-  // the expanded panel keeps its popover surface until it is fully collapsed.
+  // Keep the popover surface until both its animation and native dismissal finish.
   const surfaceClassName = anchor ? 'bg-popover' : 'bg-secondary';
-  const surfaceFill = useResolveClassNames(surfaceClassName);
-  const tintColor =
-    typeof surfaceFill.backgroundColor === 'string' ? surfaceFill.backgroundColor : undefined;
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
     [triggerSize],
   );
 
-  useEffect(() => {
-    if (isOpen) {
-      progress.set(isReducedMotion ? 1 : withTiming(1, menuOpenMotion));
-      return;
-    }
-
-    if (isReducedMotion) {
-      progress.set(0);
-      return;
-    }
-
-    progress.set(
-      withTiming(0, settleMotion, (finished) => {
-        // A re-open cancels this one; landing the portal teardown then would
-        // yank the menu back inline mid-animation.
-        if (finished) {
-          runOnJS(setAnchor)(null);
-        }
-      }),
-    );
-  }, [isOpen, isReducedMotion, progress]);
-
-  const close = useCallback(() => {
-    setIsOpen(false);
-
-    if (isReducedMotion) {
-      progress.set(0);
-      setAnchor(null);
-    }
-  }, [isReducedMotion, progress]);
-  const handleBackdropPress = useCallback(() => {
-    close();
-    Keyboard.dismiss();
-  }, [close]);
   const toggle = () => {
     if (isOpen) {
       close();
@@ -168,17 +102,16 @@ function MorphMenuRoot({
     // anchor is a snapshot and never re-measures, so a layout change here leaves
     // the panel floating away from its trigger. The ＋ menu used to take the
     // keyboard down right after this callback and did exactly that.
-    footprintRef.current?.measureInWindow((x, y) => {
-      setAnchor({ left: x, top: y });
-      setIsOpen(true);
+    footprintRef.current?.measureInWindow((pageX, pageY, width, height) => {
+      open({ pageX, pageY, width, height });
     });
   };
   // Every item subscribes to this, so a fresh object each render would re-render
   // the whole panel on any parent update.
-  const contextValue = useMemo(() => ({ close }), [close]);
+  const contextValue = useMemo(() => ({ close, isOpen }), [close, isOpen]);
 
   const containerStyle = useAnimatedStyle(() => ({
-    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, openRadius]),
+    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, cornerRadius]),
     height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight.value]),
     width: interpolate(progress.value, [0, 1], [triggerSize, panelWidth.value]),
   }));
@@ -188,23 +121,15 @@ function MorphMenuRoot({
     const fade = Math.min(progress.value / (menuFadeMotion.duration / menuOpenMotion.duration), 1);
 
     return {
-      filter: [{ blur: fade * blurRadius }],
+      filter: [{ blur: fade * menuBlurRadius }],
       opacity: 1 - fade,
       transform: [
-        { translateX: -slideDistance * progress.value },
+        { translateX: -menuSlideDistance * progress.value },
         { rotate: `${45 * progress.value}deg` },
-        { scale: 1 - (1 - restingScale) * progress.value },
+        { scale: 1 - (1 - menuRestingScale) * progress.value },
       ],
     };
   });
-  const panelStyle = useAnimatedStyle(() => ({
-    filter: [{ blur: (1 - progress.value) * blurRadius }],
-    opacity: progress.value,
-    transform: [
-      { translateX: slideDistance * (1 - progress.value) },
-      { scale: restingScale + (1 - restingScale) * progress.value },
-    ],
-  }));
 
   // The panel lays out inline before it ever opens, so these land while nothing
   // is on screen at that size and there are no frames to animate through. The
@@ -221,42 +146,34 @@ function MorphMenuRoot({
     }
   };
 
-  // The morphing container plus the trigger. Rendered inline while closed and
-  // inside the portal while open, so it is the same subtree either way.
-  //
-  // The provider travels with it: the portal re-renders its children under the
-  // host rather than teleporting the React node, so a provider left behind at
-  // the call site would not reach the items once they float.
+  // Only the trigger and its morph belong to the composer. The overlay, rows,
+  // bounded scrolling, selection dispatch, and dismissal are shared menus.
   const menu = (
-    <MorphMenuContext value={contextValue}>
+    <>
       <Animated.View style={[panelAnchorStyle, containerStyle]}>
-        {/* The panel stays inside the surface: an empty `GlassView` draws no
-            material at all, so the two cannot be split into siblings to fade
-            them separately. */}
-        <SurfaceFrame
-          className={surfaceClassName}
-          cornerRadius={openRadius}
-          style={fillStyle}
-          tintColor={tintColor}
+        <MenuPanel
+          contentStyle={[panelContentStyle, { minWidth: minPanelWidth, maxWidth: maxPanelWidth }]}
+          isOpen={isOpen}
+          maxHeight={maxPanelHeight}
+          onLayout={handlePanelLayout}
+          progress={progress}
+          surfaceClassName={surfaceClassName}
+          testID={testID ? `${testID}-panel` : undefined}
         >
-          <Animated.View
-            onLayout={handlePanelLayout}
-            pointerEvents={isOpen ? 'auto' : 'none'}
-            style={[panelContentStyle, { minWidth: minPanelWidth }, panelStyle]}
-            testID={testID ? `${testID}-panel` : undefined}
-          >
-            {children}
-          </Animated.View>
-        </SurfaceFrame>
+          {children}
+        </MenuPanel>
       </Animated.View>
 
       <Pressable
+        accessibilityElementsHidden={Boolean(anchor)}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
         className="absolute bottom-0 left-0 items-center justify-center"
+        importantForAccessibility={anchor ? 'no-hide-descendants' : 'auto'}
         onPress={toggle}
         pointerEvents={isOpen ? 'none' : 'auto'}
+        ref={triggerRef}
         style={triggerFootprint}
         testID={testID ? `${testID}-trigger` : undefined}
       >
@@ -264,7 +181,7 @@ function MorphMenuRoot({
           <PlusIcon className="size-6 text-foreground" />
         </Animated.View>
       </Pressable>
-    </MorphMenuContext>
+    </>
   );
 
   return (
@@ -272,61 +189,41 @@ function MorphMenuRoot({
       {/* Reserves the closed footprint in the parent's flow, and is what gets
           measured — the floating copy is positioned from it. */}
       <View className="relative" ref={footprintRef} style={[triggerFootprint, style]}>
-        {anchor ? null : menu}
+        {anchor ? null : <MenuInteraction value={contextValue}>{menu}</MenuInteraction>}
       </View>
 
-      {/* The open menu is portalled for two reasons: it has to paint over the
-          composer next to it, and its dismiss catcher has to reach the whole
-          screen — an in-place one only receives touches inside its ancestors'
-          bounds, which here is a composer row a fraction of the screen tall.
-          The catcher renders first so the menu sits on top of it. */}
       {anchor ? (
-        <Portal name={`morph-menu-${portalName}`}>
-          <Pressable
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            onPress={handleBackdropPress}
-            pointerEvents={isOpen ? 'auto' : 'none'}
-            style={StyleSheet.absoluteFill}
-            testID={testID ? `${testID}-backdrop` : undefined}
-          />
-
+        <MenuOverlay
+          isOpen={isOpen}
+          isVisible={isVisible}
+          onClose={close}
+          onClosed={finishClose}
+          testID={testID}
+        >
           <View
+            accessibilityLabel={accessibilityLabel}
             className="absolute"
-            pointerEvents={isOpen ? 'box-none' : 'none'}
-            style={[triggerFootprint, anchor]}
+            role="menu"
+            style={[triggerFootprint, { left: anchor.pageX, top: anchor.pageY }]}
           >
             {menu}
           </View>
-        </Portal>
+        </MenuOverlay>
       ) : null}
     </>
   );
 }
 
-const rowClassName = 'h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-secondary-active';
-
 function MorphMenuItem({ icon, label, onPress, selected, testID, trailing }: MorphMenuItemProps) {
-  const { close } = useComposerMenu();
-
   return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="menuitem"
+    <MenuRow
       accessibilityState={{ selected }}
-      className={rowClassName}
-      onPress={() => {
-        close();
-        onPress();
-      }}
+      icon={icon}
+      label={label}
+      onPress={onPress}
       testID={testID}
-    >
-      {icon}
-      <Text className="flex-1 text-base text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
-      {trailing}
-    </Pressable>
+      trailing={trailing}
+    />
   );
 }
 
@@ -344,37 +241,17 @@ function MorphMenuToggle({
   testID,
   value,
 }: MorphMenuToggleProps) {
-  const { close } = useComposerMenu();
-
   return (
-    <Pressable
-      accessibilityLabel={label}
+    <MenuRow
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}
-      className={rowClassName}
       disabled={disabled}
-      onPress={() => {
-        close();
-        onValueChange(!value);
-      }}
+      icon={icon}
+      label={label}
+      onPress={() => onValueChange(!value)}
       testID={testID}
-    >
-      {icon}
-      <Text className="flex-1 text-base text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
-      {/* The whole row is the hit target, so the switch must not take the touch
-          itself — it would fire its own change on top of the row's. */}
-      <View pointerEvents="none">
-        <Switch
-          accessibilityLabel={label}
-          disabled={disabled}
-          onValueChange={onValueChange}
-          size="sm"
-          value={value}
-        />
-      </View>
-    </Pressable>
+      trailing={<SwitchIndicator disabled={disabled} size="sm" value={value} />}
+    />
   );
 }
 
@@ -387,8 +264,7 @@ export const MorphMenu = Object.assign(MorphMenuRoot, {
   Toggle: MorphMenuToggle,
 });
 
-const fillStyle = { height: '100%', width: '100%' } as const;
 // Pinned bottom-left so the panel grows up and to the right out of the button,
 // which is where the composer's add button sits.
 const panelAnchorStyle = { bottom: 0, left: 0, position: 'absolute' } as const;
-const panelContentStyle = { gap: 2, left: 0, padding: 8, position: 'absolute', bottom: 0 } as const;
+const panelContentStyle = { left: 0, position: 'absolute', bottom: 0 } as const;

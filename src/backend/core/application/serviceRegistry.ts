@@ -11,6 +11,7 @@ import { PreferenceService } from '@/backend/data/PreferenceService';
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
+import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -39,6 +40,7 @@ export const services = {
   ResourceScopeCoordinator,
   CacheService,
   DbService,
+  DesktopConnectionRuntime,
   PreferenceService,
   BackgroundActivityEnvironment,
   KeepAliveCoordinator,

@@ -11,7 +11,7 @@ describe('bundled SQLite migrations', () => {
     try {
       database.exec('PRAGMA foreign_keys = ON');
       const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0021_official-cloud-plugins');
+      const target = entries.findIndex(({ tag }) => tag === '0022_official-cloud-plugins');
       expect(target).toBeGreaterThan(0);
       for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
       database.exec(`
@@ -63,7 +63,7 @@ describe('bundled SQLite migrations', () => {
     try {
       database.exec('PRAGMA foreign_keys = ON');
       const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0020_plugin-authorizations');
+      const target = entries.findIndex(({ tag }) => tag === '0021_plugin-authorizations');
       expect(target).toBeGreaterThan(0);
       const journal = readMigrationJournal();
       // Drizzle resumes by timestamp, so the appended migration must follow the merged base.
@@ -94,6 +94,45 @@ describe('bundled SQLite migrations', () => {
       database.close();
     }
   });
+
+  test.each([1788949862518, 1788966000000])(
+    'adds the skipped desktop table after plugin development migration %i without replaying grants',
+    (lastAppliedAt) => {
+      const database = new DatabaseSync(':memory:');
+      try {
+        database.exec('PRAGMA foreign_keys = ON');
+        const entries = readMigrationEntries();
+        // These plugin heads predated the merge of v0.2's earlier-timestamped desktop migration.
+        applyMigrationsAsDrizzleWould(
+          database,
+          entries.filter(
+            ({ tag, when }) => when <= lastAppliedAt && tag !== '0020_desktop-connection',
+          ),
+        );
+        database.exec(`
+          INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+          VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'fixture-secret', 1, 1);
+          INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, is_active, created_at, updated_at)
+          VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', 1, 1, 1);
+        `);
+        const grants = database.prepare('SELECT * FROM plugin_authorization').all();
+        const servers = database.prepare('SELECT * FROM mcp_server').all();
+        expect(columnNames(database, 'desktop_connection')).toEqual([]);
+
+        applyMigrationsAsDrizzleWould(
+          database,
+          entries.filter(({ when }) => when > lastAppliedAt),
+        );
+
+        expect(columnNames(database, 'desktop_connection')).toContain('active_base_url');
+        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(grants);
+        expect(database.prepare('SELECT * FROM mcp_server').all()).toEqual(servers);
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      } finally {
+        database.close();
+      }
+    },
+  );
 
   test('registers every journal entry in the Expo runtime bundle', () => {
     const journal = readMigrationJournal();
@@ -134,6 +173,55 @@ describe('bundled SQLite migrations', () => {
     }
   });
 
+  test.each([16, 19])(
+    'preserves paired desktops from the former %i development migration',
+    (migrationIndex) => {
+      const database = new DatabaseSync(':memory:');
+
+      try {
+        database.exec('PRAGMA foreign_keys = ON');
+        const entries = readMigrationEntries();
+        applyMigrationsAsDrizzleWould(database, entries.slice(0, migrationIndex));
+        // Both former development migrations installed this same table.
+        database.exec(`
+        CREATE TABLE desktop_connection (
+          id text PRIMARY KEY NOT NULL,
+          name text NOT NULL,
+          base_urls text NOT NULL,
+          active_base_url text NOT NULL,
+          desktop_version text NOT NULL,
+          status text DEFAULT 'paired' NOT NULL,
+          last_fetched_at integer,
+          created_at integer NOT NULL,
+          updated_at integer NOT NULL
+        );
+        INSERT INTO desktop_connection
+          (id, name, base_urls, active_base_url, desktop_version, last_fetched_at, created_at, updated_at)
+        VALUES
+          ('desktop-1', 'My Desktop', '["http://desktop.local:23333"]',
+           'http://desktop.local:23333', '1.0.0', 2, 1, 2);
+      `);
+        const before = database.prepare('SELECT * FROM desktop_connection').all();
+
+        const lastAppliedAt = migrationIndex === 19 ? 1788769828081 : entries[15]!.when;
+        applyMigrationsAsDrizzleWould(
+          database,
+          entries.filter(({ when }) => when > lastAppliedAt),
+        );
+
+        expect(database.prepare('SELECT * FROM desktop_connection').all()).toEqual(before);
+        expect(columnNames(database, 'agent_session_message')).toContain('stats');
+        expect(columnNames(database, 'job')).toContain('cancel_requested_at');
+        expect(indexNames(database, 'agent_session_message')).toContain(
+          'agent_session_message_created_id_idx',
+        );
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      } finally {
+        database.close();
+      }
+    },
+  );
+
   test('replays the journal into the schema the services are typed against', () => {
     const database = new DatabaseSync(':memory:');
 
@@ -166,6 +254,7 @@ describe('bundled SQLite migrations', () => {
         'agent_tool_binding',
         'ai_usage_record',
         'app_state',
+        'desktop_connection',
         'file_entry',
         'job',
         'mcp_server',
@@ -195,6 +284,17 @@ describe('bundled SQLite migrations', () => {
         'auth_method',
         'account_label',
         'credential',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(columnNames(database, 'desktop_connection')).toEqual([
+        'id',
+        'name',
+        'base_urls',
+        'active_base_url',
+        'desktop_version',
+        'status',
+        'last_fetched_at',
         'created_at',
         'updated_at',
       ]);
@@ -937,13 +1037,14 @@ function readMigrationSqlFiles(): string[] {
   return readMigrationEntries().map(({ sql }) => sql);
 }
 
-function readMigrationEntries(): { sql: string; tag: string }[] {
+function readMigrationEntries(): { sql: string; tag: string; when: number }[] {
   const migrationDirectory = `${process.cwd()}/migrations/sqlite-drizzle`;
   const journal = readMigrationJournal();
 
-  return journal.entries.map(({ tag }) => ({
+  return journal.entries.map(({ tag, when }) => ({
     sql: readFileSync(`${migrationDirectory}/${tag}.sql`, 'utf8'),
     tag,
+    when,
   }));
 }
 

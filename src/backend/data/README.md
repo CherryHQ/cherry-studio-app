@@ -10,6 +10,10 @@ business-data persistence and the concrete implementations that read or write th
 - `PreferenceService.ts` owns cached access to SQLite-backed user preferences.
 - `db/` owns the Expo SQLite connection, Drizzle schemas, migrations, custom SQL, and seeders.
 - `services/` owns entity persistence and data-specific transformations.
+- `DesktopConnectionService` stores paired-device metadata and atomically adds missing providers
+  and models. Existing IDs are skipped without changing local configuration, credentials, notes,
+  order, or timestamps. New models use the existing mobile provider's endpoint configuration for
+  validation. Network pairing and SecureStore access belong to `backend/services/desktopConnections`.
 - `fixtures/` contains development data consumed by the database seeders and their tests.
 
 The concrete graph is assembled only by `src/bootstrap`. Frontend resource callers see endpoint

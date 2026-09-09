@@ -5,8 +5,7 @@ import type { SliderControlProps } from './slider-control.types';
 
 const ACCESSIBILITY_ACTIONS = [{ name: 'decrement' }, { name: 'increment' }] as const;
 
-// Web and non-native tooling keep the Cherry control. Metro replaces this
-// private adapter with the native iOS or Android implementation on device.
+// Android and Web share the styled control; iOS keeps its private native adapter.
 export function SliderControl({
   accessibilityLabel,
   disabled = false,
@@ -40,6 +39,7 @@ export function SliderControl({
 
   return (
     <HeroSlider
+      className="min-h-12 justify-center"
       isDisabled={disabled}
       maxValue={max}
       minValue={min}
@@ -49,11 +49,15 @@ export function SliderControl({
       testID={testID}
       value={value}
     >
-      <HeroSlider.Track>
-        <HeroSlider.Fill />
+      <HeroSlider.Track className="h-1.5 rounded-full bg-primary/10" hitSlop={21}>
+        <HeroSlider.Fill className="rounded-full bg-primary" />
         <HeroSlider.Thumb
           accessibilityActions={disabled ? undefined : ACCESSIBILITY_ACTIONS}
           accessibilityLabel={accessibilityLabel}
+          classNames={{
+            thumbContainer: 'size-6 rounded-full bg-background p-0.5',
+            thumbKnob: 'rounded-full bg-primary shadow-none',
+          }}
           onAccessibilityAction={disabled ? undefined : handleAccessibilityAction}
         />
       </HeroSlider.Track>

@@ -46,10 +46,15 @@ catalogs own business behavior; Cherry does not translate old calls or duplicate
 Newly published upstream tools require an explicit code admission decision. A missing or incompatible
 tool is unavailable, not an invitation to fall back to the deleted local implementation.
 
-Migration `0021_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
+Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
 credentials, server UUIDs, old per-tool selections, approval settings, disabled tools and history.
 Users review and re-enable access; old per-tool identities are not retargeted automatically. Custom
 MCP servers are unchanged. The plugin detail page explains the cloud destination and re-enable step.
+
+The merged sequence preserves v0.2's `0020_desktop-connection`, followed by
+`0021_plugin-authorizations`. Migration `0023_reconcile-desktop-connection` also creates the desktop
+table if absent: earlier plugin development installs can have a newer migration timestamp without
+that table. This reconciliation preserves existing desktop pairings and plugin data.
 
 Sources: [GitHub remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md),
 [GitHub tools](https://github.com/github/github-mcp-server),

@@ -6,6 +6,7 @@ import type { AgentSessionService } from '../../services/AgentSessionService';
 import type { AgentToolBindingService } from '../../services/AgentToolBindingService';
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
+import type { DesktopConnectionService } from '../../services/DesktopConnectionService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
 import type { FileEntryService } from '../../services/FileEntryService';
 import type { JobService } from '../../services/JobService';
@@ -18,6 +19,7 @@ import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
 import { createAgentToolBindingHandlers } from './agentToolBindings';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
+import { createDesktopConnectionHandlers } from './desktopConnections';
 import { createFileHandlers } from './files';
 import { createJobHandlers } from './jobs';
 import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
@@ -36,6 +38,7 @@ export type DataApiDependencies = {
   agentSessions: AgentSessionService;
   aiUsageRecords: AiUsageRecordService;
   contentSearch: ContentSearchService;
+  desktopConnections: DesktopConnectionService;
   entitySearch: EntitySearchService;
   files: FileEntryService;
   jobs: JobService;
@@ -55,6 +58,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
     ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
+    ...createDesktopConnectionHandlers(dependencies.desktopConnections),
     ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
