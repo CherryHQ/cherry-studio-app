@@ -116,6 +116,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             pendingSend={controls.pendingSend}
             enteringUserMessageId={controls.enteringUserMessageId}
             onPendingSendDisplayed={controls.completePendingSend}
+            assistantAvatar={agent.agent?.avatar}
             assistantAvatarUri={agent.agent?.avatarUri}
             assistantName={agent.agent?.name}
             isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}

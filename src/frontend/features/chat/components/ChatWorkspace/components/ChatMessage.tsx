@@ -8,6 +8,7 @@ import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
+  avatar?: null | string;
   avatarUri?: null | string;
   name: string;
 }>;
@@ -30,6 +31,7 @@ function renderChatAssistantMessage(
       <View className="w-full flex-row items-center gap-2">
         <AgentAvatar
           accessibilityLabel={presentation.name}
+          avatar={presentation.avatar}
           name={presentation.name}
           size={24}
           uri={presentation.avatarUri}

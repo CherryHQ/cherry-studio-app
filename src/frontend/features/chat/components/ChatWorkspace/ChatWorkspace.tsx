@@ -37,6 +37,7 @@ type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
   pendingSend?: PendingChatSend;
   onPendingSendDisplayed: (userMessageId: string) => void;
+  assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
@@ -54,6 +55,7 @@ export function ChatWorkspace({
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
+  assistantAvatar,
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
@@ -138,10 +140,11 @@ export function ChatWorkspace({
   }, [forkBoundaryMessageId, forkedFromSessionId, projectedMessages, sessionId]);
   const assistantPresentation = useMemo(
     () => ({
+      avatar: assistantAvatar,
       avatarUri: assistantAvatarUri,
       name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
     }),
-    [assistantAvatarUri, assistantName, t],
+    [assistantAvatar, assistantAvatarUri, assistantName, t],
   );
   const renderChatMessage = useCallback(
     (message: MessageListItem) => {
@@ -225,6 +228,7 @@ export function ChatWorkspace({
   if (!sessionId && listMessages.length === 0) {
     return (
       <ChatDraftState
+        assistantAvatar={assistantAvatar}
         assistantAvatarUri={assistantAvatarUri}
         assistantName={assistantName}
         contentBottomInset={contentBottomInset}

@@ -328,6 +328,7 @@ function AgentEditForm({
         >
           <AgentAvatar
             accessibilityLabel={t('agent.form.setAvatar')}
+            avatar={agent?.avatar}
             name={form.name}
             size={agentFormAvatarSize}
             uri={form.avatarUri}
