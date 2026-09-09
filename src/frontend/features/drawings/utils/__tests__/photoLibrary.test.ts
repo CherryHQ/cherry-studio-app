@@ -80,16 +80,20 @@ describe('photo library paging', () => {
 
 describe('photo preview permission', () => {
   test('does not prompt while the drawing gallery mounts', () => {
-    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: false }, false)).toBe(
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, state: 'denied' }, false)).toBe(
       false,
     );
   });
 
   test('prompts only after an explicit action when permission can still be requested', () => {
-    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: false }, true)).toBe(true);
-    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: false, granted: false }, true)).toBe(
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, state: 'denied' }, true)).toBe(
+      true,
+    );
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: false, state: 'denied' }, true)).toBe(
       false,
     );
-    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, granted: true }, true)).toBe(false);
+    expect(shouldRequestPhotoPreviewAccess({ canAskAgain: true, state: 'granted' }, true)).toBe(
+      false,
+    );
   });
 });

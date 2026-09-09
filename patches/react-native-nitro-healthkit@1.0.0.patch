@@ -120,7 +120,7 @@ index d7d9d566a392df4574671a6271fa1758cd29ba3c..19695d326bba91c3611cadd75d46e111
    return JNI_VERSION_1_6;
  }
 diff --git a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
-index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3f01393be 100644
+index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..95ea307226b03b11b14d171ef30becab8ef0567f 100644
 --- a/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
 +++ b/android/src/main/kotlin/io/github/n0ku/nitrohealthkit/HealthKitModule.kt
 @@ -6,22 +6,14 @@ import android.util.Log
@@ -160,24 +160,41 @@ index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3
          val granted = client.permissionController.getGrantedPermissions()
          if (granted.contains(permission)) AUTHORIZED else DENIED
      }
-@@ -177,9 +174,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+@@ -175,12 +172,7 @@ class HealthKitModule : HybridHealthKitSpec() {
+             if (!chunkEnd.isAfter(chunkStart)) break
+ 
              val response = readChunkWithRetry(recordType, chunkStart, chunkEnd)
-             if (response != null) {
-                 accumulated += response.records
+-            if (response != null) {
+-                accumulated += response.records
 -                if (response.pageToken != null) {
 -                    Log.w(TAG, "readAllRecords ${recordType.simpleName}: chunk $chunkStart→$chunkEnd hit pageSize cap (${response.records.size}); window has more records that won't be returned")
 -                }
-             }
+-            }
++            accumulated += response.records
              chunkStart = chunkEnd
              chunks++
-@@ -258,7 +252,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+         }
+@@ -213,7 +205,7 @@ class HealthKitModule : HybridHealthKitSpec() {
+         recordType: KClass<T>,
+         start: Instant,
+         end: Instant,
+-    ): androidx.health.connect.client.response.ReadRecordsResponse<T>? {
++    ): androidx.health.connect.client.response.ReadRecordsResponse<T> {
+         var attempt = 0
+         var backoffMs = QUOTA_RETRY_INITIAL_MS
+         while (true) {
+@@ -258,8 +250,9 @@ class HealthKitModule : HybridHealthKitSpec() {
                      val isQuotaError = (t.message ?: "").contains("quota", ignoreCase = true) ||
                          (t.cause?.message ?: "").contains("quota", ignoreCase = true)
                      if (!isQuotaError || attempt >= QUOTA_RETRY_MAX_ATTEMPTS) {
 -                        Log.w(TAG, "readAllRecords ${recordType.simpleName} chunk failed [$start→$end] (attempt $attempt): ${t.javaClass.simpleName}: ${t.message}")
-                         return null
+-                        return null
++                        // A failed chunk is not an empty interval. Let the caller
++                        // mark this metric failed while preserving other metrics.
++                        throw t
                      }
                      kotlinx.coroutines.delay(backoffMs)
+                     backoffMs = (backoffMs * 2).coerceAtMost(QUOTA_RETRY_MAX_MS)
 @@ -311,7 +304,6 @@ class HealthKitModule : HybridHealthKitSpec() {
  
          val records = readAllRecords(recordType, startDate, endDate)
@@ -194,20 +211,36 @@ index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3
          out.toTypedArray()
      }
  
-@@ -459,12 +450,10 @@ class HealthKitModule : HybridHealthKitSpec() {
-                         ),
-                     )
-                 } catch (t: Throwable) {
+@@ -451,21 +442,14 @@ class HealthKitModule : HybridHealthKitSpec() {
+         // Sum path: rely on Health Connect's native aggregate when available, fast and pre-bucketed.
+         if (aggregationType == "sum" && metric != null) {
+             val response = withContext(Dispatchers.IO) {
+-                try {
+-                    client.aggregate(
+-                        AggregateRequest(
+-                            metrics = setOf(metric),
+-                            timeRangeFilter = TimeRangeFilter.between(startDate, endDate),
+-                        ),
+-                    )
+-                } catch (t: Throwable) {
 -                    Log.w(TAG, "aggregate $iosType: failed [$startDate→$endDate]: ${t.javaClass.simpleName}: ${t.message}")
-                     null
-                 }
+-                    null
+-                }
++                client.aggregate(
++                    AggregateRequest(
++                        metrics = setOf(metric),
++                        timeRangeFilter = TimeRangeFilter.between(startDate, endDate),
++                    ),
++                )
              }
-             val v = if (response != null) QuantityMapper.coerceAggregateToDouble(iosType, response[metric]) else 0.0
+-            val v = if (response != null) QuantityMapper.coerceAggregateToDouble(iosType, response[metric]) else 0.0
 -            Log.d(TAG, "aggregate $iosType [$startDate→$endDate] sum=$v")
-             return v
+-            return v
++            return QuantityMapper.coerceAggregateToDouble(iosType, response[metric])
          }
  
-@@ -503,7 +492,6 @@ class HealthKitModule : HybridHealthKitSpec() {
+         // Fallback: pull samples and reduce client-side. Slower but works for any aggregation.
+@@ -503,7 +487,6 @@ class HealthKitModule : HybridHealthKitSpec() {
          }
          val records = readAllRecords(recordType, startDate, endDate)
          val flattened = CategoryMapper.flatten(type, records).toTypedArray()
@@ -215,7 +248,7 @@ index 1f769abc3ad053b16fa600d6ce4607cea0a5cf42..78181a9f8cbceffa9bc9dd9e9e8fc1d3
          if (useCacheValue) cache.set(key, flattened, ttl)
          flattened
      }
-@@ -754,23 +742,9 @@ class HealthKitModule : HybridHealthKitSpec() {
+@@ -754,23 +737,9 @@ class HealthKitModule : HybridHealthKitSpec() {
          StepsRecord::class,
          HeartRateRecord::class,
          DistanceRecord::class,

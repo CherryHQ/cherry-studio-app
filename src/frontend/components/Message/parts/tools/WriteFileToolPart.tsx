@@ -37,6 +37,7 @@ export function WriteFileToolPart({ part }: WriteFileToolPartProps) {
         statusText={statusText}
         testID="write-file-tool-part"
         title={t('chat.builtinTool.file.write')}
+        titleAnimation={part.state === 'input-streaming' ? 'none' : 'shimmer'}
       >
         {filename ? (
           <MessagePart.ValueSection

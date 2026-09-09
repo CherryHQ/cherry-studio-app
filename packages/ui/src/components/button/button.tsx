@@ -160,7 +160,8 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
   const mergedAccessibilityState = {
     ...accessibilityState,
     ...(isDisabled ? { disabled: true } : {}),
-    ...(loading ? { busy: true } : {}),
+    // Android can retain the previous busy description when the key is omitted.
+    busy: loading || accessibilityState?.busy || false,
   };
 
   return (

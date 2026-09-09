@@ -27,6 +27,7 @@ export type {
   RuntimeTextAttachmentPart,
   RuntimeTool,
   RuntimeToolCall,
+  RuntimeToolInputPreview,
   RuntimeToolRef,
   RuntimeToolResult,
   RuntimeUsage,

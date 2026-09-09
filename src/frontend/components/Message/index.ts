@@ -1,4 +1,8 @@
 export { MessageList } from './MessageList';
+export {
+  ToolInputPreviewProvider,
+  type ToolInputPreviewSource,
+} from './parts/tools/ToolInputPreviewContext';
 export { AssistantMessage } from './rows/AssistantMessage';
 export { UserMessage } from './rows/UserMessage';
 export { getBuiltInToolDisplay } from './parts/tools/builtInTool/builtInToolDisplay';

@@ -107,6 +107,12 @@ interface AgentRuntimeSession {
 }
 ```
 
+Tools may opt in to a bounded input preview through `RuntimeTool.inputPreview`, naming a top-level
+text field and an optional display-name field. Pi coalesces partial input into
+`{ type: 'tool.input.preview', partId, preview: { text, truncated, name? } }` events. These are
+display-only values, independent of `input` and tool execution. The latest preview accompanies the
+tool part for observation recovery and interruption; the full input is published on completion.
+
 `RuntimeModelPreflight` is a narrow, JSON-safe projection of input modalities, context/input/output
 limits, and native tool support. The Host calls it before reservation; provider SDK model objects,
 credentials, endpoints, and headers remain private to the Runtime adapter. Pi preflight and final

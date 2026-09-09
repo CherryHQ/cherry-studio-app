@@ -16,7 +16,7 @@
         "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
-        "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add and update calendar events when you ask the assistant.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to AI providers and MCP servers on your local network.",
@@ -90,7 +90,7 @@
           "isIosBackgroundLocationEnabled": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": "Cherry Studio does not access motion activity data from device sensors. It reads health and fitness data from Apple Health only when you ask the assistant.",
+          "motionUsagePermission": false,
           "locationWhenInUsePermission": "Allow Cherry Studio to use your location when you ask the assistant."
         }
       ],
@@ -107,7 +107,7 @@
         {
           "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
           "cameraPermission": "Allow Cherry Studio to open the camera for drawings and chat messages.",
-          "microphonePermission": "Cherry Studio does not use your microphone or record audio."
+          "microphonePermission": false
         }
       ],
       [
@@ -135,7 +135,6 @@
           }
         }
       ],
-      "./scripts/with-health-connect",
       "expo-status-bar"
     ],
     "experiments": {

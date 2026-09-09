@@ -666,7 +666,7 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
-  test('publishes tool input generation without forwarding every argument delta', async () => {
+  test('previews opted-in file content without exposing executable partial input', async () => {
     const runtime = createTestRuntime();
     const fullInput = {
       filename: 'page.html',
@@ -680,6 +680,7 @@ describe('PiRuntime mapping', () => {
       approval: 'auto',
       description: 'Write a managed file.',
       inputSchema: { type: 'object' },
+      inputPreview: { textField: 'content', nameField: 'filename' },
       execute: async ({ input }) => {
         executedInput = input;
         return { value: { status: 'created', filename: 'page.html' }, artifacts: [] };
@@ -698,7 +699,7 @@ describe('PiRuntime mapping', () => {
             type: 'toolCall',
             id: 'write-call',
             name: piTool.name,
-            arguments: { filename: 'page.html' },
+            arguments: { filename: 'page.html', content: '<html>large generated' },
           },
         ],
         stopReason: 'toolUse',
@@ -726,6 +727,7 @@ describe('PiRuntime mapping', () => {
           partial,
         },
       });
+      expect(executedInput).toBeUndefined();
       await context.emit({
         type: 'message_update',
         message: completed,
@@ -768,6 +770,11 @@ describe('PiRuntime mapping', () => {
     });
     expect(toolEvents[0]).not.toHaveProperty('input');
     expect(toolEvents.filter((part) => part.state === 'input-streaming')).toHaveLength(1);
+    expect(events).toContainEqual({
+      type: 'tool.input.preview',
+      partId: 'tool-write-call',
+      preview: { name: 'page.html', text: '<html>large generated', truncated: false },
+    });
     expect(toolEvents).toContainEqual(
       expect.objectContaining({ input: fullInput, state: 'input-available' }),
     );
