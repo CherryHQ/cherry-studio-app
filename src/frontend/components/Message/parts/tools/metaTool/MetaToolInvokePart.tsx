@@ -13,7 +13,7 @@ export function MetaToolInvokePart({ part, toolName }: MetaToolInvokePartProps) 
   const { t } = useTranslation();
   const input = isRecord(part.input) ? part.input : undefined;
   const params = isRecord(input?.params) ? input.params : undefined;
-  let errorText = part.state === 'output-error' ? part.errorText : undefined;
+  let errorText = part.state === 'output-error' ? part.errorText : '';
   if (toolName === 'tool_call') {
     if (part.errorCode === 'tool_schema_not_inspected') {
       errorText = t('chat.metaToolInvoke.schemaRequired');
