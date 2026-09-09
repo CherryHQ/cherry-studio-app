@@ -196,6 +196,7 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
     description:
       'Replace exact text in a Cherry-managed UTF-8 file. Use file_entry_id from an attachment or an earlier file tool result. A file created earlier in this same turn is updated in place and keeps its id; any other file is left unchanged and the edit is saved as a new version (`report.html` becomes `report v2.html`), which further edits in the same turn continue. Use replace_all only when every exact occurrence should change. The result includes a snippet of the edited region and the one-based line it starts at, usable as read_file start_line.',
     inputSchema: toRuntimeInputSchema(editFileInputSchema),
+    inputPreview: { textField: 'new_string' },
     approval: 'auto',
     execute({ input, signal }) {
       const parsed = editFileInputSchema.safeParse(input);

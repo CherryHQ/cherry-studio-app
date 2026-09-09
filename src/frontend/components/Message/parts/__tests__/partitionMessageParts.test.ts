@@ -82,6 +82,26 @@ describe('partitionMessageParts', () => {
     expect(body.map((item) => item.kind)).toEqual(['part']);
   });
 
+  test('ignores settled blank text between steps and after the answer without changing indices', () => {
+    const { body, process } = partitionMessageParts([
+      reasoning('thinking'),
+      text(''),
+      tool('read'),
+      text('\n  \t'),
+      reasoning('checking'),
+      text('answer'),
+      text('  '),
+    ]);
+
+    expect(process.map(({ index }) => index)).toEqual([0, 2, 4]);
+    expect(body.map(({ index }) => index)).toEqual([5]);
+  });
+
+  test('keeps an empty streaming text part mounted while its first content arrives', () => {
+    const part: CherryMessagePart = { state: 'streaming', text: '', type: 'text' };
+    expect(partitionMessageParts([part]).process).toEqual([{ index: 0, part }]);
+  });
+
   test('folds every visible part before the final result despite interleaved sources and files', () => {
     const source: CherryMessagePart = {
       sourceId: 'source-1',

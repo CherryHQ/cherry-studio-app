@@ -45,20 +45,23 @@ export function MessageParts({
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
 
   return (
-    <View className="gap-2">
+    <View className="gap-4">
       {process.length > 0 ? (
         isStreaming ? (
-          process.map(({ index, part }) => (
-            <MessagePartRenderer
-              isStreaming
-              isTextSelectionEnabled={isTextSelectionEnabled}
-              key={getMessagePartKey(message, part, index)}
-              messageParts={parts}
-              part={part}
-              renderMode={renderMode}
-              resolvedText={citations.textByPartIndex.get(index)}
-            />
-          ))
+          <View className="gap-1">
+            {process.map(({ index, part }) => (
+              <MessagePartRenderer
+                isStreaming
+                isTextSelectionEnabled={isTextSelectionEnabled}
+                key={getMessagePartKey(message, part, index)}
+                messageId={message.id}
+                messageParts={parts}
+                part={part}
+                renderMode={renderMode}
+                resolvedText={citations.textByPartIndex.get(index)}
+              />
+            ))}
+          </View>
         ) : (
           <ProcessGroupPart
             citationText={citations.textByPartIndex}
@@ -79,6 +82,7 @@ export function MessageParts({
           isStreaming={isStreaming}
           isTextSelectionEnabled={isTextSelectionEnabled}
           key={getMessagePartKey(message, item.part, item.index)}
+          messageId={message.id}
           messageParts={parts}
           part={item.part}
           renderMode={renderMode}

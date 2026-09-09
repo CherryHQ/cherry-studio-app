@@ -204,6 +204,8 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /** Opt-in text fields to preview while input is incomplete; never executable input. */
+  inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
   /** Tools in the same group stop together after a tool-scoped failure. */
   failureGroup?: string;
@@ -213,6 +215,12 @@ export type RuntimeTool = {
    */
   autoApprovalEligible?: boolean;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
+};
+
+export type RuntimeToolInputPreview = {
+  text: string;
+  truncated: boolean;
+  name?: string;
 };
 
 export interface MessageRuntimeTimingSink {
@@ -267,6 +275,7 @@ export type RuntimeOutputPart =
         | 'error'
         | 'interrupted';
       input?: RuntimeJsonValue;
+      inputPreview?: RuntimeToolInputPreview;
       output?: RuntimeToolResult;
       approvalId?: string;
       error?: RuntimeError;
@@ -336,6 +345,7 @@ export type RuntimeError = {
 export type RuntimeEvent =
   | { type: 'part.add'; index: number; part: RuntimeOutputPart }
   | { type: 'text.delta'; partId: string; text: string }
+  | { type: 'tool.input.preview'; partId: string; preview: RuntimeToolInputPreview }
   | { type: 'part.replace'; part: RuntimeOutputPart }
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }

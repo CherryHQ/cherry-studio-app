@@ -144,9 +144,10 @@ precedence. Migration `0018_usage-invocation-semantics` marks older `agent-sessi
 `legacy-aggregate`; original counts, costs, and snapshots are retained because their provider
 boundaries cannot be recovered.
 
-Tiered pricing is a data and calculation capability in this port, not a new configuration UI.
-Desktop reads `pricing.inputTokenTiers` from user-edited models; neither catalog currently supplies
-those tiers. Mobile's pricing editor and catalog tier ingestion remain separate follow-up features.
+Provider model creation and editing expose `pricing.inputTokenTiers` alongside base and cache rates.
+The editor preserves unknown prices and per-image/per-minute rates, and validates increasing tier
+thresholds before saving. Neither bundled catalog currently supplies tiers; catalog tier ingestion
+remains a separate follow-up feature.
 
 New usage facts and their Agent message projections commit together. Message `stats` includes token
 details, request/estimated/unpriced counts, costs grouped by currency, and measured provider

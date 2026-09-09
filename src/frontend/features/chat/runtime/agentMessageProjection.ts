@@ -80,6 +80,7 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMessagePart {
   const base = {
     input: part.input,
+    ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
     title: part.displayName,
     toolCallId: part.toolCallId,
     toolName: part.providerName,

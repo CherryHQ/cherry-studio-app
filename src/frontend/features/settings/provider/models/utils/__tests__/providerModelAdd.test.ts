@@ -72,6 +72,34 @@ describe('provider model add helpers', () => {
     expect(build({}, baseline).input).toEqual({ modelId: 'custom-model', providerId: 'openai' });
   });
 
+  test('submits group and capability overrides without freezing untouched catalog pricing', () => {
+    const baseline = catalogModel('custom-model', {
+      capabilities: [MODEL_CAPABILITY.WEB_SEARCH, MODEL_CAPABILITY.AUDIO_RECOGNITION],
+      pricing: { input: { perMillionTokens: 1 }, output: { perMillionTokens: 2 } },
+    });
+    const result = build(
+      {
+        group: ' My models ',
+        supportsStreaming: false,
+        capabilities: { reasoning: true, functionCall: true, video: true },
+      },
+      baseline,
+    );
+    expect(result.input).toMatchObject({
+      group: 'My models',
+      supportsStreaming: false,
+      capabilities: expect.arrayContaining([
+        MODEL_CAPABILITY.WEB_SEARCH,
+        MODEL_CAPABILITY.AUDIO_RECOGNITION,
+        MODEL_CAPABILITY.VIDEO_RECOGNITION,
+        MODEL_CAPABILITY.REASONING,
+        MODEL_CAPABILITY.FUNCTION_CALL,
+      ]),
+      inputModalities: [MODALITY.TEXT, MODALITY.AUDIO, MODALITY.VIDEO],
+    });
+    expect(result.input).not.toHaveProperty('pricing');
+  });
+
   test('adds vision without erasing reasoning, tools or other modalities', () => {
     const baseline = catalogModel('custom-model', {
       capabilities: [MODEL_CAPABILITY.REASONING, MODEL_CAPABILITY.FUNCTION_CALL],
@@ -104,7 +132,7 @@ describe('provider model add helpers', () => {
         ...createInitialProviderModelAddFormState(),
         endpointType: ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
       }),
-    ).toEqual({ drawing: true, vision: false });
+    ).toMatchObject({ drawing: true, vision: false });
   });
 
   test.each([ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, ENDPOINT_TYPE.OPENAI_IMAGE_EDIT])(

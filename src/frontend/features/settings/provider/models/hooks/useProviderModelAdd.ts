@@ -4,17 +4,27 @@ import { useTranslation } from 'react-i18next';
 
 import { useMutation, useQuery } from '@/frontend/data';
 import type { Provider } from '@/shared/data/types/provider';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import {
   buildProviderModelAddInput,
+  changeProviderModelPrimaryType,
+  changeProviderModelEndpoint,
   createInitialProviderModelAddFormState,
   getProviderModelAddCapabilities,
   getProviderModelAddIdError,
+  getProviderModelPrimaryType,
   isProviderModelImageEndpoint,
   type ProviderModelAddCapability,
   type ProviderModelAddEndpoint,
   type ProviderModelAddFormState,
+  type ProviderModelPrimaryType,
 } from '../utils/providerModelAdd';
+import {
+  buildModelPricing,
+  createModelPricingDraft,
+  type ModelPricingDraft,
+} from '../utils/providerModelPricing';
 
 /** Draft overrides stay local; catalog values are derived, never copied into the draft. */
 export function useProviderModelAdd({ provider }: { provider: Provider }) {
@@ -46,6 +56,11 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
   const baseline =
     shouldResolve && resolvedModelId === modelId ? resolvedQuery.data?.[0] : undefined;
   const capabilities = getProviderModelAddCapabilities(formState, baseline);
+  const primaryType = formState.primaryType ?? getProviderModelPrimaryType(capabilities, baseline);
+  const pricingDraft = formState.pricing ?? createModelPricingDraft(baseline?.pricing);
+  const pricingErrors = formState.pricing
+    ? buildModelPricing(formState.pricing, baseline?.pricing).errors
+    : [];
   const buildResult = buildProviderModelAddInput({
     existingModels: modelsQuery.data ?? [],
     formState,
@@ -68,7 +83,7 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
   const isDirty = Object.entries(formState).some(([key, value]) => {
     if (key === 'endpointType') return value !== 'auto';
     if (key === 'capabilities') return Object.keys(formState.capabilities).length > 0;
-    return value !== '';
+    return value !== '' && value !== undefined;
   });
   const fieldErrors = Object.fromEntries(
     Object.entries(buildResult.errors).map(([field, key]) => [
@@ -115,11 +130,10 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
     });
   }
   function updateEndpointType(endpointType: ProviderModelAddEndpoint) {
-    setFormState((current) => {
-      const overrides = { ...current.capabilities };
-      if (isProviderModelImageEndpoint(endpointType)) delete overrides.drawing;
-      return { ...current, endpointType, capabilities: overrides };
-    });
+    setFormState((current) => changeProviderModelEndpoint(current, endpointType, baseline));
+  }
+  function updatePrimaryType(type: ProviderModelPrimaryType) {
+    setFormState((current) => changeProviderModelPrimaryType(current, type, provider, baseline));
   }
   async function retryLookup() {
     await modelsQuery.refetch();
@@ -160,6 +174,9 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
     baseline,
     canSubmit,
     capabilities,
+    primaryType,
+    pricingDraft,
+    pricingErrors,
     fieldErrors,
     formState,
     isDirty,
@@ -172,6 +189,18 @@ export function useProviderModelAdd({ provider }: { provider: Provider }) {
     submitAddModel,
     updateCapability,
     updateEndpointType,
+    updatePrimaryType,
+    updateGroup: (value: string) => updateFormField('group', value),
+    updatePricing: (value: ModelPricingDraft) =>
+      updateFormField(
+        'pricing',
+        deepEqual(value, createModelPricingDraft(baseline?.pricing)) ? undefined : value,
+      ),
+    updateSupportsStreaming: (value: boolean) =>
+      updateFormField(
+        'supportsStreaming',
+        value === (baseline?.supportsStreaming ?? true) ? undefined : value,
+      ),
     updateModelId,
     updateContextWindow: (value: string) => updateFormField('contextWindow', value),
     updateMaxInputTokens: (value: string) => updateFormField('maxInputTokens', value),

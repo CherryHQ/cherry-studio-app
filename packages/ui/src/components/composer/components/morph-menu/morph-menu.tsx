@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import {
+  Keyboard,
   type LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -150,6 +151,10 @@ function MorphMenuRoot({
       setAnchor(null);
     }
   }, [isReducedMotion, progress]);
+  const handleBackdropPress = useCallback(() => {
+    close();
+    Keyboard.dismiss();
+  }, [close]);
   const toggle = () => {
     if (isOpen) {
       close();
@@ -280,7 +285,7 @@ function MorphMenuRoot({
           <Pressable
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            onPress={close}
+            onPress={handleBackdropPress}
             pointerEvents={isOpen ? 'auto' : 'none'}
             style={StyleSheet.absoluteFill}
             testID={testID ? `${testID}-backdrop` : undefined}

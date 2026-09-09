@@ -1,38 +1,51 @@
 import {
-  Button,
   Input,
   OptionPickerBottomSheet,
-  SelectField,
+  Section,
   TextField,
   useToast,
 } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useMutation } from '@/frontend/data';
-import type { Model } from '@/shared/data/types/model';
+import { ENDPOINT_TYPE, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
-import { isTextGenerationModel } from '@/shared/utils/modelPurpose';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { useProviderApiServiceSheetClose } from '../../../apiService';
+import { ProviderModelClassificationFields } from '../../../models/components/ProviderModelClassificationFields';
+import { ProviderModelFormSection } from '../../../models/components/ProviderModelFormSection';
 import { ProviderModelNumberField } from '../../../models/components/ProviderModelNumberField';
-import { getProviderChatEndpointTypes } from '../../../models/utils/providerModelAdd';
+import { ProviderModelPricingFields } from '../../../models/components/ProviderModelPricingFields';
+import { ProviderModelTypeField } from '../../../models/components/ProviderModelTypeField';
 import {
-  getProviderModelEndpointSelection,
-  getProviderModelEndpointOptions,
-  PROVIDER_DEFAULT_ENDPOINT_SELECTION,
-  type ProviderModelEndpointSelection,
-} from '../../../models/utils/providerModelEndpoint';
+  changeProviderModelPrimaryType,
+  changeProviderModelEndpoint,
+  createInitialProviderModelAddFormState,
+  getProviderModelAddCapabilities,
+  getProviderModelAddEndpointOptions,
+  getProviderModelEndpointLabelKey,
+  getProviderModelPrimaryType,
+  type ProviderModelAddCapability,
+  type ProviderModelAddEndpoint,
+} from '../../../models/utils/providerModelAdd';
+import {
+  buildModelPricing,
+  createModelPricingDraft,
+} from '../../../models/utils/providerModelPricing';
 import { refreshProviderModelQueries } from '../../../models/utils/refreshProviderModelQueries';
 import { ProviderModelPage } from '../components/ProviderModelPage';
 import {
   buildModelEditPatch,
   createModelEditDraft,
+  createModelEditSettings,
+  buildModelEditSettingsPatch,
   modelLimitFields,
   type ModelEditDraft,
 } from '../utils/providerModelEdit';
@@ -45,41 +58,65 @@ export default function ProviderModelEditScreen() {
   );
 }
 
-function ModelEditor({ model, provider }: { model: Model; provider: Provider }) {
+function ModelEditor({ model: sourceModel, provider }: { model: Model; provider: Provider }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   const mutation = useMutation('PATCH', '/models/:uniqueModelId*');
+  const [model] = useState(sourceModel);
   const [initial] = useState(() => createModelEditDraft(model));
   const [draft, setDraft] = useState(initial);
-  const [initialEndpoint] = useState(() => getProviderModelEndpointSelection(model));
-  const [endpoint, setEndpoint] = useState<ProviderModelEndpointSelection>(initialEndpoint);
+  const [initialSettings] = useState(() => createModelEditSettings(model));
+  const [settings, setSettings] = useState(initialSettings);
   const [isEndpointOpen, setIsEndpointOpen] = useState(false);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
   const patch = buildModelEditPatch(initial, draft);
+  const settingsResult = buildModelEditSettingsPatch(model, provider, settings);
+  const capabilities = getProviderModelAddCapabilities(settings, model);
+  const primaryType = settings.primaryType ?? getProviderModelPrimaryType(capabilities, model);
+  const pricingDraft = settings.pricing ?? createModelPricingDraft(model.pricing);
+  const pricingErrors = settings.pricing
+    ? buildModelPricing(settings.pricing, model.pricing).errors
+    : [];
+  const supportsStreaming = settings.supportsStreaming ?? model.supportsStreaming;
+  const hasPricingErrors = pricingErrors.some((tier) => Object.keys(tier).length > 0);
+  const limitError =
+    !patch && draft.name.trim() ? t('settings.provider.models.form.invalidLimits') : undefined;
   const isDirty =
     Object.keys(initial).some(
       (key) => initial[key as keyof ModelEditDraft] !== draft[key as keyof ModelEditDraft],
-    ) || endpoint !== initialEndpoint;
+    ) || !deepEqual(initialSettings, settings);
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: isDirty,
     isSaving,
   });
   const setField = (field: keyof ModelEditDraft, value: string) =>
     setDraft((current) => ({ ...current, [field]: value }));
+  function updateCapability(capability: ProviderModelAddCapability, selected: boolean) {
+    setSettings((current) => {
+      const overrides = { ...current.capabilities };
+      const inherited = getProviderModelAddCapabilities(
+        createInitialProviderModelAddFormState(),
+        model,
+      )[capability];
+      if (selected === inherited) delete overrides[capability];
+      else overrides[capability] = selected;
+      return { ...current, capabilities: overrides };
+    });
+  }
   const save = async () => {
-    if (!patch || !isDirty || isSaving) return;
+    if (!patch || !settingsResult.patch || !isDirty || savingRef.current) return;
+    Keyboard.dismiss();
+    savingRef.current = true;
     setIsSaving(true);
     try {
       await mutation.trigger({
         params: { uniqueModelId: model.id },
         body: {
           ...patch,
-          ...(endpoint !== initialEndpoint
-            ? { endpointTypes: endpoint === PROVIDER_DEFAULT_ENDPOINT_SELECTION ? [] : [endpoint] }
-            : {}),
+          ...settingsResult.patch,
         },
       });
       await refreshProviderModelQueries(queryClient, provider.id);
@@ -92,10 +129,29 @@ function ModelEditor({ model, provider }: { model: Model; provider: Provider }) 
     } catch {
       toast.show({ label: t('settings.provider.models.detail.saveFailed'), variant: 'danger' });
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
-  const endpointOptions = getProviderModelEndpointOptions(provider, t);
+  const endpointOptions: { value: ProviderModelAddEndpoint; label: string }[] = [
+    { value: 'auto' as const, label: t('settings.provider.models.addEndpointAuto') },
+    ...getProviderModelAddEndpointOptions(provider).map(({ id, labelKey }) => ({
+      value: id,
+      label: t(labelKey),
+    })),
+  ];
+  if (
+    settings.endpointType !== 'auto' &&
+    !endpointOptions.some(({ value }) => value === settings.endpointType)
+  ) {
+    endpointOptions.push({
+      value: settings.endpointType,
+      label: t(getProviderModelEndpointLabelKey(settings.endpointType)),
+    });
+  }
+  const endpointLabel =
+    endpointOptions.find((option) => option.value === settings.endpointType)?.label ??
+    t('settings.provider.models.endpoint.unavailable');
   return (
     <>
       <RouteHeader
@@ -107,85 +163,161 @@ function ModelEditor({ model, provider }: { model: Model; provider: Provider }) 
             key: 'save-model',
             label: t(isSaving ? 'common.saving' : 'common.save'),
             accessibilityLabel: t('common.save'),
-            disabled: !isDirty || !patch || isSaving,
+            disabled: !isDirty || !patch || !settingsResult.patch || isSaving,
             onPress: () => void save(),
           },
         ]}
       />
       <KeyboardAwareScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 20 }}
+        bottomOffset={16}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 32 }}
         contentInsetAdjustmentBehavior="automatic"
         disableScrollOnKeyboardHide
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         mode="layout"
       >
-        <View className="gap-5">
-          <Text className="font-mono text-muted-foreground text-sm">{model.modelId}</Text>
-          <Text className="text-foreground-tertiary text-sm">
-            {t('settings.provider.models.detail.identityReadOnly', { provider: provider.name })}
-          </Text>
-          {(['name', 'group', 'notes'] as const).map((field) => (
-            <TextField key={field}>
-              <TextField.Label>{t(`settings.provider.models.detail.${field}`)}</TextField.Label>
-              <Input
-                accessibilityLabel={t(`settings.provider.models.detail.${field}`)}
-                disabled={isSaving}
-                value={draft[field]}
-                onChangeText={(value) => setField(field, value)}
-              />
-            </TextField>
-          ))}
-          {isTextGenerationModel(model) && getProviderChatEndpointTypes(provider).length > 0 ? (
-            <SelectField
-              accessibilityLabel={t('settings.provider.models.detail.endpoint')}
+        <View className="gap-4">
+          <View className="gap-1">
+            <Text selectable className="font-mono text-sm text-foreground">
+              {model.modelId}
+            </Text>
+            <Text className="text-muted-foreground text-xs">{provider.name}</Text>
+          </View>
+          <TextField disabled={isSaving} required invalid={!draft.name.trim()}>
+            <TextField.Label>{t('settings.provider.models.detail.name')}</TextField.Label>
+            <Input
+              accessibilityLabel={t('settings.provider.models.detail.name')}
+              autoCorrect={false}
+              returnKeyType="done"
+              value={draft.name}
+              onChangeText={(value) => setField('name', value)}
+            />
+            <TextField.Error>
+              {!draft.name.trim() ? t('settings.provider.models.form.nameRequired') : undefined}
+            </TextField.Error>
+          </TextField>
+          <Section>
+            <ProviderModelTypeField
+              value={primaryType}
               disabled={isSaving}
-              onPress={() => setIsEndpointOpen(true)}
-            >
-              <SelectField.Label>{t('settings.provider.models.detail.endpoint')}</SelectField.Label>
-              <SelectField.Value>
-                <SelectField.ValueText>
-                  {endpointOptions.find((option) => option.value === endpoint)?.label ??
-                    t('settings.provider.models.endpoint.unavailable')}
-                </SelectField.ValueText>
-              </SelectField.Value>
-            </SelectField>
-          ) : null}
-          <Button
-            variant="ghost"
-            accessibilityState={{ expanded: isAdvancedOpen }}
-            onPress={() => setIsAdvancedOpen((value) => !value)}
+              onChange={(type) =>
+                setSettings((current) =>
+                  changeProviderModelPrimaryType(current, type, provider, model),
+                )
+              }
+            />
+            <Section.SelectItem
+              label={t('settings.provider.models.addEndpointTypeLabel')}
+              accessibilityLabel={`${t('settings.provider.models.addEndpointTypeLabel')}, ${endpointLabel}`}
+              value={
+                <Text className="text-base text-foreground" numberOfLines={2}>
+                  {endpointLabel}
+                </Text>
+              }
+              disabled={isSaving}
+              onPress={() => {
+                Keyboard.dismiss();
+                setIsEndpointOpen(true);
+              }}
+            />
+            {settingsResult.error &&
+            !(
+              hasPricingErrors &&
+              settingsResult.error === 'settings.provider.models.pricing.invalidFields'
+            ) ? (
+              <Text className="px-4 pb-4 text-error text-sm">{t(settingsResult.error)}</Text>
+            ) : null}
+          </Section>
+          <ProviderModelClassificationFields
+            capabilities={capabilities}
+            disabled={isSaving}
+            requiresImageInput={Boolean(
+              settings.endpointType === initialSettings.endpointType
+                ? model.endpointTypes?.includes(ENDPOINT_TYPE.OPENAI_IMAGE_EDIT)
+                : settings.endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+            )}
+            supportsStreaming={supportsStreaming}
+            onCapabilityChange={updateCapability}
           >
-            {t('settings.provider.models.detail.advanced')}
-          </Button>
-          {isAdvancedOpen
-            ? modelLimitFields.map((field) => (
+            <Section.SwitchItem
+              disabled={isSaving}
+              label={t('settings.provider.models.supportsStreaming')}
+              value={supportsStreaming}
+              onValueChange={(value) =>
+                setSettings((current) => ({
+                  ...current,
+                  supportsStreaming: value === model.supportsStreaming ? undefined : value,
+                }))
+              }
+            />
+          </ProviderModelClassificationFields>
+          <ProviderModelFormSection
+            title={t('settings.provider.models.form.limits')}
+            errorMessage={limitError}
+            disabled={isSaving}
+          >
+            <View className="gap-4 px-4 pb-4">
+              {modelLimitFields.map((field) => (
                 <ProviderModelNumberField
                   key={field}
                   label={t(`settings.provider.models.detail.${field}`)}
                   disabled={isSaving}
                   value={draft[field]}
                   onChangeText={(value) => setField(field, value)}
-                  placeholder={t('settings.provider.models.detail.unknown')}
+                  placeholder={t('settings.provider.models.detail.useDefault')}
                 />
-              ))
-            : null}
-          {!patch ? (
-            <Text className="text-error text-sm">
-              {t('settings.provider.models.detail.invalidFields')}
-            </Text>
-          ) : null}
+              ))}
+            </View>
+          </ProviderModelFormSection>
+          <ProviderModelPricingFields
+            draft={pricingDraft}
+            errors={pricingErrors}
+            disabled={isSaving}
+            onChange={(pricing) =>
+              setSettings((current) => ({
+                ...current,
+                pricing: deepEqual(pricing, createModelPricingDraft(model.pricing))
+                  ? undefined
+                  : pricing,
+              }))
+            }
+          />
+          <ProviderModelFormSection
+            title={t('settings.provider.models.form.organization')}
+            summary={draft.group.trim() || draft.notes.trim() || undefined}
+            disabled={isSaving}
+          >
+            <View className="gap-4 px-4 pb-4">
+              {(['group', 'notes'] as const).map((field) => (
+                <TextField key={field} disabled={isSaving}>
+                  <TextField.Label>{t(`settings.provider.models.detail.${field}`)}</TextField.Label>
+                  <Input
+                    accessibilityLabel={t(`settings.provider.models.detail.${field}`)}
+                    autoCapitalize={field === 'group' ? 'none' : 'sentences'}
+                    autoCorrect={field === 'notes'}
+                    multiline={field === 'notes'}
+                    placeholder={t('settings.provider.models.form.optional')}
+                    value={draft[field]}
+                    onChangeText={(value) => setField(field, value)}
+                  />
+                </TextField>
+              ))}
+            </View>
+          </ProviderModelFormSection>
         </View>
       </KeyboardAwareScrollView>
       {isEndpointOpen ? (
-        <OptionPickerBottomSheet<ProviderModelEndpointSelection>
+        <OptionPickerBottomSheet<ProviderModelAddEndpoint>
           open
           onClose={() => setIsEndpointOpen(false)}
           title={t('settings.provider.models.endpoint.title')}
           options={endpointOptions}
-          selectedValue={endpoint}
-          onValueChange={setEndpoint}
+          selectedValue={settings.endpointType}
+          onValueChange={(endpointType) =>
+            setSettings((current) => changeProviderModelEndpoint(current, endpointType, model))
+          }
           size="compact"
         />
       ) : null}
