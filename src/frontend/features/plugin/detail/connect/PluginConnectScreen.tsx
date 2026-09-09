@@ -16,7 +16,6 @@ import {
   type PluginId,
 } from '@/shared/contracts/plugins';
 
-import { PluginIcon } from '../../components/PluginIcon';
 import { PLUGIN_LINKS } from '../../pluginCatalog';
 import { useRefreshPluginConnections } from '../../usePluginConnections';
 
@@ -79,21 +78,15 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
       <RouteHeader title={t('plugins.connectTitle', { name })} />
       <KeyboardAwareScrollView
         className="flex-1 bg-background"
-        contentContainerClassName="gap-7 px-6 py-6"
+        contentContainerClassName="gap-6 px-6 py-6"
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         bottomOffset={keyboardBottomOffset}
         testID="plugin-connect"
       >
-        <View className="gap-4">
-          <PluginIcon pluginId={pluginId} size="large" />
-          <Text className="text-2xl font-semibold text-foreground">
-            {t('plugins.connectTitle', { name })}
-          </Text>
-          <Text className="text-base text-muted-foreground">
-            {t(`plugins.catalog.${pluginId}.setup`)}
-          </Text>
-        </View>
+        <Text className="text-base text-muted-foreground">
+          {t(`plugins.catalog.${pluginId}.setup`)}
+        </Text>
         <View className="gap-4">
           <TextField invalid={invalid} disabled={isConnecting}>
             <TextField.Label>{t(`plugins.catalog.${pluginId}.credentialLabel`)}</TextField.Label>
@@ -129,7 +122,6 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
         <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
         <Button
           size="lg"
-          shape="pill"
           loading={isConnecting}
           disabled={!credential.trim()}
           onPress={() => void connect()}

@@ -16,11 +16,11 @@ export function PluginIcon({
     <View
       className={
         size === 'large'
-          ? 'size-18 items-center justify-center rounded-2xl bg-secondary'
-          : 'size-14 items-center justify-center rounded-2xl bg-secondary'
+          ? 'size-12 items-center justify-center'
+          : 'size-10 items-center justify-center'
       }
     >
-      <Icon className={size === 'large' ? 'size-10 text-foreground' : 'size-7 text-foreground'} />
+      <Icon className={size === 'large' ? 'size-9 text-foreground' : 'size-7 text-foreground'} />
     </View>
   );
 }
