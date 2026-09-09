@@ -23,7 +23,7 @@ export function Switch({
       accessibilityRole="switch"
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
-      hitSlop={8}
+      hitSlop={14}
       onPress={handlePress}
       testID={testID}
     >

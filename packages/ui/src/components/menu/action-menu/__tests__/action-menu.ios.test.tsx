@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ActionMenu } from '../action-menu';
+import { ActionMenu } from '../action-menu.ios';
 
 type NativeMenuProps = {
   children?: ReactNode;
@@ -24,7 +24,7 @@ jest.mock('react-native-nitro-modules', () => {
   };
 });
 
-describe('ActionMenu', () => {
+describe('ActionMenu.ios', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {

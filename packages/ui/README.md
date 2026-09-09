@@ -189,7 +189,8 @@ the at-bottom state and the one-shot scroll action:
 />;
 ```
 
-`Alert` is the shared native dialog primitive. Mount one provider at the application root and
+`Alert` is the shared dialog primitive. Android uses a Cherry-styled dialog with a bounded,
+scrollable body and full-width actions; iOS keeps its native alert. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
 confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:
 
@@ -269,9 +270,13 @@ value and persistence. The default grouped `Section` supplies its surface and se
 </Section>
 ```
 
-`Switch` and `Slider` keep one controlled CherryUI contract while private platform adapters render
-native SwiftUI controls on iOS and native Android controls on Android. Feature code never imports a
-platform UI SDK or branches on the operating system. Web keeps the CherryUI fallback controls.
+`Switch` and `Slider` keep one controlled CherryUI contract. Android and Web render Cherry-owned
+controls: a circular switch thumb on a green or neutral track, and a thin slider track with a larger
+touchable thumb. iOS retains its private SwiftUI adapters. Android no longer resolves native switch
+or slider adapters. Feature code never imports a platform UI SDK or branches on the operating system.
+The desktop component library informs the geometry and hierarchy; colors continue to come from
+Mobile's theme-aware tokens. `Tabs` on Android follows the same neutral inset selection treatment,
+with content-driven height and labels that scale and wrap.
 
 `Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
 press target and switch accessibility node; its trailing switch is a package-private visual
@@ -439,8 +444,8 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
-`ActionMenu` and `ContextMenu` are the shared native action menus. Each accepts one trigger element
-and a flat, stable `items` array; the package owns Nitro wiring, native action dispatch, and the
+`ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
+and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
 component instead of configuring a trigger:
 
@@ -475,8 +480,10 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMenuInteraction`, while
-Android uses `PopupMenu`. Each keeps the system style for destructive items. Expo Router page
+unchanged. iOS uses `UIMenu` / `UIContextMenuInteraction`. Android uses one Cherry-styled popover
+surface for both triggers, with theme-aware destructive text, checkmarks, 48-point minimum rows,
+wrapping labels, bounded scrolling, safe-area positioning, outside-tap dismissal, and system back
+handling. Selecting an enabled action closes the menu before running its callback. Expo Router page
 previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing an Android `ContextMenu` in one
@@ -492,8 +499,9 @@ target.
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
 on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
 ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
-gesture arena, so committed scrolling and pan gestures cancel it, and the native view only presents
-the already-arbitrated menu. Recognition timing and touch slop come from Android
+gesture arena, so committed scrolling and pan gestures cancel it. The existing native view remains
+an invisible system-configuration bridge with no menu items; it never presents `PopupMenu`.
+Recognition timing and touch slop come from Android
 `ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
 are also exposed as accessibility custom actions on the trigger child, so the contextual operations
 do not depend on long press; iOS accessibility stays with the system interaction. Verify changed

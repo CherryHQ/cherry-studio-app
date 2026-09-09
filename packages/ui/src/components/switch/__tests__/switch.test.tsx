@@ -1,7 +1,12 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
+
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = jest.requireActual('tailwind-merge');
+  return { cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')) };
+});
 
 jest.mock('../switch-control', () => {
   const React = jest.requireActual('react');
@@ -11,21 +16,6 @@ jest.mock('../switch-control', () => {
     SwitchControl: (props: object) =>
       React.createElement(View, { ...props, mockComponent: 'switch-control' }),
   };
-});
-
-jest.mock('heroui-native', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
-
-  function Switch(props: object) {
-    return React.createElement(View, { ...props, mockComponent: 'hero-switch' });
-  }
-
-  Switch.Thumb = function SwitchThumb(props: object) {
-    return React.createElement(View, { ...props, mockComponent: 'hero-switch-thumb' });
-  };
-
-  return { Switch };
 });
 
 const { SwitchControl: FallbackSwitchControl } = jest.requireActual('../switch-control.tsx') as {
@@ -40,80 +30,55 @@ describe('Switch', () => {
     renderer = undefined;
   });
 
-  test('maps the shared API to the Cherry visual control', () => {
+  test('exposes controlled switch state and requests the opposite value on press', () => {
     const onValueChange = jest.fn();
-    const style = { opacity: 0.8 };
 
     act(() => {
       renderer = create(
         <FallbackSwitchControl
           accessibilityLabel="Airplane mode"
           onValueChange={onValueChange}
-          style={style}
-          testID="airplane-mode"
           value
         />,
       );
     });
 
-    const control = renderer!.root.findByProps({ mockComponent: 'hero-switch' });
-    const thumb = renderer!.root.findByProps({ mockComponent: 'hero-switch-thumb' });
-
+    const control = renderer!.root.findByType(Pressable);
     expect(control.props).toMatchObject({
       accessibilityLabel: 'Airplane mode',
-      className: 'h-6 w-12',
-      hitSlop: 8,
-      isDisabled: false,
-      isSelected: true,
-      style,
-      testID: 'airplane-mode',
+      accessibilityRole: 'switch',
+      accessibilityState: { checked: true, disabled: false },
     });
-    expect(thumb.props.className).toBe('h-5 w-7');
 
-    act(() => control.props.onSelectedChange(false));
+    act(() => control.props.onPress());
     expect(onValueChange).toHaveBeenCalledWith(false);
+    expect(control.props.accessibilityState.checked).toBe(true);
   });
 
-  test.each([
-    { root: 'h-5 w-10', size: 'sm', thumb: 'h-4 w-6' },
-    { root: 'h-6 w-12', size: 'default', thumb: 'h-5 w-7' },
-    { root: 'h-7 w-14', size: 'lg', thumb: 'h-6 w-8' },
-  ] as const)('renders the $size size', ({ root, size, thumb }) => {
+  test('keeps a disabled indicator hidden from touch and accessibility', () => {
     act(() => {
       renderer = create(
         <FallbackSwitchControl
-          accessibilityLabel="Airplane mode"
-          onValueChange={jest.fn()}
-          size={size}
-          value
-        />,
-      );
-    });
-
-    expect(renderer!.root.findByProps({ mockComponent: 'hero-switch' }).props.className).toBe(root);
-    expect(renderer!.root.findByProps({ mockComponent: 'hero-switch-thumb' }).props.className).toBe(
-      thumb,
-    );
-  });
-
-  test('maps disabled state to the visual control', () => {
-    act(() => {
-      renderer = create(
-        <FallbackSwitchControl
-          accessibilityLabel="Airplane mode"
+          accessibilityElementsHidden
           disabled
-          onValueChange={jest.fn()}
+          importantForAccessibility="no-hide-descendants"
+          pointerEvents="none"
           value={false}
         />,
       );
     });
 
-    const control = renderer!.root.findByProps({ mockComponent: 'hero-switch' });
-
-    expect(control.props.isDisabled).toBe(true);
+    expect(renderer!.root.findByType(Pressable).props).toMatchObject({
+      accessibilityElementsHidden: true,
+      accessibilityState: { checked: false, disabled: true },
+      disabled: true,
+      importantForAccessibility: 'no-hide-descendants',
+      onPress: undefined,
+      pointerEvents: 'none',
+    });
   });
 
-  test('owns the press and keeps the native control presentational', () => {
+  test('owns the press and keeps the control presentational', () => {
     const onValueChange = jest.fn();
     const stopPropagation = jest.fn();
 
@@ -146,7 +111,7 @@ describe('Switch', () => {
     expect(pressOwner.props).toMatchObject({
       accessibilityState: { checked: true, disabled: false },
       disabled: false,
-      hitSlop: 8,
+      hitSlop: 14,
       testID: 'airplane-mode',
     });
     expect(interactionShield.props.accessible).toBe(false);

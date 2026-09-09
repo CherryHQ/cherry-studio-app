@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 
-/** Semantic leading glyph; the native view owns each platform's artwork. */
+/** Semantic leading glyph; the menu implementation owns its artwork. */
 export type MenuIcon = 'branch';
 
 export type MenuItem = Readonly<{
