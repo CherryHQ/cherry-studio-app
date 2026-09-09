@@ -61,6 +61,7 @@ export type CreateProviderInput = {
 type ProviderInputWithoutOrderKey = Omit<InsertUserProviderRow, 'orderKey'>;
 export type UpdateProviderInput = {
   apiFeatures?: Partial<RuntimeApiFeatures> | null;
+  apiKeys?: ApiKeyEntry[];
   authConfig?: AuthConfig | null;
   defaultChatEndpoint?: InsertUserProviderRow['defaultChatEndpoint'] | null;
   endpointConfigs?: EndpointConfigs | null;
@@ -545,6 +546,9 @@ export class ProviderService {
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
     const updates: Partial<InsertUserProviderRow> = {};
 
+    if (input.apiKeys !== undefined) {
+      updates.apiKeys = normalizeApiKeys(input.apiKeys);
+    }
     if (input.apiFeatures !== undefined) {
       updates.apiFeatures = input.apiFeatures;
     }

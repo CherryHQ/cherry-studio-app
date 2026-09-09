@@ -30,6 +30,7 @@ const followingModel: Model = {
 };
 let mockModels: Model[] = [];
 const mockSave = jest.fn();
+const mockReplaceApiKeys = jest.fn();
 const mockConfirm = jest.fn();
 const mockAlert = jest.fn();
 const mockToast = jest.fn();
@@ -57,7 +58,7 @@ jest.mock('../useProviderApiServiceQueries', () => ({
     authConfigQuery: { isPending: false, isError: false },
     isSaving: false,
     saveProviderMutation: { mutateAsync: mockSave },
-    replaceApiKeysMutation: { mutateAsync: jest.fn() },
+    replaceApiKeysMutation: { mutateAsync: mockReplaceApiKeys },
   }),
 }));
 jest.mock('../../../components/ProviderForm', () => ({
@@ -135,14 +136,45 @@ describe('shared provider configuration saves', () => {
   it('retains the draft and prevents continuation when persistence fails', async () => {
     const onSaved = jest.fn();
     mockSave.mockRejectedValue(new Error('write failed'));
-    act(() => configuration.form.actions.setName('Unsaved'));
+    act(() => {
+      configuration.form.actions.setName('Unsaved');
+      configuration.form.actions.setApiKey('sk-new');
+    });
     await act(async () => {
       configuration.requestSave(onSaved);
     });
     expect(configuration.form.state.name).toBe('Unsaved');
+    expect(configuration.form.state.apiKey).toBe('sk-new');
+    expect(mockReplaceApiKeys).not.toHaveBeenCalled();
     expect(configuration.form.meta.isDirty).toBe(true);
     expect(configuration.isSaving).toBe(false);
     expect(onSaved).not.toHaveBeenCalled();
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'danger' }));
+  });
+
+  it('submits changed endpoints and keys together before clearing the draft', async () => {
+    act(() => {
+      configuration.form.actions.setEndpointUrl(
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        'https://new.example.com/v1',
+      );
+      configuration.form.actions.setApiKey('sk-new');
+    });
+
+    await act(async () => configuration.requestSave());
+
+    expect(mockSave).toHaveBeenCalledTimes(1);
+    expect(mockSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeys: [expect.objectContaining({ key: 'sk-new', isEnabled: true })],
+        endpointConfigs: expect.objectContaining({
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
+            baseUrl: 'https://new.example.com/v1',
+          }),
+        }),
+      }),
+    );
+    expect(mockReplaceApiKeys).not.toHaveBeenCalled();
+    expect(configuration.form.meta.isDirty).toBe(false);
   });
 });
