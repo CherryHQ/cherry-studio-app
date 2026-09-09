@@ -75,7 +75,7 @@ export function MessagePartProcess({
           <MessagePartDisclosureIcon isOpen={isOpen} />
         </View>
       </MessagePartStatus>
-      <MessagePartCollapsible className="gap-4" isOpen={isOpen} testID={`${testID}-detail`}>
+      <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-detail`}>
         <MessagePartStatusDensityScope density="compact">{children}</MessagePartStatusDensityScope>
       </MessagePartCollapsible>
     </View>

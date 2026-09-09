@@ -182,6 +182,28 @@ const fileProcessParts: CherryMessagePart[] = [
   { state: 'done', text: '已完成游戏页面，并修复结束状态的绘制逻辑。', type: 'text' },
 ];
 
+const readFileProcessParts: CherryMessagePart[] = Array.from(
+  { length: 3 },
+  (_, index): CherryMessagePart[] => [
+    { state: 'done', text: '检查文件中的状态保存逻辑。', type: 'reasoning' },
+    { state: 'done', text: '\n', type: 'text' },
+    {
+      input: { file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID },
+      output: {
+        filename: 'game.html',
+        lineCount: 40,
+        startLine: index * 40 + 1,
+        totalLines: 120,
+        status: 'ok',
+      },
+      state: 'output-available',
+      toolCallId: `file-process-read-${index}`,
+      toolName: 'read_file',
+      type: 'dynamic-tool',
+    },
+  ],
+).flat();
+
 const editFileParts: CherryMessagePart[] = [
   {
     input: {
@@ -381,6 +403,22 @@ export const messageExamples: readonly MessageExample[] = [
     message: createMessage('assistant-edit-file', 'assistant', editFileParts),
   },
   {
+    label: 'Reasoning and file reads — live process spacing',
+    message: createMessage(
+      'assistant-read-process-live',
+      'assistant',
+      readFileProcessParts,
+      'pending',
+    ),
+  },
+  {
+    label: 'Reasoning and file reads — expand completed process',
+    message: createMessage('assistant-read-process-complete', 'assistant', [
+      ...readFileProcessParts,
+      { state: 'done', text: '已找到问题，接下来修复状态保存逻辑。', type: 'text' },
+    ]),
+  },
+  {
     label: 'File generation — live preview',
     message: createMessage(
       'assistant-file-streaming',
@@ -416,6 +454,19 @@ export const messageExamples: readonly MessageExample[] = [
       ],
       'pending',
     ),
+  },
+  {
+    label: 'File generation — complete minified source in a capped viewport',
+    message: createMessage('assistant-file-minified-complete', 'assistant', [
+      {
+        input: { filename: 'game.js', content: 'requestAnimationFrame(loop);'.repeat(4_000) },
+        output: { filename: 'game.js', status: 'created' },
+        state: 'output-available',
+        toolCallId: 'file-minified-complete-write',
+        toolName: 'write_file',
+        type: 'dynamic-tool',
+      },
+    ]),
   },
   {
     label: 'File generation — expand process to inspect step spacing',

@@ -1,4 +1,4 @@
-import { getFileToolContent } from '../fileToolContentPresentation';
+import { getFileToolContent, splitFileToolContent } from '../fileToolContentPresentation';
 import type { ToolMessagePart } from '../toolPartState';
 
 function tool(input: Partial<ToolMessagePart> = {}): ToolMessagePart {
@@ -61,13 +61,39 @@ test('retains the visible partial content after an interrupted call', () => {
   ).toMatchObject({ text: 'partial', isStreaming: false });
 });
 
-test('bounds final/history content and classifies Markdown as prose', () => {
+test('preserves the full completed content beyond the streaming preview budget', () => {
+  const text = 'body\n'.repeat(10_000);
   const content = getFileToolContent(
     tool({
-      state: 'input-available',
-      input: { filename: 'report.md', content: 'body\n'.repeat(10_000) },
+      state: 'output-available',
+      input: { filename: 'report.md', content: text },
     }),
   );
-  expect(content).toMatchObject({ truncated: true, isCode: false });
-  expect(content?.text.length).toBeLessThanOrEqual(8_192);
+  expect(content).toMatchObject({ text, truncated: false, isCode: false, isStreaming: false });
+});
+
+test('keeps short completed content in one naturally sized block', () => {
+  expect(splitFileToolContent('first\nsecond')).toEqual([{ offset: 0, text: 'first\nsecond' }]);
+});
+
+test.each([
+  ['multiline', '  line\n'.repeat(10_000)],
+  ['minified', 'const value = 1;'.repeat(10_000)],
+  ['blank lines', '\n'.repeat(100)],
+  ['Windows line endings', `${'x'.repeat(1_023)}\r\n`.repeat(10)],
+  ['surrogate pairs', `${'x'.repeat(1_023)}🚀`.repeat(10)],
+])('chunks %s without dropping or reordering content', (_name, text) => {
+  const chunks = splitFileToolContent(text);
+  expect(chunks.map((chunk) => chunk.text).join('')).toBe(text);
+  let offset = 0;
+  for (const chunk of chunks) {
+    expect(chunk.offset).toBe(offset);
+    expect(chunk.text.length).toBeGreaterThan(0);
+    expect(chunk.text.length).toBeLessThanOrEqual(1_024);
+    expect(chunk.text.match(/\n/g)?.length ?? 0).toBeLessThanOrEqual(16);
+    expect(chunk.text).not.toMatch(/^[\uDC00-\uDFFF]/);
+    expect(chunk.text).not.toMatch(/[\uD800-\uDBFF]$/);
+    expect(chunk.text).not.toMatch(/\r$/);
+    offset += chunk.text.length;
+  }
 });

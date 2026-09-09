@@ -87,12 +87,20 @@ stay in their own message parts and are never duplicated in the tool sheet. A su
 may summarize user-facing metadata such as its filename and size, but it does not expose internal
 entry ids or repeat the file body.
 
-Inline file content is a passive generation indicator. While input streams, it shows four stable
-line slots containing the latest source text, with a small per-line character budget and no Markdown
-parsing or syntax highlighting. It does not select text, open links, or own a scroll gesture; the
-message list owns scrolling across it. The preview text is hidden from accessibility navigation
-because the tool summary already announces its state. Once input generation ends, the preview
-disappears and only the filename remains alongside the tool's result or execution status.
+Inline file content uses lightweight, read-only text without Markdown parsing or syntax highlighting.
+During generation, four stable line slots show the latest source text with a small per-line character
+budget. This live preview passes gestures to the message list and stays out of accessibility
+navigation because the tool summary already announces its state.
+
+Once input generation ends, completed arguments supply the full content in a height-capped scroll
+area. Long content uses virtualized text chunks with character and line budgets, so even minified
+files do not create one unbounded native text layout. Chunks preserve the full source and stable
+offset keys; only the viewport height is capped. Short content sizes naturally up to the same cap.
+The finished content supports scrolling and accessibility reading without selection, copying,
+editing, or link actions. Dragging it detaches the message list from live-edge following through
+the same reading-interaction boundary used by inline disclosures. If an interrupted call has no
+complete input, only its retained partial preview is available; completed input always takes
+precedence over that fallback.
 
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
@@ -104,6 +112,10 @@ views must use `MessagePart.Detail`. The source group stays out of layout while 
 streaming and appears once the message reaches any terminal status. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
+
+A process uses tighter internal spacing than the separation between the process and the answer,
+both during streaming and when expanded after completion. Settled blank text parts are excluded
+from the visual partition so they cannot insert empty layout rows between status summaries.
 
 A manual inline disclosure toggle is a reading interaction. Before changing local disclosure state,
 the part adapter notifies the list scroll controller, which leaves live-edge following and cancels
