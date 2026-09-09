@@ -22,9 +22,9 @@ type EffortSliderTrackProps = {
 };
 
 /**
- * A 64dp opaque capsule surrounds a 44dp brand progress pill. The capsule and
+ * A 64dp opaque capsule surrounds a 44dp primary progress pill. The capsule and
  * exposed ticks follow the active theme. The thumb sits inside the progress end
- * cap, leaving its four-pixel brand ring visible at the endpoints.
+ * cap, leaving its four-pixel primary ring visible at the endpoints.
  */
 export function EffortSliderTrack({
   trackHeight,
@@ -32,8 +32,14 @@ export function EffortSliderTrack({
   position,
   measuredWidth,
 }: EffortSliderTrackProps) {
-  const [brandColor, trackColor, trackForegroundColor, constantBlack, constantWhite] =
-    useThemeColor(['brand', 'popover', 'popover-foreground', 'constant-black', 'constant-white']);
+  const [primaryColor, primaryForegroundColor, trackColor, trackForegroundColor, constantBlack] =
+    useThemeColor([
+      'primary',
+      'primary-foreground',
+      'popover',
+      'popover-foreground',
+      'constant-black',
+    ]);
   const scale = trackHeight / effortSliderTrackHeight;
   const progressHeight = effortSliderProgressHeight * scale;
   const thumbInset = effortSliderThumbInset * scale;
@@ -81,7 +87,7 @@ export function EffortSliderTrack({
           className="absolute overflow-hidden rounded-full"
           style={[
             {
-              backgroundColor: brandColor,
+              backgroundColor: primaryColor,
               height: progressHeight,
               left: progressInset,
               top: (trackHeight - progressHeight) / 2,
@@ -98,7 +104,7 @@ export function EffortSliderTrack({
                 key={fraction}
                 className="rounded-full"
                 style={{
-                  backgroundColor: constantWhite,
+                  backgroundColor: primaryForegroundColor,
                   height: tickSize,
                   left: centerX - tickSize / 2,
                   opacity: 0.16,
@@ -115,7 +121,7 @@ export function EffortSliderTrack({
         className="absolute rounded-full"
         style={[
           {
-            backgroundColor: constantWhite,
+            backgroundColor: primaryForegroundColor,
             elevation: 1,
             height: thumbSize,
             left: 0,

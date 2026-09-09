@@ -27,9 +27,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
   const { resumeKeyboardTracking } = useComposerPresentationActions();
-  // `brand`, not `primary`: the product colour is a promise, while `primary` is
-  // a slot the user may get to repaint.
-  const brand = useThemeColor('brand');
+  const linkColor = useThemeColor('link');
 
   const handlePaste = useCallback(
     (payload: PasteEventPayload) => {
@@ -44,10 +42,10 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   // creates any other kind, and auto-detection is off — so the base `link`
   // style is set alongside the variant rather than left to the library's blue.
   const markdownStyle = useMemo(() => {
-    const mentionStyle = { color: brand, underline: false };
+    const mentionStyle = { color: linkColor, underline: false };
 
     return { link: mentionStyle, linkVariants: { '^tool:': mentionStyle } };
-  }, [brand]);
+  }, [linkColor]);
 
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
     // Focus is the only event that is allowed to reconnect the dock after a
