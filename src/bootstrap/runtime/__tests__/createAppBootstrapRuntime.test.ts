@@ -11,6 +11,7 @@ const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
+const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
@@ -75,6 +76,7 @@ const createRuntime = () =>
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     DbService: mockDb,
+    DesktopConnectionRuntime: mockDesktopConnections,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -116,6 +118,7 @@ describe('createAppBootstrapRuntime', () => {
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
+      desktopConnections: mockDesktopConnections,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,
     });

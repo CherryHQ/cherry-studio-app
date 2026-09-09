@@ -3,6 +3,7 @@ import type { AgentSessionMessageSchemas } from './agentSessionMessages';
 import type { AgentSessionSchemas } from './agentSessions';
 import type { AgentToolBindingSchemas } from './agentToolBindings';
 import type { AiUsageRecordSchemas } from './aiUsageRecords';
+import type { DesktopConnectionSchemas } from './desktopConnections';
 import type { FileSchemas } from './files';
 import type { JobSchemas } from './jobs';
 import type { McpServerSchemas } from './mcpServers';
@@ -16,6 +17,7 @@ export type ApiSchemas = AgentSchemas &
   AgentSessionMessageSchemas &
   AgentSessionSchemas &
   AiUsageRecordSchemas &
+  DesktopConnectionSchemas &
   FileSchemas &
   JobSchemas &
   McpServerSchemas &
