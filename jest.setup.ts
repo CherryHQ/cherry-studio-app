@@ -42,6 +42,45 @@ jest.mock('expo-observe', () => ({
 // "display radius unknown" answer, which every caller already handles.
 jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
 
+// expo-media-library subclasses its native module's `Asset`/`Query` at import
+// time, and jest-expo's native stub has neither, so any suite reaching
+// DevicePermissions (through the service registry) throws without this. The
+// stub mirrors the surface the app uses; suites that assert on it install
+// their own factory.
+jest.mock('expo-media-library', () => {
+  const undetermined = { granted: false, status: 'undetermined', canAskAgain: true };
+  return {
+    Asset: class MockAsset {
+      static async create(): Promise<void> {}
+      async getUri(): Promise<string> {
+        return '';
+      }
+    },
+    AssetField: { CREATION_TIME: 'creationTime', MEDIA_TYPE: 'mediaType' },
+    MediaType: { IMAGE: 'image' },
+    Query: class MockQuery {
+      eq(): this {
+        return this;
+      }
+      orderBy(): this {
+        return this;
+      }
+      limit(): this {
+        return this;
+      }
+      offset(): this {
+        return this;
+      }
+      async exeForMetadata(): Promise<never[]> {
+        return [];
+      }
+    },
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    getPermissionsAsync: jest.fn(async () => undetermined),
+    requestPermissionsAsync: jest.fn(async () => undetermined),
+  };
+});
+
 // The library resolves its native module at import time. Its own jest entry is
 // the sanctioned stand-in and keeps the hooks/event emitters callable, which the
 // chat list needs the moment it imports KeyboardEvents.
