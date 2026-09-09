@@ -6,6 +6,7 @@ export type SidebarActions = {
   openLibrary: () => void;
   openPaintings: () => void;
   openSettings: () => void;
+  openSearch: () => void;
   startNewChat: () => void;
 };
 

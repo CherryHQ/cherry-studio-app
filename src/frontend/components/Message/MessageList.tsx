@@ -27,9 +27,13 @@ export function MessageList({
   enteringMessageId,
   extraData,
   initialLayoutReady = true,
+  initialScrollTarget,
+  hasNewerMessages = false,
   keyboardOffset,
   messages,
   onLoadOlder,
+  onLoadNewer,
+  onReturnToLatest,
   onReady,
   renderMessage,
 }: MessageListProps) {
@@ -49,12 +53,16 @@ export function MessageList({
     handleTouchStart,
     isFollowing,
   } = useMessageListScrollController({
+    contentTopInset,
     dataKey,
     enteringMessageId,
     initialLayoutReady,
+    initialScrollTarget,
+    hasNewerMessages,
     listRef,
     messages,
     onReady,
+    onReturnToLatest,
   });
   const isAtBottom = useSharedValue(true);
   const contentHeightRef = useRef({ dataKey, height: 0 });
@@ -129,6 +137,9 @@ export function MessageList({
     void onLoadOlder();
   }, [onLoadOlder]);
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
+  const handleEndReached = useCallback(() => {
+    void onLoadNewer?.();
+  }, [onLoadNewer]);
 
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
@@ -168,6 +179,8 @@ export function MessageList({
               onScroll={handleScroll}
               onStartReached={onLoadOlder ? handleStartReached : undefined}
               onStartReachedThreshold={0.05}
+              onEndReached={hasNewerMessages ? handleEndReached : undefined}
+              onEndReachedThreshold={0.3}
               // Message parts own local disclosure state. Keep recycling disabled
               // until that state is explicitly reset with LegendList recycling hooks.
               recycleItems={false}
@@ -185,7 +198,10 @@ export function MessageList({
             accessibilityLabel={t('chat.message.scrollToBottom')}
             bottomAccessoryHeight={bottomAccessoryHeight}
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-            isAtBottom={!isContentScrollable || isNativeAtBottomForButton || isFollowing}
+            isAtBottom={
+              !hasNewerMessages &&
+              (!isContentScrollable || isNativeAtBottomForButton || isFollowing)
+            }
             // The press only enters following mode, which already hides the
             // button. Mirroring an optimistic at-end state here would stick at
             // `true` whenever the scroll does not actually land at the end.

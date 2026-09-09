@@ -37,3 +37,10 @@ composer isolates its pending work and prevents a late completion from navigatin
 
 The visible, focused chat acknowledges the current completed turn through `useSessionReadReceipt`.
 Previews, an open drawer, and background routes do not clear the list's unread completion indicator.
+
+Search results may specify a message destination. `useAgentMessageHistoryWindow` opens a bounded
+window around that message and supports pagination in both directions. It shows the full target
+window rather than trimming it to the usual recent-message render window. Until its newer edge
+reaches the live transcript, the workspace excludes live rows to avoid displaying a false contiguous
+history. Sending or pressing return-to-latest replaces the window with the latest messages.
+Message navigation leaves composer identity tied to the Session.

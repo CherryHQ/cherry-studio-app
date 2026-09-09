@@ -8,6 +8,23 @@ function createService(handlers: Record<string, Record<string, jest.Mock>>) {
 }
 
 describe('DataApiService', () => {
+  it('cancels reads before dispatch and propagates cancellation into an active handler', async () => {
+    const controller = new AbortController();
+    const get = jest.fn(async ({ signal }) => {
+      expect(signal).toBe(controller.signal);
+      controller.abort();
+      return { items: [] };
+    });
+    const service = createService({ '/agent-sessions': { GET: get } });
+    await expect(
+      service.get('/agent-sessions', { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      service.get('/agent-sessions', { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
   it('receives published changes until its subscriber unsubscribes', () => {
     const service = createService({});
     const listener = jest.fn();

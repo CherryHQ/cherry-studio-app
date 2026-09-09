@@ -6,6 +6,7 @@ import { View } from 'react-native';
 import { useStartNewChat } from '@/frontend/appShell/navigation/chat';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
+import { useSessionSearch } from '../hooks/useSessionSearch';
 import { SidebarBody } from './SidebarBody';
 import { SidebarFooter } from './SidebarFooter';
 import { SidebarHeader } from './SidebarHeader';
@@ -25,10 +26,15 @@ type SidebarProps = {
 function SidebarRoot({ children, navigation }: SidebarProps) {
   const router = useRouter();
   const startNewChat = useStartNewChat();
+  const openSessionSearch = useSessionSearch();
 
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
+      openSearch: () => {
+        navigation.closeDrawer();
+        openSessionSearch();
+      },
       navigateAgents: () => {
         navigation.closeDrawer();
         router.push('/agents');
@@ -50,7 +56,7 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         void startNewChat();
       },
     }),
-    [navigation, router, startNewChat],
+    [navigation, openSessionSearch, router, startNewChat],
   );
 
   return (

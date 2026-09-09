@@ -36,9 +36,15 @@ export type MessageListProps = {
   enteringMessageId?: string;
   extraData?: unknown;
   initialLayoutReady?: boolean;
+  /** Applied once per dataKey, before restoring a saved reading position. */
+  initialScrollTarget?: 'end' | { messageId: string };
+  /** The loaded window ends before the current conversation's live edge. */
+  hasNewerMessages?: boolean;
   keyboardOffset: number;
   messages: readonly MessageListItem[];
   onLoadOlder?: () => Promise<void>;
+  onLoadNewer?: () => Promise<void>;
+  onReturnToLatest?: () => void;
   onReady?: () => void;
   renderMessage: MessageRenderer;
 };

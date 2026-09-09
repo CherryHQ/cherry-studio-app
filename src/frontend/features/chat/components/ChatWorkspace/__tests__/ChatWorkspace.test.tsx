@@ -240,8 +240,11 @@ function createWorkspaceElement(
       isAssistantToolbarEnabled={!isPreview}
       keyboardOffset={isPreview ? 0 : 26}
       messageWindow={{
+        hasNewerMessages: false,
         isLoadingInitial,
+        isLoadingNewer: false,
         isLoadingOlder: true,
+        loadNewer: mockLoadOlder,
         loadOlder: mockLoadOlder,
         messages,
         retry: mockRetry,
@@ -306,8 +309,11 @@ describe('ChatWorkspace message rendering integration', () => {
       isAssistantToolbarEnabled: false,
       keyboardOffset: 26,
       messageWindow: {
+        hasNewerMessages: false,
         isLoadingInitial: true,
+        isLoadingNewer: false,
         isLoadingOlder: false,
+        loadNewer: mockLoadOlder,
         loadOlder: mockLoadOlder,
         messages: [],
         retry: mockRetry,

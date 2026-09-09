@@ -124,6 +124,12 @@ describe('bundled SQLite migrations', () => {
         'files',
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
+      expect(
+        database
+          .prepare("PRAGMA index_info('agent_session_message_created_id_idx')")
+          .all()
+          .map((column) => column.name),
+      ).toEqual(['created_at', 'id']);
 
       // Agent persistence (docs/references/agent/agent-persistence.md): four
       // tables, no turn or pending-approval table, no workspace or runtime id.

@@ -10,6 +10,7 @@ import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import {
   createAgentMessageListProjectionCache,
@@ -67,7 +68,20 @@ export function ChatWorkspace({
   isAssistantToolbarEnabled,
   sessionId,
 }: ChatWorkspaceProps) {
-  const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
+  const {
+    dataKey,
+    error,
+    hasNewerMessages,
+    initialScrollTarget,
+    isLoadingInitial,
+    isLoadingOlder,
+    isLoadingNewer,
+    loadOlder,
+    loadNewer,
+    messages,
+    returnToLatest,
+    retry,
+  } = messageWindow;
   const live = useAgentChatSession(sessionId);
   const listKey = sessionId ?? pendingSend?.sessionId;
   const client = useAgentChatActions();
@@ -81,8 +95,8 @@ export function ChatWorkspace({
     }
   }, [client, messages, sessionId]);
   const mergedMessages = useMemo(
-    () => mergeAgentMessageViews(messages, live.liveMessages),
-    [live.liveMessages, messages],
+    () => (hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages)),
+    [hasNewerMessages, live.liveMessages, messages],
   );
   useEffect(() => {
     if (
@@ -215,15 +229,16 @@ export function ChatWorkspace({
     }
   }, [client, sessionId, t, toast]);
   const requiresInitialHistoryLayout =
-    Boolean(sessionId) &&
-    !pendingSend?.isNewSession &&
-    shouldWaitForInitialHistoryLayout({
-      hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
-      isLoadingInitial,
-      messageCount: messages.length,
-    });
+    typeof initialScrollTarget === 'object' ||
+    (Boolean(sessionId) &&
+      !pendingSend?.isNewSession &&
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
+        isLoadingInitial,
+        messageCount: messages.length,
+      }));
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey: listKey,
+    renderGateKey: dataKey ?? listKey,
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(
@@ -247,7 +262,19 @@ export function ChatWorkspace({
       <View className="flex-1 justify-center px-8 py-16">
         <ContentState.Error
           primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
-          title={t('chat.history.loadFailed')}
+          secondaryAction={
+            returnToLatest
+              ? {
+                  children: t('chat.history.returnToLatest'),
+                  onPress: returnToLatest,
+                }
+              : undefined
+          }
+          title={t(
+            error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+              ? 'chat.history.messageUnavailable'
+              : 'chat.history.loadFailed',
+          )}
         />
       </View>
     );
@@ -255,7 +282,7 @@ export function ChatWorkspace({
 
   return (
     <View className="flex-1 bg-chat-background">
-      <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
+      <ChatOlderMessagesIndicator isLoading={isLoadingOlder || isLoadingNewer} />
       <AssistantMessageActionsProvider
         key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
@@ -264,13 +291,17 @@ export function ChatWorkspace({
         <MessageList
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
-          dataKey={listKey}
+          dataKey={dataKey ?? listKey}
           enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
           extraData={messageListExtraData}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+          initialScrollTarget={initialScrollTarget}
+          hasNewerMessages={hasNewerMessages}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}
+          onLoadNewer={loadNewer}
+          onReturnToLatest={returnToLatest}
           onReady={markListLoaded}
           renderMessage={renderChatMessage}
         />

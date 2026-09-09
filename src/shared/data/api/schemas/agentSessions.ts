@@ -11,6 +11,8 @@ export type AgentSessionEntity = z.infer<typeof AgentSessionEntitySchema>;
 
 export const ListAgentSessionsQuerySchema = z.strictObject({
   agentId: z.string().min(1).optional(),
+  /** Literal substring of the conversation title, across the complete collection. */
+  q: z.string().trim().min(1).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
 });
