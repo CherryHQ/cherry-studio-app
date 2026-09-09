@@ -55,8 +55,7 @@ export function SidebarBody({ children }: PropsWithChildren) {
             <ScrollView
               {...scrollHandlers}
               contentContainerStyle={{
-                // Clears the whole floating dock, whose own bottom padding is
-                // concentric with the display's corners rather than a fixed inset.
+                // Clears the floating dock at its shared composer-aligned position.
                 paddingBottom: dockBottomPadding + appSidebar.dockHeight + appSidebar.headerGapY,
                 paddingTop: headerInset,
               }}

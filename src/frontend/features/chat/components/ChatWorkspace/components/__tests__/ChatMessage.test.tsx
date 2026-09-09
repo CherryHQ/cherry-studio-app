@@ -81,7 +81,7 @@ describe('ChatMessage', () => {
     expect(mockContextMenu).not.toHaveBeenCalled();
   });
 
-  test('shows the model identity and local creation time for the individual message', () => {
+  test('shows the local creation time separately from the model identity', () => {
     act(() => {
       renderer = create(
         renderMessage({
@@ -97,7 +97,7 @@ describe('ChatMessage', () => {
       );
     });
 
-    expect(renderer?.root.findByProps({ testID: 'assistant-message-time' }).props.children).toBe(
+    expect(renderer?.root.findByProps({ testID: 'chat-message-time' }).props.children).toBe(
       '08/28 15:02',
     );
     expect(
@@ -116,6 +116,7 @@ function renderMessage(message: MessageListItem, isMessageActionsEnabled = true)
       assistantPresentation={{ name: 'Assistant' }}
       isMessageActionsEnabled={isMessageActionsEnabled}
       message={message}
+      shouldShowTimestamp
     />
   );
 }

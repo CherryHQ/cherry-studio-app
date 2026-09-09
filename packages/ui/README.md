@@ -565,6 +565,10 @@ const dock = useComposerDockLayout();
 </Composer.Dock>;
 ```
 
+`getComposerActionCenterOffset(bottomInset)` exposes the toolbar action center's distance from the
+screen bottom with the keyboard closed, so adjacent controls can align without duplicating composer
+padding.
+
 `Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
 what it does — the model in use, a mode. Same height and material, but sized to its label, and it is
 the one thing in the row that can be arbitrarily wide, so it is also the one thing that gives: it

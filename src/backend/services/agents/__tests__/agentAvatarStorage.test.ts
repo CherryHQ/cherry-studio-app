@@ -81,11 +81,18 @@ describe('replaceAgentAvatar', () => {
     ).resolves.toBe(`agent-avatar-file:${STORED_NAME}`);
   });
 
-  it('has nothing to drop for an agent that had no avatar', async () => {
+  it.each([null, '🍒'])('has no previous file to drop for avatar %s', async (previousAvatar) => {
     const images = createImages();
 
-    await replaceAgentAvatar(images, AGENT_ID, sourceUri, null, async (avatar) => avatar);
+    const persisted = await replaceAgentAvatar(
+      images,
+      AGENT_ID,
+      sourceUri,
+      previousAvatar,
+      async (avatar) => avatar,
+    );
 
+    expect(persisted).toBe(`agent-avatar-file:${STORED_NAME}`);
     expect(images.remove).not.toHaveBeenCalled();
   });
 });
