@@ -40,14 +40,6 @@ The `development-simulator` EAS profile builds an ARM64 development client: the 
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
 not an installable physical-device IPA.
 
-### iOS Preview
-
-Captured from the development client. The floating gear belongs to Expo developer tools.
-
-| Directory | GitHub detail | Amap detail (dark) |
-| --- | --- | --- |
-| ![Plugins directory](./assets/plugins-list-light.png) | ![GitHub plugin detail](./assets/plugins-github-light.png) | ![Amap plugin detail in dark appearance](./assets/plugins-amap-dark.png) |
-
 ## Outcome And Scope
 
 Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, chooses
