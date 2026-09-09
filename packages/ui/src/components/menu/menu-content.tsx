@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '../../utils';
 import type { MenuItem } from './menu.types';
 
-/** Shared product surface for tap and long-press menus, sized for fingers and scalable text. */
+/** Android context-menu surface, sized for fingers and scalable text. */
 export function MenuContent({ items }: { items: readonly MenuItem[] }) {
   const { isOpen } = usePopover();
   return isOpen ? <OpenMenuContent items={items} /> : null;

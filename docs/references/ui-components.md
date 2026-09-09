@@ -7,12 +7,9 @@ feature component into the package.
 
 ## The Platform Rule
 
-Android product controls use CherryUI-owned presentation as the stable visual baseline. Switches,
-sliders, tabs, alerts, and action/context menus take their colors, geometry, and typography from the
-product design system, with desktop-informed hierarchy and mobile touch targets. Operating-system
-appearance is not the presentation contract for these Android controls. Existing iOS native
-adapters remain supported. System permission prompts, share sheets, file/photo pickers, keyboard,
-and navigation lifecycle still belong to the operating system.
+Android `Switch`, `Slider`, and `ContextMenu` use CherryUI-owned presentation with desktop-informed
+geometry and mobile touch targets. Their existing iOS native adapters remain supported. This
+product-control choice does not change the presentation of other component families.
 
 One rule governs every platform decision:
 
@@ -181,7 +178,8 @@ behavior or presentation where it differs:
 | Window insets | layout and spacing rules | safe-area and system-bar inset values |
 | Share and pickers | trigger and surrounding product flow | share sheet, photo picker, and document picker |
 | File preview | metadata, loading, error, and fallback states | Quick Look or the available Android viewer |
-| Product alerts and action or context menus | semantic content, actions, roles, state, and Android CherryUI presentation | iOS native presentation; Android system long-press configuration and back handling |
+| System alerts and action menus | semantic content, actions, roles, and state | native presentation, dismissal, and gesture dispatch |
+| Context menus | semantic content, actions, roles, state, and Android CherryUI presentation | iOS native presentation; Android long-press configuration and back handling |
 | Permissions | pre-permission explanation and denied-state recovery | the system authorization prompt |
 | Haptics and accessibility | intent, labels, state, and reduced-motion behavior | supported feedback and accessibility APIs |
 

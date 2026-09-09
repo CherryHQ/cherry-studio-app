@@ -3,40 +3,31 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Alert } from '../components/alert/alert.android';
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ bottom: 24, left: 0, right: 0, top: 24 }),
-}));
-
 jest.mock('heroui-native', () => {
-  const React = jest.requireActual('react');
-  const { Text, View } = jest.requireActual('react-native');
+  const React = require('react');
+  const { Text, View } = require('react-native');
 
   function Dialog(props: object) {
     return React.createElement(View, { ...props, mockComponent: 'hero-dialog' });
   }
 
-  Dialog.Portal = function Portal(props: object) {
-    return React.createElement(View, { ...props, mockComponent: 'hero-dialog-portal' });
-  };
-  Dialog.Overlay = function Overlay(props: object) {
-    return React.createElement(View, { ...props, mockComponent: 'hero-dialog-overlay' });
-  };
-  Dialog.Content = function Content(props: object) {
-    return React.createElement(View, { ...props, mockComponent: 'hero-dialog-content' });
-  };
-  Dialog.Title = function Title(props: object) {
-    return React.createElement(Text, { ...props, mockComponent: 'hero-dialog-title' });
-  };
-  Dialog.Description = function Description(props: object) {
-    return React.createElement(Text, { ...props, mockComponent: 'hero-dialog-description' });
-  };
+  Dialog.Portal = (props: object) =>
+    React.createElement(View, { ...props, mockComponent: 'hero-dialog-portal' });
+  Dialog.Overlay = (props: object) =>
+    React.createElement(View, { ...props, mockComponent: 'hero-dialog-overlay' });
+  Dialog.Content = (props: object) =>
+    React.createElement(View, { ...props, mockComponent: 'hero-dialog-content' });
+  Dialog.Title = (props: object) =>
+    React.createElement(Text, { ...props, mockComponent: 'hero-dialog-title' });
+  Dialog.Description = (props: object) =>
+    React.createElement(Text, { ...props, mockComponent: 'hero-dialog-description' });
 
   return { Dialog };
 });
 
 jest.mock('../../button', () => {
-  const React = jest.requireActual('react');
-  const { Pressable, Text } = jest.requireActual('react-native');
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
 
   function Button({ children, ...props }: { children?: React.ReactNode }) {
     return React.createElement(
@@ -50,8 +41,8 @@ jest.mock('../../button', () => {
 });
 
 jest.mock('../../input', () => {
-  const React = jest.requireActual('react');
-  const { TextInput } = jest.requireActual('react-native');
+  const React = require('react');
+  const { TextInput } = require('react-native');
 
   return {
     Input: (props: object) =>
@@ -60,8 +51,8 @@ jest.mock('../../input', () => {
 });
 
 jest.mock('../../text-field', () => {
-  const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
+  const React = require('react');
+  const { View } = require('react-native');
 
   return {
     TextField: (props: object) =>
@@ -124,7 +115,7 @@ describe('Alert (Android)', () => {
 
     const button = renderer!.root.findByProps({ mockComponent: 'cherry-button' });
 
-    expect(button.props.size).toBe('default');
+    expect(button.props.size).toBe('sm');
     expect(button.props.variant).toBe('destructive');
     act(() => button.props.onPress());
     expect(order).toEqual(['action', 'close']);

@@ -93,11 +93,10 @@ describe('Tabs.android', () => {
       'Messages',
       'Settings',
     ]);
-    for (const label of renderer.root.findAllByType(Text)) {
-      expect(label.props.allowFontScaling).not.toBe(false);
-      expect(label.props.maxFontSizeMultiplier).toBeUndefined();
-      expect(label.props.numberOfLines).toBeUndefined();
-    }
+    expect(renderer.root.findAllByType(Text).map((label) => label.props.sourceClassName)).toEqual([
+      'text-xs',
+      'text-xs',
+    ]);
 
     act(() => root.props.onValueChange('settings'));
     expect(onValueChange).toHaveBeenCalledWith('settings');
@@ -143,14 +142,14 @@ describe('Tabs.android', () => {
     expect(renderer.root.findAllByProps({ testID: 'hug-tabs' }).at(-1)?.props.sourceClassName).toBe(
       'gap-0 self-start',
     );
-    expect(list.props.sourceClassName).toContain('self-start');
+    expect(list.props.sourceClassName).toBe('h-[34px] self-start rounded-[17px]');
     // No `flex-1`: a hugging trigger is as wide as its own label.
     expect(
       items.map(
         (item) =>
           triggers.find((trigger) => trigger.props.value === item.value)?.props.sourceClassName,
       ),
-    ).toEqual([expect.not.stringContaining('flex-1'), expect.not.stringContaining('flex-1')]);
+    ).toEqual(['h-7 px-4 py-0', 'h-7 px-4 py-0']);
   });
 
   it('renders custom children with the current item state', () => {

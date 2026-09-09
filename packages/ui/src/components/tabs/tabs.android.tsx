@@ -27,11 +27,11 @@ export function Tabs<TValue extends string>({
       <HeroTabs.List
         className={
           isHug
-            ? 'self-start rounded-lg bg-secondary p-1'
-            : 'w-full self-stretch rounded-lg bg-secondary p-1'
+            ? 'h-[34px] self-start rounded-[17px]'
+            : 'h-[34px] w-full self-stretch rounded-[17px]'
         }
       >
-        <HeroTabs.Indicator className="rounded-md border border-border bg-background shadow-none" />
+        <HeroTabs.Indicator />
         {items.map((item) => {
           const isSelected = item.value === value;
           const customContent =
@@ -44,12 +44,8 @@ export function Tabs<TValue extends string>({
               accessibilityLabel={item.label}
               accessibilityRole="tab"
               accessibilityState={{ disabled: item.disabled, selected: isSelected }}
-              className={
-                isHug
-                  ? 'min-h-10 shrink rounded-md px-4 py-2'
-                  : 'min-h-10 min-w-0 flex-1 rounded-md px-2 py-2'
-              }
-              hitSlop={{ bottom: 4, top: 4 }}
+              className={isHug ? 'h-7 px-4 py-0' : 'h-7 flex-1 px-1 py-0'}
+              hitSlop={{ bottom: 5, top: 5 }}
               isDisabled={item.disabled}
               key={item.value}
               testID={item.testID}
@@ -59,11 +55,11 @@ export function Tabs<TValue extends string>({
                 customContent
               ) : (
                 <HeroTabs.Label
-                  className={
-                    isSelected
-                      ? 'shrink text-center font-medium text-foreground text-sm'
-                      : 'shrink text-center font-medium text-muted-foreground text-sm'
-                  }
+                  adjustsFontSizeToFit
+                  className="text-xs"
+                  maxFontSizeMultiplier={1.2}
+                  minimumFontScale={0.9}
+                  numberOfLines={1}
                 >
                   {item.label}
                 </HeroTabs.Label>
