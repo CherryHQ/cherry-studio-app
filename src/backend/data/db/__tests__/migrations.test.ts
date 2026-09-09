@@ -6,6 +6,58 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('requires renewed Agent consent for official cloud tools while retaining grants and custom MCP settings', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(({ tag }) => tag === '0021_official-cloud-plugins');
+      expect(target).toBeGreaterThan(0);
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+        VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'github-secret', 1, 1),
+               ('amap-grant', 'amap', 'api_key', 'Web Service', 'amap-secret', 1, 1);
+        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, is_active, created_at, updated_at)
+        VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', 1, 1, 1),
+               ('amap-server', 'Amap', 'builtin', 'amap', 'amap-grant', 1, 1, 1);
+        INSERT INTO mcp_server (id, name, base_url, headers, is_active, created_at, updated_at)
+        VALUES ('custom-server', 'Custom', 'https://custom.example/mcp', '{"Authorization":"custom-secret"}', 1, 1, 1);
+        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, raw_tool_name, enabled, approval, created_at, updated_at)
+        VALUES ('github-default', 'agent', 'mcp', 'github-server', NULL, 1, 'auto', 1, 1),
+               ('github-tool', 'agent', 'mcp', 'github-server', 'create_issue', 0, 'deny', 1, 1),
+               ('amap-default', 'agent', 'mcp', 'amap-server', NULL, 1, 'ask', 1, 1),
+               ('custom-default', 'agent', 'mcp', 'custom-server', NULL, 1, 'auto', 1, 1);
+      `);
+      const grants = database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all();
+      const servers = database.prepare('SELECT * FROM mcp_server ORDER BY id').all();
+      const bindings = database.prepare('SELECT * FROM agent_tool_binding ORDER BY id').all();
+      database.exec('BEGIN IMMEDIATE');
+      applyMigrationSql(database, entries[target].sql);
+      database.exec('COMMIT');
+      expect(database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all()).toEqual(
+        grants,
+      );
+      expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
+      expect(database.prepare('SELECT * FROM agent_tool_binding ORDER BY id').all()).toEqual(
+        bindings.map((binding) =>
+          binding.mcp_server_id === 'custom-server'
+            ? binding
+            : {
+                ...binding,
+                enabled: 0,
+                updated_at: expect.any(Number),
+              },
+        ),
+      );
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds plugin authorization inside a transaction without changing existing MCP credentials or bindings', () => {
     const database = new DatabaseSync(':memory:');
     try {

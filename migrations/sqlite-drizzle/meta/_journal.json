@@ -148,6 +148,13 @@
       "when": 1788949862518,
       "tag": "0020_plugin-authorizations",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788966000000,
+      "tag": "0021_official-cloud-plugins",
+      "breakpoints": true
     }
   ]
 }

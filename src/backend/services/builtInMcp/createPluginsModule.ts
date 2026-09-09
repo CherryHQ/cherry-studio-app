@@ -2,8 +2,7 @@ import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthor
 import { ConnectPluginSchema, PluginError, type PluginsModule } from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
-import { createAmapClient } from './providers/amap';
-import { createGitHubClient } from './providers/github';
+import { validatePluginCredential } from './createBuiltInMcpClient';
 
 export function createPluginsModule(runtime: {
   invalidateServer(id: string): void;
@@ -24,15 +23,11 @@ export function createPluginsModule(runtime: {
       const parsed = ConnectPluginSchema.parse(input);
       return serialize(parsed.pluginId, async () => {
         signal?.throwIfAborted();
-        let accountLabel: string;
-        if (parsed.pluginId === 'github') {
-          accountLabel = (
-            await createGitHubClient(async () => parsed.credential).getAccount(signal)
-          ).login;
-        } else {
-          await createAmapClient(async () => parsed.credential).validateCredential(signal);
-          accountLabel = 'Web Service';
-        }
+        const accountLabel = await validatePluginCredential(
+          parsed.pluginId,
+          parsed.credential,
+          signal,
+        );
         signal?.throwIfAborted();
         let connection: Awaited<ReturnType<typeof pluginAuthorizationService.connect>>;
         try {

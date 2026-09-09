@@ -3,8 +3,7 @@ import { createPluginsModule } from '../createPluginsModule';
 const mockConnect = jest.fn();
 const mockDisconnect = jest.fn();
 const mockList = jest.fn();
-const mockGetAccount = jest.fn();
-const mockValidateAmap = jest.fn();
+const mockValidateCredential = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
     connect: (...args: unknown[]) => mockConnect(...args),
@@ -12,11 +11,8 @@ jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
     listConnections: (...args: unknown[]) => mockList(...args),
   },
 }));
-jest.mock('../providers/github', () => ({
-  createGitHubClient: () => ({ getAccount: mockGetAccount }),
-}));
-jest.mock('../providers/amap', () => ({
-  createAmapClient: () => ({ validateCredential: mockValidateAmap }),
+jest.mock('../createBuiltInMcpClient', () => ({
+  validatePluginCredential: (...args: unknown[]) => mockValidateCredential(...args),
 }));
 
 const input = { pluginId: 'github' as const, credential: 'test-token' };
@@ -28,7 +24,7 @@ const connection = {
 };
 beforeEach(() => {
   jest.resetAllMocks();
-  mockGetAccount.mockResolvedValue({ login: 'cherry' });
+  mockValidateCredential.mockResolvedValue('cherry');
   mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
   mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
@@ -37,7 +33,7 @@ beforeEach(() => {
 it('validates credentials upstream before storing anything', async () => {
   const invalidateServer = jest.fn();
   const plugins = createPluginsModule({ invalidateServer });
-  mockGetAccount.mockRejectedValueOnce(new Error('invalid token'));
+  mockValidateCredential.mockRejectedValueOnce(new Error('invalid token'));
   await expect(plugins.connect(input)).rejects.toThrow('invalid token');
   expect(mockConnect).not.toHaveBeenCalled();
   mockConnect.mockRejectedValueOnce(new Error('storage error'));
@@ -63,10 +59,10 @@ it('invalidates the runtime only after the new grant commits', async () => {
 
 it('serializes disconnect behind an in-progress connect and leaves it disconnected', async () => {
   let finishValidation!: () => void;
-  mockGetAccount.mockImplementation(
+  mockValidateCredential.mockImplementation(
     () =>
       new Promise((resolve) => {
-        finishValidation = () => resolve({ login: 'cherry' });
+        finishValidation = () => resolve('cherry');
       }),
   );
   const operations: string[] = [];
@@ -90,9 +86,9 @@ it('serializes disconnect behind an in-progress connect and leaves it disconnect
 
 it('does not commit when the authorization form is cancelled after validation', async () => {
   const controller = new AbortController();
-  mockGetAccount.mockImplementation(async () => {
+  mockValidateCredential.mockImplementation(async () => {
     controller.abort();
-    return { login: 'cherry' };
+    return 'cherry';
   });
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   await expect(plugins.connect(input, controller.signal)).rejects.toThrow();

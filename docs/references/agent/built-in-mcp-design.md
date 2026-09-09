@@ -1,10 +1,11 @@
 # Built-In MCP Integrations
 
-> Status: GitHub and Amap are implemented on this branch. iOS acceptance covers both plugin UIs,
-> invalid credentials, and GitHub authorization, an approved model-driven `get_me` call, authorization
-> replacement, and disconnect. Amap acceptance with a valid Web Service key remains pending.
-> Canva, Gmail, Yuque, Feishu, and renewable OAuth authorization remain planned. The architecture
-> below includes that future scope; the first delivery is described separately here.
+> Status (2026-09-09): GitHub and Amap now connect directly to their official hosted MCP services.
+> Their handwritten business tools and in-process MCP transport have been removed. No self-hosting
+> is required. Coverage is based on official documentation/source, not authenticated cloud calls.
+> Regression tests are updated but not executed; the new cloud flow has no device acceptance yet.
+> Earlier iOS evidence belongs to the superseded local implementation. Canva, Gmail, Yuque, Feishu,
+> multiple accounts and renewable OAuth authorization remain planned.
 
 ## First Delivery: Plugins
 
@@ -15,8 +16,47 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 
 | Integration | Implemented authorization | Implemented tools |
 | --- | --- | --- |
-| GitHub | User-supplied personal access token, validated with `/user` | `get_me`, `search_repositories`, `search_issues`, `get_file_contents`, `list_pull_requests`, `get_issue`, `create_issue`, `add_issue_comment`, `create_pull_request` |
-| Amap | User-supplied Web Service key, validated with district lookup | `search_places`, `search_nearby`, `geocode`, `reverse_geocode`, `driving_route`, `walking_route`, `transit_route`, `weather`, `search_district` |
+| GitHub | User-supplied personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
+| Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
+
+### Official Cloud Coverage
+
+GitHub's hosted endpoint is `https://api.githubcopilot.com/mcp/`, authenticated with a Bearer token.
+Amap's is `https://mcp.amap.com/mcp?key=...`. Both use the existing SDK's Streamable HTTP transport.
+The Amap key is injected only when sending a request; the SDK endpoint and saved server identity
+contain no key. Routing is fixed in backend code and redirects cannot forward credentials elsewhere.
+GitHub also receives `X-MCP-Tools` for the admitted subset; Cherry enforces the allowlist locally for
+both services, independently of upstream behavior.
+
+| Former capability | Official replacement | Difference |
+| --- | --- | --- |
+| GitHub profile, repository search, file reads, PR listing | `get_me`, `search_repositories`, `get_file_contents`, `list_pull_requests` | Upstream schemas and result shapes |
+| GitHub issue/PR search | `search_issues`, `search_pull_requests` | Separate tools |
+| GitHub issue/PR detail | `issue_read`, `pull_request_read` | Upstream `method` selects the read operation |
+| GitHub issue creation | `issue_write` | Supports creation and updates; requires renewed Agent consent |
+| GitHub comments and PR creation | `add_issue_comment`, `create_pull_request` | Existing-branch PR workflow retained |
+| Amap place and nearby search | `maps_text_search`, `maps_around_search` | Former pagination inputs are not guaranteed |
+| Amap address/coordinate conversion | `maps_geo`, `maps_regeocode` | Upstream schemas and result shapes |
+| Amap driving, walking and transit | `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated` | Longitude-first GCJ-02 coordinates |
+| Amap weather | `maps_weather` | Forecast-oriented; no promise of the former live/forecast switch |
+| Amap administrative districts | None in the documented cloud catalog | Removed; no local REST fallback |
+
+This covers GitHub's previous workflows and eight of Amap's nine capability categories. The official
+catalogs own business behavior; Cherry does not translate old calls or duplicate their schemas.
+Newly published upstream tools require an explicit code admission decision. A missing or incompatible
+tool is unavailable, not an invitation to fall back to the deleted local implementation.
+
+Migration `0021_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
+credentials, server UUIDs, old per-tool selections, approval settings, disabled tools and history.
+Users review and re-enable access; old per-tool identities are not retargeted automatically. Custom
+MCP servers are unchanged. The plugin detail page explains the cloud destination and re-enable step.
+
+Sources: [GitHub remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md),
+[GitHub tools](https://github.com/github/github-mcp-server),
+[Amap hosted setup](https://lbs.amap.com/api/mcp-server/gettingstarted),
+[Amap capabilities](https://lbs.amap.com/api/mcp-server/summary). Amap's official
+`@amap/amap-maps-mcp-server@0.0.8` distribution corroborates tool names and forecast output; it is
+source evidence, not a bundled dependency or proof of live remote schema parity.
 
 The current `plugin_authorization` table stores the integration, static authorization method,
 account label, the credential as entered, and timestamps. The credential is not encrypted at rest:
@@ -35,41 +75,44 @@ Connection metadata is read through the Data API's `GET /plugin-connections` end
 `PluginsModule` workflow contract owns only connect and disconnect; shared plugin entities live
 under `shared/data/types`, and the MCP runtime's connection configuration remains backend-private.
 
-`BuiltInMcpTransport` speaks the installed SDK's in-process MCP contract. Provider adapters reuse
-the existing HTTP routes, bound response sizes and pagination, validate inputs, propagate cancellation,
-and do not retry writes. GitHub token permissions and Amap quota/access restrictions remain upstream
-authority. Amap coordinates are longitude-first GCJ-02; no device-location grant is requested.
+`createBuiltInMcpClient` creates an account-bound official HTTP client, rechecks the referenced grant
+before every network request, propagates cancellation, and does not replay writes. There is no
+transport-level `authProvider`, so a `401` cannot trigger a resend. HTTP errors expose only safe
+diagnostics; ambiguous submitted writes tell the caller to check GitHub before retrying. Input
+validation and result-size limits remain in the existing MCP runtime. GitHub token permissions and
+Amap quota/access restrictions remain upstream authority. No device-location grant is requested.
 
 The `development-simulator` EAS profile builds an ARM64 development client: the currently pinned
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
 not an installable physical-device IPA.
 
-## Outcome And Scope
+## Broader Roadmap And Scope
 
 Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, chooses
 which Agent may use it, and then uses its tools through ordinary conversation. The application owns
-authorization, credential renewal, platform requests, and tool execution on the device. No
+authorization and tool orchestration on the device; official MCP services execute their business
+tools remotely. Credential renewal belongs to future OAuth slices. No
 Cherry-operated authorization proxy, command-line program, local HTTP listener, or desktop process
 is required by this design.
 
-Five integrations execute bundled functions against official platform APIs. Canva is a bundled
-connector to the official remote MCP service. Both appear as built-in integrations and enter the
-existing MCP discovery, binding, approval, and result pipeline. Canva is an explicit upstream MCP
-dependency, not a claim that its Connect REST API supports a secretless mobile client.
+GitHub and Amap use official remote MCP services; Canva is planned to use the same route. Gmail,
+Yuque and Feishu retain their proposed direct-API designs pending a separate connector assessment.
+All enter the existing MCP discovery, binding, approval, and result pipeline. Canva is an explicit
+upstream MCP dependency, not a claim that its Connect REST API supports a secretless mobile client.
 
 The initial scope is:
 
 | Region | Integration ID | Initial useful tools | Execution and authorization |
 | --- | --- | --- | --- |
-| International | `github` | Search repositories; read files; list/read issues and pull requests; create issues and comments | Local functions and GitHub API. Device authorization is the intended login path; a personal token is an optional first implementation. [Authorization](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps) |
+| International | `github` | Search repositories; read files; list/read issues and pull requests; create/update issues and comments | Official hosted MCP with a personal token. Interactive authorization remains future work. [Remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) |
 | International | `canva` | Search/read designs; generate a candidate and create a design; export a design | Bundled remote MCP connector. Preserve upstream names such as `search-designs`, `get-design`, `generate-design`, `create-design-from-candidate`, and `export-design`. [Tool catalog](https://www.canva.dev/docs/mcp/tools/) |
 | International | `gmail` | Search messages; read threads; create drafts; send a draft; modify labels | Local functions and Gmail API, with separate iOS and Android authorization adapters. [Native OAuth](https://developers.google.com/identity/protocols/oauth2/native-app), [Android authorization](https://developer.android.com/identity/authorization) |
-| China | `amap` | Search places; search nearby; geocode; plan a route | Local functions and Web Service API, initially with a user-supplied service key. [Getting started](https://lbs.amap.com/api/webservice/gettingstarted) |
+| China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
 | China | `yuque` | Search/read documents; list knowledge books; create/update documents | Local functions and OpenAPI with a user-supplied personal or space token. [Official API client](https://github.com/yuque/yuque-open-cli/blob/main/README.zh-CN.md) |
 | China | `feishu` | Search/read documents; list/query/update Base records; query/create calendar events; create tasks | Local functions and OpenAPI. Adapt the official personal-agent authorization path, subject to mobile support and tenant policy. [Official authorization source](https://github.com/larksuite/cli/blob/main/internal/auth/app_registration.go) |
 
-Tool names for local integrations are Cherry-owned names, such as `search_repositories`,
-`read_document`, and `create_draft`; they are not API endpoint names. Full API coverage, local file
+Future local integrations may use Cherry-owned names such as `read_document` and `create_draft`;
+remote integrations preserve official names. Full API coverage, local file
 uploads/downloads, Feishu messaging, Canva editing transactions, and permanent deletion operations
 are later capability slices. All six platforms remain in the plan regardless of delivery order.
 
@@ -81,7 +124,7 @@ turn, and MCP tools already use `tool_search`, `tool_describe`, and `tool_call`.
 
 | Existing owner | Reuse | Required extension |
 | --- | --- | --- |
-| `McpRuntimeService` | Client lifetime, paginated discovery, invocation, invalidation and cancellation | Select a remote or bundled local connection; attach authorization without storing tokens in connection headers |
+| `McpRuntimeService` | Client lifetime, paginated discovery, invocation, invalidation and cancellation | Select a custom remote or fixed official cloud connection; attach authorization without storing tokens in connection headers |
 | `mcp_server` and `agent_tool_binding` | Server UUIDs, tool enablement, Agent bindings, approval and dangling identities | Add an explicit built-in server variant and its authorization reference; keep binding identities unchanged |
 | `mcpRuntimeAdapter` | Input validation, deterministic aliases, result bounds and Runtime callbacks | Replace its URL-only connection identity with a source-aware identity |
 | `MobileAgentHost` and Pi | Frozen catalog, approvals, events, transcript and deferred tool discovery | Consume the extended MCP catalog; no new conversation engine or separate discovery loop |
@@ -89,7 +132,7 @@ turn, and MCP tools already use `tool_search`, `tool_describe`, and `tool_call`.
 | SQLite and Data API | Serialized writes, migration delivery, typed public projections | One new authorization table and a credential-free read surface |
 
 The server schema and Runtime accept both remote HTTP endpoints and explicit built-in identities.
-`@ai-sdk/mcp@1.0.71` provides the custom `MCPTransport` used by GitHub and Amap. Its
+`@ai-sdk/mcp@1.0.71` provides the Streamable HTTP client used by GitHub and Amap. Its
 `OAuthClientProvider` remains a future integration point. The first delivery adds no native
 dependency for credential storage.
 
@@ -98,7 +141,7 @@ dependency for credential storage.
 ```mermaid
 flowchart TD
   Settings["Plugins: catalog and connected accounts"] --> Workflow["PluginsModule: connect and disconnect"]
-  Workflow --> Auth["PluginAuthorizationRuntime"]
+  Workflow --> Auth["PluginAuthorizationService"]
   Auth --> AuthTable["plugin_authorization: metadata and credentials"]
   Workflow --> Server["mcp_server: connected integration instance"]
   Server --> Binding["agent_tool_binding: Agent access"]
@@ -106,19 +149,16 @@ flowchart TD
   Host --> Pi["Pi: search, describe and call tools"]
   Pi --> Approval["Existing approval and execution boundary"]
   Approval --> MCP["McpRuntimeService"]
-  MCP --> Local["In-process MCP session"]
-  Local --> Platform["Bundled platform functions"]
-  Platform --> Auth
-  Platform --> HTTP["Existing HttpClient routes"]
-  HTTP --> API["Official platform APIs"]
-  MCP --> Remote["Existing streaming MCP transport"]
-  Remote --> Canva["Official Canva MCP"]
-  Remote --> Auth
+  MCP --> Client["Grant-bound official cloud client"]
+  Client --> Auth
+  Client --> Remote["SDK Streamable HTTP over expo/fetch"]
+  Remote --> GitHub["Official GitHub MCP"]
+  Remote --> Amap["Official Amap MCP"]
 ```
 
 There are three durable facts with different owners:
 
-1. A bundled definition describes an integration and the tools it implements. Definitions ship in
+1. A bundled definition describes an integration, its endpoint and admitted tools. Definitions ship in
    code and are not copied into a database catalog.
 2. An authorization records a particular account/grant and its credentials. It does not enable
    tools or assign them to Agents.
@@ -128,7 +168,10 @@ There are three durable facts with different owners:
 Connecting an account and enabling an integration for an Agent are separate actions. Settings may
 offer them together, but connecting never silently grants every Agent access.
 
-### In-Process MCP
+### Future Direct-API Integrations
+
+The following transport proposal is for unimplemented direct-API platforms only. GitHub and Amap
+do not use it; their former custom transport and business handlers have been deleted.
 
 For local integrations, extend the existing MCP client with an in-process transport backed by a
 bundled tool dispatcher. Preserve JSON-RPC messages, request correlation, initialization/version
@@ -184,7 +227,10 @@ the same grant does not invalidate the catalog. Settings edits apply to the next
 grant stops further calls in the current turn. An already submitted remote operation cannot be
 rolled back merely by cancelling locally.
 
-## Persistence
+## Persistence Roadmap
+
+The expanded schema and renewal behavior below remain proposed. The current static-credential
+schema and disconnect behavior are described under First Delivery above.
 
 ### Authorization Table
 
@@ -336,10 +382,11 @@ API endpoints. The single shared Axios transport remains the transport engine.
   mapping at the existing transport boundary. Amap coordinates explicitly identify their coordinate
   system and are converted before using APIs that require a different system.
 
-Canva's Streamable HTTP MCP traffic stays on the existing specialized `expo/fetch` MCP transport;
-it must not be forced through the non-streaming HTTP client. Inject current credentials through
-its account-bound fetch adapter. Use the SDK's `auth()` helper and `OAuthClientProvider` for the
-explicit connection session, with an HTTP-backed fetch adapter for ordinary OAuth metadata/form
+GitHub and Amap use the existing specialized `expo/fetch` MCP transport; planned Canva traffic
+follows the same boundary. Streamable HTTP must not be forced through the non-streaming HTTP client.
+Inject current credentials through the account-bound fetch adapter. For future OAuth connections,
+use the SDK's `auth()` helper and `OAuthClientProvider` for the explicit connection session, with an
+HTTP-backed fetch adapter for ordinary OAuth metadata/form
 requests. Retain the returned registration/issuer facts for the authorization runtime's renewal.
 
 Do not attach a second refresh owner to the active transport: the installed MCP SDK can recover
@@ -388,9 +435,10 @@ Provider annotations are descriptive hints, not authorization. User-selected aut
 can reduce routine prompts through the current mechanism; connecting an account does not itself
 grant automatic approval. The approval display must identify the connected account and target.
 
-Canva uses a reviewed subset of its discovered upstream tools, including prerequisite workflow
-tools such as candidate creation. Upstream names and schemas remain intact. New upstream tools do
-not become enabled merely because discovery starts returning them. Freeze the admitted catalog
+GitHub and Amap use a reviewed subset of discovered upstream tools; planned Canva admission must
+also include prerequisite workflow tools such as candidate creation. Upstream names and schemas
+remain intact. New upstream tools do not become enabled merely because discovery starts returning
+them. Freeze the admitted catalog
 for the turn; unavailable or incompatible tools are excluded with a visible capability reason.
 
 Version 1 returns JSON/text, remote IDs and URLs with `artifacts: []` through the existing MCP
@@ -411,19 +459,14 @@ src/backend/
     http/                                  existing non-streaming transport
     builtInMcp/
       index.ts                             deliberate public exports only
-      createBuiltInMcpModule.ts             connect/disconnect workflow composition
+      createPluginsModule.ts               current connect/disconnect workflow
+      createBuiltInMcpClient.ts             current GitHub/Amap cloud clients and admission
       builtInMcpRegistry.ts                 single bundled integration registry
       builtInMcpDefinition.ts               backend definition/handler contracts
       auth/
         PluginAuthorizationRuntime.ts      grant lifetime and shared renewal
-        PluginCredentialStore.ts           AES envelope and secure key adapter
         AuthorizationSession.ts            cancellable interactive auth attempt
       providers/
-        github/
-          definition.ts
-          GithubClient.ts                  platform API and response schemas
-          githubAuth.ts
-          tools.ts                         split by intent only when size warrants
         canva/
           definition.ts                    fixed remote endpoint and reviewed tools
           canvaAuth.ts                     MCP OAuth provider adapter
@@ -435,7 +478,6 @@ src/backend/
             gmailAuth.ts                   explicit unsupported fallback
             gmailAuth.ios.ts
             gmailAuth.android.ts
-        amap/                              definition.ts, AmapClient.ts, tools.ts
         yuque/                             definition.ts, YuqueClient.ts, tools.ts
         feishu/                            definition.ts, FeishuClient.ts, feishuAuth.ts, tools.ts
   ai/mcp/
@@ -480,7 +522,8 @@ never holds a concrete backend service.
 
 These gates qualify the implementation plan; they do not remove platforms from scope.
 
-- **GitHub:** enable device authorization on the registered application. Its token exchange does
+- **GitHub:** verify hosted MCP access with the supplied token and organization policy. Future
+  device authorization requires a registered application. Its token exchange does
   not require a shared client secret; the ordinary web flow currently does. Expiring device-flow
   grants can be refreshed. Device flow is documented for headless clients, so the mobile UX still
   needs acceptance. Do not silently substitute a confidential web flow.
@@ -498,7 +541,7 @@ These gates qualify the implementation plan; they do not remove platforms from s
   permissions require Google's review; sending restricted email data to a remote AI provider must
   be evaluated under the applicable data-use and assessment requirements even without a Cherry
   backend. [Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
-- **Amap:** verify the supplied Web Service key's API entitlement and applicable quota. Reuse the
+- **Amap:** verify the supplied Web Service key's hosted MCP access and applicable quota. Reuse the
   app's existing location permission/capability when current position is requested; explicit place
   searches do not require obtaining device position.
 - **Yuque:** verify token availability for the account and the correct personal/space API host.
@@ -519,8 +562,8 @@ state in settings. Do not present a platform as connected merely because its bun
 | Slice | Deliverable | Completion evidence to obtain during implementation |
 | --- | --- | --- |
 | A: Admission and contracts | Confirm six definitions, native redirect/client setup, Canva allowlist/CIMD requirements and Feishu authorization support | Recorded platform setup decisions; confirmed local transport and authorization contract compatibility |
-| B: Shared infrastructure and GitHub | Authorization schema; built-in server variant; local MCP transport; settings connection workflow; GitHub read tools and bounded writes | Existing remote MCP behavior preserved; account-bound Agent call works through normal discovery/approval/history |
-| C: Amap and Yuque | Reuse the same infrastructure for API-key and personal-token grants | Useful place/document workflows with pagination, bounded results and actionable credential failures |
+| B: Shared infrastructure and GitHub | Implemented static authorization, built-in server variant, official hosted MCP, plugin connection workflow and reviewed tools | Cloud-flow acceptance pending; account-bound Agent call through normal discovery/approval/history |
+| C: Amap and Yuque | Amap hosted MCP implemented; Yuque remains planned | Amap cloud-flow acceptance pending; future document workflows with bounded results and actionable credential failures |
 | D: Gmail and Feishu | Native/interactive authorization, renewal, account identity checks and selected business tools | Read/write permissions distinguished; renewal, revoked grants and platform-specific availability handled |
 | E: Canva | Bundled remote connection through the same authorization table, server identity and Agent bindings | Approved redirect setup; search/read and candidate-to-design/export workflows using admitted upstream tools |
 | F: Capability expansion | Explicitly selected extra tools and managed-file transfer where needed | Separate artifact/permission contracts before admitting uploads or local export attachments |
@@ -532,8 +575,8 @@ must not prevent the remaining catalog from working.
 
 Resolve enabled sources independently with bounded discovery and report an unavailable source
 without dropping healthy sources. Freeze the resulting catalog before the turn begins; a source
-that recovers later can join the next turn. Local tool listing needs no platform API request and
-must not refresh credentials just to display its bundled definitions.
+that recovers later can join the next turn. GitHub/Amap listing requires a network request to the
+official service. Future local listing should not refresh credentials merely to display definitions.
 
 During implementation, update all affected source contracts together: server schema/entity/DTOs,
 Data API handlers, binding resolution, connection identity comparison, descriptor projection,
@@ -560,7 +603,8 @@ Future verification should cover the owning behavior, following
   receive explicitly authorized iOS/Android acceptance. Long provider jobs respect the existing
   60-second call boundary; use separate status tools where the provider supports asynchronous jobs.
 
-Evidence for this design is repository source, installed dependency declarations and official
-platform documentation/source. No schema, runtime or platform implementation has been changed; no
-tests, builds, simulators, device actions or live account authorization have been run. Platform
-admission applications and static client-metadata publication have not been submitted.
+Evidence for the cloud migration is repository source, installed SDK declarations and official
+platform documentation/source. Code, a data migration and regression tests have been updated.
+Tests, builds, device actions and authenticated MCP calls have not been run for this migration;
+earlier local-plugin acceptance does not verify the replacement. Future platform admission
+applications and static client-metadata publication have not been submitted.

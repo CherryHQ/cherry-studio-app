@@ -5,7 +5,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
-import { createBuiltInMcpTransport } from '@/backend/services/builtInMcp';
+import { createBuiltInMcpClient, isBuiltInMcpToolAllowed } from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
   McpModule,
@@ -13,6 +13,7 @@ import type {
   McpServerRuntimeSummary,
   McpToolSummary,
 } from '@/shared/contracts';
+import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
@@ -136,11 +137,7 @@ function createMcpClient(
   signal: AbortSignal,
 ): Promise<MCPClient> {
   if (config.origin === 'builtin') {
-    return createMCPClient({
-      clientName: 'Cherry Studio',
-      initializationOptions: { signal },
-      transport: createBuiltInMcpTransport(config.builtinId, config.authorizationId),
-    });
+    return createBuiltInMcpClient(config.builtinId, config.authorizationId, signal);
   }
   const headers = normalizeMcpHeaders(config.headers);
   return createMCPClient({
@@ -164,7 +161,7 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
 }
 
 /**
- * Runtime MCP client manager for remote servers and in-process plugins.
+ * Runtime MCP client manager for custom servers and official cloud plugins.
  *
  * Every read fetches `tools/list` live, bounded by `TOOLS_FETCH_TIMEOUT_MS`.
  * Fetches reconnect once; tool calls are never replayed.
@@ -522,6 +519,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (
       !server.isEnabled ||
       !isRunnableMcpServer(server) ||
+      (server.origin === 'builtin' &&
+        !isBuiltInMcpToolAllowed(server.builtinId, ref.rawToolName)) ||
       server.disabledTools.includes(ref.rawToolName)
     ) {
       throw unavailableToolError();
@@ -568,6 +567,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
       }
       if (!signal.aborted) {
         this.resetConnection(state);
+      }
+      if (error instanceof PluginError) {
+        throw new McpRuntimeToolError(
+          'mcp_tool_call_failed',
+          error.message,
+          error.reason === 'network' || error.reason === 'quota',
+        );
       }
       throw error;
     }
@@ -616,6 +622,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
         'mcp.connection.generation': generation,
       });
       rawTools = await listAllTools(client, bound.signal);
+      if (server.origin === 'builtin') {
+        rawTools = rawTools.filter((tool) => isBuiltInMcpToolAllowed(server.builtinId, tool.name));
+      }
     } catch (error) {
       endMcpTrace(trace, error, bound.signal, bound.didTimeout());
       if (error instanceof McpEvictedError) {

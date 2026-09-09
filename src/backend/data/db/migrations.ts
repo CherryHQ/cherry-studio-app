@@ -19,6 +19,7 @@ import m0017 from '../../../../migrations/sqlite-drizzle/0017_desktop-compatible
 import m0018 from '../../../../migrations/sqlite-drizzle/0018_usage-invocation-semantics.sql';
 import m0019 from '../../../../migrations/sqlite-drizzle/0019_agent-message-search-order.sql';
 import m0020 from '../../../../migrations/sqlite-drizzle/0020_plugin-authorizations.sql';
+import m0021 from '../../../../migrations/sqlite-drizzle/0021_official-cloud-plugins.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -49,5 +50,6 @@ export const migrations = {
     m0018,
     m0019,
     m0020,
+    m0021,
   },
 };
