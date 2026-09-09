@@ -1,116 +1,157 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 
-import { useInfiniteQuery } from '@/frontend/data';
+import { queryKeys } from '@/frontend/data';
+import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useMessageRenderWindow } from '@/frontend/hooks/chat/useMessageRenderWindow';
 import { getOlderLoadAction } from '@/frontend/hooks/chat/utils/messageHistoryWindowStrategy';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
 import type { AgentMessageView } from '@/shared/contracts/agent';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type {
+  AgentSessionMessagePage,
+  ListAgentSessionMessagesQueryParams,
+} from '@/shared/data/api/schemas/agentSessionMessages';
 
 export type AgentMessageHistoryWindow = {
+  dataKey?: string;
   error?: Error;
+  hasNewerMessages: boolean;
+  initialScrollTarget?: 'end' | { messageId: string };
   isLoadingInitial: boolean;
   isLoadingOlder: boolean;
+  isLoadingNewer: boolean;
   loadOlder: () => Promise<void>;
+  loadNewer: () => Promise<void>;
   messages: readonly AgentMessageView[];
+  returnToLatest?: () => void;
   retry: () => Promise<void>;
 };
 
-type OlderFetchOptions = {
-  showLoading: boolean;
+type MessageNavigation = {
+  messageId?: string;
+  messageRequestId?: string;
 };
 
-type ActiveOlderFetch = {
-  promise: Promise<void>;
-  sessionId: string | undefined;
-};
-
-function flattenMessagePages(
-  pages: readonly CursorPaginationResponse<AgentMessageView>[],
-): AgentMessageView[] {
+function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMessageView[] {
   const messages: AgentMessageView[] = [];
-
+  const seen = new Set<string>();
   for (let pageIndex = pages.length - 1; pageIndex >= 0; pageIndex -= 1) {
     const page = pages[pageIndex];
     for (let itemIndex = page.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
-      messages.push(page.items[itemIndex]);
+      const message = page.items[itemIndex];
+      if (!seen.has(message.id)) {
+        seen.add(message.id);
+        messages.push(message);
+      }
     }
   }
-
   return messages;
 }
 
+/** One transcript window, initially at either the live edge or a search result. */
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
+  navigation: MessageNavigation = {},
 ): AgentMessageHistoryWindow {
-  const enabled = Boolean(sessionId);
-  const query = useInfiniteQuery('/agent-sessions/:sessionId/messages', {
-    enabled,
-    limit: messageWindowPolicy.initialFetchCount,
-    params: { sessionId: sessionId ?? '__missing_session__' },
+  const apiClient = useApiClient();
+  const { messageId, messageRequestId } = navigation;
+  const navigationKey = JSON.stringify([sessionId, messageId, messageRequestId]);
+  const [latestNavigationKey, setLatestNavigationKey] = useState<string>();
+  const isReturningToLatest = latestNavigationKey === navigationKey;
+  const aroundMessageId = isReturningToLatest ? undefined : messageId;
+  const isAroundMessage = Boolean(aroundMessageId);
+  const dataKey = messageId
+    ? `${navigationKey}:${isAroundMessage ? 'message' : 'latest'}`
+    : sessionId;
+  const initialPageParam: ListAgentSessionMessagesQueryParams = { aroundMessageId };
+  const query = useInfiniteQuery({
+    enabled: Boolean(sessionId),
+    getNextPageParam: (
+      page: AgentSessionMessagePage,
+    ): ListAgentSessionMessagesQueryParams | undefined =>
+      page.nextCursor ? { cursor: page.nextCursor, direction: 'older' } : undefined,
+    getPreviousPageParam: (
+      page: AgentSessionMessagePage,
+    ): ListAgentSessionMessagesQueryParams | undefined =>
+      page.previousCursor ? { cursor: page.previousCursor, direction: 'newer' } : undefined,
+    initialPageParam,
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await apiClient.get(
+        `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
+        {
+          query: { ...pageParam, limit: messageWindowPolicy.initialFetchCount },
+        },
+      );
+      if (signal.aborted) throw new Error('Message history request cancelled');
+      return page;
+    },
+    queryKey: [
+      ...queryKeys.agentSessions.messages(sessionId ?? '__missing_session__'),
+      {
+        aroundMessageId,
+        ...(aroundMessageId ? { messageRequestId } : {}),
+        limit: messageWindowPolicy.initialFetchCount,
+      },
+    ],
     staleTime: messageWindowPolicy.staleTimeMs,
+    // Each search selection gets a fresh window; discard inactive copies promptly.
+    ...(aroundMessageId ? { gcTime: messageWindowPolicy.staleTimeMs } : {}),
   });
-  const { error, hasNext, isLoading, isLoadingMore, loadNext, pages, refresh } = query;
-  const allMessages = useMemo(() => flattenMessagePages(pages), [pages]);
+  const allMessages = useMemo(
+    () => flattenMessagePages(query.data?.pages ?? []),
+    [query.data?.pages],
+  );
   const { hasHiddenMessages, hiddenMessageCount, revealMore, visibleMessages } =
     useMessageRenderWindow(allMessages);
-  const activeOlderFetchRef = useRef<ActiveOlderFetch | null>(null);
-  const [loadingOlderSessionId, setLoadingOlderSessionId] = useState<string>();
-
-  const fetchOlderIfNeeded = useCallback(
-    async (fetchOptions: OlderFetchOptions) => {
-      const activeFetch = activeOlderFetchRef.current;
-      if (activeFetch && activeFetch.sessionId === sessionId) {
-        if (fetchOptions.showLoading) {
-          const activePromise = activeFetch.promise;
-          setLoadingOlderSessionId(sessionId);
-          await activePromise.finally(() => {
-            setLoadingOlderSessionId((current) => (current === sessionId ? undefined : current));
-          });
-        }
-        return;
-      }
-
-      if (!hasNext || isLoadingMore) {
-        return;
-      }
-
-      const fetchPromise = loadNext();
-      activeOlderFetchRef.current = { promise: fetchPromise, sessionId };
-      if (fetchOptions.showLoading) {
-        setLoadingOlderSessionId(sessionId);
-      }
-
-      await fetchPromise.finally(() => {
-        if (activeOlderFetchRef.current?.promise === fetchPromise) {
-          activeOlderFetchRef.current = null;
-        }
-        if (fetchOptions.showLoading) {
-          setLoadingOlderSessionId((current) => (current === sessionId ? undefined : current));
-        }
-      });
-    },
-    [hasNext, isLoadingMore, loadNext, sessionId],
-  );
-
+  const { fetchNextPage, fetchPreviousPage, hasNextPage, hasPreviousPage, isFetching, refetch } =
+    query;
   const loadOlder = useCallback(async () => {
-    const action = getOlderLoadAction({ hasHiddenMessages, hiddenMessageCount });
-    if (action === 'reveal') {
+    if (
+      !isAroundMessage &&
+      getOlderLoadAction({ hasHiddenMessages, hiddenMessageCount }) === 'reveal'
+    ) {
       revealMore();
-      return;
+    } else if (hasNextPage && !isFetching) {
+      await fetchNextPage({ cancelRefetch: false });
     }
-    await fetchOlderIfNeeded({ showLoading: true });
-  }, [fetchOlderIfNeeded, hasHiddenMessages, hiddenMessageCount, revealMore]);
+  }, [
+    fetchNextPage,
+    hasHiddenMessages,
+    hasNextPage,
+    hiddenMessageCount,
+    isAroundMessage,
+    isFetching,
+    revealMore,
+  ]);
+  const loadNewer = useCallback(async () => {
+    if (hasPreviousPage && !isFetching) {
+      await fetchPreviousPage({ cancelRefetch: false });
+    }
+  }, [fetchPreviousPage, hasPreviousPage, isFetching]);
+  const returnToLatest = useCallback(() => {
+    setLatestNavigationKey(navigationKey);
+  }, [navigationKey]);
   const retry = useCallback(async () => {
-    await refresh();
-  }, [refresh]);
+    await refetch();
+  }, [refetch]);
 
   return {
-    error,
-    isLoadingInitial: isLoading,
-    isLoadingOlder: loadingOlderSessionId === sessionId,
+    dataKey,
+    error: query.error ?? undefined,
+    // An initial target query has not established continuity with the live edge yet.
+    hasNewerMessages: isAroundMessage && (!query.data || Boolean(hasPreviousPage)),
+    initialScrollTarget: aroundMessageId
+      ? { messageId: aroundMessageId }
+      : isReturningToLatest
+        ? 'end'
+        : undefined,
+    isLoadingInitial: query.isLoading,
+    isLoadingOlder: query.isFetchingNextPage,
+    isLoadingNewer: query.isFetchingPreviousPage,
     loadOlder,
-    messages: visibleMessages,
+    loadNewer,
+    messages: isAroundMessage ? allMessages : visibleMessages,
+    returnToLatest: isAroundMessage ? returnToLatest : undefined,
     retry,
   };
 }

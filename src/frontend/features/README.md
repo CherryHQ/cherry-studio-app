@@ -62,8 +62,6 @@ The implementation name may use repository `camelCase` conventions even when the
 - `paintings/`: painting composer plus `viewer/` and `viewer/conversation/` child pages.
 - `search/`: transient search result page; its cross-page request session lives in
   `appShell/search`.
-- `sessions/`: Agent Session management page; reusable list UI lives in
-  `components/SessionList`.
 - `settings/`: settings home and all settings child pages, including provider, model, MCP, and web
   search configuration.
 

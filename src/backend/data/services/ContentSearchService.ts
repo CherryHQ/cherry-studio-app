@@ -109,6 +109,7 @@ export class ContentSearchService {
           JOIN agent_session session ON session.id = message.session_id
           LEFT JOIN agent ON agent.id = session.agent_id AND agent.deleted_at IS NULL
           WHERE message.searchable_text != ''
+            AND message.role IN ('user', 'assistant')
             AND ${sessionCondition}
             AND ${agentCondition}
             AND ${createdAtCondition}

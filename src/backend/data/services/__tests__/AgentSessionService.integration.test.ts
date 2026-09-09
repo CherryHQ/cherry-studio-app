@@ -59,6 +59,21 @@ describe('AgentSessionService persistence', () => {
       details: { id: 'missing', resource: 'AgentSession' },
     });
   });
+
+  test('searches titles across agents with literal wildcards and cursor pagination', async () => {
+    insertSession(sqlite, { agentId: 'agent-1', id: '计划 100%_a', lastActivityAt: 100 });
+    insertSession(sqlite, { agentId: 'agent-2', id: '计划 100%_b', lastActivityAt: 200 });
+    insertSession(sqlite, { agentId: 'agent-2', id: '计划 100xx', lastActivityAt: 300 });
+    const first = await agentSessionService.listByCursor({ q: '  100%_  ', limit: 1 });
+    expect(first.items.map((session) => session.id)).toEqual(['计划 100%_b']);
+    const second = await agentSessionService.listByCursor({
+      q: '100%_',
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(second.items.map((session) => session.id)).toEqual(['计划 100%_a']);
+    expect(second.nextCursor).toBeUndefined();
+  });
 });
 
 function insertAgent(database: DatabaseSync, id: string): void {

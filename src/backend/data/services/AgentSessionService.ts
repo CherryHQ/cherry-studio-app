@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionTable } from '@/backend/data/db/schemas';
@@ -49,6 +49,9 @@ export class AgentSessionService {
       .where(
         and(
           query.agentId ? eq(agentSessionTable.agentId, query.agentId) : undefined,
+          query.q
+            ? sql`${agentSessionTable.title} LIKE ${`%${query.q.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`
+            : undefined,
           cursor ? ordering.where(cursor) : undefined,
         ),
       )

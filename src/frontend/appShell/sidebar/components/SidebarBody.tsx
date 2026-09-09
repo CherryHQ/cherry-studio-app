@@ -1,10 +1,18 @@
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { ContextMenuScrollBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, View } from 'react-native';
+import {
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -84,10 +92,23 @@ function SidebarBodyDefault({
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openLibrary, openPaintings, openSearch } =
+    useSidebarActions('Sidebar.Body');
 
   return (
     <>
+      <View className="px-5 pb-3">
+        <Pressable
+          accessibilityLabel={t('session.search.placeholder')}
+          accessibilityRole="button"
+          className="min-h-11 flex-row items-center gap-2 rounded-xl bg-secondary px-3 active:bg-sidebar-accent"
+          onPress={openSearch}
+          testID="sidebar-search"
+        >
+          <SearchIcon className="size-4 text-muted-foreground" />
+          <Text className="text-base text-muted-foreground">{t('session.search.placeholder')}</Text>
+        </Pressable>
+      </View>
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow

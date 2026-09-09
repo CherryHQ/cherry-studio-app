@@ -67,7 +67,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const session = useAgentSession(sessionId);
   const resolvedAgentId = session.data?.agentId ?? composerSession.draftAgentId ?? agentId;
   const agent = useAgentApiById(resolvedAgentId);
-  const messageWindow = useAgentMessageHistoryWindow(sessionId);
+  const messageWindow = useAgentMessageHistoryWindow(
+    sessionId,
+    target.kind === 'session' ? target : undefined,
+  );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
   const isNewAgentAvailable =

@@ -402,6 +402,69 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockLatestListProps?.dataKey).toBe('session-2');
   });
 
+  test('places a search target below the header instead of restoring the saved anchor', async () => {
+    const messages = [createMessage('target', 'user'), createMessage('saved', 'assistant')];
+    cacheService.set('chat.scroll_anchor.session-1', { key: 'saved', offset: 24 });
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(messages, {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    expect(mockListScrollToIndex).toHaveBeenCalledWith({
+      animated: false,
+      index: 0,
+      viewOffset: 96,
+      viewPosition: 0,
+    });
+    mockListScrollToIndex.mockClear();
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([...messages, createMessage('later', 'assistant')], {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  test('keeps the end of an incomplete history window in reading mode', async () => {
+    const onReturnToLatest = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('target', 'user')], {
+            hasNewerMessages: true,
+            initialScrollTarget: { messageId: 'target' },
+            onReturnToLatest,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onContentSizeChange?.(320, 1200);
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    await act(async () => mockScrollButtonProps?.onPress());
+    expect(onReturnToLatest).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
   test('auto-sticks only while following and yields immediately to a user drag', async () => {
     const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
     act(() => {
