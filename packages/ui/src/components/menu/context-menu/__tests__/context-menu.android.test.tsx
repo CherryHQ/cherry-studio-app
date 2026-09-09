@@ -119,8 +119,8 @@ describe('ContextMenu.android', () => {
 
   beforeEach(() => {
     jest
-      .spyOn(viewPrototype, 'measure')
-      .mockImplementation((callback) => callback(0, 0, 200, 48, 16, 120));
+      .spyOn(viewPrototype, 'measureInWindow')
+      .mockImplementation((callback) => callback(16, 120, 200, 48));
     mockShowMenu.mockClear();
     mockGetLongPressMaxDistance.mockClear();
     mockGetLongPressMinDuration.mockClear();

@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ActionMenu } from '../action-menu.android';
@@ -82,6 +82,53 @@ describe('ActionMenu.android', () => {
     });
     const trigger = findTrigger();
     expect(trigger.props.disabled).toBe(true);
+    act(() => trigger.props.onPress());
+    expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
+  });
+
+  it('owns nested button touches and accessibility while preserving trigger preparation', () => {
+    const onChildPress = jest.fn();
+    const prepare = jest.fn(() => false);
+    act(() => {
+      renderer = create(
+        <ActionMenu items={items}>
+          <Pressable
+            accessibilityLabel="More"
+            onPress={onChildPress}
+            onStartShouldSetResponderCapture={prepare}
+            testID="nested-button"
+          >
+            <Text>More</Text>
+          </Pressable>
+        </ActionMenu>,
+      );
+    });
+    const shield = renderer!.root.find(
+      (node) =>
+        node.props.pointerEvents === 'none' &&
+        node.props.importantForAccessibility === 'no-hide-descendants',
+    );
+    expect(shield.findByProps({ testID: 'nested-button' })).toBeDefined();
+    const trigger = findTrigger();
+    act(() => {
+      trigger.props.onStartShouldSetResponderCapture();
+      trigger.props.onPress();
+    });
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(onChildPress).not.toHaveBeenCalled();
+    expect(renderer!.root.findByProps({ testID: 'menu-content' }).props.isOpen).toBe(true);
+  });
+
+  it('respects a child button disabled prop without requiring duplicated accessibility state', () => {
+    act(() => {
+      renderer = create(
+        <ActionMenu items={items}>
+          <Pressable disabled />
+        </ActionMenu>,
+      );
+    });
+    const trigger = findTrigger();
+    expect(trigger.props.accessibilityState.disabled).toBe(true);
     act(() => trigger.props.onPress());
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
   });

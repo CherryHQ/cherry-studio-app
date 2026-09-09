@@ -1,4 +1,3 @@
-import { BackHandler } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MenuContent } from '../menu-content';
@@ -13,6 +12,7 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
+    cancelAnimation: jest.fn(),
     Easing: { bezier: () => 'bezier' },
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0] + (output[1] - output[0]) * value,
@@ -37,13 +37,27 @@ jest.mock('heroui-native/utils', () => {
   return { cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')) };
 });
 
-jest.mock('../../portal', () => {
+jest.mock('../menu-overlay', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
-  const component = (props: object) => React.createElement(View, props);
+  const { MenuInteraction } = jest.requireActual('../menu-interaction');
 
   return {
-    Portal: component,
+    MenuOverlay: ({
+      children,
+      isOpen,
+      onClose,
+      ...props
+    }: {
+      children: React.ReactNode;
+      isOpen: boolean;
+      onClose: () => void;
+    }) =>
+      React.createElement(
+        MenuInteraction,
+        { value: { isOpen, close: onClose } },
+        React.createElement(View, props, children),
+      ),
   };
 });
 
@@ -52,7 +66,6 @@ jest.mock('../menu-panel', () => {
   const { View } = jest.requireActual('react-native');
   return {
     MenuPanel: (props: object) => React.createElement(View, props),
-    menuRowClassName: '',
   };
 });
 
@@ -74,7 +87,7 @@ describe('MenuContent', () => {
     jest.restoreAllMocks();
   });
 
-  it('closes before invoking the selected action, including when it throws', () => {
+  it('hands the selected action to dismissal without running it in the open menu', () => {
     const order: string[] = [];
     mockOpenChange.mockImplementation(() => order.push('close'));
     const onPress = jest.fn(() => {
@@ -94,11 +107,12 @@ describe('MenuContent', () => {
       );
     });
 
-    expect(() =>
-      renderer!.root.findByProps({ accessibilityLabel: 'Delete' }).props.onPress(),
-    ).toThrow('Action failed');
-    expect(order).toEqual(['close', 'action']);
+    act(() => renderer!.root.findByProps({ accessibilityLabel: 'Delete' }).props.onPress());
+    expect(order).toEqual(['close']);
     expect(mockOpenChange).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
+    expect(() => mockOpenChange.mock.calls[0][0]()).toThrow('Action failed');
+    expect(order).toEqual(['close', 'action']);
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
@@ -146,13 +160,11 @@ describe('MenuContent', () => {
       accessibilityState: { checked: true, disabled: false },
     });
     act(() => item.props.onPress());
-    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(mockOpenChange).toHaveBeenCalledWith(onPress);
     expect(item.props.accessibilityState.checked).toBe(true);
   });
 
-  it('dismisses on Android back and releases the subscription when closing', () => {
-    const remove = jest.fn();
-    const subscribe = jest.spyOn(BackHandler, 'addEventListener').mockReturnValue({ remove });
+  it('stops accepting selections as soon as closing begins', () => {
     const items = [{ id: 'rename', label: 'Rename', onPress: jest.fn() }];
     act(() => {
       renderer = create(
@@ -165,9 +177,6 @@ describe('MenuContent', () => {
         />,
       );
     });
-    const handler = subscribe.mock.calls[0][1];
-    act(() => expect(handler({ type: 'hardwareBackPress', timeStamp: Date.now() })).toBe(true));
-    expect(mockOpenChange).toHaveBeenCalledTimes(1);
     act(() =>
       renderer!.update(
         <MenuContent
@@ -179,12 +188,8 @@ describe('MenuContent', () => {
         />,
       ),
     );
-    expect(remove).toHaveBeenCalledTimes(1);
-    const backdrop = renderer!.root.find(
-      (node) => node.props.accessibilityElementsHidden && typeof node.props.onPress === 'function',
-    );
-    expect(backdrop.props.pointerEvents).toBe('none');
     act(() => renderer!.root.findByProps({ accessibilityLabel: 'Rename' }).props.onPress());
     expect(items[0].onPress).not.toHaveBeenCalled();
+    expect(mockOpenChange).not.toHaveBeenCalled();
   });
 });

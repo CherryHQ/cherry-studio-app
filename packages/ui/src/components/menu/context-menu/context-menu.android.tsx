@@ -1,4 +1,4 @@
-import { cloneElement, type ReactElement, useCallback, useMemo, useState } from 'react';
+import { cloneElement, type ReactElement, useCallback, useMemo, useRef, useState } from 'react';
 import { type AccessibilityActionEvent, type AccessibilityActionInfo, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { callback } from 'react-native-nitro-modules';
@@ -40,8 +40,13 @@ export function ContextMenu({ children, items }: ContextMenuProps) {
 }
 
 function ContextMenuAnchor({ children, items }: ContextMenuProps) {
-  const { anchor, close, finishClose, isOpen, open } = useMenuState();
+  const anchorRef = useRef<View>(null);
   const [anchorView, setAnchorView] = useState<View | null>(null);
+  const handleAnchor = useCallback((view: View | null) => {
+    anchorRef.current = view;
+    setAnchorView(view);
+  }, []);
+  const { anchor, close, finishClose, isOpen, open } = useMenuState(anchorRef);
   const interaction = useContextMenuInteraction();
   const [menuBinding, setMenuBinding] = useState<NativeMenuBinding | null>(null);
   const handleMenuView = useCallback((view: NativeCherryMenuRef) => {
@@ -55,7 +60,7 @@ function ContextMenuAnchor({ children, items }: ContextMenuProps) {
   const hybridRef = useMemo(() => callback(handleMenuView), [handleMenuView]);
   const handleLongPress = useCallback(() => {
     if (!interaction.isRecognitionBlocked()) {
-      anchorView?.measure((_x, _y, width, height, pageX, pageY) => {
+      anchorView?.measureInWindow((pageX, pageY, width, height) => {
         open({ height, pageX, pageY, width });
       });
     }
@@ -81,7 +86,7 @@ function ContextMenuAnchor({ children, items }: ContextMenuProps) {
           onAction={IGNORE_NATIVE_ACTION}
           trigger="longPress"
         >
-          <View collapsable={false} ref={setAnchorView}>
+          <View collapsable={false} ref={handleAnchor}>
             {withMenuAccessibilityActions(children, items)}
           </View>
         </NativeCherryMenuView>

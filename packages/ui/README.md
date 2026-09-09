@@ -481,12 +481,24 @@ rows, expanding panel, and slide/blur/fade motion. Use these shared components f
 lists throughout the app instead of adding another menu presentation. iOS retains native action
 and context menus.
 
+Android tap menus own one press target even when their trigger contains a `Button` or `Pressable`.
+The child remains presentation-only; `disabled`, accessibility disabled state, and
+`pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
+tap and accessibility actions.
+
 The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
 bounded scrolling, and safe-area positioning. They open above or below the trigger according to
-available space. Outside taps and system back close them; closing immediately disables interaction
-and retains the panel until its animation finishes. Reduced motion opens and closes immediately.
-Selecting an enabled item closes it before running the action. Searchable pickers, selection
-sheets, forms, and system media/share interfaces retain their own interaction contracts.
+available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
+`MenuOverlay`, `MenuRow`, `MenuPanel`, and lifecycle hooks. The transparent system modal isolates
+background accessibility, preserves the caller's theme/context, and owns Back/Escape. Opening
+focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
+change dismisses the measured presentation instead of retaining a stale anchor.
+
+Outside taps and system back close them; closing immediately disables item interaction and retains
+the modal until its animation and native dismissal finish. Reduced motion skips the animation.
+An enabled selection is accepted once and runs after native dismissal, so actions can safely open
+a system picker or navigate; it does not restore old focus over the destination. Searchable pickers,
+selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing an Android `ContextMenu` in one
@@ -608,9 +620,12 @@ only when a conditional row should animate the surface height:
 ```
 
 The package deliberately ships no attachment strip; callers compose their own row and pass its
-presence through `canSend`. `Composer.Menu` owns the add-button trigger and shares its private panel
-and motion with Android action/context menus. Its items close before invoking their action.
-`width` is a floor, and callers that need most of the screen must bound their children to the window.
+presence through `canSend`. `Composer.Menu` owns the add-button trigger and its morph. Its menu rows,
+bounded scrolling, panel material, motion lifecycle, dismissal, and action dispatch are shared with
+Android action/context menus. Labels wrap and grow with text size. Toggle rows own one accessible
+switch action and render a private decorative indicator. `width` is a floor bounded by the viewport.
+Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel, including when its
+content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
 ## Motion
 

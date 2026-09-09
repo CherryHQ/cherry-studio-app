@@ -13,6 +13,11 @@ lists use `ActionMenu` or `ContextMenu`, sharing the composer add menu's private
 Their existing iOS native adapters remain supported. Pickers, forms, and system media/share
 interfaces keep their own interaction contracts.
 
+Cherry-rendered menus share their row, bounded panel, and lifecycle owners. Their private
+`MenuOverlay` uses a transparent system modal for background accessibility isolation and native
+Back/Escape, while CherryUI owns content, focus, motion, and action dispatch after dismissal.
+The composer's trigger morph is a placement variant, not a separate menu interaction implementation.
+
 One rule governs every platform decision:
 
 > Respect a platform difference the platform imposes. Do not introduce one it does not.

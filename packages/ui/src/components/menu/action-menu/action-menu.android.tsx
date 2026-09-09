@@ -1,5 +1,5 @@
-import { cloneElement, type ReactElement, useRef } from 'react';
-import { Pressable, type View, type ViewProps } from 'react-native';
+import { type ReactElement, useRef } from 'react';
+import { Pressable, View, type ViewProps } from 'react-native';
 
 import { MenuContent } from '../menu-content';
 import type { ActionMenuProps } from '../menu.types';
@@ -16,19 +16,30 @@ export function ActionMenu({ children, items }: ActionMenuProps) {
 
 function ActionMenuTrigger({ children, items }: ActionMenuProps) {
   const triggerRef = useRef<View>(null);
-  const { anchor, close, finishClose, isOpen, open } = useMenuState();
-  const child = children as ReactElement<ViewProps>;
-  const isDisabled =
-    child.props.accessibilityState?.disabled || child.props.pointerEvents === 'none';
+  const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
+  const child = children as ReactElement<ViewProps & { disabled?: boolean }>;
+  const isDisabled = Boolean(
+    child.props.disabled ||
+    child.props.accessibilityState?.disabled ||
+    child.props.pointerEvents === 'none',
+  );
 
   return (
     <>
       <Pressable
         accessibilityLabel={child.props.accessibilityLabel}
         accessibilityRole="button"
-        accessibilityState={{ ...child.props.accessibilityState, expanded: isOpen }}
+        accessibilityState={{
+          ...child.props.accessibilityState,
+          disabled: isDisabled,
+          expanded: isOpen,
+        }}
+        className="active:opacity-60"
         collapsable={false}
         disabled={isDisabled}
+        onStartShouldSetResponderCapture={
+          isDisabled ? undefined : child.props.onStartShouldSetResponderCapture
+        }
         onPress={() => {
           if (isDisabled) {
             return;
@@ -39,7 +50,14 @@ function ActionMenuTrigger({ children, items }: ActionMenuProps) {
         }}
         ref={triggerRef}
       >
-        {cloneElement(child, { accessible: false })}
+        <View
+          accessibilityElementsHidden
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          pointerEvents="none"
+        >
+          {children}
+        </View>
       </Pressable>
       {anchor ? (
         <MenuContent
