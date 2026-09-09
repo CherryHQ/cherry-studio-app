@@ -43,7 +43,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
     case 'text':
       return (
         <TextPart
-          isStreaming={isStreaming}
+          isStreaming={isStreaming && part.state !== 'done'}
           isTextSelectionEnabled={isTextSelectionEnabled}
           part={part}
           renderMode={renderMode}
@@ -51,7 +51,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
         />
       );
     case 'reasoning':
-      return <ReasoningPart isStreaming={isStreaming} part={part} />;
+      return <ReasoningPart isStreaming={isStreaming && part.state !== 'done'} part={part} />;
     case 'data-code':
       return (
         <CodePart
