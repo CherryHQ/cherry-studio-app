@@ -1,7 +1,7 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Keyboard, Pressable, Text } from 'react-native';
 
 import {
   type ChatRouteParamsInput,
@@ -31,12 +31,14 @@ export function useMainHeaderAgent() {
       return;
     }
 
+    Keyboard.dismiss();
     router.push({
       params: { agentId: currentAgentId },
       pathname: '/sessions',
     });
   }, [currentAgentId, router]);
   const openNewSession = useCallback(() => {
+    Keyboard.dismiss();
     if (agent) {
       router.setParams(chatRouteParams({ agentId: agent.id, kind: 'draft' }));
       return;
