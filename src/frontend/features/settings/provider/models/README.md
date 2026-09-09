@@ -8,7 +8,8 @@ This module owns provider model listing, connectivity checks, synchronization, a
 
 ## Organization
 
-- `components/` contains model row content and token-limit inputs shared by management and model tasks.
+- `components/` contains model rows and classification, token-limit, and pricing fields shared by
+  manual creation and editing.
 - `hooks/` owns displayed group state plus add/sync workflows.
 - `utils/` contains pure grouping and filtering helpers, synchronization previews, and the check's
   selection resolvers.
@@ -30,16 +31,31 @@ An empty directory also offers manual creation. Removal results report protected
 The manual form and synchronization task mount independently under `detail/modelAdd/components/`;
 the synchronization preview lives with that task, while the legacy pull page only redirects.
 
-Manual creation edits vision/drawing capabilities, not a separate purpose. Existing list rules
-derive chat/drawing groups. The local registry resolver supplies the model baseline; untouched fields
-stay omitted, and name overrides survive ID edits. The form has no group input; existing group
-metadata and automatic defaults are preserved. Advanced endpoint selection is single-choice
-and defaults to automatic, preserving catalog and gateway routing. Drawing retains native catalog
-routes or uses a configured OpenAI image endpoint; it does not expose chat token limits.
+Manual creation and editing expose text/image/embedding/rerank classification, reasoning and tool
+capabilities, image/audio/video inputs, group, streaming support metadata, and pricing. Existing list
+rules derive chat/drawing groups and keep unsupported types out of chat selection. This is model
+configuration, not admission of new execution paths: Pi still controls conversation protocols and
+supported media, and the streaming flag remains a model capability declaration.
+
+The local registry resolver supplies the model baseline; untouched fields stay omitted, and name
+and group overrides survive ID edits. Endpoint selection remains single-choice, preserving
+untouched catalog endpoint lists and gateway routing. Drawing retains native catalog routes or uses
+a configured OpenAI image endpoint. Type changes update the corresponding capability, endpoint, and
+output modality together. Unmanaged catalog metadata survives unrelated edits.
+
+Pricing supports USD/CNY, base input/output/cache rates, and input-token tiers. Unknown prices remain
+unpriced; zero is an explicit free rate. Empty cache rates use the input rate. Tier thresholds must
+be positive, safe integers in increasing order, and incomplete tiers block saving. Editing token
+rates preserves per-image and per-minute prices. Clearing an edited token limit submits `null` to
+restore catalog or app defaults through the existing nullable storage columns.
 
 Manual creation accepts one model at a time. Multiple or duplicate IDs and conflicting interfaces
-produce field errors. The form keeps labels and placeholders concise, with optional fields behind
-More settings. Numeric fields preserve raw input for validation; context/output checks share the
+produce field errors. The mobile forms keep identity fields first and use bottom-sheet pickers for type and endpoint.
+Capabilities, token limits, pricing, and organization use plain collapsible rows with optional
+one-line values and visible validation errors. Persistent copy is limited to labels, pricing units,
+and contextual constraints; empty-state descriptions and repeated guidance are omitted. Pricing expands one tier at a time and opens newly added tiers; notes
+use a multiline input. Keyboard scrolling follows the focused input without section-level jumps.
+Numeric fields preserve raw input for validation; context/output checks share the
 runtime's mobile fallback constants. Failed writes keep the draft, and immediate duplicate saves are
 guarded. The separate synchronization workflow retains its batch support.
 
