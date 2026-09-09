@@ -1,20 +1,11 @@
 import * as z from 'zod';
 
-export const PluginIdSchema = z.enum(['github', 'amap']);
-export type PluginId = z.infer<typeof PluginIdSchema>;
+import { type PluginConnection, type PluginId, PluginIdSchema } from '@/shared/data/types/plugin';
 
 export const ConnectPluginSchema = z.strictObject({
   pluginId: PluginIdSchema,
   credential: z.string().trim().min(1).max(4096).regex(/^\S+$/),
 });
-
-/** Public projection; credentials and ciphertext never cross this boundary. */
-export type PluginConnection = {
-  pluginId: PluginId;
-  serverId: string;
-  accountLabel: string;
-  connectedAt: string;
-};
 
 export type PluginErrorReason =
   | 'authorization'
@@ -39,7 +30,6 @@ export class PluginError extends Error {
 }
 
 export interface PluginsModule {
-  listConnections(): Promise<PluginConnection[]>;
   connect(
     input: z.infer<typeof ConnectPluginSchema>,
     signal?: AbortSignal,

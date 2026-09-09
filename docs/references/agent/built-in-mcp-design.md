@@ -31,6 +31,10 @@ preserves the server UUID but allocates a new grant identity; disconnecting disa
 bindings, deletes the server and grant, and invalidates active calls. Reconnecting after disconnect
 requires explicit Agent enablement. Credentials stay out of frontend query caches and tool arguments.
 
+Connection metadata is read through the Data API's `GET /plugin-connections` endpoint. The
+`PluginsModule` workflow contract owns only connect and disconnect; shared plugin entities live
+under `shared/data/types`, and the MCP runtime's connection configuration remains backend-private.
+
 `BuiltInMcpTransport` speaks the installed SDK's in-process MCP contract. Provider adapters reuse
 the existing HTTP routes, bound response sizes and pagination, validate inputs, propagate cancellation,
 and do not retry writes. GitHub token permissions and Amap quota/access restrictions remain upstream

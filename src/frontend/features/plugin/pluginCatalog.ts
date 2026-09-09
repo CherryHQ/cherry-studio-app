@@ -1,4 +1,4 @@
-import type { PluginId } from '@/shared/contracts/plugins';
+import type { PluginId } from '@/shared/data/types/plugin';
 
 export const PLUGIN_IDS: readonly PluginId[] = ['github', 'amap'];
 

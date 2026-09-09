@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import type { PluginId } from '@/shared/contracts/plugins';
+import type { PluginId } from '@/shared/data/types/plugin';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 import { pluginAuthorizationTable } from './pluginAuthorization';

@@ -1,7 +1,7 @@
 import type { MCPTransport } from '@ai-sdk/mcp';
 
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
-import type { PluginId } from '@/shared/contracts/plugins';
+import type { PluginId } from '@/shared/data/types/plugin';
 
 import { BuiltInMcpTransport } from './BuiltInMcpTransport';
 import { createAmapClient } from './providers/amap';

@@ -8,7 +8,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { PluginIdSchema, type PluginId } from '@/shared/contracts/plugins';
+import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PluginIcon } from '../components/PluginIcon';
 import { PLUGIN_LINKS } from '../pluginCatalog';

@@ -1,11 +1,6 @@
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
-import {
-  ConnectPluginSchema,
-  PluginIdSchema,
-  PluginError,
-  type PluginId,
-  type PluginsModule,
-} from '@/shared/contracts/plugins';
+import { ConnectPluginSchema, PluginError, type PluginsModule } from '@/shared/contracts/plugins';
+import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { createAmapClient } from './providers/amap';
 import { createGitHubClient } from './providers/github';
@@ -25,7 +20,6 @@ export function createPluginsModule(runtime: {
     return result;
   }
   return {
-    listConnections: () => pluginAuthorizationService.listConnections(),
     connect(input, signal) {
       const parsed = ConnectPluginSchema.parse(input);
       return serialize(parsed.pluginId, async () => {

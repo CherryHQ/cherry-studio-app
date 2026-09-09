@@ -4,8 +4,10 @@ This module owns bundled platform adapters and the connect/disconnect workflow f
 GitHub and Amap are the first providers. The broader roadmap is in the
 [integration design](../../../../docs/references/agent/built-in-mcp-design.md).
 
-- `createPluginsModule` exposes credential-free connection metadata and coordinates upstream
-  validation, atomic persistence, and runtime invalidation. Mutations serialize per plugin.
+- `createPluginsModule` coordinates upstream validation, atomic persistence, and runtime
+  invalidation for connect/disconnect. Mutations serialize per plugin.
+- Connection metadata is read through `GET /plugin-connections` on the Data API. Frontend queries
+  and invalidation use that endpoint's query key; credentials never enter its response.
 - `PluginAuthorizationService`, under the data layer, owns the independent authorization table and
   changes its MCP reference in the same SQLite transaction. It resolves the current database per call.
   Credentials are stored as entered, the same way provider API keys and remote MCP headers already
@@ -17,9 +19,10 @@ GitHub and Amap are the first providers. The broader roadmap is in the
   mapping, validation, safe errors, bounded result sizes, and their tool definitions. Shared Axios
   transport, cancellation, and query serialization stay in the existing `http` module.
 
-`McpRuntimeService` owns connection generations. A grant change cannot retarget a tool from an
-already frozen turn catalog. Provider calls resolve the referenced grant again before each HTTP
-request. Disconnect removes that grant and disables the server's existing Agent bindings.
+`McpRuntimeService` owns its private connection configuration and connection generations. A grant
+change cannot retarget a tool from an already frozen turn catalog. Provider calls resolve the
+referenced grant again before each HTTP request. Disconnect removes that grant and disables the
+server's existing Agent bindings.
 
 Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval, deferred discovery,
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.

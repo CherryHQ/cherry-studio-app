@@ -2,7 +2,7 @@ import GitHubIcon from '@cherrystudio/app-icons/icons/github';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import { View } from 'react-native';
 
-import type { PluginId } from '@/shared/contracts/plugins';
+import type { PluginId } from '@/shared/data/types/plugin';
 
 export function PluginIcon({
   pluginId,

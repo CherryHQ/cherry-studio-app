@@ -6,16 +6,6 @@ export type McpConnectionConfig = {
   headers?: Record<string, string>;
 };
 
-export type McpRuntimeConnectionConfig =
-  | McpConnectionConfig
-  | {
-      origin: 'builtin';
-      endpointUrl: null;
-      builtinId: 'github' | 'amap';
-      authorizationId: string;
-      headers?: never;
-    };
-
 export type McpToolSummary = {
   description?: string;
   name: string;

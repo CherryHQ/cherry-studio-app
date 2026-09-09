@@ -7,7 +7,7 @@ import {
   monotonicUpdateTimestamp,
   pluginAuthorizationTable,
 } from '@/backend/data/db/schemas';
-import type { PluginConnection, PluginId } from '@/shared/contracts/plugins';
+import type { PluginConnection, PluginId } from '@/shared/data/types/plugin';
 
 /** Owns grant rows and their MCP identities; it never exposes credentials to UI. */
 export class PluginAuthorizationService {

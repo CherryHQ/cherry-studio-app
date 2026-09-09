@@ -9,12 +9,8 @@ import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import {
-  ConnectPluginSchema,
-  PluginIdSchema,
-  PluginError,
-  type PluginId,
-} from '@/shared/contracts/plugins';
+import { ConnectPluginSchema, PluginError } from '@/shared/contracts/plugins';
+import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PLUGIN_LINKS } from '../../pluginCatalog';
 import { useRefreshPluginConnections } from '../../usePluginConnections';

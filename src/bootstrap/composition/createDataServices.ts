@@ -12,6 +12,7 @@ import { jobService } from '@/backend/data/services/JobService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
+import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { providerService } from '@/backend/data/services/ProviderService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
@@ -47,6 +48,7 @@ export function createDataServices({
     mcpServer: mcpServerService,
     model: modelService,
     painting: paintingService,
+    pluginAuthorization: pluginAuthorizationService,
     preference,
     provider: providerService,
   };

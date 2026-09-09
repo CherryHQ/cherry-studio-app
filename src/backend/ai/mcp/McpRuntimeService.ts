@@ -8,7 +8,6 @@ import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { createBuiltInMcpTransport } from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
-  McpRuntimeConnectionConfig,
   McpModule,
   McpServerInfo,
   McpServerRuntimeSummary,
@@ -16,6 +15,7 @@ import type {
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { PluginId } from '@/shared/data/types/plugin';
 import { isSameMcpConnectionConfig, normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
 import type { TraceRecorder, TraceSpan } from '../observability';
@@ -36,6 +36,17 @@ const logger = loggerService.withContext('McpRuntimeService');
  * Without it a server that accepts the socket then stalls would pin a client
  * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
+
+type McpRuntimeConnectionConfig =
+  | McpConnectionConfig
+  | {
+      origin: 'builtin';
+      endpointUrl: null;
+      builtinId: PluginId;
+      authorizationId: string;
+      headers?: never;
+    };
+
 type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'state'> & {
   connectionConfig: McpRuntimeConnectionConfig;
 };

@@ -120,6 +120,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
 | `paintings` | Atomically creates painting receipts and durable jobs, cancels generation, and resolves files |
 | `permissions` | Coordinates stored permission policy with device status, recovery, and system settings |
+| `plugins` | Validates credentials and coordinates authorization, connection persistence, and runtime invalidation; connection reads use the Data API |
 | `profile` | Encapsulates profile avatar storage and preference coordination |
 | `providers` | Combines provider removal policy with provider avatar storage |
 | `webSearch` | Encapsulates provider-specific connectivity checks and third-party behavior |
