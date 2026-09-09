@@ -26,9 +26,9 @@ export function fileAttachmentIssueDescription(issue: FileAttachmentIssue, t: TF
 
 export function fileAttachmentNoticeKeys(report: FileAttachmentReport | undefined): string[] {
   if (!report) return [];
-  return [
-    ...(report.mode === 'document-text' ? ['attachments.notice.documentText'] : []),
-    ...(report.sourceTruncated ? ['attachments.notice.sourceTruncated'] : []),
-    ...(report.requestTruncated ? ['attachments.notice.requestTruncated'] : []),
-  ];
+  const notices: string[] = [];
+  if (report.mode === 'document-text') notices.push('attachments.notice.documentText');
+  if (report.sourceTruncated) notices.push('attachments.notice.sourceTruncated');
+  if (report.requestTruncated) notices.push('attachments.notice.requestTruncated');
+  return notices;
 }

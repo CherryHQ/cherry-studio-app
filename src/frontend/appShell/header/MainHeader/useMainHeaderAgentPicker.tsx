@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Keyboard } from 'react-native';
 
 import { MainHeaderAgentPickerSheet } from './MainHeaderAgentPickerSheet';
 
@@ -13,6 +14,9 @@ export function useMainHeaderAgentPicker(currentAgentId: string | undefined) {
         open={isOpen}
       />
     ),
-    openAgentPicker: () => setIsOpen(true),
+    openAgentPicker: () => {
+      Keyboard.dismiss();
+      setIsOpen(true);
+    },
   };
 }

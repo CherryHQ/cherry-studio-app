@@ -19,6 +19,7 @@ import { useUniwind } from 'uniwind';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
+import { DocumentParserSetting } from './components/DocumentParserSetting';
 import { ProfileHero } from './components/ProfileHero';
 import { useProviderListNavigation } from './provider';
 
@@ -93,6 +94,7 @@ export default function SettingsScreen() {
               onPress={() => router.push('/settings/mcp')}
             />
           </Section>
+          <DocumentParserSetting />
           <Section>
             {Platform.OS === 'ios' ? (
               <Section.Item

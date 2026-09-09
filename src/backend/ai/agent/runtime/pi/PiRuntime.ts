@@ -18,6 +18,7 @@ import type {
 
 import { raceAbort, settleWithin } from '../raceAbort';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
+import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import {
   createDeniedToolResult,
   createErrorToolResult,
@@ -29,6 +30,7 @@ import type {
   AgentRuntimeSession,
   MessageRuntimeTimingSink,
   RuntimeDescriptor,
+  RuntimeDocumentAttachmentPart,
   RuntimeError,
   RuntimeEvent,
   RuntimeExecutionRequest,
@@ -60,6 +62,7 @@ import {
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
+import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
@@ -262,31 +265,96 @@ function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null 
     };
   }
   const textAttachments = inputAndHistoryParts.filter((part) => part.type === 'text-attachment');
-  const hasNonUserHistoricalTextAttachment = request.history.some((turn) =>
+  const documentAttachments = inputAndHistoryParts.filter(
+    (part) => part.type === 'document-attachment',
+  );
+  const hasNonUserHistoricalContentAttachment = request.history.some((turn) =>
     turn.messages.some(
       (message) =>
-        message.role !== 'user' && message.parts.some((part) => part.type === 'text-attachment'),
+        message.role !== 'user' &&
+        message.parts.some(
+          (part) => part.type === 'text-attachment' || part.type === 'document-attachment',
+        ),
     ),
   );
   if (
-    hasNonUserHistoricalTextAttachment ||
-    textAttachments.some((part) => !isValidatedTextAttachment(part))
+    hasNonUserHistoricalContentAttachment ||
+    textAttachments.some((part) => !isValidatedTextAttachment(part)) ||
+    documentAttachments.some((part) => !isValidatedDocumentAttachment(part))
   ) {
     return {
       code: 'unsupported_input',
-      message: 'Pi Runtime accepts only validated untrusted text attachments in user input.',
+      message: 'Pi Runtime accepts only validated untrusted content attachments in user input.',
       retryable: false,
     };
   }
   return null;
 }
 
-function isInlineImagePart(part: { mediaType: string; type: 'file'; uri: string }): boolean {
+function isInlineImagePart(part: { mediaType: string; uri: string }): boolean {
   return (
+    typeof part.mediaType === 'string' &&
+    typeof part.uri === 'string' &&
     part.mediaType.startsWith('image/') &&
     part.uri.startsWith(`data:${part.mediaType};base64,`) &&
     part.uri.length > `data:${part.mediaType};base64,`.length
   );
+}
+
+function isValidatedDocumentAttachment(part: RuntimeDocumentAttachmentPart): boolean {
+  if (
+    typeof part.fileEntryId !== 'string' ||
+    !part.fileEntryId ||
+    typeof part.mediaType !== 'string' ||
+    !part.mediaType.includes('/') ||
+    typeof part.name !== 'string' ||
+    !part.name ||
+    /[/\\\0]/u.test(part.name) ||
+    part.trust !== 'untrusted-user-content' ||
+    part.parser !== 'anydoc' ||
+    typeof part.parserVersion !== 'string' ||
+    !part.parserVersion ||
+    !Number.isSafeInteger(part.totalCharacters) ||
+    part.totalCharacters < 0 ||
+    !part.document ||
+    !Array.isArray(part.images) ||
+    !Array.isArray(part.assetDelivery)
+  )
+    return false;
+  if (part.document.delivery === 'complete') {
+    const result = part.document.result;
+    if (
+      !result ||
+      result.status !== 'ok' ||
+      !Array.isArray(result.warnings) ||
+      result.warnings.some((warning) => typeof warning !== 'string') ||
+      !RuntimeJsonValueSchema.safeParse(result.ir).success
+    )
+      return false;
+  } else if (part.document.delivery !== 'deferred') return false;
+  const sentRefs = new Map<string, string>();
+  for (const asset of part.assetDelivery) {
+    if (
+      !asset ||
+      typeof asset.assetRef !== 'string' ||
+      !asset.assetRef ||
+      (asset.contentType !== null && typeof asset.contentType !== 'string') ||
+      !Number.isSafeInteger(asset.size) ||
+      asset.size < 0 ||
+      !['sent', 'model-unsupported', 'unsupported-type', 'budget'].includes(asset.status)
+    )
+      return false;
+    if (asset.status === 'sent') {
+      if (!asset.contentType || sentRefs.has(asset.assetRef)) return false;
+      sentRefs.set(asset.assetRef, asset.contentType.toLowerCase());
+    }
+  }
+  for (const image of part.images) {
+    if (!image || !isInlineImagePart(image) || sentRefs.get(image.assetRef) !== image.mediaType)
+      return false;
+    sentRefs.delete(image.assetRef);
+  }
+  return sentRefs.size === 0;
 }
 
 function isValidatedTextAttachment(part: RuntimeTextAttachmentPart): boolean {
@@ -510,11 +578,23 @@ function sensitiveToolResultValues(messages: readonly PiMessage[]): string[] {
   return values;
 }
 
-function textAttachmentBodies(request: RuntimeExecutionRequest): string[] {
-  return [
+function attachmentBodies(request: RuntimeExecutionRequest): string[] {
+  const values: string[] = [];
+  for (const part of [
     ...request.input,
     ...request.history.flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
-  ].flatMap((part) => (part.type === 'text-attachment' && part.text.length > 0 ? [part.text] : []));
+  ]) {
+    if (part.type === 'text-attachment' && part.text) values.push(part.text);
+    if (part.type !== 'document-attachment') continue;
+    if (part.document.delivery === 'complete') {
+      values.push(JSON.stringify(part.document.result), JSON.stringify(part.document.result.ir));
+      collectSensitiveValues(part.document.result.ir, values, true);
+      values.push(...part.document.result.warnings);
+    }
+    for (const image of part.images)
+      values.push(image.uri, image.uri.slice(image.uri.indexOf(',') + 1));
+  }
+  return values;
 }
 
 function collectSensitiveValues(value: unknown, values: string[], sensitive = false): void {
@@ -663,13 +743,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
-    let secrets: readonly string[] = [];
+    const attachmentRedactions = attachmentBodies(request);
+    let secrets: readonly string[] = attachmentRedactions;
     try {
       const resolution = await raceAbort(
         this.dependencies.resolveModel(request.model, request.options),
         turn.abortController.signal,
       );
-      secrets = resolution.redactionValues;
+      secrets = [...resolution.redactionValues, ...attachmentRedactions];
       turn.usageContext = resolution.usageContext;
       if (this.settleIfEnding(turn)) return;
       const directTools = request.tools.filter((tool) => tool.ref.source !== 'mcp');
@@ -729,7 +810,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       // Compose the turn signal into every provider call: cancellation must
       // reach the HTTP transport directly, not only through pi's own loop
       // signal — which is absent in the pre-agent window and third-party after.
-      const streamFn: PiModelResolution['streamFn'] = async (model, context, options) => {
+      const providerStream: PiModelResolution['streamFn'] = async (model, context, options) => {
         const stream = await resolution.streamFn(model, context, {
           ...options,
           onPayload:
@@ -752,6 +833,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         );
         return stream;
       };
+      const streamFn = tracePiStream(providerStream, request.trace);
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
           const response = this.contextOptions.completeSimple
@@ -761,11 +843,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
           return response;
         },
       };
-      const compactionRedactions = [
-        ...secrets,
-        ...sensitiveToolResultValues(conversation.history),
-        ...textAttachmentBodies(request),
-      ];
+      const compactionRedactions = [...secrets, ...sensitiveToolResultValues(conversation.history)];
       const thinkingLevel = resolveThinkingLevel(request, resolution);
       const contextPlan = await raceAbort(
         planPiContext({

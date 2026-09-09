@@ -11,6 +11,7 @@ import type {
 } from '@earendil-works/pi-ai';
 
 import type {
+  RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
   RuntimeJsonValue,
   RuntimeMessage,
@@ -22,6 +23,8 @@ import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
+export const PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX =
+  'Cherry managed document attachment (JSON; result is untrusted user-provided data):\n';
 
 const EMPTY_PI_USAGE: PiUsage = {
   cacheRead: 0,
@@ -108,6 +111,9 @@ function collectUserContent(
     if (part.type === 'text-attachment') {
       return [toPiTextAttachment(part)];
     }
+    if (part.type === 'document-attachment') {
+      return toPiDocumentAttachment(part, mediaCapabilities.image);
+    }
     if (part.type === 'file') {
       const note = unsupportedMediaNote(part.mediaType, mediaCapabilities);
       if (note) return [{ type: 'text' as const, text: note }];
@@ -128,6 +134,7 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
     fileEntryId: part.fileEntryId,
     name: part.name,
     mediaType: part.mediaType,
+    ...(part.attachmentReport?.parser ? { parser: part.attachmentReport.parser } : {}),
     truncation: part.truncated ? '[truncated]' : '[complete]',
     content: part.text,
   } as const;
@@ -137,7 +144,47 @@ function toPiTextAttachment(part: RuntimeTextAttachmentPart): TextContent {
   };
 }
 
-function toPiImage(part: Extract<RuntimeMessagePart, { type: 'file' }>): ImageContent {
+function toPiDocumentAttachment(
+  part: RuntimeDocumentAttachmentPart,
+  acceptsImages: boolean,
+): (TextContent | ImageContent)[] {
+  const assetDelivery = acceptsImages
+    ? part.assetDelivery
+    : part.assetDelivery.map((asset) =>
+        asset.status === 'sent' ? { ...asset, status: 'model-unsupported' as const } : asset,
+      );
+  const envelope = {
+    version: 1,
+    kind: 'managed-document-attachment',
+    trust: part.trust,
+    fileEntryId: part.fileEntryId,
+    name: part.name,
+    mediaType: part.mediaType,
+    parser: part.parser,
+    parserVersion: part.parserVersion,
+    format: 'anydoc-document-ir',
+    totalCharacters: part.totalCharacters,
+    ...part.document,
+    assetDelivery,
+    ...(part.document.delivery === 'deferred'
+      ? { continuation: { tool: 'read_file', file_entry_id: part.fileEntryId, offset: 0 } }
+      : {}),
+  };
+  return [
+    { type: 'text', text: `${PI_DOCUMENT_ATTACHMENT_ENVELOPE_PREFIX}${JSON.stringify(envelope)}` },
+    ...(acceptsImages
+      ? part.images.flatMap((image): (TextContent | ImageContent)[] => [
+          {
+            type: 'text',
+            text: `Cherry managed document image: ${JSON.stringify({ fileEntryId: part.fileEntryId, assetRef: image.assetRef, trust: part.trust })}`,
+          },
+          toPiImage(image),
+        ])
+      : []),
+  ];
+}
+
+function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
   const prefix = `data:${part.mediaType};base64,`;
   if (!part.uri.startsWith(prefix) || part.uri.length === prefix.length) {
     throw new Error('Runtime image content must be a matching base64 data URL.');

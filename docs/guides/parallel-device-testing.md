@@ -291,7 +291,7 @@ pnpm dev --port "$CONDUCTOR_PORT"
 Use a workspace-unique session, explicit simulator, and explicit Metro hint:
 
 ```bash
-agent-device open com.cherry-ai.cherry-studio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)" --metro-host 127.0.0.1 --metro-port "$CONDUCTOR_PORT" --relaunch
+agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)" --metro-host 127.0.0.1 --metro-port "$CONDUCTOR_PORT" --relaunch
 ```
 
 For Android, relaunch the installed development client on the dedicated emulator, then open the
@@ -300,7 +300,7 @@ URL from another workspace. Opening that URL through `agent-device` configures A
 reachability for its Metro port.
 
 ```bash
-agent-device open com.cherry_ai.cherry_studio_app.dev --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL" --relaunch
+agent-device open com.cherryai.cherrystudio_app.dev --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL" --relaunch
 agent-device open "$DEV_CLIENT_URL" --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL"
 ```
 

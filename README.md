@@ -47,10 +47,10 @@ values are rejected.
 | `preview` | Cherry Studio Preview | `.preview` | `cherrystudio-preview` |
 | `production` | Cherry Studio | none | `cherrystudio` |
 
-The base IDs remain `com.cherry-ai.cherry-studio-app` (iOS) and
-`com.cherry_ai.cherry_studio_app` (Android). Widget identifiers and iOS App Groups follow the selected
-variant. Each variant has independent app data; existing installations retain the original identity
-and their data is not automatically migrated to the new development or preview app.
+The base IDs are `com.cherryai.cherrystudio-app` (iOS) and
+`com.cherryai.cherrystudio_app` (Android). Widget identifiers and iOS App Groups follow the selected
+variant. Each variant has independent app data; existing installations retain their previous identity
+and their data is not automatically migrated to apps using the new IDs.
 
 The `dev`, `start`, Storybook, `ios`, and `android` scripts select `PROFILE=development`. The `prebuild`
 script also defaults to development, while preserving an explicitly set `PROFILE` (for example,
@@ -59,9 +59,10 @@ same explicit `PROFILE` when building or starting Metro. When switching variants
 `ios` or `android` directories, regenerate them with `PROFILE=<profile> pnpm exec expo prebuild --clean`
 before building; this replaces generated native projects, including any manual native edits.
 
-These identity changes require new native builds. The first iOS development/preview build also needs
+These identity changes require new native builds. Each iOS variant needs
 matching Apple app identifiers, widget identifiers, App Groups, and provisioning profiles. The EAS
-project ID and production App Store submission target stay unchanged.
+project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
+in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
 
 ## Validate
 

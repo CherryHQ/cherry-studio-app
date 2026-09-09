@@ -21,8 +21,8 @@ here. Terms follow [Domain Language](../domain-language.md).
    Composer imports when an attachment enters its managed draft.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
-6. **Only the user deletes files.** Two paths exist: cancelling an attachment before send, and (once
-   the file library ships) library deletion. There is no background garbage collection.
+6. **Only the user deletes files.** Removing a composer attachment removes its reference, not the
+   library entry. Deletion belongs to the file library; there is no background garbage collection.
 7. **Owners hold their own file ids; there is no association table.** A message carries them in its
    part JSON, a painting in its `files` column. Nothing maintains a reverse index, because nothing
    asks which owners use a given file — and a file outlives every owner that pointed at it.
@@ -43,7 +43,7 @@ here. Terms follow [Domain Language](../domain-language.md).
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
   extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
-  generic document type from the PDF/DOCX/PPTX/XLSX filename before persisting it. The stored type is
+  generic document type from the PDF, Office, ODF, RTF, or EPUB filename before persisting it. The stored type is
   authoritative for every consumer; readers do not re-infer it from the extension. It is also the filter key for the
   library's category tabs (`image/%`, `application/pdf`, …), which is why extensions are not stored
   separately.
@@ -95,6 +95,41 @@ never created.
 
 ## Agent Attachment Persistence
 
+### Shared send-time preparation
+
+`FileModule.prepareAttachments` and the Agent's session-scoped adapter share
+`services/file/prepareFileAttachments`. It owns metadata admission, content budgets, and
+`FileAttachmentReport`; importing a file does not parse it, and failed submission does not delete
+the imported entry. Painting still admits images only.
+
+`readAttachmentContent` is the common controlled reader for attachments and file tools. Its
+document parser setting is supplied by the caller, with AnyDoc as the default. PDF always uses
+the native text extractor. The built-in parser supports DOCX/PPTX/XLSX text; AnyDoc 0.4.1 also
+accepts DOC/PPT/XLS, ODT/ODS/ODP, RTF, and EPUB. `text/rtf` is a document, not raw UTF-8 text;
+CSV stays on the text path. Format admission follows the published mobile entry point's
+[content detection](https://github.com/tulaafrica/anydoc/blob/rn-v0.4.1/src/formats/detect.rs),
+not every extension supported elsewhere in the engine.
+
+The AnyDoc adapter dynamically loads the community module and retains its original `ir`,
+`warnings`, asset references, media types, and byte buffers. JSON validation does not project a
+fixed IR schema. A community `fallback` result is a parse failure, preserved as the backend error's
+cause; it never triggers a second parser. Native module failure is separately classified as
+`parser-unavailable`. No parsed document or derived asset gets a database table or library entry.
+
+Prepared content is text or a document with complete/deferred delivery. Complete documents retain
+the original JSON object. Oversized documents carry continuation metadata instead of a JSON
+prefix. Embedded images share count, byte, and context reserves with directly attached images,
+including repeated historical occurrences. Unsupported image formats are not converted. Asset
+delivery descriptors state whether pixels were sent, unsupported by the model/type, or omitted
+for budget. Reports persist only delivery facts and omission reasons, never IR or image bytes.
+
+AnyDoc uses published native libraries with Nitro/Nitrogen 0.36.4. A new development client is
+required; installing JavaScript dependencies alone does not register the native module. The
+package's permitted postinstall downloads the iOS XCFramework; Android obtains its library during
+the native build. Native conversion has no hard cancellation; aborted reads discard late results.
+
+### Agent projection
+
 A persisted Agent file part stores `fileEntryId` plus Host-validated display metadata such as name
 and media type — never an absolute sandbox path, which iOS invalidates on container relocation. The
 Host verifies the live entry and managed blob before reserving a current submission. If the entry or
@@ -104,16 +139,16 @@ reservation, and converts managed bytes to a bounded temporary Data URL for the 
 text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
 UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
-unsupported binary media types fail closed before reservation. PDF, DOCX, PPTX, and XLSX inputs are
-also admitted through local text extraction, with a 20 MiB source limit. PDFs use the existing Expo
-native extractor (at most 100 pages); Office files use bounded in-memory ZIP/XML parsing and SheetJS
+unsupported binary media types fail closed before reservation. Documents have a 20 MiB source
+limit. PDFs use the existing Expo native extractor (at most 100 pages). In built-in mode,
+DOCX/PPTX/XLSX use bounded in-memory ZIP/XML parsing and SheetJS
 for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
 part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office
 text is capped at one million UTF-16 units. Parser truncation is retained in the Runtime part.
 XLSX extraction checks local entry metadata against the ZIP directory and bounds actual XML output
 while decompressing. SheetJS receives a new uncompressed archive containing only the validated XML
 and relationship parts, so original headers and embedded binary entries cannot bypass those limits.
-All extracted documents share the text attachment budget (200,000 code points per file, 400,000
+All prepared document content shares the text attachment budget (200,000 code points per file, 400,000
 per request, including repeated historical references). Word includes paragraphs and ancillary text,
 PowerPoint follows slide relationships and includes speaker notes while excluding notes-page layout
 fields such as slide numbers, dates, headers, and footers. These fields do not make an otherwise
@@ -125,8 +160,25 @@ Empty documents fail with `ATTACHMENT_NO_TEXT`; damaged, encrypted, or over-limi
 before reservation. Unreadable historical documents are omitted without failing a new turn.
 Extracted text remains request-local, is encoded as untrusted user content, and is never persisted.
 
-Image attachments are sent to providers as inlined base64 data URLs; documents are sent as extracted
-text and work with text-only models. The provider upload cache is deferred
+In AnyDoc mode, the Agent projects the unchanged IR as a `RuntimeDocumentAttachmentPart`.
+Pi nests the original object in one JSON envelope with parser/version, trust, delivery facts, and
+asset descriptors. Admitted image bytes use the existing image channel, with each image labelled
+by `fileEntryId` and its original `assetRef`. No Markdown conversion or built-in enrichment is
+applied; upstream differences such as workbook values without original cell coordinates remain.
+Oversized IR is deferred to `read_file` rather than cut into invalid JSON. The Host captures
+`file.document_parser.mode` before preparation's first await and shares that value with attachment
+preparation and `read_file`. A later turn reparses historical input references with its own snapshot;
+existing messages, attachment reports, and tool results are not rewritten.
+
+Settings exposes **Document parser** as a local preference with AnyDoc selected by default and
+Built-in available for comparison. Its picker describes both formats and the next-turn/PDF rules;
+a failed preference save reports through the existing toast gateway. The transcript displays file
+attachments without processing notices. Reports still persist the actual parser, complete versus
+deferred IR delivery, and image omission reasons; older messages without those facts remain
+unspecified rather than inferred from today's preference.
+
+Image attachments are sent to providers as inlined base64 data URLs; documents send text or raw
+JSON and also work with text-only models, with embedded pixels explicitly marked unsent. The provider upload cache is deferred
 until the AI SDK's Files Upload API leaves pre-release; its content hash belongs to that cache table,
 not to `file_entry`.
 
@@ -143,9 +195,8 @@ held. Only the turn that produced the draft may call it, one edit at a time: `ed
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
 
 **Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
-bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. The composer
-calls it when the user cancels an attachment; the future library calls it when the user empties the
-trash.
+bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. Cancelling an
+attachment does not call it; deletion and the future trash belong to the library.
 
 **Missing bytes** — a current submission fails before admission; an already-persisted reference
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
@@ -191,9 +242,11 @@ text boundary, and the source is history. New entries persist with `provenance: 
 envelope; `generate_image` likewise imports generated image bytes with generated provenance.
 `write_file` reads no entry and does not consult the turn resource ledger. Knowledge of a valid id
 is sufficient for `edit_file` even outside that ledger, but it exposes no file listing or search.
-`read_file` returns a bounded line window of a ledger member's UTF-8 text or locally extracted
-document content and creates nothing. Its `sourceTruncated` flag distinguishes an extraction cap
-from the pageable line window's `truncated` flag. Versions are
+`read_file` returns bounded line windows for UTF-8/built-in/PDF output, or explicit raw JSON
+character windows for AnyDoc, and creates nothing. JSON offsets count Unicode code points;
+concatenating all windows recovers `JSON.stringify(original IR)`, including long strings. Asset
+descriptors contain references and sizes, never pixels. For text output, `sourceTruncated`
+distinguishes an extraction cap from the pageable line window's `truncated` flag. Versions are
 carried in the filename rather than a lineage column; folding a version chain in the library is a
 future library concern and needs no schema change to start.
 

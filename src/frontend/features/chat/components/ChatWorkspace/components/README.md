@@ -38,14 +38,16 @@ It uses plain secondary text with a middle dot between tokens and elapsed time, 
 surface, border, or extra icon. Token counts use a locale-independent compact number with its unit,
 such as `27k Tokens`. The entire summary remains tappable.
 
-The detail sheet retains localized exact counts. It opens at medium height and expands to large,
-leading with the model and total tokens, then grouping input/cache and output/reasoning measurements
-into two columns. A neutral segmented bar
-shows the relative input/output counts only when both are known and their sum is positive. Costs,
-performance, and message metadata follow as separate typographic groups, using theme tokens and
-scalable text. Missing counts stay unavailable and a measured zero remains visible.
+The detail sheet retains localized exact counts. It opens at medium height and expands through
+large to full height. The model and provider remain at the top, followed by total tokens and the
+input/cache and output/reasoning measurements in two columns. A neutral segmented bar shows the
+relative input/output counts only when both are known and their sum is positive. Performance
+measurements follow without an explanatory paragraph, and costs appear last. The message metadata
+section is omitted. The groups retain their theme tokens and scalable text. Missing counts stay
+unavailable and a measured zero remains visible.
 
-The usage button uses CherryUI's release-time press action under the existing message context menu.
-Scrolling, a committed long press, and system cancellation must cancel that tap; accessibility
+Message rows do not register a long-press copy menu. Copy is an explicit assistant toolbar action.
+The usage button uses CherryUI's release-time press action.
+Scrolling and system cancellation must cancel that tap; accessibility
 activation opens the same detail. The maintained sheet owns scrolling and dismissal. No feature-local
 gesture recognizer is added.

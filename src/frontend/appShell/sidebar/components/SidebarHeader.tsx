@@ -15,10 +15,12 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
  */
 export function SidebarHeader() {
   const insets = useSafeAreaInsets();
+  const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
   return (
     <View className="absolute top-0 right-0 left-0" pointerEvents="box-none">
-      <SidebarFade edge="top" size={appSidebar.headerBlurSize} />
+      {/* Match the body's top inset so the first resting row stays outside the blur. */}
+      <SidebarFade edge="top" size={headerInset} />
       <View
         className="absolute right-0 left-0 flex-row items-center gap-2 px-5"
         style={{ height: appSidebar.headerRowHeight, top: insets.top + appSidebar.headerGapY }}

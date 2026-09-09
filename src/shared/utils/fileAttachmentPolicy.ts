@@ -21,7 +21,7 @@ export const MIN_TEXT_CONTEXT_TOKEN_RESERVE = 1_024;
 
 export function fileAttachmentMode(file: Pick<FileAttachmentFact, 'mediaType' | 'name'>) {
   if (isAiSupportedImageMediaType(file.mediaType)) return 'image';
-  if (documentFileTypeFromMediaType(file.mediaType)) return 'document-text';
+  if (documentFileTypeFromMediaType(file.mediaType)) return 'document';
   if (isSupportedTextAttachment(file)) return 'text';
   return undefined;
 }
@@ -50,7 +50,7 @@ export function validateFileAttachments(
     const limit =
       mode === 'image'
         ? MAX_IMAGE_ATTACHMENT_BYTES
-        : mode === 'document-text'
+        : mode === 'document'
           ? MAX_DOCUMENT_ATTACHMENT_BYTES
           : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });

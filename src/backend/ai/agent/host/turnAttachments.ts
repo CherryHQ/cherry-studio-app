@@ -10,17 +10,21 @@ import {
   type AgentInputPart,
   type AgentMessageView,
 } from '@/shared/contracts/agent';
-import { FileAttachmentError, type FileAttachmentIssue } from '@/shared/contracts/fileAttachment';
+import {
+  FileAttachmentError,
+  type DocumentParserMode,
+  type FileAttachmentIssue,
+} from '@/shared/contracts/fileAttachment';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { fileAttachmentMode, validateFileAttachments } from '@/shared/utils/fileAttachmentPolicy';
 import { isAiSupportedImageMediaType } from '@/shared/utils/imageFileTypes';
 
+import { resolveManagedContentAttachments } from '../resources/contentAttachments';
 import type {
   ManagedFileFact,
   ManagedFileResolver,
   TurnResourceLedger,
 } from '../resources/managedFileResolver';
-import { resolveManagedTextAttachments } from '../resources/textAttachments';
 import { raceAbort, unsupportedMediaNote } from '../runtime';
 import type { AgentRuntime, RuntimeInputPart, RuntimeModelPreflight } from '../runtime';
 import type { RuntimeAttachmentContents } from './turnRuntimeInput';
@@ -199,19 +203,22 @@ function failAttachment(error: FileAttachmentError): never {
   );
 }
 
-/** Resolves bounded text attachment bodies, projecting failures to protocol errors. */
-export async function resolveRuntimeTextAttachments(
+/** Projects shared text/document preparation failures to protocol errors. */
+export async function resolveRuntimeContentAttachments(
   files: ManagedFileResolver,
   input: AgentInputPart[],
   history: AgentMessageView[],
   resources: TurnResourceLedger,
   signal: AbortSignal,
+  model: RuntimeModelPreflight,
+  documentParserMode: DocumentParserMode,
 ): Promise<RuntimeAttachmentContents> {
   const currentFileEntryIds = input.flatMap((part) =>
     part.type === 'file' ? [part.fileEntryId] : [],
   );
   const historicalFileEntryIds: string[] = [];
   for (let messageIndex = history.length - 1; messageIndex >= 0; messageIndex -= 1) {
+    if (history[messageIndex]?.role !== 'user') continue;
     const parts = history[messageIndex]?.parts ?? [];
     for (let partIndex = parts.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = parts[partIndex];
@@ -222,25 +229,31 @@ export async function resolveRuntimeTextAttachments(
   }
 
   try {
-    return await resolveManagedTextAttachments({
+    return await resolveManagedContentAttachments({
       availableFiles: resources.availableFiles,
       currentFileEntryIds,
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
       readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
       signal,
+      documentParserMode,
+      target: {
+        purpose: 'chat',
+        acceptsImages: model.inputModalities.includes('image'),
+        maxInputTokens: model.maxInputTokens,
+      },
     });
   } catch (error) {
     signal.throwIfAborted();
     if (error instanceof FileAttachmentError) failAttachment(error);
-    fail('ATTACHMENT_UNAVAILABLE', 'An attached text file could not be resolved.', {
+    fail('ATTACHMENT_UNAVAILABLE', 'An attached file could not be resolved.', {
       code: 'unavailable',
     });
   }
 }
 
 /**
- * Builds the execution-time attachment payload: validated text bodies plus
+ * Builds the execution-time attachment payload: prepared text/documents plus
  * inline image data URLs when the model accepts images, or text omission
  * notes when it does not (image bytes are never read in that case).
  */
@@ -251,10 +264,11 @@ export async function materializeRuntimeAttachments(input: {
   modelPreflight: RuntimeModelPreflight;
   resources: TurnResourceLedger;
   signal: AbortSignal;
-  textAttachments: RuntimeAttachmentContents;
+  contentAttachments: RuntimeAttachmentContents;
 }): Promise<RuntimeAttachmentContents> {
-  const { files, history, inputParts, modelPreflight, resources, signal, textAttachments } = input;
-  const attachments = new Map(textAttachments);
+  const { files, history, inputParts, modelPreflight, resources, signal, contentAttachments } =
+    input;
+  const attachments = new Map(contentAttachments);
   if (modelPreflight.inputModalities.includes('image')) {
     const images = await resolveRuntimeImages(files, resources, signal);
     for (const [fileEntryId, image] of images) {

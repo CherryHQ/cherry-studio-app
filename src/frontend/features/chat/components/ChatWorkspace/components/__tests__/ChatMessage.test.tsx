@@ -5,18 +5,10 @@ import type { MessageListItem } from '@/frontend/components/Message';
 
 import { ChatMessage } from '../ChatMessage';
 
-const mockCopyAssistantMessage = jest.fn();
-let mockMenuItems: readonly { disabled?: boolean; id: string }[] = [];
+const mockContextMenu = jest.fn(({ children }: { children: ReactNode }) => children);
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  ContextMenu: ({ children, items }: { children: ReactNode; items: typeof mockMenuItems }) => {
-    mockMenuItems = items;
-    return children;
-  },
-}));
-
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  ContextMenu: (props: { children: ReactNode }) => mockContextMenu(props),
 }));
 
 jest.mock('@/frontend/components/Avatar', () => {
@@ -37,10 +29,6 @@ jest.mock('@/frontend/components/Message', () => {
   };
 });
 
-jest.mock('../../context/AssistantMessageActionsProvider', () => ({
-  useAssistantMessageActions: () => ({ copyAssistantMessage: mockCopyAssistantMessage }),
-}));
-
 jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));
@@ -52,24 +40,36 @@ jest.mock('../AssistantMessageUsage', () => ({
 describe('ChatMessage', () => {
   let renderer: ReactTestRenderer | undefined;
 
+  beforeEach(() => {
+    mockContextMenu.mockClear();
+  });
+
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
   });
 
-  test('keeps the long-press menu mounted while copy changes from unavailable to available', () => {
+  test('does not attach a long-press menu before or after an assistant answer settles', () => {
     act(() => {
       renderer = create(renderMessage(createMessage('pending')));
     });
 
-    expect(mockMenuItems).toMatchObject([{ disabled: true, id: 'copy' }]);
+    expect(mockContextMenu).not.toHaveBeenCalled();
 
     act(() => {
       renderer?.update(renderMessage(createMessage('success')));
     });
 
-    expect(mockMenuItems).toMatchObject([{ disabled: false, id: 'copy' }]);
+    expect(mockContextMenu).not.toHaveBeenCalled();
     expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
+  });
+
+  test('does not attach a long-press menu to user messages', () => {
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), role: 'user' }));
+    });
+
+    expect(mockContextMenu).not.toHaveBeenCalled();
   });
 
   test('keeps native text selection available when message actions are disabled', () => {
@@ -78,7 +78,7 @@ describe('ChatMessage', () => {
     });
 
     expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(true);
-    expect(mockMenuItems).toEqual([]);
+    expect(mockContextMenu).not.toHaveBeenCalled();
   });
 
   test('shows the model identity and local creation time for the individual message', () => {

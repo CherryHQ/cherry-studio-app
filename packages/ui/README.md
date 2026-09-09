@@ -105,6 +105,11 @@ active font size step and decides how links open:
 />;
 ```
 
+The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
+updates and exposes native scroll indicators. Table cells do not open a copy menu; whole-message
+copy stays with the message actions. This behavior is native and requires a development-client
+rebuild after changing the patch.
+
 When rendering selectable content inside a scroll surface, follow the selection and
 scroll-cancellation contract in
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md)

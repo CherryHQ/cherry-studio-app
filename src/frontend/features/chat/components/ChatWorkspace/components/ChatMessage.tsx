@@ -1,13 +1,9 @@
-import { ContextMenu, type MenuItem } from '@cherrystudio/ui/components';
-import { memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo } from 'react';
 import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
-import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
-import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { AssistantMessageUsage } from './AssistantMessageUsage';
 
@@ -98,40 +94,15 @@ export const ChatMessage = memo(function ChatMessage({
   isMessageActionsEnabled,
   message,
 }: ChatMessageProps) {
-  const { t } = useTranslation();
-  const { copyAssistantMessage } = useAssistantMessageActions();
   const isTextSelectionEnabled = !isMessageActionsEnabled;
-  const copyText = useMemo(
-    () =>
-      !isMessageActionsEnabled || message.status === 'pending'
-        ? ''
-        : copyAssistantMessageText(message.data.parts ?? []),
-    [isMessageActionsEnabled, message],
-  );
-  const menuItems = useMemo<readonly MenuItem[]>(() => {
-    if (!isMessageActionsEnabled) {
-      return [];
-    }
-
-    return [
-      {
-        disabled: !copyText,
-        id: 'copy',
-        label: t('common.copy'),
-        onPress: () => copyAssistantMessage({ messageId: message.id, text: copyText }),
-      },
-    ];
-  }, [copyAssistantMessage, copyText, isMessageActionsEnabled, message.id, t]);
 
   return (
-    <ContextMenu items={menuItems}>
-      <View className="w-full" collapsable={false} testID={`chat-message-${message.id}`}>
-        {message.role === 'user' ? (
-          <UserMessage message={message} />
-        ) : (
-          renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
-        )}
-      </View>
-    </ContextMenu>
+    <View className="w-full" testID={`chat-message-${message.id}`}>
+      {message.role === 'user' ? (
+        <UserMessage message={message} />
+      ) : (
+        renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
+      )}
+    </View>
   );
 });

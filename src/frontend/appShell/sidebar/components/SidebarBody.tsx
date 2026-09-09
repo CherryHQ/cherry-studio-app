@@ -49,12 +49,7 @@ export function SidebarBody({ children }: PropsWithChildren) {
 
   return (
     <View className="flex-1">
-      <ScrollShadow
-        className="flex-1"
-        color={backgroundColor}
-        size={appSidebar.scrollShadowSize}
-        visibility="top"
-      >
+      <ScrollShadow className="flex-1" color={backgroundColor} size={headerInset} visibility="top">
         <ContextMenuScrollBoundary>
           {(scrollHandlers) => (
             <ScrollView

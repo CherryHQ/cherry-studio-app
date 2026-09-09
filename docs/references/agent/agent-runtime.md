@@ -173,6 +173,7 @@ type RuntimeExecutionRequest = {
   input: RuntimeInputPart[]
   tools: RuntimeTool[]
   options: RuntimeOptions
+  trace?: TraceSpan
 }
 
 type RuntimeModel = {
@@ -196,11 +197,40 @@ type RuntimeInputPart =
       truncated: boolean
       trust: 'untrusted-user-content'
     }
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
+
+type RuntimeDocumentAttachmentPart = {
+  type: 'document-attachment'
+  fileEntryId: string
+  mediaType: string
+  name: string
+  trust: 'untrusted-user-content'
+  parser: 'anydoc'
+  parserVersion: string
+  totalCharacters: number // Unicode code points in JSON.stringify(original IR)
+  document:
+    | { delivery: 'complete'; result: { status: 'ok'; ir: RuntimeJsonValue; warnings: string[] } }
+    | { delivery: 'deferred' }
+  assetDelivery: { assetRef: string; contentType: string | null; size: number;
+    status: 'sent' | 'model-unsupported' | 'unsupported-type' | 'budget' }[]
+  images: { assetRef: string; mediaType: string; uri: string }[]
+  attachmentReport?: FileAttachmentReport
+}
 ```
 
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
+
+`trace` is an optional process-local instrumentation handle from
+`backend/ai/observability`. It provides explicit child spans, bounded metadata attributes, and
+terminal status. Its methods never throw into execution. The Host owns the root and storage;
+Runtime code never resolves a storage service or imports a native tracing SDK. Pi records provider
+requests, including context-compaction requests. Tool and approval timing stay in message runtime
+statistics, and token usage stays in the invocation ledger. MCP owns its connection, catalog, and
+tool-call diagnostics, including work before a turn is admitted. Closing the Host root closes
+unfinished provider records, and late callbacks cannot reopen a settled trace. See
+[AI diagnostic tracing](../../../src/backend/ai/observability/README.md).
 
 The Host resolves protocol-level turn snapshots before this boundary. `default` and the current Pi
 `auto` fallback become an absent `reasoningEffort`, while `none` becomes `off`; Runtime
@@ -230,7 +260,21 @@ forge its boundary metadata. Pi's current-input/history estimator counts the res
 alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
 are redacted if a compaction model reproduces them in a persisted checkpoint.
 
-Neither Data URLs, extracted text, nor device URIs enter protocol values, SQLite, snapshots, or
+Document attachments use the file module's shared reader with the parser preference frozen before
+turn preparation first yields. That same setting enters the turn's `read_file` callback. The Host
+does not flatten AnyDoc IR into text: the document part keeps the original opaque JSON and admitted
+images, while the persisted user file part receives only its preparation report. Current and
+historical occurrences share the file module's content and image budgets. PDF remains native text;
+switching parsers affects the next turn's reads, not previous messages or persisted tool results.
+
+Pi serializes the complete document envelope once, with the original IR as a nested object, never
+an escaped JSON string. When delivery is deferred, it emits managed-id/offset continuation guidance
+instead of partial JSON. Each admitted image follows a label identifying `fileEntryId` and
+`assetRef`, using the existing image channel. Delivery descriptors stay separate from the IR and
+explain omitted pixels. Runtime validation, context estimates, history replay, error redaction, and
+checkpoint redaction cover document parts as well as text and direct images.
+
+Neither Data URLs, attachment IR, extracted attachment text, nor device URIs enter protocol values, SQLite, snapshots, or
 logs. Tool-side access follows the stricter managed-id ledger in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
@@ -258,6 +302,7 @@ type RuntimeMessagePart =
       truncated: boolean
       trust: 'untrusted-user-content'
     }
+  | RuntimeDocumentAttachmentPart
   | { type: 'file'; mediaType: string; name?: string; uri: string }
   | {
       type: 'tool-call'

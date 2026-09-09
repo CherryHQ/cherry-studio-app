@@ -14,6 +14,8 @@ import {
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import type { TraceRecorder } from '../../../observability';
+import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import type { ManagedFileResolver } from '../../resources/managedFileResolver';
 import {
   createDeniedToolResult,
@@ -126,6 +128,7 @@ const stubTool: RuntimeTool = {
 };
 
 type HostOverrides = {
+  traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
   appLanguage?: () => 'en-US' | 'zh-CN';
   resolveRuntimeTools?: () => Promise<RuntimeTool[]>;
@@ -144,6 +147,7 @@ function createHost(
     {
       agents: overrides.agents ?? agents,
       appLanguage: overrides.appLanguage ?? (() => 'zh-CN'),
+      documentParserMode: () => 'builtin',
       files,
       inferenceModel: resolveInferenceModel,
       naming: () => naming,
@@ -152,6 +156,7 @@ function createHost(
       },
       usage,
       tools,
+      traces: overrides.traces,
     },
     backgroundReply,
     runtime,
@@ -247,6 +252,52 @@ describe('MobileAgentHost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
+  });
+
+  test('correlates Runtime spans with the durable turn and finishes tracing after persistence', async () => {
+    const { traces, records } = createTraceRecorder();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+      controller.request.trace?.startSpan('provider')?.end('ok');
+      for (const requestId of ['provider-1', 'provider-2']) {
+        controller.emit({
+          type: 'usage',
+          requestId,
+          completedAt: 1_500,
+          context: USAGE_CONTEXT,
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        });
+      }
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, { traces });
+    const session = await host.startSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+      parts: [{ type: 'text', text: 'private input' }],
+    });
+    await waitFor(
+      () => records.some((record) => record.name === 'ai.turn' && record.revision === 2),
+      'the diagnostic trace to settle',
+    );
+    const assistant = (await store.listMessages(session.id))[1];
+    expect(assistant.status).toBe('success');
+    const root = records.find((record) => record.name === 'ai.turn' && record.revision === 2)!;
+    expect(root).toMatchObject({
+      status: 'ok',
+      context: {
+        agentId: AGENT_ID,
+        sessionId: session.id,
+        messageId: assistant.id,
+        turnId: expect.any(String),
+      },
+    });
+    expect(records.find((record) => record.name === 'provider')).toMatchObject({
+      traceId: root.traceId,
+      parentSpanId: root.spanId,
+      context: root.context,
+    });
+    expect(JSON.stringify(records)).not.toContain('private input');
+    expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
   });
 
   test('retains each latest turn without transcript observers and only notifies status changes', async () => {
@@ -801,6 +852,7 @@ describe('MobileAgentHost', () => {
 
     expect(getTools).toHaveBeenCalledWith({
       disabledCapabilities: ['health'],
+      documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
       resolveUsageAttribution: expect.any(Function),

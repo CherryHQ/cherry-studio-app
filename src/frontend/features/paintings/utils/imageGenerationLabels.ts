@@ -54,11 +54,13 @@ const PARAM_LABEL_KEYS = {
 } as const satisfies Record<CanonicalParamKey, string>;
 
 const OPTION_LABEL_KEYS: Partial<Record<CanonicalParamKey, Record<string, string>>> = {
+  aspectRatio: { auto: 'painting.settings.option.auto' },
   background: {
     auto: 'painting.settings.option.auto',
     opaque: 'painting.settings.option.opaque',
     transparent: 'painting.settings.option.transparent',
   },
+  imageResolution: { auto: 'painting.settings.option.auto' },
   moderation: {
     auto: 'painting.settings.option.auto',
     low: 'painting.settings.option.low',

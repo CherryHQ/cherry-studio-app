@@ -10,6 +10,9 @@ import type {
 } from '@/backend/ai/agent';
 import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 
+import type { TraceRecorder } from '../observability';
+import { endMcpTrace } from './endMcpTrace';
+
 export const MCP_TOOL_CALL_TIMEOUT_MS = 60 * 1000;
 export const MCP_TOOL_RESULT_MAX_BYTES = 256 * 1024;
 
@@ -42,6 +45,7 @@ export type McpRuntimeToolSelection = {
 };
 
 export type McpToolInvocationCapability = {
+  traces?: TraceRecorder;
   invoke(
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
@@ -114,7 +118,7 @@ function compileMcpInputSchema(value: unknown): {
 
 /**
  * Adapt selected MCP descriptors into process-local Runtime tools.
- * The callback closes over only a compiled validator, the stable ref, and a narrow invoke method.
+ * The callback owns the compiled validator, stable ref, invocation port, and optional diagnostics.
  */
 export function createMcpRuntimeTools(
   selections: readonly McpRuntimeToolSelection[],
@@ -172,7 +176,15 @@ export function createMcpRuntimeTools(
       description: descriptor.description,
       displayName: descriptor.displayName,
       execute: (call) =>
-        executeMcpRuntimeTool({ call, endpointUrl, generation, inputValidator, invoke, ref }),
+        executeMcpRuntimeTool({
+          call,
+          endpointUrl,
+          generation,
+          inputValidator,
+          invoke,
+          ref,
+          traces: capability.traces,
+        }),
       inputSchema,
       providerName,
       ref,
@@ -187,21 +199,26 @@ async function executeMcpRuntimeTool(input: {
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];
   ref: Extract<RuntimeToolRef, { source: 'mcp' }>;
+  traces?: TraceRecorder;
 }) {
   const { call } = input;
-  if (call.signal.aborted) {
-    throw cancelledError();
-  }
-  if (!input.inputValidator.safeParse(call.input).success) {
-    throw new McpRuntimeToolError(
-      'mcp_tool_input_invalid',
-      'The MCP tool input did not match its JSON Schema.',
-      false,
-    );
-  }
-
-  const bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
+  const trace = input.traces?.startTrace('mcp.call_tool', undefined, {
+    'mcp.server.id': input.ref.serverId,
+    'mcp.connection.generation': input.generation,
+    'tool.name': input.ref.rawToolName,
+    'tool.call.id': call.toolCallId,
+  });
+  let bound: BoundedSignal | undefined;
   try {
+    if (call.signal.aborted) throw cancelledError();
+    if (!input.inputValidator.safeParse(call.input).success) {
+      throw new McpRuntimeToolError(
+        'mcp_tool_input_invalid',
+        'The MCP tool input did not match its JSON Schema.',
+        false,
+      );
+    }
+    bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
     const remoteResult = await raceAbort(
       input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation),
       bound.signal,
@@ -213,9 +230,20 @@ async function executeMcpRuntimeTool(input: {
       throw cancelledError();
     }
 
-    return { artifacts: [], value: projectMcpResult(remoteResult) };
+    const value = projectMcpResult(remoteResult);
+    const isToolError =
+      remoteResult !== null &&
+      typeof remoteResult === 'object' &&
+      'isError' in remoteResult &&
+      remoteResult.isError === true;
+    trace?.end(
+      isToolError ? 'error' : 'ok',
+      isToolError ? { 'error.category': 'tool_result' } : undefined,
+    );
+    return { artifacts: [], value };
   } catch (error) {
-    if (bound.didTimeout()) {
+    endMcpTrace(trace, error, call.signal, bound?.didTimeout());
+    if (bound?.didTimeout()) {
       throw timeoutError();
     }
     if (call.signal.aborted) {
@@ -226,7 +254,7 @@ async function executeMcpRuntimeTool(input: {
     }
     throw new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
   } finally {
-    bound.done();
+    bound?.done();
   }
 }
 
