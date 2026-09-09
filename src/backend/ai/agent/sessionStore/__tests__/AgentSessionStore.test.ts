@@ -986,7 +986,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       notices.push({
         paths,
         inTransaction: raw.isTransaction,
-        row: raw.prepare('SELECT title FROM agent_session WHERE id = ?').get(session.id),
+        row: raw.prepare('SELECT name AS title FROM agent_session WHERE id = ?').get(session.id),
       });
     });
     try {

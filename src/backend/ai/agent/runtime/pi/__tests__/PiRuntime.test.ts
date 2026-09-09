@@ -1314,7 +1314,7 @@ describe('PiRuntime mapping', () => {
     );
     const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
     holder.resolution = { ...holder.resolution, maxInputTokens: 12_000 };
-    const history = compactableHistory();
+    const history: RuntimeExecutionRequest['history'] = compactableHistory();
     history[1].messages[1] = {
       ...history[1].messages[1],
       usage: { inputTokens: 120_000, outputTokens: 8, totalTokens: 120_008 },
