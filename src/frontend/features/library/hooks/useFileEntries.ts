@@ -30,23 +30,25 @@ export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled
   );
 
   useFillViewport({
-    enabled,
+    enabled: enabled && !query.error,
     hasNext: query.hasNext,
     isLoadingMore: query.isLoadingMore,
     loadNext,
     visibleCount: entries.length,
   });
   const loadMore = useCallback(() => {
-    if (enabled) {
+    if (enabled && !query.error) {
       void loadNext();
     }
-  }, [enabled, loadNext]);
+  }, [enabled, loadNext, query.error]);
 
   return {
     entries,
+    error: query.error,
     isLoading: query.isLoading,
     isLoadingMore: query.isLoadingMore,
     loadMore,
+    refresh: query.refresh,
   };
 }
 

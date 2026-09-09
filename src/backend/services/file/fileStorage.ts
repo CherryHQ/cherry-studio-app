@@ -26,10 +26,10 @@ import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
-const fileChanges = new Emitter<void>();
+const fileChanges = new Emitter<FileEntryId>();
 
 /** All managed-file writers notify here, after their entry changes commit. */
-export function subscribeFileChanges(listener: () => void): () => void {
+export function subscribeFileChanges(listener: (entryId: FileEntryId) => void): () => void {
   const subscription = fileChanges.event(listener);
   return () => subscription.dispose();
 }
@@ -190,7 +190,7 @@ export async function createInternalEntry(
   const written = await writeInternalFile(input);
   try {
     const entry = await entries.create(written);
-    fileChanges.fire();
+    fileChanges.fire(entry.id);
     return entry;
   } catch (error) {
     try {
@@ -259,7 +259,7 @@ export async function discardInternalEntries(
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
-    fileChanges.fire();
+    fileChanges.fire(entry.id);
   }
 }
 
@@ -289,7 +289,7 @@ export async function rewriteInternalTextEntry(
     throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
   }
   const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
-  fileChanges.fire();
+  fileChanges.fire(entry.id);
   return updatedEntry;
 }
 
@@ -320,7 +320,7 @@ export async function deleteInternalEntry(
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
-  fileChanges.fire();
+  fileChanges.fire(id);
   return true;
 }
 

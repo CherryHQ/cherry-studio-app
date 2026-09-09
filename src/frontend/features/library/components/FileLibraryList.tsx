@@ -79,7 +79,7 @@ export function FileLibraryList({
   const { enterEditing, toggleId } = useSelectionActions();
   const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
   const { width: windowWidth } = useWindowDimensions();
-  const { entries, isLoading, isLoadingMore, loadMore } = useFileEntries(filter, {
+  const { entries, error, isLoading, isLoadingMore, loadMore, refresh } = useFileEntries(filter, {
     enabled: isDataLoadEnabled,
   });
   const visibleEntries = useMemo(
@@ -179,7 +179,14 @@ export function FileLibraryList({
   const listEmpty = useMemo(
     () => (
       <View style={styles.empty}>
-        {isLoading || isLoadingMore ? (
+        {error ? (
+          <View className="min-h-48 flex-1 justify-center px-6 pb-24">
+            <ContentState.Error
+              primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+              title={t('library.loadFailed')}
+            />
+          </View>
+        ) : isLoading || isLoadingMore ? (
           <FileLibrarySkeleton
             count={fileLibraryGrid.skeletonTiles}
             tileSize={tileSize}
@@ -192,18 +199,25 @@ export function FileLibraryList({
         )}
       </View>
     ),
-    [isLoading, isLoadingMore, t, tileSize, viewMode],
+    [error, isLoading, isLoadingMore, refresh, t, tileSize, viewMode],
   );
   const listFooter = useMemo(
     () =>
-      isLoadingMore && visibleEntries.length > 0 ? (
+      visibleEntries.length === 0 ? null : error ? (
+        <View className="px-6 py-4">
+          <ContentState.Error
+            primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
+            title={t('library.loadFailed')}
+          />
+        </View>
+      ) : isLoadingMore ? (
         <FileLibrarySkeleton
           count={fileLibraryGrid.columns}
           tileSize={tileSize}
           viewMode={viewMode}
         />
       ) : null,
-    [isLoadingMore, tileSize, viewMode, visibleEntries.length],
+    [error, isLoadingMore, refresh, t, tileSize, viewMode, visibleEntries.length],
   );
 
   return (
