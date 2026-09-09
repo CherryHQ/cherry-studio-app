@@ -4,28 +4,65 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { MorphMenu } from '../morph-menu';
 
 jest.mock('heroui-native/utils', () => {
-  const { twMerge } = require('tailwind-merge');
+  const { twMerge } = jest.requireActual('tailwind-merge');
 
   return {
     cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
   };
 });
 
-jest.mock('heroui-native/portal', () => {
+jest.mock('../../../../menu/menu-overlay', () => {
   const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
+  const { Pressable, View } = jest.requireActual('react-native');
+  const { MenuInteraction } = jest.requireActual('../../../../menu/menu-interaction');
 
   return {
-    Portal: ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement(View, { ...props, mockComponent: 'hero-portal' }, children),
+    MenuOverlay: ({
+      children,
+      isOpen,
+      isVisible,
+      onClose,
+      onClosed,
+      testID,
+    }: {
+      children: React.ReactNode;
+      isOpen: boolean;
+      isVisible: boolean;
+      onClose: () => void;
+      onClosed: () => void;
+      testID?: string;
+    }) => {
+      React.useEffect(() => {
+        if (!isVisible) onClosed();
+      }, [isVisible, onClosed]);
+      if (!isVisible) return null;
+      return React.createElement(
+        MenuInteraction,
+        { value: { isOpen, close: onClose } },
+        React.createElement(
+          View,
+          { mockComponent: 'menu-overlay' },
+          React.createElement(Pressable, {
+            onPress: onClose,
+            pointerEvents: isOpen ? 'auto' : 'none',
+            testID: `${testID}-backdrop`,
+          }),
+          React.createElement(View, { pointerEvents: isOpen ? 'box-none' : 'none' }, children),
+        ),
+      );
+    },
   };
 });
+
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 
 // Harmless when Metro/jest resolves the Android surface instead: mocking a
 // module nothing imports is a no-op.
 jest.mock('expo-glass-effect', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   return {
     GlassView: ({ children, ...props }: { children?: React.ReactNode }) =>
@@ -48,6 +85,7 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
+    cancelAnimation: jest.fn(),
     Easing: { bezier: () => 'bezier' },
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0] + (output[1] - output[0]) * value,
@@ -135,7 +173,7 @@ describe('MorphMenu', () => {
   }
 
   function portal(tree: ReactTestRenderer) {
-    return tree.root.findAllByProps({ mockComponent: 'hero-portal' })[0]!;
+    return tree.root.findAllByProps({ mockComponent: 'menu-overlay' })[0]!;
   }
 
   function layout(tree: ReactTestRenderer, size: { height: number; width: number }) {
@@ -151,13 +189,13 @@ describe('MorphMenu', () => {
   it('keeps the menu inline and reports itself collapsed while closed', () => {
     const tree = render();
 
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
     expect(tree.root.findByProps({ testID: 'menu-trigger' }).props.accessibilityState).toEqual({
       expanded: false,
     });
   });
 
-  it('floats the open menu in a portal anchored to the measured trigger', () => {
+  it('floats the open menu in the shared overlay anchored to the measured trigger', () => {
     const tree = render();
 
     press(tree, 'menu-trigger');
@@ -196,7 +234,7 @@ describe('MorphMenu', () => {
     press(tree, 'menu-backdrop');
 
     expect(onPress).not.toHaveBeenCalled();
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
   });
 
   it('closes immediately when reduced motion is enabled', () => {
@@ -206,7 +244,7 @@ describe('MorphMenu', () => {
     press(tree, 'menu-trigger');
     press(tree, 'menu-backdrop');
 
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
   });
 
   it('closes itself before running an item, so callers do not have to', () => {
@@ -217,35 +255,31 @@ describe('MorphMenu', () => {
     press(tree, 'menu-camera');
 
     expect(onPress).toHaveBeenCalledTimes(1);
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
   });
 
-  it('stops the closing portal from intercepting touches before its animation finishes', () => {
+  it('disables the closing menu content before its animation finishes', () => {
     mockFinishTimingImmediately = false;
     const tree = render();
 
     press(tree, 'menu-trigger');
     press(tree, 'menu-camera');
 
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' }).length).toBeGreaterThan(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' }).length).toBeGreaterThan(0);
     expect(tree.root.findByProps({ testID: 'menu-backdrop' }).props.pointerEvents).toBe('none');
     expect(
-      portal(tree).find((node) => {
-        const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
-
-        return (
+      portal(tree).findAll(
+        (node) =>
           node.props.pointerEvents === 'none' &&
-          style?.left === anchorRect.x &&
-          style?.top === anchorRect.y
-        );
-      }),
-    ).toBeDefined();
+          node.findAllByProps({ testID: 'menu-panel' }).length > 0,
+      ).length,
+    ).toBeGreaterThan(0);
 
     act(() => {
       mockTimingCallbacks.splice(0).forEach((callback) => callback(true));
     });
 
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
   });
 
   it('opens to the size its panel measured, on both axes', () => {
@@ -287,7 +321,7 @@ describe('MorphMenu', () => {
       act(() => {
         create(<MorphMenu.Item label="Camera" onPress={jest.fn()} />);
       }),
-    ).toThrow('useComposerMenu must be called inside a Composer.Menu');
+    ).toThrow('Menu items must be rendered inside a menu');
 
     consoleError.mockRestore();
   });
@@ -315,7 +349,7 @@ describe('MorphMenu', () => {
     press(tree, 'menu-web-search');
 
     expect(onValueChange).toHaveBeenCalledWith(true);
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
   });
 
   it('reports the toggle state to assistive tech', () => {
@@ -335,7 +369,7 @@ describe('MorphMenu', () => {
     const toggle = findPressable(renderer!.root, 'menu-web-search');
 
     expect(toggle.props.accessibilityRole).toBe('switch');
-    expect(toggle.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
+    expect(toggle.props.accessibilityState).toEqual({ checked: true, disabled: false });
   });
 
   it('renders an item icon alongside its label', () => {

@@ -1,6 +1,9 @@
 import type { ReactElement } from 'react';
 
-/** Semantic leading glyph; the native view owns each platform's artwork. */
+/** Private window-space geometry shared by menu trigger and layout owners. */
+export type MenuAnchor = { height: number; pageX: number; pageY: number; width: number };
+
+/** Semantic leading glyph; the menu implementation owns its artwork. */
 export type MenuIcon = 'branch';
 
 export type MenuItem = Readonly<{
