@@ -107,8 +107,15 @@ active font size step and decides how links open:
 
 The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
 updates and exposes native scroll indicators. Table cells do not open a copy menu; whole-message
-copy stays with the message actions. This behavior is native and requires a development-client
-rebuild after changing the patch.
+copy stays with the message actions. Standalone code blocks have a 192-point maximum height,
+including their header, in both native layout and shadow measurement. Short blocks keep their
+natural height; longer blocks keep their complete content in a native vertical scroll viewport
+with horizontal scrolling for long lines. The limit applies during streaming and after completion,
+including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
+text long presses; Android gives an overflowing code pane priority over the outer message list
+for that touch sequence. These behaviors are native and require a development-client rebuild
+after changing the patch. The upstream `codeBlock` style has no `maxHeight` property; limiting
+the outer Markdown view would constrain the whole message instead of each code block.
 
 When rendering selectable content inside a scroll surface, follow the selection and
 scroll-cancellation contract in

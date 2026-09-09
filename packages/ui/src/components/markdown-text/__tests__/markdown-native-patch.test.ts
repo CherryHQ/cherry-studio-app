@@ -29,3 +29,52 @@ describe('native Markdown table interaction patch', () => {
     expect(patch).toContain('+      isScrollbarFadingEnabled = false');
   });
 });
+
+describe('native Markdown code-block height patch', () => {
+  test('caps both iOS measurement paths at 192 points', () => {
+    expect(patch).toContain('+static const CGFloat kENRMCodeBlockMaxHeight = 192;');
+    expect(patch).toContain(
+      '+  return MIN(_codeSize.height + inset * 2 + [self headerHeight], kENRMCodeBlockMaxHeight);',
+    );
+    expect(patch).toContain(
+      '+  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);',
+    );
+  });
+
+  test('preserves the full iOS code extent inside the capped scroll viewport', () => {
+    expect(patch).toContain(
+      '+  CGFloat contentHeight = MAX(_codeSize.height + inset * 2 - borderW, frame.size.height);',
+    );
+    expect(patch).toContain(
+      '+  _scrollView.contentSize = CGSizeMake(contentWidth, contentHeight);',
+    );
+    expect(patch).toContain(
+      '+  _scrollView.scrollEnabled = contentWidth > frame.size.width || contentHeight > frame.size.height;',
+    );
+  });
+
+  test('caps Android layout and shadow measurement with the same density-aware limit', () => {
+    expect(patch).toContain('+    private const val MAX_HEIGHT_DP = 192f');
+    expect(patch).toContain(
+      '+      (MAX_HEIGHT_DP * context.resources.displayMetrics.density).toInt()',
+    );
+    expect(patch).toContain(
+      '+      MeasureSpec.makeMeasureSpec((maxHeight - headerH).coerceAtLeast(0), MeasureSpec.AT_MOST),',
+    );
+    expect(patch).toContain(
+      '+    setMeasuredDimension(measuredWidth, (headerH + verticalScrollView.measuredHeight).coerceAtMost(maxHeight))',
+    );
+    expect(patch).toContain(
+      '+      return (layout.height.toFloat() + inset * 2 + headerH).coerceAtMost(maxHeightPx(context).toFloat())',
+    );
+  });
+
+  test('nests Android horizontal code scrolling inside a vertical native viewport', () => {
+    expect(patch).toContain('+    object : ScrollView(context) {');
+    expect(patch).toContain(
+      '+      addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))',
+    );
+    expect(patch).toContain('+          parent?.requestDisallowInterceptTouchEvent(true)');
+    expect(patch).toContain('+          parent?.requestDisallowInterceptTouchEvent(false)');
+  });
+});

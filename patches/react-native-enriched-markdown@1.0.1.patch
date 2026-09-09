@@ -176,3 +176,215 @@ diff --git a/ios/views/TableContainerView.m b/ios/views/TableContainerView.m
    }
  #else
    CGFloat overhang = MAX(self.config.tableHorizontalOverflow, 0);
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
+index 380c6be097ff3e6b67e6f66ec32b205af196844f..8f6ccbeab2b5ef3ba8754fd22d998b42469161eb 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/views/CodeBlockContainerView.kt
+@@ -17,10 +17,12 @@ import android.text.StaticLayout
+ import android.text.TextPaint
+ import android.text.TextUtils
+ import android.util.TypedValue
++import android.view.MotionEvent
+ import android.view.View
+ import android.widget.FrameLayout
+ import android.widget.HorizontalScrollView
+ import android.widget.ImageView
++import android.widget.ScrollView
+ import androidx.appcompat.widget.AppCompatImageButton
+ import androidx.appcompat.widget.AppCompatTextView
+ import com.swmansion.enriched.markdown.parser.MarkdownASTNode
+@@ -35,8 +37,8 @@ import kotlin.math.ceil
+ 
+ /**
+  * Block segment view for fenced code blocks (see splitASTIntoSegments):
+- * a fixed header bar (language name, copy button) above a horizontally
+- * scrolling, non-wrapping code pane. Syntax coloring comes from the
++ * a fixed header bar (language name, copy button) above a height-capped,
++ * two-axis scrolling, non-wrapping code pane. Syntax coloring comes from the
+  * CodeBlockHighlighter seam and falls back to plain text. The box visuals
+  * must stay in sync with the commonmark flavor's CodeBlockSpan.
+  *
+@@ -55,6 +57,7 @@ class CodeBlockContainerView(
+   private val inset = contentInset(codeBlockStyle)
+   private val borderW = borderPx(codeBlockStyle)
+   private val headerH = headerHeight(codeBlockStyle)
++  private val maxHeight = maxHeightPx(context)
+ 
+   override val segmentMarginTop: Int get() = codeBlockStyle.marginTop.toInt()
+   override val segmentMarginBottom: Int get() = codeBlockStyle.marginBottom.toInt()
+@@ -114,6 +117,29 @@ class CodeBlockContainerView(
+       addView(textView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+     }
+ 
++  private val verticalScrollView =
++    object : ScrollView(context) {
++      override fun dispatchTouchEvent(event: MotionEvent): Boolean {
++        // Let this native pane arbitrate drags before the outer message list.
++        // The platform scroll views retain touch slop and cancel text long presses.
++        if (event.actionMasked == MotionEvent.ACTION_DOWN &&
++          (canScrollVertically(-1) || canScrollVertically(1))
++        ) {
++          parent?.requestDisallowInterceptTouchEvent(true)
++        }
++        val handled = super.dispatchTouchEvent(event)
++        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
++          parent?.requestDisallowInterceptTouchEvent(false)
++        }
++        return handled
++      }
++    }.apply {
++      isVerticalScrollBarEnabled = true
++      isNestedScrollingEnabled = true
++      overScrollMode = View.OVER_SCROLL_NEVER
++      addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++    }
++
+   private val languageView =
+     AppCompatTextView(context).apply {
+       includeFontPadding = false
+@@ -155,7 +181,7 @@ class CodeBlockContainerView(
+       }
+     isLongClickable = true
+     setOnLongClickListener { view -> showContextMenu(view) }
+-    addView(scrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
++    addView(verticalScrollView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+     addView(languageView, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+     addView(copyButton, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+   }
+@@ -187,9 +213,9 @@ class CodeBlockContainerView(
+     heightSpec: Int,
+   ) {
+     val measuredWidth = MeasureSpec.getSize(widthSpec)
+-    scrollView.measure(
++    verticalScrollView.measure(
+       MeasureSpec.makeMeasureSpec((measuredWidth - borderW * 2).coerceAtLeast(0), MeasureSpec.EXACTLY),
+-      MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
++      MeasureSpec.makeMeasureSpec((maxHeight - headerH).coerceAtLeast(0), MeasureSpec.AT_MOST),
+     )
+     copyButton.measure(
+       MeasureSpec.makeMeasureSpec(headerH, MeasureSpec.EXACTLY),
+@@ -200,7 +226,7 @@ class CodeBlockContainerView(
+       MeasureSpec.makeMeasureSpec(labelMaxWidth, MeasureSpec.AT_MOST),
+       MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+     )
+-    setMeasuredDimension(measuredWidth, headerH + scrollView.measuredHeight)
++    setMeasuredDimension(measuredWidth, (headerH + verticalScrollView.measuredHeight).coerceAtMost(maxHeight))
+   }
+ 
+   override fun onLayout(
+@@ -230,7 +256,7 @@ class CodeBlockContainerView(
+       buttonTop + copyButton.measuredHeight,
+     )
+ 
+-    scrollView.layout(borderW, headerH, width - borderW, bottom - top - borderW)
++    verticalScrollView.layout(borderW, headerH, width - borderW, bottom - top - borderW)
+   }
+ 
+   // Divider between the header and the code, centered in the gap the code
+@@ -305,6 +331,12 @@ class CodeBlockContainerView(
+   }
+ 
+   companion object {
++    // Keep this budget in sync with iOS and Cherry Mobile's file-output viewport.
++    private const val MAX_HEIGHT_DP = 192f
++
++    private fun maxHeightPx(context: Context): Int =
++      (MAX_HEIGHT_DP * context.resources.displayMetrics.density).toInt()
++
+     private const val HEADER_LABEL_SCALE = 0.85f
+ 
+     // Drawable box for the copy glyph, as a multiple of the code font size.
+@@ -366,7 +398,7 @@ class CodeBlockContainerView(
+       val inset = contentInset(style)
+       val headerH = headerHeight(style)
+       val text = buildCodeText(CodeBlockNode.extractCode(node), style)
+-      if (text.isEmpty()) return headerH + inset * 2f
++      if (text.isEmpty()) return (headerH + inset * 2f).coerceAtMost(maxHeightPx(context).toFloat())
+       val paint = createCodePaint(style, context)
+       val contentWidth = ceil(Layout.getDesiredWidth(text, paint)).toInt().coerceAtLeast(1)
+       val layout =
+@@ -377,7 +409,7 @@ class CodeBlockContainerView(
+           .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
+           .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE)
+           .build()
+-      return layout.height.toFloat() + inset * 2 + headerH
++      return (layout.height.toFloat() + inset * 2 + headerH).coerceAtMost(maxHeightPx(context).toFloat())
+     }
+   }
+ }
+diff --git a/ios/views/ENRMCodeBlockContainerView.m b/ios/views/ENRMCodeBlockContainerView.m
+index a668c26ebc9da0c7bda60da80c580ccbdd3571cd..4bde9011cd8ff93c614b6401a5468691db008eb9 100644
+--- a/ios/views/ENRMCodeBlockContainerView.m
++++ b/ios/views/ENRMCodeBlockContainerView.m
+@@ -8,8 +8,8 @@
+ #endif
+ 
+ // Block segment view for fenced code blocks (see SegmentRenderer.m):
+-// a fixed header bar (language name, copy button) above a horizontally
+-// scrolling, non-wrapping code pane. The container's drawRect: draws
++// a fixed header bar (language name, copy button) above a height-capped,
++// two-axis scrolling, non-wrapping code pane. The container's drawRect: draws
+ // background, border, label, and divider; only the copy button and the
+ // scroll view are subviews. Syntax coloring comes from the
+ // ENRMCodeBlockHighlighter seam and falls back to plain text. The box
+@@ -26,6 +26,9 @@
+ static const CGFloat kENRMHeaderIconScale = 0.72;
+ static const CGFloat kENRMHeaderSecondaryAlpha = 0.6;
+ static const CGFloat kENRMHeaderDividerAlpha = 0.2;
++// Cherry Mobile keeps each code block within the same 192-point viewport
++// budget as file output, while preserving the complete scrollable content.
++static const CGFloat kENRMCodeBlockMaxHeight = 192;
+ 
+ // Height geometry and code-run construction shared by the instance layout path
+ // and the view-free measureHeightForCodeBlockNode:, so the two cannot drift.
+@@ -243,13 +246,15 @@ - (instancetype)initWithConfig:(StyleConfig *)config
+ - (void)setupScrollView
+ {
+   _scrollView = [[RCTUIScrollView alloc] init];
+-  _scrollView.showsVerticalScrollIndicator = NO;
++  _scrollView.showsVerticalScrollIndicator = YES;
+   _scrollView.showsHorizontalScrollIndicator = YES;
+   _codeContentView = [[ENRMCodeBlockContentView alloc] initWithFrame:CGRectZero];
+   BOOL darkBackground = ENRMColorIsDark([_config codeBlockBackgroundColor]);
+ #if !TARGET_OS_OSX
+   _scrollView.bounces = YES;
+   _scrollView.alwaysBounceHorizontal = NO;
++  _scrollView.alwaysBounceVertical = NO;
++  _scrollView.directionalLockEnabled = YES;
+   _scrollView.backgroundColor = [UIColor clearColor];
+   _scrollView.isAccessibilityElement = NO;
+   _scrollView.accessibilityElementsHidden = YES;
+@@ -281,11 +286,12 @@ - (void)layoutScrollArea
+ 
+   CGFloat horizontalPad = MAX(inset - borderW, 0);
+   CGFloat contentWidth = MAX(_codeSize.width + horizontalPad * 2, frame.size.width);
++  CGFloat contentHeight = MAX(_codeSize.height + inset * 2 - borderW, frame.size.height);
+   _codeContentView.textOrigin = CGPointMake(horizontalPad, inset);
+-  _codeContentView.frame = CGRectMake(0, 0, contentWidth, frame.size.height);
++  _codeContentView.frame = CGRectMake(0, 0, contentWidth, contentHeight);
+ #if !TARGET_OS_OSX
+-  _scrollView.contentSize = CGSizeMake(contentWidth, frame.size.height);
+-  _scrollView.scrollEnabled = contentWidth > frame.size.width;
++  _scrollView.contentSize = CGSizeMake(contentWidth, contentHeight);
++  _scrollView.scrollEnabled = contentWidth > frame.size.width || contentHeight > frame.size.height;
+ #endif
+ }
+ 
+@@ -406,7 +412,7 @@ - (CGFloat)contentInset
+ - (CGFloat)measureHeight:(CGFloat)maxWidth
+ {
+   CGFloat inset = [self contentInset];
+-  return _codeSize.height + inset * 2 + [self headerHeight];
++  return MIN(_codeSize.height + inset * 2 + [self headerHeight], kENRMCodeBlockMaxHeight);
+ }
+ 
+ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleConfig *)config
+@@ -414,7 +420,7 @@ + (CGFloat)measureHeightForCodeBlockNode:(MarkdownASTNode *)node config:(StyleCo
+   CGFloat inset = ENRMCodeBlockContentInset(config);
+   CGFloat headerH = inset + ENRMCodeBlockHeaderLabelLineHeight(ENRMCodeBlockHeaderFont(config));
+   NSAttributedString *code = ENRMCodeBlockPlainAttributedCode(ENRMCodeBlockExtractCode(node), config);
+-  return ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH;
++  return MIN(ENRMCodeBlockCodeSize(code).height + inset * 2 + headerH, kENRMCodeBlockMaxHeight);
+ }
+ 
+ - (void)drawRect:(CGRect)rect

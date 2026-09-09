@@ -34,6 +34,26 @@ const markdown = [
   '$$',
 ].join('\n');
 
+const LONG_CODE_BLOCK_CONTENT = [
+  ...Array.from({ length: 48 }, (_, index) => `const item${index} = ${index};`),
+  `const summary = '${'Horizontal overflow remains readable. '.repeat(12)}';`,
+  '// Last line: vertical scrolling must reach this content.',
+].join('\n');
+
+const LONG_CODE_BLOCK_MARKDOWN = [
+  'Text before the code stays in the message flow.',
+  '',
+  '```ts',
+  LONG_CODE_BLOCK_CONTENT,
+  '```',
+  '',
+  'Text after the code stays visible. The next short block uses its natural height.',
+  '',
+  '```ts',
+  'const answer = 42;',
+  '```',
+].join('\n');
+
 const managedAttachment: CherryMessagePart = {
   filename: 'cherry-studio.png',
   mediaType: 'image/png',
@@ -345,6 +365,37 @@ export const messageExamples: readonly MessageExample[] = [
       ],
       'pending',
     ),
+  },
+  {
+    label: 'Code block height — streaming reasoning',
+    message: createMessage(
+      'assistant-code-reasoning-live',
+      'assistant',
+      [{ type: 'reasoning', state: 'streaming', text: `\`\`\`ts\n${LONG_CODE_BLOCK_CONTENT}` }],
+      'pending',
+    ),
+  },
+  {
+    label: 'Code block height — streaming answer',
+    message: createMessage(
+      'assistant-code-answer-live',
+      'assistant',
+      [{ type: 'text', state: 'streaming', text: `\`\`\`ts\n${LONG_CODE_BLOCK_CONTENT}` }],
+      'pending',
+    ),
+  },
+  {
+    label: 'Code block height — completed reasoning and final answer',
+    message: createMessage('assistant-code-complete', 'assistant', [
+      { type: 'reasoning', state: 'done', text: LONG_CODE_BLOCK_MARKDOWN },
+      { type: 'text', state: 'done', text: LONG_CODE_BLOCK_MARKDOWN },
+    ]),
+  },
+  {
+    label: 'Code block height — data-code part',
+    message: createMessage('assistant-code-data', 'assistant', [
+      { type: 'data-code', data: { content: LONG_CODE_BLOCK_CONTENT, language: 'ts' } },
+    ]),
   },
   {
     label: 'Translation and data parts',
