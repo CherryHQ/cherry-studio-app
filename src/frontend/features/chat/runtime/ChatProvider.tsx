@@ -13,6 +13,7 @@ import {
 import { AppState } from 'react-native';
 
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
+import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
@@ -142,7 +143,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
     [client, draftHandoff, forkSession, sendMessage],
   );
 
-  return <AgentChatContext value={value}>{children}</AgentChatContext>;
+  return (
+    <AgentChatContext value={value}>
+      <ToolInputPreviewProvider source={client.toolInputPreviews}>
+        {children}
+      </ToolInputPreviewProvider>
+    </AgentChatContext>
+  );
 }
 
 function createChatNavigation(input: { pathname: string; router: ReturnType<typeof useRouter> }) {

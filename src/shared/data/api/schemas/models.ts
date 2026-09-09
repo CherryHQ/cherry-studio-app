@@ -59,6 +59,9 @@ export const UpdateModelSchema = CreateModelSchema.omit({
 })
   .partial()
   .extend({
+    contextWindow: CreateModelSchema.shape.contextWindow.nullable(),
+    maxInputTokens: CreateModelSchema.shape.maxInputTokens.nullable(),
+    maxOutputTokens: CreateModelSchema.shape.maxOutputTokens.nullable(),
     isDeprecated: z.boolean().optional(),
     isEnabled: z.boolean().optional(),
     isHidden: z.boolean().optional(),

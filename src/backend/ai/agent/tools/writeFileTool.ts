@@ -75,6 +75,7 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
     displayName: 'Write file',
     description: "Save UTF-8 text as a new file in the user's Cherry file library.",
     inputSchema: toRuntimeInputSchema(writeFileInputSchema),
+    inputPreview: { textField: 'content', nameField: 'filename' },
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.
     approval: 'auto',

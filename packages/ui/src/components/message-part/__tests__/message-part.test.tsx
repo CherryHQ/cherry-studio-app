@@ -256,6 +256,28 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'Searching' })).toBeDefined();
   });
 
+  it('keeps the running status and details usable without a continuous title animation', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Tool
+          state="running"
+          statusText="Generating file content"
+          testID="streaming-file"
+          title="Write file"
+          titleAnimation="none"
+        >
+          <Text>File details</Text>
+        </MessagePart.Tool>,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({ accessibilityHint: 'shimmer' })).toHaveLength(0);
+    const trigger = findPressableByTestId(renderer!, 'streaming-file-trigger');
+    expect(trigger.props.accessibilityLabel).toBe('Write file, Generating file content');
+    act(() => trigger.props.onPress());
+    expect(renderer!.root.findByProps({ children: 'File details' })).toBeDefined();
+  });
+
   it('keeps a running tool group expanded and folds it once complete', () => {
     const steps = (
       <>
