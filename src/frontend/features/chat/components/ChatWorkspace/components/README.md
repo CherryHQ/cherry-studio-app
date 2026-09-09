@@ -15,6 +15,14 @@ cover and loading indicator exit together with a short eased fade.
 Viewport following, scroll memory, keyboard spacing, manual scrolling, and the scroll-to-bottom
 control are owned and documented by `@/frontend/components/Message`.
 
+## Message Timestamps
+
+Chat shows a centered timestamp above the first dated message in the loaded history and above
+each message at least five minutes after the preceding dated message. User and assistant messages
+share this rule; missing or invalid dates and synthetic system rows do not create time markers.
+Loading older history recalculates the boundaries. The assistant header contains only the assistant
+and model identity.
+
 ## Message Usage
 
 Settled assistant messages show total tokens and elapsed time beside their actions. The usage
