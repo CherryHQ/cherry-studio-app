@@ -169,6 +169,13 @@
       "when": 1788970800000,
       "tag": "0023_reconcile-desktop-connection",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788972571308,
+      "tag": "0024_extensible-plugin-authorizations",
+      "breakpoints": true
     }
   ]
 }

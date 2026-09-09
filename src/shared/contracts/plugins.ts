@@ -4,10 +4,11 @@ import { type PluginConnection, type PluginId, PluginIdSchema } from '@/shared/d
 
 export const ConnectPluginSchema = z.strictObject({
   pluginId: PluginIdSchema,
-  credential: z.string().trim().min(1).max(4096).regex(/^\S+$/),
+  fields: z.record(z.string().min(1).max(128), z.string().max(16_384)),
 });
 
 export type PluginErrorReason =
+  | 'unavailable'
   | 'authorization'
   | 'access'
   | 'quota'

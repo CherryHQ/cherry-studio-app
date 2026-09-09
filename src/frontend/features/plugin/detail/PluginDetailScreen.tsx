@@ -11,7 +11,8 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PluginIcon } from '../components/PluginIcon';
-import { PLUGIN_LINKS } from '../pluginCatalog';
+import { getPluginText } from '../pluginCatalog';
+import { usePluginCatalog } from '../usePluginCatalog';
 import { usePluginConnections, useRefreshPluginConnections } from '../usePluginConnections';
 
 export function PluginDetailScreen() {
@@ -23,16 +24,18 @@ export function PluginDetailScreen() {
 }
 
 function PluginDetail({ pluginId }: { pluginId: PluginId }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const { toast } = useToast();
   const plugins = useBackendModule('plugins');
+  const catalog = usePluginCatalog();
   const connections = usePluginConnections();
   const refresh = useRefreshPluginConnections();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const connection = connections.data?.find((item) => item.pluginId === pluginId);
-  const name = t(`plugins.catalog.${pluginId}.name`);
+  const entry = catalog.data?.find((item) => item.id === pluginId);
+  const name = entry ? getPluginText(entry.name, i18n.language) : pluginId;
 
   async function disconnect() {
     setIsDisconnecting(true);
@@ -40,12 +43,27 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
       await plugins.disconnect(pluginId);
       await refresh();
       toast.show({ label: t('plugins.disconnected'), variant: 'success' });
+      if (!entry) router.back();
     } catch {
       toast.show({ label: t('plugins.disconnectFailed'), variant: 'danger' });
     } finally {
       setIsDisconnecting(false);
     }
   }
+
+  if (catalog.isLoading || connections.isLoading)
+    return <ContentState.Loading title={t('plugins.loading')} />;
+  if (catalog.isError || connections.isError)
+    return (
+      <ContentState.Error
+        title={t('plugins.loadFailed')}
+        primaryAction={{
+          children: t('common.retry'),
+          onPress: () => void Promise.all([catalog.refetch(), connections.refetch()]),
+        }}
+      />
+    );
+  if (!entry && !connection) return <ContentState.Empty title={t('plugins.notFound')} />;
 
   return (
     <>
@@ -58,47 +76,41 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
       >
         <View className="gap-4">
           <View className="flex-row items-center gap-3">
-            <PluginIcon pluginId={pluginId} size="large" />
+            <PluginIcon icon={entry?.icon} size="large" />
             <Text className="flex-1 text-2xl font-semibold text-foreground">{name}</Text>
           </View>
           <Text className="text-base text-foreground">
-            {t(`plugins.catalog.${pluginId}.description`)}
+            {entry
+              ? getPluginText(entry.description, i18n.language)
+              : t('plugins.unavailableDescription')}
           </Text>
         </View>
-        <View className="gap-3">
-          <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
-          <Text className="text-sm text-muted-foreground">
-            {t(`plugins.catalog.${pluginId}.access`)}
-          </Text>
-          <Text className="text-sm text-muted-foreground">{t('plugins.privacyDescription')}</Text>
-          <View className="flex-row flex-wrap gap-4">
-            <Button
-              variant="link"
-              size="inline"
-              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].website)}
-            >
-              {t('plugins.website')}
-            </Button>
-            <Button
-              variant="link"
-              size="inline"
-              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].privacy)}
-            >
-              {t('plugins.privacyPolicy')}
-            </Button>
+        {entry ? (
+          <View className="gap-3">
+            <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
+            <Text className="text-sm text-muted-foreground">
+              {getPluginText(entry.access, i18n.language)}
+            </Text>
+            <Text className="text-sm text-muted-foreground">{t('plugins.privacyDescription')}</Text>
+            <View className="flex-row flex-wrap gap-4">
+              <Button
+                variant="link"
+                size="inline"
+                onPress={() => void openExternalUrl(entry.links.website)}
+              >
+                {t('plugins.website')}
+              </Button>
+              <Button
+                variant="link"
+                size="inline"
+                onPress={() => void openExternalUrl(entry.links.privacy)}
+              >
+                {t('plugins.privacyPolicy')}
+              </Button>
+            </View>
           </View>
-        </View>
-        {connections.isLoading ? (
-          <ContentState.Loading title={t('plugins.loading')} />
-        ) : connections.isError ? (
-          <ContentState.Error
-            title={t('plugins.loadFailed')}
-            primaryAction={{
-              children: t('common.retry'),
-              onPress: () => void connections.refetch(),
-            }}
-          />
-        ) : connection ? (
+        ) : null}
+        {connection ? (
           <View className="gap-4">
             <View className="flex-row items-center gap-2">
               <CheckIcon className="size-5 text-success" />
@@ -107,15 +119,17 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
               </Text>
             </View>
             <View className="flex-row flex-wrap gap-3">
-              <Button
-                variant="outline"
-                disabled={isDisconnecting}
-                onPress={() =>
-                  router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
-                }
-              >
-                {t('plugins.reconnect')}
-              </Button>
+              {entry ? (
+                <Button
+                  variant="outline"
+                  disabled={isDisconnecting}
+                  onPress={() =>
+                    router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
+                  }
+                >
+                  {t('plugins.reconnect')}
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 loading={isDisconnecting}

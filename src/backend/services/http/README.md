@@ -32,6 +32,8 @@ pairing and configuration import.
   boundary.
 - Neither the transport nor its interceptors retry or replay by default. In particular, a `401`
   remains one failed request unless a domain explicitly owns a safe refresh-and-retry policy.
+- Secret-bearing exchanges can specify `redirect: 'error'`. The fetch adapter rejects redirects
+  instead of forwarding credentials to a new endpoint; Feishu application authorization uses this.
 
 The routing model is:
 

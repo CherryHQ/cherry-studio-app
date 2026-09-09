@@ -8,6 +8,11 @@ import {
 
 const mockFetch = jest.fn();
 const mockGetGrant = jest.fn();
+const mockTokenRequest = jest.fn();
+jest.mock('@/backend/services/http', () => ({
+  createHttpClient: () => ({ request: (...args: unknown[]) => mockTokenRequest(...args) }),
+  isHttpError: () => false,
+}));
 jest.mock('@ai-sdk/mcp', () => {
   const actual = jest.requireActual<typeof mcp>('@ai-sdk/mcp');
   return { ...actual, createMCPClient: jest.fn(actual.createMCPClient) };
@@ -30,6 +35,8 @@ const definitions = [
     name: 'maps_weather',
     inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
   },
+  { name: 'fetch-doc', inputSchema: { type: 'object', properties: {} } },
+  { name: 'create-doc', inputSchema: { type: 'object', properties: {} } },
 ];
 
 function reply(request: RpcRequest, result: unknown): Response {
@@ -76,9 +83,102 @@ function toolRequests(): RpcRequest[] {
 beforeEach(() => {
   jest.mocked(mcp.createMCPClient).mockClear();
   mockFetch.mockReset().mockImplementation(respond);
-  mockGetGrant.mockReset().mockResolvedValue({ credential: 'private-key' });
+  mockGetGrant.mockReset().mockImplementation(async (pluginId: string) => ({
+    credential: 'private-key',
+    authMethod: pluginId === 'amap' ? 'api_key' : 'personal_token',
+  }));
+  mockTokenRequest.mockReset().mockResolvedValue({
+    data: { code: 0, tenant_access_token: 'private-tenant-token', expire: 7200 },
+  });
 });
 afterEach(() => jest.restoreAllMocks());
+
+const feishuCredential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'private-app-secret' });
+
+it('connects Feishu as the application without storing credentials in MCP configuration or calling business tools', async () => {
+  await expect(validatePluginCredential('feishu', feishuCredential)).resolves.toBe('cli_cherry');
+  expect(toolRequests()).toEqual([]);
+  expect(mockTokenRequest).toHaveBeenCalledTimes(1);
+  expect(mockTokenRequest.mock.calls[0][0]).toMatchObject({
+    method: 'POST',
+    path: '/open-apis/auth/v3/tenant_access_token/internal',
+    body: { app_id: 'cli_cherry', app_secret: 'private-app-secret' },
+    redirect: 'error',
+  });
+  const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
+  expect(JSON.stringify(config)).not.toMatch(/private-app-secret|private-tenant-token/);
+  for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+    const headers = new Headers(init.headers);
+    expect(url).toBe('https://mcp.feishu.cn/mcp');
+    expect(headers.get('X-Lark-MCP-TAT')).toBe('private-tenant-token');
+    expect(headers.get('X-Lark-MCP-Allowed-Tools')?.split(',')).toContain('create-doc');
+    expect(headers.has('X-Lark-MCP-UAT')).toBe(false);
+    expect(headers.has('Authorization')).toBe(false);
+    expect(init.redirect).toBe('error');
+    expect(JSON.stringify(init)).not.toContain('private-app-secret');
+  }
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-doc')).toBe(false);
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-user')).toBe(false);
+});
+
+it('rechecks a Feishu grant after token exchange and prevents a revoked grant from sending a cloud request', async () => {
+  mockGetGrant.mockResolvedValue({ credential: feishuCredential, authMethod: 'app_credentials' });
+  mockTokenRequest.mockImplementation(async () => {
+    mockGetGrant.mockRejectedValue(new Error('revoked'));
+    return { data: { code: 0, tenant_access_token: 'private-tenant-token', expire: 7200 } };
+  });
+  await expect(
+    createBuiltInMcpClient('feishu', 'grant-feishu', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('keeps cached Feishu tokens subject to grant revocation', async () => {
+  mockGetGrant.mockResolvedValue({ credential: feishuCredential, authMethod: 'app_credentials' });
+  const client = await createBuiltInMcpClient(
+    'feishu',
+    'grant-feishu',
+    new AbortController().signal,
+  );
+  try {
+    await client.listTools();
+    expect(mockTokenRequest).toHaveBeenCalledTimes(1);
+    mockGetGrant.mockRejectedValue(new Error('revoked'));
+    mockFetch.mockClear();
+    await expect(client.listTools()).rejects.toMatchObject({ reason: 'authorization' });
+    expect(mockFetch).not.toHaveBeenCalled();
+  } finally {
+    await client.close();
+  }
+});
+
+it('does not replay a Feishu write after an expired token response', async () => {
+  mockGetGrant.mockResolvedValue({ credential: feishuCredential, authMethod: 'app_credentials' });
+  const client = await createBuiltInMcpClient(
+    'feishu',
+    'grant-feishu',
+    new AbortController().signal,
+  );
+  try {
+    const tools = await client.tools();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.body && JSON.parse(init.body).method === 'tools/call')
+        return new Response('private-tenant-token', { status: 401 });
+      return respond(url, init);
+    });
+    await expect(
+      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
+    ).rejects.toMatchObject({ reason: 'authorization' });
+    expect(toolRequests()).toHaveLength(1);
+    expect(mockTokenRequest).toHaveBeenCalledTimes(1);
+    // A later independent request can obtain a new token, without replaying the failed write.
+    await client.listTools();
+    expect(mockTokenRequest).toHaveBeenCalledTimes(2);
+    expect(toolRequests()).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
 
 it.each([
   ['github', 'https://api.githubcopilot.com/mcp/'],
@@ -221,7 +321,7 @@ it('does not send a request cancelled while resolving credentials', async () => 
     const controller = new AbortController();
     mockGetGrant.mockImplementation(async () => {
       controller.abort();
-      return { credential: 'private-key' };
+      return { credential: 'private-key', authMethod: 'personal_token' };
     });
     mockFetch.mockClear();
     await expect(client.listTools({ options: { signal: controller.signal } })).rejects.toThrow();
@@ -298,4 +398,22 @@ it('rejects an empty weather response even when the MCP envelope reports success
   await expect(validatePluginCredential('amap', 'entered-key')).rejects.toMatchObject({
     reason: 'request',
   });
+});
+
+it('keeps unregistered plugins inert without resolving grants or starting a client', async () => {
+  expect(isBuiltInMcpToolAllowed('vendor.future-plugin', 'get_me')).toBe(false);
+  await expect(
+    createBuiltInMcpClient('vendor.future-plugin', 'grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'unavailable' });
+  expect(mockGetGrant).not.toHaveBeenCalled();
+  expect(mcp.createMCPClient).not.toHaveBeenCalled();
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('rejects an unsupported stored authorization method before transmitting credentials', async () => {
+  mockGetGrant.mockResolvedValue({ credential: 'private-key', authMethod: 'future_method_v2' });
+  await expect(
+    createBuiltInMcpClient('github', 'grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
 });

@@ -1,17 +1,19 @@
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import GitHubIcon from '@cherrystudio/app-icons/icons/github';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import { View } from 'react-native';
 
-import type { PluginId } from '@/shared/data/types/plugin';
+const ICONS = { github: GitHubIcon, 'map-pin': MapPinIcon, 'file-text': FileTextIcon };
 
 export function PluginIcon({
-  pluginId,
+  icon,
   size = 'default',
 }: {
-  pluginId: PluginId;
+  icon?: string;
   size?: 'default' | 'large';
 }) {
-  const Icon = pluginId === 'github' ? GitHubIcon : MapPinIcon;
+  const Icon =
+    icon && Object.hasOwn(ICONS, icon) ? ICONS[icon as keyof typeof ICONS] : FileTextIcon;
   return (
     <View
       className={

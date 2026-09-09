@@ -106,6 +106,7 @@ export function createAppBootstrapRuntime(
       mcpServers: services.mcpServer,
       models: services.model,
       paintings: services.painting,
+      pluginCatalog: dataApiDependencies.pluginCatalog,
       pluginConnections: services.pluginAuthorization,
       providers: services.provider,
       systemModelSupport: dataApiDependencies.systemModelSupport,

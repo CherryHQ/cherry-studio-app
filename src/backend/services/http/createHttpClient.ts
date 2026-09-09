@@ -93,6 +93,13 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
+  if (request.redirect !== undefined && request.redirect !== 'error') {
+    throw new HttpError('HTTP redirect policy is invalid.', {
+      code: 'INVALID_REDIRECT_POLICY',
+      kind: 'internal',
+    });
+  }
+
   if (
     typeof request.path !== 'string' ||
     !request.path.startsWith('/') ||
@@ -229,6 +236,7 @@ const dispatchRequestInterceptors = async (
     config.params = request.query;
     config.responseType = request.responseType;
     config.signal = request.signal;
+    config.fetchOptions = { redirect: request.redirect };
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
     return config;

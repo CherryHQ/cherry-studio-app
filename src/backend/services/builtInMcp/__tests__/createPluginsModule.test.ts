@@ -15,7 +15,7 @@ jest.mock('../createBuiltInMcpClient', () => ({
   validatePluginCredential: (...args: unknown[]) => mockValidateCredential(...args),
 }));
 
-const input = { pluginId: 'github' as const, credential: 'test-token' };
+const input = { pluginId: 'github', fields: { token: 'test-token' } };
 const connection = {
   pluginId: 'github',
   accountLabel: 'cherry',
@@ -41,6 +41,26 @@ it('validates credentials upstream before storing anything', async () => {
   expect(invalidateServer).not.toHaveBeenCalled();
 });
 
+it('requires Feishu application credentials and stores both only in the backend grant', async () => {
+  const plugins = createPluginsModule({ invalidateServer: jest.fn() });
+  expect(() => plugins.connect({ pluginId: 'feishu', fields: { appSecret: 'secret' } })).toThrow();
+  expect(mockValidateCredential).not.toHaveBeenCalled();
+  mockValidateCredential.mockResolvedValue('cli_cherry');
+  await plugins.connect({
+    pluginId: 'feishu',
+    fields: { appId: 'cli_cherry', appSecret: 'secret' },
+  });
+  const credential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'secret' });
+  expect(mockValidateCredential.mock.calls[0][1]).toBe(credential);
+  expect(mockConnect.mock.calls[0][0]).toEqual({
+    pluginId: 'feishu',
+    authMethod: 'app_credentials',
+    serverName: '飞书',
+    accountLabel: 'cli_cherry',
+    credential,
+  });
+});
+
 it('invalidates the runtime only after the new grant commits', async () => {
   const operations: string[] = [];
   mockConnect.mockImplementation(async () => {
@@ -52,6 +72,8 @@ it('invalidates the runtime only after the new grant commits', async () => {
   expect(operations).toEqual(['commit', 'invalidate']);
   expect(mockConnect.mock.calls[0][0]).toEqual({
     pluginId: 'github',
+    authMethod: 'personal_token',
+    serverName: 'GitHub',
     accountLabel: 'cherry',
     credential: 'test-token',
   });
@@ -93,4 +115,28 @@ it('does not commit when the authorization form is cancelled after validation', 
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
   await expect(plugins.connect(input, controller.signal)).rejects.toThrow();
   expect(mockConnect).not.toHaveBeenCalled();
+});
+
+it('rejects unregistered plugins and invalid plugin-owned fields before network or persistence', () => {
+  const plugins = createPluginsModule({ invalidateServer: jest.fn() });
+  expect(() => plugins.connect({ pluginId: 'future', fields: { token: 'secret' } })).toThrow(
+    'not available',
+  );
+  for (const fields of [
+    { token: 'bad key' },
+    { token: 'secret', unexpected: 'value' },
+    {},
+  ] as Record<string, string>[]) {
+    expect(() => plugins.connect({ pluginId: 'github', fields })).toThrow();
+  }
+  expect(mockValidateCredential).not.toHaveBeenCalled();
+  expect(mockConnect).not.toHaveBeenCalled();
+});
+
+it('allows disconnecting a plugin no longer bundled by this app version', async () => {
+  mockList.mockResolvedValue([{ ...connection, pluginId: 'future' }]);
+  const invalidateServer = jest.fn();
+  await createPluginsModule({ invalidateServer }).disconnect('future');
+  expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
+  expect(mockDisconnect).toHaveBeenCalledWith('future');
 });

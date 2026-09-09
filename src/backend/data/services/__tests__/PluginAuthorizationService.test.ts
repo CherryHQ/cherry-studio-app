@@ -15,6 +15,8 @@ let db: TestDb;
 let service: PluginAuthorizationService;
 const input = {
   pluginId: 'github' as const,
+  authMethod: 'personal_token',
+  serverName: 'GitHub',
   accountLabel: 'cherry',
   credential: 'ghp_first',
 };
@@ -48,6 +50,32 @@ it('stores a grant and built-in identity atomically while exposing no credential
   expect(server.headers).toBeUndefined();
   expect(JSON.stringify(connection)).not.toContain('ghp_first');
   expect(JSON.stringify(server)).not.toContain('ghp_first');
+});
+
+it('persists Feishu application credentials without exposing them in connection or MCP data', async () => {
+  const credential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'private-secret' });
+  const connection = await service.connect({
+    pluginId: 'feishu',
+    authMethod: 'app_credentials',
+    serverName: 'Feishu',
+    accountLabel: 'cli_cherry',
+    credential,
+  });
+  const server = await new McpServerService().getById(connection.serverId);
+  expect(server).toMatchObject({
+    origin: 'builtin',
+    builtinId: 'feishu',
+    name: 'Feishu',
+    endpointUrl: null,
+  });
+  expect(
+    db.sqlite.prepare('SELECT auth_method, credential FROM plugin_authorization').get(),
+  ).toEqual({
+    auth_method: 'app_credentials',
+    credential,
+  });
+  expect(JSON.stringify(await service.listConnections())).not.toContain('private-secret');
+  expect(JSON.stringify(server)).not.toContain('private-secret');
 });
 
 it('rotates grant identity without retargeting an old credential reference', async () => {
@@ -119,6 +147,22 @@ it('enforces remote/built-in storage constraints and referenced grant deletion',
   const update = db.sqlite.prepare('UPDATE mcp_server SET base_url = ? WHERE id = ?');
   expect(() => update.run('https://remote.example/mcp', connection.serverId)).toThrow();
   expect(() => db.sqlite.exec('DELETE FROM plugin_authorization')).toThrow();
-  expect(() => db.sqlite.exec("UPDATE plugin_authorization SET auth_method = 'api_key'")).toThrow();
+  expect(() => db.sqlite.exec("UPDATE plugin_authorization SET auth_method = ''")).toThrow();
   expect(db.sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+});
+
+it('retains and disconnects an unregistered plugin without a provider-specific data branch', async () => {
+  const connection = await service.connect({
+    pluginId: 'vendor.future-plugin',
+    authMethod: 'future_method_v2',
+    serverName: 'Future plugin',
+    accountLabel: 'Future account',
+    credential: '{"version":2,"secret":"private"}',
+  });
+  const server = await new McpServerService().getById(connection.serverId);
+  expect(server).toMatchObject({ builtinId: 'vendor.future-plugin', name: 'Future plugin' });
+  expect(await service.listConnections()).toEqual([connection]);
+  await service.disconnect('vendor.future-plugin');
+  expect(await service.listConnections()).toEqual([]);
+  expect(db.sqlite.prepare('SELECT * FROM plugin_authorization').all()).toEqual([]);
 });

@@ -53,7 +53,13 @@ export class PluginAuthorizationService {
   }
 
   async connect(
-    input: { pluginId: PluginId; accountLabel: string; credential: string },
+    input: {
+      pluginId: PluginId;
+      authMethod: string;
+      serverName: string;
+      accountLabel: string;
+      credential: string;
+    },
     signal?: AbortSignal,
   ): Promise<PluginConnection> {
     return this.dbService.withWriteTx(async (tx) => {
@@ -66,8 +72,10 @@ export class PluginAuthorizationService {
       const [grant] = await tx
         .insert(pluginAuthorizationTable)
         .values({
-          ...input,
-          authMethod: input.pluginId === 'github' ? 'personal_token' : 'api_key',
+          pluginId: input.pluginId,
+          authMethod: input.authMethod,
+          accountLabel: input.accountLabel,
+          credential: input.credential,
         })
         .returning();
       const [server] = previous
@@ -82,7 +90,7 @@ export class PluginAuthorizationService {
               origin: 'builtin',
               builtinId: input.pluginId,
               authorizationId: grant.id,
-              name: input.pluginId === 'github' ? 'GitHub' : '高德地图',
+              name: input.serverName,
               isEnabled: true,
             })
             .returning();

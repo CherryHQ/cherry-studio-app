@@ -9,38 +9,51 @@ import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { ConnectPluginSchema, PluginError } from '@/shared/contracts/plugins';
-import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
+import { PluginError } from '@/shared/contracts/plugins';
+import { PluginIdSchema, type PluginCatalogEntry } from '@/shared/data/types/plugin';
+import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import { PLUGIN_LINKS } from '../../pluginCatalog';
+import { getPluginText } from '../../pluginCatalog';
+import { usePluginCatalog } from '../../usePluginCatalog';
 import { useRefreshPluginConnections } from '../../usePluginConnections';
 
 export function PluginConnectScreen() {
   const { pluginId } = useLocalSearchParams<{ pluginId: string }>();
   const parsed = PluginIdSchema.safeParse(pluginId);
   const { t } = useTranslation();
+  const catalog = usePluginCatalog();
   if (!parsed.success) return <ContentState.Empty title={t('plugins.notFound')} />;
-  return <PluginConnect key={parsed.data} pluginId={parsed.data} />;
+  if (catalog.isLoading) return <ContentState.Loading title={t('plugins.loading')} />;
+  if (catalog.isError)
+    return (
+      <ContentState.Error
+        title={t('plugins.loadFailed')}
+        primaryAction={{ children: t('common.retry'), onPress: () => void catalog.refetch() }}
+      />
+    );
+  const entry = catalog.data?.find((item) => item.id === parsed.data);
+  if (!entry) return <ContentState.Empty title={t('plugins.unavailable')} />;
+  return <PluginConnect key={entry.id} entry={entry} />;
 }
 
-function PluginConnect({ pluginId }: { pluginId: PluginId }) {
-  const { t } = useTranslation();
+function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const plugins = useBackendModule('plugins');
   const refresh = useRefreshPluginConnections();
   const { toast } = useToast();
   const pendingConnection = useRef<AbortController | null>(null);
   useEffect(() => () => pendingConnection.current?.abort(), []);
-  const [credential, setCredential] = useState('');
+  const [fields, setFields] = useState<Record<string, string>>({});
   const [isConnecting, setIsConnecting] = useState(false);
-  const [invalid, setInvalid] = useState(false);
-  const name = t(`plugins.catalog.${pluginId}.name`);
+  const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
+  const name = getPluginText(entry.name, i18n.language);
 
   async function connect() {
     if (pendingConnection.current) return;
-    const parsed = ConnectPluginSchema.safeParse({ pluginId, credential });
+    const parsed = createPluginCredentialsSchema(entry.credentialFields).safeParse(fields);
     if (!parsed.success) {
-      setInvalid(true);
+      setInvalidFields(new Set(parsed.error.issues.map((issue) => String(issue.path[0]))));
       return;
     }
     const controller = new AbortController();
@@ -49,8 +62,8 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
     setIsConnecting(true);
     try {
       // Keep credentials out of query/mutation caches and route parameters.
-      await plugins.connect(parsed.data, controller.signal);
-      setCredential('');
+      await plugins.connect({ pluginId: entry.id, fields: parsed.data }, controller.signal);
+      setFields({});
       await refresh();
       toast.show({ label: t('plugins.connectSuccess', { name }), variant: 'success' });
       router.back();
@@ -60,7 +73,7 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
         label:
           error instanceof PluginError
             ? t(`plugins.errors.${error.reason}`)
-            : t(`plugins.catalog.${pluginId}.connectFailed`),
+            : t('plugins.errors.request'),
         variant: 'danger',
       });
     } finally {
@@ -81,45 +94,63 @@ function PluginConnect({ pluginId }: { pluginId: PluginId }) {
         testID="plugin-connect"
       >
         <Text className="text-base text-muted-foreground">
-          {t(`plugins.catalog.${pluginId}.setup`)}
+          {getPluginText(entry.setup, i18n.language)}
         </Text>
         <View className="gap-4">
-          <TextField invalid={invalid} disabled={isConnecting}>
-            <TextField.Label>{t(`plugins.catalog.${pluginId}.credentialLabel`)}</TextField.Label>
-            <Input
-              accessibilityLabel={t(`plugins.catalog.${pluginId}.credentialLabel`)}
-              type="password"
-              visibilityAccessibilityLabels={{
-                hide: t('plugins.hideCredential'),
-                show: t('plugins.showCredential'),
-              }}
-              value={credential}
-              onChangeText={(value) => {
-                setCredential(value);
-                setInvalid(false);
-              }}
-              disabled={isConnecting}
-              invalid={invalid}
-              maxLength={4096}
-              onSubmitEditing={() => void connect()}
-              returnKeyType="done"
-              testID="plugin-credential"
-            />
-            <TextField.Error>{t('plugins.invalidCredential')}</TextField.Error>
-          </TextField>
+          {entry.credentialFields.map((field) => {
+            const invalid = invalidFields.has(field.id);
+            const label = getPluginText(field.label, i18n.language);
+            return (
+              <TextField key={field.id} invalid={invalid} disabled={isConnecting}>
+                <TextField.Label>{label}</TextField.Label>
+                <Input
+                  accessibilityLabel={label}
+                  {...(field.secret
+                    ? {
+                        type: 'password' as const,
+                        visibilityAccessibilityLabels: {
+                          hide: t('plugins.hideCredential'),
+                          show: t('plugins.showCredential'),
+                        },
+                      }
+                    : {
+                        type: 'text' as const,
+                        autoCapitalize: 'none' as const,
+                        autoCorrect: false,
+                      })}
+                  value={fields[field.id] ?? ''}
+                  onChangeText={(value) => {
+                    setFields((previous) => ({ ...previous, [field.id]: value }));
+                    setInvalidFields((previous) => {
+                      const next = new Set(previous);
+                      next.delete(field.id);
+                      return next;
+                    });
+                  }}
+                  disabled={isConnecting}
+                  invalid={invalid}
+                  maxLength={field.maxLength}
+                  onSubmitEditing={() => void connect()}
+                  returnKeyType="done"
+                  testID={`plugin-field-${field.id}`}
+                />
+                <TextField.Error>{getPluginText(field.error, i18n.language)}</TextField.Error>
+              </TextField>
+            );
+          })}
           <Button
             variant="link"
             size="inline"
-            onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].credentials)}
+            onPress={() => void openExternalUrl(entry.links.credentials)}
           >
-            {t(`plugins.catalog.${pluginId}.getCredential`)}
+            {getPluginText(entry.credentialLinkLabel, i18n.language)}
           </Button>
         </View>
         <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
         <Button
           size="lg"
           loading={isConnecting}
-          disabled={!credential.trim()}
+          disabled={entry.credentialFields.some((field) => !fields[field.id]?.trim())}
           onPress={() => void connect()}
           testID="plugin-connect-submit"
         >

@@ -1,11 +1,12 @@
 # Built-In MCP Integrations
 
-> Status (2026-09-09): GitHub and Amap now connect directly to their official hosted MCP services.
-> Their handwritten business tools and in-process MCP transport have been removed. No self-hosting
-> is required. Coverage is based on official documentation/source, not authenticated cloud calls.
-> Regression tests are updated but not executed; the new cloud flow has no device acceptance yet.
-> Earlier iOS evidence belongs to the superseded local implementation. Canva, Gmail, Yuque, Feishu,
-> multiple accounts and renewable OAuth authorization remain planned.
+> Status (2026-09-10): GitHub, Amap and Feishu connect directly to official hosted MCP services.
+> Feishu now supports application identity and six document tools, with application-token renewal.
+> No self-hosting is required. Coverage is based on official documentation/source, not authenticated
+> cloud calls. Regression tests are updated but not executed; cloud flows have no device acceptance.
+> Earlier iOS evidence belongs to the superseded local implementation. Canva, Gmail, Yuque, Feishu
+> user identity, multiple accounts and renewable OAuth remain planned. See
+> [Plugin Expansion Research](./plugin-expansion-research.md) for current availability and prerequisites.
 
 ## First Delivery: Plugins
 
@@ -18,15 +19,18 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | --- | --- | --- |
 | GitHub | User-supplied personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
+| Feishu | User-supplied custom application ID/secret; token exchange, initialization and `fetch-doc` discovery, without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
 
 ### Official Cloud Coverage
 
 GitHub's hosted endpoint is `https://api.githubcopilot.com/mcp/`, authenticated with a Bearer token.
-Amap's is `https://mcp.amap.com/mcp?key=...`. Both use the existing SDK's Streamable HTTP transport.
+Amap's is `https://mcp.amap.com/mcp?key=...`. Feishu's is `https://mcp.feishu.cn/mcp`, authenticated
+with `X-Lark-MCP-TAT`. All use the existing SDK's Streamable HTTP transport.
 The Amap key is injected only when sending a request; the SDK endpoint and saved server identity
 contain no key. Routing is fixed in backend code and redirects cannot forward credentials elsewhere.
 GitHub also receives `X-MCP-Tools` for the admitted subset; Cherry enforces the allowlist locally for
-both services, independently of upstream behavior.
+all three services, independently of upstream behavior. Feishu also receives
+`X-Lark-MCP-Allowed-Tools`; user-only search and unrelated API domains are not admitted.
 
 | Former capability | Official replacement | Difference |
 | --- | --- | --- |
@@ -63,12 +67,17 @@ Sources: [GitHub remote service](https://github.com/github/github-mcp-server/blo
 `@amap/amap-maps-mcp-server@0.0.8` distribution corroborates tool names and forecast output; it is
 source evidence, not a bundled dependency or proof of live remote schema parity.
 
-The current `plugin_authorization` table stores the integration, static authorization method,
-account label, the credential as entered, and timestamps. The credential is not encrypted at rest:
+The current `plugin_authorization` table stores the integration, authorization method,
+account label, provider credential (encoded application credentials for Feishu), and timestamps.
+The credential is not encrypted at rest:
 provider API keys and remote MCP headers already live unencrypted in the same sandboxed SQLite
 database, and a plugin-only encryption layer would not raise that baseline while adding a native
 dependency and a second store to keep consistent. No refresh-token or expiry behavior is claimed
-for this first delivery. The larger authorization schema below is the target for later OAuth
+for personal user grants. Feishu stores the user's application ID/secret as `app_credentials` and
+exchanges them for an in-memory application token before expiry; it does not store a refresh token.
+Migration `0024_extensible-plugin-authorizations` removes the old platform/method enumeration while
+preserving existing grants and server identities. Platform registration no longer changes SQL.
+The larger authorization schema below is the target for later OAuth
 slices, not the current schema.
 
 `PluginAuthorizationService` commits each grant and its MCP reference together. Updating authorization
@@ -76,20 +85,79 @@ preserves the server UUID but allocates a new grant identity; disconnecting disa
 bindings, deletes the server and grant, and invalidates active calls. Reconnecting after disconnect
 requires explicit Agent enablement. Credentials stay out of frontend query caches and tool arguments.
 
-Connection metadata is read through the Data API's `GET /plugin-connections` endpoint. The
+Catalog metadata comes from `GET /plugin-catalog`; connection metadata comes from
+`GET /plugin-connections` on the Data API. The
 `PluginsModule` workflow contract owns only connect and disconnect; shared plugin entities live
 under `shared/data/types`, and the MCP runtime's connection configuration remains backend-private.
 
-`createBuiltInMcpClient` creates an account-bound official HTTP client, rechecks the referenced grant
+`createBuiltInMcpClient` resolves a registered plugin and checks its stored authorization method.
+`createOfficialMcpClient` supplies the shared HTTP transport and rechecks the referenced grant
 before every network request, propagates cancellation, and does not replay writes. There is no
 transport-level `authProvider`, so a `401` cannot trigger a resend. HTTP errors expose only safe
-diagnostics; ambiguous submitted writes tell the caller to check GitHub before retrying. Input
+diagnostics; ambiguous submitted writes tell the caller to check the service before retrying. Input
 validation and result-size limits remain in the existing MCP runtime. GitHub token permissions and
 Amap quota/access restrictions remain upstream authority. No device-location grant is requested.
 
 The `development-simulator` EAS profile builds an ARM64 development client: the currently pinned
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
 not an installable physical-device IPA.
+
+## Extensible Plugin Definitions (Implemented)
+
+`PluginDefinition` is the single bundled extension contract. `pluginRegistry.ts` registers the
+GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
+
+- A stable `catalog.id`, localized copy, links, optional icon name and credential field descriptors.
+  An optional `serverName` preserves the default saved MCP name independently of UI language.
+- A stable `authMethod` identifier and `encodeCredentials` for its opaque stored credential format.
+- `createClient`, which receives the grant resolver, cancellation signal and admitted tool policy.
+- Reviewed tool names classified as `read` or `write`, plus a read-only connection validation rule.
+
+The database stores open strings for `pluginId` and `authMethod`. SQL checks only that they are
+nonempty; it still preserves foreign keys, remote/built-in source constraints and the single
+connection per plugin index. The serialized MCP schema validates identifier syntax rather than
+listing provider names. Runtime availability is a separate decision: only registered definitions
+can create clients or admit tools, and a stored grant must match that definition's auth method.
+Unknown definitions are retained in storage and shown as unavailable; their connections can be
+disconnected. They cannot execute, even when an old Agent binding still exists. This supports
+forward-compatible records across versions that use the open identifier contract.
+
+`GET /plugin-catalog` exposes a detached, JSON-only projection of the same definitions. It includes
+no credential, auth implementation or client factory. The list, detail and connection pages derive
+from that projection. Plugin-owned copy carries a required English fallback and optional language
+tags; the frontend selects its active language. Credential fields declare labels, validation errors,
+secret display, maximum length and an optional pattern. `createPluginCredentialsSchema` derives
+strict validation for both the form and backend workflow. There is no per-provider frontend list,
+form branch or global translation-key tree. Unknown icon names use a generic document icon.
+
+To add another credential-based hosted MCP plugin:
+
+1. Add one definition under `src/backend/services/builtInMcp/plugins/`, with its metadata, fields,
+   credential codec, reviewed tools and read-only setup check.
+2. Reuse `createOfficialMcpClient` and provide a fixed official endpoint plus credential injection.
+   A plugin-specific token helper may own token acquisition/expiry as Feishu does.
+3. Register that definition once in `pluginRegistry.ts`. The catalog, form, storage, discovery and
+   execution policies consume it automatically. No database, shared provider enum or screen edit
+   is required. Add an icon only if the generic fallback or existing vocabulary is insufficient.
+4. Add cases for the plugin's authorization, validation and tool boundary; perform cloud/device
+   acceptance only when explicitly authorized.
+
+Keep plugin IDs and auth-method identifiers stable across releases. Existing GitHub/Amap raw
+credentials and Feishu's JSON credentials retain their current representation. If a plugin later
+changes its stored format, version the opaque credential envelope and keep backward-compatible
+parsing in that plugin, or explicitly require reconnection for an unsupported method. Display-name
+or tool-catalog edits do not justify changing a durable ID.
+
+This is bundled code registration, not downloaded executable plugins. The `createClient` boundary
+can later host an in-process adapter without adding provider switches to storage or screens.
+Interactive OAuth and multiple accounts remain future features: browser/callback sessions and
+atomic token renewal need their own shared workflow contracts when implemented. Those are actual
+new lifecycle/storage requirements, not reasons to reintroduce platform-name SQL constraints.
+
+Migration `0024_extensible-plugin-authorizations` is a one-time compatibility step for databases
+that already contain the old checks. Its rebuild preserves grants, server identities, disabled tools
+and Agent bindings, including when foreign keys stay enabled inside the migration transaction.
+The unshipped Feishu-only migration was replaced; shipped migration history is unchanged.
 
 ## Follow-Up PR: Plugin Instruction Resources
 
@@ -130,8 +198,9 @@ tools remotely. Credential renewal belongs to future OAuth slices. No
 Cherry-operated authorization proxy, command-line program, local HTTP listener, or desktop process
 is required by this design.
 
-GitHub and Amap use official remote MCP services; Canva is planned to use the same route. Gmail,
-Yuque and Feishu retain their proposed direct-API designs pending a separate connector assessment.
+GitHub, Amap and Feishu document tools use official remote MCP services; Canva and Gmail are planned
+to use that route after their access and authorization prerequisites are met. Yuque and broader
+Feishu business domains retain their proposed direct-API designs.
 All enter the existing MCP discovery, binding, approval, and result pipeline. Canva is an explicit
 upstream MCP dependency, not a claim that its Connect REST API supports a secretless mobile client.
 
@@ -140,13 +209,13 @@ The initial scope is:
 | Region | Integration ID | Initial useful tools | Execution and authorization |
 | --- | --- | --- | --- |
 | International | `github` | Search repositories; read files; list/read issues and pull requests; create/update issues and comments | Official hosted MCP with a personal token. Interactive authorization remains future work. [Remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) |
-| International | `canva` | Search/read designs; generate a candidate and create a design; export a design | Bundled remote MCP connector. Preserve upstream names such as `search-designs`, `get-design`, `generate-design`, `create-design-from-candidate`, and `export-design`. [Tool catalog](https://www.canva.dev/docs/mcp/tools/) |
-| International | `gmail` | Search messages; read threads; create drafts; send a draft; modify labels | Local functions and Gmail API, with separate iOS and Android authorization adapters. [Native OAuth](https://developers.google.com/identity/protocols/oauth2/native-app), [Android authorization](https://developer.android.com/identity/authorization) |
+| International | `canva` | Search/read designs; generate a candidate and create a design; export a design | Planned remote MCP connector, pending callback approval and user OAuth. Preserve upstream names such as `search-designs`, `get-design`, `generate-design`, `create-design-from-candidate`, and `export-design`. [Tool catalog](https://www.canva.dev/docs/mcp/tools/) |
+| International | `gmail` | Search/read threads; create drafts; modify labels | Planned official hosted MCP after Developer Preview access and mobile OAuth setup. Sending drafts is not in the current official MCP catalog. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
 | China | `yuque` | Search/read documents; list knowledge books; create/update documents | Local functions and OpenAPI with a user-supplied personal or space token. [Official API client](https://github.com/yuque/yuque-open-cli/blob/main/README.zh-CN.md) |
-| China | `feishu` | Search/read documents; list/query/update Base records; query/create calendar events; create tasks | Local functions and OpenAPI. Adapt the official personal-agent authorization path, subject to mobile support and tenant policy. [Official authorization source](https://github.com/larksuite/cli/blob/main/internal/auth/app_registration.go) |
+| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with user-supplied application credentials. User authorization and curated OpenAPI functions remain later slices. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
 
-Future local integrations may use Cherry-owned names such as `read_document` and `create_draft`;
+Future local integrations may use Cherry-owned names such as `read_document`;
 remote integrations preserve official names. Full API coverage, local file
 uploads/downloads, Feishu messaging, Canva editing transactions, and permanent deletion operations
 are later capability slices. All six platforms remain in the plan regardless of delivery order.
@@ -167,7 +236,7 @@ turn, and MCP tools already use `tool_search`, `tool_describe`, and `tool_call`.
 | SQLite and Data API | Serialized writes, migration delivery, typed public projections | One new authorization table and a credential-free read surface |
 
 The server schema and Runtime accept both remote HTTP endpoints and explicit built-in identities.
-`@ai-sdk/mcp@1.0.71` provides the Streamable HTTP client used by GitHub and Amap. Its
+`@ai-sdk/mcp@1.0.71` provides the Streamable HTTP client used by GitHub, Amap and Feishu. Its
 `OAuthClientProvider` remains a future integration point. The first delivery adds no native
 dependency for credential storage.
 
@@ -175,7 +244,11 @@ dependency for credential storage.
 
 ```mermaid
 flowchart TD
-  Settings["Plugins: catalog and connected accounts"] --> Workflow["PluginsModule: connect and disconnect"]
+  Registry["Bundled PluginDefinition registry"] --> Catalog["GET /plugin-catalog: public metadata"]
+  Catalog --> Settings["Plugins: catalog and connected accounts"]
+  Registry --> Workflow["PluginsModule: connect and disconnect"]
+  Settings --> Workflow
+  Registry --> Client["Grant-bound official cloud client"]
   Workflow --> Auth["PluginAuthorizationService"]
   Auth --> AuthTable["plugin_authorization: metadata and credentials"]
   Workflow --> Server["mcp_server: connected integration instance"]
@@ -189,6 +262,7 @@ flowchart TD
   Client --> Remote["SDK Streamable HTTP over expo/fetch"]
   Remote --> GitHub["Official GitHub MCP"]
   Remote --> Amap["Official Amap MCP"]
+  Remote --> Feishu["Official Feishu MCP: application identity"]
 ```
 
 There are three durable facts with different owners:
@@ -277,10 +351,10 @@ existing user-configured MCP headers into a new universal credential system.
 | Field | Shape and responsibility |
 | --- | --- |
 | `id` | Generated UUID for one saved grant |
-| `pluginId` | One of the six stable built-in integration IDs |
+| `pluginId` | Open stable identifier; availability is resolved through bundled registration |
 | `accountId`, `accountLabel` | Remote account identity and user-facing label; account ID may be absent for an API key |
 | `tenantId` | Optional workspace/tenant identity; a Feishu user may have multiple tenant grants |
-| `authMethod` | `api-key`, `personal-token`, `oauth-device`, `oauth-pkce`, or `platform-sdk` |
+| `authMethod` | Open plugin-owned identifier; current values include `api_key`, `personal_token` and `app_credentials` |
 | `grantedScopes` | Actual returned/verified permissions as a JSON string array; unknown permissions are not treated as granted |
 | `status` | `connected`, `needs_reauth`, or `disconnected`; not a live network-health indicator |
 | `credential` | Nullable versioned credential envelope stored in the row |
@@ -438,9 +512,9 @@ response contract is JSON/text; it is not already a generic binary or streaming 
 
 ## Catalog And Tool Contract
 
-A backend-owned definition contains a stable integration ID, catalog version, display metadata,
-authorization adapter, and either a local tool factory or fixed remote MCP configuration. Expose
-only a serializable summary to settings. Derive it from the same registry so there is one catalog.
+The implemented definition and public catalog are described in Extensible Plugin Definitions above.
+Future instruction resources, local API adapters or catalog versions should extend that same
+registry. They must not introduce a second frontend catalog or provider-name storage enumeration.
 
 A local tool definition has a stable raw name, description, validated input/output schemas,
 required permissions, operation classification and handler. Use one schema source to validate

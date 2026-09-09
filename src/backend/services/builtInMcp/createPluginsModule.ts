@@ -1,8 +1,10 @@
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { ConnectPluginSchema, PluginError, type PluginsModule } from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
+import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import { validatePluginCredential } from './createBuiltInMcpClient';
+import { requirePluginDefinition } from './pluginRegistry';
 
 export function createPluginsModule(runtime: {
   invalidateServer(id: string): void;
@@ -21,18 +23,25 @@ export function createPluginsModule(runtime: {
   return {
     connect(input, signal) {
       const parsed = ConnectPluginSchema.parse(input);
+      const plugin = requirePluginDefinition(parsed.pluginId);
+      const fields = createPluginCredentialsSchema(plugin.catalog.credentialFields).parse(
+        parsed.fields,
+      );
       return serialize(parsed.pluginId, async () => {
         signal?.throwIfAborted();
-        const accountLabel = await validatePluginCredential(
-          parsed.pluginId,
-          parsed.credential,
-          signal,
-        );
+        const credential = plugin.encodeCredentials(fields);
+        const accountLabel = await validatePluginCredential(parsed.pluginId, credential, signal);
         signal?.throwIfAborted();
         let connection: Awaited<ReturnType<typeof pluginAuthorizationService.connect>>;
         try {
           connection = await pluginAuthorizationService.connect(
-            { pluginId: parsed.pluginId, accountLabel, credential: parsed.credential },
+            {
+              pluginId: parsed.pluginId,
+              authMethod: plugin.authMethod,
+              serverName: plugin.serverName ?? plugin.catalog.name.default,
+              accountLabel,
+              credential,
+            },
             signal,
           );
         } catch {
