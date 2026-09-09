@@ -217,12 +217,13 @@ export function useAgentChatControls(input: {
   }>();
   const currentSubmission = submission?.composerKey === composerKey ? submission : undefined;
   const pendingSend = currentSubmission?.send;
-  const sourceRef = useRef<symbol | null>(null);
+  // A send captures its composer key; a late completion compares it with the
+  // mounted key so a composer the user has left cannot navigate or update state.
+  const mountedComposerKeyRef = useRef<number | null>(composerKey);
   useEffect(() => {
-    const source = Symbol();
-    sourceRef.current = source;
+    mountedComposerKeyRef.current = composerKey;
     return () => {
-      if (sourceRef.current === source) sourceRef.current = null;
+      mountedComposerKeyRef.current = null;
     };
   }, [composerKey]);
 
@@ -233,8 +234,7 @@ export function useAgentChatControls(input: {
     async (
       message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
     ) => {
-      const source = sourceRef.current;
-      const isCurrent = () => source !== null && sourceRef.current === source;
+      const isCurrent = () => mountedComposerKeyRef.current === composerKey;
       const request = {
         ...message,
         sessionId: sessionId ?? uuidv7(),
