@@ -37,7 +37,6 @@ export function MessageUsageDetail({
       : t('chat.messageUsage.speedValue', { value: decimals.format(value) });
   const formatDuration = (value: number | undefined) =>
     value === undefined ? undefined : seconds.format(value / 1000);
-  const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
   const providerName = message.model
     ? (records.find((record) => record.providerId === message.model?.providerId)?.providerName ??
       message.model.providerId)
@@ -61,22 +60,6 @@ export function MessageUsageDetail({
     ['chat.messageUsage.approvalDuration', formatDuration(detail.approvalDurationMs)],
   ] as const;
   const visiblePerformance = performance.filter(([, value]) => value !== undefined);
-  const metadata = [
-    [
-      'chat.messageUsage.requests',
-      detail.requestCount === undefined ? undefined : numbers.format(detail.requestCount),
-    ],
-    [
-      'chat.messageUsage.createdAt',
-      createdAt && Number.isFinite(createdAt.getTime())
-        ? new Intl.DateTimeFormat(locale, {
-            dateStyle: 'medium',
-            timeStyle: 'medium',
-          }).format(createdAt)
-        : undefined,
-    ],
-  ] as const;
-  const visibleMetadata = metadata.filter(([, value]) => value !== undefined);
 
   return (
     <MessagePart.Detail
@@ -117,7 +100,86 @@ export function MessageUsageDetail({
               <Text className="text-muted-foreground text-xs">{unavailable}</Text>
             ) : null}
           </View>
+          <View className="gap-4">
+            {hasTokenDistribution ? (
+              <View
+                accessibilityElementsHidden
+                className="h-1.5 flex-row gap-1 overflow-hidden rounded-full"
+                importantForAccessibility="no-hide-descendants"
+              >
+                {detail.inputTokens ? (
+                  <View
+                    className="rounded-full bg-foreground"
+                    style={{ flex: detail.inputTokens / tokenSum }}
+                  />
+                ) : null}
+                {detail.outputTokens ? (
+                  <View
+                    className="rounded-full bg-muted-foreground"
+                    style={{ flex: detail.outputTokens / tokenSum }}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
+              <View className="min-w-32 flex-1 gap-3">
+                <View className="gap-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="size-1.5 rounded-full bg-foreground" />
+                    <Text className="text-muted-foreground text-sm">
+                      {t('chat.messageUsage.input')}
+                    </Text>
+                  </View>
+                  <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
+                    {formatTokens(detail.inputTokens)}
+                  </Text>
+                </View>
+                <View className="gap-2">
+                  {inputDetails.map(([key, value]) =>
+                    value === undefined ? null : (
+                      <MessageUsageRow key={key} label={t(key)} value={numbers.format(value)} />
+                    ),
+                  )}
+                </View>
+              </View>
+              <View className="min-w-32 flex-1 gap-3">
+                <View className="gap-1">
+                  <View className="flex-row items-center gap-1.5">
+                    <View className="size-1.5 rounded-full bg-muted-foreground" />
+                    <Text className="text-muted-foreground text-sm">
+                      {t('chat.messageUsage.output')}
+                    </Text>
+                  </View>
+                  <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
+                    {formatTokens(detail.outputTokens)}
+                  </Text>
+                </View>
+                {detail.reasoningTokens !== undefined ? (
+                  <MessageUsageRow
+                    label={t('chat.messageUsage.reasoning')}
+                    value={numbers.format(detail.reasoningTokens)}
+                  />
+                ) : null}
+              </View>
+            </View>
+          </View>
         </View>
+
+        {visiblePerformance.length > 0 ? (
+          <View className="gap-4">
+            <MessagePart.SectionTitle title={t('chat.messageUsage.performance')} />
+            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
+              {visiblePerformance.map(([key, value]) => (
+                <View className="min-w-32 flex-1 gap-1" key={key}>
+                  <Text className="text-muted-foreground text-xs">{t(key)}</Text>
+                  <Text className="font-medium text-foreground text-lg tabular-nums" selectable>
+                    {value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View className="gap-3">
           <MessagePart.SectionTitle title={t('chat.messageUsage.cost')} />
@@ -154,100 +216,6 @@ export function MessageUsageDetail({
             </Text>
           ) : null}
         </View>
-
-        {visiblePerformance.length > 0 ? (
-          <View className="gap-4">
-            <MessagePart.SectionTitle title={t('chat.messageUsage.performance')} />
-            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
-              {visiblePerformance.map(([key, value]) => (
-                <View className="min-w-32 flex-1 gap-1" key={key}>
-                  <Text className="text-muted-foreground text-xs">{t(key)}</Text>
-                  <Text className="font-medium text-foreground text-lg tabular-nums" selectable>
-                    {value}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text className="text-muted-foreground text-xs">
-              {t('chat.messageUsage.durationHint')}
-            </Text>
-          </View>
-        ) : null}
-
-        <View className="gap-4">
-          {hasTokenDistribution ? (
-            <View
-              accessibilityElementsHidden
-              className="h-1.5 flex-row gap-1 overflow-hidden rounded-full"
-              importantForAccessibility="no-hide-descendants"
-            >
-              {detail.inputTokens ? (
-                <View
-                  className="rounded-full bg-foreground"
-                  style={{ flex: detail.inputTokens / tokenSum }}
-                />
-              ) : null}
-              {detail.outputTokens ? (
-                <View
-                  className="rounded-full bg-muted-foreground"
-                  style={{ flex: detail.outputTokens / tokenSum }}
-                />
-              ) : null}
-            </View>
-          ) : null}
-          <View className="flex-row flex-wrap gap-x-6 gap-y-5">
-            <View className="min-w-32 flex-1 gap-3">
-              <View className="gap-1">
-                <View className="flex-row items-center gap-1.5">
-                  <View className="size-1.5 rounded-full bg-foreground" />
-                  <Text className="text-muted-foreground text-sm">
-                    {t('chat.messageUsage.input')}
-                  </Text>
-                </View>
-                <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
-                  {formatTokens(detail.inputTokens)}
-                </Text>
-              </View>
-              <View className="gap-2">
-                {inputDetails.map(([key, value]) =>
-                  value === undefined ? null : (
-                    <MessageUsageRow key={key} label={t(key)} value={numbers.format(value)} />
-                  ),
-                )}
-              </View>
-            </View>
-            <View className="min-w-32 flex-1 gap-3">
-              <View className="gap-1">
-                <View className="flex-row items-center gap-1.5">
-                  <View className="size-1.5 rounded-full bg-muted-foreground" />
-                  <Text className="text-muted-foreground text-sm">
-                    {t('chat.messageUsage.output')}
-                  </Text>
-                </View>
-                <Text className="font-medium text-foreground text-xl tabular-nums" selectable>
-                  {formatTokens(detail.outputTokens)}
-                </Text>
-              </View>
-              {detail.reasoningTokens !== undefined ? (
-                <MessageUsageRow
-                  label={t('chat.messageUsage.reasoning')}
-                  value={numbers.format(detail.reasoningTokens)}
-                />
-              ) : null}
-            </View>
-          </View>
-        </View>
-
-        {visibleMetadata.length > 0 ? (
-          <View className="gap-3">
-            <MessagePart.SectionTitle title={t('chat.messageUsage.message')} />
-            {visibleMetadata.map(([key, value]) =>
-              value === undefined ? null : (
-                <MessageUsageRow key={key} label={t(key)} value={value} />
-              ),
-            )}
-          </View>
-        ) : null}
 
         {error ? (
           <ContentState.Error
