@@ -2,6 +2,7 @@ import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import { Avatar } from '@cherrystudio/ui/components';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 
 import { getBrandAvatarFallback } from '../utils/brandAvatarStyles';
 
@@ -11,6 +12,8 @@ const AGENT_AVATAR_INITIAL_FONT_SIZE = 18;
 type AgentAvatarProps = {
   /** Defaults to `name`; pass one explicitly when the name may be blank. */
   accessibilityLabel?: string;
+  /** Stored avatar value; built-in emoji are rendered without an image URI. */
+  avatar?: null | string;
   name: string;
   size?: number;
   testID?: string;
@@ -19,7 +22,7 @@ type AgentAvatarProps = {
 };
 
 /**
- * Round avatar for an Agent, with the same generated initial tile providers use
+ * Round avatar for an Agent: photo, built-in emoji, or the generated initial tile providers use
  * (`getBrandAvatarFallback`) — round rather than square because an Agent reads
  * as a persona, not a brand.
  *
@@ -29,6 +32,7 @@ type AgentAvatarProps = {
  */
 export function AgentAvatar({
   accessibilityLabel,
+  avatar,
   name,
   size = AGENT_AVATAR_SIZE,
   testID,
@@ -47,6 +51,10 @@ export function AgentAvatar({
           recyclingKey={uri}
           source={{ uri }}
         />
+      ) : avatar === CHERRY_AGENT_AVATAR ? (
+        <Avatar.Fallback textProps={{ style: { fontSize: Math.round(size * 0.58) } }}>
+          {avatar}
+        </Avatar.Fallback>
       ) : fallback ? (
         <Avatar.Fallback
           style={{ backgroundColor: fallback.backgroundColor }}

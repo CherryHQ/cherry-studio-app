@@ -21,6 +21,14 @@ export function MessageUsageDetail({
   const { error, isLoading, records, refresh } = useMessageUsageRecords(message.id);
   const detail = getMessageUsageDetails(message.stats, records, message.model);
   const locale = i18n.resolvedLanguage ?? i18n.language;
+  const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
+  const formattedCreatedAt =
+    createdAt && !Number.isNaN(createdAt.getTime())
+      ? new Intl.DateTimeFormat(locale, {
+          dateStyle: 'medium',
+          timeStyle: 'medium',
+        }).format(createdAt)
+      : undefined;
   const numbers = new Intl.NumberFormat(locale);
   const decimals = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const seconds = new Intl.NumberFormat(locale, {
@@ -235,6 +243,16 @@ export function MessageUsageDetail({
             <Button onPress={() => void refresh()} size="inline" variant="ghost">
               <Text className="font-medium text-foreground text-xs">{t('common.retry')}</Text>
             </Button>
+          </View>
+        ) : null}
+        {formattedCreatedAt ? (
+          <View className="gap-1">
+            <Text className="text-muted-foreground text-xs">
+              {t('chat.messageUsage.createdAt')}
+            </Text>
+            <Text className="font-mono text-foreground text-xs" selectable>
+              {formattedCreatedAt}
+            </Text>
           </View>
         ) : null}
       </View>

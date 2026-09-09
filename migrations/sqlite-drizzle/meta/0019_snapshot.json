@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f1e90213-ef28-4e51-9a21-4496dc195377",
+  "id": "290afc04-cc1a-49db-8691-4e9ab59dd339",
   "prevId": "c182e418-6ea2-447e-b251-e1f731154423",
   "tables": {
     "app_state": {
@@ -657,6 +657,11 @@
           "columns": ["session_id", "created_at"],
           "isUnique": false
         },
+        "agent_session_message_created_id_idx": {
+          "name": "agent_session_message_created_id_idx",
+          "columns": ["created_at", "id"],
+          "isUnique": false
+        },
         "agent_session_message_turn_id_idx": {
           "name": "agent_session_message_turn_id_idx",
           "columns": ["turn_id"],
@@ -1306,29 +1311,7 @@
           "name": "base_url",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "origin": {
-          "name": "origin",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'remote'"
-        },
-        "builtin_id": {
-          "name": "builtin_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "authorization_id": {
-          "name": "authorization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "headers": {
@@ -1374,32 +1357,12 @@
           "name": "mcp_server_is_active_idx",
           "columns": ["is_active"],
           "isUnique": false
-        },
-        "mcp_server_builtin_idx": {
-          "name": "mcp_server_builtin_idx",
-          "columns": ["builtin_id"],
-          "isUnique": true
         }
       },
-      "foreignKeys": {
-        "mcp_server_authorization_id_plugin_authorization_id_fk": {
-          "name": "mcp_server_authorization_id_plugin_authorization_id_fk",
-          "tableFrom": "mcp_server",
-          "tableTo": "plugin_authorization",
-          "columnsFrom": ["authorization_id"],
-          "columnsTo": ["id"],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {
-        "mcp_server_origin_check": {
-          "name": "mcp_server_origin_check",
-          "value": "(\"mcp_server\".\"origin\" = 'remote' and \"mcp_server\".\"base_url\" is not null and \"mcp_server\".\"builtin_id\" is null and \"mcp_server\".\"authorization_id\" is null) or (\"mcp_server\".\"origin\" = 'builtin' and \"mcp_server\".\"base_url\" is null and \"mcp_server\".\"headers\" is null and \"mcp_server\".\"builtin_id\" is not null and \"mcp_server\".\"authorization_id\" is not null)"
-        }
-      }
+      "checkConstraints": {}
     },
     "painting": {
       "name": "painting",
@@ -1473,74 +1436,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "plugin_authorization": {
-      "name": "plugin_authorization",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "plugin_id": {
-          "name": "plugin_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "auth_method": {
-          "name": "auth_method",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "account_label": {
-          "name": "account_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "credential": {
-          "name": "credential",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "plugin_authorization_provider_check": {
-          "name": "plugin_authorization_provider_check",
-          "value": "\"plugin_authorization\".\"plugin_id\" in ('github', 'amap')"
-        },
-        "plugin_authorization_method_check": {
-          "name": "plugin_authorization_method_check",
-          "value": "(\"plugin_authorization\".\"plugin_id\" = 'github' and \"plugin_authorization\".\"auth_method\" = 'personal_token') or (\"plugin_authorization\".\"plugin_id\" = 'amap' and \"plugin_authorization\".\"auth_method\" = 'api_key')"
-        }
-      }
     },
     "user_model": {
       "name": "user_model",

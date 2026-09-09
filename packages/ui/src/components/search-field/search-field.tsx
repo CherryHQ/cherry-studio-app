@@ -17,6 +17,7 @@ export function SearchField({
   style,
   testID,
   value,
+  variant = 'default',
 }: SearchFieldProps) {
   return (
     <HeroSearchField
@@ -33,7 +34,11 @@ export function SearchField({
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus={autoFocus}
-          className="min-h-10 rounded-full border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border"
+          className={
+            variant === 'filled'
+              ? 'min-h-12 rounded-full border-0 bg-card py-0 text-(length:--text-base) shadow-sm ios:shadow-sm ios:focus:outline-transparent android:border-0 android:shadow-sm android:focus:border-0'
+              : 'min-h-10 rounded-full border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
+          }
           onBlur={onBlur}
           onFocus={onFocus}
           onSubmitEditing={onSubmitEditing}

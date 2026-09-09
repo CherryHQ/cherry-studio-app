@@ -28,6 +28,7 @@ type MockLegendListProps = {
   keyboardDismissMode?: string;
   keyboardLiftBehavior?: string;
   keyboardOffset?: number;
+  keyExtractor?: (item: MessageListItem) => string;
   maintainScrollAtEnd?: unknown;
   maintainVisibleContentPosition?: unknown;
   onContentSizeChange?: (width: number, height: number) => void;
@@ -118,7 +119,7 @@ jest.mock('@legendapp/list/keyboard', () => {
       return (
         <View testID="message-list">
           {props.data?.map((item, index) => (
-            <Fragment key={item.id}>
+            <Fragment key={props.keyExtractor?.(item) ?? item.id}>
               {props.renderItem?.({ extraData: props.extraData, index, item })}
             </Fragment>
           ))}
@@ -402,6 +403,69 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockLatestListProps?.dataKey).toBe('session-2');
   });
 
+  test('places a search target below the header instead of restoring the saved anchor', async () => {
+    const messages = [createMessage('target', 'user'), createMessage('saved', 'assistant')];
+    cacheService.set('chat.scroll_anchor.session-1', { key: 'saved', offset: 24 });
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(messages, {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    expect(mockListScrollToIndex).toHaveBeenCalledWith({
+      animated: false,
+      index: 0,
+      viewOffset: 96,
+      viewPosition: 0,
+    });
+    mockListScrollToIndex.mockClear();
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([...messages, createMessage('later', 'assistant')], {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  test('keeps the end of an incomplete history window in reading mode', async () => {
+    const onReturnToLatest = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('target', 'user')], {
+            hasNewerMessages: true,
+            initialScrollTarget: { messageId: 'target' },
+            onReturnToLatest,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onContentSizeChange?.(320, 1200);
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    await act(async () => mockScrollButtonProps?.onPress());
+    expect(onReturnToLatest).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
   test('auto-sticks only while following and yields immediately to a user drag', async () => {
     const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
     act(() => {
@@ -582,7 +646,7 @@ describe('MessageList scroll-controller ownership', () => {
     });
   });
 
-  test('a local send keeps keyboard insets active and waits for dismissal before scrolling', async () => {
+  test('shows a local send before keyboard dismissal and corrects the settled viewport without replaying motion', async () => {
     const messages = [createMessage('user-1', 'user')];
     act(() => {
       renderer = create(<MessageList {...listProps(messages)} />);
@@ -600,16 +664,17 @@ describe('MessageList scroll-controller ownership', () => {
         <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
       );
     });
-    act(flushAnimationFrames);
+    await act(async () => flushAnimationFrames());
 
     expect(mockLatestListProps?.freeze).toBeUndefined();
     expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
-    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
 
     await act(async () => finishDismiss());
 
-    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
-    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
+    expect(mockListScrollToEnd).toHaveBeenLastCalledWith({ animated: false });
   });
 
   test.each(['drag', 'dataset switch'] as const)(
@@ -632,7 +697,9 @@ describe('MessageList scroll-controller ownership', () => {
           <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
         );
       });
-      act(flushAnimationFrames);
+      await act(async () => flushAnimationFrames());
+      expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+      mockListScrollToEnd.mockClear();
 
       act(() => {
         if (interruption === 'drag') {
@@ -654,6 +721,53 @@ describe('MessageList scroll-controller ownership', () => {
       expect(mockListScrollToEnd).not.toHaveBeenCalled();
     },
   );
+
+  test('hands a Draft list to its durable Session without restoring or scrolling again', async () => {
+    const pending = [
+      { ...createMessage('user-1', 'user'), status: 'pending' as const },
+      { ...createMessage('assistant-1', 'assistant'), status: 'pending' as const },
+    ];
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(pending, {
+            dataKey: 'session-1',
+            enteringMessageId: 'user-1',
+          })}
+        />,
+      );
+    });
+    await loadList();
+    const keys = pending.map((message) => mockLatestListProps!.keyExtractor!(message));
+    mockListScrollToEnd.mockClear();
+    mockListScrollToIndex.mockClear();
+    mockKeyboardDismiss.mockClear();
+    const accepted = pending.map((message) => ({ ...message, status: 'success' as const }));
+    await act(async () => {
+      renderer?.update(
+        <MessageList
+          {...listProps(accepted, {
+            dataKey: 'session-1',
+            enteringMessageId: 'user-1',
+          })}
+        />,
+      );
+    });
+    act(flushAnimationFrames);
+    expect(accepted.map((message) => mockLatestListProps!.keyExtractor!(message))).toEqual(keys);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+    expect(mockKeyboardDismiss).not.toHaveBeenCalled();
+
+    mockListState.isAtEnd = false;
+    mockListState.start = 0;
+    mockListState.scroll = 32;
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScroll?.({} as never);
+    });
+    expect(cacheService.get('chat.scroll_anchor.session-1')).toEqual({ key: 'user-1', offset: 32 });
+  });
 
   test('the explicit scroll button returns reading mode to the live edge', async () => {
     const messages = [createMessage('user-1', 'user')];

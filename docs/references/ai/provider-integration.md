@@ -22,6 +22,13 @@ selected Agent model through the Host-owned provider adapter. The current Pi bin
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
 
+Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
+Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,
+and translates effort and budget fields into the selected native protocol. The same adapter gates
+temperature using model metadata and thinking-mode constraints. OpenAI-compatible chat endpoints
+use `max_tokens` and omit OpenAI-only storage/strict-tool options; stream-usage parameters follow
+the endpoint's dialect declaration rather than URL detection.
+
 Model-backed application tools use this capability path:
 
 ```text

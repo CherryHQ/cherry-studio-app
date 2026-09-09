@@ -20,3 +20,20 @@ Services that are part of the mobile data layer are instantiated by
 That concrete graph is private to bootstrap; resource operations are exposed directly through
 handlers in `src/backend/data/api`, while `src/bootstrap/composition/createBackend.ts` exposes only
 orchestration that qualifies for a frontend-visible `XxxModule` in `src/shared/contracts`.
+
+## Mobile Search Reads
+
+Session listing and content search use `db/readSqliteRows.ts` to execute bound SQL through Expo's
+native async reader. The regular Drizzle Expo driver is synchronous even when its result is
+awaited. Cancellation is cooperative: the current native statement may finish, but its result is
+discarded and no subsequent candidate batch is issued.
+
+Content search uses trigram LIKE candidates only for terms with at least three characters and no
+SQL wildcard characters. Other terms are matched literally within chronological batches, backed
+by the mobile `agent_session_message_created_id_idx` index. Each read returns at most 200 candidates;
+short/literal-wildcard searches inspect at most 500 candidates per page, indexed searches 5,000.
+Reaching that budget returns the last scanned position even if there are no matches. Only an
+exhausted source drops its continuation. Batches advance by `(created_at, id)`, without OFFSET.
+
+Visible-text filtering preserves fenced and inline code. Snippets collapse lines and include the
+earliest keyword instead of starting with a separate context-only or ellipsis line.

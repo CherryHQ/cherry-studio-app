@@ -1,6 +1,6 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
@@ -62,6 +62,10 @@ describe('auxiliary Data API integration', () => {
     ) as unknown as Database;
     dbService = {
       getDb: () => database,
+      getSqlite: () => ({
+        getAllAsync: async (query: string, params: SQLInputValue[]) =>
+          sqlite.prepare(query).all(...params),
+      }),
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         sqlite.exec('BEGIN IMMEDIATE');
         try {
@@ -167,7 +171,63 @@ describe('auxiliary Data API integration', () => {
     expect(persistedRows[0]?.turnId).toBe(turnId);
     expect(persistedRows[1]?.turnId).toBe(turnId);
   });
+  test.each([
+    ['<View>', '```tsx\n<View>hello</View>\n```'],
+    ['List<T>', '`List<T>`'],
+    ['100%_', 'progress: 100%_done'],
+    ['计划', '今天的计划'],
+  ])('finds literal visible content for %s', async (q, text) => {
+    insertSearchMessages(sqlite, [
+      { id: 'visible', text, createdAt: 1 },
+      { id: 'hidden-system', text, createdAt: 2, role: 'system' },
+    ]);
+    const result = await contentSearchService.search({ q });
+    expect(result.items.map((item) => item.messageId)).toEqual(['visible']);
+    expect(result.items[0]?.snippet).toContain(q);
+  });
+
+  test('continues a short-word search beyond a full batch with no matches', async () => {
+    insertSearchMessages(sqlite, [
+      { id: 'old-match', text: '明天的计划', createdAt: 0 },
+      ...Array.from({ length: 500 }, (_, index) => ({
+        id: `noise-${index}`,
+        text: 'unrelated message',
+        createdAt: index + 1,
+      })),
+    ]);
+    const first = await contentSearchService.search({ q: '计划' });
+    expect(first.items).toEqual([]);
+    expect(first.nextCursor).toBeDefined();
+    const second = await contentSearchService.search({ q: '计划', cursor: first.nextCursor });
+    expect(second.items.map((item) => item.messageId)).toEqual(['old-match']);
+    expect(second.nextCursor).toBeUndefined();
+  });
 });
+
+function insertSearchMessages(
+  sqlite: DatabaseSync,
+  messages: { id: string; text: string; createdAt: number; role?: string }[],
+) {
+  sqlite.exec(`INSERT INTO agent (id, name, order_key, created_at, updated_at)
+    VALUES ('search-agent', 'Search Agent', 'a0', 1, 1);
+    INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+    VALUES ('search-session', 'search-agent', 'Search Session', 1, 1, 1);`);
+  const statement = sqlite.prepare(`INSERT INTO agent_session_message
+    (id, session_id, role, data, status, created_at, updated_at)
+    VALUES (?, 'search-session', ?, ?, 'success', ?, ?)`);
+  for (const message of messages) {
+    statement.run(
+      message.id,
+      message.role ?? 'assistant',
+      JSON.stringify({
+        version: 1,
+        parts: [{ id: message.id, type: 'text', state: 'done', text: message.text }],
+      }),
+      message.createdAt,
+      message.createdAt,
+    );
+  }
+}
 
 function applyMigrations(database: DatabaseSync): void {
   const directory = `${process.cwd()}/migrations/sqlite-drizzle`;

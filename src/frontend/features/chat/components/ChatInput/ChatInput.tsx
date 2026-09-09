@@ -32,7 +32,7 @@ import {
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useAgentChatControls } from '../../runtime';
+import type { useAgentChatControls } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
@@ -45,6 +45,7 @@ import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 
 type ChatInputProps = {
   agentId?: string;
+  controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
   sessionId?: string;
 };
@@ -60,12 +61,9 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
+export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
   const { t } = useTranslation();
-  const { cancel, isApprovalPending, isBusy, sendMessage } = useAgentChatControls({
-    agentId,
-    sessionId,
-  });
+  const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const { agent } = useAgentApiById(agentId);
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'text' });
@@ -247,6 +245,7 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
         >
           {(effortGauge) => (
             <ComposerSurface
+              canSend={canSend}
               dismissKeyboardOnSend={dismissKeyboardOnSend}
               getSendErrorLabel={getSendErrorLabel}
               onSend={handleSendPress}

@@ -15,6 +15,7 @@ import { stripMarkdownFormatting } from './searchSnippet';
 const defaultFtsSearchLimit = 500;
 const ftsSearchChunkSize = 200;
 const ftsSearchMaxCandidates = 5_000;
+const SHORT_SEARCH_MAX_CANDIDATES = 500;
 const logger = loggerService.withContext('FtsSearch');
 
 export type SearchCursor = { createdAt: number; id: string };
@@ -23,7 +24,6 @@ export type SearchFetchContext = {
   createdAtFromMs: number | undefined;
   cursor: SearchCursor | undefined;
   ftsConditions: SQL[];
-  offset: number;
 };
 
 type SearchMapContext = {
@@ -39,11 +39,13 @@ type SearchWithCursorOptions<Row, PublicItem> = {
   cursor?: string;
   cursorConfig: CursorConfig;
   fetchRows: (context: SearchFetchContext) => Promise<Row[]>;
+  getCursor: (row: Row) => SearchCursor;
   getSearchableText: (row: Row) => string;
   limit?: number;
   mapRow: (row: Row, context: SearchMapContext) => SearchMappedItem<PublicItem>;
   maxCandidates?: number;
   q: string;
+  signal?: AbortSignal;
 };
 
 export function decodeSearchCursor(raw: string, config: CursorConfig): SearchCursor {
@@ -74,11 +76,13 @@ export async function searchWithCursor<Row, PublicItem>({
   cursor: rawCursor,
   cursorConfig,
   fetchRows,
+  getCursor,
   getSearchableText,
   limit = defaultFtsSearchLimit,
   mapRow,
   maxCandidates = ftsSearchMaxCandidates,
   q,
+  signal,
 }: SearchWithCursorOptions<Row, PublicItem>): Promise<CursorPaginationResponse<PublicItem>> {
   const terms = splitKeywordsToTerms(q);
   if (terms.length === 0) return { items: [] };
@@ -86,28 +90,36 @@ export async function searchWithCursor<Row, PublicItem>({
   const matchMode: KeywordMatchMode = 'substring';
   const fetchLimit = limit + 1;
   const regexes = buildKeywordRegexes(terms, { flags: 'i', matchMode });
-  const ftsConditions = terms.map(
+  // Short words and literal SQL wildcards cannot use this LIKE index safely.
+  // Scan them in bounded chronological batches and apply literal matching below.
+  const indexedTerms = terms.filter((term) => Array.from(term).length >= 3 && !/[%_]/.test(term));
+  const ftsConditions = indexedTerms.map(
     (term) => sql`fts.searchable_text LIKE ${buildFtsLikePattern(term)}`,
   );
-  const cursor = rawCursor !== undefined ? decodeSearchCursor(rawCursor, cursorConfig) : undefined;
+  let cursor = rawCursor !== undefined ? decodeSearchCursor(rawCursor, cursorConfig) : undefined;
   const createdAtFromMs = getCreatedAtFromMs(createdAtFrom);
-  const results: Array<SearchMappedItem<PublicItem>> = [];
-  let offset = 0;
+  const results: SearchMappedItem<PublicItem>[] = [];
   let scannedCandidates = 0;
+  let exhausted = false;
+  const candidateBudget =
+    ftsConditions.length > 0 ? maxCandidates : Math.min(maxCandidates, SHORT_SEARCH_MAX_CANDIDATES);
 
-  while (results.length < fetchLimit) {
+  while (results.length < fetchLimit && scannedCandidates < candidateBudget) {
+    signal?.throwIfAborted();
+    const chunkSize = Math.min(ftsSearchChunkSize, candidateBudget - scannedCandidates);
     const rows = await fetchRows({
-      chunkSize: ftsSearchChunkSize,
+      chunkSize,
       createdAtFromMs,
       cursor,
       ftsConditions,
-      offset,
     });
+    signal?.throwIfAborted();
+    exhausted = rows.length < chunkSize;
     if (rows.length === 0) break;
     scannedCandidates += rows.length;
-    offset += rows.length;
 
     for (const row of rows) {
+      cursor = getCursor(row);
       const searchableText = getSearchableText(row);
       if (!searchableText) continue;
       const plainText = stripMarkdownFormatting(searchableText);
@@ -127,10 +139,11 @@ export async function searchWithCursor<Row, PublicItem>({
       if (results.length >= fetchLimit) break;
     }
 
-    if (scannedCandidates >= maxCandidates && results.length < fetchLimit) {
-      logger.warn('FTS search candidate scan limit reached', {
+    if (exhausted) break;
+    if (scannedCandidates >= candidateBudget && results.length < fetchLimit) {
+      logger.debug('Search candidate scan continues on the next page', {
         limit,
-        maxCandidates,
+        maxCandidates: candidateBudget,
         scannedCandidates,
         termCount: terms.length,
       });
@@ -139,11 +152,12 @@ export async function searchWithCursor<Row, PublicItem>({
   }
 
   const itemsWithCursor = results.slice(0, limit);
-  const nextCursorBoundary = results.length > limit ? itemsWithCursor.at(-1) : undefined;
+  const nextCursorBoundary =
+    results.length > limit ? itemsWithCursor.at(-1)?.sort : !exhausted ? cursor : undefined;
   return {
     items: itemsWithCursor.map((result) => result.item),
     nextCursor: nextCursorBoundary
-      ? encodeSearchCursor(nextCursorBoundary.sort.createdAt, nextCursorBoundary.sort.id)
+      ? encodeSearchCursor(nextCursorBoundary.createdAt, nextCursorBoundary.id)
       : undefined,
   };
 }

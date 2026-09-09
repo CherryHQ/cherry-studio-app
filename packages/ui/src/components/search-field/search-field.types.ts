@@ -14,4 +14,5 @@ export type SearchFieldProps = {
   style?: StyleProp<ViewStyle>;
   testID?: string;
   value: string;
+  variant?: 'default' | 'filled';
 };

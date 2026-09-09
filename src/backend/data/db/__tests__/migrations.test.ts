@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { tag: string }[];
+  entries: { tag: string; when: number }[];
 };
 
 describe('bundled SQLite migrations', () => {
@@ -11,7 +11,11 @@ describe('bundled SQLite migrations', () => {
     try {
       database.exec('PRAGMA foreign_keys = ON');
       const entries = readMigrationEntries();
-      const target = entries.findIndex(({ tag }) => tag === '0019_plugin-authorizations');
+      const target = entries.findIndex(({ tag }) => tag === '0020_plugin-authorizations');
+      expect(target).toBeGreaterThan(0);
+      const journal = readMigrationJournal();
+      // Drizzle resumes by timestamp, so the appended migration must follow the merged base.
+      expect(journal.entries[target].when).toBeGreaterThan(journal.entries[target - 1].when);
       for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
       database.exec(`
         INSERT INTO mcp_server (id, name, base_url, headers, disabled_tools, is_active, created_at, updated_at)
@@ -170,6 +174,12 @@ describe('bundled SQLite migrations', () => {
         'files',
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
+      expect(
+        database
+          .prepare("PRAGMA index_info('agent_session_message_created_id_idx')")
+          .all()
+          .map((column) => column.name),
+      ).toEqual(['created_at', 'id']);
 
       // Agent persistence (docs/references/agent/agent-persistence.md): four
       // tables, no turn or pending-approval table, no workspace or runtime id.

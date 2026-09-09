@@ -8,7 +8,7 @@ import { cacheService } from '@/frontend/data/CacheService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
 
-import type { MessageListItem } from '../types';
+import type { MessageListItem, MessageListProps } from '../types';
 import { computeScrollAnchor, resolveRestoreTarget } from './messageListScrollMemory';
 import {
   type FollowingReason,
@@ -20,12 +20,16 @@ const SAVE_THROTTLE_MS = 200;
 const scrollLog = loggerService.withContext('ChatScroll');
 
 type MessageListScrollControllerInputs = {
+  contentTopInset: number;
   dataKey: string | undefined;
   enteringMessageId: string | undefined;
   initialLayoutReady: boolean;
+  initialScrollTarget?: MessageListProps['initialScrollTarget'];
+  hasNewerMessages: boolean;
   listRef: RefObject<LegendListRef | null>;
   messages: readonly MessageListItem[];
   onReady: (() => void) | undefined;
+  onReturnToLatest?: () => void;
 };
 
 type ObservedScrollAnchor = Readonly<{
@@ -112,6 +116,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
       try {
         if (options.closeKeyboard) {
+          // Make the submitted row visible before keyboard dismissal changes the viewport.
+          await inputsRef.current.listRef.current?.scrollToEnd({ animated: false });
+          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+            return;
+          }
           // Keep keyboard geometry updates active so dismissal clears its bottom
           // inset before we resolve the list's new live edge.
           await KeyboardController.dismiss();
@@ -119,7 +128,14 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
             return;
           }
         }
-        await inputsRef.current.listRef.current?.scrollToEnd({ animated: options.animated });
+        const current = inputsRef.current;
+        if (current.onReturnToLatest) {
+          current.onReturnToLatest();
+        } else {
+          await current.listRef.current?.scrollToEnd({
+            animated: options.animated && !options.closeKeyboard,
+          });
+        }
       } catch (error) {
         scrollLog.warn('[SCROLL] liveEdgeScroll failed', error as Error, { reason });
       } finally {
@@ -279,8 +295,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       return;
     }
 
+    const explicitTarget = current.initialScrollTarget;
     const saved =
-      pendingMessageId || !current.dataKey ? null : cacheService.get(cacheKeyFor(current.dataKey));
+      pendingMessageId || explicitTarget === 'end'
+        ? null
+        : explicitTarget
+          ? { key: explicitTarget.messageId, offset: -current.contentTopInset }
+          : current.dataKey
+            ? cacheService.get(cacheKeyFor(current.dataKey))
+            : null;
     const target = resolveRestoreTarget(
       saved,
       (key) => current.messages.findIndex((message) => message.id === key),
@@ -374,7 +397,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   const finishUserScroll = useCallback(() => {
     const isAtEnd = inputsRef.current.listRef.current?.getState().isAtEnd ?? false;
-    if (isAtEnd) {
+    if (isAtEnd && !inputsRef.current.hasNewerMessages) {
       follow.enterFollowing('user-reached-bottom');
       clearStoredAnchor();
     } else {

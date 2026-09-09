@@ -26,17 +26,6 @@ export function useMainHeaderAgent() {
   const { agent } = useAgentApiById(currentAgentId);
   const startNewChat = useStartNewChat();
 
-  const openAgentHistory = useCallback(() => {
-    if (!currentAgentId) {
-      return;
-    }
-
-    Keyboard.dismiss();
-    router.push({
-      params: { agentId: currentAgentId },
-      pathname: '/sessions',
-    });
-  }, [currentAgentId, router]);
   const openNewSession = useCallback(() => {
     Keyboard.dismiss();
     if (agent) {
@@ -47,7 +36,7 @@ export function useMainHeaderAgent() {
     void startNewChat();
   }, [agent, router, startNewChat]);
 
-  return { agent, currentAgentId, openAgentHistory, openNewSession };
+  return { agent, currentAgentId, openNewSession };
 }
 
 export function MainHeaderAgentButton({ agent, onPress }: { agent: Agent; onPress: () => void }) {

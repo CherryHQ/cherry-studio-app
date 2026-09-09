@@ -7,29 +7,37 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 import { AppState } from 'react-native';
+import { v7 as uuidv7 } from 'uuid';
 
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentInputPart, AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
   createAgentChatDraftHandoffState,
 } from './agentChatDraftHandoff';
+import { createPendingChatMessages } from './agentMessageProjection';
 import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
 
-type AgentChatSendInput = {
+type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
-  modelId?: AgentSubmitMessageInput['modelId'];
-  parts: AgentInputPart[];
-  reasoningEffort?: AgentSubmitMessageInput['reasoningEffort'];
-  sessionId?: string;
+  isNewSession: boolean;
+  isCurrent: () => boolean;
 };
+
+export type PendingChatSend = Readonly<{
+  sessionId: string;
+  isNewSession: boolean;
+  isSubmitting: boolean;
+  messages: ReturnType<typeof createPendingChatMessages>;
+}>;
 
 type AgentChatForkInput = {
   fromMessageId: string;
@@ -97,30 +105,23 @@ export function ChatProvider({ children }: PropsWithChildren) {
   useEffect(() => () => client.dispose(), [client]);
 
   const sendMessage = useCallback(
-    async ({ agentId, modelId, parts, reasoningEffort, sessionId }: AgentChatSendInput) => {
-      let targetSessionId = sessionId;
-      if (!targetSessionId) {
+    async ({ agentId, isCurrent, isNewSession, ...submission }: AgentChatSendInput) => {
+      if (isNewSession) {
         if (!agentId) {
           throw new Error('Select an Agent before sending a message.');
         }
-
-        const session = await client.startSession(agentId, parts, {
-          ...(modelId !== undefined ? { modelId } : {}),
-          ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
+        const session = await client.startSession({
+          ...submission,
+          agentId,
+          executionTarget: { kind: 'local' },
         });
-        targetSessionId = session.id;
-        draftHandoff.handoffToSession(
-          { agentId, sessionId: targetSessionId },
-          navigation.openSession,
-        );
+        if (isCurrent()) {
+          draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);
+        }
         void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
         return;
       }
-
-      await client.submitMessage(targetSessionId, parts, {
-        ...(modelId !== undefined ? { modelId } : {}),
-        ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
-      });
+      await client.submitMessage(submission);
     },
     [client, draftHandoff, navigation, queryClient],
   );
@@ -200,24 +201,95 @@ export function useAgentChatDraftHandoff(
   return handoff;
 }
 
-export function useAgentChatControls(input: { agentId?: string; sessionId?: string }) {
+export function useAgentChatControls(input: {
+  agentId?: string;
+  sessionId?: string;
+  composerKey: number;
+}) {
   const { client, sendMessage } = useAgentChatContext();
-  const { agentId, sessionId } = input;
+  const { agentId, composerKey, sessionId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
+  const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
+  const [submission, setSubmission] = useState<{
+    composerKey: number;
+    userMessageId: string;
+    send?: PendingChatSend;
+  }>();
+  const currentSubmission = submission?.composerKey === composerKey ? submission : undefined;
+  const pendingSend = currentSubmission?.send;
+  // A send captures its composer key; a late completion compares it with the
+  // mounted key so a composer the user has left cannot navigate or update state.
+  const mountedComposerKeyRef = useRef<number | null>(composerKey);
+  useEffect(() => {
+    mountedComposerKeyRef.current = composerKey;
+    return () => {
+      mountedComposerKeyRef.current = null;
+    };
+  }, [composerKey]);
+
   const cancel = useCallback(() => {
-    if (!sessionId) {
-      return Promise.resolve();
-    }
-    return client.cancelTurn(sessionId);
+    return sessionId ? client.cancelTurn(sessionId) : Promise.resolve();
   }, [client, sessionId]);
   const send = useCallback(
-    (message: Omit<AgentChatSendInput, 'agentId' | 'sessionId'>) =>
-      sendMessage({ agentId, sessionId, ...message }),
-    [agentId, sendMessage, sessionId],
+    async (
+      message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
+    ) => {
+      const isCurrent = () => mountedComposerKeyRef.current === composerKey;
+      const request = {
+        ...message,
+        sessionId: sessionId ?? uuidv7(),
+        userMessageId: uuidv7(),
+        assistantMessageId: uuidv7(),
+      };
+      const pending: PendingChatSend = {
+        sessionId: request.sessionId,
+        isNewSession: !sessionId,
+        isSubmitting: true,
+        messages: createPendingChatMessages(request),
+      };
+      setSubmission({ composerKey, userMessageId: request.userMessageId, send: pending });
+      try {
+        await sendMessage({ ...request, agentId, isCurrent, isNewSession: pending.isNewSession });
+        if (isCurrent()) {
+          setSubmission((current) =>
+            current?.send === pending
+              ? { ...current, send: { ...pending, isSubmitting: false } }
+              : current,
+          );
+        }
+      } catch (error) {
+        if (isCurrent())
+          setSubmission((current) =>
+            current?.send === pending ? { ...current, send: undefined } : current,
+          );
+        throw error;
+      }
+    },
+    [agentId, composerKey, sendMessage, sessionId],
+  );
+  const completePendingSend = useCallback(
+    (userMessageId: string) => {
+      setSubmission((current) =>
+        current?.composerKey === composerKey &&
+        current.userMessageId === userMessageId &&
+        current.send &&
+        !current.send.isSubmitting
+          ? { ...current, send: undefined }
+          : current,
+      );
+    },
+    [composerKey],
   );
 
   return {
     cancel,
+    completePendingSend,
+    pendingSend,
+    enteringUserMessageId: currentSubmission?.userMessageId,
+    canSend:
+      pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready'))
+        ? false
+        : undefined,
     isApprovalPending: activeTurnStatus === 'awaiting-approval',
     isBusy:
       activeTurnStatus !== undefined &&
@@ -251,14 +323,15 @@ function useAgentSessionSelection<TValue>(
     () => select(sessionId ? client.getState(sessionId) : EMPTY_AGENT_SESSION_STATE),
     [client, select, sessionId],
   );
-
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-function selectSessionState(state: AgentSessionChatState) {
-  return state;
 }
 
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
+}
+function selectSessionState(state: AgentSessionChatState) {
+  return state;
+}
+function selectObservationStatus(state: AgentSessionChatState) {
+  return state.status;
 }

@@ -1,4 +1,4 @@
-import { chatHref, chatReturnToHref, parseChatRoute } from '../chatRoute';
+import { chatHref, chatReturnToHref, chatRouteParams, parseChatRoute } from '../chatRoute';
 
 describe('shared chat route contract', () => {
   test('uses the Session id as the complete existing-chat identity', () => {
@@ -31,5 +31,23 @@ describe('shared chat route contract', () => {
       '/?sessionId=session%20%2F%201',
     );
     expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
+  });
+
+  test('preserves a message destination and repeated-navigation identity', () => {
+    const target = {
+      kind: 'session' as const,
+      sessionId: 'session',
+      messageId: 'message',
+      messageRequestId: 'second-visit',
+    };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'session', sessionId: 'another' })).toHaveProperty(
+      'messageId',
+      undefined,
+    );
+    expect(chatRouteParams({ kind: 'draft', agentId: 'agent' })).toHaveProperty(
+      'messageRequestId',
+      undefined,
+    );
   });
 });

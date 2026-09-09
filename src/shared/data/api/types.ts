@@ -57,7 +57,7 @@ export interface ApiClient {
   ): Promise<ResponseForPath<TPath, 'DELETE'>>;
   get<TPath extends ConcreteApiPaths>(
     path: TPath,
-    options?: { query?: QueryParamsForPath<TPath, 'GET'> },
+    options?: { query?: QueryParamsForPath<TPath, 'GET'>; signal?: AbortSignal },
   ): Promise<ResponseForPath<TPath, 'GET'>>;
   patch<TPath extends ConcreteApiPaths>(
     path: TPath,
@@ -91,7 +91,7 @@ type RequiredField<Shape, Key extends PropertyKey> =
   Shape extends Record<Key, unknown> ? true : false;
 
 export type ApiHandler<Path extends ApiPaths, Method extends ApiMethods<Path>> = (
-  input: (RequiredField<MethodShape<Path, Method>, 'params'> extends true
+  input: { signal?: AbortSignal } & (RequiredField<MethodShape<Path, Method>, 'params'> extends true
     ? { params: Field<MethodShape<Path, Method>, 'params'> }
     : { params?: Field<MethodShape<Path, Method>, 'params'> }) &
     (RequiredField<MethodShape<Path, Method>, 'query'> extends true

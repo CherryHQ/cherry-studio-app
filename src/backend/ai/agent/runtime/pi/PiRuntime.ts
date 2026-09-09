@@ -638,7 +638,12 @@ function resolveThinkingLevel(
   resolution: PiModelResolution,
 ): ModelThinkingLevel {
   if (!resolution.model.reasoning) return 'off';
-  return request.options.reasoningEffort ?? resolution.defaultThinkingLevel;
+  const effort = request.options.reasoningEffort;
+  if (effort === 'none') return 'off';
+  if (effort === undefined || effort === 'default' || effort === 'auto') {
+    return resolution.defaultThinkingLevel;
+  }
+  return effort;
 }
 
 function toRuntimeJson(value: unknown, fallback: RuntimeJsonValue = null): RuntimeJsonValue {

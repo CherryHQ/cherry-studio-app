@@ -50,7 +50,7 @@ describe('ContextMenuLink.ios', () => {
     act(() => {
       renderer = create(
         <ContextMenuLink
-          href={{ pathname: '/sessions', params: { sessionId: 'session-1' } }}
+          href={{ pathname: '/agents', params: { sessionId: 'session-1' } }}
           items={[
             {
               id: 'delete',
@@ -68,7 +68,7 @@ describe('ContextMenuLink.ios', () => {
     });
 
     expect(mockLinkProps?.href).toEqual({
-      pathname: '/sessions',
+      pathname: '/agents',
       params: { sessionId: 'session-1' },
     });
     expect(mockLinkProps?.asChild).toBe(true);

@@ -238,11 +238,18 @@ state.
 Stateless single-turn consumers have no restoration key. They use LegendList's initial-end
 bootstrap once, and the controller adopts following mode without issuing a second initial scroll.
 
+`initialScrollTarget` takes precedence over saved scroll memory for a dataset. Message targets align
+the entire row below the header, with no highlight; an explicit end target returns to the live edge.
+The caller changes `dataKey` for a new navigation request or a replacement history window. A window
+with `hasNewerMessages` remains in reading mode even at its loaded end, requests newer pages through
+`onLoadNewer`, and keeps the return-to-latest control available. `onReturnToLatest` lets the data
+owner replace that window before the controller resumes following; local sends use the same path.
+
 Keyboard lift remains `whenAtEnd`: focusing the composer must not move a viewport that is reading
 history. The keyboard controller is a platform geometry adapter; it never transitions the product
-following/reading state. A local send keeps keyboard geometry updates active while awaiting
-dismissal, then scrolls to the live edge after the keyboard inset clears. A dataset switch or
-committed drag during dismissal cancels that pending scroll.
+following/reading state. A local send immediately positions the message at the live edge, keeps
+keyboard geometry updates active during dismissal, and corrects the final inset without replaying
+scroll motion. A dataset switch or committed drag during dismissal cancels that final correction.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 wrapping attachment group sits above the optional bubble, keeping every card inside the user

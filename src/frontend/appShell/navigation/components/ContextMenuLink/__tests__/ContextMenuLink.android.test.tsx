@@ -83,7 +83,7 @@ describe('ContextMenuLink.android', () => {
     act(() => {
       renderer = create(
         <ContextMenuLink
-          href="/sessions"
+          href="/agents"
           items={[
             { id: 'rename', label: 'Rename', onPress: onRename },
             { id: 'delete', label: 'Delete', onPress: onDelete },

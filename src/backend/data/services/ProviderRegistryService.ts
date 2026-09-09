@@ -422,6 +422,10 @@ export class ProviderRegistryService {
     return this.loader.getExcludedProviderIds();
   }
 
+  isProviderExcludedFromCatalog(providerId: string): boolean {
+    return this.loader.isProviderExcludedFromCatalog(providerId);
+  }
+
   getProviderDisplayMetadata(
     providerId: string,
     presetProviderId?: string,
@@ -578,7 +582,16 @@ export class ProviderRegistryService {
     const presetReasoning = this.loader.findModel(
       matchedOverride?.modelId ?? model.presetModelId ?? '',
     )?.reasoning;
-    const support = mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support);
+    const materializedReasoning = model.reasoning
+      ? {
+          ...model.reasoning,
+          supportedEfforts: model.reasoning.supportedEfforts ?? model.reasoning.selectableEfforts,
+        }
+      : undefined;
+    const support = mergeReasoningSupport(
+      presetReasoning ?? materializedReasoning,
+      contract?.support,
+    );
     const wireDialect =
       support?.wireDialect ?? this.loader.findModel(model.apiModelId ?? '')?.reasoning?.wireDialect;
     const resolved = resolveReasoningProfileFromRegistry({

@@ -58,6 +58,32 @@ describe('chat model connection probe', () => {
     });
   });
 
+  test('reserves output for mandatory reasoning and only disables it when the model allows it', async () => {
+    for (const selectableEfforts of [
+      ['low', 'high'],
+      ['none', 'high'],
+    ] as const) {
+      const probe = createProbe([
+        { type: 'text.delta', partId: 'answer', text: 'OK' },
+        { type: 'completed' },
+      ]);
+      await checkChatModel(
+        probe.runtime,
+        {
+          ...model,
+          maxOutputTokens: 2048,
+          reasoning: { selectableEfforts: [...selectableEfforts] },
+        },
+        probe,
+      );
+      expect(probe.requests[0].options).toEqual(
+        selectableEfforts[0] === 'none'
+          ? { maxOutputTokens: 64, reasoningEffort: 'none' }
+          : { maxOutputTokens: 2048, reasoningEffort: 'default' },
+      );
+    }
+  });
+
   test('returns a closed failure reason instead of provider diagnostics', async () => {
     const probe = createProbe([
       {

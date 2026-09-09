@@ -21,10 +21,10 @@ export function createSearchHandlers(
       },
     },
     '/search/contents': {
-      GET: async ({ query }) => {
+      GET: async ({ query, signal }) => {
         const parsed = ContentSearchQuerySchema.safeParse(query);
         if (!parsed.success) throw toDataApiError(parsed.error);
-        return await contentSearch.search(parsed.data);
+        return await contentSearch.search(parsed.data, signal);
       },
     },
   };

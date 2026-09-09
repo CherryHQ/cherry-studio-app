@@ -15,6 +15,14 @@ cover and loading indicator exit together with a short eased fade.
 Viewport following, scroll memory, keyboard spacing, manual scrolling, and the scroll-to-bottom
 control are owned and documented by `@/frontend/components/Message`.
 
+## Message Timestamps
+
+Chat shows a centered timestamp above the first dated message in the loaded history and above
+each message at least five minutes after the preceding dated message. User and assistant messages
+share this rule; missing or invalid dates and synthetic system rows do not create time markers.
+Loading older history recalculates the boundaries. The assistant header contains only the assistant
+and model identity.
+
 ## Message Usage
 
 Settled assistant messages show total tokens and elapsed time beside their actions. The usage
@@ -42,9 +50,10 @@ The detail sheet retains localized exact counts. It opens at medium height and e
 large to full height. The model and provider remain at the top, followed by total tokens and the
 input/cache and output/reasoning measurements in two columns. A neutral segmented bar shows the
 relative input/output counts only when both are known and their sum is positive. Performance
-measurements follow without an explanatory paragraph, and costs appear last. The message metadata
-section is omitted. The groups retain their theme tokens and scalable text. Missing counts stay
-unavailable and a measured zero remains visible.
+measurements follow without an explanatory paragraph, then costs. The message's creation date and
+time appear at the bottom, formatted for the current locale in the device's local time zone with
+seconds. Missing or invalid dates are omitted. The groups retain their theme tokens and scalable
+text. Missing counts stay unavailable and a measured zero remains visible.
 
 Message rows do not register a long-press copy menu. Copy is an explicit assistant toolbar action.
 The usage button uses CherryUI's release-time press action.
