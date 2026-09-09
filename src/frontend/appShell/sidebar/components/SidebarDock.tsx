@@ -55,7 +55,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
         </Pressable>
       </Surface>
 
-      <View className="overflow-hidden rounded-full bg-card">
+      <Surface interactive shape="pill">
         <Pressable
           accessibilityLabel={t('navigation.settings')}
           accessibilityRole="button"
@@ -83,7 +83,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             </Text>
           ) : null}
         </Pressable>
-      </View>
+      </Surface>
     </View>
   );
 }

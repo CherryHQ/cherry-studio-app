@@ -1,3 +1,4 @@
+import { getComposerActionCenterOffset } from '@cherrystudio/ui/components';
 import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,11 +8,9 @@ import { appSidebar } from '@/frontend/utils/constants';
  * Geometry of the floating dock, shared by the dock itself and by the body that
  * has to scroll clear of it.
  *
- * `inset` makes the dock's corners concentric with the display's: a rounded
- * rect nested in another only looks right when the two share a center, which
- * means the gap has to equal the difference of their radii. Anything less and
- * the pill's corner visibly tightens against the screen's. The drawer's right
- * edge is straight, so there the same inset is plain symmetry.
+ * Horizontal spacing follows the display's corner radius, mirrored at the
+ * drawer's straight right edge. Vertical placement aligns both button centers
+ * with the chat composer's send action through its public layout contract.
  */
 export function useDockMetrics() {
   const insets = useSafeAreaInsets();
@@ -23,7 +22,7 @@ export function useDockMetrics() {
   return {
     /** Horizontal inset from the sidebar's edges. */
     inset,
-    /** Bottom padding: the concentric inset, never less than the home indicator. */
-    bottomPadding: Math.max(inset, insets.bottom),
+    /** Aligns the dock's button centers with the composer's bottom action row. */
+    bottomPadding: getComposerActionCenterOffset(insets.bottom) - buttonRadius,
   };
 }
