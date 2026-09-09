@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import type { HeaderToolbarAction } from '@/frontend/components/headers';
+import type { HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
@@ -53,7 +53,6 @@ export function DeviceConnectionsScreen() {
               <NetworkIcon className="size-7 text-foreground" />
             </ContentState.Icon>
           }
-          layout="page"
           primaryAction={{
             children: t('settings.deviceConnections.scan.action'),
             onPress: () => router.push('/settings/device-connections/scan'),

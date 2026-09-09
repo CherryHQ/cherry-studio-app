@@ -149,7 +149,6 @@ export default function DesktopProviderSyncScreen() {
       ) : availableConnections.length === 0 ? (
         <ContentState.Empty
           description={t('settings.provider.desktopSync.noDeviceDescription')}
-          layout="page"
           primaryAction={{
             children: t('settings.provider.desktopSync.openDeviceConnections'),
             onPress: openDeviceConnections,
@@ -219,7 +218,6 @@ function ProviderSelection({
     return (
       <ContentState.Empty
         description={t('settings.provider.desktopSync.emptyDescription')}
-        layout="page"
         title={t('settings.provider.desktopSync.empty')}
       />
     );
