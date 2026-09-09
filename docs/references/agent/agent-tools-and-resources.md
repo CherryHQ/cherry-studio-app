@@ -329,8 +329,9 @@ retry; cancellation still propagates without becoming a cached failure.
 - [Health Access](../../../modules/health-access/README.md) owns native read authorization;
   `src/backend/services/permissions` maps its results to the shared permission contract. Data
   queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
-- Android uses Health Connect's activity result to finish authorization and reads grants per data
-  type. Settings open Health Connect management even when all permissions are already granted.
+- Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
+  result on earlier versions, then reads grants per data type. Settings open Health Connect
+  management even when all permissions are already granted.
   Unsupported devices hide the capability; a missing or outdated provider retains an install path.
 - Apple Health never discloses whether a read permission was granted. `requested` means the system
   no longer needs to ask, and settings explain how to review access in Apple Health.

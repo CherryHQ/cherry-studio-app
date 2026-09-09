@@ -14,6 +14,12 @@ import {
 } from '../builtInToolSource';
 import type { ConfiguredPaintingModel } from '../painting';
 
+// Catalog scenarios supply their own permission reader. Native authorization is
+// covered at the DevicePermissions boundary, outside this catalog test.
+jest.mock('@/backend/services/permissions', () => ({
+  devicePermissions: { getStatuses: jest.fn(), request: jest.fn() },
+}));
+
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
 const TURN_RESOURCES: TurnToolResources = {
   availableFiles: new Map(),

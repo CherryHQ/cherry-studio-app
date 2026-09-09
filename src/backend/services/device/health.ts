@@ -117,7 +117,7 @@ async function getRangeHealthSummary(
         // The native aggregate collapses absent samples into zero. Check existence
         // without replacing HealthKit/Health Connect's aggregation with raw sums.
         const samples = await withNativeToolTimeout(
-          healthKit.getQuantityData(config.identifier, start, end, 1, false),
+          healthKit.getQuantityData(config.identifier, start, end, null, false),
           `${metric} availability query`,
         );
         if (!samples.length) {

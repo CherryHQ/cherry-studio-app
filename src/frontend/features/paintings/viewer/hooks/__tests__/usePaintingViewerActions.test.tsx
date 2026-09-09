@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { Linking } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data/BackendProvider';
@@ -23,7 +22,7 @@ const mockCreateAsset = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockRequestPermissions = jest.fn();
 const mockToastShow = jest.fn();
-const mockOpenSettings = jest.spyOn(Linking, 'openSettings');
+const mockOpenSettings = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockRouterBack, push: mockRouterPush }),
@@ -31,8 +30,6 @@ jest.mock('expo-router', () => ({
 
 jest.mock('expo-media-library', () => ({
   Asset: { create: (...args: unknown[]) => mockCreateAsset(...args) },
-  getPermissionsAsync: (...args: unknown[]) => mockGetPermissions(...args),
-  requestPermissionsAsync: (...args: unknown[]) => mockRequestPermissions(...args),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -83,6 +80,11 @@ const dataApi = {
 } as unknown as ApiClient;
 const backend = {
   paintings: { cancelGeneration: mockCancelGeneration },
+  permissions: {
+    getStatuses: mockGetPermissions,
+    request: mockRequestPermissions,
+    openSystemSettings: mockOpenSettings,
+  },
 } as unknown as Backend;
 let queryClient: QueryClient;
 
@@ -110,10 +112,16 @@ describe('usePaintingViewerActions', () => {
     jest.clearAllMocks();
     actions = undefined;
     mockCreateAsset.mockResolvedValue(undefined);
-    mockGetPermissions.mockResolvedValue({ canAskAgain: true, granted: true });
+    mockGetPermissions.mockResolvedValue({
+      'photos.write': { state: 'granted', canAskAgain: false },
+    });
     mockOpenSettings.mockResolvedValue(undefined);
-    mockRequestPermissions.mockResolvedValue({ canAskAgain: true, granted: true });
-    queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+    mockRequestPermissions.mockResolvedValue({
+      'photos.write': { state: 'granted', canAskAgain: false },
+    });
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity }, mutations: { gcTime: Infinity } },
+    });
     await act(async () => {
       renderer = create(
         <QueryClientProvider client={queryClient}>
@@ -129,6 +137,7 @@ describe('usePaintingViewerActions', () => {
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
+    queryClient.clear();
   });
 
   it('opens the current painting conversation', () => {
@@ -143,13 +152,15 @@ describe('usePaintingViewerActions', () => {
   it('saves immediately when write-only photo access is already granted', async () => {
     await act(async () => actions?.download());
 
-    expect(mockGetPermissions).toHaveBeenCalledWith(true);
+    expect(mockGetPermissions).toHaveBeenCalledWith(['photos.write']);
     expect(mockRequestPermissions).not.toHaveBeenCalled();
     expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
   });
 
   it('requests photo access only after Alert confirmation', async () => {
-    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'undetermined', canAskAgain: true },
+    });
 
     await act(async () => actions?.download());
 
@@ -166,12 +177,14 @@ describe('usePaintingViewerActions', () => {
     };
     await act(onConfirm);
 
-    expect(mockRequestPermissions).toHaveBeenCalledWith(true);
+    expect(mockRequestPermissions).toHaveBeenCalledWith(['photos.write']);
     expect(mockCreateAsset).toHaveBeenCalledWith('file:///painting.png');
   });
 
   it('offers to open system settings when photo access cannot be requested again', async () => {
-    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: false });
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'denied', canAskAgain: false },
+    });
 
     await act(async () => actions?.download());
 
@@ -188,12 +201,16 @@ describe('usePaintingViewerActions', () => {
     };
     await act(onConfirm);
 
-    expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    expect(mockOpenSettings).toHaveBeenCalledWith('photos');
   });
 
   it('offers system settings when a native permission request is denied permanently', async () => {
-    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
-    mockRequestPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: false });
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'undetermined', canAskAgain: true },
+    });
+    mockRequestPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'denied', canAskAgain: false },
+    });
 
     await act(async () => actions?.download());
     const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
@@ -210,8 +227,12 @@ describe('usePaintingViewerActions', () => {
   });
 
   it('reports when a native photo-save request is denied without saving', async () => {
-    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
-    mockRequestPermissions.mockResolvedValueOnce({ canAskAgain: true, granted: false });
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'undetermined', canAskAgain: true },
+    });
+    mockRequestPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'denied', canAskAgain: true },
+    });
 
     await act(async () => actions?.download());
     const { onConfirm } = mockAlertConfirm.mock.calls[0][0] as {
@@ -227,7 +248,9 @@ describe('usePaintingViewerActions', () => {
   });
 
   it('reports when system settings cannot be opened', async () => {
-    mockGetPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: false });
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'denied', canAskAgain: false },
+    });
     mockOpenSettings.mockRejectedValueOnce(new Error('settings unavailable'));
 
     await act(async () => actions?.download());
@@ -257,6 +280,20 @@ describe('usePaintingViewerActions', () => {
 
     await act(async () => actions?.download());
 
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'imageActions.saveFailed',
+      variant: 'danger',
+    });
+  });
+
+  it('does not save or request access after a permission lookup failure', async () => {
+    mockGetPermissions.mockResolvedValueOnce({
+      'photos.write': { state: 'error', canAskAgain: false },
+    });
+    await act(async () => actions?.download());
+    expect(mockCreateAsset).not.toHaveBeenCalled();
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+    expect(mockAlertConfirm).not.toHaveBeenCalled();
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'imageActions.saveFailed',
       variant: 'danger',

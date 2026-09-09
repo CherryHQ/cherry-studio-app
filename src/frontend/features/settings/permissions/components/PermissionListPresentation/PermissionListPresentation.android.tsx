@@ -5,7 +5,6 @@ import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import type { ComponentType } from 'react';
-import { Platform } from 'react-native';
 
 import type { PermissionKind } from '../../permissionConfig';
 
@@ -27,9 +26,7 @@ const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | u
 };
 
 export const healthPermissionProvider = 'connect' as const;
-export const supportsCalendarWriteOnly = false;
 export const healthSettingsNeedInstructions = false;
-export const photoSaveNeedsPermission = Number(Platform.Version) < 30;
 
 export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
   const Icon = permissionIcons[kind];

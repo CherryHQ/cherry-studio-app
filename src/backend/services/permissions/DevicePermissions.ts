@@ -204,7 +204,7 @@ export class DevicePermissions implements PermissionsModule {
         types.map((type) => [healthPermissionScope(type), statuses[type] ?? failed]),
       );
     } catch (error) {
-      logger.warn('Health permission lookup failed', error);
+      logger.warn('Health permission lookup failed', { error });
       return fill(failed);
     }
   }

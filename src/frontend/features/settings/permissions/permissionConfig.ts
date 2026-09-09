@@ -24,14 +24,31 @@ export const permissionConfig: Record<
   {
     permission: DevicePermission;
     scopes: readonly DevicePermissionScope[];
+    requestScopes: readonly DevicePermissionScope[];
   }
 > = {
-  calendar: { permission: 'calendar', scopes: ['calendar.read', 'calendar.write'] },
-  health: { permission: 'health', scopes: HEALTH_PERMISSION_SCOPES },
-  location: { permission: 'location', scopes: ['location.read'] },
-  reminders: { permission: 'reminders', scopes: ['reminders.read', 'reminders.write'] },
-  camera: { permission: 'camera', scopes: ['camera.read'] },
-  photos: { permission: 'photos', scopes: ['photos.read', 'photos.write'] },
+  calendar: {
+    permission: 'calendar',
+    scopes: ['calendar.read', 'calendar.write'],
+    requestScopes: ['calendar.read'],
+  },
+  health: {
+    permission: 'health',
+    scopes: HEALTH_PERMISSION_SCOPES,
+    requestScopes: HEALTH_PERMISSION_SCOPES,
+  },
+  location: { permission: 'location', scopes: ['location.read'], requestScopes: ['location.read'] },
+  reminders: {
+    permission: 'reminders',
+    scopes: ['reminders.read', 'reminders.write'],
+    requestScopes: ['reminders.read'],
+  },
+  camera: { permission: 'camera', scopes: ['camera.read'], requestScopes: ['camera.read'] },
+  photos: {
+    permission: 'photos',
+    scopes: ['photos.read', 'photos.write'],
+    requestScopes: ['photos.read'],
+  },
 };
 
 export function getPermissionStatus(

@@ -8,13 +8,19 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
+import expo.modules.interfaces.permissions.PermissionsResponseListener
 import expo.modules.kotlin.activityresult.AppContextActivityResultContract
 import expo.modules.kotlin.activityresult.AppContextActivityResultLauncher
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.Serializable
+import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 private const val PROVIDER = "com.google.android.apps.healthdata"
 
@@ -43,8 +49,24 @@ class HealthAccessModule : Module() {
         val current = getStatuses(types)
         val requested = types.distinct().filter { current[it]?.get("canAskAgain") == true }
         if (requested.isNotEmpty()) {
-          val result = launcher.launch(HealthPermissionRequest(ArrayList(requested)))
-          recordRequest(requested, result.granted.toSet())
+          val granted = if (Build.VERSION.SDK_INT >= 34) {
+            // Android 14+ returns runtime permission callbacks, not activity results.
+            // Expo's activity-result registry does not forward that callback path.
+            withContext(Dispatchers.Main) {
+              suspendCancellableCoroutine<Unit> { continuation ->
+                requireNotNull(appContext.permissions).askForPermissions(
+                  PermissionsResponseListener {
+                    if (continuation.isActive) continuation.resume(Unit)
+                  },
+                  *requested.map(::readPermission).toTypedArray()
+                )
+              }
+            }
+            HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions()
+          } else {
+            launcher.launch(HealthPermissionRequest(ArrayList(requested))).granted.toSet()
+          }
+          recordRequest(requested, granted)
         }
         getStatuses(types)
       }
@@ -59,11 +81,10 @@ class HealthAccessModule : Module() {
           else Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$PROVIDER"))
         }
         "available" -> {
-          if (Build.VERSION.SDK_INT >= 34) {
-            Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
-              .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
-          } else {
-            Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS).setPackage(PROVIDER)
+          // The per-app permission-management activity can require privileged
+          // GRANT_RUNTIME_PERMISSIONS. Use the SDK's public settings entry point.
+          Intent(HealthConnectClient.ACTION_HEALTH_CONNECT_SETTINGS).apply {
+            if (Build.VERSION.SDK_INT < 34) setPackage(PROVIDER)
           }
         }
         else -> error("Health Connect is not supported on this device")

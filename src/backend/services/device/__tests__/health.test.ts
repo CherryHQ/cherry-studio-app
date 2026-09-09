@@ -50,6 +50,13 @@ describe('health summaries with incomplete data', () => {
       data: { steps: { value: 80 }, heartRate: { value: null } },
       metricStates: { steps: 'available', heartRate: 'error' },
     });
+    expect(native.getQuantityData).toHaveBeenCalledWith(
+      'HKQuantityTypeIdentifierStepCount',
+      new Date(range.startDate),
+      new Date(range.endDate),
+      null,
+      false,
+    );
   });
 
   test('daily results retain available days without inventing absent values', async () => {

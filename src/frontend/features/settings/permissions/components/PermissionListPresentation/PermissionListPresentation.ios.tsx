@@ -34,6 +34,4 @@ export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
 }
 
 export const healthPermissionProvider = 'apple' as const;
-export const supportsCalendarWriteOnly = true;
 export const healthSettingsNeedInstructions = true;
-export const photoSaveNeedsPermission = true;

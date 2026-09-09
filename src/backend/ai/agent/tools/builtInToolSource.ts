@@ -341,7 +341,7 @@ async function resolveDeviceAccess(
   try {
     return await deps.devicePermissions.getStatuses(scopes);
   } catch (error) {
-    logger.warn('Device access lookup failed; omitting device tools', error);
+    logger.warn('Device access lookup failed; omitting device tools', { error });
     return {};
   }
 }
