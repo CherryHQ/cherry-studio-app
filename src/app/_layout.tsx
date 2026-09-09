@@ -127,7 +127,7 @@ function RootStack() {
         options={{
           animation: 'fade_from_bottom',
           animationDuration: APP_SEARCH_TRANSITION_DURATION_MS,
-          headerTransparent: false,
+          headerShown: false,
         }}
       />
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />

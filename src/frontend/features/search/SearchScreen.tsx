@@ -1,12 +1,13 @@
-import { ContentState, SearchField, Spinner } from '@cherrystudio/ui/components';
+import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Button, ContentState, SearchField, Spinner, Surface } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RouteHeader } from '@/frontend/appShell/header';
 import {
   cancelScheduledAppSearchFinish,
   finishAppSearchSession,
@@ -19,7 +20,7 @@ import {
 } from '@/frontend/appShell/search';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-const SEARCH_RESULT_ESTIMATED_HEIGHT = 52;
+const SEARCH_RESULT_ESTIMATED_HEIGHT = 72;
 
 type SearchPhase = 'idle' | 'loading' | 'ready' | 'error';
 type StoredSearchRequest = AppSearchRequest<unknown, unknown, unknown>;
@@ -85,7 +86,7 @@ function AppSearchRoutePage({
   const [filters, setFilters] = useState(() => request.filter?.initialValue);
   const [groups, setGroups] = useState<readonly AppSearchGroup<unknown>[]>([]);
   const [nextCursor, setNextCursor] = useState<string>();
-  const [phase, setPhase] = useState<SearchPhase>('idle');
+  const [phase, setPhase] = useState<SearchPhase>(request.loadRecent ? 'loading' : 'idle');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestNumberRef = useRef(0);
@@ -95,7 +96,8 @@ function AppSearchRoutePage({
 
   useEffect(() => {
     const searchQuery = query.trim();
-    if (!searchQuery) {
+    const loadPage = searchQuery ? request.search : request.loadRecent;
+    if (!loadPage) {
       return;
     }
 
@@ -105,8 +107,9 @@ function AppSearchRoutePage({
     searchAbortRef.current = abortController;
     paginationAbortRef.current?.abort();
 
+    const input = { filters, query: searchQuery, signal: abortController.signal };
     void Promise.resolve()
-      .then(() => request.search({ filters, query: searchQuery, signal: abortController.signal }))
+      .then(() => loadPage(input))
       .then(
         (page) => {
           if (abortController.signal.aborted || requestNumber !== requestNumberRef.current) {
@@ -140,16 +143,19 @@ function AppSearchRoutePage({
   );
 
   const listItems = useMemo(() => buildListItems(groups, request), [groups, request]);
-  const handleQueryChange = useCallback((value: string) => {
-    searchAbortRef.current?.abort();
-    paginationAbortRef.current?.abort();
-    requestNumberRef.current += 1;
-    setQuery(value);
-    setGroups([]);
-    setNextCursor(undefined);
-    setPhase(value.trim() ? 'loading' : 'idle');
-    setIsLoadingMore(false);
-  }, []);
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      searchAbortRef.current?.abort();
+      paginationAbortRef.current?.abort();
+      requestNumberRef.current += 1;
+      setQuery(value);
+      setGroups([]);
+      setNextCursor(undefined);
+      setPhase(value.trim() || request.loadRecent ? 'loading' : 'idle');
+      setIsLoadingMore(false);
+    },
+    [request.loadRecent],
+  );
   const clearQuery = useCallback(() => handleQueryChange(''), [handleQueryChange]);
   const handleFiltersChange = useCallback(
     (value: unknown) => {
@@ -159,10 +165,10 @@ function AppSearchRoutePage({
       setFilters(value);
       setGroups([]);
       setNextCursor(undefined);
-      setPhase(query.trim() ? 'loading' : 'idle');
+      setPhase(query.trim() || request.loadRecent ? 'loading' : 'idle');
       setIsLoadingMore(false);
     },
-    [query],
+    [query, request.loadRecent],
   );
   const handleSelect = useCallback(
     (item: unknown) => {
@@ -176,12 +182,19 @@ function AppSearchRoutePage({
     },
     [router, searchSessionId],
   );
+  const handleClose = useCallback(() => {
+    if (isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    router.back();
+  }, [router]);
   const renderItem = useCallback(
     ({ item }: LegendListRenderItemProps<AppSearchListItem>) => {
       if (item.type === 'header') {
         return (
-          <View className="px-4 pt-4 pb-1">
-            <Text className="font-medium text-muted-foreground text-sm">{item.title}</Text>
+          <View className="px-5 pt-4 pb-2">
+            <Text accessibilityRole="header" className="font-medium text-base text-foreground">
+              {item.title}
+            </Text>
           </View>
         );
       }
@@ -191,7 +204,7 @@ function AppSearchRoutePage({
           accessibilityLabel={request.getAccessibilityLabel(item.item)}
           accessibilityRole="button"
           accessibilityState={request.getAccessibilityState?.(item.item)}
-          className="min-h-12 justify-center px-4 active:bg-foreground/5"
+          className="min-h-12 justify-center px-5 active:bg-foreground/5"
           onPress={() => handleSelect(item.item)}
         >
           {request.renderItem(item.item)}
@@ -201,7 +214,9 @@ function AppSearchRoutePage({
     [handleSelect, request],
   );
   const loadMore = useCallback(() => {
-    if (!nextCursor || isLoadingMore || phase !== 'ready') {
+    const searchQuery = query.trim();
+    const loadPage = searchQuery ? request.search : request.loadRecent;
+    if (!loadPage || !nextCursor || isLoadingMore || phase !== 'ready') {
       return;
     }
 
@@ -212,15 +227,9 @@ function AppSearchRoutePage({
     paginationAbortRef.current = abortController;
     setIsLoadingMore(true);
 
+    const input = { cursor, filters, query: searchQuery, signal: abortController.signal };
     void Promise.resolve()
-      .then(() =>
-        request.search({
-          cursor,
-          filters,
-          query: query.trim(),
-          signal: abortController.signal,
-        }),
-      )
+      .then(() => loadPage(input))
       .then(
         (page) => {
           if (abortController.signal.aborted || requestNumber !== requestNumberRef.current) {
@@ -245,23 +254,15 @@ function AppSearchRoutePage({
   const FilterComponent = request.filter?.component;
 
   return (
-    <>
-      <RouteHeader title={t('navigation.search')} />
-      <View className="flex-1">
-        <View className={request.filter ? 'px-4 pt-3 pb-2' : 'px-4 py-3'}>
-          <SearchField
-            accessibilityLabel={request.placeholder}
-            autoFocus
-            clearAccessibilityLabel={t('common.clear')}
-            onChangeText={handleQueryChange}
-            onClear={clearQuery}
-            placeholder={request.placeholder}
-            testID="app-search-input"
-            value={query}
-          />
-        </View>
+    <KeyboardAvoidingView
+      behavior="padding"
+      // The dock already includes this inset; keep its 12px gap when the keyboard replaces it.
+      keyboardVerticalOffset={-insets.bottom}
+      style={styles.page}
+    >
+      <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         {request.filter && FilterComponent ? (
-          <View className="px-4 pb-3">
+          <View className="px-5 pt-4 pb-3">
             <FilterComponent
               context={request.filter.context}
               onChange={handleFiltersChange}
@@ -285,7 +286,7 @@ function AppSearchRoutePage({
           </View>
         ) : (
           <LegendList
-            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+            contentContainerStyle={styles.listContent}
             data={listItems}
             estimatedItemSize={SEARCH_RESULT_ESTIMATED_HEIGHT}
             getItemType={getListItemType}
@@ -293,9 +294,11 @@ function AppSearchRoutePage({
             keyboardShouldPersistTaps="handled"
             keyExtractor={listKeyExtractor}
             ListEmptyComponent={
-              <View className="px-6 py-12">
-                <ContentState.Empty description={request.emptyText} />
-              </View>
+              query.trim() ? (
+                <View className="px-6 py-12">
+                  <ContentState.Empty description={request.emptyText} />
+                </View>
+              ) : null
             }
             ListFooterComponent={
               isLoadingMore ? (
@@ -313,8 +316,36 @@ function AppSearchRoutePage({
             style={styles.list}
           />
         )}
+        <View
+          className="flex-row items-center gap-3 px-4 pt-3"
+          style={{ paddingBottom: insets.bottom + 12 }}
+        >
+          <SearchField
+            accessibilityLabel={request.placeholder}
+            autoFocus
+            clearAccessibilityLabel={t('common.clear')}
+            onChangeText={handleQueryChange}
+            onClear={clearQuery}
+            placeholder={request.placeholder}
+            style={styles.searchField}
+            testID="app-search-input"
+            value={query}
+            variant="filled"
+          />
+          <Surface interactive shape="circle">
+            <Button
+              accessibilityLabel={t('common.close')}
+              icon={<XIcon />}
+              onPress={handleClose}
+              shape="pill"
+              size="lg"
+              testID="app-search-close"
+              variant="ghost"
+            />
+          </Surface>
+        </View>
       </View>
-    </>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -370,6 +401,8 @@ function getListItemType(item: AppSearchListItem) {
 }
 
 const styles = StyleSheet.create({
+  page: { flex: 1 },
   list: { flex: 1 },
-  listContent: { flexGrow: 1 },
+  listContent: { flexGrow: 1, paddingBottom: 12 },
+  searchField: { flex: 1 },
 });

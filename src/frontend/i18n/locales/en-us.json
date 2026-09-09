@@ -504,6 +504,7 @@
   "session.search.messages": "Messages",
   "session.search.noResults": "No matching sessions or messages",
   "session.search.placeholder": "Search conversations",
+  "session.search.recent": "Recent conversations",
   "session.search.sessions": "Sessions",
   "session.status.awaitingApproval": "Needs approval",
   "session.status.completed": "Completed",

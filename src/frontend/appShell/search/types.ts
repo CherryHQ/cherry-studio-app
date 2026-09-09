@@ -44,6 +44,9 @@ export type AppSearchRequest<TItem, TFilters = undefined, TFilterContext = undef
   getAccessibilityLabel: (item: TItem) => string;
   getAccessibilityState?: (item: TItem) => AccessibilityState;
   keyExtractor: (item: TItem) => string;
+  loadRecent?: (
+    input: Omit<AppSearchInput<TFilters>, 'query'>,
+  ) => AppSearchPage<TItem> | Promise<AppSearchPage<TItem>>;
   placeholder: string;
   renderItem: (item: TItem) => ReactNode;
   search: (input: AppSearchInput<TFilters>) => AppSearchPage<TItem> | Promise<AppSearchPage<TItem>>;

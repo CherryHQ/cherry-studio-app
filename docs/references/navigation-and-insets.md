@@ -181,8 +181,10 @@ carry filters, or are not the rows the screen already draws — uses the root `/
 one fixed view: callers adapt data, matching, optional filters, and result content rather than
 supplying business-specific search screens. Native back or an interactive pop cancels without
 calling business logic; selection resolves only after the route's exit transition completes. The
-route title is always Search, and it does not query or render a full result set until the user
-enters non-whitespace text. Session search and provider model search are this shape.
+route has no navigation header: it owns a bottom query input and close button, with the result list
+above them. It handles safe-area and keyboard insets at that boundary. Empty queries only load
+recent items when the request supplies `loadRecent`; they never trigger a full search. Session
+search and provider model search are this shape.
 
 The two share their matching rules through `frontend/utils/search`, which is keyword-based: a query
 splits on whitespace and every keyword has to appear across an item's searchable fields. They share

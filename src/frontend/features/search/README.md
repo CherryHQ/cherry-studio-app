@@ -21,15 +21,17 @@ The two share their matching rules through `@/frontend/utils/search` and nothing
 - Every entry opens the same route and layout. Business requests adapt their data lookup, matching,
   grouping, input placeholder, labels, optional filter state, filter controls, and result content to
   that view; they do not supply another search screen.
-- The route owns the fixed Search title, query input, request cancellation, pagination, result
+- The route owns a full-page result list with no navigation header, a bottom capsule query input and
+  circular close button, safe-area and keyboard insets, request cancellation, pagination, result
   presses, filter placement, native-stack entry and exit, and the empty/loading/error states.
 - A request that supplies `filter` gives the route one initial value and a controlled component. The
   route owns that value, resets results when it changes, and passes it into every search call. The
   filter component also receives the current query so derived counts stay aligned with its results.
-- An empty or whitespace-only query stays in the waiting state: it does not call the request and does
-  not render the request's full data set. Results begin only after the user enters a query.
-- A result press always closes the route. Back, Android system back, and the iOS pop gesture always
-  cancel. The promise resolves only after the native exit transition finishes.
+- An empty or whitespace-only query calls the optional `loadRecent` function. Without that function,
+  it stays in the waiting state. The route never calls `search` with an empty query or implicitly
+  renders the request's full data set. Recent items share result grouping and selection behavior.
+- A result press always closes the route. The close button, Android system back, and the iOS pop
+  gesture cancel. The promise resolves only after the native exit transition finishes.
 - The caller alone decides what a selected item means. The search route never writes preferences,
   navigates to a business destination, toggles selection, or keeps itself open after a press.
 
