@@ -9,6 +9,8 @@ surfaces.
 - `AgentListScreen` is the root page. `edit/AgentEditScreen` is shared by the edit and create route
   adapters.
 - The list header's plus action opens the create-Agent route.
+- Creating from the chat header's Agent picker opens a draft conversation with the saved Agent.
+  Creating from the management list returns to that list.
 - Tapping a list row opens that Agent's editor.
 - Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
   across the mode change, so releasing the long press cannot open the editor or toggle it again.

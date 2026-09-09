@@ -36,7 +36,7 @@ export function MainHeaderAgentPickerSheet({
   };
   const createAgent = () => {
     onClose();
-    router.push('/agents/new');
+    router.push({ params: { startChat: 'true' }, pathname: '/agents/new' });
   };
 
   return (
