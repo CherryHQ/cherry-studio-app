@@ -25,6 +25,8 @@ export async function checkChatModel(
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
   let timedOut = false;
+  const canDisableReasoning = model.reasoning?.selectableEfforts.includes('none') ?? false;
+  const requiresReasoning = model.reasoning !== undefined && !canDisableReasoning;
 
   try {
     options.signal?.throwIfAborted();
@@ -34,7 +36,10 @@ export async function checkChatModel(
       input: [{ type: 'text', text: 'Reply with OK.' }],
       instructions: '',
       model: { modelId: model.modelId, providerId: model.providerId },
-      options: { maxOutputTokens: 64, reasoningEffort: 'off' },
+      options: {
+        maxOutputTokens: Math.min(model.maxOutputTokens ?? 4096, requiresReasoning ? 4096 : 64),
+        reasoningEffort: canDisableReasoning ? 'none' : 'default',
+      },
       tools: [],
       turnId,
     });

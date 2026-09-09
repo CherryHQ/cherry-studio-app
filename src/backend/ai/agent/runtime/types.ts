@@ -85,7 +85,17 @@ export type RuntimeModelPreflight = {
 };
 
 export type RuntimeOptions = {
-  reasoningEffort?: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  reasoningEffort?:
+    | 'default'
+    | 'none'
+    | 'auto'
+    | 'off'
+    | 'minimal'
+    | 'low'
+    | 'medium'
+    | 'high'
+    | 'xhigh'
+    | 'max';
   maxOutputTokens?: number;
   temperature?: number;
 };
