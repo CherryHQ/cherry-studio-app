@@ -1,3 +1,4 @@
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import { OptionPickerBottomSheet, Section, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ export function DocumentParserSetting() {
       <Section>
         <Section.SelectItem
           label={t('settings.documentParser.title')}
+          leading={<FileTextIcon className="size-4 text-foreground" />}
           onPress={() => setIsPickerOpen(true)}
           testID="settings-document-parser"
           value={t(`settings.documentParser.${mode}`)}
