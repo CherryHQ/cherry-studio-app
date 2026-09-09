@@ -6,6 +6,7 @@ import { ToolPartRenderer } from '../ToolPartRenderer';
 import type { ToolMessagePart } from '../toolPartState';
 
 jest.mock('../GenericToolPart', () => mockCreateToolPart('GenericToolPart'));
+jest.mock('../FileToolContent', () => mockCreateToolPart('FileToolContent'));
 jest.mock('../EditFileToolPart', () => ({
   ...mockCreateToolPart('EditFileToolPart'),
   isEditFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'edit_file',

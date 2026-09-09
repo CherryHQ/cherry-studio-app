@@ -6,6 +6,7 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentMessageDeltaSchema,
   AgentSessionSnapshotSchema,
   AgentSessionStatusSchema,
   AgentStartSessionInputSchema,
@@ -36,6 +37,29 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips bounded input previews separately from tool execution input', () => {
+    const preview = { name: 'page.html', text: '<html>', truncated: false };
+    const delta = { op: 'tool.input.preview', partId: 'tool-1', preview };
+    expect(AgentMessageDeltaSchema.parse(roundTrip(delta))).toEqual(delta);
+    expect(
+      AgentMessageDeltaSchema.safeParse({
+        ...delta,
+        preview: { ...preview, text: 'x'.repeat(8_193) },
+      }).success,
+    ).toBe(false);
+    const part = {
+      id: 'tool-1',
+      type: 'tool',
+      toolCallId: 'call-1',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      state: 'input-streaming',
+      inputPreview: preview,
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).not.toHaveProperty('input');
+  });
   test('rejects the retired turn-only capability field', () => {
     // Capability enablement moved to the Agent record; a stale caller still
     // sending the composer-era field must fail loudly, not silently no-op.

@@ -120,6 +120,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       displayName: part.displayName,
       state: part.state,
       ...(part.input !== undefined ? { input: part.input } : {}),
+      ...(part.inputPreview !== undefined ? { inputPreview: part.inputPreview } : {}),
       ...(output !== undefined ? { output } : {}),
       ...(part.approvalId !== undefined ? { approvalId: part.approvalId } : {}),
       ...(part.error !== undefined ? { error: toAgentErrorView(part.error) } : {}),

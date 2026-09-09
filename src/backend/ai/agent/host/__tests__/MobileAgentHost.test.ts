@@ -932,6 +932,94 @@ describe('MobileAgentHost', () => {
     expect([...(resources?.fileEntryIds ?? [])]).toEqual([SECOND_FILE_ENTRY_ID]);
   });
 
+  test('recovers file input previews without persisting or updating background reply on each tick', async () => {
+    const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+    const releasePreview = createDeferred();
+    const releaseResult = createDeferred();
+    const toolPart = {
+      id: 'tool-1',
+      type: 'tool',
+      toolCallId: 'call-1',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      state: 'input-streaming',
+    } as const;
+    const preview = { text: 'latest content', name: 'report.txt', truncated: true };
+    const input = { filename: 'report.txt', content: 'complete file with latest content' };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({ type: 'part.add', index: 0, part: toolPart });
+      await releasePreview.promise;
+      controller.emit({ type: 'tool.input.preview', partId: toolPart.id, preview });
+      await releaseResult.promise;
+      controller.emit({
+        type: 'part.replace',
+        part: { ...toolPart, state: 'input-available', input, inputPreview: preview },
+      });
+      controller.emit({
+        type: 'tool.input.preview',
+        partId: toolPart.id,
+        preview: { text: 'stale', truncated: false },
+      });
+      controller.emit({
+        type: 'part.replace',
+        part: {
+          ...toolPart,
+          state: 'output-available',
+          input,
+          inputPreview: preview,
+          output: { value: { status: 'created' }, artifacts: [] },
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    const observation = await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Write a report.' }],
+    });
+    try {
+      await waitFor(
+        () => backgroundReplyTurn.update.mock.calls.length > 0,
+        'the initial tool state',
+      );
+      backgroundReplyTurn.update.mockClear();
+      releasePreview.resolve();
+      await waitFor(
+        () =>
+          events.some(
+            (event) => event.type === 'message.delta' && event.delta.op === 'tool.input.preview',
+          ),
+        'the file input preview',
+      );
+      const resumed = await host.observeSession(session.id, () => {});
+      expect(resumed.snapshot.streamingMessage?.parts).toEqual([
+        { ...toolPart, inputPreview: preview },
+      ]);
+      resumed.unsubscribe();
+      expect(saveSnapshot).not.toHaveBeenCalled();
+      expect(backgroundReplyTurn.update).not.toHaveBeenCalled();
+    } finally {
+      releasePreview.resolve();
+      releaseResult.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the file turn to settle');
+    expect(
+      events.filter(
+        (event) => event.type === 'message.delta' && event.delta.op === 'tool.input.preview',
+      ),
+    ).toHaveLength(1);
+    expect((await store.listMessages(session.id))[1]?.parts[0]).toMatchObject({
+      state: 'output-available',
+      input,
+      inputPreview: preview,
+    });
+    observation.unsubscribe();
+  });
+
   test.each(['output-available', 'denied', 'error'] as const)(
     'saves %s tool results without writes for text or intermediate tool states',
     async (state) => {

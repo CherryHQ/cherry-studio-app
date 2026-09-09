@@ -13,6 +13,8 @@ import type {
   AgentTurnView,
 } from '@/shared/contracts/agent';
 
+import { ToolInputPreviewStore } from './ToolInputPreviewStore';
+
 export type AgentSessionChatStatus = 'idle' | 'observing' | 'ready' | 'error';
 
 export type AgentSessionChatState = {
@@ -93,6 +95,8 @@ function applyMessageDelta(message: AgentMessageView, delta: AgentMessageDelta):
       });
       return changed ? { ...message, parts } : message;
     }
+    case 'tool.input.preview':
+      return message;
   }
 }
 
@@ -101,6 +105,7 @@ function isTerminalMessage(message: AgentMessageView): boolean {
 }
 
 export class AgentSessionChatClient {
+  readonly toolInputPreviews = new ToolInputPreviewStore();
   private readonly sessions = new Map<string, SessionEntry>();
 
   constructor(
@@ -327,6 +332,7 @@ export class AgentSessionChatClient {
       entry.listeners.clear();
     }
     this.sessions.clear();
+    this.toolInputPreviews.clear();
   }
 
   private getEntry(sessionId: string): SessionEntry {
@@ -353,6 +359,8 @@ export class AgentSessionChatClient {
     entry.observation?.unsubscribe();
     entry.observation = undefined;
     entry.observationPromise = undefined;
+    for (const messageId of entry.liveMessages.keys())
+      this.toolInputPreviews.clearMessage(messageId);
   }
 
   private installSnapshot(entry: SessionEntry, snapshot: AgentSessionSnapshot): void {
@@ -362,6 +370,7 @@ export class AgentSessionChatClient {
     }
     if (snapshot.streamingMessage) {
       entry.liveMessages.set(snapshot.streamingMessage.id, snapshot.streamingMessage);
+      this.installToolInputPreviews(snapshot.streamingMessage);
     }
     this.updateState(entry, {
       activeTurn: snapshot.activeTurn,
@@ -407,6 +416,7 @@ export class AgentSessionChatClient {
         return;
       case 'message.created':
         entry.liveMessages.set(event.message.id, event.message);
+        this.installToolInputPreviews(event.message);
         this.commitLiveMessages(entry, {
           ...(event.message.role === 'user' ? { enteringUserMessageId: event.message.id } : {}),
         });
@@ -416,6 +426,16 @@ export class AgentSessionChatClient {
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'message.delta': {
+        if (event.delta.op === 'tool.input.preview') {
+          const partId = event.delta.partId;
+          const part = entry.liveMessages
+            .get(event.messageId)
+            ?.parts.find((part) => part.id === partId);
+          if (part?.type === 'tool' && part.state === 'input-streaming') {
+            this.toolInputPreviews.set(event.messageId, part.toolCallId, event.delta.preview);
+          }
+          return;
+        }
         if (event.delta.op === 'text.append') {
           if (!this.queueTextDelta(entry, event.messageId, event.delta)) {
             return;
@@ -434,12 +454,20 @@ export class AgentSessionChatClient {
           return;
         }
         entry.liveMessages.set(event.messageId, nextMessage);
+        if (event.delta.op === 'part.replace' && event.delta.part.type === 'tool') {
+          this.toolInputPreviews.set(
+            event.messageId,
+            event.delta.part.toolCallId,
+            event.delta.part.inputPreview,
+          );
+        }
         this.commitLiveMessages(entry);
         return;
       }
       case 'message.finalized':
         entry.pendingTextDeltas.clear();
         entry.liveMessages.set(event.message.id, event.message);
+        this.toolInputPreviews.clearMessage(event.message.id);
         this.commitLiveMessages(entry);
         this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
@@ -468,6 +496,14 @@ export class AgentSessionChatClient {
     }
     clearTimeout(entry.liveMessagesFlush);
     entry.liveMessagesFlush = undefined;
+  }
+
+  private installToolInputPreviews(message: AgentMessageView): void {
+    for (const part of message.parts) {
+      if (part.type === 'tool' && part.inputPreview) {
+        this.toolInputPreviews.set(message.id, part.toolCallId, part.inputPreview);
+      }
+    }
   }
 
   private commitLiveMessages(
