@@ -40,9 +40,11 @@ type InternalSectionSwitchItemProps = SectionSwitchItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
-function renderTextSlot(content: ReactNode, className?: string) {
+function renderTextSlot(content: ReactNode, className?: string, numberOfLines?: number) {
   return typeof content === 'string' || typeof content === 'number' ? (
-    <Text className={className}>{content}</Text>
+    <Text className={className} numberOfLines={numberOfLines}>
+      {content}
+    </Text>
   ) : (
     content
   );
@@ -198,7 +200,7 @@ function SectionSelectItem({
           {valueLeading ? (
             <View className="shrink-0 items-center justify-center">{valueLeading}</View>
           ) : null}
-          {renderTextSlot(value, 'min-w-0 shrink text-right text-base text-foreground')}
+          {renderTextSlot(value, 'min-w-0 shrink text-right text-base text-foreground', 1)}
           <ChevronDownIcon
             className="size-5 shrink-0 text-muted-foreground"
             testID="section-select-chevron"
