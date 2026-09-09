@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
+import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar, AvatarPickerField } from '@/frontend/components/Avatar';
 import {
   ModelPickerDrawer,
@@ -51,7 +52,10 @@ const logger = loggerService.withContext('AgentEditScreen');
 
 export default function AgentEditScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ agentId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    agentId?: string | string[];
+    startChat?: string | string[];
+  }>();
   const agentId = getSingleRouteParam(params.agentId);
   const { agent, isLoading, refetch } = useAgentApiById(agentId);
   const {
@@ -110,6 +114,7 @@ export default function AgentEditScreen() {
       agentId={agentId}
       originalToolBindings={bindings}
       servers={servers}
+      shouldStartChat={!agentId && getSingleRouteParam(params.startChat) === 'true'}
     />
   );
 }
@@ -119,11 +124,13 @@ function AgentEditForm({
   agentId,
   originalToolBindings,
   servers,
+  shouldStartChat,
 }: {
   agent: Agent | undefined;
   agentId?: string;
   originalToolBindings: readonly AgentToolBinding[];
   servers: readonly McpServer[];
+  shouldStartChat: boolean;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -133,7 +140,9 @@ function AgentEditForm({
   const { createAgent, isCreating, isSettingAvatar, setAgentAvatar } = useAgentMutations();
   const { flush, hasFailedSave, retry, saveField, saveToolBindings } = useAgentAutoSave(agentId);
   const modelPickerData = useModelPickerData({ modelType: 'text' });
-  const openProviderSetup = useOpenProviderSetup();
+  const openProviderSetup = useOpenProviderSetup(
+    shouldStartChat ? '/agents/new?startChat=true' : undefined,
+  );
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
@@ -265,7 +274,11 @@ function AgentEditForm({
       }
     }
 
-    router.back();
+    if (shouldStartChat) {
+      router.dismissTo(chatHref({ agentId: savedAgentId, kind: 'draft' }));
+    } else {
+      router.back();
+    }
   }, [
     agent?.avatarUri,
     alert,
@@ -275,6 +288,7 @@ function AgentEditForm({
     isEditing,
     router,
     setAgentAvatar,
+    shouldStartChat,
     t,
     toast,
   ]);
