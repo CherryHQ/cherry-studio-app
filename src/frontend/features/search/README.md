@@ -27,6 +27,11 @@ The two share their matching rules through `@/frontend/utils/search` and nothing
 - A request that supplies `filter` gives the route one initial value and a controlled component. The
   route owns that value, resets results when it changes, and passes it into every search call. The
   filter component also receives the current query so derived counts stay aligned with its results.
+- `useAppSearchResults.ts` owns request scheduling, cancellation, and pagination. A request may
+  debounce expensive nonempty queries and return group-owned continuations. Those continuations
+  are loaded explicitly beside their group, including when a bounded search has not found a match
+  yet. Group insertion preserves the visible position; pagination state is consumed by continuation
+  controls instead of invalidating every result row.
 - An empty or whitespace-only query calls the optional `loadRecent` function. Without that function,
   it stays in the waiting state. The route never calls `search` with an empty query or implicitly
   renders the request's full data set. Recent items share result grouping and selection behavior.

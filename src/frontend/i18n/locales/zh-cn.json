@@ -508,6 +508,8 @@
   "session.status.failed": "回复失败",
   "session.status.running": "运行中",
   "appSearch.loadFailed": "无法加载搜索结果。",
+  "appSearch.loadMore": "加载更多",
+  "appSearch.continueSearch": "继续搜索",
   "appSearch.loading": "正在加载结果……",
   "appSearch.retry": "重试",
   "settings.about.contact.title": "联系我们",

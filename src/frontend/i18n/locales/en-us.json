@@ -511,6 +511,8 @@
   "session.status.failed": "Failed",
   "session.status.running": "Running",
   "appSearch.loadFailed": "Search could not be loaded.",
+  "appSearch.loadMore": "Load more",
+  "appSearch.continueSearch": "Continue searching",
   "appSearch.loading": "Loading results...",
   "appSearch.retry": "Retry",
   "settings.about.contact.title": "Contact",

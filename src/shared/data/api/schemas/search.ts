@@ -101,6 +101,7 @@ export interface SessionMessageContentSearchItem {
 export type ContentSearchResponse = {
   query: string;
   items: SessionMessageContentSearchItem[];
+  /** More history remains to search; a bounded scan may return this with no items. */
   nextCursor?: string;
 };
 

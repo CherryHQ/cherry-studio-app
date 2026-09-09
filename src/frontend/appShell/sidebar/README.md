@@ -7,7 +7,9 @@ The circular search button beside the sidebar title opens the shared `/search` p
 conversations. Before a query is entered, it shows the ten most recently active conversations.
 Title matches use the cursor-paginated `/agent-sessions?q=...` collection and message matches use
 `/search/contents`.
-Each group advances independently. Selecting a title opens its Session; selecting a message also
+Nonempty input waits 250ms before querying. Each group advances through its own "Load more" action;
+an empty message batch with more history offers "Continue searching". Message previews are compact
+excerpts around the first keyword and keep code text intact. Selecting a title opens its Session; selecting a message also
 carries its message id and a fresh navigation request id so repeated selections locate it again.
 Search uses the shared transient selection contract and closes before opening the chat.
 

@@ -7,6 +7,8 @@ export type AppSearchGroup<TItem> = {
   items: readonly TItem[];
   key: string;
   title?: string;
+  /** A group-owned continuation, loaded explicitly without advancing other groups. */
+  nextCursor?: string;
 };
 
 export type AppSearchPage<TItem> = {
@@ -29,6 +31,7 @@ export type AppSearchFilter<TFilters, TContext = undefined> = {
 
 export type AppSearchInput<TFilters = undefined> = {
   cursor?: string;
+  groupKey?: string;
   filters: TFilters;
   query: string;
   signal: AbortSignal;
@@ -39,6 +42,8 @@ export type AppSearchInput<TFilters = undefined> = {
  * What selecting that item means remains entirely with the caller of `open`.
  */
 export type AppSearchRequest<TItem, TFilters = undefined, TFilterContext = undefined> = {
+  /** Delay nonempty queries for expensive sources; local matching stays immediate by default. */
+  debounceMs?: number;
   emptyText: string;
   filter?: AppSearchFilter<TFilters, TFilterContext>;
   getAccessibilityLabel: (item: TItem) => string;

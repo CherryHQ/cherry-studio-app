@@ -74,6 +74,8 @@ export const agentSessionMessageTable = sqliteTable(
   },
   (t) => [
     index('agent_session_message_session_created_idx').on(t.sessionId, t.createdAt),
+    // Mobile short-word search scans bounded global history windows between input events.
+    index('agent_session_message_created_id_idx').on(t.createdAt, t.id),
     index('agent_session_message_turn_id_idx').on(t.turnId),
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.

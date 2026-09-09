@@ -19,6 +19,7 @@ export function useSessionSearch() {
 
   return useCallback(() => {
     void open<SessionSearchResult>({
+      debounceMs: 250,
       emptyText: t('session.search.noResults'),
       getAccessibilityLabel: ({ item, kind }) =>
         kind === 'session'
@@ -28,7 +29,7 @@ export function useSessionSearch() {
         kind === 'session' ? `session:${item.id}` : `message:${item.messageId}`,
       loadRecent: async ({ signal }) => {
         if (signal.aborted) return { groups: [] };
-        const page = await apiClient.get('/agent-sessions', { query: { limit: 10 } });
+        const page = await apiClient.get('/agent-sessions', { query: { limit: 10 }, signal });
         return {
           groups: page.items.length
             ? [
@@ -86,7 +87,7 @@ function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {
         <Text className="text-base text-foreground" numberOfLines={1}>
           {title}
         </Text>
-        <Text className="text-muted-foreground text-sm" numberOfLines={1}>
+        <Text className="text-muted-foreground text-sm" numberOfLines={2}>
           {subtitle}
         </Text>
       </View>
