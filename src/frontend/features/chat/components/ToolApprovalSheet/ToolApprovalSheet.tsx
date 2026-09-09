@@ -48,32 +48,52 @@ export function ToolApprovalSheet({
   return (
     <BottomSheet
       dismissible={false}
+      footer={
+        <ToolApprovalSheetActions
+          key={approval.approvalId}
+          approval={approval}
+          onCancel={onCancel}
+          onRespond={onRespond}
+        />
+      }
       onClose={ignoreClose}
       open={isOpen}
-      sizes={['compact', 'large']}
+      size="medium"
       title={t('chat.tool.approval.title')}
     >
-      <ToolApprovalSheetBody
+      <ScrollView
         key={approval.approvalId}
-        approval={approval}
-        onCancel={onCancel}
-        onRespond={onRespond}
-        pendingCount={approvals.length}
-      />
+        className="min-h-0 flex-1"
+        contentContainerClassName="gap-4 px-6 pt-2 pb-4"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="gap-1">
+          <Text className="text-foreground-tertiary text-sm">
+            {t('chat.tool.approval.description')}
+          </Text>
+          <Text className="font-semibold text-base text-foreground" selectable>
+            {approval.displayName}
+          </Text>
+          {approvals.length > 1 ? (
+            <Text className="text-foreground-tertiary text-xs">
+              {t('chat.tool.approval.pendingCount', { count: approvals.length })}
+            </Text>
+          ) : null}
+        </View>
+        <ApprovalArgumentsPreview input={approval.input} />
+      </ScrollView>
     </BottomSheet>
   );
 }
 
-function ToolApprovalSheetBody({
+function ToolApprovalSheetActions({
   approval,
   onCancel,
   onRespond,
-  pendingCount,
 }: {
   approval: PendingToolApproval;
   onCancel: () => Promise<void>;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
-  pendingCount: number;
 }) {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,21 +120,7 @@ function ToolApprovalSheetBody({
   };
 
   return (
-    <View className="gap-4 px-6 pt-2">
-      <View className="gap-1">
-        <Text className="text-foreground-tertiary text-sm">
-          {t('chat.tool.approval.description')}
-        </Text>
-        <Text className="font-semibold text-base text-foreground" selectable>
-          {approval.displayName}
-        </Text>
-        {pendingCount > 1 ? (
-          <Text className="text-foreground-tertiary text-xs">
-            {t('chat.tool.approval.pendingCount', { count: pendingCount })}
-          </Text>
-        ) : null}
-      </View>
-      <ApprovalArgumentsPreview input={approval.input} />
+    <View className="gap-4">
       <Button disabled={isSubmitting} onPress={() => void submit('stop')} variant="secondary">
         <Button.Label>{t('chat.input.action.stopGenerating')}</Button.Label>
       </Button>
@@ -145,15 +151,11 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
   return (
     <View className="gap-1">
       <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
-      <ScrollView
-        className="max-h-48 rounded-md bg-secondary"
-        nestedScrollEnabled
-        showsVerticalScrollIndicator={false}
-      >
+      <View className="rounded-md bg-secondary">
         <Text className="p-2 font-mono text-foreground text-xs" selectable>
           {preview}
         </Text>
-      </ScrollView>
+      </View>
     </View>
   );
 }
