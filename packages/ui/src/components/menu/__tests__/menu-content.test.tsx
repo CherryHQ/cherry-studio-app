@@ -1,4 +1,4 @@
-import { BackHandler, Pressable } from 'react-native';
+import { BackHandler } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MenuContent } from '../menu-content';
@@ -71,6 +71,7 @@ describe('MenuContent', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('closes before invoking the selected action, including when it throws', () => {
@@ -165,7 +166,7 @@ describe('MenuContent', () => {
       );
     });
     const handler = subscribe.mock.calls[0][1];
-    act(() => expect(handler()).toBe(true));
+    act(() => expect(handler({ type: 'hardwareBackPress', timeStamp: Date.now() })).toBe(true));
     expect(mockOpenChange).toHaveBeenCalledTimes(1);
     act(() =>
       renderer!.update(
@@ -179,12 +180,11 @@ describe('MenuContent', () => {
       ),
     );
     expect(remove).toHaveBeenCalledTimes(1);
-    const backdrop = renderer!.root
-      .findAllByType(Pressable)
-      .find((node) => node.props.accessibilityElementsHidden);
-    expect(backdrop!.props.pointerEvents).toBe('none');
+    const backdrop = renderer!.root.find(
+      (node) => node.props.accessibilityElementsHidden && typeof node.props.onPress === 'function',
+    );
+    expect(backdrop.props.pointerEvents).toBe('none');
     act(() => renderer!.root.findByProps({ accessibilityLabel: 'Rename' }).props.onPress());
     expect(items[0].onPress).not.toHaveBeenCalled();
-    subscribe.mockRestore();
   });
 });

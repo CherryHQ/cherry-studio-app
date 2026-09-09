@@ -1,4 +1,4 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ActionMenu } from '../action-menu.android';
@@ -20,6 +20,13 @@ describe('ActionMenu.android', () => {
   let renderer: ReactTestRenderer | undefined;
   const items = [{ id: 'rename', label: 'Rename', onPress: jest.fn() }];
 
+  function findTrigger() {
+    return renderer!.root.find(
+      (node) =>
+        node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function',
+    );
+  }
+
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
@@ -33,7 +40,7 @@ describe('ActionMenu.android', () => {
         </ActionMenu>,
       );
     });
-    const trigger = renderer!.root.findByType(Pressable);
+    const trigger = findTrigger();
     expect(trigger.props.accessibilityLabel).toBe('More');
     expect(trigger.props.accessibilityState.expanded).toBe(false);
     act(() => trigger.props.onPress());
@@ -55,7 +62,7 @@ describe('ActionMenu.android', () => {
         </ActionMenu>,
       );
     });
-    const trigger = renderer!.root.findByType(Pressable);
+    const trigger = findTrigger();
     act(() => trigger.props.onPress());
     const menu = renderer!.root.findByProps({ testID: 'menu-content' });
     const finishOldClose = menu.props.onClosed;
@@ -73,7 +80,7 @@ describe('ActionMenu.android', () => {
         </ActionMenu>,
       );
     });
-    const trigger = renderer!.root.findByType(Pressable);
+    const trigger = findTrigger();
     expect(trigger.props.disabled).toBe(true);
     act(() => trigger.props.onPress());
     expect(renderer!.root.findAllByProps({ testID: 'menu-content' })).toHaveLength(0);
@@ -88,6 +95,8 @@ describe('ActionMenu.android', () => {
       );
     });
     expect(renderer!.root.findByProps({ testID: 'child' })).toBeDefined();
-    expect(renderer!.root.findAllByType(Pressable)).toHaveLength(0);
+    expect(renderer!.root.findAll((node) => typeof node.props.onPress === 'function')).toHaveLength(
+      0,
+    );
   });
 });

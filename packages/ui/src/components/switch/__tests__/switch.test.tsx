@@ -1,4 +1,4 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Switch } from '../switch';
@@ -43,7 +43,7 @@ describe('Switch', () => {
       );
     });
 
-    const control = renderer!.root.findByType(Pressable);
+    const control = renderer!.root.findByProps({ accessibilityRole: 'switch' });
     expect(control.props).toMatchObject({
       accessibilityLabel: 'Airplane mode',
       accessibilityRole: 'switch',
@@ -68,7 +68,7 @@ describe('Switch', () => {
       );
     });
 
-    expect(renderer!.root.findByType(Pressable).props).toMatchObject({
+    expect(renderer!.root.findByProps({ accessibilityRole: 'switch' }).props).toMatchObject({
       accessibilityElementsHidden: true,
       accessibilityState: { checked: false, disabled: true },
       disabled: true,

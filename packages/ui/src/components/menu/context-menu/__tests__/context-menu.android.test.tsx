@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   type AccessibilityActionEvent,
   type GestureResponderEvent,
@@ -41,13 +41,9 @@ jest.mock('../../menu-content', () => {
   };
 });
 
-function createWithAnchor(element: ReactElement) {
-  return create(element, {
-    createNodeMock: () => ({
-      measure: (callback: (...values: number[]) => void) => callback(0, 0, 200, 48, 16, 120),
-    }),
-  });
-}
+// The preset renders View as a class, so its measurement lives on the
+// instance prototype rather than a host node supplied by createNodeMock.
+const viewPrototype = View.prototype as View;
 const mockGetLongPressMaxDistance = jest.fn(() => 16);
 const mockGetLongPressMinDuration = jest.fn(() => 625);
 const mockNativeMenuRef = {
@@ -122,6 +118,9 @@ describe('ContextMenu.android', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
+    jest
+      .spyOn(viewPrototype, 'measure')
+      .mockImplementation((callback) => callback(0, 0, 200, 48, 16, 120));
     mockShowMenu.mockClear();
     mockGetLongPressMaxDistance.mockClear();
     mockGetLongPressMinDuration.mockClear();
@@ -131,13 +130,14 @@ describe('ContextMenu.android', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('uses system long-press configuration to open the Cherry menu at its anchor', () => {
     const onRename = jest.fn();
 
     act(() => {
-      renderer = createWithAnchor(
+      renderer = create(
         <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: onRename }]}>
           <Text>Row</Text>
         </ContextMenu>,
@@ -165,7 +165,7 @@ describe('ContextMenu.android', () => {
 
   it('keeps a touch that stops momentum blocked for its complete sequence', () => {
     act(() => {
-      renderer = createWithAnchor(
+      renderer = create(
         <ContextMenuScrollBoundary>
           {(scrollHandlers) => (
             <View {...scrollHandlers} testID="scroll-owner">
@@ -203,7 +203,7 @@ describe('ContextMenu.android', () => {
     const onDisabled = jest.fn();
 
     act(() => {
-      renderer = createWithAnchor(
+      renderer = create(
         <ContextMenu
           items={[
             { id: 'rename', label: 'Rename', onPress: onRename },
@@ -237,7 +237,7 @@ describe('ContextMenu.android', () => {
     const onMenuRename = jest.fn();
 
     act(() => {
-      renderer = createWithAnchor(
+      renderer = create(
         <ContextMenu items={[{ id: 'rename', label: 'Rename', onPress: onMenuRename }]}>
           <Pressable
             accessibilityActions={[
@@ -269,7 +269,7 @@ describe('ContextMenu.android', () => {
 
   it('renders its child directly when no items are available', () => {
     act(() => {
-      renderer = createWithAnchor(
+      renderer = create(
         <ContextMenu items={[]}>
           <View testID="row" />
         </ContextMenu>,
