@@ -18,7 +18,7 @@ function OpenMenuContent({ items }: { items: readonly MenuItem[] }) {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const maxHeight = Math.max(0, Math.min(480, height - insets.top - insets.bottom - 42));
-  const menuWidth = Math.max(0, Math.min(288, width - insets.left - insets.right - 32));
+  const menuWidth = Math.max(0, Math.min(208, width - insets.left - insets.right - 32));
 
   return (
     <Popover.Portal unstable_accessibilityContainerViewIsModal>
