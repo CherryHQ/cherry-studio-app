@@ -86,22 +86,37 @@ export function MessageUsageDetail({
       title={t('chat.messageUsage.title')}
     >
       <View className="gap-8 px-1 pt-2 pb-4">
-        <View className="gap-1">
-          <Text className="text-muted-foreground text-sm">
-            {t('chat.messageUsage.totalTokens')}
-          </Text>
-          <Text
-            adjustsFontSizeToFit
-            className="font-semibold text-4xl text-foreground tabular-nums"
-            minimumFontScale={0.6}
-            numberOfLines={1}
-            selectable
-          >
-            {detail.totalTokens === undefined ? '—' : numbers.format(detail.totalTokens)}
-          </Text>
-          {detail.totalTokens === undefined ? (
-            <Text className="text-muted-foreground text-xs">{unavailable}</Text>
+        <View className="gap-6">
+          {message.model ? (
+            <View className="flex-row items-center gap-2.5">
+              <ModelAvatar model={message.model} size={28} />
+              <View className="min-w-0 flex-1 gap-0.5">
+                <Text className="font-medium text-foreground text-sm" selectable>
+                  {message.model.name}
+                </Text>
+                <Text className="text-muted-foreground text-xs" selectable>
+                  {providerName}
+                </Text>
+              </View>
+            </View>
           ) : null}
+          <View className="gap-1">
+            <Text className="text-muted-foreground text-sm">
+              {t('chat.messageUsage.totalTokens')}
+            </Text>
+            <Text
+              adjustsFontSizeToFit
+              className="font-semibold text-4xl text-foreground tabular-nums"
+              minimumFontScale={0.6}
+              numberOfLines={1}
+              selectable
+            >
+              {detail.totalTokens === undefined ? '—' : numbers.format(detail.totalTokens)}
+            </Text>
+            {detail.totalTokens === undefined ? (
+              <Text className="text-muted-foreground text-xs">{unavailable}</Text>
+            ) : null}
+          </View>
         </View>
 
         <View className="gap-3">
@@ -223,22 +238,9 @@ export function MessageUsageDetail({
           </View>
         </View>
 
-        {message.model || visibleMetadata.length > 0 ? (
+        {visibleMetadata.length > 0 ? (
           <View className="gap-3">
             <MessagePart.SectionTitle title={t('chat.messageUsage.message')} />
-            {message.model ? (
-              <View className="flex-row items-center gap-2.5">
-                <ModelAvatar model={message.model} size={28} />
-                <View className="min-w-0 flex-1 gap-0.5">
-                  <Text className="font-medium text-foreground text-sm" selectable>
-                    {message.model.name}
-                  </Text>
-                  <Text className="text-muted-foreground text-xs" selectable>
-                    {providerName}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
             {visibleMetadata.map(([key, value]) =>
               value === undefined ? null : (
                 <MessageUsageRow key={key} label={t(key)} value={value} />
