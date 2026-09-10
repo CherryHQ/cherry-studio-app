@@ -12,6 +12,8 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import { AgentEventTraceRuntime } from '@/backend/services/diagnostics/AgentEventTraceRuntime';
+import { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -41,7 +43,9 @@ export const services = {
   CacheService,
   DbService,
   DesktopConnectionRuntime,
+  DiagnosticBundleService,
   PreferenceService,
+  AgentEventTraceRuntime,
   BackgroundActivityEnvironment,
   KeepAliveCoordinator,
   BackgroundActivityManager,

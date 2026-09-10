@@ -39,6 +39,7 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -56,6 +57,7 @@ export function createBackend(
   infrastructure: {
     dbService: DbService;
     desktopConnections: DesktopConnectionRuntime;
+    diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
@@ -182,6 +184,7 @@ export function createBackend(
     backend: {
       agent: services.agent,
       desktopConnections: infrastructure.desktopConnections,
+      diagnostics: infrastructure.diagnostics,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         delete: services.fileContent.delete,

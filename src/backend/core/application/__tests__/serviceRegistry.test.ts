@@ -143,5 +143,7 @@ describe('service registry', () => {
     for (const producer of ['McpRuntimeService', 'MobileAgentHost']) {
       expect(layerOf('TraceStorageService')).toBeLessThan(layerOf(producer));
     }
+    expect(layerOf('AgentEventTraceRuntime')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('AgentEventTraceRuntime')).toBeLessThan(layerOf('MobileAgentHost'));
   });
 });

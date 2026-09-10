@@ -10,6 +10,7 @@ feature UI may render.
 | `createAppBootstrapRuntime.ts` | Creates the stable `Backend`, `ApiClient`, and `PreferenceClient`; defines initialize and dispose ordering |
 | `initializeAppRuntime.ts` | Applies cached boot preferences, initializes i18n, and seeds localized first-run data after the native handoff |
 | `startupCoverHandoff.ts` | Holds native-appearance mutations until the system-themed RN cover owns the surface |
+| `diagnosticRecording.ts` | App-entry process logger and exception observers, independent of host or database readiness |
 | `AppBootstrapProvider.tsx` | Owns one runtime, injects its interfaces, tracks startup status, and disposes it |
 | `AppBootstrapGate.tsx` | Renders nothing while loading and surfaces initialization failure |
 
@@ -29,6 +30,10 @@ Only work required for a correct first render may block the gate. The runtime's
 `runPostReadyTasks()` method delegates to the host's fire-and-forget PostReady phase. Route data,
 provider catalogs, transcript history, diagnostics, and other feature work stay outside the
 critical path unless a separate startup decision proves otherwise.
+
+The process log sink is installed before router imports to capture startup failure. It holds no
+open file handles or timers and survives application-host replacement. Source inspection, scan,
+ZIP creation, and upload still run only on an explicit frontend diagnostic operation.
 
 ## Ownership Rules
 

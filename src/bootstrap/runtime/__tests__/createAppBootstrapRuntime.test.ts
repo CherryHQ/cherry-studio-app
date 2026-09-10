@@ -9,9 +9,11 @@ const mockAgent = { kind: 'agent' };
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
+const mockEventTraces = { kind: 'event-traces' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
@@ -81,10 +83,12 @@ const createRuntime = () =>
     AgentRuntime: mockAgentRuntime,
     AiService: mockAi,
     TraceStorageService: mockTraces,
+    AgentEventTraceRuntime: mockEventTraces,
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     DbService: mockDb,
     DesktopConnectionRuntime: mockDesktopConnections,
+    DiagnosticBundleService: mockDiagnostics,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -127,6 +131,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
+      diagnostics: mockDiagnostics,
       languageServing: mockAgentRuntime,
       providerRegistryUpdater: mockProviderRegistryUpdater,
     });

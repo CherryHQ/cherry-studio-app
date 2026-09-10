@@ -9,6 +9,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -82,6 +83,7 @@ async function initializeApp({
       void runtime.runPostReadyTasks();
     }
   } catch (error) {
+    loggerService.withContext('AppBootstrap').error('Application initialization failed', { error });
     if (!isDisposed()) {
       setState({ error: toError(error), status: 'error' });
     }
