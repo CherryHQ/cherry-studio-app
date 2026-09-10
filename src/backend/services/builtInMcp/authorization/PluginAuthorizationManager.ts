@@ -11,20 +11,28 @@ type Entry = {
   observer?: ReturnType<typeof createAuthorizationObserver>;
 };
 
+type CreateAuthorizationStore = (
+  plugin: PluginDefinition,
+  method: string,
+) => PluginAuthorizationStore;
+
 /** Owns method runtimes and observers for one McpRuntimeService generation. */
 export class PluginAuthorizationManager {
   readonly credentials = new PluginCredentialStore();
   private readonly entries = new Map<string, Map<string, Entry>>();
   private stopped = false;
+  private readonly createStore: CreateAuthorizationStore;
 
   constructor(
     private readonly lookup: (id: string) => PluginDefinition | undefined = getPluginDefinition,
-    private readonly createStore: (
-      plugin: PluginDefinition,
-      method: string,
-    ) => PluginAuthorizationStore = (plugin, method) =>
-      this.credentials.authorizationStore(plugin.catalog.id, method, plugin.serverName),
-  ) {}
+    createStore?: CreateAuthorizationStore,
+  ) {
+    // Keep the this-capturing arrow out of parameter defaults for Hermes compatibility.
+    this.createStore =
+      createStore ??
+      ((plugin, method) =>
+        this.credentials.authorizationStore(plugin.catalog.id, method, plugin.serverName));
+  }
 
   get(pluginId: string, methodId: string) {
     return this.entry(pluginId, methodId).runtime;
