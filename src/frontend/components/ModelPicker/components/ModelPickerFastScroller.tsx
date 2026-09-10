@@ -1,14 +1,11 @@
-import { Image } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AccessibilityActionEvent, type LayoutChangeEvent, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, type LayoutChangeEvent, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS, useSharedValue } from 'react-native-reanimated';
-import { useUniwind } from 'uniwind';
 
-import type { Provider } from '@/shared/data/types/provider';
+import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 
 import {
   type ModelPickerFastScrollAnchor,
@@ -163,37 +160,12 @@ function ModelPickerFastScrollAnchorIcon({
 }) {
   return (
     <View className={isActive ? 'scale-110 opacity-100' : 'opacity-40'}>
-      <ProviderRailIcon provider={anchor.provider} size={providerIconSize} />
+      <ProviderBrandAvatar
+        presetProviderId={anchor.provider.presetProviderId}
+        providerId={anchor.provider.id}
+        providerName={anchor.provider.name}
+        size={providerIconSize}
+      />
     </View>
-  );
-}
-
-function ProviderRailIcon({ provider, size }: { provider: Provider; size: number }) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const iconId = provider.presetProviderId ?? provider.id;
-  const iconSource = resolveProviderIcon(iconId);
-
-  if (!iconSource) {
-    const initial = Array.from(provider.name.trim())[0] ?? 'P';
-    return (
-      <Text
-        className="text-center font-semibold text-muted-foreground"
-        style={{ fontSize: size * 0.72, lineHeight: size }}
-      >
-        {initial}
-      </Text>
-    );
-  }
-
-  return (
-    <Image
-      cachePolicy="memory-disk"
-      className="rounded"
-      contentFit="contain"
-      recyclingKey={provider.id}
-      source={iconSource[iconTheme]}
-      style={{ height: size, width: size }}
-    />
   );
 }

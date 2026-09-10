@@ -5,7 +5,6 @@ import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/reac
 import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
 import { BrandAvatar, BrandAvatarIcon, ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
@@ -211,8 +210,6 @@ function getPrimaryLabel(item: AiUsageRankingItem, t: (key: string) => string): 
 }
 
 function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: string }) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const frameProps = {
     label,
     size: AI_USAGE_RANKING_AVATAR_SIZE,
@@ -240,9 +237,8 @@ function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: 
       <BrandAvatar {...frameProps}>
         <BrandAvatarIcon
           displayContext={modelIconSource ? undefined : 'provider'}
-          iconId={item.providerId ?? undefined}
           recyclingKey={item.key}
-          source={iconSource[iconTheme]}
+          source={iconSource}
         />
       </BrandAvatar>
     );

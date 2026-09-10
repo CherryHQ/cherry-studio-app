@@ -77,7 +77,6 @@ export const ProviderListRow = memo(function ProviderListRow({
       }
       leading={
         <ProviderAvatar
-          displayContext="provider-list"
           presetProviderId={provider.presetProviderId}
           providerId={provider.id}
           providerName={provider.name}
