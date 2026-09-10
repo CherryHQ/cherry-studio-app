@@ -1,4 +1,5 @@
 import { useToast } from '@cherrystudio/ui/components';
+import { clearInitialURL } from 'expo-linking';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
@@ -32,6 +33,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     invalid: Set<string>;
   } | null>(null);
   const finished = useRef(false);
+  const browserAttempt = useRef<string | null>(null);
   const name = t(`plugins.catalog.${entry.id}.name`);
   const applicationFields = method.applicationFields;
 
@@ -67,7 +69,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     }
     await refresh();
     toast.show({ label: t('plugins.connectSuccess', { name }), variant: 'success' });
-    router.back();
+    router.dismissTo({ pathname: '/plugins/[pluginId]', params: { pluginId: entry.id } });
   });
   useEffect(() => {
     if (!connection || finished.current) return;
@@ -76,16 +78,38 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   }, [connection]);
 
   async function openConfirmation(state: PluginAuthorizationState) {
-    if (state.status !== 'waiting') return;
+    if (state.status !== 'waiting' && state.status !== 'callback') return;
+    if (browserAttempt.current) return;
+    browserAttempt.current = state.attemptId;
     try {
+      if (state.status === 'callback') {
+        const result = await WebBrowser.openAuthSessionAsync(
+          state.authorizationUrl,
+          state.redirectUrl,
+        );
+        if (result.type === 'success') {
+          clearInitialURL();
+          await plugins.authorization.receiveCallback(
+            entry.id,
+            method.id,
+            state.attemptId,
+            result.url,
+          );
+        } else {
+          // Closing the browser is an explicit cancellation; the previous grant is untouched.
+          await plugins.authorization.cancel(entry.id, method.id, state.attemptId);
+        }
+        return;
+      }
       // Android may resolve immediately; iOS resolves on close (including `cancel`
       // after successful approval). Neither result is proof of success or denial.
       await WebBrowser.openBrowserAsync(state.verificationUrl).catch(() =>
         Linking.openURL(state.verificationUrl),
       );
-    } catch {
-      toast.show({ label: t('plugins.authorization.browserFailed'), variant: 'danger' });
+    } catch (error) {
+      setActionError(error instanceof PluginError ? error.reason : 'request');
     } finally {
+      browserAttempt.current = null;
       plugins.authorization.check(entry.id, method.id);
     }
   }
@@ -147,6 +171,9 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
     openConfirmation,
     check: () => plugins.authorization.check(entry.id, method.id),
     cancel: () => act(() => plugins.authorization.cancel(entry.id, method.id)),
+    confirm: () =>
+      state?.status === 'review' &&
+      act(() => plugins.authorization.confirm(entry.id, method.id, state.attemptId)),
     resetApplication: () => act(() => plugins.authorization.resetApplication(entry.id, method.id)),
   };
 }

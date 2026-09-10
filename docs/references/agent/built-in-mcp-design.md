@@ -1,11 +1,12 @@
 # Built-In MCP Integrations
 
 > Status (2026-09-10): as-built reference for GitHub, Amap and Feishu. All three connect directly
-> to official hosted MCP services; no self-hosting is required. Feishu supports browser-based user
-> authorization with a newly registered or an existing application and user-token renewal
-> for six document tools. Regression coverage for the authorization-method
-> and SQLite changes was updated but has not been run in this session. The Feishu user flow has
-> no device or live-account acceptance yet. Canva, Gmail, Yuque, multiple
+> to official hosted MCP services; no self-hosting is required. GitHub supports publisher-configured
+> OAuth App authorization with an in-app system authentication session, account confirmation and
+> token renewal. Feishu supports browser-based user authorization with a newly registered or an
+> existing application and user-token renewal for six document tools. Updated authorization
+> regression suites have not been run; GitHub and Feishu browser flows still require device and
+> live-account acceptance. Canva, Gmail, Yuque, multiple
 > accounts and other providers' OAuth remain planned. Proposed designs that are not implemented
 > live in [Built-In MCP Roadmap](./built-in-mcp-roadmap.md); availability research is in
 > [Plugin Expansion Research](./plugin-expansion-research.md).
@@ -19,7 +20,7 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 
 | Integration | Implemented authorization | Implemented tools |
 | --- | --- | --- |
-| GitHub | User-supplied personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
+| GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
 | Feishu | Browser-confirmed user authorization with an application configured on the Feishu page or credentials entered manually. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
 
@@ -85,9 +86,10 @@ and resolved `PluginGrant` in `builtInMcp/authorization`. The database service a
 `credentialReference`; the native store accepts secret values as `credential`. The SQL column is
 still named `credential`, so this distinction changes no persisted format.
 Each authorization method owns and validates its versioned object before native persistence:
-GitHub stores `{ version: 1, token }`, Amap stores `{ version: 1, key }`, and Feishu user authorization stores
-`{ version: 1, application, tokens }`. Token values, scope and expiration metadata belong inside
-that object; adding an authorization field does not add a database column.
+GitHub personal tokens store `{ version: 1, token }`; GitHub OAuth stores application identity,
+account facts and tokens in its versioned credential. Amap stores `{ version: 1, key }`, and Feishu
+user authorization stores `{ version: 1, application, tokens }`. Token values, scope and expiration
+metadata belong inside that object; adding an authorization field does not add a database column.
 
 Reusable application information and completed grants occupy separate native items. Browser
 challenges and uncommitted user credentials stay in the method runtime's memory. Leaving the page
@@ -106,8 +108,10 @@ and tool arguments.
 
 Catalog metadata comes from `GET /plugin-catalog`; connection metadata comes from
 `GET /plugin-connections` on the Data API. The `PluginsModule` owns connect/disconnect and the
-interactive authorization surface: observe, check, begin, use an existing application, cancel and
-reset application. Every action selects both a plugin and an authorization method. Shared plugin entities live under `shared/data/types`; the MCP runtime's
+interactive authorization surface: observe, check, begin, receive callback, account review/confirm,
+use an existing application, cancel and reset application. It also exposes local connection-status
+notifications and the result of optional remote revocation. Authorization actions select both a
+plugin and an authorization method. Shared plugin entities live under `shared/data/types`; the MCP runtime's
 connection configuration remains backend-private.
 
 `createBuiltInMcpClient` resolves a registered plugin and checks its stored authorization method.
@@ -117,6 +121,35 @@ transport-level `authProvider`, so a `401` cannot trigger a resend. HTTP errors 
 diagnostics; ambiguous submitted writes tell the caller to check the service before retrying. Input
 validation and result-size limits remain in the existing MCP runtime. GitHub token permissions and
 Amap quota/access restrictions remain upstream authority. No device-location grant is requested.
+
+### GitHub Browser Authorization
+
+The publisher-configured `github_user` method uses an OAuth App and a system authentication session
+with S256 PKCE. It requests `repo offline_access` for the admitted repository tools and renewable
+user tokens; an OAuth response without `repo` is rejected.
+The backend runtime validates the exact redirect, state and expiry and consumes the code once.
+The generic callback route only forwards the original URL and removes it from navigation; no token
+exchange or persistence belongs to the route. A cold start returns to the connection screen to begin
+again. The method is hidden when publisher configuration is incomplete; `personal_token` remains.
+
+`/user` supplies the stable numeric account ID. The runtime remains in `review` until the user
+confirms the account, then the observer runs read-only MCP validation and commits through the shared
+store. No installation query, repository selection or minimum repository count is required.
+Same-account reauthorization preserves the server and Agent settings. A different account ID, an
+incomparable method, or a changed expected grant requires explicit disconnect before replacement.
+
+A completed native credential contains application identity, account facts, complete rotated tokens,
+and confirmed rejection. Pending tokens are memory-only. Renewal shares results
+and uses owner cancellation; an uncertain refresh or failed native write is not automatically
+retried in the same runtime. Query reads project local status and never refresh or call GitHub.
+Resource/network/quota errors remain distinct from confirmed token rejection. A late MCP 401 must
+match the current grant and sent token before marking the credential rejected.
+
+Disconnect captures the current token's revocation closure in memory, removes local authorization
+and bindings first, then attempts remote revocation with a five-second deadline. Failure leaves the
+local connection removed and exposes an unconfirmed result with the authorization settings link.
+See [GitHub Plugin Authorization](../../guides/github-plugin-authorization.md) for publisher setup
+and the still-required live-account/device acceptance.
 
 ### Feishu Browser Authorization
 
@@ -195,7 +228,8 @@ GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
 
 The [module directory map](../../../src/backend/services/builtInMcp/README.md#file-ownership)
 defines implementation placement: common authorization lives in `authorization/`, client and
-connection validation in `transport/`, and all Feishu-specific code in `plugins/feishu/`.
+connection validation in `transport/`, and provider-specific code in `plugins/github/` and
+`plugins/feishu/`.
 
 The database stores open strings for `pluginId` and `authMethod`. SQL checks only that they are
 nonempty; it still preserves foreign keys, remote/built-in source constraints and the single
@@ -230,8 +264,8 @@ To add another hosted MCP plugin or authorization method:
    lifetime and persistence through the scoped authorization store.
 3. Register the plugin once in `pluginRegistry.ts`, or add a method to an existing definition.
    The catalog, method selector, persistence and runtime manager consume it without provider
-   switches. Current interactive presentation covers browser confirmation and polling; callback
-   or native SDK interactions remain additional capability work in the roadmap.
+   switches. Interactive methods explicitly declare browser polling or callback capability. The
+   generic screen handles callback review and confirmation; native SDK interactions remain future work.
 4. Cover the authorization, validation and tool boundary. Run cloud/device acceptance only when
    explicitly authorized.
 
@@ -247,9 +281,9 @@ can later host an in-process adapter without adding provider switches to storage
 Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, chooses
 which Agent may use it, and then uses its tools through ordinary conversation. The application owns
 authorization and tool orchestration on the device; official MCP services execute their business
-tools remotely. Feishu user grants renew on demand; other OAuth providers remain later slices. No
-Cherry-operated authorization proxy, command-line program, local HTTP listener, or desktop process
-is required by this design.
+tools remotely. Expiring GitHub and Feishu user grants renew on demand; other OAuth providers remain
+later slices. No Cherry-operated authorization proxy, command-line program, local HTTP listener,
+or desktop process is required by this design.
 
 GitHub, Amap and Feishu document tools use official remote MCP services; Canva and Gmail are planned
 to use that route after their access and authorization prerequisites are met. Yuque and broader
@@ -259,7 +293,7 @@ a claim that its Connect REST API supports a secretless mobile client.
 
 | Region | Integration ID | Initial useful tools | Execution and authorization |
 | --- | --- | --- | --- |
-| International | `github` | Search repositories; read files; list/read issues and pull requests; create/update issues and comments | Official hosted MCP with a personal token. Interactive authorization remains future work. [Remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) |
+| International | `github` | Search repositories; read files; list/read issues and pull requests; create/update issues and comments | Official hosted MCP with publisher-configured OAuth App authorization or a personal token. [Remote service](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) |
 | International | `canva` | Search/read designs; generate a candidate and create a design; export a design | Planned remote MCP connector, pending callback approval and user OAuth. Preserve upstream names such as `search-designs`, `get-design`, `generate-design`, `create-design-from-candidate`, and `export-design`. [Tool catalog](https://www.canva.dev/docs/mcp/tools/) |
 | International | `gmail` | Search/read threads; create drafts; modify labels | Planned official hosted MCP after Developer Preview access and mobile OAuth setup. Sending drafts is not in the current official MCP catalog. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
@@ -288,7 +322,7 @@ flowchart TD
   Auth --> AuthTable["plugin_authorization: metadata and secure reference"]
   Workflow --> Manager["PluginAuthorizationManager: method runtimes and observers"]
   Registry --> Manager
-  Manager --> Observer["Authorization observer: polling and completion while observed"]
+  Manager --> Observer["Authorization observer: polling or callback expiry, completion after confirmation"]
   Observer --> UserAuth["FeishuAuthorizationRuntime: device flow and renewal"]
   UserAuth --> State["In-memory authorization attempt"]
   UserAuth --> Secrets["PluginCredentialStore: native credentials and application"]

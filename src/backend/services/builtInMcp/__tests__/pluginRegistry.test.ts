@@ -8,6 +8,7 @@ function credentialMethod(id = 'future_credentials_v2'): PluginAuthorizationDefi
     id,
     kind: 'credentials',
     fields: [{ id: 'tenantKey', secret: true, maxLength: 128 }],
+    requiresDisconnect: true,
     encodeCredentials: (fields) => ({ version: 2, key: fields.tenantKey }),
     createRequestAuthorization: () => ({ apply() {} }),
   };
@@ -29,6 +30,7 @@ function definition(id: string): PluginDefinition {
       {
         id: 'future_oauth',
         kind: 'interactive',
+        interaction: 'polling',
         stages: ['consent'],
         createRuntime: () => {
           throw new Error('Must not start from catalog reads');
@@ -70,6 +72,10 @@ it('projects detached method metadata while retaining all executable factories o
     for (const key of ['createRuntime', 'encodeCredentials', 'createRequestAuthorization'])
       expect(method).not.toHaveProperty(key);
   }
+  expect(catalog.authMethods[0]).toMatchObject({ requiresDisconnect: true });
+  expect(catalog.authMethods[1]).toMatchObject({ interaction: 'polling' });
+  Object.assign(catalog.authMethods[1], { interaction: 'callback' });
+  expect(registry.listCatalog()[0].authMethods[1]).toMatchObject({ interaction: 'polling' });
   Object.assign(catalog.links, { website: 'https://modified.example' });
   const method = catalog.authMethods[0];
   if (method.kind !== 'credentials') throw new Error('Expected credential method');

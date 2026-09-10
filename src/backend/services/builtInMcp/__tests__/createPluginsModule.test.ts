@@ -10,10 +10,12 @@ function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
 const mockConnect = jest.fn();
 const mockDisconnect = jest.fn();
 const mockList = jest.fn();
+const mockCurrentGrant = jest.fn();
 const mockValidateConnection = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
     listConnections: (...args: unknown[]) => mockList(...args),
+    getCurrentGrant: (...args: unknown[]) => mockCurrentGrant(...args),
   },
 }));
 jest.mock('../transport/validatePluginConnection', () => ({
@@ -225,4 +227,50 @@ it('allows disconnecting a plugin no longer bundled by this app version', async 
   await createPluginsModule({ invalidateServer }).disconnect('future');
   expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
   expect(mockDisconnect).toHaveBeenCalledWith('future');
+});
+
+it('requires an explicit disconnect before a credential method replaces an identity it cannot compare', async () => {
+  mockCurrentGrant.mockResolvedValue({ id: 'old-grant', authMethod: 'github_user' });
+  await expect(
+    createPluginsModule({ invalidateServer: jest.fn() }).connect(input),
+  ).rejects.toMatchObject({ reason: 'requires-disconnect' });
+  expect(mockValidateConnection).not.toHaveBeenCalled();
+  expect(mockConnect).not.toHaveBeenCalled();
+});
+
+it('captures optional revocation before local deletion and reports remote failure after disconnect', async () => {
+  const operations: string[] = [];
+  mockCurrentGrant.mockResolvedValue({ id: 'old-grant', authMethod: 'feishu_user' });
+  const auth = authorizations.get('feishu', 'feishu_user');
+  auth.prepareRevocation = async () => {
+    operations.push('capture');
+    return {
+      managementUrl: 'https://example.com/manage',
+      revoke: async (signal) => {
+        expect(signal.aborted).toBe(false);
+        operations.push('remote');
+        throw new Error('network');
+      },
+    };
+  };
+  mockDisconnect.mockImplementation(async () => {
+    operations.push('local');
+  });
+  const result = await createPluginsModule({ invalidateServer: jest.fn() }).disconnect('feishu');
+  expect(operations).toEqual(['capture', 'local', 'remote']);
+  expect(result).toEqual({
+    revocation: 'unconfirmed',
+    managementUrl: 'https://example.com/manage',
+  });
+});
+
+it('does not let unavailable native credentials prevent local disconnection', async () => {
+  mockCurrentGrant.mockResolvedValue({ id: 'old-grant', authMethod: 'feishu_user' });
+  authorizations.get('feishu', 'feishu_user').prepareRevocation = async () => {
+    throw new Error('locked');
+  };
+  await expect(
+    createPluginsModule({ invalidateServer: jest.fn() }).disconnect('feishu'),
+  ).resolves.toEqual({ revocation: 'unconfirmed' });
+  expect(mockDisconnect).toHaveBeenCalledWith('feishu');
 });

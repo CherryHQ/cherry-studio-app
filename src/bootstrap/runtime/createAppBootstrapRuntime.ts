@@ -107,7 +107,9 @@ export function createAppBootstrapRuntime(
       models: services.model,
       paintings: services.painting,
       pluginCatalog: dataApiDependencies.pluginCatalog,
-      pluginConnections: services.pluginAuthorization,
+      pluginConnections: {
+        listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
+      },
       providers: services.provider,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),

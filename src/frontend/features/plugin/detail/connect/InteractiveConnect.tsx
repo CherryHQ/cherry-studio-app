@@ -1,4 +1,5 @@
 import { Button, ContentState, useAlert } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -23,6 +24,7 @@ export function InteractiveConnect({
 }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const router = useRouter();
   const {
     state,
     isBusy,
@@ -35,11 +37,13 @@ export function InteractiveConnect({
     check,
     cancel,
     resetApplication,
+    confirm,
   } = useInteractiveConnect(entry, method);
   const name = t(`plugins.catalog.${entry.id}.name`);
   const textKey = `plugins.catalog.${entry.id}.authMethods.${method.id}`;
   const applicationFields = method.applicationFields;
-  const waiting = state?.status === 'waiting' ? state : null;
+  const waiting = state?.status === 'waiting' || state?.status === 'callback' ? state : null;
+  const review = state?.status === 'review' ? state : null;
   const finalStatus =
     state?.status === 'expired' ||
     state?.status === 'denied' ||
@@ -73,9 +77,14 @@ export function InteractiveConnect({
               {t(`${textKey}.stages.${waiting.stage}.waiting`)}
             </Text>
             <Text className="text-sm text-muted-foreground">
-              {t('plugins.authorization.returnToCherry', { name })}
+              {t(
+                waiting.status === 'callback'
+                  ? 'plugins.authorization.returnFromCallback'
+                  : 'plugins.authorization.returnToCherry',
+                { name },
+              )}
             </Text>
-            {waiting.userCode ? (
+            {waiting.status === 'waiting' && waiting.userCode ? (
               <Text selectable className="text-sm text-foreground">
                 {t('plugins.authorization.userCode', { code: waiting.userCode })}
               </Text>
@@ -83,9 +92,45 @@ export function InteractiveConnect({
             <Button variant="outline" onPress={() => void openConfirmation(waiting)}>
               {t('plugins.authorization.openAgain')}
             </Button>
-            <Button variant="ghost" disabled={isBusy} onPress={() => check()}>
-              {t('plugins.authorization.checkAgain')}
-            </Button>
+            {waiting.status === 'waiting' ? (
+              <Button variant="ghost" disabled={isBusy} onPress={() => check()}>
+                {t('plugins.authorization.checkAgain')}
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
+        {review ? (
+          <View className="gap-4">
+            <Text className="text-lg font-medium text-foreground">
+              {t('plugins.authorization.reviewAccount', { account: review.accountLabel })}
+            </Text>
+            {review.requiresDisconnect ? (
+              <>
+                <Text className="text-sm text-muted-foreground">
+                  {t('plugins.authorization.requiresDisconnect')}
+                </Text>
+                <Button
+                  variant="outline"
+                  onPress={() =>
+                    router.dismissTo({
+                      pathname: '/plugins/[pluginId]',
+                      params: { pluginId: entry.id },
+                    })
+                  }
+                >
+                  {t('plugins.authorization.manageConnection')}
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="lg"
+                loading={isBusy}
+                onPress={() => void confirm()}
+                testID="plugin-confirm-connection"
+              >
+                {t('plugins.authorization.confirmConnection')}
+              </Button>
+            )}
           </View>
         ) : null}
         {finalStatus ? (
@@ -147,7 +192,7 @@ export function InteractiveConnect({
             </Button>
           </View>
         ) : null}
-        {state && !waiting && state.status !== 'ready' && !existingApplication ? (
+        {state && !waiting && !review && state.status !== 'ready' && !existingApplication ? (
           <Button size="lg" loading={isBusy} onPress={() => void begin()} testID="plugin-authorize">
             {t(state.status === 'application-ready' ? `${textKey}.continue` : `${textKey}.start`)}
           </Button>
@@ -189,7 +234,7 @@ export function InteractiveConnect({
             {t('plugins.authorization.resetApplication')}
           </Button>
         ) : null}
-        {waiting || state?.status === 'ready' ? (
+        {waiting || review || state?.status === 'ready' ? (
           <Button variant="ghost" onPress={() => void cancel()}>
             {t('plugins.authorization.cancel')}
           </Button>

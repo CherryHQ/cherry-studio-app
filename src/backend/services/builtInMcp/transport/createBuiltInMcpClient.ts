@@ -43,6 +43,13 @@ export async function createBuiltInMcpClient(
     tools: plugin.tools,
     signal,
     authorization: method.createRequestAuthorization(plugin.tools),
+    rejectCredential:
+      method.kind === 'interactive'
+        ? (credential) =>
+            authorizations
+              .get(pluginId, method.id)
+              .rejectCredential?.(authorizationId, credential) ?? Promise.resolve()
+        : undefined,
     async assertAuthorized() {
       await readGrant();
     },

@@ -90,7 +90,7 @@ it('completes an approved attempt once and reports the connection', async () => 
   });
 });
 
-it('reports a failed step without looping and retries only on an explicit check', async () => {
+it('does not repeat a failed completion until a new attempt is authorized', async () => {
   state = { status: 'ready', attemptId: 'attempt-1' };
   flow.complete.mockRejectedValueOnce(new PluginError('storage', 'safe'));
   const { observer, seen } = observe();
@@ -98,6 +98,10 @@ it('reports a failed step without looping and retries only on an explicit check'
   expect(seen.at(-1)).toMatchObject({ busy: false, error: 'storage' });
   await jest.advanceTimersByTimeAsync(60_000);
   expect(flow.complete).toHaveBeenCalledTimes(1);
+  observer.check();
+  await flush();
+  expect(flow.complete).toHaveBeenCalledTimes(1);
+  state = { status: 'ready', attemptId: 'attempt-2' };
   flow.complete.mockResolvedValueOnce(connection);
   observer.check();
   await flush();
@@ -129,4 +133,33 @@ it('does not complete a detached method when its browser return requests a late 
   await flush();
   expect(flow.complete).toHaveBeenCalledTimes(1);
   expect(seen.at(-1)).toMatchObject({ connection });
+});
+
+it('waits for callback expiry without polling and never commits the review state', async () => {
+  state = {
+    status: 'callback',
+    attemptId: 'callback-1',
+    stage: 'user',
+    authorizationUrl: 'https://example.com/authorize',
+    redirectUrl: 'cherrystudio://plugins/future/callback',
+    expiresAt: 600_000,
+  };
+  const { observer } = observe();
+  await flush();
+  await jest.advanceTimersByTimeAsync(60_000);
+  expect(flow.poll).not.toHaveBeenCalled();
+  expect(flow.complete).not.toHaveBeenCalled();
+  state = {
+    status: 'review',
+    attemptId: 'callback-1',
+    accountLabel: 'Cherry',
+    requiresDisconnect: false,
+  };
+  observer.check();
+  await flush();
+  expect(flow.complete).not.toHaveBeenCalled();
+  state = { status: 'ready', attemptId: 'callback-1' };
+  observer.check();
+  await flush();
+  expect(flow.complete).toHaveBeenCalledTimes(1);
 });

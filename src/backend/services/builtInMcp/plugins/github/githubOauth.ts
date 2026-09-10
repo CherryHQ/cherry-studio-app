@@ -9,11 +9,6 @@ import * as z from 'zod';
 
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
-import type { PluginRepositoryAccess } from '@/shared/data/types/plugin';
-
-export const GITHUB_USER_CREDENTIAL_PREFIX = 'github-user:';
-export const isGithubUserCredential = (credential: string) =>
-  credential.startsWith(GITHUB_USER_CREDENTIAL_PREFIX);
 
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
 export const GithubApplicationSchema = z.object({
@@ -23,11 +18,6 @@ export const GithubApplicationSchema = z.object({
     .max(128)
     .regex(/^[a-zA-Z0-9_.]+$/),
   clientSecret: secret,
-  slug: z
-    .string()
-    .min(1)
-    .max(100)
-    .regex(/^[a-zA-Z0-9-]+$/),
   redirectUrl: z.enum([
     'cherrystudio://plugins/github/callback',
     'cherrystudio-dev://plugins/github/callback',
@@ -41,9 +31,8 @@ export function getGithubApplication(): GithubApplication | undefined {
   const configuredScheme = Constants.expoConfig?.scheme;
   const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme;
   const parsed = GithubApplicationSchema.safeParse({
-    clientId: process.env.EXPO_PUBLIC_GITHUB_APP_CLIENT_ID,
-    clientSecret: process.env.EXPO_PUBLIC_GITHUB_APP_CLIENT_SECRET,
-    slug: process.env.EXPO_PUBLIC_GITHUB_APP_SLUG,
+    clientId: process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID,
+    clientSecret: process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET,
     redirectUrl: `${scheme}://plugins/github/callback`,
   });
   return parsed.success ? parsed.data : undefined;
@@ -86,7 +75,7 @@ function safeError(error: unknown, signal?: AbortSignal): PluginError {
       return new PluginError('authorization', 'GitHub authorization requires reconnecting.');
     if (error.status === 401)
       return new PluginError('authorization', 'GitHub authorization is no longer valid.');
-    if (error.status === 429 || error.retryAfter)
+    if (error.status === 429 || error.retryAfter || error.code === 'rate_limited')
       return new PluginError('quota', 'GitHub authorization rate limited.');
     if (error.status === 403) return new PluginError('access', 'GitHub denied resource access.');
     if (error.status && error.status < 500)
@@ -98,6 +87,7 @@ function safeError(error: unknown, signal?: AbortSignal): PluginError {
 const TokenResponseSchema = z.object({
   access_token: secret,
   token_type: z.literal('bearer'),
+  scope: z.string().max(4096),
   refresh_token: secret.optional(),
   expires_in: z.number().int().positive().optional(),
   refresh_token_expires_in: z.number().int().positive().optional(),
@@ -116,7 +106,9 @@ async function exchange(body: Record<string, string>, signal: AbortSignal): Prom
       signal,
       errorDecoder: ({ data }) => {
         const error = OAuthErrorSchema.safeParse(data);
-        return error.success ? { code: error.data.error } : undefined;
+        return error.success
+          ? { code: error.data.error, message: 'GitHub authorization failed.' }
+          : undefined;
       },
     });
     // GitHub can return OAuth failures with HTTP 200. Never expose error_description.
@@ -126,6 +118,9 @@ async function exchange(body: Record<string, string>, signal: AbortSignal): Prom
       throw new PluginError(reason, 'GitHub could not complete authorization.');
     }
     const tokens = parse(TokenResponseSchema, response.data);
+    // The admitted MCP tools include private repository reads and issue/PR writes.
+    if (!tokens.scope.split(/[\s,]+/).includes('repo'))
+      throw new PluginError('access', 'GitHub repository permission was not granted.');
     return {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
@@ -139,16 +134,19 @@ async function exchange(body: Record<string, string>, signal: AbortSignal): Prom
   }
 }
 
-async function get(path: string, token: string, signal: AbortSignal, page = 1, perPage = 100) {
+async function get(path: string, token: string, signal: AbortSignal) {
   try {
     const result = await api.request<unknown>({
       method: 'GET',
       path,
-      query: { page, per_page: perPage },
       headers: { ...API_HEADERS, Authorization: `Bearer ${token}` },
       signal,
       redirect: 'error',
       maxResponseBytes: 2_000_000,
+      errorDecoder: ({ headers }) =>
+        headers['x-ratelimit-remaining'] === '0'
+          ? { code: 'rate_limited', message: 'GitHub rate limit reached.' }
+          : undefined,
     });
     return result.data;
   } catch (error) {
@@ -177,6 +175,7 @@ export const githubOauth = {
       code_challenge: challenge,
       code_challenge_method: 'S256',
       prompt: 'select_account',
+      scope: 'repo offline_access',
     }).toString();
     return { state, verifier, authorizationUrl: url.href };
   },
@@ -217,7 +216,7 @@ export const githubOauth = {
       rotated.refreshExpiresAt === undefined
     )
       throw new PluginError(
-        'authorization',
+        'request',
         'GitHub returned an incomplete token rotation. Reconnect GitHub.',
       );
     return rotated;
@@ -225,45 +224,6 @@ export const githubOauth = {
 
   async getAccount(token: string, signal: AbortSignal) {
     return parse(GithubAccountSchema, await get('/user', token, signal));
-  },
-
-  async getRepositoryAccess(token: string, signal: AbortSignal): Promise<PluginRepositoryAccess> {
-    const InstallationPageSchema = z.object({
-      total_count: z.number().int().nonnegative(),
-      installations: z.array(
-        z.object({
-          id: z.number().int().positive().safe(),
-          account: z.object({ login: z.string().min(1).max(100) }).nullable(),
-          suspended_at: z.string().nullable(),
-        }),
-      ),
-    });
-    let repositoryCount = 0;
-    const accounts = new Set<string>();
-    const seen = new Set<number>();
-    for (let page = 1; page <= 20; page++) {
-      const result = parse(
-        InstallationPageSchema,
-        await get('/user/installations', token, signal, page),
-      );
-      for (const installation of result.installations) {
-        if (seen.has(installation.id))
-          throw new PluginError('request', 'GitHub installation pagination changed. Try again.');
-        seen.add(installation.id);
-        if (installation.suspended_at || !installation.account) continue;
-        // total_count is the user's actual accessible subset; never claim all installation repos.
-        const repos = parse(
-          z.object({ total_count: z.number().int().nonnegative() }),
-          await get(`/user/installations/${installation.id}/repositories`, token, signal, 1, 1),
-        );
-        repositoryCount += repos.total_count;
-        if (repos.total_count) accounts.add(installation.account.login);
-      }
-      if (seen.size >= result.total_count)
-        return { repositoryCount, accounts: [...accounts], checkedAt: Date.now() };
-      if (!result.installations.length) break;
-    }
-    throw new PluginError('request', 'Could not finish checking GitHub repository access.');
   },
 
   async revoke(application: GithubApplication, accessToken: string, signal: AbortSignal) {

@@ -25,6 +25,23 @@ const secretKey = (reference: PluginSecretReference) => `plugin-secret.${referen
 
 /** Local credentials only. The manager owns this queue and drains it before the database closes. */
 export class PluginCredentialStore {
+  private readonly listeners = new Set<() => void>();
+  observe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+  notifyChanged() {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch {
+        /* Observers cannot undo a committed credential change. */
+      }
+    }
+  }
+
   private tail: Promise<unknown> = Promise.resolve();
   private readonly lifetime = new AbortController();
 
@@ -53,6 +70,7 @@ export class PluginCredentialStore {
   }
 
   async stop() {
+    this.listeners.clear();
     this.lifetime.abort();
     await this.tail.catch(() => {});
   }
@@ -98,6 +116,9 @@ export class PluginCredentialStore {
   ): PluginAuthorizationStore {
     const applicationKey = `plugin-application.${pluginId}.${method}`;
     return {
+      notifyChanged: () => this.notifyChanged(),
+      getCurrentAuthorizationId: () =>
+        this.run(async () => (await this.database.getCurrentGrant(pluginId))?.id),
       readApplication: () => this.run(() => this.read(applicationKey)),
       writeApplication: (application) =>
         this.run(() =>
@@ -122,9 +143,10 @@ export class PluginCredentialStore {
             secretKey(PluginSecretReferenceSchema.parse(row.credentialReference)),
             credential,
           );
+          this.notifyChanged();
           return true;
         }),
-      commit: (credential, accountLabel, signal) =>
+      commit: (credential, accountLabel, signal, expected) =>
         this.connect(
           {
             pluginId,
@@ -134,6 +156,7 @@ export class PluginCredentialStore {
             accountLabel,
           },
           signal,
+          expected,
         ),
     };
   }
@@ -143,6 +166,7 @@ export class PluginCredentialStore {
       credential: PluginCredential;
     },
     callerSignal?: AbortSignal,
+    expected?: { authorizationId: string | undefined },
   ) {
     const signal = callerSignal
       ? AbortSignal.any([callerSignal, this.lifetime.signal])
@@ -150,6 +174,8 @@ export class PluginCredentialStore {
     return this.run(async () => {
       signal.throwIfAborted();
       const previous = await this.database.getCurrentGrant(input.pluginId);
+      if (expected && previous?.id !== expected.authorizationId)
+        throw new PluginError('requires-disconnect', 'The plugin connection changed. Start again.');
       const reference = { storage: 'secure-store-v1' as const, id: randomUUID() };
       const { credential, ...connectionInput } = input;
       let connection;
@@ -164,6 +190,7 @@ export class PluginCredentialStore {
         throw error;
       }
       if (previous) await this.remove(previous.credentialReference);
+      this.notifyChanged();
       return connection;
     });
   }
@@ -173,6 +200,7 @@ export class PluginCredentialStore {
       const previous = await this.database.getCurrentGrant(pluginId);
       const result = await this.database.disconnect(pluginId);
       if (previous) await this.remove(previous.credentialReference);
+      this.notifyChanged();
       return result;
     });
   }

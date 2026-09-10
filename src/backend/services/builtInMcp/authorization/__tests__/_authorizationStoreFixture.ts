@@ -7,6 +7,8 @@ export function authorizationStoreFixture() {
   const clone = <T>(value: T): T =>
     value === undefined ? value : JSON.parse(JSON.stringify(value));
   const store: jest.Mocked<PluginAuthorizationStore> = {
+    notifyChanged: jest.fn(),
+    getCurrentAuthorizationId: jest.fn(async () => data.grant?.id),
     readApplication: jest.fn(async () => clone(data.application)),
     writeApplication: jest.fn(async (application) => {
       data.application = clone(application);

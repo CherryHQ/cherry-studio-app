@@ -14,7 +14,7 @@ that needs a local process is a different delivery route.
 
 | Region | Integration | Official offering | Decision |
 | --- | --- | --- | --- |
-| International | GitHub | Hosted MCP at `https://api.githubcopilot.com/mcp/`, personal-token support | Keep the current connector. [Official remote server](https://github.com/github/github-mcp-server/blob/main/docs/remote-server.md) |
+| International | GitHub | Hosted MCP at `https://api.githubcopilot.com/mcp/` | The current connector supports publisher-configured OAuth App authorization and personal-token entry. See [GitHub Browser Authorization](./built-in-mcp-design.md#github-browser-authorization). |
 | International | Canva | Hosted MCP at `https://mcp.canva.com/mcp`; individual OAuth authorization | Next cloud candidate after Cherry's callback is approved. Canva currently requires redirect-URI allowlisting; CIMD is preferred, DCR remains a deprecated compatibility option. Cherry has no configured approved callback. [Official integration guide](https://www.canva.dev/docs/mcp/) |
 | International | Gmail | Hosted MCP at `https://gmailmcp.googleapis.com/mcp/v1`, Google Workspace Developer Preview | Update the former direct-API-only plan. Requires preview access, enabled Gmail/MCP APIs, OAuth configuration and a mobile authorization implementation. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | Amap | Hosted MCP at `https://mcp.amap.com/mcp`, Web Service key | Keep the current connector. [Official setup](https://lbs.amap.com/api/mcp-server/gettingstarted) |

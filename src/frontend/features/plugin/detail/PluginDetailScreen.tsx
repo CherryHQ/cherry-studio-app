@@ -8,6 +8,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
+import type { PluginDisconnectResult } from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PluginIcon } from '../components/PluginIcon';
@@ -31,6 +32,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
   const catalog = usePluginCatalog();
   const connections = usePluginConnections();
   const refresh = useRefreshPluginConnections();
+  const [disconnectResult, setDisconnectResult] = useState<PluginDisconnectResult | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const connection = connections.data?.find((item) => item.pluginId === pluginId);
   const entry = catalog.data?.find((item) => item.id === pluginId);
@@ -39,7 +41,8 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
   async function disconnect() {
     setIsDisconnecting(true);
     try {
-      await plugins.disconnect(pluginId);
+      const result = await plugins.disconnect(pluginId);
+      setDisconnectResult(result);
       await refresh();
       toast.show({ label: t('plugins.disconnected'), variant: 'success' });
       if (!entry) router.back();
@@ -109,14 +112,52 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
             </View>
           </View>
         ) : null}
+        {disconnectResult?.revocation === 'unconfirmed' && !connection ? (
+          <View className="gap-3">
+            <Text className="text-sm text-muted-foreground">
+              {t('plugins.authorization.revocationUnconfirmed')}
+            </Text>
+            {disconnectResult.managementUrl ? (
+              <Button
+                variant="link"
+                onPress={() => void openExternalUrl(disconnectResult.managementUrl!)}
+              >
+                {t('plugins.authorization.manageAuthorization')}
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
         {connection ? (
           <View className="gap-4">
             <View className="flex-row items-center gap-2">
-              <CheckIcon className="size-5 text-success" />
+              {!connection.authorization || connection.authorization.status === 'connected' ? (
+                <CheckIcon className="size-5 text-success" />
+              ) : null}
               <Text className="flex-1 text-sm text-foreground">
                 {t('plugins.connectedAccount', { account: connection.accountLabel })}
               </Text>
             </View>
+            {connection.authorization && connection.authorization.status !== 'connected' ? (
+              <Text className="text-sm text-destructive">
+                {t(`plugins.connectionStatus.${connection.authorization.status}`)}
+              </Text>
+            ) : null}
+            {connection.authorization?.reason ? (
+              <Text className="text-sm text-muted-foreground">
+                {t(`plugins.errors.${connection.authorization.reason}`)}
+              </Text>
+            ) : null}
+            {connection.authorization?.managementUrl ? (
+              <Button
+                variant="link"
+                onPress={() => void openExternalUrl(connection.authorization!.managementUrl!)}
+              >
+                {t('plugins.authorization.manageAuthorization')}
+              </Button>
+            ) : null}
+            <Button variant="outline" onPress={() => router.push('/agents')}>
+              {t('plugins.authorization.chooseAgents')}
+            </Button>
             <View className="flex-row flex-wrap gap-3">
               {entry ? (
                 <Button

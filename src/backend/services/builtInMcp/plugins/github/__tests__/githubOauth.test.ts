@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto';
 
+import Constants from 'expo-constants';
+
 import { HttpError } from '@/backend/services/http/HttpError';
 
-import { githubOauth } from '../githubOauth';
+import { getGithubApplication, githubOauth } from '../githubOauth';
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { scheme: 'cherrystudio-dev' } },
+}));
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -20,15 +27,15 @@ jest.mock('expo-crypto', () => ({
     jest.requireActual('node:crypto').createHash(algorithm).update(value).digest(options.encoding),
 }));
 const application = {
-  clientId: 'Iv1.cherry',
+  clientId: 'cherry-oauth-client',
   clientSecret: 'public-client-secret',
-  slug: 'cherry-studio',
   redirectUrl: 'cherrystudio-dev://plugins/github/callback' as const,
 };
 const signal = new AbortController().signal;
 const response = {
   access_token: 'private-access',
   token_type: 'bearer',
+  scope: 'repo',
   refresh_token: 'private-refresh',
   expires_in: 28_800,
   refresh_token_expires_in: 15_552_000,
@@ -38,6 +45,26 @@ beforeEach(() => {
   jest.spyOn(Date, 'now').mockReturnValue(1000);
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('loads only OAuth App credentials and derives the callback from the native scheme', () => {
+  jest.replaceProperty(process, 'env', {
+    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
+    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: application.clientSecret,
+  });
+  expect(getGithubApplication()).toEqual(application);
+  jest.replaceProperty(Constants, 'expoConfig', {
+    ...Constants.expoConfig!,
+    scheme: 'unregistered',
+  });
+  expect(getGithubApplication()).toBeUndefined();
+});
+
+it('keeps browser authorization unavailable when OAuth credentials are incomplete', () => {
+  jest.replaceProperty(process, 'env', {
+    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
+  });
+  expect(getGithubApplication()).toBeUndefined();
+});
 
 it('binds browser authorization to a fresh S256 proof and exact redirect without sending the verifier', async () => {
   const first = await githubOauth.challenge(application);
@@ -50,6 +77,7 @@ it('binds browser authorization to a fresh S256 proof and exact redirect without
   expect(url.searchParams.get('code_challenge_method')).toBe('S256');
   expect(url.searchParams.get('redirect_uri')).toBe(application.redirectUrl);
   expect(url.searchParams.get('state')).toBe(first.state);
+  expect(url.searchParams.get('scope')).toBe('repo offline_access');
   expect(first.state).not.toBe(second.state);
   expect(first.verifier).not.toBe(second.verifier);
   expect(first.authorizationUrl).not.toContain(first.verifier);
@@ -92,9 +120,37 @@ it('rejects HTTP-200 OAuth errors without exposing upstream credential-bearing d
   expect(error.message).not.toContain('private-refresh');
 });
 
+it('accepts a non-expiring OAuth token without inventing refresh credentials', async () => {
+  mockRequest.mockResolvedValue({
+    data: { access_token: 'private-access', token_type: 'bearer', scope: 'repo' },
+  });
+  const tokens = await githubOauth.exchangeCode(application, 'code', 'verifier', signal);
+  expect(tokens.accessToken).toBe('private-access');
+  expect(tokens.refreshToken).toBeUndefined();
+  expect(tokens.expiresAt).toBeUndefined();
+  expect(tokens.refreshExpiresAt).toBeUndefined();
+});
+
+it.each(['', 'read:user', 'public_repo', 'repo:status'])(
+  'rejects insufficient OAuth scope: %s',
+  async (scope) => {
+    mockRequest.mockResolvedValue({ data: { ...response, scope } });
+    await expect(
+      githubOauth.exchangeCode(application, 'code', 'verifier', signal),
+    ).rejects.toMatchObject({ reason: 'access' });
+  },
+);
+
+it('accepts the repository scope in a normalized comma-separated grant', async () => {
+  mockRequest.mockResolvedValue({ data: { ...response, scope: 'read:user,repo' } });
+  await expect(
+    githubOauth.exchangeCode(application, 'code', 'verifier', signal),
+  ).resolves.toMatchObject({ accessToken: 'private-access' });
+});
+
 it('does not accept an incomplete rotation that could silently discard the renewable grant', async () => {
   mockRequest.mockResolvedValue({
-    data: { access_token: 'next', token_type: 'bearer', expires_in: 100 },
+    data: { access_token: 'next', token_type: 'bearer', scope: 'repo', expires_in: 100 },
   });
   await expect(
     githubOauth.refresh(
@@ -102,7 +158,7 @@ it('does not accept an incomplete rotation that could silently discard the renew
       { accessToken: 'old', refreshToken: 'private-refresh' },
       signal,
     ),
-  ).rejects.toMatchObject({ reason: 'authorization' });
+  ).rejects.toMatchObject({ reason: 'request' });
 });
 
 it('also recognizes definitive refresh rejection on non-2xx responses through a closed decoder', async () => {
@@ -119,43 +175,8 @@ it('also recognizes definitive refresh rejection on non-2xx responses through a 
   const decoder = mockRequest.mock.calls[0][1].errorDecoder;
   expect(
     decoder({ data: { error: 'bad_refresh_token', error_description: 'private-refresh' } }),
-  ).toEqual({ code: 'bad_refresh_token' });
+  ).toEqual({ code: 'bad_refresh_token', message: 'GitHub authorization failed.' });
   expect(decoder({ data: { error: 'private-refresh' } })).toBeUndefined();
-});
-
-it('counts only user-accessible repositories across installations and pagination', async () => {
-  mockRequest.mockImplementation(async (_base, request) => {
-    if (request.path === '/user/installations')
-      return {
-        data: {
-          total_count: 3,
-          installations:
-            request.query.page === 1
-              ? [{ id: 1, account: { login: 'personal' }, suspended_at: null }]
-              : [
-                  { id: 2, account: { login: 'org' }, suspended_at: null },
-                  { id: 3, account: { login: 'suspended' }, suspended_at: '2026-09-10' },
-                ],
-        },
-      };
-    return { data: { total_count: request.path.includes('/1/') ? 2 : 4 } };
-  });
-  expect(await githubOauth.getRepositoryAccess('private-access', signal)).toEqual({
-    repositoryCount: 6,
-    accounts: ['personal', 'org'],
-    checkedAt: 1000,
-  });
-  expect(mockRequest.mock.calls.filter(([, request]) => request.path.includes('/3/'))).toHaveLength(
-    0,
-  );
-  expect(
-    mockRequest.mock.calls.every(
-      ([base, request]) =>
-        base === 'https://api.github.com' &&
-        request.headers.Authorization === 'Bearer private-access' &&
-        request.redirect === 'error',
-    ),
-  ).toBe(true);
 });
 
 it('distinguishes account revocation from resource denial and temporary network failure', async () => {
@@ -177,10 +198,10 @@ it('revokes only the current token using GitHub’s DELETE body contract', async
     'https://api.github.com',
     expect.objectContaining({
       method: 'DELETE',
-      path: '/applications/Iv1.cherry/token',
+      path: '/applications/cherry-oauth-client/token',
       body: { access_token: 'private-access' },
       headers: expect.objectContaining({
-        Authorization: `Basic ${btoa('Iv1.cherry:public-client-secret')}`,
+        Authorization: `Basic ${btoa('cherry-oauth-client:public-client-secret')}`,
       }),
       redirect: 'error',
     }),

@@ -17,7 +17,8 @@ export type PluginErrorReason =
   | 'request'
   | 'unknown-write'
   | 'cancelled'
-  | 'storage';
+  | 'storage'
+  | 'requires-disconnect';
 
 /** Safe diagnostics for tools; UI translates the closed reason instead of the message. */
 export class PluginError extends Error {
@@ -44,10 +45,24 @@ export type PluginAuthorizationState =
       expiresAt: number;
       nextPollAt: number;
     }
+  | {
+      status: 'callback';
+      attemptId: string;
+      stage: string;
+      authorizationUrl: string;
+      redirectUrl: string;
+      expiresAt: number;
+    }
+  | {
+      status: 'review';
+      attemptId: string;
+      accountLabel: string;
+      requiresDisconnect: boolean;
+    }
   | { status: 'expired' | 'denied' | 'unsupported-account'; attemptId: string }
   | { status: 'ready'; attemptId: string };
 
-/** What an observing screen renders: the durable state plus the backend's transient progress. */
+/** What an observing screen renders: current authorization state and backend progress. */
 export type PluginAuthorizationObservation = {
   state: PluginAuthorizationState;
   /** True while the backend is reading, polling or completing. */
@@ -58,12 +73,18 @@ export type PluginAuthorizationObservation = {
   connection?: PluginConnection;
 };
 
+export type PluginDisconnectResult = {
+  revocation: 'revoked' | 'unconfirmed' | 'not-applicable';
+  managementUrl?: string;
+};
+
 export interface PluginsModule {
   connect(
     input: z.infer<typeof ConnectPluginSchema>,
     signal?: AbortSignal,
   ): Promise<PluginConnection>;
-  disconnect(pluginId: PluginId): Promise<void>;
+  disconnect(pluginId: PluginId): Promise<PluginDisconnectResult>;
+  observeConnections(listener: () => void): () => void;
   authorization: {
     /**
      * The backend polls and completes only while at least one observer is attached. Detaching
@@ -77,13 +98,30 @@ export interface PluginsModule {
     /** Run one step now, for example after the user returns from the browser. */
     check(pluginId: PluginId, authMethod: string): void;
     begin(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
+    receiveCallback(
+      pluginId: PluginId,
+      authMethod: string,
+      attemptId: string,
+      url: string,
+    ): Promise<PluginAuthorizationState>;
+    /** Thin route fallback; resolves the active callback attempt before dispatching. */
+    receiveRedirect(pluginId: PluginId, url: string): Promise<void>;
+    confirm(
+      pluginId: PluginId,
+      authMethod: string,
+      attemptId: string,
+    ): Promise<PluginAuthorizationState>;
     /** Authorize with an existing application instead of registering a new one. */
     useApplication(
       pluginId: PluginId,
       authMethod: string,
       fields: Record<string, string>,
     ): Promise<PluginAuthorizationState>;
-    cancel(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
+    cancel(
+      pluginId: PluginId,
+      authMethod: string,
+      callbackAttemptId?: string,
+    ): Promise<PluginAuthorizationState>;
     resetApplication(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
   };
 }

@@ -77,6 +77,7 @@ export function createOfficialMcpClient(
       if (!response.ok && !(init?.method === 'GET' && response.status === 405)) {
         void response.body?.cancel().catch(() => undefined);
         if (response.status === 401) {
+          await context.rejectCredential?.(credential).catch(() => undefined);
           throw new PluginError(
             'authorization',
             'The official MCP service rejected the credential.',
