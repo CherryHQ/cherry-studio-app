@@ -7,8 +7,10 @@ an installation's repositories in Cherry.
 
 ## Publisher Configuration
 
-Create an OAuth App under GitHub developer settings, not a GitHub App. Use separate registrations
-for development, preview and production so each has its own callback and credentials.
+Create an OAuth App under GitHub developer settings, not a GitHub App. GitHub supports up to
+10 callback URLs per OAuth App, so one registration can serve development, preview and production.
+Add the full callback URL for each enabled environment; keep the production callback when adding
+development. Separate registrations remain an option when credentials should be isolated.
 
 | Expo profile | Authorization callback URL |
 | --- | --- |
@@ -32,8 +34,9 @@ An incomplete refresh response requires reconnecting instead of reusing an uncer
 
 ## Development And EAS Environments
 
-Set these project-level variables in the Expo project's Environment variables page. Create distinct
-values in `development`, `preview` and `production` using the matching OAuth App registration.
+Set these project-level variables in each enabled EAS environment (`development`, `preview` or
+`production`) on the Expo project's Environment variables page. Reuse the same values when sharing
+one OAuth App, or supply the matching registration's credentials when using separate apps.
 
 | Variable | Value | EAS visibility |
 | --- | --- | --- |
@@ -131,6 +134,7 @@ in their owning modules. Follow [Testing And CI](./testing-and-ci.md) and active
 
 ## Official References
 
+- [OAuth App registration and multiple callback URLs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app)
 - [MCP host integration](https://github.com/github/github-mcp-server/blob/main/docs/host-integration.md)
 - [OAuth App authorization, PKCE and token refresh](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
 - [OAuth scopes](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps)
