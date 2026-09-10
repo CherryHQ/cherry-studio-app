@@ -3,6 +3,12 @@ import * as z from 'zod';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
 
+import {
+  FeishuApplicationSchema,
+  type FeishuApplication,
+  type FeishuTokens,
+} from './feishuCredentials';
+
 // Protocol reference: larksuite/cli 9aaedb981b036ca94bd8ec9c630adf0ead9b6d1c,
 // internal/auth/{app_registration,device_flow,uat_client}.go. No CLI process or private web API.
 const accounts = createHttpClient({ baseUrl: 'https://accounts.feishu.cn', timeoutMs: 15_000 });
@@ -31,23 +37,6 @@ export const FEISHU_DOCUMENT_SCOPES = [
 const FEISHU_REQUESTED_SCOPES = ['offline_access', ...FEISHU_DOCUMENT_SCOPES];
 
 const secret = z.string().min(1).max(16_384);
-export const FeishuApplicationSchema = z.object({
-  appId: z
-    .string()
-    .regex(/^cli_[a-zA-Z0-9]+$/)
-    .max(128),
-  appSecret: secret,
-});
-export type FeishuApplication = z.infer<typeof FeishuApplicationSchema>;
-export const FeishuTokensSchema = z.object({
-  accessToken: secret,
-  refreshToken: secret.optional(),
-  expiresAt: z.number().finite(),
-  refreshExpiresAt: z.number().finite(),
-  scope: z.string().max(16_384),
-});
-export type FeishuTokens = z.infer<typeof FeishuTokensSchema>;
-
 const OauthResponseSchema = z.looseObject({
   error: z.string().optional(),
   code: z.number().optional(),

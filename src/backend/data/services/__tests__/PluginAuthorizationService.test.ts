@@ -14,7 +14,7 @@ jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 let db: TestDb;
 let service: PluginAuthorizationService;
 const reference = (id: number) => ({
-  storage: 'secure-store-v1',
+  storage: 'secure-store-v1' as const,
   id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`,
 });
 const input = {
@@ -22,7 +22,7 @@ const input = {
   authMethod: 'personal_token',
   serverName: 'GitHub',
   accountLabel: 'cherry',
-  credential: reference(1),
+  credentialReference: reference(1),
 };
 beforeEach(async () => {
   db = createTestDb(new DatabaseSync(':memory:'));
@@ -63,7 +63,7 @@ it('persists Feishu credential references without exposing them in connection or
     authMethod: 'app_credentials',
     serverName: 'Feishu',
     accountLabel: 'cli_cherry',
-    credential,
+    credentialReference: credential,
   });
   const server = await new McpServerService().getById(connection.serverId);
   expect(server).toMatchObject({
@@ -88,14 +88,14 @@ it('rotates grant identity without retargeting an old credential reference', asy
   if (oldServer.origin !== 'builtin') throw new Error('Expected a plugin');
   const second = await service.connect({
     ...input,
-    credential: reference(2),
+    credentialReference: reference(2),
   });
   expect(second.serverId).toBe(first.serverId);
-  await expect(service.getCredentialGrant('github', oldServer.authorizationId)).rejects.toThrow();
+  await expect(service.getAuthorizedGrant('github', oldServer.authorizationId)).rejects.toThrow();
   const newServer = await new McpServerService().getById(second.serverId);
   if (newServer.origin !== 'builtin') throw new Error('Expected a plugin');
   expect(
-    (await service.getCredentialGrant('github', newServer.authorizationId)).credential,
+    (await service.getAuthorizedGrant('github', newServer.authorizationId)).credentialReference,
   ).toEqual(reference(2));
   expect(db.sqlite.prepare('SELECT count(*) AS count FROM plugin_authorization').get()).toEqual({
     count: 1,
@@ -108,13 +108,15 @@ it('retains disabled grants for backend renewal without making them executable',
     ...input,
     pluginId: 'feishu',
     authMethod: 'feishu_user',
-    credential,
+    credentialReference: credential,
   });
   const server = await new McpServerService().getById(connection.serverId);
   if (server.origin !== 'builtin') throw new Error('Expected a plugin');
   await new McpServerService().update(connection.serverId, { isEnabled: false });
-  expect(await service.getCurrentGrant('feishu', 'feishu_user')).toMatchObject({ credential });
-  await expect(service.getCredentialGrant('feishu', server.authorizationId)).rejects.toThrow();
+  expect(await service.getCurrentGrant('feishu', 'feishu_user')).toMatchObject({
+    credentialReference: credential,
+  });
+  await expect(service.getAuthorizedGrant('feishu', server.authorizationId)).rejects.toThrow();
   expect(await service.getCurrentGrant('github', 'personal_token')).toBeUndefined();
   await service.disconnect('feishu');
   expect(await service.getCurrentGrant('feishu', 'feishu_user')).toBeUndefined();
@@ -124,7 +126,7 @@ it('rolls back both the grant and server when committing a credential change fai
   const first = await service.connect(input);
   const oldServer = await new McpServerService().getById(first.serverId);
   db.failWriteTxCommit(new Error('disk full'));
-  await expect(service.connect({ ...input, credential: reference(2) })).rejects.toThrow(
+  await expect(service.connect({ ...input, credentialReference: reference(2) })).rejects.toThrow(
     'disk full',
   );
   expect(await new McpServerService().getById(first.serverId)).toEqual(oldServer);
@@ -182,7 +184,7 @@ it('retains and disconnects an unregistered plugin without a provider-specific d
     authMethod: 'future_method_v2',
     serverName: 'Future plugin',
     accountLabel: 'Future account',
-    credential: reference(1),
+    credentialReference: reference(1),
   });
   const server = await new McpServerService().getById(connection.serverId);
   expect(server).toMatchObject({ builtinId: 'vendor.future-plugin', name: 'Future plugin' });
@@ -202,7 +204,9 @@ it('rejects plaintext, malformed references and non-JSON credentials before writ
     { token: undefined },
     { token: () => 'secret' },
   ]) {
-    await expect(service.connect({ ...input, credential: credential as never })).rejects.toThrow();
+    await expect(
+      service.connect({ ...input, credentialReference: credential as never }),
+    ).rejects.toThrow();
   }
   expect(await service.listConnections()).toEqual([]);
 });

@@ -1,0 +1,1 @@
+export { feishuPlugin } from './feishuPlugin';

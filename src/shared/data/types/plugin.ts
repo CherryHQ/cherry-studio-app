@@ -13,16 +13,13 @@ export type PluginCredentialField = {
   readonly pattern?: string;
 };
 
-/** Backend-only logical payload; native storage holds values, SQLite holds opaque references. */
-export const PluginCredentialSchema = z.record(z.string(), z.json());
-export type PluginCredential = z.infer<typeof PluginCredentialSchema>;
-
 export type PluginCredentialMethod = {
   readonly id: string;
   readonly kind: 'credentials';
   readonly fields: readonly PluginCredentialField[];
 };
 
+/** Browser confirmation with backend polling; application entry is optional. */
 export type PluginInteractiveMethod = {
   readonly id: string;
   readonly kind: 'interactive';

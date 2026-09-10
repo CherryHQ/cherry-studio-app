@@ -1,6 +1,7 @@
+import type { PluginDefinition } from '../../pluginDefinition';
+import { createPluginRegistry } from '../../pluginRegistry';
+import type { PluginAuthorizationRuntime } from '../pluginAuthorization';
 import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
-import type { PluginAuthorizationRuntime, PluginDefinition } from '../pluginDefinition';
-import { createPluginRegistry } from '../pluginRegistry';
 import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 function runtimeFixture(): PluginAuthorizationRuntime {
@@ -21,7 +22,7 @@ function runtimeFixture(): PluginAuthorizationRuntime {
       accountLabel: 'Future',
       connectedAt: '2026-09-10T00:00:00.000Z',
     })),
-    resolveCredential: jest.fn(async (grant) => grant.credential),
+    resolveCredential: jest.fn(async () => ({ version: 1 })),
     cancel: jest.fn(async () => ({ status: 'idle' as const })),
     interrupt: jest.fn(),
     invalidateGrant: jest.fn(),

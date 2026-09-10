@@ -62,7 +62,7 @@ Implementation ownership:
 - `createBuiltInMcpClient` resolves the registered definition and binds token use to its grant/method.
   `createOfficialMcpClient` rechecks that grant after token exchange, rejects redirects and enforces
   tool admission on invocation as well as discovery.
-- `feishuAuthorization` owns the per-client token cache and the ordinary HTTP token exchange. It
+- `plugins/feishu/feishuAppToken` owns the per-client token cache and the ordinary HTTP token exchange. It
   uses the shared HTTP transport with explicit redirect rejection. A failed write is never replayed.
 - Existing Agent bindings, approval, cancellation and result-size limits remain authoritative.
   Connecting does not enable the plugin for every Agent.

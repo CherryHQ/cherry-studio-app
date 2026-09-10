@@ -3,7 +3,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 
 import { PluginError } from '@/shared/contracts/plugins';
 
-import type { PluginClientContext } from './pluginDefinition';
+import type { PluginClientContext } from '../pluginDefinition';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
 type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' | 'sse' }>;

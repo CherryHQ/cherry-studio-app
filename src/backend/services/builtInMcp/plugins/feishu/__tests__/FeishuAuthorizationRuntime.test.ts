@@ -1,8 +1,8 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
+import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { FEISHU_DOCUMENT_SCOPES, feishuOauth } from '../feishuOauth';
-import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({
@@ -221,8 +221,8 @@ it('deduplicates refresh and persists all rotated fields without changing the au
   now.mockReturnValue(tokens.expiresAt);
   jest.mocked(feishuOauth.refresh).mockResolvedValue(rotatedTokens);
   const results = await Promise.all([
-    runtime.resolveCredential(grant),
-    runtime.resolveCredential(grant),
+    runtime.resolveCredential(grant.id),
+    runtime.resolveCredential(grant.id),
   ]);
   expect(results).toEqual([
     { version: 1, application, tokens: rotatedTokens },
@@ -231,7 +231,9 @@ it('deduplicates refresh and persists all rotated fields without changing the au
   expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
   expect(fixture.data.grant?.id).toBe(grant.id);
   expect(fixture.data.grant?.credential.tokens).toEqual(rotatedTokens);
-  expect(await createRuntime().resolveCredential(grant)).toMatchObject({ tokens: rotatedTokens });
+  expect(await createRuntime().resolveCredential(grant.id)).toMatchObject({
+    tokens: rotatedTokens,
+  });
 });
 
 it('does not restore a grant removed from SQLite, while retaining the application for reconnecting', async () => {
@@ -240,7 +242,7 @@ it('does not restore a grant removed from SQLite, while retaining the applicatio
   fixture.data.grant = undefined;
   const restarted = createRuntime();
   expect(await restarted.getState()).toEqual(applicationReady);
-  await expect(restarted.resolveCredential(grant)).rejects.toMatchObject({
+  await expect(restarted.resolveCredential(grant.id)).rejects.toMatchObject({
     reason: 'authorization',
   });
   expect(stored()).not.toMatch(/private-access|private-refresh/);
@@ -250,7 +252,7 @@ it('can explicitly replace an unusable application without dropping a working co
   const runtime = createRuntime();
   const grant = await connected(runtime);
   expect(await runtime.resetApplication()).toEqual({ status: 'idle' });
-  expect(await runtime.resolveCredential(grant)).toMatchObject({ tokens });
+  expect(await runtime.resolveCredential(grant.id)).toMatchObject({ tokens });
   expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'registration' });
   expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(2);
 });
@@ -260,12 +262,14 @@ it('preserves credentials on transient refresh failure; disconnect removes the g
   const grant = await connected(runtime);
   now.mockReturnValue(tokens.expiresAt);
   jest.mocked(feishuOauth.refresh).mockRejectedValue(new PluginError('network', 'safe'));
-  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'network' });
+  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'network' });
   expect(stored()).toContain('private-refresh');
   runtime.invalidateGrant();
   await runtime.cancel();
   fixture.data.grant = undefined;
-  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'authorization' });
+  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({
+    reason: 'authorization',
+  });
   expect(stored()).not.toMatch(/private-access|private-refresh|private-device/);
   expect(await runtime.getState()).toEqual(applicationReady);
   expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'user' });
@@ -309,9 +313,9 @@ it('cancels only one caller wait while the shared refresh continues and is saved
   now.mockReturnValue(tokens.expiresAt);
   const refresh = pendingRefresh();
   const controller = new AbortController();
-  const first = runtime.resolveCredential(grant, controller.signal);
+  const first = runtime.resolveCredential(grant.id, controller.signal);
   const cancelled = expect(first).rejects.toMatchObject({ reason: 'cancelled' });
-  const second = runtime.resolveCredential(grant);
+  const second = runtime.resolveCredential(grant.id);
   await refresh.started;
   controller.abort();
   await cancelled;
@@ -328,7 +332,7 @@ it('finishes persisting renewal even after its only caller stops waiting', async
   now.mockReturnValue(tokens.expiresAt);
   const refresh = pendingRefresh();
   const controller = new AbortController();
-  const result = runtime.resolveCredential(grant, controller.signal);
+  const result = runtime.resolveCredential(grant.id, controller.signal);
   const cancelled = expect(result).rejects.toMatchObject({ reason: 'cancelled' });
   await refresh.started;
   controller.abort();
@@ -344,7 +348,7 @@ it('does not start renewal for an already cancelled caller', async () => {
   now.mockReturnValue(tokens.expiresAt);
   const controller = new AbortController();
   controller.abort();
-  await expect(runtime.resolveCredential(grant, controller.signal)).rejects.toMatchObject({
+  await expect(runtime.resolveCredential(grant.id, controller.signal)).rejects.toMatchObject({
     reason: 'cancelled',
   });
   expect(feishuOauth.refresh).not.toHaveBeenCalled();
@@ -356,8 +360,8 @@ it('shares a failed refresh without submitting another rotation for each queued 
   now.mockReturnValue(tokens.expiresAt);
   jest.mocked(feishuOauth.refresh).mockRejectedValue(new PluginError('network', 'safe'));
   const results = await Promise.allSettled([
-    runtime.resolveCredential(grant),
-    runtime.resolveCredential(grant),
+    runtime.resolveCredential(grant.id),
+    runtime.resolveCredential(grant.id),
   ]);
   expect(results.every((result) => result.status === 'rejected')).toBe(true);
   expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
@@ -370,7 +374,7 @@ it('reports a renewal save failure without retrying persistence on later state r
   now.mockReturnValue(tokens.expiresAt);
   jest.mocked(feishuOauth.refresh).mockResolvedValue(rotatedTokens);
   fixture.store.updateCredential.mockRejectedValueOnce(new Error('disk full'));
-  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'storage' });
+  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'storage' });
   expect(fixture.data.grant?.credential.tokens).toEqual(tokens);
   expect(await runtime.getState()).toEqual(applicationReady);
   expect(fixture.store.updateCredential).toHaveBeenCalledTimes(1);
@@ -385,7 +389,7 @@ it.each(['disconnect', 'stop'] as const)(
     const grant = await connected(runtime);
     now.mockReturnValue(tokens.expiresAt);
     const refresh = pendingRefresh();
-    const result = runtime.resolveCredential(grant);
+    const result = runtime.resolveCredential(grant.id);
     const cancelled = expect(result).rejects.toMatchObject({ reason: 'cancelled' });
     await refresh.started;
     if (action === 'disconnect') runtime.invalidateGrant();
@@ -405,7 +409,7 @@ it('does not overwrite a replacement grant when the old renewal finishes', async
   const grant = await connected(runtime);
   now.mockReturnValue(tokens.expiresAt);
   const refresh = pendingRefresh();
-  const result = runtime.resolveCredential(grant);
+  const result = runtime.resolveCredential(grant.id);
   const rejected = expect(result).rejects.toMatchObject({ reason: 'authorization' });
   await refresh.started;
   const replacement = {
@@ -428,8 +432,8 @@ it('saves rotated credentials before reporting reduced permissions', async () =>
   now.mockReturnValue(tokens.expiresAt);
   const reduced = { ...rotatedTokens, scope: 'docx:document:readonly' };
   jest.mocked(feishuOauth.refresh).mockResolvedValue(reduced);
-  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'access' });
+  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'access' });
   expect(fixture.data.grant?.credential.tokens).toEqual(reduced);
-  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'access' });
+  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'access' });
   expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
 });

@@ -1,75 +1,16 @@
 import type { MCPClient } from '@ai-sdk/mcp';
 import * as z from 'zod';
 
-import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
-import type { PluginCredential, PluginId } from '@/shared/data/types/plugin';
+import type { PluginId } from '@/shared/data/types/plugin';
 
-import type { PluginAuthorizationManager } from './PluginAuthorizationManager';
-import {
-  getPluginDefinition,
-  requirePluginAuthMethod,
-  requirePluginDefinition,
-} from './pluginRegistry';
+import type { PluginCredential } from '../authorization/pluginCredential';
+import { requirePluginAuthMethod, requirePluginDefinition } from '../pluginRegistry';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
 
-export function isBuiltInMcpToolAllowed(pluginId: PluginId, name: string): boolean {
-  const plugin = getPluginDefinition(pluginId);
-  return plugin !== undefined && Object.hasOwn(plugin.tools, name);
-}
-
-/** Bind a client to a registered plugin and one durable grant, checked before every request. */
-export async function createBuiltInMcpClient(
-  pluginId: PluginId,
-  authorizationId: string,
-  signal: AbortSignal,
-  authorizations: Pick<PluginAuthorizationManager, 'get'> & {
-    credentials: Pick<PluginAuthorizationManager['credentials'], 'getCredentialGrant'>;
-  },
-): Promise<MCPClient> {
-  const plugin = requirePluginDefinition(pluginId);
-  const initial = await pluginAuthorizationService
-    .getCredentialGrant(pluginId, authorizationId)
-    .catch(() => {
-      throw new PluginError('authorization', 'The plugin authorization is no longer available.');
-    });
-  const method = plugin.authMethods.find((candidate) => candidate.id === initial.authMethod);
-  if (!method)
-    throw new PluginError(
-      'authorization',
-      'The plugin authorization method is unavailable. Reconnect the plugin.',
-    );
-  const methodId = method.id;
-  async function readGrant() {
-    const grant = await pluginAuthorizationService.getCredentialGrant(pluginId, authorizationId);
-    if (grant.authMethod !== methodId)
-      throw new PluginError(
-        'authorization',
-        'The plugin authorization method changed. Reconnect the plugin.',
-      );
-    return grant;
-  }
-  return plugin.createClient({
-    pluginId,
-    tools: plugin.tools,
-    signal,
-    authorization: method.createRequestAuthorization(plugin.tools),
-    async assertAuthorized() {
-      await readGrant();
-    },
-    async getCredential(callerSignal) {
-      const grant = await readGrant();
-      return method.kind === 'interactive'
-        ? authorizations.get(pluginId, method.id).resolveCredential(grant, callerSignal)
-        : (await authorizations.credentials.getCredentialGrant(pluginId, authorizationId))
-            .credential;
-    },
-  });
-}
-
 /** Verify new credentials through read-only connection checks before committing them. */
-export async function validatePluginCredential(
+export async function validatePluginConnection(
   pluginId: PluginId,
   authMethod: string,
   credential: PluginCredential,

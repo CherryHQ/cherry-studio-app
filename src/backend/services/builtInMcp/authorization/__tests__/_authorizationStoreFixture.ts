@@ -1,6 +1,5 @@
-import type { PluginCredential } from '@/shared/data/types/plugin';
-
-import type { PluginAuthorizationStore, PluginGrant } from '../pluginDefinition';
+import type { PluginAuthorizationStore } from '../pluginAuthorization';
+import type { PluginCredential, PluginGrant } from '../pluginCredential';
 
 export function authorizationStoreFixture() {
   const data: { application?: PluginCredential; grant?: PluginGrant } = {};

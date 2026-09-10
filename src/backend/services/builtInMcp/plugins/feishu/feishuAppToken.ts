@@ -2,17 +2,9 @@ import * as z from 'zod';
 
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
-import type { PluginCredential, PluginCredentialField } from '@/shared/data/types/plugin';
-import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-export const FEISHU_CREDENTIAL_FIELDS = [
-  { id: 'appId', secret: false, maxLength: 128, pattern: '^cli_[a-zA-Z0-9]+$' },
-  { id: 'appSecret', secret: true, maxLength: 4096, pattern: '^\\S+$' },
-] as const satisfies readonly PluginCredentialField[];
-
-const FeishuAppCredentialsSchema = createPluginCredentialsSchema(FEISHU_CREDENTIAL_FIELDS).extend({
-  version: z.literal(1),
-});
+import type { PluginCredential } from '../../authorization/pluginCredential';
+import { parseFeishuAppCredentials } from './feishuCredentials';
 
 const feishuHttp = createHttpClient({
   baseUrl: 'https://open.feishu.cn',
@@ -25,16 +17,8 @@ const TokenResponseSchema = z.object({
   expire: z.number().int().positive(),
 });
 
-export function parseFeishuAppCredentials(credential: PluginCredential) {
-  try {
-    return FeishuAppCredentialsSchema.parse(credential);
-  } catch {
-    throw new PluginError('authorization', 'The Feishu application credentials are invalid.');
-  }
-}
-
 /** One token cache per MCP client/grant. The caller still checks the durable grant per request. */
-export function createFeishuTokenProvider() {
+export function createFeishuAppTokenProvider() {
   let cached: { appId: string; appSecret: string; token: string; expiresAt: number } | undefined;
 
   return {

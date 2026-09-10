@@ -2,8 +2,8 @@ import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';
 
-import { createOfficialMcpClient } from '../createOfficialMcpClient';
 import type { PluginDefinition } from '../pluginDefinition';
+import { createOfficialMcpClient } from '../transport/createOfficialMcpClient';
 
 const GithubCredentialSchema = z.object({
   version: z.literal(1),

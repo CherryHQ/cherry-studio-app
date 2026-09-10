@@ -1,12 +1,12 @@
-import { createOfficialMcpClient } from '../createOfficialMcpClient';
+import type { PluginDefinition } from '../../pluginDefinition';
+import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
+import { createFeishuAppTokenProvider } from './feishuAppToken';
+import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
 import {
-  createFeishuTokenProvider,
   FEISHU_CREDENTIAL_FIELDS,
   parseFeishuAppCredentials,
-} from '../feishuAuthorization';
-import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
-import { FeishuUserCredentialSchema } from '../feishuAuthorizationState';
-import type { PluginDefinition } from '../pluginDefinition';
+  FeishuUserCredentialSchema,
+} from './feishuCredentials';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
@@ -50,7 +50,7 @@ export const feishuPlugin: PluginDefinition = {
       fields: FEISHU_CREDENTIAL_FIELDS,
       encodeCredentials: (fields) => ({ version: 1, ...fields }),
       createRequestAuthorization(tools) {
-        const tokens = createFeishuTokenProvider();
+        const tokens = createFeishuAppTokenProvider();
         return {
           async apply(credential, { headers, signal }) {
             headers.delete('X-Lark-MCP-UAT');

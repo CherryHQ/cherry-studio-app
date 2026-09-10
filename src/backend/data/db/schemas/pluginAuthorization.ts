@@ -1,9 +1,17 @@
 import { sql } from 'drizzle-orm';
 import { check, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import * as z from 'zod';
 
-import type { PluginCredential, PluginId } from '@/shared/data/types/plugin';
+import type { PluginId } from '@/shared/data/types/plugin';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
+
+/** SQLite stores only these opaque references; native storage owns their values. */
+export const PluginSecretReferenceSchema = z.strictObject({
+  storage: z.literal('secure-store-v1'),
+  id: z.string().uuid(),
+});
+export type PluginSecretReference = z.infer<typeof PluginSecretReferenceSchema>;
 
 /**
  * Opaque plugin grants: identifiers and credential formats are owned by bundled definitions.
@@ -16,7 +24,9 @@ export const pluginAuthorizationTable = sqliteTable(
     pluginId: text().$type<PluginId>().notNull(),
     authMethod: text().notNull(),
     accountLabel: text().notNull(),
-    credential: text({ mode: 'json' }).$type<PluginCredential>().notNull(),
+    credentialReference: text('credential', { mode: 'json' })
+      .$type<PluginSecretReference>()
+      .notNull(),
     ...createUpdateTimestamps,
   },
   (t) => [

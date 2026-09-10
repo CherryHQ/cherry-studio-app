@@ -1,20 +1,19 @@
 import { randomUUID } from 'expo-crypto';
 
 import { PluginError, type PluginAuthorizationState } from '@/shared/contracts/plugins';
-import type { PluginCredential } from '@/shared/data/types/plugin';
 
-import { FeishuUserCredentialSchema, type FeishuUserCredential } from './feishuAuthorizationState';
-import {
-  FeishuApplicationSchema,
-  feishuOauth,
-  missingFeishuDocumentScopes,
-  type FeishuApplication,
-} from './feishuOauth';
 import type {
   PluginAuthorizationRuntime,
   PluginAuthorizationStore,
-  PluginGrant,
-} from './pluginDefinition';
+} from '../../authorization/pluginAuthorization';
+import type { PluginCredential } from '../../authorization/pluginCredential';
+import {
+  FeishuApplicationSchema,
+  FeishuUserCredentialSchema,
+  type FeishuApplication,
+  type FeishuUserCredential,
+} from './feishuCredentials';
+import { feishuOauth, missingFeishuDocumentScopes } from './feishuOauth';
 
 type AuthorizationState = {
   application?: FeishuApplication;
@@ -228,15 +227,18 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     return { ...credential, tokens };
   }
 
-  resolveCredential(grant: PluginGrant, callerSignal?: AbortSignal): Promise<PluginCredential> {
+  resolveCredential(
+    authorizationId: string,
+    callerSignal?: AbortSignal,
+  ): Promise<PluginCredential> {
     if (callerSignal?.aborted)
       return Promise.reject(new PluginError('cancelled', 'Feishu authorization cancelled.'));
-    const shared = this.resolutions.get(grant.id);
+    const shared = this.resolutions.get(authorizationId);
     if (shared) return callerSignal ? waitForCaller(shared, callerSignal) : shared;
     const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
     const operation = this.serialize(async () => {
       signal.throwIfAborted();
-      const current = await this.store.getGrant(grant.id);
+      const current = await this.store.getGrant(authorizationId);
       if (!current)
         throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
       const parsed = FeishuUserCredentialSchema.safeParse(current.credential);
@@ -267,10 +269,11 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       signal.throwIfAborted();
       return JSON.parse(JSON.stringify(credential)) as PluginCredential;
     });
-    this.resolutions.set(grant.id, operation);
+    this.resolutions.set(authorizationId, operation);
     void operation
       .finally(() => {
-        if (this.resolutions.get(grant.id) === operation) this.resolutions.delete(grant.id);
+        if (this.resolutions.get(authorizationId) === operation)
+          this.resolutions.delete(authorizationId);
       })
       .catch(() => {});
     return callerSignal ? waitForCaller(operation, callerSignal) : operation;

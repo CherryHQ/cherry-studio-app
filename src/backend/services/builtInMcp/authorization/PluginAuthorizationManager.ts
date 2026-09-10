@@ -1,13 +1,10 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
+import type { PluginDefinition } from '../pluginDefinition';
+import { getPluginDefinition, requirePluginAuthMethod } from '../pluginRegistry';
 import { createAuthorizationObserver } from './createAuthorizationObserver';
+import type { PluginAuthorizationStore, PluginAuthorizationRuntime } from './pluginAuthorization';
 import { PluginCredentialStore } from './PluginCredentialStore';
-import type {
-  PluginAuthorizationStore,
-  PluginAuthorizationRuntime,
-  PluginDefinition,
-} from './pluginDefinition';
-import { getPluginDefinition, requirePluginAuthMethod } from './pluginRegistry';
 
 type Entry = {
   runtime: PluginAuthorizationRuntime;

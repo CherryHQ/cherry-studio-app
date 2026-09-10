@@ -6,10 +6,10 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
   pluginAuthorizationTable,
+  PluginSecretReferenceSchema,
+  type PluginSecretReference,
 } from '@/backend/data/db/schemas';
-import type { PluginConnection, PluginCredential, PluginId } from '@/shared/data/types/plugin';
-
-import { PluginSecretReferenceSchema } from './utils/pluginSecretReferences';
+import type { PluginConnection, PluginId } from '@/shared/data/types/plugin';
 
 /** Owns grant references and MCP identities. Credentials are opaque native-storage references. */
 export class PluginAuthorizationService {
@@ -36,7 +36,7 @@ export class PluginAuthorizationService {
     }));
   }
 
-  async getCredentialGrant(pluginId: PluginId, authorizationId: string) {
+  async getAuthorizedGrant(pluginId: PluginId, authorizationId: string) {
     const [row] = await this.db
       .select({ grant: pluginAuthorizationTable })
       .from(pluginAuthorizationTable)
@@ -57,7 +57,10 @@ export class PluginAuthorizationService {
   /** Backend-only state, including disabled connections that still own their grant. */
   async getCurrentGrant(pluginId: PluginId, authMethod?: string) {
     const [row] = await this.db
-      .select({ id: pluginAuthorizationTable.id, credential: pluginAuthorizationTable.credential })
+      .select({
+        id: pluginAuthorizationTable.id,
+        credentialReference: pluginAuthorizationTable.credentialReference,
+      })
       .from(pluginAuthorizationTable)
       .innerJoin(mcpServerTable, eq(mcpServerTable.authorizationId, pluginAuthorizationTable.id))
       .where(
@@ -77,11 +80,11 @@ export class PluginAuthorizationService {
       authMethod: string;
       serverName: string;
       accountLabel: string;
-      credential: PluginCredential;
+      credentialReference: PluginSecretReference;
     },
     signal?: AbortSignal,
   ): Promise<PluginConnection> {
-    const credential = PluginSecretReferenceSchema.parse(input.credential);
+    const credentialReference = PluginSecretReferenceSchema.parse(input.credentialReference);
     return this.dbService.withWriteTx(async (tx) => {
       signal?.throwIfAborted();
       const [previous] = await tx
@@ -95,7 +98,7 @@ export class PluginAuthorizationService {
           pluginId: input.pluginId,
           authMethod: input.authMethod,
           accountLabel: input.accountLabel,
-          credential,
+          credentialReference,
         })
         .returning();
       const [server] = previous

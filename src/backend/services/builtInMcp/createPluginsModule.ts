@@ -8,9 +8,9 @@ import {
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import { validatePluginCredential } from './createBuiltInMcpClient';
-import type { PluginAuthorizationManager } from './PluginAuthorizationManager';
+import type { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
 import { requirePluginAuthMethod, requirePluginDefinition } from './pluginRegistry';
+import { validatePluginConnection } from './transport/validatePluginConnection';
 
 export function createPluginsModule(
   runtime: { invalidateServer(id: string): void },
@@ -34,7 +34,7 @@ export function createPluginsModule(
     return serialize(pluginId, async () => {
       await authorizations.cancelAttempts(pluginId, methodId);
       const { credential, accountLabel, signal } = await auth.prepare(attemptId, attemptSignal);
-      await validatePluginCredential(pluginId, methodId, credential, signal);
+      await validatePluginConnection(pluginId, methodId, credential, signal);
       let connection;
       try {
         connection = await auth.commit(attemptId, accountLabel, signal);
@@ -104,7 +104,7 @@ export function createPluginsModule(
       return serialize(parsed.pluginId, async () => {
         signal?.throwIfAborted();
         const credential = method.encodeCredentials(fields);
-        const accountLabel = await validatePluginCredential(
+        const accountLabel = await validatePluginConnection(
           parsed.pluginId,
           method.id,
           credential,

@@ -80,6 +80,10 @@ The `plugin_authorization` table stores plugin ID, authorization method, account
 keeps plugin secrets in `expo-secure-store` with `WHEN_UNLOCKED_THIS_DEVICE_ONLY` and no biometric
 prompt. Credentials are local to this installation and do not participate in sync. This policy is
 specific to plugins; provider API keys and remote MCP headers are outside this change.
+Backend types distinguish `PluginSecretReference` in the database schema from `PluginCredential`
+and resolved `PluginGrant` in `builtInMcp/authorization`. The database service accepts
+`credentialReference`; the native store accepts secret values as `credential`. The SQL column is
+still named `credential`, so this distinction changes no persisted format.
 Each authorization method owns and validates its versioned object before native persistence:
 GitHub stores `{ version: 1, token }`, Amap stores `{ version: 1, key }`, Feishu applications store
 `{ version: 1, appId, appSecret }`, and Feishu user authorization stores
@@ -188,6 +192,10 @@ GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
   authorization, cancellation signal and admitted tool policy.
 - Reviewed tool names classified as `read` or `write`, plus a read-only connection validation rule.
 
+The [module directory map](../../../src/backend/services/builtInMcp/README.md#file-ownership)
+defines implementation placement: common authorization lives in `authorization/`, client and
+connection validation in `transport/`, and all Feishu-specific code in `plugins/feishu/`.
+
 The database stores open strings for `pluginId` and `authMethod`. SQL checks only that they are
 nonempty; it still preserves foreign keys, remote/built-in source constraints and the single
 connection per plugin index. The serialized MCP schema validates identifier syntax rather than
@@ -214,7 +222,8 @@ To add another hosted MCP plugin or authorization method:
 
 1. Add a definition under `src/backend/services/builtInMcp/plugins/`, with its links, methods,
    reviewed tools, read-only setup check and locale copy. Methods declare either credential fields
-   and an encoder or interactive stages and a runtime factory.
+   and an encoder or interactive stages and a runtime factory. Keep a provider's private clients,
+   credential schemas, authorization runtime and tests in its own directory once it spans files.
 2. Reuse `createOfficialMcpClient` with a fixed official endpoint. Each method provides its own
    credential injection. A renewable method implements `resolveCredential` and owns its renewal
    lifetime and persistence through the scoped authorization store.

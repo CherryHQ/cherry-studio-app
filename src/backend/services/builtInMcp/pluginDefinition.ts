@@ -1,32 +1,16 @@
 import type { MCPClient } from '@ai-sdk/mcp';
 
-import type { PluginAuthorizationState } from '@/shared/contracts/plugins';
 import type {
   PluginCatalogEntry,
-  PluginConnection,
-  PluginCredential,
   PluginCredentialMethod,
   PluginInteractiveMethod,
 } from '@/shared/data/types/plugin';
 
-/** Logical credentials stay inside the backend; SQLite owns only their references. */
-export type PluginGrant = { id: string; credential: PluginCredential };
-
-export interface PluginAuthorizationStore {
-  readApplication(): Promise<PluginCredential | undefined>;
-  writeApplication(application: PluginCredential | undefined): Promise<void>;
-  getGrant(authorizationId?: string): Promise<PluginGrant | undefined>;
-  updateCredential(
-    authorizationId: string,
-    credential: PluginCredential,
-    signal: AbortSignal,
-  ): Promise<boolean>;
-  commit(
-    credential: PluginCredential,
-    accountLabel: string,
-    signal: AbortSignal,
-  ): Promise<PluginConnection>;
-}
+import type {
+  PluginAuthorizationRuntime,
+  PluginAuthorizationStore,
+} from './authorization/pluginAuthorization';
+import type { PluginCredential } from './authorization/pluginCredential';
 
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
 
@@ -46,30 +30,6 @@ export type PluginClientContext = {
   readonly authorization: PluginRequestAuthorization;
   readonly signal: AbortSignal;
 };
-
-/** One app-owned executor per plugin/method; callers own their waits, never shared renewal. */
-export interface PluginAuthorizationRuntime {
-  readonly attemptSignal: AbortSignal;
-  getState(): Promise<PluginAuthorizationState>;
-  begin(): Promise<PluginAuthorizationState>;
-  poll(attemptId: string): Promise<PluginAuthorizationState>;
-  useApplication?(fields: Record<string, string>): Promise<PluginAuthorizationState>;
-  resetApplication?(): Promise<PluginAuthorizationState>;
-  prepare(
-    attemptId: string,
-    signal: AbortSignal,
-  ): Promise<{
-    credential: PluginCredential;
-    accountLabel: string;
-    signal: AbortSignal;
-  }>;
-  commit(attemptId: string, accountLabel: string, signal: AbortSignal): Promise<PluginConnection>;
-  resolveCredential(grant: PluginGrant, signal?: AbortSignal): Promise<PluginCredential>;
-  cancel(): Promise<PluginAuthorizationState>;
-  interrupt(): void;
-  invalidateGrant(): void;
-  stop(): Promise<void>;
-}
 
 export type PluginAuthorizationDefinition = (
   | (PluginCredentialMethod & {

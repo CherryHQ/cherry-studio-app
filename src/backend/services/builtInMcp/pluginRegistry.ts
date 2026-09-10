@@ -3,6 +3,7 @@ import {
   PluginIdSchema,
   type PluginCatalogEntry,
   type PluginCredentialField,
+  type PluginId,
 } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
@@ -98,4 +99,9 @@ export function requirePluginAuthMethod(plugin: PluginDefinition, id: string) {
       'This authorization method is unavailable in this app version.',
     );
   return method;
+}
+
+export function isBuiltInMcpToolAllowed(pluginId: PluginId, name: string): boolean {
+  const plugin = getPluginDefinition(pluginId);
+  return plugin !== undefined && Object.hasOwn(plugin.tools, name);
 }

@@ -1,7 +1,7 @@
+import { authorizationStoreFixture } from '../authorization/__tests__/_authorizationStoreFixture';
+import { PluginAuthorizationManager } from '../authorization/PluginAuthorizationManager';
 import { createPluginsModule as createModule } from '../createPluginsModule';
-import type { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
-import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
-import { authorizationStoreFixture } from './_authorizationStoreFixture';
+import type { FeishuAuthorizationRuntime } from '../plugins/feishu/FeishuAuthorizationRuntime';
 
 function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
   return createModule(runtime, authorizations);
@@ -10,16 +10,16 @@ function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
 const mockConnect = jest.fn();
 const mockDisconnect = jest.fn();
 const mockList = jest.fn();
-const mockValidateCredential = jest.fn();
+const mockValidateConnection = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
     listConnections: (...args: unknown[]) => mockList(...args),
   },
 }));
-jest.mock('../createBuiltInMcpClient', () => ({
-  validatePluginCredential: (...args: unknown[]) => mockValidateCredential(...args),
+jest.mock('../transport/validatePluginConnection', () => ({
+  validatePluginConnection: (...args: unknown[]) => mockValidateConnection(...args),
 }));
-jest.mock('../PluginCredentialStore', () => ({
+jest.mock('../authorization/PluginCredentialStore', () => ({
   PluginCredentialStore: class {
     authorizationStore() {
       return mockFixture.store;
@@ -47,7 +47,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockFixture = authorizationStoreFixture();
   authorizations = new PluginAuthorizationManager();
-  mockValidateCredential.mockResolvedValue('cherry');
+  mockValidateConnection.mockResolvedValue('cherry');
   mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
   mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
@@ -80,7 +80,7 @@ it('commits an observed ready attempt only after read-only validation of its sel
     });
   });
   await expect(connected).resolves.toEqual(connection);
-  expect(mockValidateCredential).toHaveBeenCalledWith('feishu', 'feishu_user', credential, signal);
+  expect(mockValidateConnection).toHaveBeenCalledWith('feishu', 'feishu_user', credential, signal);
   expect(commit).toHaveBeenCalledWith(
     '00000000-0000-4000-8000-000000000001',
     'Cherry (ou_cherry)',
@@ -133,7 +133,7 @@ it('invalidates pending user authorization synchronously and keeps the applicati
 it('validates credentials upstream before storing anything', async () => {
   const invalidateServer = jest.fn();
   const plugins = createPluginsModule({ invalidateServer });
-  mockValidateCredential.mockRejectedValueOnce(new Error('invalid token'));
+  mockValidateConnection.mockRejectedValueOnce(new Error('invalid token'));
   await expect(plugins.connect(input)).rejects.toThrow('invalid token');
   expect(mockConnect).not.toHaveBeenCalled();
   mockConnect.mockRejectedValueOnce(new Error('storage error'));
@@ -150,15 +150,15 @@ it('requires Feishu application credentials and stores both only in the backend 
       fields: { appSecret: 'secret' },
     }),
   ).toThrow();
-  expect(mockValidateCredential).not.toHaveBeenCalled();
-  mockValidateCredential.mockResolvedValue('cli_cherry');
+  expect(mockValidateConnection).not.toHaveBeenCalled();
+  mockValidateConnection.mockResolvedValue('cli_cherry');
   await plugins.connect({
     pluginId: 'feishu',
     authMethod: 'app_credentials',
     fields: { appId: 'cli_cherry', appSecret: 'secret' },
   });
   const credential = { version: 1, appId: 'cli_cherry', appSecret: 'secret' };
-  expect(mockValidateCredential.mock.calls[0][2]).toEqual(credential);
+  expect(mockValidateConnection.mock.calls[0][2]).toEqual(credential);
   expect(mockConnect.mock.calls[0][0]).toEqual({
     pluginId: 'feishu',
     authMethod: 'app_credentials',
@@ -188,7 +188,7 @@ it('invalidates the runtime only after the new grant commits', async () => {
 
 it('serializes disconnect behind an in-progress connect and leaves it disconnected', async () => {
   let finishValidation!: () => void;
-  mockValidateCredential.mockImplementation(
+  mockValidateConnection.mockImplementation(
     () =>
       new Promise((resolve) => {
         finishValidation = () => resolve('cherry');
@@ -215,7 +215,7 @@ it('serializes disconnect behind an in-progress connect and leaves it disconnect
 
 it('does not commit when the authorization form is cancelled after validation', async () => {
   const controller = new AbortController();
-  mockValidateCredential.mockImplementation(async () => {
+  mockValidateConnection.mockImplementation(async () => {
     controller.abort();
     return 'cherry';
   });
@@ -242,7 +242,7 @@ it('rejects unregistered plugins and invalid plugin-owned fields before network 
       plugins.connect({ pluginId: 'github', authMethod: 'personal_token', fields }),
     ).toThrow();
   }
-  expect(mockValidateCredential).not.toHaveBeenCalled();
+  expect(mockValidateConnection).not.toHaveBeenCalled();
   expect(mockConnect).not.toHaveBeenCalled();
 });
 

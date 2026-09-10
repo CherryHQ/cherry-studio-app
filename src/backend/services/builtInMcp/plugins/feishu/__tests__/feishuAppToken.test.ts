@@ -1,4 +1,4 @@
-import { createFeishuTokenProvider } from '../feishuAuthorization';
+import { createFeishuAppTokenProvider } from '../feishuAppToken';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -17,7 +17,7 @@ afterEach(() => jest.restoreAllMocks());
 
 it('reuses a token only for the same credential and replaces it before expiry', async () => {
   const now = jest.spyOn(Date, 'now').mockReturnValue(1000);
-  const provider = createFeishuTokenProvider();
+  const provider = createFeishuAppTokenProvider();
   await expect(provider.getToken(credential)).resolves.toBe('token-first');
   now.mockReturnValue(7_140_999);
   await expect(provider.getToken(credential)).resolves.toBe('token-first');
@@ -40,7 +40,7 @@ it.each([
   'rejects unsuccessful or malformed token results without retaining or exposing them',
   async (data) => {
     mockRequest.mockResolvedValue({ data });
-    const provider = createFeishuTokenProvider();
+    const provider = createFeishuAppTokenProvider();
     const error = await provider.getToken(credential).catch((value: unknown) => value);
     expect(error).toMatchObject({ reason: 'authorization', stack: undefined });
     expect(JSON.stringify(error)).not.toContain('private-secret');
@@ -50,7 +50,7 @@ it.each([
 );
 
 it('does not cache a token returned after cancellation', async () => {
-  const provider = createFeishuTokenProvider();
+  const provider = createFeishuAppTokenProvider();
   const controller = new AbortController();
   mockRequest.mockImplementationOnce(async () => {
     controller.abort();

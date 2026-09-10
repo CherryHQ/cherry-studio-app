@@ -11,11 +11,10 @@ import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('@/backend/services/builtInMcp', () => ({
   PluginAuthorizationManager: jest.requireActual(
-    '@/backend/services/builtInMcp/PluginAuthorizationManager',
+    '@/backend/services/builtInMcp/authorization/PluginAuthorizationManager',
   ).PluginAuthorizationManager,
-  isBuiltInMcpToolAllowed: jest.requireActual(
-    '@/backend/services/builtInMcp/createBuiltInMcpClient',
-  ).isBuiltInMcpToolAllowed,
+  isBuiltInMcpToolAllowed: jest.requireActual('@/backend/services/builtInMcp/pluginRegistry')
+    .isBuiltInMcpToolAllowed,
   createBuiltInMcpClient: (pluginId: string, authorizationId: string, signal: AbortSignal) =>
     mockSdkInitContract({ pluginId, authorizationId, initializationOptions: { signal } }),
 }));

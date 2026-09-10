@@ -5,6 +5,28 @@ GitHub, Amap and Feishu are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
+## File Ownership
+
+| Location | Owns |
+| --- | --- |
+| `index.ts` | Public entry point for bootstrap and the MCP runtime |
+| `pluginDefinition.ts`, `pluginRegistry.ts` | Plugin registration, catalog projection and admitted tool policy |
+| `createPluginsModule.ts` | Connect/disconnect workflow and per-plugin mutation ordering |
+| `authorization/` | Method runtimes and observers, native credential storage, and their backend-only contracts |
+| `transport/` | Grant-bound clients, fixed-endpoint HTTP and `validatePluginConnection` |
+| `plugins/github.ts`, `plugins/amap.ts` | Small self-contained plugin definitions |
+| `plugins/feishu/` | Feishu definition, application-token client, browser authorization, credential schemas and tests |
+
+Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
+internal responsibility groups; they do not add public barrels. Feishu exposes only its definition
+through `plugins/feishu/index.ts`.
+
+The [connection page](../../../frontend/features/plugin/detail/connect/PluginConnectScreen.tsx)
+selects between `CredentialConnect` and `InteractiveConnect`. `useInteractiveConnect` owns route
+observation, browser actions and form state; backend observers own polling and completion.
+
+## Workflow And Lifetime
+
 - `pluginRegistry` is the single bundled registration point. Definitions own metadata, reviewed
   tools, read-only validation and an ordered `authMethods` collection. Each method owns its form
   fields and encoder or interactive runtime factory, plus request authorization. Workflows and
@@ -23,6 +45,9 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 - `PluginCredentialStore` keeps reusable applications and completed grants in local SecureStore,
   without sync. SQLite owns connection metadata and opaque credential references. See the
   [storage contract](../../../../docs/references/agent/built-in-mcp-design.md#grants-and-connections).
+- `PluginCredential` and resolved `PluginGrant` live in `authorization/pluginCredential.ts`.
+  `PluginSecretReference` belongs to the database authorization schema. The database service accepts
+  `credentialReference`; the native store accepts `credential`. The SQL column remains `credential`.
 - `createBuiltInMcpClient` binds the selected method to one grant. `createOfficialMcpClient` uses
   `@ai-sdk/mcp` Streamable HTTP and `expo/fetch`, checks authorization before and after credential
   resolution, enforces fixed endpoints and admitted tools, rejects redirects and never replays
@@ -31,7 +56,8 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
   Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT` or
   `X-Lark-MCP-TAT` plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and
   `fetch-doc` discovery without a business write. Each method owns credential injection.
-- `feishuAuthorization` owns the application-token exchange and per-client cache. `feishuOauth`
+- `plugins/feishu/feishuCredentials` owns credential formats and field validation.
+  `feishuAppToken` owns the application-token exchange and per-client cache. `feishuOauth`
   implements personal-agent registration, device authorization and renewal through the existing
   HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every document
   scope and an issued refresh token, and retains application identity across disconnect.
@@ -40,6 +66,10 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
   the complete native token bundle after checking the grant ID.
 - Pending authorization stays in memory. Errors and process interruption require a new flow;
   reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
+
+The interactive contract currently represents browser confirmation with polling. Existing-application
+entry and reset are optional method capabilities; callback and native SDK flows require their own
+capability design when implemented.
 
 A grant change cannot retarget a tool from an already frozen turn catalog. Disconnect disables
 existing Agent bindings and revokes the server/grant before best-effort native cleanup.
