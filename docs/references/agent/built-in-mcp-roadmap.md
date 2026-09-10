@@ -197,29 +197,14 @@ resource ledger. No local or remote MCP JSON is promoted into a file grant by sh
 
 ## Plugin Instruction Resources
 
-The shipped slices deliver the plugin UI, authorization lifecycle, official cloud tool integration
-and required migrations. They do not deliver plugin workflow guides, Markdown resource loading,
-dynamic instruction injection, or task shortcuts. Implement the instruction layer separately,
-following the existing [Agent Skills boundary](./agent-skills.md), without expanding MCP
-permissions.
+Bundled instruction resources are implemented for GitHub, Amap and Feishu through the existing
+plugin registry. The [module contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides)
+defines the TypeScript guide data, source/revision attribution, authoring validation and
+size limits. The Host prepares only guide sections whose required tools are executable for this
+Agent and connection, without changing saved prompts, chat history or MCP permissions. Configuration
+changes apply to the next turn and execution-time revocation remains immediate. Plugin details
+provide a read-only full-guide preview.
 
-- [ ] Define one plugin-owned instruction resource contract and directory convention. Keep stable
-  plugin metadata and its Markdown resource together, with one source of truth; settle exact paths
-  and file naming during implementation rather than creating a parallel registry.
-- [ ] Specify the mobile Markdown subset, bundled-resource delivery, source/revision attribution,
-  encoding, size limits, ordering, and handling of missing or invalid content. Start with bundled
-  instruction text, not downloaded code, scripts, hooks, arbitrary file access, or a general importer.
-- [ ] Resolve guides when a plugin enters the current Agent's available capabilities for a turn,
-  not when the app starts or an MCP connection happens to open. The Host prepares an immutable
-  instruction snapshot alongside the tool snapshot; it does not mutate the Agent's saved prompt or
-  repeatedly append guides to chat history.
-- [ ] Define disablement, disconnection, unavailable-tool, and update behavior. Re-evaluate selection
-  on the next turn, preserve current-turn isolation, and retain existing immediate tool-revocation
-  checks. Guides cannot grant capabilities or override application safety rules or user instructions.
-- [ ] Ship concise GitHub and Amap workflow guides through the shared loader, with coverage for
-  Agent isolation, duplicate injection, resource validation, updates, and disabled/unavailable
-  plugins. Keep the first delivery independent of a general Skill manager or new persistence tables.
-
-Task shortcuts are a separate optional follow-up; they are not a prerequisite for instruction
-loading. Visual workflow editing, background scheduling, executable extensions, and a third-party
-plugin marketplace are outside this follow-up's initial scope.
+General Skill management, imports, on-demand loading of longer guides and task shortcuts remain
+future work. Visual workflow editing, background scheduling, executable extensions, and a third-party
+plugin marketplace are outside the bundled instruction slice.

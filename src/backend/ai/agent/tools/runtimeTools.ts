@@ -1,4 +1,8 @@
 import type { McpExecutableToolDescriptor, McpRuntimeToolSelection } from '@/backend/ai/mcp';
+import {
+  resolveBuiltInPluginGuides,
+  type PluginGuideSnapshot,
+} from '@/backend/services/builtInMcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
@@ -18,11 +22,14 @@ type McpRuntimeToolCapability = {
 };
 
 export type AgentRuntimeToolResolver = {
-  resolve(agentId: string): Promise<RuntimeTool[]>;
+  resolve(agentId: string): Promise<{
+    tools: RuntimeTool[];
+    pluginGuides: readonly PluginGuideSnapshot[];
+  }>;
 };
 
 /**
- * Resolve the current persisted MCP policy into one immutable Runtime catalog.
+ * Resolve the current MCP policy into executable tools and their bundled instruction snapshot.
  * Discovery failures remove that server from this turn without changing its bindings.
  */
 export function createAgentRuntimeToolResolver(input: {
@@ -40,7 +47,7 @@ export function createAgentRuntimeToolResolver(input: {
         ),
       ];
       if (serverIds.length === 0) {
-        return [];
+        return { tools: [], pluginGuides: [] };
       }
 
       const mcpRuntime = input.getMcpRuntime();
@@ -89,7 +96,10 @@ export function createAgentRuntimeToolResolver(input: {
         },
       );
 
-      return mcpRuntime.createRuntimeTools(selections);
+      return {
+        tools: mcpRuntime.createRuntimeTools(selections),
+        pluginGuides: resolveBuiltInPluginGuides(selections.map(({ descriptor }) => descriptor)),
+      };
     },
   };
 }

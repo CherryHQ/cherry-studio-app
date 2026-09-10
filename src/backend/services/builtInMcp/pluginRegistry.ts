@@ -8,6 +8,7 @@ import {
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import type { PluginDefinition } from './pluginDefinition';
+import { validatePluginGuide, type PluginGuideSnapshot } from './pluginGuide';
 import { amapPlugin } from './plugins/amap';
 import { feishuPlugin } from './plugins/feishu';
 import { githubPlugin } from './plugins/github';
@@ -37,18 +38,72 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
     }
     if (plugin.tools[plugin.validation.tool] !== 'read')
       throw new Error(`Plugin setup must use an admitted read tool: ${id}`);
+    if (plugin.guide) validatePluginGuide(plugin.guide, plugin.tools);
     plugins.set(id, plugin);
   }
   return {
     get: (id: string) => plugins.get(id),
+    resolveGuides(
+      tools: readonly { pluginId?: string; serverId: string; rawToolName: string }[],
+    ): readonly PluginGuideSnapshot[] {
+      const connections = new Map<string, { pluginId: string; names: Set<string> }>();
+      for (const tool of tools) {
+        if (!tool.pluginId) continue;
+        const plugin = plugins.get(tool.pluginId);
+        if (!plugin?.guide || !Object.hasOwn(plugin.tools, tool.rawToolName)) continue;
+        const connection = connections.get(tool.serverId);
+        if (connection) {
+          if (connection.pluginId !== tool.pluginId)
+            throw new Error('Conflicting plugin identities for an MCP connection.');
+          connection.names.add(tool.rawToolName);
+        } else {
+          connections.set(tool.serverId, {
+            pluginId: tool.pluginId,
+            names: new Set([tool.rawToolName]),
+          });
+        }
+      }
+      return Object.freeze(
+        [...connections]
+          .sort(([serverA, a], [serverB, b]) => {
+            const keyA = `${a.pluginId}\0${serverA}`;
+            const keyB = `${b.pluginId}\0${serverB}`;
+            return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+          })
+          .flatMap(([serverId, { pluginId, names }]) => {
+            const guide = plugins.get(pluginId)!.guide!;
+            const content = guide.sections
+              .filter((section) => section.requiredTools.every((name) => names.has(name)))
+              .map((section) => section.content.trim())
+              .join('\n\n');
+            if (!content) return [];
+            return [
+              Object.freeze({
+                pluginId,
+                serverId,
+                revision: guide.revision,
+                content,
+              }),
+            ];
+          }),
+      );
+    },
     listCatalog: (): PluginCatalogEntry[] =>
       // Return only a detached JSON projection; frontend caches cannot mutate executable definitions.
       Array.from(
         plugins.values(),
-        ({ catalog, authMethods }) =>
+        ({ catalog, authMethods, guide }) =>
           JSON.parse(
             JSON.stringify({
               ...catalog,
+              ...(guide
+                ? {
+                    guide: {
+                      revision: guide.revision,
+                      content: guide.sections.map((section) => section.content.trim()).join('\n\n'),
+                    },
+                  }
+                : {}),
               authMethods: authMethods.map((method) =>
                 method.kind === 'credentials'
                   ? {
@@ -91,6 +146,7 @@ const registry = createPluginRegistry([githubPlugin, amapPlugin, feishuPlugin]);
 
 export const getPluginDefinition = registry.get;
 export const getBuiltInPluginCatalog = registry.listCatalog;
+export const resolveBuiltInPluginGuides = registry.resolveGuides;
 
 export function requirePluginDefinition(id: string): PluginDefinition {
   const plugin = registry.get(id);

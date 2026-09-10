@@ -113,7 +113,49 @@ describe('Agent Runtime MCP tool resolution', () => {
       getMcpRuntime,
     });
 
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
     expect(getMcpRuntime).not.toHaveBeenCalled();
+  });
+
+  test('keeps guides isolated by Agent, effective tool policy and the current connection snapshot', async () => {
+    let canWrite = false;
+    let isConnected = true;
+    const resolver = createAgentRuntimeToolResolver({
+      bindings: {
+        list: async (agentId) => ({ items: agentId === AGENT_ID ? [binding(SERVER_A)] : [] }),
+        resolveMcpTool: async (_agentId, { rawToolName }) => ({
+          enabled: true,
+          approval: rawToolName === 'update-doc' && !canWrite ? 'deny' : 'ask',
+        }),
+      },
+      getMcpRuntime: () => ({
+        createRuntimeTools: (selections) => selections as unknown as RuntimeTool[],
+        listExecutableToolDescriptors: async () => {
+          if (!isConnected) throw new Error('Disconnected');
+          return ['fetch-doc', 'update-doc'].map((name) => ({
+            ...descriptor(SERVER_A, name),
+            pluginId: 'feishu',
+          }));
+        },
+      }),
+    });
+
+    const firstTurn = await resolver.resolve(AGENT_ID);
+    expect(firstTurn.pluginGuides).toHaveLength(1);
+    expect(firstTurn.pluginGuides[0].content).toContain('## Read a document');
+    expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
+    await expect(resolver.resolve('another-agent')).resolves.toEqual({
+      tools: [],
+      pluginGuides: [],
+    });
+
+    canWrite = true;
+    const secondTurn = await resolver.resolve(AGENT_ID);
+    expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
+    expect(firstTurn.pluginGuides[0].content).not.toContain('update-doc');
+
+    isConnected = false;
+    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual({ tools: [], pluginGuides: [] });
+    expect(secondTurn.pluginGuides[0].content).toContain('## Modify an existing document');
   });
 });

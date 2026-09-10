@@ -446,10 +446,12 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### Skill Boundary
 
-- Mobile Skill persistence, binding resolution, and prompt projection are not implemented.
+- General Mobile Skill persistence and binding resolution are not implemented. Bundled plugin
+  guides are selected with the current Agent's executable MCP tools and projected by the Host;
+  see the [plugin guide contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides).
 - The target contract treats a Skill as instruction context, not a Runtime capability; it cannot add
   tools or change approval, permission, MCP, or managed-resource policy.
-- See [Agent Skills](./agent-skills.md) for that explicitly deferred boundary.
+- See [Agent Skills](./agent-skills.md) for the broader deferred boundary.
 
 ## Approval And Failure Policy
 

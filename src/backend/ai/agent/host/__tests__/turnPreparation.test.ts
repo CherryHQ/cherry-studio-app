@@ -435,7 +435,10 @@ function createHarness() {
   const getSystemTools = jest.fn(
     async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
   );
-  const resolveRuntimeTools = jest.fn(async (_agentId: string) => [configuredTool]);
+  const resolveRuntimeTools = jest.fn(async (_agentId: string) => ({
+    tools: [configuredTool],
+    pluginGuides: [],
+  }));
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({
       uniqueModelId: createUniqueModelId(model.providerId, model.modelId),

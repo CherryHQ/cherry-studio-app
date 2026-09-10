@@ -25,6 +25,8 @@ const UTF8_ENCODER = new TextEncoder();
 
 export type McpExecutableToolDescriptor = {
   serverId: string;
+  /** Bundled identity from the server record, never inferred from remote descriptions or names. */
+  pluginId?: string;
   rawToolName: string;
   displayName: string;
   description: string;

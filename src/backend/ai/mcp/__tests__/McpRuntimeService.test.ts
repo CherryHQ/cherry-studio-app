@@ -647,6 +647,7 @@ describe('built-in plugin identities', () => {
 
       expect(descriptors).toEqual([
         expect.objectContaining({
+          pluginId: builtinId,
           description: `${name} (${builtinId}): desc ${toolName}`,
           rawToolName: toolName,
           serverId: server.id,

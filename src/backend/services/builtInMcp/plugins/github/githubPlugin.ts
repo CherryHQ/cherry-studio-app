@@ -7,6 +7,7 @@ import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient
 import { GithubAuthorizationRuntime } from './GithubAuthorizationRuntime';
 import { GithubTokenCredentialSchema, GithubUserCredentialSchema } from './githubCredentials';
 import { getGithubApplication } from './githubOauth';
+import { githubGuide } from './guide';
 
 const githubUserMethod: PluginAuthorizationDefinition = {
   id: 'github_user',
@@ -27,6 +28,7 @@ const githubUserMethod: PluginAuthorizationDefinition = {
 
 export const githubPlugin: PluginDefinition = {
   serverName: 'GitHub',
+  guide: githubGuide,
   catalog: {
     id: 'github',
     icon: 'github',

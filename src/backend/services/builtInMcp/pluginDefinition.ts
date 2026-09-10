@@ -11,6 +11,7 @@ import type {
   PluginAuthorizationStore,
 } from './authorization/pluginAuthorization';
 import type { PluginCredential } from './authorization/pluginCredential';
+import type { PluginGuideDefinition } from './pluginGuide';
 
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
 
@@ -44,11 +45,12 @@ export type PluginAuthorizationDefinition = (
 
 /** A bundled plugin owns its methods, credential formats, client and read-only setup check. */
 export interface PluginDefinition {
-  readonly catalog: Omit<PluginCatalogEntry, 'authMethods'>;
+  readonly catalog: Omit<PluginCatalogEntry, 'authMethods' | 'guide'>;
   /** Saved MCP server name, independent of the UI's active language. */
   readonly serverName: string;
   readonly authMethods: readonly PluginAuthorizationDefinition[];
   readonly tools: PluginToolPolicy;
+  readonly guide?: PluginGuideDefinition;
   createClient(context: PluginClientContext): Promise<MCPClient>;
   readonly validation: {
     readonly tool: string;

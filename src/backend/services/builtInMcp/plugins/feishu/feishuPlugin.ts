@@ -2,9 +2,11 @@ import type { PluginDefinition } from '../../pluginDefinition';
 import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
 import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
 import { FEISHU_CREDENTIAL_FIELDS, FeishuUserCredentialSchema } from './feishuCredentials';
+import { feishuGuide } from './guide';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
+  guide: feishuGuide,
   catalog: {
     id: 'feishu',
     icon: 'feishu',

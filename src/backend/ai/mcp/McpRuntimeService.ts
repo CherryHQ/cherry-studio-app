@@ -267,6 +267,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return definitions
       .filter((tool) => !disabledTools.has(tool.name))
       .map((tool) => ({
+        ...(server.origin === 'builtin' ? { pluginId: server.builtinId } : {}),
         description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
         displayName: tool.title ?? tool.annotations?.title ?? tool.name,
         // Pin the catalog to both its endpoint and live connection generation;
