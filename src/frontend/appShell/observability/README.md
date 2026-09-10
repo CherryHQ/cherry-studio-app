@@ -25,12 +25,23 @@ UserDefaults, system boot time, and file timestamp API reasons from the
 These declarations are the app's baseline; React Native aggregates additional API reasons from
 native dependencies during CocoaPods installation.
 
-Reporting and native initialization are disabled in development mode or when
-`EXPO_PUBLIC_SENTRY_DSN` is absent. `app.config.ts` supplies the build's `PROFILE` through
-`extra.sentryEnvironment` to distinguish report environments.
+Reporting and native initialization require `extra.sentryEnvironment === 'production'`, a configured
+`EXPO_PUBLIC_SENTRY_DSN`, and a bundle running outside development mode. `app.config.ts` supplies the
+build's `PROFILE` through `extra.sentryEnvironment`. Development and preview packages never enable
+reporting, even when a DSN is present.
+
+`app.config.ts` includes the Sentry Expo plugin only for `PROFILE=production`, so generated
+development and preview native projects have no Sentry source-map or debug-symbol upload hooks.
+The Sentry dependency remains installed across profiles; disabling reporting and uploads does not
+remove its native code from the app.
 
 The GitHub release workflows trigger EAS cloud builds using the `production` environment. Configure
 `EXPO_PUBLIC_SENTRY_DSN` as a plain-text variable and `SENTRY_AUTH_TOKEN` as a sensitive variable in
 that EAS environment. The DSN is embedded in the app; the token is used only by native build hooks
 to upload source maps and debug symbols to `cherryai/cherry-studio-a0`. GitHub keeps `EXPO_TOKEN`
 for EAS authentication. The Sentry Expo and Metro plugins handle uploads and source map identifiers.
+
+Sentry also works with local EAS builds; cloud workers are not required. Use `pnpm build:local` to
+load `.env` and `.env.local` into the build process before EAS creates its source archive. See
+[Local EAS Builds](../../../../docs/guides/local-builds.md) for production credentials, profile-specific
+Sentry behavior, and native regeneration when switching profiles.

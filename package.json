@@ -8,6 +8,7 @@
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
     "eas-build-post-install": "pnpm packages:build",
+    "build:local": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/buildLocal.ts",
     "dev": "pnpm packages:build && PROFILE=development expo start --dev-client",
     "dev:clear": "pnpm packages:build && PROFILE=development expo start --dev-client --clear",
     "start": "pnpm packages:build && PROFILE=development expo start --dev-client",

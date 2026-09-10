@@ -3,13 +3,14 @@ import Constants from 'expo-constants';
 
 export function configureSentry() {
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-  const isEnabled = Boolean(dsn) && !__DEV__;
+  const environment = Constants.expoConfig?.extra?.sentryEnvironment;
+  const isEnabled = environment === 'production' && Boolean(dsn) && !__DEV__;
 
   Sentry.init({
     dsn,
     enabled: isEnabled,
     enableNative: isEnabled,
-    environment: Constants.expoConfig?.extra?.sentryEnvironment,
+    environment,
     sendDefaultPii: false,
     // Also reaches the native SDKs, so iOS request URLs cannot become crash breadcrumbs.
     maxBreadcrumbs: 0,
