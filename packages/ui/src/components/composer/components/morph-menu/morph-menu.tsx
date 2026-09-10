@@ -1,7 +1,15 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { useMemo, useRef } from 'react';
-import { type LayoutChangeEvent, Pressable, useWindowDimensions, View } from 'react-native';
-import Animated, { interpolate, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { useEffect, useMemo, useRef } from 'react';
+import { type LayoutChangeEvent, Pressable, useWindowDimensions, type View } from 'react-native';
+import Animated, {
+  interpolate,
+  measure,
+  useAnimatedRef,
+  useAnimatedStyle,
+  useDerivedValue,
+  useFrameCallback,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MenuInteraction, useMenuInteraction } from '../../../menu/menu-interaction';
@@ -12,9 +20,10 @@ import {
   menuRestingScale,
   menuSlideDistance,
 } from '../../../menu/menu-motion';
-import { MenuOverlay } from '../../../menu/menu-overlay';
+import { KeyboardMenuOverlay } from '../../../menu/menu-overlay';
 import { MenuPanel, useMenuPanelRadius } from '../../../menu/menu-panel';
 import { MenuRow } from '../../../menu/menu-row';
+import type { MenuAnchor } from '../../../menu/menu.types';
 import { useMenuMotion } from '../../../menu/use-menu-motion';
 import { useMenuState } from '../../../menu/use-menu-state';
 import { SwitchIndicator } from '../../../switch/switch-indicator';
@@ -75,14 +84,39 @@ function MorphMenuRoot({
   const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
   const { progress, isVisible } = useMenuMotion(isOpen);
   const cornerRadius = useMenuPanelRadius();
-  const maxPanelHeight = Math.max(
-    0,
-    (anchor ? anchor.pageY + triggerSize : windowHeight - insets.bottom - 16) - insets.top - 16,
-  );
   const panelHeight = useSharedValue(fallbackPanelHeight);
   const panelWidth = useSharedValue(minPanelWidth);
-  const footprintRef = useRef<View>(null);
-  // Keep the popover surface until both its animation and native dismissal finish.
+  const footprintRef = useAnimatedRef<View>();
+  const liveAnchor = useSharedValue<MenuAnchor | null>(null);
+  const openRequest = useRef(0);
+  const isPresented = Boolean(anchor);
+  // Measure the real footprint on the UI thread, including its ancestors'
+  // keyboard and composer transforms. A one-time JS measurement becomes stale
+  // when the keyboard is still moving at the moment the menu opens.
+  const trackingFrame = useFrameCallback(() => {
+    const next = measure(footprintRef);
+    const current = liveAnchor.get();
+    if (next && (next.pageX !== current?.pageX || next.pageY !== current?.pageY)) {
+      liveAnchor.set({
+        pageX: next.pageX,
+        pageY: next.pageY,
+        width: next.width,
+        height: next.height,
+      });
+    }
+  }, false);
+
+  useEffect(() => {
+    trackingFrame.setActive(isPresented);
+    return () => trackingFrame.setActive(false);
+  }, [isPresented, trackingFrame]);
+  useEffect(
+    () => () => {
+      openRequest.current += 1;
+    },
+    [],
+  );
+  // Keep the popover surface until its animation and overlay removal finish.
   const surfaceClassName = anchor ? 'bg-popover' : 'bg-secondary';
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
@@ -95,24 +129,46 @@ function MorphMenuRoot({
       return;
     }
 
-    // Measured before the state flip so the floating copy mounts exactly where
-    // the inline trigger was — otherwise the morph starts from a jump.
-    //
-    // Nothing may move the composer between this measurement and the open: the
-    // anchor is a snapshot and never re-measures, so a layout change here leaves
-    // the panel floating away from its trigger. The ＋ menu used to take the
-    // keyboard down right after this callback and did exactly that.
+    const request = ++openRequest.current;
+    // Seed the first floating frame, then keep following the mounted footprint.
     footprintRef.current?.measureInWindow((pageX, pageY, width, height) => {
-      open({ pageX, pageY, width, height });
+      if (request !== openRequest.current) return;
+      const next = { pageX, pageY, width, height };
+      liveAnchor.set(next);
+      open(next);
     });
   };
   // Every item subscribes to this, so a fresh object each render would re-render
   // the whole panel on any parent update.
   const contextValue = useMemo(() => ({ close, isOpen }), [close, isOpen]);
 
+  const floatingStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: liveAnchor.get()?.pageX ?? 0 },
+      { translateY: liveAnchor.get()?.pageY ?? 0 },
+    ],
+  }));
+  const maxPanelHeight = useDerivedValue(() =>
+    Math.max(
+      0,
+      (isPresented
+        ? (liveAnchor.get()?.pageY ?? 0) + triggerSize
+        : windowHeight - insets.bottom - 16) -
+        insets.top -
+        16,
+    ),
+  );
+  const panelBoundsStyle = useAnimatedStyle(() => ({ maxHeight: maxPanelHeight.get() }));
   const containerStyle = useAnimatedStyle(() => ({
     borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, cornerRadius]),
-    height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight.value]),
+    height: Math.min(
+      maxPanelHeight.get(),
+      interpolate(
+        progress.value,
+        [0, 1],
+        [triggerSize, Math.min(panelHeight.get(), maxPanelHeight.get())],
+      ),
+    ),
     width: interpolate(progress.value, [0, 1], [triggerSize, panelWidth.value]),
   }));
   // Fade out over the first 200/350 of the open so the plus is gone before the
@@ -146,15 +202,17 @@ function MorphMenuRoot({
     }
   };
 
-  // Only the trigger and its morph belong to the composer. The overlay, rows,
-  // bounded scrolling, selection dispatch, and dismissal are shared menus.
+  // Rows and dismissal remain shared; this overlay preserves the input context.
   const menu = (
     <>
       <Animated.View style={[panelAnchorStyle, containerStyle]}>
         <MenuPanel
-          contentStyle={[panelContentStyle, { minWidth: minPanelWidth, maxWidth: maxPanelWidth }]}
+          contentStyle={[
+            panelContentStyle,
+            { minWidth: minPanelWidth, maxWidth: maxPanelWidth },
+            panelBoundsStyle,
+          ]}
           isOpen={isOpen}
-          maxHeight={maxPanelHeight}
           onLayout={handlePanelLayout}
           progress={progress}
           surfaceClassName={surfaceClassName}
@@ -188,27 +246,32 @@ function MorphMenuRoot({
     <>
       {/* Reserves the closed footprint in the parent's flow, and is what gets
           measured — the floating copy is positioned from it. */}
-      <View className="relative" ref={footprintRef} style={[triggerFootprint, style]}>
+      <Animated.View
+        className="relative"
+        collapsable={false}
+        ref={footprintRef}
+        style={[triggerFootprint, style]}
+      >
         {anchor ? null : <MenuInteraction value={contextValue}>{menu}</MenuInteraction>}
-      </View>
+      </Animated.View>
 
       {anchor ? (
-        <MenuOverlay
+        <KeyboardMenuOverlay
           isOpen={isOpen}
           isVisible={isVisible}
           onClose={close}
           onClosed={finishClose}
           testID={testID}
         >
-          <View
+          <Animated.View
             accessibilityLabel={accessibilityLabel}
-            className="absolute"
+            className="absolute top-0 left-0"
             role="menu"
-            style={[triggerFootprint, { left: anchor.pageX, top: anchor.pageY }]}
+            style={[triggerFootprint, floatingStyle]}
           >
             {menu}
-          </View>
-        </MenuOverlay>
+          </Animated.View>
+        </KeyboardMenuOverlay>
       ) : null}
     </>
   );

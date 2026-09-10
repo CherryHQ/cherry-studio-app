@@ -57,7 +57,7 @@ export function MenuPanel({
         importantForAccessibility={isOpen ? 'auto' : 'no-hide-descendants'}
         onLayout={onLayout}
         pointerEvents={isOpen ? 'auto' : 'none'}
-        style={[contentStyle, { maxHeight }, panelStyle]}
+        style={[contentStyle, maxHeight === undefined ? undefined : { maxHeight }, panelStyle]}
         testID={testID}
       >
         <ScrollView

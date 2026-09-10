@@ -17,7 +17,7 @@ jest.mock('../../../../menu/menu-overlay', () => {
   const { MenuInteraction } = jest.requireActual('../../../../menu/menu-interaction');
 
   return {
-    MenuOverlay: ({
+    KeyboardMenuOverlay: ({
       children,
       isOpen,
       isVisible,
@@ -72,11 +72,18 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
-type SharedValueStub = { set: (next: number) => void; value: number };
+type SharedValueStub<TValue> = {
+  get: () => TValue;
+  set: (next: TValue) => void;
+  value: TValue;
+};
 type TimingCallback = (finished: boolean) => void;
 let mockReducedMotion = false;
 let mockFinishTimingImmediately = true;
 let mockTimingCallbacks: TimingCallback[] = [];
+let mockFrameCallback: () => void;
+let mockFrameActive = false;
+const mockMeasure = jest.fn();
 
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react');
@@ -89,16 +96,32 @@ jest.mock('react-native-reanimated', () => {
     Easing: { bezier: () => 'bezier' },
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0] + (output[1] - output[0]) * value,
+    measure: (...args: unknown[]) => mockMeasure(...args),
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedRef: () => React.useRef(null),
     useAnimatedStyle: (factory: () => object) => factory(),
+    useDerivedValue: (factory: () => unknown) => ({ get: factory }),
+    useFrameCallback: (callback: () => void) => {
+      mockFrameCallback = callback;
+      const ref = React.useRef(null);
+      ref.current ??= {
+        setActive: (active: boolean) => {
+          mockFrameActive = active;
+        },
+      };
+      return ref.current;
+    },
     useReducedMotion: () => mockReducedMotion,
     // Backed by a ref, like the real one: a shared value that reset itself on
     // every render would make anything driven by one untestable.
-    useSharedValue: (initial: number) => {
-      const ref = React.useRef(null) as { current: SharedValueStub | null };
+    useSharedValue: <TValue,>(initial: TValue) => {
+      const ref = React.useRef(null) as { current: SharedValueStub<TValue> | null };
 
       ref.current ??= {
-        set(next: number) {
+        get() {
+          return this.value;
+        },
+        set(next: TValue) {
           this.value = next;
         },
         value: initial,
@@ -141,6 +164,8 @@ describe('MorphMenu', () => {
     mockReducedMotion = false;
     mockFinishTimingImmediately = true;
     mockTimingCallbacks = [];
+    mockMeasure.mockReset();
+    jest.restoreAllMocks();
     jest.clearAllMocks();
   });
 
@@ -202,13 +227,11 @@ describe('MorphMenu', () => {
 
     expect(portal(tree).findAllByProps({ testID: 'menu-panel' }).length).toBeGreaterThan(0);
     // The floating copy sits where the inline footprint was measured.
-    const positioned = portal(tree).findAll((node) => {
-      const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
-
-      return style?.left === anchorRect.x && style?.top === anchorRect.y;
-    });
-
-    expect(positioned.length).toBeGreaterThan(0);
+    const floating = portal(tree).findByProps({ role: 'menu' });
+    expect(StyleSheet.flatten(floating.props.style).transform).toEqual([
+      { translateX: anchorRect.x },
+      { translateY: anchorRect.y },
+    ]);
   });
 
   it('renders the dismiss catcher behind the menu', () => {
@@ -224,6 +247,76 @@ describe('MorphMenu', () => {
 
     expect(backdropIndex).toBeGreaterThanOrEqual(0);
     expect(menuIndex).toBeGreaterThan(backdropIndex);
+  });
+
+  it('follows a moving trigger and bounds the panel until the closing animation finishes', () => {
+    mockFinishTimingImmediately = false;
+    const menu = () => (
+      <MorphMenu accessibilityLabel="Add" testID="menu">
+        <MorphMenu.Item label="Camera" onPress={jest.fn()} testID="menu-camera" />
+      </MorphMenu>
+    );
+    act(() => {
+      renderer = create(menu());
+    });
+    const tree = renderer!;
+    expect(mockFrameActive).toBe(false);
+    layout(tree, { height: 420, width: 340 });
+    press(tree, 'menu-trigger');
+    expect(mockFrameActive).toBe(true);
+
+    function moveTrigger(pageX: number, pageY: number) {
+      mockMeasure.mockReturnValue({ pageX, pageY, width: 32, height: 32 });
+      act(() => {
+        mockFrameCallback();
+        tree.update(menu());
+      });
+      const floating = portal(tree).findByProps({ role: 'menu' });
+      expect(StyleSheet.flatten(floating.props.style).transform).toEqual([
+        { translateX: pageX },
+        { translateY: pageY },
+      ]);
+    }
+
+    moveTrigger(18, 240);
+    const panel = portal(tree).findByProps({ testID: 'menu-panel' });
+    expect(StyleSheet.flatten(panel.props.style).maxHeight).toBe(256);
+    expect(
+      portal(tree).findAll((node) => StyleSheet.flatten(node.props.style)?.height === 256).length,
+    ).toBeGreaterThan(0);
+
+    // An unavailable measurement must retain the last usable position.
+    mockMeasure.mockReturnValue(null);
+    act(() => {
+      mockFrameCallback();
+      tree.update(menu());
+    });
+    expect(
+      StyleSheet.flatten(portal(tree).findByProps({ role: 'menu' }).props.style).transform,
+    ).toEqual([{ translateX: 18 }, { translateY: 240 }]);
+
+    press(tree, 'menu-backdrop');
+    expect(mockFrameActive).toBe(true);
+    moveTrigger(18, 480);
+    act(() => mockTimingCallbacks.splice(0).forEach((callback) => callback(true)));
+    expect(mockFrameActive).toBe(false);
+    expect(tree.root.findAllByProps({ mockComponent: 'menu-overlay' })).toHaveLength(0);
+  });
+
+  it('ignores an older opening measurement delivered after the latest press', () => {
+    const pending: ((x: number, y: number, width: number, height: number) => void)[] = [];
+    jest.spyOn(View.prototype, 'measureInWindow').mockImplementation((callback) => {
+      pending.push(callback);
+    });
+    const tree = render();
+    press(tree, 'menu-trigger');
+    press(tree, 'menu-trigger');
+    act(() => pending[1](18, 300, 32, 32));
+    act(() => pending[0](12, 700, 32, 32));
+
+    expect(
+      StyleSheet.flatten(portal(tree).findByProps({ role: 'menu' }).props.style).transform,
+    ).toEqual([{ translateX: 18 }, { translateY: 300 }]);
   });
 
   it('closes on the backdrop without choosing anything', () => {

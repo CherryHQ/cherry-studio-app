@@ -33,13 +33,9 @@ const logger = loggerService.withContext('ComposerMenu');
  * closes the menu, dismisses and blurs the field, then opens its picker;
  * caller-owned tool rows only close the menu and keep the input context live.
  *
- * The menu used to take the keyboard down when it opened so
- * the panel could grow into that space, but the panel is portalled and anchored
- * to where the trigger was measured *before* the dismissal — so the composer
- * dropped ~290pt while the panel stayed put, and the menu ended up floating in
- * the middle of the screen with nothing under it. The panel grows upward out of
- * the ＋ button and clears the keyboard on its own, so it never needed that
- * space.
+ * The keyboard-preserving overlay follows the live ＋ position through input
+ * layout and keyboard motion. It grows upward within the available space,
+ * scrolling its contents when needed instead of dismissing the keyboard.
  */
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
