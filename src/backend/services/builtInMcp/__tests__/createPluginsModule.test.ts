@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { createPluginsModule as createModule } from '../createPluginsModule';
 import type { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
-import { authorizationStoreFixture } from './authorizationStoreFixture';
+import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),

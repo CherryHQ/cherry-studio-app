@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { migrateFeishuAuthorization } from '../migrateFeishuAuthorization';
-import { authorizationStoreFixture } from './authorizationStoreFixture';
+import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), deleteItemAsync: jest.fn() }));
 const id = '00000000-0000-4000-8000-000000000001';

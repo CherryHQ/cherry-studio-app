@@ -1,7 +1,7 @@
 import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
 import type { PluginAuthorizationRuntime, PluginDefinition } from '../pluginDefinition';
 import { createPluginRegistry } from '../pluginRegistry';
-import { authorizationStoreFixture } from './authorizationStoreFixture';
+import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 function runtimeFixture(): PluginAuthorizationRuntime {
   const lifetime = new AbortController();

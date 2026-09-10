@@ -4,7 +4,7 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { FEISHU_DOCUMENT_SCOPES, feishuOauth } from '../feishuOauth';
-import { authorizationStoreFixture } from './authorizationStoreFixture';
+import { authorizationStoreFixture } from './_authorizationStoreFixture';
 
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({

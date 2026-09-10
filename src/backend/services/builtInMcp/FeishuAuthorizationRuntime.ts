@@ -39,7 +39,14 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         return operation();
       })
       .catch((error: unknown) => {
-        if (this.lifetime.signal.aborted || (error instanceof Error && error.name === 'AbortError'))
+        if (
+          this.lifetime.signal.aborted ||
+          // Native abort reasons can come from another realm and fail instanceof Error.
+          (typeof error === 'object' &&
+            error !== null &&
+            'name' in error &&
+            error.name === 'AbortError')
+        )
           throw new PluginError('cancelled', 'Feishu authorization cancelled.');
         throw error;
       });
