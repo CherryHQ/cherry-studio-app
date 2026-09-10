@@ -4,6 +4,7 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
@@ -75,6 +76,8 @@ const CASES = [
     expectedModelId: 'test-model',
   },
 ] as const;
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('Pi model resolver', () => {
   let resolver: PiRuntimeDependencies;

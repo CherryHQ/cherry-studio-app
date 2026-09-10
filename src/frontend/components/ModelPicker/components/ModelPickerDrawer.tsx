@@ -3,6 +3,8 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
@@ -49,20 +51,22 @@ export function ModelPickerDrawer({
       testID="model-picker"
       title={title ?? t('modelPicker.title')}
     >
-      <ModelPickerDrawerContent
-        deferredSearchText={deferredSearchText}
-        emptyText={emptyText}
-        isModelVisible={isModelVisible}
-        modelType={modelType}
-        onAddProvider={onAddProvider}
-        onSelect={onSelect}
-        onSearchFocusChange={setIsSearchFocused}
-        onSearchTextChange={setSearchText}
-        open={open}
-        providerId={providerId}
-        searchText={searchText}
-        selectedModelId={selectedModelId}
-      />
+      <ModelRegistryGate>
+        <ModelPickerDrawerContent
+          deferredSearchText={deferredSearchText}
+          emptyText={emptyText}
+          isModelVisible={isModelVisible}
+          modelType={modelType}
+          onAddProvider={onAddProvider}
+          onSelect={onSelect}
+          onSearchFocusChange={setIsSearchFocused}
+          onSearchTextChange={setSearchText}
+          open={open}
+          providerId={providerId}
+          searchText={searchText}
+          selectedModelId={selectedModelId}
+        />
+      </ModelRegistryGate>
     </BottomSheet>
   );
 }

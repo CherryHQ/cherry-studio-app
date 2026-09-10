@@ -8,6 +8,10 @@ import { ModelPickerDrawer } from '../ModelPickerDrawer';
 let mockGroups: ModelPickerGroup[] = [];
 let mockListProps: { emptyText?: string; listItems: readonly ModelPickerListItem[] } | undefined;
 
+jest.mock('@/frontend/components/ModelRegistry', () => ({
+  ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
+}));
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { TextInput: MockTextInput, View: MockView } = jest.requireActual('react-native');
 

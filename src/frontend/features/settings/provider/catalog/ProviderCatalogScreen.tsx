@@ -1,4 +1,3 @@
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import { Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -121,41 +120,6 @@ function CustomProviderCatalogRow({ onCreate }: { onCreate: () => void }) {
   );
 }
 
-function ProviderRegistryUpdateNotice({
-  isUpdating,
-  onUpdate,
-}: {
-  isUpdating: boolean;
-  onUpdate: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <View className="gap-3 rounded-xl border border-border bg-secondary p-3">
-      <View className="gap-1">
-        <Text className="font-medium text-base text-foreground">
-          {t('settings.provider.catalog.registryUpdate.availableTitle')}
-        </Text>
-        <Text className="text-muted-foreground text-sm">
-          {t('settings.provider.catalog.registryUpdate.availableDescription')}
-        </Text>
-      </View>
-      <Button
-        icon={<DownloadIcon className="size-4" />}
-        loading={isUpdating}
-        onPress={onUpdate}
-        size="sm"
-      >
-        {t(
-          isUpdating
-            ? 'settings.provider.catalog.registryUpdate.updating'
-            : 'settings.provider.catalog.registryUpdate.update',
-        )}
-      </Button>
-    </View>
-  );
-}
-
 export default function ProviderCatalogScreen({
   setupIntent,
 }: { setupIntent?: FirstUseSetupIntent } = {}) {
@@ -183,39 +147,6 @@ export default function ProviderCatalogScreen({
     queryFn: providers.listCatalog,
     queryKey: queryKeys.providers.catalog(),
     staleTime: 5 * 60 * 1000,
-  });
-  const registryUpdateQueryKey = queryKeys.providers.registryUpdate();
-  const registryUpdateQuery = useQuery({
-    enabled: false,
-    queryFn: providers.checkRegistryUpdate,
-    queryKey: registryUpdateQueryKey,
-    retry: false,
-  });
-  const refetchRegistryUpdate = registryUpdateQuery.refetch;
-  useFocusEffect(
-    useCallback(() => {
-      if (intent !== 'chat') void refetchRegistryUpdate();
-    }, [intent, refetchRegistryUpdate]),
-  );
-  const applyRegistryUpdateMutation = useMutation({
-    mutationFn: providers.applyRegistryUpdate,
-    onError: () => {
-      toast.show({
-        label: t('settings.provider.catalog.registryUpdate.updateFailed'),
-        variant: 'danger',
-      });
-    },
-    onSuccess: (result) => {
-      queryClient.setQueryData(registryUpdateQueryKey, { status: 'current' });
-      toast.show({
-        label: t(
-          result.status === 'updated'
-            ? 'settings.provider.catalog.registryUpdate.updated'
-            : 'settings.provider.catalog.registryUpdate.current',
-        ),
-        variant: 'success',
-      });
-    },
   });
   const entries = catalogQuery.data ?? [];
   const {
@@ -379,12 +310,6 @@ export default function ProviderCatalogScreen({
         className="min-h-0 flex-1 gap-3 px-4 pb-5"
         testID={intent === 'chat' ? 'onboarding-provider' : 'provider-catalog'}
       >
-        {intent !== 'chat' && registryUpdateQuery.data?.status === 'available' ? (
-          <ProviderRegistryUpdateNotice
-            isUpdating={applyRegistryUpdateMutation.isPending}
-            onUpdate={() => applyRegistryUpdateMutation.mutate()}
-          />
-        ) : null}
         {catalogQuery.isPending || (intent === 'chat' && savedProviders.isPending) ? (
           <View className="px-1 py-8">
             <ContentState.Loading title={t('settings.provider.catalog.loading')} />

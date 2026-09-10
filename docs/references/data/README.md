@@ -207,15 +207,27 @@ bundle-owned and is imported explicitly through `ProvidersModule`. Seeders do no
 Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder versions are
 journaled under `app_state` keys prefixed with `seed:`.
 
-`ProviderRegistryUpdaterService` checks only `models.json` and `provider-models.json` when the user
-opens the Provider catalog. The screen reports an available update, but downloads and activates
-the complete snapshot only after the user presses Update. China locale/zone signals prefer GitCode
-and other devices prefer GitHub; either source falls back to the other. A schema-validated,
-user-approved snapshot is committed to the lossy cache with its activation marker written last, and
-mounted model projections are invalidated when it becomes active. `providers.json` never comes from
-this unsigned channel, so API destinations, authentication modes, and the importable Provider catalog
-remain bundle-owned. Offline, malformed, interrupted, or incompatible checks and updates keep using
-the last valid matching approved cache, or the bundled registry when no such cache exists.
+`ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
+When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
+in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
+fallback to the other source. Startup never contacts the network once a snapshot is saved. The only
+later refresh trigger is opening a provider's model list, which silently downloads a newer catalog
+and keeps the saved one when offline or unchanged. The app does not bundle these model files. Model
+selection, model editing, and model calls require a downloaded snapshot; welcome, provider
+configuration, and history remain accessible. Model workflows present a retry action when the
+initial download fails.
+
+Complete, validated snapshots occupy two alternating files in persistent document storage. Writes
+replace the inactive slot, preserving the active snapshot even when the filesystem's overwrite/move
+is interrupted. Startup can fall back to the previous valid slot. Legacy cache snapshots migrate
+after validation, without depending on the old bundled catalog version. Mounted model projections
+refresh after activation. User-model overrides and custom records are never rewritten by catalog
+updates; unset preset fields inherit the current snapshot.
+
+`providers.json` remains bundled: the unsigned model channel cannot change provider API destinations,
+authentication modes, or importable providers. Schema and minimum-reader compatibility checks remain
+in place; newer readers can still use older compatible saved catalogs. Model metadata fixes and
+ordinary updates belong upstream, while Mobile owns interpretation and provider connection support.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may

@@ -6,12 +6,15 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { agentService } from '../AgentService';
 import { applyMigrations } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('AgentService persistence', () => {
   let sqlite: DatabaseSync;

@@ -20,11 +20,11 @@ import {
 } from '@/backend/core/lifecycle';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
-import type { ProviderRegistryUpdateCheck, ProviderRegistryUpdateResult } from '@/shared/contracts';
+import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
 import {
-  invalidateProviderRegistrySnapshot,
-  readProviderRegistrySnapshot,
+  type ProviderRegistrySnapshot,
+  readProviderRegistrySnapshots,
   writeProviderRegistrySnapshot,
 } from './providerRegistrySnapshot';
 import { providerRegistryUpdates } from './providerRegistryUpdates';
@@ -68,46 +68,59 @@ type StagedSnapshot = {
  *
  * The payload is unsigned, so `providers.json` deliberately remains bundled:
  * remote data can improve model descriptions and capabilities, but can never
- * redirect credentials or change a provider's API destination. Network checks
- * are requested by the provider catalog screen, and a complete snapshot is
- * downloaded and activated only after an explicit user action.
+ * redirect credentials or change a provider's API destination. Startup restores
+ * the persistent snapshot and downloads one only when none is saved. Later
+ * refreshes happen when the user opens a provider's model list.
  */
 @Injectable('ProviderRegistryUpdaterService')
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('not-applicable')
 export class ProviderRegistryUpdaterService extends BaseService {
   private activeManifest: CatalogManifest | undefined;
-  private availableUpdateSource: RegistryNetworkSource | undefined;
+  private activeSlot: ProviderRegistrySnapshot['slot'] | undefined;
   private applyInFlight: Promise<ProviderRegistryUpdateResult> | undefined;
-  private checkInFlight: Promise<void> | undefined;
   private readonly requestControllers = new Set<AbortController>();
   private stopped = false;
+  private cacheInFlight: Promise<void> | undefined;
 
   protected async onReady(): Promise<void> {
     this.stopped = false;
-    this.activeManifest = undefined;
-    this.availableUpdateSource = undefined;
-    if (Platform.OS !== 'web') {
-      await this.activateCachedSnapshot();
+    await this.restoreSnapshot();
+    if (this.stopped || providerRegistryService.isReady()) {
+      return;
     }
-  }
-
-  /** Check the remote manifests without downloading or activating registry data. */
-  public checkForUpdate(): Promise<ProviderRegistryUpdateCheck> {
-    if (this.applyInFlight) {
-      return this.applyInFlight.then(() => this.getCurrentUpdateStatus());
-    }
-    if (this.checkInFlight) {
-      return this.checkInFlight.then(() => this.getAvailableUpdateStatus());
-    }
-
-    this.checkInFlight = this.findAvailableUpdate().finally(() => {
-      this.checkInFlight = undefined;
+    void this.applyUpdate().catch((error: unknown) => {
+      if (!this.stopped) {
+        logger.warn('Could not download the model registry; model use will retry', toError(error));
+      }
     });
-    return this.checkInFlight.then(() => this.getAvailableUpdateStatus());
   }
 
-  /** Download and activate the available registry snapshot after user confirmation. */
+  /** Shared by model-selection surfaces so first download is deduplicated and retryable. */
+  public async ensureReady(): Promise<void> {
+    await this.restoreSnapshot();
+    if (!providerRegistryService.isReady()) {
+      await this.applyUpdate();
+    }
+    if (!providerRegistryService.isReady()) {
+      throw new Error('No compatible model registry is available');
+    }
+  }
+
+  private restoreSnapshot(): Promise<void> {
+    this.cacheInFlight ??=
+      Platform.OS === 'web'
+        ? Promise.resolve()
+        : this.activateCachedSnapshot().catch((error: unknown) => {
+            logger.warn(
+              'Could not restore the model registry; a download is required',
+              toError(error),
+            );
+          });
+    return this.cacheInFlight;
+  }
+
+  /** Download and activate a newer compatible registry snapshot when the remote lane has one. */
   public applyUpdate(): Promise<ProviderRegistryUpdateResult> {
     if (this.applyInFlight) {
       return this.applyInFlight;
@@ -124,54 +137,59 @@ export class ProviderRegistryUpdaterService extends BaseService {
     for (const controller of this.requestControllers) {
       controller.abort();
     }
-    await Promise.allSettled([this.applyInFlight, this.checkInFlight]);
+    await Promise.allSettled([this.cacheInFlight, this.applyInFlight]);
+    this.cacheInFlight = undefined;
     this.activeManifest = undefined;
-    this.availableUpdateSource = undefined;
+    this.activeSlot = undefined;
     providerRegistryService.clearRemoteSnapshot();
     providerRegistryUpdates.clear();
   }
 
   private async activateCachedSnapshot(): Promise<void> {
-    try {
-      const snapshot = await readProviderRegistrySnapshot(
-        providerRegistryService.getBundledCatalogVersions(),
-      );
-      if (!snapshot) {
-        return;
-      }
-
-      this.assertStructurallyCompatibleManifest(snapshot.manifest);
-      if (!isCatalogManifestCompatible(snapshot.manifest)) {
-        throw new Error('Cached registry snapshot requires unsupported runtime semantics');
-      }
-      const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
-      providerRegistryService.installRemoteSnapshot(parsed);
-      this.activeManifest = snapshot.manifest;
-      providerRegistryUpdates.emit({ revision: snapshot.manifest.revision, source: 'cache' });
-    } catch (error) {
-      providerRegistryService.clearRemoteSnapshot();
+    const snapshots = await readProviderRegistrySnapshots();
+    for (const snapshot of snapshots) {
+      if (this.stopped) return;
       try {
-        invalidateProviderRegistrySnapshot();
-      } catch (invalidationError) {
+        this.assertStructurallyCompatibleManifest(snapshot.manifest);
+        if (!isCatalogManifestCompatible(snapshot.manifest)) continue;
+        const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
+        this.activeSlot = snapshot.slot;
+        if (snapshot.slot === 'legacy') {
+          try {
+            this.activeSlot = await writeProviderRegistrySnapshot(
+              snapshot.files,
+              snapshot.manifest,
+              snapshot.slot,
+            );
+          } catch (error) {
+            logger.warn(
+              'Could not migrate the registry; using the validated cache',
+              toError(error),
+            );
+          }
+        }
+        if (this.stopped) return;
+        providerRegistryService.installRemoteSnapshot(parsed);
+        this.activeManifest = snapshot.manifest;
+        providerRegistryUpdates.emit({ revision: snapshot.manifest.revision, source: 'cache' });
+        return;
+      } catch (error) {
         logger.warn(
-          'Failed to invalidate an unusable registry snapshot',
-          invalidationError as Error,
+          'Saved registry snapshot is unusable; trying the previous snapshot',
+          toError(error),
         );
       }
-      logger.warn(
-        'Cached registry snapshot is unusable; falling back to bundled data',
-        error as Error,
-      );
     }
   }
 
-  private async findAvailableUpdate(): Promise<void> {
+  /** The first reachable source whose manifest is newer than the active snapshot. */
+  private async findAvailableUpdate(): Promise<RegistryNetworkSource | undefined> {
     let reachedSource = false;
     let lastError: Error | undefined;
 
     for (const source of this.getSourceOrder()) {
       if (this.stopped) {
-        return;
+        return undefined;
       }
 
       try {
@@ -181,8 +199,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
           continue;
         }
         if (this.isUpdateAvailable(manifest)) {
-          this.availableUpdateSource = source;
-          return;
+          return source;
         }
       } catch (error) {
         lastError = toError(error);
@@ -194,24 +211,19 @@ export class ProviderRegistryUpdaterService extends BaseService {
       }
     }
 
-    this.availableUpdateSource = undefined;
-    if (!reachedSource && !this.stopped) {
+    if ((!reachedSource || !providerRegistryService.isReady()) && !this.stopped) {
       throw lastError ?? new Error('No provider registry source is available');
     }
+    return undefined;
   }
 
   private async runApplyUpdate(): Promise<ProviderRegistryUpdateResult> {
-    if (this.checkInFlight) {
-      await this.checkInFlight;
-    }
-    if (!this.availableUpdateSource) {
-      await this.findAvailableUpdate();
-    }
-    if (!this.availableUpdateSource) {
+    await this.restoreSnapshot();
+    const preferredSource = await this.findAvailableUpdate();
+    if (!preferredSource) {
       return this.getCurrentUpdateStatus();
     }
 
-    const preferredSource = this.availableUpdateSource;
     const sources = [
       preferredSource,
       ...this.getSourceOrder().filter((source) => source !== preferredSource),
@@ -230,7 +242,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
         }
 
         await this.applySnapshot(staged, source);
-        this.availableUpdateSource = undefined;
         return { status: 'updated' };
       } catch (error) {
         lastError = toError(error);
@@ -243,7 +254,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
     if (lastError && !this.stopped) {
       throw lastError;
     }
-    this.availableUpdateSource = undefined;
     return this.getCurrentUpdateStatus();
   }
 
@@ -252,10 +262,10 @@ export class ProviderRegistryUpdaterService extends BaseService {
     source: RegistryNetworkSource,
   ): Promise<void> {
     if (Platform.OS !== 'web') {
-      await writeProviderRegistrySnapshot(
+      this.activeSlot = await writeProviderRegistrySnapshot(
         staged.files,
         staged.manifest,
-        providerRegistryService.getBundledCatalogVersions(),
+        this.activeSlot,
       );
     }
     if (this.stopped) {
@@ -316,10 +326,6 @@ export class ProviderRegistryUpdaterService extends BaseService {
     return REMOTE_REGISTRY_FILES.some(
       (file) => providerRegistryService.getCatalogVersion(file) !== manifest.files[file],
     );
-  }
-
-  private getAvailableUpdateStatus(): ProviderRegistryUpdateCheck {
-    return this.availableUpdateSource ? { status: 'available' } : this.getCurrentUpdateStatus();
   }
 
   private getCurrentUpdateStatus(): { status: 'current' } {

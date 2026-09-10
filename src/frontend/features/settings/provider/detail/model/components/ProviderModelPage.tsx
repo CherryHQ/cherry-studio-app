@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { useQuery } from '@/frontend/data';
 import {
   isUniqueModelId,
@@ -37,9 +38,11 @@ export function ProviderModelPage({
     );
   }
   return (
-    <LoadedProviderModel modelId={modelId} providerId={providerId}>
-      {children}
-    </LoadedProviderModel>
+    <ModelRegistryGate>
+      <LoadedProviderModel modelId={modelId} providerId={providerId}>
+        {children}
+      </LoadedProviderModel>
+    </ModelRegistryGate>
   );
 }
 

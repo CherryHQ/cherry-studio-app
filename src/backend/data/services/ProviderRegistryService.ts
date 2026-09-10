@@ -384,14 +384,18 @@ export class ProviderRegistryService {
     return this.loader.getProviderModelsVersion();
   }
 
-  getCatalogVersion(file: RemoteRegistryFileName): string {
+  getCatalogVersion(file: RemoteRegistryFileName): string | undefined {
     return file === 'models.json'
       ? this.loader.getModelsVersion()
       : this.loader.getProviderModelsVersion();
   }
 
-  getBundledCatalogVersions() {
-    return this.loader.getBundledCatalogVersions();
+  assertReady(): void {
+    this.loader.assertReady();
+  }
+
+  isReady(): boolean {
+    return this.loader.isReady();
   }
 
   parseRemoteSnapshot(input: { models: unknown; providerModels: unknown }) {

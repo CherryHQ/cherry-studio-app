@@ -3,114 +3,69 @@ import {
   CatalogManifestSchema,
   type RemoteRegistryFileName,
 } from '@cherrystudio/provider-registry/mobile';
+import { loggerService } from '@logger';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as z from 'zod';
 
-export type BundledRegistryVersions = {
-  models: string;
-  providerModels: string;
-};
-
-type ProviderRegistrySnapshot = {
-  files: Record<RemoteRegistryFileName, string>;
-  manifest: CatalogManifest;
-};
-
-// v2 is populated only by an explicit user-approved update. The directory
-// boundary prevents older automatically downloaded snapshots from activating.
-const SNAPSHOT_DIRECTORY_NAME = 'provider-registry-v2';
-const SNAPSHOT_MARKER_NAME = 'snapshot.json';
-
-const SnapshotMarkerSchema = z.object({
-  bundledVersions: z.object({
-    models: z.string(),
-    providerModels: z.string(),
-  }),
+const logger = loggerService.withContext('ProviderRegistrySnapshot');
+const SnapshotSchema = z.object({
+  files: z.object({ 'models.json': z.string(), 'provider-models.json': z.string() }),
   manifest: CatalogManifestSchema,
 });
+const slots = ['a', 'b'] as const;
+type SnapshotSlot = (typeof slots)[number] | 'legacy';
+export type ProviderRegistrySnapshot = z.infer<typeof SnapshotSchema> & { slot: SnapshotSlot };
 
-function snapshotDirectory(): Directory {
-  return new Directory(Paths.cache, SNAPSHOT_DIRECTORY_NAME);
+function snapshotFile(slot: SnapshotSlot): File {
+  return slot === 'legacy'
+    ? new File(Paths.cache, 'provider-registry-v2', 'snapshot.json')
+    : new File(Paths.document, 'provider-registry', `snapshot-${slot}.json`);
 }
 
-function snapshotFile(name: string): File {
-  return new File(snapshotDirectory(), name);
-}
-
-function snapshotMarker(): File {
-  return snapshotFile(SNAPSHOT_MARKER_NAME);
-}
-
-function matchesBundledVersions(
-  left: BundledRegistryVersions,
-  right: BundledRegistryVersions,
-): boolean {
-  return left.models === right.models && left.providerModels === right.providerModels;
-}
-
-export async function readProviderRegistrySnapshot(
-  bundledVersions: BundledRegistryVersions,
-): Promise<ProviderRegistrySnapshot | null> {
-  const markerFile = snapshotMarker();
-  if (!markerFile.exists) {
-    return null;
+/** Return newest first; the updater validates compatibility and both payloads before activation. */
+export async function readProviderRegistrySnapshots(): Promise<ProviderRegistrySnapshot[]> {
+  const snapshots: ProviderRegistrySnapshot[] = [];
+  for (const slot of [...slots, 'legacy'] as const) {
+    const file = snapshotFile(slot);
+    if (!file.exists) continue;
+    try {
+      let snapshot: z.infer<typeof SnapshotSchema>;
+      if (slot === 'legacy') {
+        const { manifest } = z
+          .object({ manifest: CatalogManifestSchema })
+          .parse(JSON.parse(await file.text()));
+        const directory = new Directory(Paths.cache, 'provider-registry-v2');
+        const [models, providerModels] = await Promise.all([
+          new File(directory, 'models.json').text(),
+          new File(directory, 'provider-models.json').text(),
+        ]);
+        snapshot = {
+          files: { 'models.json': models, 'provider-models.json': providerModels },
+          manifest,
+        };
+      } else {
+        snapshot = SnapshotSchema.parse(JSON.parse(await file.text()));
+      }
+      snapshots.push({ ...snapshot, slot });
+    } catch (error) {
+      logger.warn('Could not read a saved registry snapshot', error as Error, { slot });
+    }
   }
-
-  const marker = SnapshotMarkerSchema.parse(JSON.parse(await markerFile.text()));
-  if (!matchesBundledVersions(marker.bundledVersions, bundledVersions)) {
-    markerFile.delete();
-    return null;
-  }
-
-  const modelsFile = snapshotFile('models.json');
-  const providerModelsFile = snapshotFile('provider-models.json');
-  if (!modelsFile.exists || !providerModelsFile.exists) {
-    markerFile.delete();
-    return null;
-  }
-
-  const [models, providerModels] = await Promise.all([
-    modelsFile.text(),
-    providerModelsFile.text(),
-  ]);
-
-  return {
-    files: {
-      'models.json': models,
-      'provider-models.json': providerModels,
-    },
-    manifest: marker.manifest,
-  };
+  return snapshots.sort((left, right) => right.manifest.revision - left.manifest.revision);
 }
 
-/** Persist the payload first and activate the complete set by writing its marker last. */
+/** Write the inactive slot. Even a partial write or failed move leaves the active slot intact. */
 export async function writeProviderRegistrySnapshot(
   files: Record<RemoteRegistryFileName, string>,
   manifest: CatalogManifest,
-  bundledVersions: BundledRegistryVersions,
-): Promise<void> {
-  const directory = snapshotDirectory();
-  if (!directory.exists) {
-    directory.create({ intermediates: true });
-  }
-
-  invalidateProviderRegistrySnapshot();
-
-  await atomicWrite(snapshotFile('models.json'), files['models.json']);
-  await atomicWrite(snapshotFile('provider-models.json'), files['provider-models.json']);
-  await atomicWrite(snapshotMarker(), JSON.stringify({ bundledVersions, manifest }, undefined, 2));
-}
-
-export function invalidateProviderRegistrySnapshot(): void {
-  const marker = snapshotMarker();
-  if (marker.exists) {
-    marker.delete();
-  }
-}
-
-async function atomicWrite(destination: File, body: string): Promise<void> {
+  activeSlot?: SnapshotSlot,
+): Promise<SnapshotSlot> {
+  const slot = activeSlot === 'a' ? 'b' : 'a';
+  const destination = snapshotFile(slot);
+  destination.parentDirectory.create({ intermediates: true, idempotent: true });
   const temporary = new File(destination.parentDirectory, `${destination.name}.tmp`);
   temporary.create({ overwrite: true });
-  temporary.write(body);
+  temporary.write(JSON.stringify({ files, manifest }));
   await temporary.move(destination, { overwrite: true });
+  return slot;
 }

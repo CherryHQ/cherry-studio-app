@@ -5,12 +5,16 @@ import {
   REASONING_FORMAT_PROFILES,
 } from '@cherrystudio/provider-registry';
 
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+
 import {
   mergePresetModel,
   ProviderRegistryService,
   providerRegistryService,
   resolveReasoningProfileFromRegistry,
 } from '../ProviderRegistryService';
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
   test('merges preset model and provider override into runtime model', () => {

@@ -1,7 +1,5 @@
 import * as z from 'zod';
 
-import modelsRegistry from '../data/models.json';
-import providerModelsRegistry from '../data/provider-models.json';
 import providersRegistry from '../data/providers.json';
 import type { ModelConfig } from './schemas/model';
 import { ModelListSchema } from './schemas/model';
@@ -28,11 +26,11 @@ export const REGISTRY_SCHEMA_VERSION = 1;
  * Latest Desktop registry semantic line this Mobile runtime fully interprets.
  *
  * This is deliberately not the Mobile application version. The remote manifest
- * is published by Desktop, so its min/source range must be compared with the
- * Desktop registry behavior implemented here until the shared package exposes
- * a package-level runtime version.
+ * is published by Desktop, so its minimum reader version is compared with the
+ * Desktop registry behavior implemented here. Older snapshots remain readable
+ * within the same schema lane.
  */
-export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.0.8';
+export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.0.14';
 
 /** Unsigned remote data may describe models, never provider routing or credentials. */
 export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
@@ -85,7 +83,8 @@ export function isCatalogManifestCompatible(
     return false;
   }
 
-  return compareVersionParts(runtime, minimum) >= 0 && compareVersionParts(runtime, source) <= 0;
+  // New runtimes still read older snapshots from the same schema lane.
+  return compareVersionParts(runtime, minimum) >= 0 && compareVersionParts(minimum, source) <= 0;
 }
 
 export type MobileRemoteRegistrySnapshot = {
@@ -97,7 +96,7 @@ export type MobileRemoteRegistrySnapshot = {
  * OAuth-only presets excluded from runtime reads, including saved providers.
  * Mobile has no OAuth sign-in. Keep temporary setup or product limitations
  * in the catalog-only exclusions below so existing
- * records remain readable. The bundled catalog stays intact in both cases.
+ * records remain readable. Provider definitions remain bundled in both cases.
  */
 const MOBILE_RUNTIME_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
   'copilot',
@@ -118,26 +117,7 @@ const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set
   'voyageai',
 ]);
 
-/**
- * Provider namespaces owned by Mobile rather than the Desktop catalog lane.
- * Bundled rows replace remote rows for these ids; mixing both sources would let
- * an unsigned Desktop snapshot mutate a Mobile-only provider.
- */
-const MOBILE_EXTENSION_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set(['github']);
-
-let parsedModels: ModelsBundle | null = null;
-let parsedProviderModels: ProviderModelsBundle | null = null;
 let parsedProviders: ProvidersBundle | null = null;
-
-function loadModelsBundle(): ModelsBundle {
-  parsedModels ??= ModelListSchema.parse(modelsRegistry);
-  return parsedModels;
-}
-
-function loadProviderModelsBundle(): ProviderModelsBundle {
-  parsedProviderModels ??= ProviderModelListSchema.parse(providerModelsRegistry);
-  return parsedProviderModels;
-}
 
 function loadProvidersBundle(): ProvidersBundle {
   parsedProviders ??= ProviderListSchema.parse(providersRegistry);
@@ -145,8 +125,7 @@ function loadProvidersBundle(): ProvidersBundle {
 }
 
 export class MobileRegistryLoader {
-  private remoteModels: ModelsBundle | null = null;
-  private remoteProviderModels: ProviderModelsBundle | null = null;
+  private remoteSnapshot: MobileRemoteRegistrySnapshot | null = null;
   private modelById: Map<string, ModelConfig> | null = null;
   private modelByNormId: Map<string, ModelConfig> | null = null;
   private modelBySizedNorm: Map<string, ModelConfig> | null = null;
@@ -160,7 +139,7 @@ export class MobileRegistryLoader {
   private providerById: Map<string, ProviderConfig> | null = null;
 
   loadModels(): ModelConfig[] {
-    const models = (this.remoteModels ?? loadModelsBundle()).models ?? [];
+    const models = this.requireSnapshot().models.models;
     this.buildModelIndex(models);
     return models;
   }
@@ -172,12 +151,7 @@ export class MobileRegistryLoader {
   }
 
   loadProviderModels(): ProviderModelOverride[] {
-    const overrides = this.remoteProviderModels
-      ? mergeMobileExtensionOverrides(
-          this.remoteProviderModels.overrides ?? [],
-          loadProviderModelsBundle().overrides ?? [],
-        )
-      : (loadProviderModelsBundle().overrides ?? []);
+    const overrides = this.requireSnapshot().providerModels.overrides;
     this.buildOverrideIndex(overrides);
     return overrides;
   }
@@ -198,23 +172,31 @@ export class MobileRegistryLoader {
     );
   }
 
-  getModelsVersion(): string {
-    return (this.remoteModels ?? loadModelsBundle()).version;
+  getModelsVersion(): string | undefined {
+    return this.remoteSnapshot?.models.version;
   }
 
   getProvidersVersion(): string {
     return loadProvidersBundle().version;
   }
 
-  getProviderModelsVersion(): string {
-    return (this.remoteProviderModels ?? loadProviderModelsBundle()).version;
+  getProviderModelsVersion(): string | undefined {
+    return this.remoteSnapshot?.providerModels.version;
   }
 
-  getBundledCatalogVersions(): { models: string; providerModels: string } {
-    return {
-      models: loadModelsBundle().version,
-      providerModels: loadProviderModelsBundle().version,
-    };
+  isReady(): boolean {
+    return this.remoteSnapshot !== null;
+  }
+
+  assertReady(): void {
+    this.requireSnapshot();
+  }
+
+  private requireSnapshot(): MobileRemoteRegistrySnapshot {
+    if (!this.remoteSnapshot) {
+      throw new Error('Model registry has not been downloaded yet');
+    }
+    return this.remoteSnapshot;
   }
 
   parseRemoteSnapshot(input: {
@@ -228,14 +210,12 @@ export class MobileRegistryLoader {
   }
 
   installRemoteSnapshot(snapshot: MobileRemoteRegistrySnapshot): void {
-    this.remoteModels = snapshot.models;
-    this.remoteProviderModels = snapshot.providerModels;
+    this.remoteSnapshot = snapshot;
     this.invalidate();
   }
 
   clearRemoteSnapshot(): void {
-    this.remoteModels = null;
-    this.remoteProviderModels = null;
+    this.remoteSnapshot = null;
     this.invalidate();
   }
 
@@ -408,20 +388,6 @@ export class MobileRegistryLoader {
       this.overridesByProvider.set(override.providerId, providerOverrides);
     }
   }
-}
-
-function mergeMobileExtensionOverrides(
-  remoteOverrides: ProviderModelOverride[],
-  bundledOverrides: ProviderModelOverride[],
-): ProviderModelOverride[] {
-  return [
-    ...remoteOverrides.filter(
-      (override) => !MOBILE_EXTENSION_PRESET_PROVIDER_IDS.has(override.providerId),
-    ),
-    ...bundledOverrides.filter((override) =>
-      MOBILE_EXTENSION_PRESET_PROVIDER_IDS.has(override.providerId),
-    ),
-  ];
 }
 
 let sharedLoader: MobileRegistryLoader | null = null;

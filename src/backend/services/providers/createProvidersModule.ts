@@ -5,7 +5,6 @@ import {
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
 import type {
-  ProviderRegistryUpdateCheck,
   ProviderRegistryUpdateEvent,
   ProviderRegistryUpdateResult,
   ProvidersModule,
@@ -38,8 +37,8 @@ export type ProvidersModuleDependencies = {
   };
   hasAvailableModels(provider: Provider): Promise<boolean>;
   registryUpdates: {
+    ensureReady(): Promise<void>;
     apply(): Promise<ProviderRegistryUpdateResult>;
-    check(): Promise<ProviderRegistryUpdateCheck>;
     subscribe(listener: (event: ProviderRegistryUpdateEvent) => void): () => void;
   };
 };
@@ -62,6 +61,7 @@ export function createProvidersModule({
   };
   return {
     getSetupStatus,
+    ensureRegistryReady: registryUpdates.ensureReady,
     enable: async (providerId) => {
       const status = await getSetupStatus(providerId);
       if (status.issue) throw new ProviderSetupError(status.issue);
@@ -69,7 +69,6 @@ export function createProvidersModule({
       return status.provider.isEnabled ? status.provider : providers.enable(providerId);
     },
     applyRegistryUpdate: registryUpdates.apply,
-    checkRegistryUpdate: registryUpdates.check,
     importPreset: async (providerId) => {
       const preset = catalog
         .list()

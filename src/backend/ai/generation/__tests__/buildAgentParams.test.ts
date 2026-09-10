@@ -3,6 +3,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -74,6 +75,8 @@ async function buildReasoningOptions(input: {
   });
   return result.options.providerOptions ?? {};
 }
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('buildAgentParams assistant-less contract', () => {
   it('uses the shared normalized wire model id', async () => {

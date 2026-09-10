@@ -4,11 +4,14 @@ import { eq } from 'drizzle-orm';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
 import { ProviderService } from '../ProviderService';
 import { createTestDb, type TestDb } from './_testDb';
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('custom provider model endpoint integrity', () => {
   let sqlite: DatabaseSync;
