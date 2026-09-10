@@ -212,8 +212,8 @@ geometry contract when list layout depends on it.
 
 ## List Behavior
 
-`MessageList` owns its `LegendList` ref, role-based recycling types, keyboard lift, at-bottom shared
-value, row frames, and the business wiring for the optional CherryUI scroll-to-bottom button.
+`MessageList` owns its `LegendList` ref, role-based recycling types, keyboard lift, visible-bottom
+geometry, row frames, and the business wiring for the optional CherryUI scroll-to-bottom button.
 Callers provide stable message item references and only the layout insets and callbacks they own.
 
 One list-owned scroll controller owns product-level scroll state. It starts detached while restoring either a saved
@@ -224,8 +224,9 @@ scroll button, or sending a local message re-enters following mode. The scroll b
 means “return to the live edge,” not merely one untracked imperative scroll.
 
 The controller keeps imperative mode reads in a ref for native scroll callbacks and exposes only a
-reactive following boolean to button rendering. Dataset generations own drag and momentum events;
-callbacks from an outgoing Session cannot transition or save state for the incoming Session.
+reactive following boolean to keyboard lift and button rendering. Dataset generations own drag and
+momentum events; callbacks from an outgoing Session cannot transition or save state for the incoming
+Session.
 
 Chat Sessions store `{ message key, offset inside the row }` in the frontend memory cache. Restore
 uses `scrollToIndex`, so prepends and changing row measurements do not invalidate a raw pixel
@@ -245,9 +246,12 @@ with `hasNewerMessages` remains in reading mode even at its loaded end, requests
 `onLoadNewer`, and keeps the return-to-latest control available. `onReturnToLatest` lets the data
 owner replace that window before the controller resumes following; local sends use the same path.
 
-Keyboard lift remains `whenAtEnd`: focusing the composer must not move a viewport that is reading
-history. The keyboard controller is a platform geometry adapter; it never transitions the product
-following/reading state. A local send immediately positions the message at the live edge, keeps
+Keyboard lift uses `persistent` while following and `never` while reading history. Composer
+expansion must not disable following just because the viewport has already resized when keyboard
+motion starts. Native keyboard motion owns scrolling during the transition; application corrections
+for content and composer-size changes resume once it ends, only if still following. The return button
+moves with the keyboard and any floating composer, and checks the visible bottom including the
+keyboard inset. A local send immediately positions the message at the live edge, keeps
 keyboard geometry updates active during dismissal, and corrects the final inset without replaying
 scroll motion. A dataset switch or committed drag during dismissal cancels that final correction.
 

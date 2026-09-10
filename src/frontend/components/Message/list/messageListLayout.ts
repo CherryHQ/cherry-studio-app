@@ -8,6 +8,16 @@ export const MESSAGE_ROW_VERTICAL_PADDING = {
   user: 8,
 } as const satisfies Record<MessageListItem['role'], number>;
 
+/** Content height includes the current keyboard inset. */
+export function isMessageListAtBottom(
+  scrollOffset: number,
+  contentHeight: number,
+  viewportHeight: number,
+): boolean {
+  'worklet';
+  return Math.max(0, contentHeight - viewportHeight) - scrollOffset <= 1;
+}
+
 // 流式助手消息高度持续变化，不能成为 MVCP 的数据恢复锚点。
 function shouldRestoreMessagePosition(item: MessageListItem): boolean {
   return !(item.role === 'assistant' && item.status === 'pending');
