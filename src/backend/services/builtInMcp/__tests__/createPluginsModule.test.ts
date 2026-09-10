@@ -141,33 +141,6 @@ it('validates credentials upstream before storing anything', async () => {
   expect(invalidateServer).not.toHaveBeenCalled();
 });
 
-it('requires Feishu application credentials and stores both only in the backend grant', async () => {
-  const plugins = createPluginsModule({ invalidateServer: jest.fn() });
-  expect(() =>
-    plugins.connect({
-      pluginId: 'feishu',
-      authMethod: 'app_credentials',
-      fields: { appSecret: 'secret' },
-    }),
-  ).toThrow();
-  expect(mockValidateConnection).not.toHaveBeenCalled();
-  mockValidateConnection.mockResolvedValue('cli_cherry');
-  await plugins.connect({
-    pluginId: 'feishu',
-    authMethod: 'app_credentials',
-    fields: { appId: 'cli_cherry', appSecret: 'secret' },
-  });
-  const credential = { version: 1, appId: 'cli_cherry', appSecret: 'secret' };
-  expect(mockValidateConnection.mock.calls[0][2]).toEqual(credential);
-  expect(mockConnect.mock.calls[0][0]).toEqual({
-    pluginId: 'feishu',
-    authMethod: 'app_credentials',
-    serverName: '飞书',
-    accountLabel: 'cli_cherry',
-    credential,
-  });
-});
-
 it('invalidates the runtime only after the new grant commits', async () => {
   const operations: string[] = [];
   mockConnect.mockImplementation(async () => {

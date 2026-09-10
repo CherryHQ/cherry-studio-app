@@ -15,7 +15,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `authorization/` | Method runtimes and observers, native credential storage, and their backend-only contracts |
 | `transport/` | Grant-bound clients, fixed-endpoint HTTP and `validatePluginConnection` |
 | `plugins/github.ts`, `plugins/amap.ts` | Small self-contained plugin definitions |
-| `plugins/feishu/` | Feishu definition, application-token client, browser authorization, credential schemas and tests |
+| `plugins/feishu/` | Feishu definition, browser authorization, user-token renewal, credential schemas and tests |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Feishu exposes only its definition
@@ -31,8 +31,8 @@ observation, browser actions and form state; backend observers own polling and c
   tools, read-only validation and an ordered `authMethods` collection. Each method owns its form
   fields and encoder or interactive runtime factory, plus request authorization. Workflows and
   screens dispatch by method capability without provider-name branches.
-- `GET /plugin-catalog` returns detached metadata including the method list. The connection page
-  defaults to the first method and offers the others. Manual forms use the method's field rules;
+- `GET /plugin-catalog` returns detached metadata. The connection page defaults to the first listed
+  method and offers the others. Manual forms use the method's field rules;
   `InteractiveConnect` renders declared stages, browser confirmation and optional existing-app entry.
   Locale files own all copy under `plugins.catalog.<id>` and `plugins.authorization`.
 - `createPluginsModule` coordinates read-only validation, persistence and connection invalidation.
@@ -53,14 +53,13 @@ observation, browser actions and form state; backend observers own polling and c
   resolution, enforces fixed endpoints and admitted tools, rejects redirects and never replays
   writes. A rotating credential retains its grant ID; reconnecting replaces that ID.
 - GitHub injects a Bearer token and `X-MCP-Tools`; Amap injects a key only into the outgoing URL.
-  Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT` or
-  `X-Lark-MCP-TAT` plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and
+  Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT`
+  plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and
   `fetch-doc` discovery without a business write. Each method owns credential injection.
-- `plugins/feishu/feishuCredentials` owns credential formats and field validation.
-  `feishuAppToken` owns the application-token exchange and per-client cache. `feishuOauth`
-  implements personal-agent registration, device authorization and renewal through the existing
+- `plugins/feishu/feishuCredentials` owns credential formats and field validation. `feishuOauth`
+  implements personal-agent registration, device authorization and user-token renewal through the existing
   HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every document
-  scope and an issued refresh token, and retains application identity across disconnect.
+  scope and an issued refresh token, and retains application credentials across disconnect.
 - Callers share one credential renewal, including its failure. A caller cancels only its wait;
   disconnect, successful replacement and host disposal invalidate the renewal owner. Saving replaces
   the complete native token bundle after checking the grant ID.

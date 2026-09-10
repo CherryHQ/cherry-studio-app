@@ -1,12 +1,7 @@
 import type { PluginDefinition } from '../../pluginDefinition';
 import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
-import { createFeishuAppTokenProvider } from './feishuAppToken';
 import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
-import {
-  FEISHU_CREDENTIAL_FIELDS,
-  parseFeishuAppCredentials,
-  FeishuUserCredentialSchema,
-} from './feishuCredentials';
+import { FEISHU_CREDENTIAL_FIELDS, FeishuUserCredentialSchema } from './feishuCredentials';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
@@ -38,28 +33,10 @@ export const feishuPlugin: PluginDefinition = {
       createRequestAuthorization: (tools) => ({
         apply(credential, { headers }) {
           const { tokens } = FeishuUserCredentialSchema.parse(credential);
-          headers.delete('X-Lark-MCP-TAT');
           headers.set('X-Lark-MCP-UAT', tokens.accessToken);
           headers.set('X-Lark-MCP-Allowed-Tools', Object.keys(tools).join(','));
         },
       }),
-    },
-    {
-      id: 'app_credentials',
-      kind: 'credentials',
-      fields: FEISHU_CREDENTIAL_FIELDS,
-      encodeCredentials: (fields) => ({ version: 1, ...fields }),
-      createRequestAuthorization(tools) {
-        const tokens = createFeishuAppTokenProvider();
-        return {
-          async apply(credential, { headers, signal }) {
-            headers.delete('X-Lark-MCP-UAT');
-            headers.set('X-Lark-MCP-TAT', await tokens.getToken(credential, signal));
-            headers.set('X-Lark-MCP-Allowed-Tools', Object.keys(tools).join(','));
-          },
-          invalidate: () => tokens.invalidate(),
-        };
-      },
     },
   ],
   createClient(context) {
@@ -69,9 +46,6 @@ export const feishuPlugin: PluginDefinition = {
   },
   validation: {
     tool: 'fetch-doc',
-    accountLabel: (_result, credential) =>
-      FeishuUserCredentialSchema.safeParse(credential).success
-        ? 'Feishu user'
-        : parseFeishuAppCredentials(credential).appId,
+    accountLabel: () => 'Feishu user',
   },
 };

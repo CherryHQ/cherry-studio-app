@@ -63,7 +63,6 @@ export function createOfficialMcpClient(
         throw new PluginError('request', 'The plugin authorization changed the request target.');
       }
       await context.assertAuthorized().catch(() => {
-        context.authorization.invalidate?.();
         throw new PluginError('authorization', 'The plugin authorization is no longer available.');
       });
       init?.signal?.throwIfAborted();
@@ -78,7 +77,6 @@ export function createOfficialMcpClient(
       if (!response.ok && !(init?.method === 'GET' && response.status === 405)) {
         void response.body?.cancel().catch(() => undefined);
         if (response.status === 401) {
-          context.authorization.invalidate?.();
           throw new PluginError(
             'authorization',
             'The official MCP service rejected the credential.',

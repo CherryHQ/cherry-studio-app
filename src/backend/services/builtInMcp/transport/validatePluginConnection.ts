@@ -46,7 +46,7 @@ export async function validatePluginConnection(
       if (definition) {
         if (!plugin.validation.args) {
           operationSignal.throwIfAborted();
-          return plugin.validation.accountLabel(undefined, credential);
+          return plugin.validation.accountLabel(undefined);
         }
         const tool = client.toolsFromDefinitions({ tools: [definition] })[name];
         const output = await tool!.execute(plugin.validation.args, {
@@ -72,7 +72,7 @@ export async function validatePluginConnection(
         const text = result.content?.find((item) => item.type === 'text')?.text;
         const value = result.structuredContent ?? (text ? JSON.parse(text) : undefined);
         operationSignal.throwIfAborted();
-        return plugin.validation.accountLabel(value, credential);
+        return plugin.validation.accountLabel(value);
       }
       if (!page.nextCursor || cursors.has(page.nextCursor)) {
         throw new PluginError('request', 'The official MCP validation tool is unavailable.');

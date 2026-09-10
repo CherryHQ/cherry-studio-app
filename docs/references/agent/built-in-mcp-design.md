@@ -2,8 +2,8 @@
 
 > Status (2026-09-10): as-built reference for GitHub, Amap and Feishu. All three connect directly
 > to official hosted MCP services; no self-hosting is required. Feishu supports browser-based user
-> authorization with a newly registered or an existing application, token renewal, and the legacy
-> application identity, for six document tools. Regression coverage for the authorization-method
+> authorization with a newly registered or an existing application and user-token renewal
+> for six document tools. Regression coverage for the authorization-method
 > and SQLite changes was updated but has not been run in this session. The Feishu user flow has
 > no device or live-account acceptance yet. Canva, Gmail, Yuque, multiple
 > accounts and other providers' OAuth remain planned. Proposed designs that are not implemented
@@ -21,13 +21,13 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | --- | --- | --- |
 | GitHub | User-supplied personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
-| Feishu | Browser-confirmed user authorization with a personal-agent application registered in the browser or an existing application entered by the user; legacy application ID/secret under Advanced. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
+| Feishu | Browser-confirmed user authorization with an application configured on the Feishu page or credentials entered manually. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
 
 ### Official Cloud Coverage
 
 GitHub's hosted endpoint is `https://api.githubcopilot.com/mcp/`, authenticated with a Bearer token.
 Amap's is `https://mcp.amap.com/mcp?key=...`. Feishu's is `https://mcp.feishu.cn/mcp`, authenticated
-with `X-Lark-MCP-UAT` for users or `X-Lark-MCP-TAT` for legacy applications. All use the existing
+with `X-Lark-MCP-UAT` for the authorized user. All use the existing
 SDK's Streamable HTTP transport. The Amap key is injected only when sending a request; the SDK
 endpoint and saved server identity contain no key. Routing is fixed in backend code and redirects
 cannot forward credentials elsewhere. GitHub also receives `X-MCP-Tools` for the admitted subset;
@@ -85,8 +85,7 @@ and resolved `PluginGrant` in `builtInMcp/authorization`. The database service a
 `credentialReference`; the native store accepts secret values as `credential`. The SQL column is
 still named `credential`, so this distinction changes no persisted format.
 Each authorization method owns and validates its versioned object before native persistence:
-GitHub stores `{ version: 1, token }`, Amap stores `{ version: 1, key }`, Feishu applications store
-`{ version: 1, appId, appSecret }`, and Feishu user authorization stores
+GitHub stores `{ version: 1, token }`, Amap stores `{ version: 1, key }`, and Feishu user authorization stores
 `{ version: 1, application, tokens }`. Token values, scope and expiration metadata belong inside
 that object; adding an authorization field does not add a database column.
 
@@ -132,10 +131,12 @@ for one immediate check when the browser closes. No Cherry callback is promised:
 manually after each official confirmation, and browser close is a check, not a success or denial
 guess.
 
-The application step has two entries. Registration uses the official `PersonalAgent` flow and
-saves the issued application before the separate user grant. Alternatively the user enters an
-existing application's ID and secret, validated by the same field rules as the legacy form, and the
-user grant is requested against that application. Either application is kept across cancellation,
+The primary application entry uses the official `PersonalAgent` flow to open the Feishu page.
+That page offers eligible custom applications owned or administered by the signed-in user; it hides
+the existing-application selector when its filtered list is empty or the URL requests creation only.
+Cherry saves the returned application credentials before the separate user grant. The secondary
+entry explicitly offers manual entry of an existing application's ID and secret, validated by the
+method's field rules. Both entries authorize the personal account. The application is kept across cancellation,
 failed user authorization and disconnect, so a later authorization never registers another
 application in Feishu. An explicit, confirmed recovery action forgets the saved application
 without dropping a live grant. The official page may retain CLI wording and require organization
@@ -263,7 +264,7 @@ a claim that its Connect REST API supports a secretless mobile client.
 | International | `gmail` | Search/read threads; create drafts; modify labels | Planned official hosted MCP after Developer Preview access and mobile OAuth setup. Sending drafts is not in the current official MCP catalog. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
 | China | `yuque` | Search/read documents; list knowledge books; create/update documents | Local functions and OpenAPI with a user-supplied personal or space token. [Official API client](https://github.com/yuque/yuque-open-cli/blob/main/README.zh-CN.md) |
-| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with browser user authorization or legacy application credentials. Live user-flow acceptance and curated OpenAPI functions remain pending. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
+| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with browser user authorization. Live user-flow acceptance and curated OpenAPI functions remain pending. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
 
 Future local integrations may use Cherry-owned names such as `read_document`; remote integrations
 preserve official names. Full API coverage, local file uploads/downloads, Feishu messaging, Canva
@@ -304,7 +305,7 @@ flowchart TD
   Client --> Remote["SDK Streamable HTTP over expo/fetch"]
   Remote --> GitHub["Official GitHub MCP"]
   Remote --> Amap["Official Amap MCP"]
-  Remote --> Feishu["Official Feishu MCP: user or application identity"]
+  Remote --> Feishu["Official Feishu MCP: user identity"]
 ```
 
 There are three durable facts with different owners:

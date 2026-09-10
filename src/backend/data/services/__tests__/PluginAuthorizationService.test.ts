@@ -60,9 +60,9 @@ it('persists Feishu credential references without exposing them in connection or
   const credential = reference(1);
   const connection = await service.connect({
     pluginId: 'feishu',
-    authMethod: 'app_credentials',
+    authMethod: 'feishu_user',
     serverName: 'Feishu',
-    accountLabel: 'cli_cherry',
+    accountLabel: 'Cherry (ou_cherry)',
     credentialReference: credential,
   });
   const server = await new McpServerService().getById(connection.serverId);
@@ -75,7 +75,7 @@ it('persists Feishu credential references without exposing them in connection or
   expect(
     db.sqlite.prepare('SELECT auth_method, credential FROM plugin_authorization').get(),
   ).toEqual({
-    auth_method: 'app_credentials',
+    auth_method: 'feishu_user',
     credential: JSON.stringify(credential),
   });
   expect((await service.listConnections())[0]).not.toHaveProperty('credential');

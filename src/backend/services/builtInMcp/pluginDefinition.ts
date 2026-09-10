@@ -19,7 +19,6 @@ export type PluginRequestAuthorization = {
     credential: PluginCredential,
     request: { url: URL; headers: Headers; signal?: AbortSignal },
   ): void | Promise<void>;
-  invalidate?(): void;
 };
 
 export type PluginClientContext = {
@@ -54,6 +53,6 @@ export interface PluginDefinition {
     readonly tool: string;
     /** Omit to validate discovery only. Never use a write tool for setup. */
     readonly args?: Record<string, unknown>;
-    accountLabel(output: unknown, credential: PluginCredential): string;
+    accountLabel(output: unknown): string;
   };
 }

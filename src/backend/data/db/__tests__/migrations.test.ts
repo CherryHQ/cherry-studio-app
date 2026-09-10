@@ -45,7 +45,7 @@ describe('bundled SQLite migrations', () => {
       expect(database.prepare('SELECT * FROM agent_tool_binding').all()).toEqual(bindings);
       database.exec(`
         INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
-        VALUES ('feishu-grant', 'feishu', 'app_credentials', 'cli_cherry', '{}', 1, 1),
+        VALUES ('feishu-grant', 'feishu', 'feishu_user', 'Cherry (ou_cherry)', '{}', 1, 1),
                ('future-grant', 'vendor.future-plugin', 'future_method_v2', 'Future account', '{}', 1, 1);
         INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, created_at, updated_at)
         VALUES ('feishu-server', 'Feishu', 'builtin', 'feishu', 'feishu-grant', 1, 1),

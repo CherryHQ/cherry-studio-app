@@ -72,8 +72,8 @@ describe('createHttpClient', () => {
     const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
     await createClient({ baseUrl: 'https://open.feishu.cn' }).request({
       method: 'POST',
-      path: '/open-apis/auth/v3/tenant_access_token/internal',
-      body: { app_secret: 'secret' },
+      path: '/open-apis/authen/v2/oauth/token',
+      body: { client_secret: 'secret' },
       redirect: 'error',
     });
   });

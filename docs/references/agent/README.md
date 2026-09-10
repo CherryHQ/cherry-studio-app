@@ -114,7 +114,7 @@ while transport details remain deferred to a separately versioned adapter contra
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse and instruction-resource designs |
-| [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu application integration, and CLI-to-JavaScript feasibility |
+| [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu personal authorization, and CLI-to-JavaScript feasibility |
 | [Agent Skills](./agent-skills.md) | Explicitly deferred Mobile Skill policy and trust boundary |
 
 ## Related
