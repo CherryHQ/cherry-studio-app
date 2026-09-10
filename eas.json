@@ -39,6 +39,7 @@
       "ios": {}
     },
     "production": {
+      "environment": "production",
       "autoIncrement": true,
       "channel": "production",
       "node": "24.19.0",

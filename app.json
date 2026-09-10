@@ -60,6 +60,14 @@
       "expo-router",
       "expo-dev-client",
       [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "organization": "cherryai",
+          "project": "cherry-studio-a0"
+        }
+      ],
+      [
         "expo-widgets",
         {
           "enablePushNotifications": false

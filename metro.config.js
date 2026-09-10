@@ -1,10 +1,10 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const path = require('path');
 const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
 const { withStorybook } = require('@storybook/react-native/withStorybook');
 const { withUniwindConfig } = require('uniwind/metro');
 
-let config = getDefaultConfig(__dirname);
+let config = getSentryExpoConfig(__dirname);
 
 config.resolver.sourceExts.push('sql');
 config.watchFolders.push(path.resolve(__dirname, 'packages'));
