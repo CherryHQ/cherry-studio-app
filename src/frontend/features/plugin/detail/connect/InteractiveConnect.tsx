@@ -207,6 +207,7 @@ export function InteractiveConnect({
             {t('plugins.authorization.useExisting')}
           </Button>
         ) : null}
+        {children}
         {state?.status === 'ready' && !error ? (
           <ContentState.Loading title={t('plugins.authorization.finishing')} />
         ) : null}
@@ -240,7 +241,6 @@ export function InteractiveConnect({
           </Button>
         ) : null}
         <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
-        {children}
       </KeyboardAwareScrollView>
     </>
   );

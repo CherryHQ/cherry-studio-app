@@ -37,17 +37,18 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
   const [methodId, setMethodId] = useState(entry.authMethods[0]?.id);
   const method = entry.authMethods.find((candidate) => candidate.id === methodId);
   if (!method) return <ContentState.Empty title={t('plugins.unavailable')} />;
-  const alternatives = (
-    <View className="gap-2">
-      {entry.authMethods
-        .filter((candidate) => candidate.id !== method.id)
-        .map((candidate) => (
-          <Button key={candidate.id} variant="link" onPress={() => setMethodId(candidate.id)}>
-            {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`)}
-          </Button>
-        ))}
-    </View>
-  );
+  const alternatives =
+    entry.authMethods.length > 1 ? (
+      <View className="gap-2">
+        {entry.authMethods
+          .filter((candidate) => candidate.id !== method.id)
+          .map((candidate) => (
+            <Button key={candidate.id} variant="outline" onPress={() => setMethodId(candidate.id)}>
+              {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`)}
+            </Button>
+          ))}
+      </View>
+    ) : null;
   if (method.kind === 'credentials' && method.requiresDisconnect) {
     if (connections.isLoading) return <ContentState.Loading title={t('plugins.loading')} />;
     if (connections.isError)
