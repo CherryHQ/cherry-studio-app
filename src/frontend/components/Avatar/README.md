@@ -7,8 +7,12 @@ Cherry product data and presentation rules before composing that primitive.
 ## Public Interface
 
 - `BrandAvatar`, `BrandAvatarIcon`, and `BrandAvatarPhoto` apply provider/model brand fallback and
-  icon inset rules. `shape` defaults to `rounded`, the brand default; editing forms pass `circle`,
-  where the avatar is the subject rather than one entry in a list of brands.
+  icon inset rules. Lists use the default `rounded` frame with the shared `rounded-md` radius;
+  detail, creation, and connection forms pass `circle`. The frame owns clipping. Provider artwork
+  with its own background fills the frame; transparent marks use shape-specific insets, and
+  first-character backgrounds fill the frame. `BrandAvatarIcon` accepts a resolved light/dark
+  source pair so aliases and model-to-provider fallbacks share the actual artwork's layout.
+  OpenCode and MiMo compensate for their existing canvas padding at display time.
 - `ProviderBrandAvatar` resolves a provider's built-in logo and generated-initial fallback. It does
   not read uploaded avatars, so provider-avatar persistence remains provider-owned.
 - `ModelAvatar` resolves a model icon from its model and provider records.
