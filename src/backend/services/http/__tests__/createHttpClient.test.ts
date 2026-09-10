@@ -358,7 +358,21 @@ describe('createHttpClient', () => {
     expect(error.cause).toBeUndefined();
   });
 
-  it('rejects a body on GET and DELETE requests, including one added by an interceptor', async () => {
+  it('preserves DELETE bodies required by token revocation endpoints', async () => {
+    const adapter = mockAdapter(async (config) => response(config, 204, undefined));
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    await createClient({ baseUrl: 'https://api.github.com' }).request({
+      method: 'DELETE',
+      path: '/applications/client/token',
+      body: { access_token: 'private-token' },
+    });
+    expect(adapter).toHaveBeenCalledTimes(1);
+    const config = adapter.mock.calls[0][0];
+    expect(config.method).toBe('DELETE');
+    expect(JSON.parse(config.data)).toEqual({ access_token: 'private-token' });
+  });
+
+  it('rejects a body on GET requests, including one added by an interceptor', async () => {
     const adapter = mockAdapter(async (config) => response(config, 200, {}));
     const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
 
@@ -366,7 +380,7 @@ describe('createHttpClient', () => {
     await expect(
       directClient.request({
         body: { enabled: true },
-        method: 'DELETE',
+        method: 'GET',
         path: '/agents/agent-1',
       } as never),
     ).rejects.toMatchObject({ code: 'INVALID_REQUEST_BODY', kind: 'internal' });

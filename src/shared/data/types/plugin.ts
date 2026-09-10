@@ -17,12 +17,14 @@ export type PluginCredentialMethod = {
   readonly id: string;
   readonly kind: 'credentials';
   readonly fields: readonly PluginCredentialField[];
+  readonly requiresDisconnect?: boolean;
 };
 
-/** Browser confirmation with backend polling; application entry is optional. */
+/** Browser interaction is explicit; application entry is optional. */
 export type PluginInteractiveMethod = {
   readonly id: string;
   readonly kind: 'interactive';
+  readonly interaction: 'polling' | 'callback';
   readonly stages: readonly string[];
   readonly applicationFields?: readonly PluginCredentialField[];
 };
@@ -40,6 +42,7 @@ export type PluginCatalogEntry = {
     readonly credentials: string;
     readonly website: string;
     readonly privacy: string;
+    readonly authorizationManagement?: string;
   };
   readonly authMethods: readonly PluginAuthorizationMethod[];
 };
@@ -50,4 +53,11 @@ export type PluginConnection = {
   serverId: string;
   accountLabel: string;
   connectedAt: string;
+  authorization?: PluginConnectionStatus;
+};
+
+export type PluginConnectionStatus = {
+  status: 'connected' | 'needs-reauthorization' | 'unavailable';
+  reason?: import('@/shared/contracts/plugins').PluginErrorReason;
+  managementUrl?: string;
 };

@@ -14,12 +14,13 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `createPluginsModule.ts` | Connect/disconnect workflow and per-plugin mutation ordering |
 | `authorization/` | Method runtimes and observers, native credential storage, and their backend-only contracts |
 | `transport/` | Grant-bound clients, fixed-endpoint HTTP and `validatePluginConnection` |
-| `plugins/github.ts`, `plugins/amap.ts` | Small self-contained plugin definitions |
+| `plugins/amap.ts` | Self-contained Amap definition |
+| `plugins/github/` | GitHub definition, OAuth App authorization with PKCE, account identity, token rotation and revocation |
 | `plugins/feishu/` | Feishu definition, browser authorization, user-token renewal, credential schemas and tests |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
-internal responsibility groups; they do not add public barrels. Feishu exposes only its definition
-through `plugins/feishu/index.ts`.
+internal responsibility groups; they do not add public barrels. Provider directory barrels expose
+only their definition.
 
 The [connection page](../../../frontend/features/plugin/detail/connect/PluginConnectScreen.tsx)
 selects between `CredentialConnect` and `InteractiveConnect`. `useInteractiveConnect` owns route
@@ -66,9 +67,37 @@ observation, browser actions and form state; backend observers own polling and c
 - Pending authorization stays in memory. Errors and process interruption require a new flow;
   reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
 
-The interactive contract currently represents browser confirmation with polling. Existing-application
-entry and reset are optional method capabilities; callback and native SDK flows require their own
-capability design when implemented.
+Interactive methods declare `polling` or `callback`. Polling retains the Feishu rules above;
+callback methods wait for a system authentication session and an exact redirect. A generic route
+adapter removes callback parameters and forwards the original URL to the active method. GitHub
+validates the redirect, state, deadline and PKCE proof and consumes each code once. Its `review`
+state exposes the account identity and requires explicit confirmation before `ready` can
+enter the shared read-only validation and commit sequence. Failed completion requires a new attempt.
+Existing-application entry/reset remain optional; native SDK interactions remain future work.
+
+The shared connection hook uses `openAuthSessionAsync` for GitHub's callback flow and
+`openBrowserAsync` for Feishu's device flow. GitHub returns through the system authentication
+session; Feishu checks the provider's authorization result by polling after browser confirmation.
+
+GitHub's `github_user` method uses an OAuth App with `repo offline_access` and is available only
+with the publisher configuration described in
+[GitHub Plugin Authorization](../../../../docs/guides/github-plugin-authorization.md). It stores a
+versioned completed object through the shared store; pending codes/verifiers/tokens remain in memory.
+The user confirms the account before read-only MCP validation and commit; there are no GitHub App
+installation queries or repository-count requirements. Stable numeric account IDs permit
+same-account reconnection while preserving Agent bindings.
+Changing identity or moving to/from an incomparable personal token requires explicit disconnection.
+The shared commit checks the expected previous grant before saving.
+
+`PluginAuthorizationManager.listConnections` adds local, credential-free status to the Data API;
+reading the list does not renew tokens or contact a provider. Native-store changes and method status
+changes notify connection queries. GitHub distinguishes missing/rejected credentials, uncertain
+renewal/storage failures, and resource/network/quota errors. An ambiguous renewal result blocks
+further automatic renewal in that runtime until reconnection; there is no durable recovery journal.
+A method may capture an optional revocation closure before local disconnect. Local grants and
+bindings are removed first, then remote revocation runs with a deadline; failure is reported without
+undoing local disconnect. A late HTTP 401 is checked against the exact grant and sent token before
+persisting rejection, and never triggers request replay.
 
 A grant change cannot retarget a tool from an already frozen turn catalog. Disconnect disables
 existing Agent bindings and revokes the server/grant before best-effort native cleanup.

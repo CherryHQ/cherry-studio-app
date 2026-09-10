@@ -59,6 +59,7 @@ export class PluginAuthorizationService {
     const [row] = await this.db
       .select({
         id: pluginAuthorizationTable.id,
+        authMethod: pluginAuthorizationTable.authMethod,
         credentialReference: pluginAuthorizationTable.credentialReference,
       })
       .from(pluginAuthorizationTable)

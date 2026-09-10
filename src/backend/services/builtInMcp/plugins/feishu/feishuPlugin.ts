@@ -27,6 +27,7 @@ export const feishuPlugin: PluginDefinition = {
     {
       id: 'feishu_user',
       kind: 'interactive',
+      interaction: 'polling',
       stages: ['registration', 'user'],
       applicationFields: FEISHU_CREDENTIAL_FIELDS,
       createRuntime: (store) => new FeishuAuthorizationRuntime(store),

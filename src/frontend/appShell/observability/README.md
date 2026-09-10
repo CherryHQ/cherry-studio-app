@@ -38,7 +38,7 @@ remove its native code from the app.
 The GitHub release workflows trigger EAS cloud builds using the `production` environment. Configure
 `EXPO_PUBLIC_SENTRY_DSN` as a plain-text variable and `SENTRY_AUTH_TOKEN` as a sensitive variable in
 that EAS environment. The DSN is embedded in the app; the token is used only by native build hooks
-to upload source maps and debug symbols to `cherryai/cherry-studio-a0`. GitHub keeps `EXPO_TOKEN`
+to upload source maps and debug symbols to `cherryai/cherry-studio-app`. GitHub keeps `EXPO_TOKEN`
 for EAS authentication. The Sentry Expo and Metro plugins handle uploads and source map identifiers.
 
 Sentry also works with local EAS builds; cloud workers are not required. Use `pnpm build:local` to

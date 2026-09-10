@@ -184,6 +184,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native/jest-preset": "0.86.0",
+    "@sentry/cli": "2.58.4",
     "@storybook/addon-ondevice-actions": "10.5.1",
     "@storybook/addon-ondevice-controls": "10.5.1",
     "@storybook/react-native": "10.5.1",

@@ -50,6 +50,7 @@ it('owns independent runtimes and observers for multiple interactive methods and
       {
         id: 'oauth',
         kind: 'interactive',
+        interaction: 'polling',
         stages: ['consent'],
         createRuntime: () => first,
         createRequestAuthorization: () => ({ apply() {} }),
@@ -57,6 +58,7 @@ it('owns independent runtimes and observers for multiple interactive methods and
       {
         id: 'enterprise_oauth',
         kind: 'interactive',
+        interaction: 'polling',
         stages: ['tenant', 'approval'],
         createRuntime: () => second,
         createRequestAuthorization: () => ({ apply() {} }),

@@ -8,13 +8,18 @@
 
 1. **Multiple authorization methods per definition.** `PluginDefinition.authMethods` owns each
    method's field rules or interactive runtime factory and request authorization. The runtime
-   manager and connection page select methods from that registry. GitHub and Amap can add OAuth
-   alongside their existing methods; their OAuth protocols are not implemented yet.
+   manager and connection page select methods from that registry. GitHub supports OAuth App
+   authorization alongside personal-token entry; Feishu supports device authorization. Amap
+   continues to use a Web Service key.
 2. **Local native credentials, without sync.** SecureStore owns applications and completed grants;
    SQLite owns connection metadata and references. Pending authorization lives only in memory.
    Failures require the user to repeat the flow; no legacy credential compatibility is provided.
 3. **Caller-independent renewal.** Callers share one renewal result. Cancelling a tool call stops
    only its wait. The complete native token bundle is replaced while the grant identity still matches.
+4. **GitHub callback authorization and local status.** A system authentication session returns to
+   the method runtime for PKCE validation and account confirmation. Local credential status,
+   token renewal, same-account reconnection and best-effort remote revocation are implemented.
+   Live-account and device acceptance remain pending.
 
 ## Persistence
 
@@ -90,7 +95,7 @@ The existing `PluginAuthorizationManager` belongs to the ApplicationHost generat
 adapter backed by SQLite references. Disposal stops observers, drains work and drops in-memory
 credentials. Startup does not prompt for login or renew credentials before first paint.
 
-Further callback and native SDK methods should preserve the existing request sequence:
+GitHub callback authorization is implemented in the [integration reference](./built-in-mcp-design.md#github-browser-authorization). Further callback and native SDK methods should preserve the existing request sequence:
 
 1. Resolve the current grant and validate the method-specific credential and permissions.
 2. Obtain or renew credentials with a small expiry allowance; personal tokens/keys are used as supplied.
@@ -99,9 +104,10 @@ Further callback and native SDK methods should preserve the existing request seq
    existing refresh token when the provider legitimately omits a replacement.
 5. Recheck authorization and dispatch the platform request with the caller's signal and deadline.
 
-A future connection-health projection should map confirmed revoked grants to `needs_reauth`; network failures,
-quota errors and ordinary forbidden-resource responses do not. A successful remote refresh followed
-by local persistence failure may require reconnecting: a database transaction cannot make the
+GitHub's current local status projection maps missing or confirmed rejected credentials to
+`needs-reauthorization`; network failures, quota errors and ordinary forbidden-resource responses
+retain their own reasons. Future methods should preserve this distinction. A successful remote
+refresh followed by local persistence failure may require reconnecting: a database transaction cannot make the
 upstream token rotation atomic. Do not blindly retry a single-use refresh token after an ambiguous
 network outcome unless that provider documents a safe recovery window.
 

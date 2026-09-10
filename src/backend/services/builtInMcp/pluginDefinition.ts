@@ -25,6 +25,7 @@ export type PluginClientContext = {
   readonly pluginId: string;
   readonly tools: PluginToolPolicy;
   readonly getCredential: (signal?: AbortSignal) => Promise<PluginCredential>;
+  readonly rejectCredential?: (credential: PluginCredential) => Promise<void>;
   readonly assertAuthorized: () => Promise<void>;
   readonly authorization: PluginRequestAuthorization;
   readonly signal: AbortSignal;

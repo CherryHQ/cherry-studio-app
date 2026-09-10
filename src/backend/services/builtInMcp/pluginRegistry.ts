@@ -27,6 +27,8 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
       methodIds.add(method.id);
       if (method.kind === 'credentials') validateFields(id, method.fields);
       else {
+        if (method.interaction !== 'polling' && method.interaction !== 'callback')
+          throw new Error(`Invalid authorization interaction: ${id}/${method.id}`);
         if (!method.stages.length || new Set(method.stages).size !== method.stages.length)
           throw new Error(`Invalid authorization stages: ${id}/${method.id}`);
         for (const stage of method.stages) PluginIdSchema.parse(stage);
@@ -49,11 +51,17 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
               ...catalog,
               authMethods: authMethods.map((method) =>
                 method.kind === 'credentials'
-                  ? { id: method.id, kind: method.kind, fields: method.fields }
+                  ? {
+                      id: method.id,
+                      kind: method.kind,
+                      fields: method.fields,
+                      requiresDisconnect: method.requiresDisconnect,
+                    }
                   : {
                       id: method.id,
                       kind: method.kind,
                       stages: method.stages,
+                      interaction: method.interaction,
                       applicationFields: method.applicationFields,
                     },
               ),

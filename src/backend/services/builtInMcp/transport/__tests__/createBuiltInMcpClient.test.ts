@@ -22,6 +22,14 @@ jest.mock('@ai-sdk/mcp', () => {
   const actual = jest.requireActual<typeof mcp>('@ai-sdk/mcp');
   return { ...actual, createMCPClient: jest.fn(actual.createMCPClient) };
 });
+jest.mock('../../plugins/github/githubOauth', () => ({
+  ...jest.requireActual('../../plugins/github/githubOauth'),
+  getGithubApplication: () => ({
+    clientId: 'cherry_oauth_client',
+    clientSecret: 'public-client-secret',
+    redirectUrl: 'cherrystudio-dev://plugins/github/callback',
+  }),
+}));
 jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
@@ -478,4 +486,66 @@ it('rejects an unsupported stored authorization method before transmitting crede
     createBuiltInMcpClient('github', 'grant', new AbortController().signal),
   ).rejects.toMatchObject({ reason: 'authorization' });
   expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('returns a rejected interactive credential to its method with the bound grant and never replays the write', async () => {
+  const rejectCredential = jest.fn(async () => {});
+  mockGetGrant.mockResolvedValue({ id: 'grant-user', authMethod: 'feishu_user' });
+  authorizations.get.mockReturnValue({
+    resolveCredential: mockResolveCredential,
+    rejectCredential,
+  });
+  const client = await createBuiltInMcpClient('feishu', 'grant-user', new AbortController().signal);
+  try {
+    const tools = await client.tools();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.body && JSON.parse(init.body).method === 'tools/call')
+        return new Response('private-rejected-token', { status: 401 });
+      return respond(url, init);
+    });
+    await expect(
+      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
+    ).rejects.toMatchObject({ reason: 'authorization' });
+    expect(rejectCredential).toHaveBeenCalledWith('grant-user', userCredential);
+    expect(toolRequests()).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+it('injects the latest GitHub user credential for each independent request without putting it in SDK configuration', async () => {
+  const credential = {
+    version: 1,
+    application: {
+      clientId: 'cherry_oauth_client',
+      clientSecret: 'public-client-secret',
+      redirectUrl: 'cherrystudio-dev://plugins/github/callback',
+    },
+    account: { id: '42', login: 'cherry' },
+    tokens: { accessToken: 'github-access', refreshToken: 'github-refresh' },
+  };
+  mockGetGrant.mockResolvedValue({ id: 'github-grant', authMethod: 'github_user' });
+  mockResolveCredential.mockResolvedValue(credential);
+  const client = await createBuiltInMcpClient(
+    'github',
+    'github-grant',
+    new AbortController().signal,
+  );
+  try {
+    await settle();
+    mockResolveCredential.mockResolvedValue({
+      ...credential,
+      tokens: { ...credential.tokens, accessToken: 'new-github-access' },
+    });
+    mockFetch.mockClear();
+    await client.listTools();
+    expect(new Headers(mockFetch.mock.calls[0][1].headers).get('Authorization')).toBe(
+      'Bearer new-github-access',
+    );
+    expect(JSON.stringify(jest.mocked(mcp.createMCPClient).mock.calls[0][0])).not.toMatch(
+      /github-access|github-refresh|public-client-secret/,
+    );
+  } finally {
+    await client.close();
+  }
 });

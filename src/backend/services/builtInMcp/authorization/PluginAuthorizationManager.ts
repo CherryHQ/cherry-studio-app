@@ -1,4 +1,6 @@
+import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
+import type { PluginConnectionStatus } from '@/shared/data/types/plugin';
 
 import type { PluginDefinition } from '../pluginDefinition';
 import { getPluginDefinition, requirePluginAuthMethod } from '../pluginRegistry';
@@ -8,6 +10,7 @@ import { PluginCredentialStore } from './PluginCredentialStore';
 
 type Entry = {
   runtime: PluginAuthorizationRuntime;
+  interaction: 'polling' | 'callback';
   observer?: ReturnType<typeof createAuthorizationObserver>;
 };
 
@@ -55,7 +58,10 @@ export class PluginAuthorizationManager {
     }
     let entry = methods.get(methodId);
     if (!entry) {
-      entry = { runtime: method.createRuntime(this.createStore(plugin, methodId)) };
+      const runtime = method.createRuntime(this.createStore(plugin, methodId));
+      if (method.interaction === 'polling' ? !runtime.poll : !runtime.receiveCallback)
+        throw new PluginError('unavailable', 'The authorization interaction is unavailable.');
+      entry = { runtime, interaction: method.interaction };
       methods.set(methodId, entry);
     }
     return entry;
@@ -69,10 +75,64 @@ export class PluginAuthorizationManager {
     const entry = this.entry(pluginId, methodId);
     entry.observer ??= createAuthorizationObserver({
       getState: () => entry.runtime.getState(),
-      poll: (attemptId) => entry.runtime.poll(attemptId),
+      poll:
+        entry.interaction === 'polling' && entry.runtime.poll
+          ? (attemptId) => entry.runtime.poll!(attemptId)
+          : undefined,
       complete,
     });
     return entry.observer;
+  }
+
+  async listConnections() {
+    const connections = await pluginAuthorizationService.listConnections();
+    return Promise.all(
+      connections.map(async (connection) => {
+        let authorization: PluginConnectionStatus;
+        try {
+          const grant = await pluginAuthorizationService.getCurrentGrant(connection.pluginId);
+          const method = this.lookup(connection.pluginId)?.authMethods.find(
+            (item) => item.id === grant?.authMethod,
+          );
+          if (!grant || !method)
+            authorization = { status: 'needs-reauthorization', reason: 'unavailable' };
+          else if (
+            method.kind === 'interactive' &&
+            this.get(connection.pluginId, method.id).describeConnection
+          )
+            authorization = await this.get(connection.pluginId, method.id).describeConnection!(
+              grant.id,
+            );
+          else {
+            const current = await this.credentials
+              .authorizationStore(
+                connection.pluginId,
+                method.id,
+                this.lookup(connection.pluginId)!.serverName,
+              )
+              .getGrant(grant.id);
+            authorization = current
+              ? { status: 'connected' }
+              : { status: 'needs-reauthorization', reason: 'authorization' };
+          }
+        } catch (error) {
+          const reason = error instanceof PluginError ? error.reason : 'storage';
+          authorization = {
+            status: reason === 'authorization' ? 'needs-reauthorization' : 'unavailable',
+            reason,
+          };
+        }
+        return { ...connection, authorization };
+      }),
+    );
+  }
+
+  async currentRuntime(pluginId: string) {
+    const grant = await pluginAuthorizationService.getCurrentGrant(pluginId);
+    const method = this.lookup(pluginId)?.authMethods.find((item) => item.id === grant?.authMethod);
+    return grant && method?.kind === 'interactive'
+      ? { grant, runtime: this.get(pluginId, method.id) }
+      : undefined;
   }
 
   private runtimes(pluginId: string, exceptMethod?: string) {

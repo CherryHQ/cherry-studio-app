@@ -45,6 +45,7 @@ export function PluginListScreen() {
         <View>
           {ids.map((id) => {
             const entry = entries.find((item) => item.id === id);
+            const connection = connections.data?.find((item) => item.pluginId === id);
             const name = entry ? t(`plugins.catalog.${id}.name`) : id;
             return (
               <Pressable
@@ -63,8 +64,12 @@ export function PluginListScreen() {
                   <Text className="text-sm text-muted-foreground">
                     {entry ? t(`plugins.catalog.${id}.summary`) : t('plugins.unavailable')}
                   </Text>
-                  {connections.data?.some((item) => item.pluginId === id) ? (
-                    <Text className="text-xs text-success">{t('plugins.connected')}</Text>
+                  {connection ? (
+                    <Text className="text-xs text-muted-foreground">
+                      {t(
+                        `plugins.connectionStatus.${connection.authorization?.status ?? 'connected'}`,
+                      )}
+                    </Text>
                   ) : null}
                 </View>
                 <ChevronRightIcon className="size-5 text-muted-foreground" />

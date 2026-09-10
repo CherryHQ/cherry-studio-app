@@ -149,3 +149,24 @@ it('does not activate a native write that finishes after the owner stops', async
   expect(await database.listConnections()).toEqual([]);
   expect(secrets.size).toBe(0);
 });
+
+it('rejects a replaced expected grant before writing another native credential', async () => {
+  await storage.connect(input);
+  const originalId = await method().getCurrentAuthorizationId();
+  await storage.connect(input);
+  const writes = native.setItemAsync.mock.calls.length;
+  await expect(
+    method().commit(input.credential, 'Cherry', new AbortController().signal, {
+      authorizationId: originalId,
+    }),
+  ).rejects.toMatchObject({ reason: 'requires-disconnect' });
+  expect(native.setItemAsync).toHaveBeenCalledTimes(writes);
+});
+
+it('distinguishes another method connection from a missing connection without reading its secret', async () => {
+  await storage.connect({ ...input, authMethod: 'app_credentials' });
+  native.getItemAsync.mockClear();
+  expect(await method().getCurrentAuthorizationId()).toBeDefined();
+  expect(await method().getGrant()).toBeUndefined();
+  expect(native.getItemAsync).not.toHaveBeenCalled();
+});

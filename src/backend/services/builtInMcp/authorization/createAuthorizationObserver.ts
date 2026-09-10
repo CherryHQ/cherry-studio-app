@@ -7,7 +7,7 @@ import type { PluginConnection } from '@/shared/data/types/plugin';
 
 export type AuthorizationFlow = {
   getState(): Promise<PluginAuthorizationState>;
-  poll(attemptId: string): Promise<PluginAuthorizationState>;
+  poll?(attemptId: string): Promise<PluginAuthorizationState>;
   complete(attemptId: string): Promise<PluginConnection>;
 };
 
@@ -16,7 +16,7 @@ const MIN_DELAY_MS = 100;
 /**
  * Drives one interactive authorization while a screen observes it: polls at the server's
  * interval, completes an approved grant once, and reports progress. Detaching stops scheduling
- * only; the flow keeps its durable state for the next observer.
+ * only; the flow keeps its in-memory state for the next observer.
  */
 export function createAuthorizationObserver(flow: AuthorizationFlow) {
   const listeners = new Set<(observation: PluginAuthorizationObservation) => void>();
@@ -50,7 +50,12 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
     emit({ busy: true, error: undefined });
     try {
       let state = await flow.getState();
-      if (state.status === 'waiting' && listeners.size && Date.now() >= state.nextPollAt)
+      if (
+        state.status === 'waiting' &&
+        flow.poll &&
+        listeners.size &&
+        Date.now() >= state.nextPollAt
+      )
         state = await flow.poll(state.attemptId);
       emit({ state });
       if (state.status === 'ready' && listeners.size) {
@@ -59,12 +64,13 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
         }
         const connection = await completion.result;
         emit({ state: await flow.getState(), connection });
+      } else if (state.status === 'callback') {
+        schedule(state.expiresAt - Date.now());
       } else if (state.status === 'waiting') {
         schedule(Math.min(state.nextPollAt, state.expiresAt) - Date.now());
       }
     } catch (error) {
-      // Retry is explicit after an actual failure. Do not loop permission/storage errors.
-      completion = undefined;
+      // A failed completion stays consumed until a new attempt. Do not repeat validation or saves on focus.
       emit({ error: error instanceof PluginError ? error.reason : 'request' });
     } finally {
       running = false;
@@ -82,7 +88,7 @@ export function createAuthorizationObserver(flow: AuthorizationFlow) {
         listeners.delete(listener);
         if (listeners.size) return;
         clearTimeout(timer);
-        // Progress and outcome belong to the observing session; durable state is re-read next time.
+        // Progress and outcome belong to the observing session; current state is re-read next time.
         observation = { state: observation.state, busy: observation.busy };
       };
     },
