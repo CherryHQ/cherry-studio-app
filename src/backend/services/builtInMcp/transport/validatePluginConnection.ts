@@ -1,10 +1,10 @@
-import type { MCPClient } from '@ai-sdk/mcp';
 import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginId } from '@/shared/data/types/plugin';
 
 import type { PluginCredential } from '../authorization/pluginCredential';
+import type { PluginClient } from '../pluginDefinition';
 import { requirePluginAuthMethod, requirePluginDefinition } from '../pluginRegistry';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
@@ -21,7 +21,7 @@ export async function validatePluginConnection(
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), CONNECTION_TIMEOUT_MS);
   const operationSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
-  let client: MCPClient | undefined;
+  let client: PluginClient | undefined;
   try {
     operationSignal.throwIfAborted();
     client = await plugin.createClient({
@@ -48,11 +48,10 @@ export async function validatePluginConnection(
           operationSignal.throwIfAborted();
           return plugin.validation.accountLabel(undefined);
         }
-        const tool = client.toolsFromDefinitions({ tools: [definition] })[name];
-        const output = await tool!.execute(plugin.validation.args, {
-          abortSignal: operationSignal,
-          messages: [],
-          toolCallId: 'plugin-authorization',
+        const output = await client.callTool({
+          name,
+          args: plugin.validation.args,
+          options: { abortSignal: operationSignal },
         });
         const result = z
           .object({

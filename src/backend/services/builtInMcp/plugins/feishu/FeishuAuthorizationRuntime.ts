@@ -13,7 +13,7 @@ import {
   type FeishuApplication,
   type FeishuUserCredential,
 } from './feishuCredentials';
-import { feishuOauth, missingFeishuDocumentScopes } from './feishuOauth';
+import { feishuOauth, missingFeishuScopes } from './feishuOauth';
 
 type AuthorizationState = {
   application?: FeishuApplication;
@@ -198,13 +198,13 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   private assertGrantedScopes(credential: FeishuUserCredential, reduced: boolean) {
-    const missing = missingFeishuDocumentScopes(credential.tokens);
+    const missing = missingFeishuScopes(credential.tokens);
     if (missing.length)
       throw new PluginError(
         'access',
         reduced
-          ? `Feishu document permissions were reduced (${missing.join(', ')}). Reauthorize.`
-          : `Approve the missing Feishu document permissions before connecting: ${missing.join(', ')}.`,
+          ? `Feishu plugin permissions were reduced (${missing.join(', ')}). Reauthorize.`
+          : `Approve the missing Feishu plugin permissions before connecting: ${missing.join(', ')}.`,
       );
     if (!credential.tokens.refreshToken)
       throw new PluginError(

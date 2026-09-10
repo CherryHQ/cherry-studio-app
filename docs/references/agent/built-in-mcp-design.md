@@ -4,7 +4,8 @@
 > to official hosted MCP services; no self-hosting is required. GitHub supports publisher-configured
 > OAuth App authorization with an in-app system authentication session, account confirmation and
 > token renewal. Feishu supports browser-based user authorization with a newly registered or an
-> existing application and user-token renewal for six document tools. Updated authorization
+> existing application and user-token renewal for nine hosted tools and nineteen curated Base,
+> task and calendar operations. Updated authorization and tool
 > regression suites have not been run; GitHub and Feishu browser flows still require device and
 > live-account acceptance. Canva, Gmail, Yuque, multiple
 > accounts and other providers' OAuth remain planned. Proposed designs that are not implemented
@@ -22,7 +23,7 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | --- | --- | --- |
 | GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
-| Feishu | Browser-confirmed user authorization with an application configured on the Feishu page or credentials entered manually. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
+| Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
 
 ### Official Cloud Coverage
 
@@ -33,8 +34,9 @@ SDK's Streamable HTTP transport. The Amap key is injected only when sending a re
 endpoint and saved server identity contain no key. Routing is fixed in backend code and redirects
 cannot forward credentials elsewhere. GitHub also receives `X-MCP-Tools` for the admitted subset;
 Cherry enforces the allowlist locally for all three services, independently of upstream behavior.
-Feishu also receives `X-Lark-MCP-Allowed-Tools`; user-only search and unrelated API domains are not
-admitted.
+Feishu also receives `X-Lark-MCP-Allowed-Tools`, containing only admitted hosted tool names.
+Its curated business operations use the same user grant against fixed `https://open.feishu.cn`
+OpenAPI routes through the app's HTTP service, with a Bearer user token and no redirects.
 
 | Former capability | Official replacement | Difference |
 | --- | --- | --- |
@@ -176,12 +178,14 @@ without dropping a live grant. The official page may retain CLI wording and requ
 approval; Cherry sends no invented CLI version or third-party brand alias. Only domestic Feishu
 accounts are supported; cross-brand Lark handoff is rejected.
 
-The requested scopes are the union for the six tools plus `offline_access`. Task/chat, contact,
-media and board scopes are dependencies of those document tools, not new tool offerings. Connection
-requires every document scope in the returned set and names the missing ones; renewal capability
+The requested scopes are generated from the admitted tool manifest plus `offline_access`.
+Chat, media and board scopes remain dependencies of document tools, without standalone messaging
+or file-transfer operations. Connection requires every declared scope and names the missing ones; renewal capability
 is proven by an issued refresh token rather than an echoed `offline_access` scope. Partial grants
 cannot connect and no partially enabled catalog is advertised. Profile lookup and MCP discovery
 follow authorization, so merely holding application credentials is not connection success.
+Existing document-only grants must reauthorize the saved application for the expanded scope set;
+token refresh does not silently expand consent. No database or credential-format migration is needed.
 
 One method queue serializes exchanges, renewal, persistence and grant commits. Explicit
 authorization cancellation invalidates the attempt before late work can commit. Ordinary tool-call
@@ -210,6 +214,46 @@ Protocol references: [official registration](https://github.com/larksuite/cli/bl
 The `development-simulator` EAS profile builds an ARM64 development client: the currently pinned
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
 not an installable physical-device IPA.
+
+### Feishu Business Tools
+
+| Domain | Admitted tools | Boundary |
+| --- | --- | --- |
+| Hosted documents and people | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments`, `search-doc`, `search-user`, `get-user` | Official names and schemas; document search covers doc/docx |
+| Wiki and Base | `wiki_get_node`, `base_list_tables`, `base_list_fields`, `base_search_records`, `base_create_record`, `base_update_record` | Resolve `/wiki/` links to `obj_token`; inspect fields, then query or write existing tables |
+| Tasks | `task_list`, `task_get`, `task_create`, `task_update`, `task_add_members` | List tasks assigned to the user; explicit member open IDs; complete/reopen the whole task |
+| Calendars | `calendar_list`, `calendar_get_primary`, `calendar_list_events`, `calendar_get_event`, `calendar_create_event`, `calendar_update_event`, `calendar_get_freebusy`, `calendar_add_attendees` | Explicit calendar/event IDs; people invitations only; recurring instances use their own IDs |
+
+`plugins/feishu/feishuTools.ts` owns the combined policy and scope union. Each domain declaration
+owns its description, input schema, read/write classification, required scopes and fixed request
+mapping. `createFeishuClient` combines remote discovery with local definitions and routes exact
+tool names. Local definitions appear once on the first discovery page; remote cursors are retained.
+`feishuOpenApi` owns HTTP dispatch, safe error mapping, grant rechecks and cancellation. The shared
+plugin contract exposes only `serverInfo`, `listTools`, `callTool` and `close`; no in-process MCP
+server or general URL/request tool is introduced. Existing Agent binding, approval and result
+handling own both routes, and client close cancels pending local calls.
+
+All lists return one bounded page and preserve continuation tokens. Base filtering/sorting overrides
+the supplied view, so descriptions warn that it searches the whole table. Task timestamps are
+milliseconds; calendar timestamps are seconds, all-day end dates are exclusive, event queries use
+windows shorter than 40 days, and free/busy queries require explicit offsets and at most 90 days.
+Task patches distinguish omitted fields from explicit date clearing. Event time patches require
+both start and end. Create operations expose the provider's optional idempotency key; there is no
+automatic retry, including after a rejected token or an uncertain write result.
+
+Requests are capped at 256 KiB and OpenAPI responses at 120 KiB to leave space inside the runtime's
+256 KiB JSON result limit. Request fewer fields, a smaller page or a shorter calendar window when
+needed. Attachment transfer, including the official `fetch-file` tool, is outside the Feishu
+plugin's product scope. Schema editing, batch writes, deletion, messaging and room booking are
+outside this curated slice. User-owned live
+authorization and business-flow acceptance remain pending; the regression suites were added or
+updated without running them.
+
+Protocol references: [hosted tools](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server),
+[Base search](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/bitable-v1/app-table-record/search),
+[task updates](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/task-v2/task/patch),
+[calendar instances](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar-event/instance_view),
+[common error codes](https://open.feishu.cn/document/ukTMukTMukTM/ugjM14COyUjL4ITN).
 
 ## Extensible Plugin Definitions
 
@@ -286,8 +330,8 @@ later slices. No Cherry-operated authorization proxy, command-line program, loca
 or desktop process is required by this design.
 
 GitHub, Amap and Feishu document tools use official remote MCP services; Canva and Gmail are planned
-to use that route after their access and authorization prerequisites are met. Yuque and broader
-Feishu business domains retain their proposed direct-API designs. All enter the existing MCP
+to use that route after their access and authorization prerequisites are met. Feishu's curated Base,
+task and calendar operations use in-app OpenAPI adapters; Yuque's direct-API design remains planned. All enter the existing MCP
 discovery, binding, approval, and result pipeline. Canva is an explicit upstream MCP dependency, not
 a claim that its Connect REST API supports a secretless mobile client.
 
@@ -298,10 +342,10 @@ a claim that its Connect REST API supports a secretless mobile client.
 | International | `gmail` | Search/read threads; create drafts; modify labels | Planned official hosted MCP after Developer Preview access and mobile OAuth setup. Sending drafts is not in the current official MCP catalog. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
 | China | `yuque` | Search/read documents; list knowledge books; create/update documents | Local functions and OpenAPI with a user-supplied personal or space token. [Official API client](https://github.com/yuque/yuque-open-cli/blob/main/README.zh-CN.md) |
-| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with browser user authorization. Live user-flow acceptance and curated OpenAPI functions remain pending. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
+| China | `feishu` | Search/read/edit documents and comments; find people; query/write Base records; manage tasks, calendar events and invitations | Official developer MCP plus curated in-app OpenAPI with shared browser user authorization. Live acceptance remains pending. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
 
 Future local integrations may use Cherry-owned names such as `read_document`; remote integrations
-preserve official names. Full API coverage, local file uploads/downloads, Feishu messaging, Canva
+preserve official names. Full API coverage, Feishu messaging, Canva
 editing transactions, and permanent deletion operations are later capability slices. All six
 platforms remain in the plan regardless of delivery order.
 
@@ -317,7 +361,7 @@ flowchart TD
   Catalog --> Settings["Plugins: catalog and connected accounts"]
   Registry --> Workflow["PluginsModule: connection and authorization workflow"]
   Settings --> Workflow
-  Registry --> Client["Grant-bound official cloud client"]
+  Registry --> Client["Grant-bound plugin client"]
   Workflow --> Auth["PluginAuthorizationService"]
   Auth --> AuthTable["plugin_authorization: metadata and secure reference"]
   Workflow --> Manager["PluginAuthorizationManager: method runtimes and observers"]
@@ -333,13 +377,14 @@ flowchart TD
   Host --> Pi["Pi: search, describe and call tools"]
   Pi --> Approval["Existing approval and execution boundary"]
   Approval --> MCP["McpRuntimeService"]
-  MCP --> Client["Grant-bound official cloud client"]
+  MCP --> Client
   Client --> Auth
   Client --> UserAuth
   Client --> Remote["SDK Streamable HTTP over expo/fetch"]
   Remote --> GitHub["Official GitHub MCP"]
   Remote --> Amap["Official Amap MCP"]
   Remote --> Feishu["Official Feishu MCP: user identity"]
+  Client --> FeishuApi["Feishu curated OpenAPI: existing HTTP service, same user grant"]
 ```
 
 There are three durable facts with different owners:
@@ -366,6 +411,6 @@ submitted remote operation cannot be rolled back merely by cancelling locally.
 All integrations retain the current base MCP `ask` policy and existing Agent approval-mode rules.
 Provider annotations are descriptive hints, not authorization. User-selected automatic approval
 can reduce routine prompts through the current mechanism; connecting an account does not itself
-grant automatic approval. GitHub, Amap and Feishu use a reviewed subset of discovered upstream
-tools; upstream names and schemas remain intact, and new upstream tools do not become enabled
-merely because discovery starts returning them.
+grant automatic approval. Hosted tools use a reviewed subset of discovered upstream names and
+schemas. Feishu's local declarations provide the reviewed OpenAPI operations. Neither upstream
+discovery nor API availability admits tools without an explicit code change.

@@ -56,7 +56,9 @@ type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'sta
   connectionConfig: McpRuntimeConnectionConfig;
 };
 
-type McpToolCallingClient = MCPClient & {
+type McpRuntimeClient = Pick<MCPClient, 'serverInfo' | 'listTools' | 'close'>;
+
+type McpToolCallingClient = McpRuntimeClient & {
   callTool(input: {
     args: Record<string, unknown>;
     name: string;
@@ -68,9 +70,9 @@ type ServerRuntimeState = {
   /** Cancels every in-flight request of the current generation; replaced on
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
-  client?: MCPClient;
+  client?: McpRuntimeClient;
   connectionConfig: McpRuntimeConnectionConfig;
-  connectionPromise?: Promise<MCPClient>;
+  connectionPromise?: Promise<McpRuntimeClient>;
   discoveredToolNames: Set<string>;
   generation: number;
   runtimeError?: string;
@@ -92,7 +94,7 @@ function unavailableToolError(): McpRuntimeToolError {
 }
 
 async function listAllTools(
-  client: MCPClient,
+  client: McpRuntimeClient,
   signal: AbortSignal,
 ): Promise<ListToolsResult['tools']> {
   const definitions: ListToolsResult['tools'] = [];
@@ -140,7 +142,7 @@ function createMcpClient(
   config: McpRuntimeConnectionConfig,
   signal: AbortSignal,
   pluginAuthorizations: PluginAuthorizationManager,
-): Promise<MCPClient> {
+): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
       config.builtinId,
@@ -166,7 +168,7 @@ function isRunnableMcpServer(server: McpServer): boolean {
   return server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 
-function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClient {
+function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCallingClient {
   return typeof (client as { callTool?: unknown }).callTool === 'function';
 }
 
@@ -396,7 +398,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state: ServerRuntimeState,
     signal: AbortSignal,
     didTimeout?: () => boolean,
-  ): Promise<MCPClient> {
+  ): Promise<McpRuntimeClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
     }
@@ -413,7 +415,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.server.id': state.serverId,
       'mcp.connection.generation': generation,
     });
-    const initPromise: Promise<MCPClient> = createMcpClient(
+    const initPromise: Promise<McpRuntimeClient> = createMcpClient(
       state.connectionConfig,
       signal,
       this.pluginAuthorizations,
@@ -441,20 +443,20 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return initPromise;
   }
 
-  private closeQuietly(client: MCPClient): void {
+  private closeQuietly(client: McpRuntimeClient): void {
     client.close().catch(() => undefined);
   }
 
   private async withTemporaryClient<TValue>(
     config: McpConnectionConfig,
     label: string,
-    operation: (client: MCPClient) => Promise<TValue> | TValue,
+    operation: (client: McpRuntimeClient) => Promise<TValue> | TValue,
   ): Promise<TValue> {
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.connection.temporary': true,
     });
-    let client: MCPClient | undefined;
+    let client: McpRuntimeClient | undefined;
     try {
       client = await createMcpClient(config, bound.signal, this.pluginAuthorizations);
       trace?.end('ok');

@@ -2,7 +2,8 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
-import { FEISHU_DOCUMENT_SCOPES, feishuOauth } from '../feishuOauth';
+import { feishuOauth } from '../feishuOauth';
+import { FEISHU_REQUIRED_SCOPES } from '../feishuTools';
 
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({
@@ -26,7 +27,7 @@ const tokens = {
   refreshToken: 'private-refresh',
   expiresAt: 3600000,
   refreshExpiresAt: 86400000,
-  scope: FEISHU_DOCUMENT_SCOPES.join(' '),
+  scope: FEISHU_REQUIRED_SCOPES.join(' '),
 };
 const challenge = {
   deviceCode: 'private-device',

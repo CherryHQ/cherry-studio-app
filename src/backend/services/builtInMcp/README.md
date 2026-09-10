@@ -1,6 +1,6 @@
 # Built-In MCP Plugins
 
-This module owns official cloud MCP connections and the connect/disconnect workflow for **Plugins**.
+This module owns bundled plugin clients and the connect/disconnect workflow for **Plugins**.
 GitHub, Amap and Feishu are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
@@ -16,7 +16,7 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | `transport/` | Grant-bound clients, fixed-endpoint HTTP and `validatePluginConnection` |
 | `plugins/amap.ts` | Self-contained Amap definition |
 | `plugins/github/` | GitHub definition, OAuth App authorization with PKCE, account identity, token rotation and revocation |
-| `plugins/feishu/` | Feishu definition, browser authorization, user-token renewal, credential schemas and tests |
+| `plugins/feishu/` | Feishu authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
 internal responsibility groups; they do not add public barrels. Provider directory barrels expose
@@ -59,8 +59,13 @@ observation, browser actions and form state; backend observers own polling and c
   `fetch-doc` discovery without a business write. Each method owns credential injection.
 - `plugins/feishu/feishuCredentials` owns credential formats and field validation. `feishuOauth`
   implements personal-agent registration, device authorization and user-token renewal through the existing
-  HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every document
+  HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every admitted tool
   scope and an issued refresh token, and retains application credentials across disconnect.
+- `plugins/feishu/feishuTools` derives discovery policy and the required scope union from the hosted
+  tool metadata and domain declarations. Each local declaration owns input validation and its fixed
+  API operation. `createFeishuClient` routes the tool-only client contract to hosted MCP or
+  `feishuOpenApi`, which shares credential resolution, rechecks the grant and sanitizes errors.
+  Its OpenAPI requests use the existing HTTP service; closing the client cancels local calls.
 - Callers share one credential renewal, including its failure. A caller cancels only its wait;
   disconnect, successful replacement and host disposal invalidate the renewal owner. Saving replaces
   the complete native token bundle after checking the grant ID.
@@ -115,9 +120,11 @@ preserving credentials, server IDs, approval settings and history. Migration
 `0024_extensible-plugin-authorizations` removes the former provider enumeration. `pluginId` and `authMethod` are open durable strings. Keep IDs stable
 and version objects inside each method.
 
-The current version supports one connection per bundled provider. Feishu's six tools support
-reading/browsing, creating, updating and commenting on documents. User-only document search,
-Base, calendars, multiple accounts and other providers' OAuth remain future slices. Write requests
+The current version supports one connection per bundled provider. Feishu combines nine hosted
+document/people tools with nineteen curated wiki, Base, task and calendar operations. Existing
+document-only grants require reauthorization. See [Feishu Business Tools](../../../../docs/references/agent/built-in-mcp-design.md#feishu-business-tools)
+for names, pagination, time/patch semantics and size limits. Feishu attachment transfer is outside
+the product scope. Broader API coverage, multiple accounts and other providers' OAuth remain future slices. Write requests
 are never replayed; an uncertain write outcome tells the caller to inspect the service before
 retrying. All Amap coordinates use GCJ-02 longitude,latitude.
 
@@ -130,5 +137,5 @@ Official service references: [GitHub remote MCP](https://github.com/github/githu
 [Amap tool catalog](https://lbs.amap.com/api/mcp-server/summary),
 [Feishu developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server).
 
-The authorization-method, SQLite and secure-storage regression suites were updated but not run.
+The authorization, transport, Feishu business-operation and persistence regression suites were added or updated but not run.
 No compilation, build, simulator, device or live-account acceptance was performed.

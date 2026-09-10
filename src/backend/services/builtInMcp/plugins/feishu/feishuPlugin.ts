@@ -1,7 +1,8 @@
 import type { PluginDefinition } from '../../pluginDefinition';
-import { createOfficialMcpClient } from '../../transport/createOfficialMcpClient';
+import { createFeishuClient } from './createFeishuClient';
 import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
 import { FEISHU_CREDENTIAL_FIELDS, FeishuUserCredentialSchema } from './feishuCredentials';
+import { FEISHU_REMOTE_TOOL_POLICY, FEISHU_TOOL_POLICY } from './feishuTools';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
@@ -15,14 +16,7 @@ export const feishuPlugin: PluginDefinition = {
       privacy: 'https://www.feishu.cn/privacy',
     },
   },
-  tools: {
-    'fetch-doc': 'read',
-    'list-docs': 'read',
-    'get-comments': 'read',
-    'create-doc': 'write',
-    'update-doc': 'write',
-    'add-comments': 'write',
-  },
+  tools: FEISHU_TOOL_POLICY,
   authMethods: [
     {
       id: 'feishu_user',
@@ -35,16 +29,17 @@ export const feishuPlugin: PluginDefinition = {
         apply(credential, { headers }) {
           const { tokens } = FeishuUserCredentialSchema.parse(credential);
           headers.set('X-Lark-MCP-UAT', tokens.accessToken);
-          headers.set('X-Lark-MCP-Allowed-Tools', Object.keys(tools).join(','));
+          headers.set(
+            'X-Lark-MCP-Allowed-Tools',
+            Object.keys(tools)
+              .filter((name) => Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, name))
+              .join(','),
+          );
         },
       }),
     },
   ],
-  createClient(context) {
-    return createOfficialMcpClient(context, {
-      url: 'https://mcp.feishu.cn/mcp',
-    });
-  },
+  createClient: createFeishuClient,
   validation: {
     tool: 'fetch-doc',
     accountLabel: () => 'Feishu user',

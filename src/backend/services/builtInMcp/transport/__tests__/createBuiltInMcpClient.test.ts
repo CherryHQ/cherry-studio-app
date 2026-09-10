@@ -1,6 +1,7 @@
 import * as mcp from '@ai-sdk/mcp';
 
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
+import { FEISHU_REQUIRED_SCOPES } from '../../plugins/feishu/feishuTools';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
 import { validatePluginConnection } from '../validatePluginConnection';
 
@@ -130,7 +131,7 @@ const userCredential = {
     refreshToken: 'user-refresh',
     expiresAt: 7200000,
     refreshExpiresAt: 86400000,
-    scope: 'documents',
+    scope: FEISHU_REQUIRED_SCOPES.join(' '),
   },
 };
 
@@ -158,15 +159,15 @@ it('rotates user tokens behind a stable grant reference without rejecting the gr
       const headers = new Headers(init.headers);
       expect(headers.get('X-Lark-MCP-UAT')).toBe('user-token-rotated');
     }
-    const tools = await client.tools();
+    await client.listTools();
     mockFetch.mockImplementation((url, init) => {
       if (init?.body && JSON.parse(init.body).method === 'tools/call')
         return new Response(null, { status: 401 });
       return respond(url, init);
     });
-    await expect(
-      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
-    ).rejects.toMatchObject({ reason: 'authorization' });
+    await expect(client.callTool({ name: 'create-doc', args: {} })).rejects.toMatchObject({
+      reason: 'authorization',
+    });
     expect(toolRequests()).toHaveLength(1);
   } finally {
     await client.close();
@@ -201,12 +202,15 @@ it('connects Feishu as the user without storing credentials in MCP configuration
     expect(url).toBe('https://mcp.feishu.cn/mcp');
     expect(headers.get('X-Lark-MCP-UAT')).toBe('user-token-first');
     expect(headers.get('X-Lark-MCP-Allowed-Tools')?.split(',')).toContain('create-doc');
+    expect(headers.get('X-Lark-MCP-Allowed-Tools')).not.toMatch(
+      /base_|task_|calendar_|wiki_get_node/,
+    );
     expect(headers.has('Authorization')).toBe(false);
     expect(init.redirect).toBe('error');
     expect(JSON.stringify(init)).not.toMatch(/private-app-secret|user-refresh/);
   }
-  expect(isBuiltInMcpToolAllowed('feishu', 'search-doc')).toBe(false);
-  expect(isBuiltInMcpToolAllowed('feishu', 'search-user')).toBe(false);
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-doc')).toBe(true);
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-user')).toBe(true);
 });
 
 it('rechecks user authorization before every Feishu request', async () => {
@@ -316,7 +320,7 @@ it.each([401, 403, 429, 500])(
   async (status) => {
     const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
     try {
-      const tools = await client.tools();
+      await client.listTools();
       mockFetch.mockImplementation((url, init) => {
         if (init?.body && JSON.parse(init.body).method === 'tools/call') {
           return new Response('private-key upstream stack', { status });
@@ -324,7 +328,7 @@ it.each([401, 403, 429, 500])(
         return respond(url, init);
       });
       const error = await Promise.resolve(
-        tools.issue_write.execute({ method: 'create' }, { toolCallId: 'write', messages: [] }),
+        client.callTool({ name: 'issue_write', args: { method: 'create' } }),
       ).catch((value: unknown) => value);
       expect(error).toMatchObject({
         reason:
@@ -347,14 +351,14 @@ it.each([401, 403, 429, 500])(
 it('reports an unknown write outcome after a connection failure without replay', async () => {
   const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
   try {
-    const tools = await client.tools();
+    await client.listTools();
     mockFetch.mockImplementation((url, init) => {
       if (init?.body && JSON.parse(init.body).method === 'tools/call')
         throw new Error('private-key');
       return respond(url, init);
     });
     await expect(
-      tools.issue_write.execute({ method: 'create' }, { toolCallId: 'write', messages: [] }),
+      client.callTool({ name: 'issue_write', args: { method: 'create' } }),
     ).rejects.toMatchObject({ reason: 'unknown-write' });
     expect(toolRequests()).toHaveLength(1);
   } finally {
@@ -497,15 +501,15 @@ it('returns a rejected interactive credential to its method with the bound grant
   });
   const client = await createBuiltInMcpClient('feishu', 'grant-user', new AbortController().signal);
   try {
-    const tools = await client.tools();
+    await client.listTools();
     mockFetch.mockImplementation((url, init) => {
       if (init?.body && JSON.parse(init.body).method === 'tools/call')
         return new Response('private-rejected-token', { status: 401 });
       return respond(url, init);
     });
-    await expect(
-      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
-    ).rejects.toMatchObject({ reason: 'authorization' });
+    await expect(client.callTool({ name: 'create-doc', args: {} })).rejects.toMatchObject({
+      reason: 'authorization',
+    });
     expect(rejectCredential).toHaveBeenCalledWith('grant-user', userCredential);
     expect(toolRequests()).toHaveLength(1);
   } finally {

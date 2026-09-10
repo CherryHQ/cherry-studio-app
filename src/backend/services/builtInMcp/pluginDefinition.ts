@@ -1,4 +1,4 @@
-import type { MCPClient } from '@ai-sdk/mcp';
+import type { CallToolResult, MCPClient } from '@ai-sdk/mcp';
 
 import type {
   PluginCatalogEntry,
@@ -13,6 +13,15 @@ import type {
 import type { PluginCredential } from './authorization/pluginCredential';
 
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
+
+/** The tool-only boundary consumed by plugin setup and the existing MCP runtime. */
+export interface PluginClient extends Pick<MCPClient, 'serverInfo' | 'listTools' | 'close'> {
+  callTool(input: {
+    name: string;
+    args: Record<string, unknown>;
+    options?: { abortSignal?: AbortSignal };
+  }): Promise<CallToolResult>;
+}
 
 export type PluginRequestAuthorization = {
   apply(
@@ -49,7 +58,7 @@ export interface PluginDefinition {
   readonly serverName: string;
   readonly authMethods: readonly PluginAuthorizationDefinition[];
   readonly tools: PluginToolPolicy;
-  createClient(context: PluginClientContext): Promise<MCPClient>;
+  createClient(context: PluginClientContext): Promise<PluginClient>;
   readonly validation: {
     readonly tool: string;
     /** Omit to validate discovery only. Never use a write tool for setup. */
