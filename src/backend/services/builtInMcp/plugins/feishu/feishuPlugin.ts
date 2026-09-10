@@ -7,7 +7,7 @@ export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
   catalog: {
     id: 'feishu',
-    icon: 'file-text',
+    icon: 'feishu',
     links: {
       credentials:
         'https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server',
