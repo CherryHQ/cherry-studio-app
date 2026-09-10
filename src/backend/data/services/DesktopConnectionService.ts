@@ -370,7 +370,10 @@ export class DesktopConnectionService {
             ...existingProvider?.endpointConfigs,
             ...configuration.endpointConfigs,
           };
-          assertCustomProviderEndpointConfiguration(configuration);
+          assertCustomProviderEndpointConfiguration({
+            defaultChatEndpoint: configuration.defaultChatEndpoint,
+            endpointConfigs: configuration.endpointConfigs,
+          });
         }
         if (existingProvider) {
           await tx
@@ -402,7 +405,8 @@ export class DesktopConnectionService {
         for (const model of missingModels) {
           if (!configuration.presetProviderId) {
             assertCustomProviderModelEndpointTypes({
-              ...configuration,
+              defaultChatEndpoint: configuration.defaultChatEndpoint,
+              endpointConfigs: configuration.endpointConfigs,
               endpointTypes: model.endpointTypes ?? [],
             });
           }
