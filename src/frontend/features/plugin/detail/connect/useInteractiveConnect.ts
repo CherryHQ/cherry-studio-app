@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, Keyboard, Linking } from 'react-native';
+import { AppState, Keyboard, Linking, Platform } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import {
@@ -58,8 +58,13 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
 
   const connection = observation?.connection;
   const connected = useEffectEvent(async () => {
-    // Only an owned in-app presentation can be dismissed; external browsers return manually.
-    await WebBrowser.dismissBrowser().catch(() => undefined);
+    if (Platform.OS === 'ios') {
+      try {
+        await WebBrowser.dismissBrowser();
+      } catch {
+        // Browser dismissal must not block completion of the saved connection.
+      }
+    }
     await refresh();
     toast.show({ label: t('plugins.connectSuccess', { name }), variant: 'success' });
     router.back();
