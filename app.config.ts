@@ -31,20 +31,26 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
-    plugins: config.plugins?.map((plugin) => {
-      if (plugin === 'expo-dev-client') {
-        return [plugin, { addGeneratedScheme: profile === 'development' }];
-      }
-      if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
-        return [
-          plugin[0],
-          { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
-        ];
-      }
-      return plugin;
-    }),
+    plugins: config.plugins
+      ?.filter((plugin) => {
+        const name = Array.isArray(plugin) ? plugin[0] : plugin;
+        return name !== '@sentry/react-native/expo' || profile === 'production';
+      })
+      .map((plugin) => {
+        if (plugin === 'expo-dev-client') {
+          return [plugin, { addGeneratedScheme: profile === 'development' }];
+        }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
+          return [
+            plugin[0],
+            { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
+          ];
+        }
+        return plugin;
+      }),
     extra: {
       ...config.extra,
+      sentryEnvironment: profile,
       eas: {
         ...eas,
         build: {

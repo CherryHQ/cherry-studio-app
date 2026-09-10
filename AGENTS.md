@@ -20,6 +20,9 @@ configuration, not in repository rules.
   [Testing And CI](docs/guides/testing-and-ci.md).
 - Before creating commits, splitting work, or opening a pull request, read
   [Git Workflow](docs/guides/git-workflow.md).
+- Before creating installation packages or changing build configuration, read
+  [Local EAS Builds](docs/guides/local-builds.md). Use `pnpm build:local` for local EAS packaging;
+  it defaults to development. Sentry reporting and build-time uploads are production-only.
 - When building or changing product UI, read
   [UI Development](docs/guides/ui-development.md) and [Design Spec](DESIGN.md). The project motion
   contract determines whether and how an interaction moves; generic skill guidance does not make

@@ -8,6 +8,7 @@
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
     "eas-build-post-install": "pnpm packages:build",
+    "build:local": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import tsx scripts/buildLocal.ts",
     "dev": "pnpm packages:build && PROFILE=development expo start --dev-client",
     "dev:clear": "pnpm packages:build && PROFILE=development expo start --dev-client --clear",
     "start": "pnpm packages:build && PROFILE=development expo start --dev-client",
@@ -86,6 +87,7 @@
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "@react-native-community/slider": "5.2.0",
     "@react-native-masked-view/masked-view": "0.3.2",
+    "@sentry/react-native": "~7.11.0",
     "@shopify/flash-list": "2.3.2",
     "@shopify/react-native-skia": "2.6.2",
     "@swmansion/react-native-bottom-sheet": "0.15.3",
