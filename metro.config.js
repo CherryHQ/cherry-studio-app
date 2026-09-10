@@ -9,6 +9,18 @@ let config = getSentryExpoConfig(__dirname);
 config.resolver.sourceExts.push('sql');
 config.watchFolders.push(path.resolve(__dirname, 'packages'));
 
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // pkce-challenge 5.x omits a native export; select the same browser entry as legacy resolution.
+  if (moduleName === 'pkce-challenge' && (platform === 'android' || platform === 'ios')) {
+    return context.resolveRequest(
+      { ...context, unstable_conditionNames: [...context.unstable_conditionNames, 'browser'] },
+      moduleName,
+      platform,
+    );
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 // Add .worklets directory to watch folders
 const workletsDir = path.resolve(__dirname, 'node_modules/react-native-worklets/.worklets');
 config.watchFolders.push(workletsDir);

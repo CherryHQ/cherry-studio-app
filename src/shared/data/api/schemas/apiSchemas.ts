@@ -9,6 +9,7 @@ import type { JobSchemas } from './jobs';
 import type { McpServerSchemas } from './mcpServers';
 import type { ModelSchemas } from './models';
 import type { PaintingSchemas } from './paintings';
+import type { PluginCatalogSchemas } from './pluginCatalog';
 import type { PluginConnectionSchemas } from './pluginConnections';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
@@ -24,6 +25,7 @@ export type ApiSchemas = AgentSchemas &
   McpServerSchemas &
   ModelSchemas &
   PaintingSchemas &
+  PluginCatalogSchemas &
   PluginConnectionSchemas &
   ProviderSchemas &
   SearchSchemas;

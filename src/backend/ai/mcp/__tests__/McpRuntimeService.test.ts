@@ -10,9 +10,11 @@ import { createTraceRecorder } from '../../observability/__tests__/_traceRecorde
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('@/backend/services/builtInMcp', () => ({
-  isBuiltInMcpToolAllowed: jest.requireActual(
-    '@/backend/services/builtInMcp/createBuiltInMcpClient',
-  ).isBuiltInMcpToolAllowed,
+  PluginAuthorizationManager: jest.requireActual(
+    '@/backend/services/builtInMcp/authorization/PluginAuthorizationManager',
+  ).PluginAuthorizationManager,
+  isBuiltInMcpToolAllowed: jest.requireActual('@/backend/services/builtInMcp/pluginRegistry')
+    .isBuiltInMcpToolAllowed,
   createBuiltInMcpClient: (pluginId: string, authorizationId: string, signal: AbortSignal) =>
     mockSdkInitContract({ pluginId, authorizationId, initializationOptions: { signal } }),
 }));

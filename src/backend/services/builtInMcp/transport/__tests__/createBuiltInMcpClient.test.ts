@@ -1,13 +1,23 @@
 import * as mcp from '@ai-sdk/mcp';
 
-import {
-  createBuiltInMcpClient,
-  isBuiltInMcpToolAllowed,
-  validatePluginCredential,
-} from '../createBuiltInMcpClient';
+import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
+import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
+import { validatePluginConnection } from '../validatePluginConnection';
 
 const mockFetch = jest.fn();
 const mockGetGrant = jest.fn();
+const mockResolveCredential = jest.fn();
+const authorizations = {
+  get: jest.fn(),
+  credentials: { getCredentialGrant: (...args: unknown[]) => mockGetGrant(...args) },
+};
+function createBuiltInMcpClient(pluginId: string, authorizationId: string, signal: AbortSignal) {
+  return createClient(pluginId, authorizationId, signal, authorizations);
+}
+jest.mock('@/backend/services/http', () => ({
+  createHttpClient: () => ({ request: jest.fn() }),
+  isHttpError: () => false,
+}));
 jest.mock('@ai-sdk/mcp', () => {
   const actual = jest.requireActual<typeof mcp>('@ai-sdk/mcp');
   return { ...actual, createMCPClient: jest.fn(actual.createMCPClient) };
@@ -15,7 +25,17 @@ jest.mock('@ai-sdk/mcp', () => {
 jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
-    getCredentialGrant: (...args: unknown[]) => mockGetGrant(...args),
+    async getAuthorizedGrant(...args: unknown[]) {
+      const grant = await mockGetGrant(...args);
+      return {
+        id: grant.id,
+        authMethod: grant.authMethod,
+        credentialReference: {
+          storage: 'secure-store-v1',
+          id: '00000000-0000-4000-8000-000000000001',
+        },
+      };
+    },
   },
 }));
 
@@ -30,6 +50,8 @@ const definitions = [
     name: 'maps_weather',
     inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
   },
+  { name: 'fetch-doc', inputSchema: { type: 'object', properties: {} } },
+  { name: 'create-doc', inputSchema: { type: 'object', properties: {} } },
 ];
 
 function reply(request: RpcRequest, result: unknown): Response {
@@ -73,12 +95,129 @@ function toolRequests(): RpcRequest[] {
   });
 }
 
+/** The SDK opens its optional GET stream after initialization resolves; let it land first. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 beforeEach(() => {
   jest.mocked(mcp.createMCPClient).mockClear();
   mockFetch.mockReset().mockImplementation(respond);
-  mockGetGrant.mockReset().mockResolvedValue({ credential: 'private-key' });
+  mockGetGrant.mockReset().mockImplementation(async (pluginId: string) => ({
+    id: 'grant-1',
+    credential:
+      pluginId === 'amap'
+        ? { version: 1, key: 'private-key' }
+        : { version: 1, token: 'private-key' },
+    authMethod: pluginId === 'amap' ? 'api_key' : 'personal_token',
+  }));
+  authorizations.get.mockReset().mockReturnValue({ resolveCredential: mockResolveCredential });
+  mockResolveCredential.mockReset().mockResolvedValue(userCredential);
 });
 afterEach(() => jest.restoreAllMocks());
+
+const userCredential = {
+  version: 1,
+  application: { appId: 'cli_cherry', appSecret: 'private-app-secret' },
+  tokens: {
+    accessToken: 'user-token-first',
+    refreshToken: 'user-refresh',
+    expiresAt: 7200000,
+    refreshExpiresAt: 86400000,
+    scope: 'documents',
+  },
+};
+
+it('rotates user tokens behind a stable grant reference without rejecting the grant', async () => {
+  mockGetGrant.mockResolvedValue({
+    id: 'user-grant',
+    credential: userCredential,
+    authMethod: 'feishu_user',
+  });
+  const client = await createBuiltInMcpClient('feishu', 'user-grant', new AbortController().signal);
+  try {
+    await settle();
+    mockResolveCredential.mockImplementation(async () => {
+      const credential = {
+        ...userCredential,
+        tokens: { ...userCredential.tokens, accessToken: 'user-token-rotated' },
+      };
+      mockGetGrant.mockResolvedValue({ id: 'user-grant', credential, authMethod: 'feishu_user' });
+      return credential;
+    });
+    mockFetch.mockClear();
+    await client.listTools();
+    expect(mockFetch).toHaveBeenCalled();
+    for (const [, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+      const headers = new Headers(init.headers);
+      expect(headers.get('X-Lark-MCP-UAT')).toBe('user-token-rotated');
+    }
+    const tools = await client.tools();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.body && JSON.parse(init.body).method === 'tools/call')
+        return new Response(null, { status: 401 });
+      return respond(url, init);
+    });
+    await expect(
+      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
+    ).rejects.toMatchObject({ reason: 'authorization' });
+    expect(toolRequests()).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+it('does not send a user token if its durable authorization is revoked during refresh', async () => {
+  mockGetGrant.mockResolvedValue({
+    id: 'user-grant',
+    credential: userCredential,
+    authMethod: 'feishu_user',
+  });
+  mockResolveCredential.mockImplementation(async () => {
+    mockGetGrant.mockRejectedValue(new Error('revoked'));
+    return userCredential;
+  });
+  await expect(
+    createBuiltInMcpClient('feishu', 'user-grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('connects Feishu as the user without storing credentials in MCP configuration or calling business tools', async () => {
+  await expect(validatePluginConnection('feishu', 'feishu_user', userCredential)).resolves.toBe(
+    'Feishu user',
+  );
+  expect(toolRequests()).toEqual([]);
+  const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
+  expect(JSON.stringify(config)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
+  for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+    const headers = new Headers(init.headers);
+    expect(url).toBe('https://mcp.feishu.cn/mcp');
+    expect(headers.get('X-Lark-MCP-UAT')).toBe('user-token-first');
+    expect(headers.get('X-Lark-MCP-Allowed-Tools')?.split(',')).toContain('create-doc');
+    expect(headers.has('Authorization')).toBe(false);
+    expect(init.redirect).toBe('error');
+    expect(JSON.stringify(init)).not.toMatch(/private-app-secret|user-refresh/);
+  }
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-doc')).toBe(false);
+  expect(isBuiltInMcpToolAllowed('feishu', 'search-user')).toBe(false);
+});
+
+it('rechecks user authorization before every Feishu request', async () => {
+  mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
+  const client = await createBuiltInMcpClient(
+    'feishu',
+    'grant-feishu',
+    new AbortController().signal,
+  );
+  try {
+    await client.listTools();
+    mockGetGrant.mockRejectedValue(new Error('revoked'));
+    mockFetch.mockClear();
+    await expect(client.listTools()).rejects.toMatchObject({ reason: 'authorization' });
+    expect(mockFetch).not.toHaveBeenCalled();
+  } finally {
+    await client.close();
+  }
+});
 
 it.each([
   ['github', 'https://api.githubcopilot.com/mcp/'],
@@ -141,6 +280,7 @@ it('rejects unexpected tool names and targets before credential injection', asyn
       mcp.MCPClientConfig['transport'],
       { type: 'http' | 'sse' }
     >;
+    await settle();
     mockFetch.mockClear();
     mockGetGrant.mockClear();
     await expect(transport.fetch!('https://untrusted.example/mcp', {})).rejects.toMatchObject({
@@ -221,7 +361,11 @@ it('does not send a request cancelled while resolving credentials', async () => 
     const controller = new AbortController();
     mockGetGrant.mockImplementation(async () => {
       controller.abort();
-      return { credential: 'private-key' };
+      return {
+        id: 'grant-1',
+        credential: { version: 1, token: 'private-key' },
+        authMethod: 'personal_token',
+      };
     });
     mockFetch.mockClear();
     await expect(client.listTools({ options: { signal: controller.signal } })).rejects.toThrow();
@@ -237,7 +381,15 @@ it.each([
 ] as const)(
   'validates %s using only a read-only cloud tool',
   async (pluginId, name, args, label) => {
-    await expect(validatePluginCredential(pluginId, 'entered-key')).resolves.toBe(label);
+    await expect(
+      validatePluginConnection(
+        pluginId,
+        pluginId === 'github' ? 'personal_token' : 'api_key',
+        pluginId === 'github'
+          ? { version: 1, token: 'entered-key' }
+          : { version: 1, key: 'entered-key' },
+      ),
+    ).resolves.toBe(label);
     expect(toolRequests().map((request) => request.params)).toEqual([{ name, arguments: args }]);
     expect(mockGetGrant).not.toHaveBeenCalled();
   },
@@ -253,9 +405,10 @@ it('rejects tool-reported credential failure without exposing upstream text', as
     }
     return respond(url, init);
   });
-  const error = await validatePluginCredential('amap', 'entered-key').catch(
-    (value: unknown) => value,
-  );
+  const error = await validatePluginConnection('amap', 'api_key', {
+    version: 1,
+    key: 'entered-key',
+  }).catch((value: unknown) => value);
   expect(error).toMatchObject({ reason: 'request' });
   expect(JSON.stringify(error)).not.toContain('entered-key');
 });
@@ -268,7 +421,9 @@ it('follows tool-list pagination to find the validation tool', async () => {
     }
     return respond(url, init);
   });
-  await expect(validatePluginCredential('github', 'entered-key')).resolves.toBe('cherry');
+  await expect(
+    validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
+  ).resolves.toBe('cherry');
 });
 
 it.each([undefined, 'repeated'])(
@@ -279,7 +434,9 @@ it.each([undefined, 'repeated'])(
       if (request?.method === 'tools/list') return reply(request, { tools: [], nextCursor });
       return respond(url, init);
     });
-    await expect(validatePluginCredential('github', 'entered-key')).rejects.toMatchObject({
+    await expect(
+      validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
+    ).rejects.toMatchObject({
       reason: 'request',
     });
     expect(toolRequests()).toEqual([]);
@@ -295,7 +452,30 @@ it('rejects an empty weather response even when the MCP envelope reports success
     }
     return respond(url, init);
   });
-  await expect(validatePluginCredential('amap', 'entered-key')).rejects.toMatchObject({
+  await expect(
+    validatePluginConnection('amap', 'api_key', { version: 1, key: 'entered-key' }),
+  ).rejects.toMatchObject({
     reason: 'request',
   });
+});
+
+it('keeps unregistered plugins inert without resolving grants or starting a client', async () => {
+  expect(isBuiltInMcpToolAllowed('vendor.future-plugin', 'get_me')).toBe(false);
+  await expect(
+    createBuiltInMcpClient('vendor.future-plugin', 'grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'unavailable' });
+  expect(mockGetGrant).not.toHaveBeenCalled();
+  expect(mcp.createMCPClient).not.toHaveBeenCalled();
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('rejects an unsupported stored authorization method before transmitting credentials', async () => {
+  mockGetGrant.mockResolvedValue({
+    credential: { version: 1, token: 'private-key' },
+    authMethod: 'future_method_v2',
+  });
+  await expect(
+    createBuiltInMcpClient('github', 'grant', new AbortController().signal),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
 });

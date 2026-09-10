@@ -22,6 +22,7 @@ import m0020 from '../../../../migrations/sqlite-drizzle/0020_desktop-connection
 import m0021 from '../../../../migrations/sqlite-drizzle/0021_plugin-authorizations.sql';
 import m0022 from '../../../../migrations/sqlite-drizzle/0022_official-cloud-plugins.sql';
 import m0023 from '../../../../migrations/sqlite-drizzle/0023_reconcile-desktop-connection.sql';
+import m0024 from '../../../../migrations/sqlite-drizzle/0024_extensible-plugin-authorizations.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -55,5 +56,6 @@ export const migrations = {
     m0021,
     m0022,
     m0023,
+    m0024,
   },
 };

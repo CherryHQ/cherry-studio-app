@@ -64,6 +64,20 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
+  it('passes redirect rejection through the fetch adapter for secret-bearing requests', async () => {
+    const adapter = mockAdapter(async (config) => {
+      expect(config.fetchOptions?.redirect).toBe('error');
+      return response(config, 200, {});
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    await createClient({ baseUrl: 'https://open.feishu.cn' }).request({
+      method: 'POST',
+      path: '/open-apis/authen/v2/oauth/token',
+      body: { client_secret: 'secret' },
+      redirect: 'error',
+    });
+  });
+
   it('keeps Axios behind the app-owned client contract', () => {
     const createClient = __testing.createHttpClientFactoryWithAdapter(
       mockAdapter(async (config) => response(config, 200, {})),

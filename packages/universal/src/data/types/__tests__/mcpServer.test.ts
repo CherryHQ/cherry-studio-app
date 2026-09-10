@@ -44,23 +44,29 @@ describe('McpServerSchema', () => {
     expect(() => McpServerSchema.parse({ ...server, endpointUrl: 'example.com/mcp' })).toThrow();
   });
 
-  it('requires a built-in grant identity and forbids remote credentials on it', () => {
-    const builtin = {
-      ...server,
-      origin: 'builtin',
-      builtinId: 'github',
-      authorizationId: id,
-      endpointUrl: null,
-    };
-    expect(McpServerSchema.parse(builtin)).toEqual(builtin);
-    for (const patch of [
-      { authorizationId: undefined },
-      { builtinId: 'unknown' },
-      { endpointUrl: 'https://example.com/mcp' },
-      { headers: { Authorization: 'secret' } },
-      { origin: 'remote' },
-    ])
-      expect(McpServerSchema.safeParse({ ...builtin, ...patch }).success).toBe(false);
-    expect(McpServerSchema.safeParse({ ...server, authorizationId: id }).success).toBe(false);
-  });
+  it.each(['github', 'amap', 'feishu', 'vendor.future-plugin'])(
+    'requires a %s grant identity and forbids remote credentials on it',
+    (builtinId) => {
+      const builtin = {
+        ...server,
+        origin: 'builtin',
+        builtinId,
+        authorizationId: id,
+        endpointUrl: null,
+      };
+      expect(McpServerSchema.parse(builtin)).toEqual(builtin);
+      for (const patch of [
+        { authorizationId: undefined },
+        { builtinId: '' },
+        { builtinId: 'invalid id' },
+        { builtinId: 'https://example.com' },
+        { builtinId: 'a'.repeat(129) },
+        { endpointUrl: 'https://example.com/mcp' },
+        { headers: { Authorization: 'secret' } },
+        { origin: 'remote' },
+      ])
+        expect(McpServerSchema.safeParse({ ...builtin, ...patch }).success).toBe(false);
+      expect(McpServerSchema.safeParse({ ...server, authorizationId: id }).success).toBe(false);
+    },
+  );
 });

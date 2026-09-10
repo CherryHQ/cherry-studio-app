@@ -34,6 +34,8 @@ export interface DecodedHttpError {
 export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError | undefined;
 
 interface HttpRequestBase {
+  /** Reject redirects for credential exchanges bound to one official endpoint. */
+  readonly redirect?: 'error';
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers?: HttpHeaders;
   /** Positive response-size limit in bytes. Omit when the domain has no explicit cap. */

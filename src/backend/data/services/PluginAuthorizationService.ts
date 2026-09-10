@@ -6,10 +6,12 @@ import {
   mcpServerTable,
   monotonicUpdateTimestamp,
   pluginAuthorizationTable,
+  PluginSecretReferenceSchema,
+  type PluginSecretReference,
 } from '@/backend/data/db/schemas';
 import type { PluginConnection, PluginId } from '@/shared/data/types/plugin';
 
-/** Owns grant rows and their MCP identities; it never exposes credentials to UI. */
+/** Owns grant references and MCP identities. Credentials are opaque native-storage references. */
 export class PluginAuthorizationService {
   private get dbService() {
     return application.get('DbService');
@@ -34,7 +36,7 @@ export class PluginAuthorizationService {
     }));
   }
 
-  async getCredentialGrant(pluginId: PluginId, authorizationId: string) {
+  async getAuthorizedGrant(pluginId: PluginId, authorizationId: string) {
     const [row] = await this.db
       .select({ grant: pluginAuthorizationTable })
       .from(pluginAuthorizationTable)
@@ -52,10 +54,37 @@ export class PluginAuthorizationService {
     return row.grant;
   }
 
+  /** Backend-only state, including disabled connections that still own their grant. */
+  async getCurrentGrant(pluginId: PluginId, authMethod?: string) {
+    const [row] = await this.db
+      .select({
+        id: pluginAuthorizationTable.id,
+        credentialReference: pluginAuthorizationTable.credentialReference,
+      })
+      .from(pluginAuthorizationTable)
+      .innerJoin(mcpServerTable, eq(mcpServerTable.authorizationId, pluginAuthorizationTable.id))
+      .where(
+        and(
+          eq(pluginAuthorizationTable.pluginId, pluginId),
+          authMethod ? eq(pluginAuthorizationTable.authMethod, authMethod) : undefined,
+          eq(mcpServerTable.builtinId, pluginId),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
   async connect(
-    input: { pluginId: PluginId; accountLabel: string; credential: string },
+    input: {
+      pluginId: PluginId;
+      authMethod: string;
+      serverName: string;
+      accountLabel: string;
+      credentialReference: PluginSecretReference;
+    },
     signal?: AbortSignal,
   ): Promise<PluginConnection> {
+    const credentialReference = PluginSecretReferenceSchema.parse(input.credentialReference);
     return this.dbService.withWriteTx(async (tx) => {
       signal?.throwIfAborted();
       const [previous] = await tx
@@ -66,8 +95,10 @@ export class PluginAuthorizationService {
       const [grant] = await tx
         .insert(pluginAuthorizationTable)
         .values({
-          ...input,
-          authMethod: input.pluginId === 'github' ? 'personal_token' : 'api_key',
+          pluginId: input.pluginId,
+          authMethod: input.authMethod,
+          accountLabel: input.accountLabel,
+          credentialReference,
         })
         .returning();
       const [server] = previous
@@ -82,7 +113,7 @@ export class PluginAuthorizationService {
               origin: 'builtin',
               builtinId: input.pluginId,
               authorizationId: grant.id,
-              name: input.pluginId === 'github' ? 'GitHub' : '高德地图',
+              name: input.serverName,
               isEnabled: true,
             })
             .returning();

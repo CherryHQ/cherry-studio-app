@@ -9,6 +9,7 @@ import {
   type McpServerMutations,
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
+import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
@@ -18,7 +19,7 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
-import { createPluginsModule } from '@/backend/services/builtInMcp';
+import { createPluginsModule, getBuiltInPluginCatalog } from '@/backend/services/builtInMcp';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
@@ -47,6 +48,7 @@ export type BackendComposition = {
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
+    pluginCatalog: PluginCatalogReader;
     systemModelSupport: SystemModelSupportFilter;
   };
 };
@@ -195,7 +197,7 @@ export function createBackend(
       models,
       paintings,
       permissions: services.devicePermissions,
-      plugins: createPluginsModule(services.mcpRuntime),
+      plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.pluginAuthorizations),
       profile,
       providers,
       webSearch: services.webSearch,
@@ -203,6 +205,7 @@ export function createBackend(
     dataApiDependencies: {
       agentAvatars,
       mcpServerMutations,
+      pluginCatalog: getBuiltInPluginCatalog,
       systemModelSupport,
     },
   };

@@ -1,30 +1,37 @@
 import { sql } from 'drizzle-orm';
 import { check, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import * as z from 'zod';
 
 import type { PluginId } from '@/shared/data/types/plugin';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 
+/** SQLite stores only these opaque references; native storage owns their values. */
+export const PluginSecretReferenceSchema = z.strictObject({
+  storage: z.literal('secure-store-v1'),
+  id: z.string().uuid(),
+});
+export type PluginSecretReference = z.infer<typeof PluginSecretReferenceSchema>;
+
 /**
- * Plugin grants. The credential is stored as entered, matching how provider
- * API keys and remote MCP headers live in this same sandboxed database.
+ * Opaque plugin grants: identifiers and credential formats are owned by bundled definitions.
+ * Credentials are opaque SecureStore references; secrets never enter SQLite.
  */
 export const pluginAuthorizationTable = sqliteTable(
   'plugin_authorization',
   {
     id: uuidPrimaryKey(),
     pluginId: text().$type<PluginId>().notNull(),
-    authMethod: text().$type<'personal_token' | 'api_key'>().notNull(),
+    authMethod: text().notNull(),
     accountLabel: text().notNull(),
-    credential: text().notNull(),
+    credentialReference: text('credential', { mode: 'json' })
+      .$type<PluginSecretReference>()
+      .notNull(),
     ...createUpdateTimestamps,
   },
   (t) => [
-    check('plugin_authorization_provider_check', sql`${t.pluginId} in ('github', 'amap')`),
-    check(
-      'plugin_authorization_method_check',
-      sql`(${t.pluginId} = 'github' and ${t.authMethod} = 'personal_token') or (${t.pluginId} = 'amap' and ${t.authMethod} = 'api_key')`,
-    ),
+    check('plugin_authorization_id_check', sql`length(trim(${t.pluginId})) > 0`),
+    check('plugin_authorization_method_check', sql`length(trim(${t.authMethod})) > 0`),
   ],
 );
 

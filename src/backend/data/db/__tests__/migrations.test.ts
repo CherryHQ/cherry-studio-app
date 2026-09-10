@@ -6,6 +6,74 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('opens plugin identifiers and authorization methods while preserving referenced grants, servers and Agent settings', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(
+        ({ tag }) => tag === '0024_extensible-plugin-authorizations',
+      );
+      expect(target).toBeGreaterThan(0);
+      const journal = readMigrationJournal();
+      expect(journal.entries[target].when).toBeGreaterThan(journal.entries[target - 1].when);
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+        VALUES ('github-grant', 'github', 'personal_token', 'cherry', 'github-secret', 1, 1),
+               ('amap-grant', 'amap', 'api_key', 'Web Service', 'amap-secret', 1, 1);
+        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, disabled_tools, is_active, created_at, updated_at)
+        VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github-grant', '["issue_write"]', 1, 1, 1),
+               ('amap-server', 'Amap', 'builtin', 'amap', 'amap-grant', '[]', 1, 1, 1);
+        INSERT INTO mcp_server (id, name, base_url, headers, is_active, created_at, updated_at)
+        VALUES ('custom', 'Custom', 'https://custom.example/mcp', '{"Authorization":"custom-secret"}', 1, 1, 1);
+        INSERT INTO agent_tool_binding (id, agent_id, source, mcp_server_id, enabled, approval, created_at, updated_at)
+        VALUES ('binding', 'agent', 'mcp', 'github-server', 1, 'ask', 1, 1);
+      `);
+      const grants = database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all();
+      const servers = database.prepare('SELECT * FROM mcp_server ORDER BY id').all();
+      const bindings = database.prepare('SELECT * FROM agent_tool_binding').all();
+      database.exec('BEGIN IMMEDIATE');
+      applyMigrationSql(database, entries[target].sql);
+      database.exec('COMMIT');
+      expect(database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all()).toEqual(
+        grants,
+      );
+      expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
+      expect(database.prepare('SELECT * FROM agent_tool_binding').all()).toEqual(bindings);
+      database.exec(`
+        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+        VALUES ('feishu-grant', 'feishu', 'feishu_user', 'Cherry (ou_cherry)', '{}', 1, 1),
+               ('future-grant', 'vendor.future-plugin', 'future_method_v2', 'Future account', '{}', 1, 1);
+        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, created_at, updated_at)
+        VALUES ('feishu-server', 'Feishu', 'builtin', 'feishu', 'feishu-grant', 1, 1),
+               ('future-server', 'Future', 'builtin', 'vendor.future-plugin', 'future-grant', 1, 1);
+      `);
+      expect(() =>
+        database.exec("DELETE FROM plugin_authorization WHERE id = 'feishu-grant'"),
+      ).toThrow();
+      expect(() =>
+        database.exec(
+          "UPDATE plugin_authorization SET auth_method = ' ' WHERE id = 'future-grant'",
+        ),
+      ).toThrow();
+      expect(() =>
+        database.exec("UPDATE plugin_authorization SET plugin_id = '' WHERE id = 'future-grant'"),
+      ).toThrow();
+      expect(() =>
+        database.exec(
+          "UPDATE mcp_server SET authorization_id = 'missing' WHERE id = 'future-server'",
+        ),
+      ).toThrow();
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
+    } finally {
+      database.close();
+    }
+  });
+
   test('requires renewed Agent consent for official cloud tools while retaining grants and custom MCP settings', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -125,7 +193,12 @@ describe('bundled SQLite migrations', () => {
         );
 
         expect(columnNames(database, 'desktop_connection')).toContain('active_base_url');
-        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(grants);
+        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(
+          grants.map((grant) => ({
+            ...grant,
+            credential: JSON.stringify({ version: 1, token: grant.credential }),
+          })),
+        );
         expect(database.prepare('SELECT * FROM mcp_server').all()).toEqual(servers);
         expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       } finally {
