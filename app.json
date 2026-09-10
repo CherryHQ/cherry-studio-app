@@ -103,7 +103,7 @@
           "isIosBackgroundLocationEnabled": false,
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
-          "motionUsagePermission": false,
+          "motionUsagePermission": "Cherry Studio does not read or track your motion and fitness activity. This permission description is required by the location service included in the app.",
           "locationWhenInUsePermission": "Allow Cherry Studio to use your location when you ask the assistant."
         }
       ],
