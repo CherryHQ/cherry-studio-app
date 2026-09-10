@@ -262,6 +262,43 @@ describe('createPaintingGenerateJobHandler', () => {
       },
     );
 
+    it.each(['completed', 'failed'])(
+      'keeps execution pending until the %s notification has been delivered',
+      async (outcome) => {
+        const dependencies = createDependencies();
+        if (outcome === 'failed') {
+          jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider down'));
+        }
+        let deliver!: () => void;
+        const delivery = new Promise<void>((resolve) => {
+          deliver = resolve;
+        });
+        let beginDelivery!: () => void;
+        const delivering = new Promise<void>((resolve) => {
+          beginDelivery = resolve;
+        });
+        dependencies.activities = {
+          startSession: () => ({
+            cancel() {},
+            update() {},
+            finish() {
+              beginDelivery();
+              return delivery;
+            },
+          }),
+        };
+        const execution = createPaintingGenerateJobHandler(dependencies).execute(createContext());
+        const settled = jest.fn();
+        void execution.then(settled, settled);
+        await delivering;
+        await Promise.resolve();
+        expect(settled).not.toHaveBeenCalled();
+        deliver();
+        if (outcome === 'failed') await expect(execution).rejects.toThrow('provider down');
+        else await expect(execution).resolves.toHaveProperty('outputs');
+      },
+    );
+
     it('finishes the session as failed when generation throws', async () => {
       const { dependencies, sessions } = createSessionDependencies();
       jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider down'));

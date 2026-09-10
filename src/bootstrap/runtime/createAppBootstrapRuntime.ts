@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
@@ -13,6 +14,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
@@ -51,10 +53,16 @@ export function createAppBootstrapRuntime(
   const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
     'BackgroundActivityEnvironment',
   );
+  const androidActivities =
+    Platform.OS === 'android'
+      ? host.container.get<AndroidBackgroundActivityRuntime>('AndroidBackgroundActivityRuntime')
+      : undefined;
   backgroundActivityEnvironment.configure({
-    assistantPresenter: createLiveActivityPresenter(AssistantActivity),
+    assistantPresenter:
+      androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
-    paintingPresenter: createLiveActivityPresenter(PaintingActivity),
+    paintingPresenter:
+      androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),
   });
   const agent = host.container.get<MobileAgentHost>('MobileAgentHost');

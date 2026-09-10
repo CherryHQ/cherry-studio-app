@@ -79,7 +79,7 @@ export type PaintingActivityDriver = {
 };
 
 export type PaintingGenerateJobDependencies = {
-  /** Dynamic-island progress surface; omitted in tests and off iOS. */
+  /** Platform task progress surface; omitted by callers without presentation. */
   activities?: PaintingActivityDriver;
   ai: PaintingAi;
   paintings: {
@@ -186,7 +186,7 @@ export function createPaintingGenerateJobHandler(
             };
           });
 
-          session?.finish(
+          await session?.finish(
             paintingActivityProps(translate, 'completed', modelName, prompt, startedAtEpochMs),
           );
           return { outputs, painting };
@@ -204,7 +204,7 @@ export function createPaintingGenerateJobHandler(
         }
       } catch (error) {
         const phase: PaintingActivityPhase = ctx.signal.aborted ? 'cancelled' : 'failed';
-        session?.finish(
+        await session?.finish(
           paintingActivityProps(translate, phase, modelName, prompt, startedAtEpochMs),
         );
         throw error;

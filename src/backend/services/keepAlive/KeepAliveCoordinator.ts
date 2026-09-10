@@ -4,10 +4,12 @@ import { type AppStateStatus, Platform } from 'react-native';
 import {
   AppStatePolicy,
   BaseService,
+  DependsOn,
   Injectable,
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const KEEP_ALIVE_VOLUME = 0.001;
@@ -22,7 +24,7 @@ export type KeepAliveLease = {
 };
 
 export type KeepAliveSource = {
-  acquire(tag: string): KeepAliveLease;
+  acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease;
 };
 
 /**
@@ -30,10 +32,12 @@ export type KeepAliveSource = {
  * is held, a silent looping audio session keeps Hermes scheduled after the app
  * is backgrounded (the OpenMinis approach). The coordinator is a pure counting
  * primitive: it carries no preference gate — each consumer decides for itself
- * when staying alive is warranted. No-ops off iOS.
+ * when staying alive is warranted. Android delegates to a user-visible dataSync
+ * foreground service with Headless JS; other platforms are a no-op.
  */
 @Injectable('KeepAliveCoordinator')
 @ServicePhase(Phase.PostReady)
+@DependsOn(['AndroidBackgroundActivityRuntime'])
 @AppStatePolicy('background-presentation')
 export class KeepAliveCoordinator extends BaseService {
   private disposed = false;
@@ -44,6 +48,10 @@ export class KeepAliveCoordinator extends BaseService {
   private retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
   private retryTimer?: ReturnType<typeof setTimeout>;
 
+  constructor(private readonly android?: Pick<AndroidBackgroundActivityRuntime, 'acquire'>) {
+    super();
+  }
+
   protected onInit(): void {
     if (Platform.OS !== 'ios') return;
     // A failed session start (audio hardware busy) must retry once the app is
@@ -51,7 +59,10 @@ export class KeepAliveCoordinator extends BaseService {
     this.registerAppStateListener(this.handleAppStateChange);
   }
 
-  acquire(_tag: string): KeepAliveLease {
+  acquire(tag: string, onInterrupt?: (reason: Error) => void | Promise<void>): KeepAliveLease {
+    if (Platform.OS === 'android' && !this.disposed) {
+      return this.android?.acquire(tag, onInterrupt) ?? noOpLease;
+    }
     if (Platform.OS !== 'ios' || this.disposed) return noOpLease;
 
     let released = false;

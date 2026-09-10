@@ -89,8 +89,8 @@ const DELAYED_TIMER_READ_RETRY_MS = 1_000;
 /**
  * `user-continued` states the product promise ("keeps running while you do
  * something else"); a keep-alive lease around `execute` is the mechanism
- * honoring it on iOS today. Honest OS leases (iOS Continued Processing,
- * Android FGS) can replace the mechanism later without touching the class.
+ * honoring it through iOS background audio or Android's dataSync foreground
+ * service. The execution class does not bypass OS background-start restrictions.
  */
 const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
   'foreground-only',
@@ -361,7 +361,7 @@ export class JobRuntime extends BaseService {
               ['running'],
             );
           } finally {
-            this.releaseKeepAliveLease(jobId);
+            await this.releaseKeepAliveAfterPump(this.activeKeepAliveLeases.get(jobId));
           }
           return { outcome: 'timed-out' };
         }
@@ -836,7 +836,12 @@ export class JobRuntime extends BaseService {
     if (handler.executionClass !== 'user-continued' || !this.keepAlive) return undefined;
 
     this.releaseKeepAliveLease(row.id);
-    const sourceLease = this.keepAlive.acquire(`job.${row.type}`);
+    const sourceLease = this.keepAlive.acquire(`job.${row.type}`, async (reason) => {
+      // Stop execution before the cancellation-intent write yields. A task
+      // denied background time must not start its request while that write waits.
+      this.abortControllers.get(row.id)?.abort(reason);
+      await this.cancel(row.id, reason.message);
+    });
     let released = false;
     const lease: KeepAliveLease = {
       release: () => {
@@ -854,6 +859,17 @@ export class JobRuntime extends BaseService {
 
   private releaseKeepAliveLease(jobId: string): void {
     this.activeKeepAliveLeases.get(jobId)?.release();
+  }
+
+  private async releaseKeepAliveAfterPump(lease: KeepAliveLease | undefined): Promise<void> {
+    if (!lease) return;
+    try {
+      // Claim queued successors before releasing execution protection:
+      // Android cannot restart the service once the app is backgrounded.
+      await this.pump({ reason: 'enqueue' });
+    } finally {
+      lease.release();
+    }
   }
 
   private armTimeoutGrace(
@@ -888,7 +904,7 @@ export class JobRuntime extends BaseService {
             timeout: timeoutError.message,
           });
         })
-        .finally(() => this.releaseKeepAliveLease(row.id));
+        .finally(() => this.releaseKeepAliveAfterPump(this.activeKeepAliveLeases.get(row.id)));
     }, graceMs);
     this.timeoutGraceHandles.set(row.id, handle);
   }
@@ -975,11 +991,11 @@ export class JobRuntime extends BaseService {
           ]);
         }
       } finally {
-        keepAliveLease?.release();
         this.clearTimeoutHandle(row.id);
-        // Released before `executed` settles, so a drain that was waiting on
-        // this execution does not then see it still registered.
+        // Unregister this settled attempt before claiming an immediate retry
+        // of the same row; retain only its lease through the queue handoff.
         binding.release();
+        await this.releaseKeepAliveAfterPump(keepAliveLease);
       }
     })();
 

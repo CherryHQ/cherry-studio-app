@@ -718,6 +718,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         agentName: plan.agent.name,
         sessionId,
         sessionTitle,
+        onInterrupt: async (reason) => {
+          const run = this.runningTurnsBySession.get(sessionId);
+          abortController.abort(reason);
+          await this.cancelTurn({ sessionId, turnId: reserved.turnId });
+          await run;
+        },
       }),
       hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
@@ -1233,6 +1239,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     agentName: string;
     sessionId: string;
     sessionTitle: string;
+    onInterrupt?: (reason: Error) => void | Promise<void>;
   }): BackgroundReplyTurn {
     try {
       return this.backgroundReply.startTurn(input);

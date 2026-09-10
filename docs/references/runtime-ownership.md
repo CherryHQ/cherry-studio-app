@@ -38,6 +38,8 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
+- Android uses task-scoped foreground-service and Headless JS lifetimes within OS limits; see
+  [Android Background Generation](./android-background-generation.md).
 - Backend modules report events/results; frontend owners perform navigation, translation, toast,
   and React Query invalidation.
 

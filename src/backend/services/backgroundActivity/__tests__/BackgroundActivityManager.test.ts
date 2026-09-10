@@ -165,7 +165,7 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     expect(mockAcquire).toHaveBeenCalledTimes(1);
-    expect(mockAcquire).toHaveBeenCalledWith('chat.topic-1');
+    expect(mockAcquire).toHaveBeenCalledWith('chat.topic-1', undefined);
 
     session.update(makeProps('awaiting-approval'), { keepAlive: false });
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
@@ -175,6 +175,102 @@ describe('BackgroundActivityManager', () => {
 
     session.cancel();
     expect(mockLeases[1]?.release).toHaveBeenCalledTimes(1);
+    await manager._doStop();
+  });
+
+  test('Android delivers an approval update before releasing its last execution lease', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const { presenter, handles } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      keepAlive: true,
+      presenter,
+      props: makeProps('generating'),
+      tag: 'chat',
+    });
+    let finishUpdate!: () => void;
+    handles[0]!.update.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUpdate = resolve;
+        }),
+    );
+    session.update(makeProps('awaiting-approval'), { keepAlive: false, urgent: true });
+    await flushOperations();
+    expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+    finishUpdate();
+    await flushOperations();
+    expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+    session.cancel();
+    await manager._doStop();
+  });
+
+  test.each(['update', 'finish'] as const)(
+    'Android keeps execution through %s delivery when an older progress update is pending',
+    async (terminalAction) => {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+      const { presenter, handles } = createMockPresenter();
+      const manager = await createManager([presenter]);
+      const session = manager.startSession({
+        keepAlive: true,
+        presenter,
+        props: makeProps('starting'),
+        tag: 'chat',
+      });
+      let releaseProgress!: () => void;
+      handles[0]!.update.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseProgress = resolve;
+          }),
+      );
+      session.update(makeProps('responding'), { urgent: true });
+      await flushOperations();
+
+      let releaseTerminal!: () => void;
+      const pendingTerminal = () =>
+        new Promise<void>((resolve) => {
+          releaseTerminal = resolve;
+        });
+      if (terminalAction === 'finish') {
+        handles[0]!.end.mockImplementationOnce(pendingTerminal);
+        void session.finish(makeProps('completed'));
+      } else {
+        handles[0]!.update.mockImplementationOnce(pendingTerminal);
+        session.update(makeProps('awaiting-approval'), { keepAlive: false, urgent: true });
+        // A repeated projection with identical content must also await delivery.
+        session.update(makeProps('awaiting-approval'), { keepAlive: false });
+      }
+      expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+      releaseProgress();
+      await flushOperations();
+      expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+      releaseTerminal();
+      await flushOperations();
+      expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+      session.cancel();
+      await manager._doStop();
+    },
+  );
+
+  test('Android represents a background-started queued task without requiring a foreground surface start', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const { presenter, handles } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      presenter,
+      props: makeProps('generating'),
+      tag: 'painting',
+    });
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    expect(mockPrepareLogo).not.toHaveBeenCalled();
+    session.finish(makeProps('completed'));
+    await flushOperations();
+    expect(handles[0]!.end).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ detail: 'completed' }),
+    );
     await manager._doStop();
   });
 
@@ -267,6 +363,49 @@ describe('BackgroundActivityManager', () => {
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
     session.cancel();
+    await manager._doStop();
+  });
+
+  test('finish waits for queued platform delivery even when the caller owns the execution lease', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const { handles, presenter } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      keepAlive: false,
+      presenter,
+      props: makeProps('preparing'),
+      tag: 'painting',
+    });
+    let releaseUpdate!: () => void;
+    handles[0]!.update.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseUpdate = resolve;
+        }),
+    );
+    session.update(makeProps('responding'), { urgent: true });
+    await flushOperations();
+    let releaseEnd!: () => void;
+    handles[0]!.end.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseEnd = resolve;
+        }),
+    );
+    let finished = false;
+    const finish = session.finish(makeProps('completed')).then(() => {
+      finished = true;
+    });
+    await flushOperations();
+    expect(finished).toBe(false);
+    expect(handles[0]!.end).not.toHaveBeenCalled();
+    releaseUpdate();
+    await flushOperations();
+    expect(handles[0]!.end).toHaveBeenCalled();
+    expect(finished).toBe(false);
+    releaseEnd();
+    await finish;
+    expect(finished).toBe(true);
     await manager._doStop();
   });
 

@@ -53,6 +53,7 @@ type TurnRecord = {
   generation: number;
   key: string;
   latestMessage?: BackgroundReplyMessage;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
@@ -78,7 +79,7 @@ type EnvironmentPort = {
  * Chat's domain adapter over the background-activity mechanism: it owns the
  * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
- * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
+ * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
  * behind the injected session manager.
  */
 @Injectable('BackgroundReplyRuntime')
@@ -103,7 +104,7 @@ export class BackgroundReplyRuntime
   }
 
   protected onInit(): void {
-    if (Platform.OS !== 'ios') return;
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
 
     this.registerDisposable(
       this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
@@ -111,7 +112,10 @@ export class BackgroundReplyRuntime
   }
 
   protected async onReady(): Promise<void> {
-    if (Platform.OS === 'ios' && this.preference.readCached(PREFERENCE_KEY)) {
+    if (
+      (Platform.OS === 'ios' || Platform.OS === 'android') &&
+      this.preference.readCached(PREFERENCE_KEY)
+    ) {
       await this.activate();
     }
   }
@@ -141,7 +145,8 @@ export class BackgroundReplyRuntime
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if (Platform.OS !== 'ios' || !this.isActivated || this.disposed) return noOpTurn;
+    if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !this.isActivated || this.disposed)
+      return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
@@ -157,6 +162,7 @@ export class BackgroundReplyRuntime
       deepLinkUrl: normalized.deepLinkUrl,
       generation,
       key: normalized.key,
+      onInterrupt: input.onInterrupt,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
@@ -338,8 +344,9 @@ export class BackgroundReplyRuntime
     // A continuation that supersedes this generation inherits the live session.
     await this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
-      record.session?.finish(this.toActivityProps(record));
+      const session = record.session;
       record.session = undefined;
+      await session?.finish(this.toActivityProps(record));
       if (this.turns.get(key) === record) this.turns.delete(key);
     });
   }
@@ -381,6 +388,7 @@ export class BackgroundReplyRuntime
     record.session = this.activities.startSession({
       deepLinkUrl: record.deepLinkUrl,
       keepAlive,
+      onInterrupt: (reason) => this.turns.get(record.key)?.onInterrupt?.(reason),
       presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
       tag: SESSION_TAG,

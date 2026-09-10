@@ -442,17 +442,17 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
   });
 
-  test('uses no-op turns on Android and when the preference is disabled at startup', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const androidRuntime = await createRuntime();
-    androidRuntime.startTurn({
+  test('uses no-op turns on unsupported platforms and when the preference is disabled at startup', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
+    const unsupportedRuntime = await createRuntime();
+    unsupportedRuntime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
       sessionTitle: 'First session',
     });
     expect(mockStartSession).not.toHaveBeenCalled();
-    await androidRuntime._doStop();
+    await unsupportedRuntime._doStop();
 
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     enabled = false;
@@ -470,6 +470,31 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(translate).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
+  });
+
+  test('Android shares the reply lifecycle and interruption targets a superseding turn', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    const runtime = await createRuntime();
+    const firstInterrupted = jest.fn();
+    const nextInterrupted = jest.fn();
+    const input = {
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'Chat',
+    };
+    runtime.startTurn({ ...input, onInterrupt: firstInterrupted });
+    runtime.startTurn({ ...input, onInterrupt: nextInterrupted });
+    expect(mockSessions).toHaveLength(1);
+    const reason = new Error('Android foreground service expired');
+    mockSessions[0]!.input.onInterrupt?.(reason);
+    expect(firstInterrupted).not.toHaveBeenCalled();
+    expect(nextInterrupted).toHaveBeenCalledWith(reason);
+    enabled = false;
+    preferenceListener?.();
+    await flushOperations();
+    expect(mockSessions[0]!.cancel).toHaveBeenCalledTimes(1);
+    await runtime._doStop();
   });
 
   test('keeps turn callbacks non-throwing when content derivation fails', async () => {

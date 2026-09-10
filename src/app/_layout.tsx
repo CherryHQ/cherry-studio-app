@@ -16,6 +16,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { useBackgroundActivityNavigation } from '@/frontend/appShell/backgroundActivity/useBackgroundActivityNavigation';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -102,6 +103,7 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 }
 
 function RootStack() {
+  useBackgroundActivityNavigation();
   const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
     'background',
     'foreground',

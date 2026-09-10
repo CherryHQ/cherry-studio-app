@@ -250,8 +250,8 @@ describe('KeepAliveCoordinator', () => {
     expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
   });
 
-  test('no-ops off iOS', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  test('no-ops on unsupported platforms', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
     const coordinator = new KeepAliveCoordinator();
     await coordinator._doInit();
     const lease = coordinator.acquire('chat');
