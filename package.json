@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "engines": {
     "node": "24.x"
   },
@@ -101,6 +101,7 @@
     "expo-blur": "~57.0.1",
     "expo-build-properties": "~57.0.5",
     "expo-calendar": "~57.0.1",
+    "expo-camera": "~57.0.4",
     "expo-clipboard": "^57.0.1",
     "expo-constants": "~57.0.5",
     "expo-crypto": "~57.0.1",
@@ -124,6 +125,7 @@
     "expo-paste-input": "0.2.2",
     "expo-router": "~57.0.6",
     "expo-screen-corner-radius": "^1.1.0",
+    "expo-secure-store": "~57.0.2",
     "expo-sharing": "~57.0.18",
     "expo-splash-screen": "~57.0.4",
     "expo-sqlite": "~57.0.1",

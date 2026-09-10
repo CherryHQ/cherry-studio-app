@@ -6,18 +6,12 @@ import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import { Section } from '@cherrystudio/ui/components';
-import { useCallback } from 'react';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
-import { useBackendModule } from '@/frontend/data';
 import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
-import type {
-  DevicePermission,
-  DevicePermissionScope,
-  PermissionStatuses,
-  SystemPermissionState,
-} from '@/shared/contracts';
+import { type DevicePermissionScope, summarizeDevicePermissions } from '@/shared/contracts';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { getAgentCapabilityAvailability } from '@/shared/data/types/builtInTool';
 
@@ -49,9 +43,8 @@ const CAPABILITY_ICONS = {
   web: GlobeIcon,
 } satisfies Record<AgentCapability, LucideIconComponent>;
 
-// Availability facts are static per build, so the visible rows and the scope
-// set the permission hook observes can be module constants — the hook requires
-// a stable scope array.
+// Platform support is static; device support is checked from live statuses below.
+// Keep the observed scope array stable for the permission hook.
 const VISIBLE_ROWS: readonly CapabilityRow[] = CAPABILITY_DISPLAY_ORDER.flatMap((capability) => {
   const availability = getAgentCapabilityAvailability(capability);
   const isSupported =
@@ -69,41 +62,22 @@ export function AgentCapabilitiesSection({
   onChange,
 }: AgentCapabilitiesSectionProps) {
   const { t } = useTranslation();
-  const permissions = useBackendModule('permissions');
-  const { refresh, statuses } = useDevicePermissionStatuses(OBSERVED_SCOPES);
-
-  const handleToggle = useCallback(
-    (row: CapabilityRow, enabled: boolean) => {
-      onChange(
-        enabled
-          ? disabledCapabilities.filter((capability) => capability !== row.capability)
-          : [...new Set([...disabledCapabilities, row.capability])],
-      );
-      // Opting in is the clearest moment to ask the system: request the first
-      // never-asked scope right away. Remaining scopes stay with the in-turn
-      // just-in-time request, so the user sees one dialog here, not a queue.
-      if (enabled) {
-        const scope = row.permissionScopes.find(
-          (candidate) => statuses[candidate] === 'undetermined',
-        );
-        if (scope) {
-          void permissions
-            .request(scope)
-            .catch(() => undefined)
-            .then(() => refresh().catch(() => undefined));
-        }
-      }
-    },
-    [disabledCapabilities, onChange, permissions, refresh, statuses],
+  const { statuses } = useDevicePermissionStatuses(OBSERVED_SCOPES);
+  const visibleRows = VISIBLE_ROWS.filter(
+    (row) =>
+      !row.permissionScopes.length ||
+      !row.permissionScopes.every((scope) => statuses[scope]?.reason === 'unsupported'),
   );
 
-  const openSettings = useCallback(
-    (scopes: readonly DevicePermissionScope[]) => {
-      const permission = scopes[0]?.split('.')[0] as DevicePermission | undefined;
-      void permissions.openSystemSettings(permission).catch(() => undefined);
-    },
-    [permissions],
-  );
+  const handleToggle = (row: CapabilityRow, enabled: boolean) => {
+    onChange(
+      enabled
+        ? disabledCapabilities.filter((capability) => capability !== row.capability)
+        : [...new Set([...disabledCapabilities, row.capability])],
+    );
+    // This changes the Agent's intent only. System access is requested for the
+    // actual operation, after the in-chat approval, or explicitly in Settings.
+  };
 
   return (
     <View className="gap-2">
@@ -111,8 +85,10 @@ export function AgentCapabilitiesSection({
         {t('agent.capabilities.section')}
       </Text>
       <View className="gap-2">
-        {VISIBLE_ROWS.map((row) => {
+        {visibleRows.map((row) => {
           const enabled = !disabledCapabilities.includes(row.capability);
+          const status = summarizeDevicePermissions(row.permissionScopes, statuses);
+          const showPermissionAction = enabled && status && status.state !== 'granted';
           const label = t(`agent.capabilities.${row.capability}.label`);
           const LeadingIcon = CAPABILITY_ICONS[row.capability];
           return (
@@ -120,12 +96,11 @@ export function AgentCapabilitiesSection({
               <Section.SwitchItem
                 density="compact"
                 description={
-                  enabled
-                    ? permissionCaption(
-                        groupPermissionState(row.permissionScopes, statuses),
-                        row.permissionScopes,
-                        openSettings,
-                        t,
+                  enabled && status && status.state !== 'granted'
+                    ? t(
+                        status.reason
+                          ? `settings.permissions.reason.${status.reason}`
+                          : `agent.capabilities.permission.${status.state}`,
                       )
                     : undefined
                 }
@@ -134,64 +109,22 @@ export function AgentCapabilitiesSection({
                 onValueChange={(value) => handleToggle(row, value)}
                 value={enabled}
               />
+              {showPermissionAction && (
+                <Section.Item
+                  density="compact"
+                  label={t('agent.capabilities.permission.manage')}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/settings/permissions/[permission]',
+                      params: { permission: row.capability },
+                    })
+                  }
+                />
+              )}
             </Section>
           );
         })}
       </View>
     </View>
   );
-}
-
-/**
- * Only problems earn a caption: `denied` deep-links to system settings — the
- * one place it can be fixed — and `unavailable` explains a switch that cannot
- * work. Granted and never-asked scopes stay quiet; the just-in-time request
- * covers the latter.
- */
-function permissionCaption(
-  state: SystemPermissionState | undefined,
-  scopes: readonly DevicePermissionScope[],
-  openSettings: (scopes: readonly DevicePermissionScope[]) => void,
-  t: (key: string) => string,
-) {
-  if (state === 'denied') {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        onPress={(event) => {
-          event.stopPropagation();
-          openSettings(scopes);
-        }}
-      >
-        <Text className="text-error text-sm">{t('agent.capabilities.permission.denied')}</Text>
-      </Pressable>
-    );
-  }
-  if (state === 'unavailable') {
-    return t('agent.capabilities.permission.unavailable');
-  }
-  return undefined;
-}
-
-function groupPermissionState(
-  scopes: readonly DevicePermissionScope[],
-  statuses: PermissionStatuses,
-): SystemPermissionState | undefined {
-  if (scopes.length === 0) {
-    return undefined;
-  }
-  const states = scopes.map((scope) => statuses[scope]);
-  if (states.some((state) => state === undefined)) {
-    return undefined;
-  }
-  if (states.every((state) => state === 'granted')) {
-    return 'granted';
-  }
-  if (states.some((state) => state === 'denied')) {
-    return 'denied';
-  }
-  if (states.some((state) => state === 'undetermined')) {
-    return 'undetermined';
-  }
-  return 'unavailable';
 }

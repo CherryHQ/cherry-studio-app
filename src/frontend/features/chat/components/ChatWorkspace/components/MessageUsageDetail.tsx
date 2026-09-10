@@ -8,7 +8,7 @@ import type { MessageListItem } from '@/frontend/components/Message';
 import { useMessageUsageRecords } from '../hooks/useMessageUsageRecords';
 import { formatMessageUsageCost, getMessageUsageDetails } from '../utils/messageUsage';
 
-const DETAIL_SIZES = ['medium', 'large'] as const;
+const DETAIL_SIZES = ['medium', 'large', 'full'] as const;
 
 export function MessageUsageDetail({
   message,
@@ -21,6 +21,14 @@ export function MessageUsageDetail({
   const { error, isLoading, records, refresh } = useMessageUsageRecords(message.id);
   const detail = getMessageUsageDetails(message.stats, records, message.model);
   const locale = i18n.resolvedLanguage ?? i18n.language;
+  const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
+  const formattedCreatedAt =
+    createdAt && !Number.isNaN(createdAt.getTime())
+      ? new Intl.DateTimeFormat(locale, {
+          dateStyle: 'medium',
+          timeStyle: 'medium',
+        }).format(createdAt)
+      : undefined;
   const numbers = new Intl.NumberFormat(locale);
   const decimals = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
   const seconds = new Intl.NumberFormat(locale, {
@@ -37,7 +45,6 @@ export function MessageUsageDetail({
       : t('chat.messageUsage.speedValue', { value: decimals.format(value) });
   const formatDuration = (value: number | undefined) =>
     value === undefined ? undefined : seconds.format(value / 1000);
-  const createdAt = message.createdAt ? new Date(message.createdAt) : undefined;
   const providerName = message.model
     ? (records.find((record) => record.providerId === message.model?.providerId)?.providerName ??
       message.model.providerId)
@@ -61,22 +68,6 @@ export function MessageUsageDetail({
     ['chat.messageUsage.approvalDuration', formatDuration(detail.approvalDurationMs)],
   ] as const;
   const visiblePerformance = performance.filter(([, value]) => value !== undefined);
-  const metadata = [
-    [
-      'chat.messageUsage.requests',
-      detail.requestCount === undefined ? undefined : numbers.format(detail.requestCount),
-    ],
-    [
-      'chat.messageUsage.createdAt',
-      createdAt && Number.isFinite(createdAt.getTime())
-        ? new Intl.DateTimeFormat(locale, {
-            dateStyle: 'medium',
-            timeStyle: 'medium',
-          }).format(createdAt)
-        : undefined,
-    ],
-  ] as const;
-  const visibleMetadata = metadata.filter(([, value]) => value !== undefined);
 
   return (
     <MessagePart.Detail
@@ -182,6 +173,22 @@ export function MessageUsageDetail({
           </View>
         </View>
 
+        {visiblePerformance.length > 0 ? (
+          <View className="gap-4">
+            <MessagePart.SectionTitle title={t('chat.messageUsage.performance')} />
+            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
+              {visiblePerformance.map(([key, value]) => (
+                <View className="min-w-32 flex-1 gap-1" key={key}>
+                  <Text className="text-muted-foreground text-xs">{t(key)}</Text>
+                  <Text className="font-medium text-foreground text-lg tabular-nums" selectable>
+                    {value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         <View className="gap-3">
           <MessagePart.SectionTitle title={t('chat.messageUsage.cost')} />
           {detail.costs.map((cost) => {
@@ -218,36 +225,6 @@ export function MessageUsageDetail({
           ) : null}
         </View>
 
-        {visiblePerformance.length > 0 ? (
-          <View className="gap-4">
-            <MessagePart.SectionTitle title={t('chat.messageUsage.performance')} />
-            <View className="flex-row flex-wrap gap-x-6 gap-y-5">
-              {visiblePerformance.map(([key, value]) => (
-                <View className="min-w-32 flex-1 gap-1" key={key}>
-                  <Text className="text-muted-foreground text-xs">{t(key)}</Text>
-                  <Text className="font-medium text-foreground text-lg tabular-nums" selectable>
-                    {value}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Text className="text-muted-foreground text-xs">
-              {t('chat.messageUsage.durationHint')}
-            </Text>
-          </View>
-        ) : null}
-
-        {visibleMetadata.length > 0 ? (
-          <View className="gap-3">
-            <MessagePart.SectionTitle title={t('chat.messageUsage.message')} />
-            {visibleMetadata.map(([key, value]) =>
-              value === undefined ? null : (
-                <MessageUsageRow key={key} label={t(key)} value={value} />
-              ),
-            )}
-          </View>
-        ) : null}
-
         {error ? (
           <ContentState.Error
             primaryAction={{ children: t('common.retry'), onPress: () => void refresh() }}
@@ -266,6 +243,16 @@ export function MessageUsageDetail({
             <Button onPress={() => void refresh()} size="inline" variant="ghost">
               <Text className="font-medium text-foreground text-xs">{t('common.retry')}</Text>
             </Button>
+          </View>
+        ) : null}
+        {formattedCreatedAt ? (
+          <View className="gap-1">
+            <Text className="text-muted-foreground text-xs">
+              {t('chat.messageUsage.createdAt')}
+            </Text>
+            <Text className="font-mono text-foreground text-xs" selectable>
+              {formattedCreatedAt}
+            </Text>
           </View>
         ) : null}
       </View>

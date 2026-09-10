@@ -16,11 +16,12 @@ suffix.
   export, and retained upload retry. Its process logger captures startup errors; its
   `AgentEventTraceRuntime` is an application-host resource. See [Diagnostics](diagnostics/README.md).
 
-- `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` expose mobile workflow
+- `models`, `paintings`, `mcp`, `providers`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.
 - `webSearch` retains the desktop-aligned `WebSearchService`. Device permissions are adapted by
-  `DevicePermissions`; avatar storage remains a set of domain functions.
+  `DevicePermissions`, which directly implements the shared `PermissionsModule` contract;
+  avatar storage remains a set of domain functions.
 - `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
   file maintenance orchestration. File-entry and reference persistence remain in
   `src/backend/data/services`.
@@ -43,6 +44,12 @@ suffix.
   resource primitives remain independent of persistence, Expo modules, and product domains.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
+- `desktopConnections` owns pairing, device-only credentials, and one-way incremental imports.
+  `DesktopConnectionRuntime` implements the shared workflow contract directly, serializes
+  credential operations, and cancels/drains requests before its host's database closes.
+  Bootstrap injects a persistence service bound to that same database; list/detail reads remain
+  in Data API. Its private Expo transport rejects redirects and keeps the deadline active through
+  response-body consumption.
 - `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
   provider adaptation, and MCP connection behavior.
 - `http` owns non-streaming HTTP(S) request/response infrastructure for external services. It

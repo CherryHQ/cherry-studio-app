@@ -70,7 +70,7 @@ export type ReconcileProviderModelsResult = {
   removedIds: string[];
 };
 
-type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
+export type ModelInputWithoutOrderKey = Omit<InsertUserModelRow, 'orderKey'>;
 type UpdateField = keyof UpdateModelDto;
 
 export const UPDATE_MODEL_FIELD_MAP: Array<UpdateField | [UpdateField, keyof InsertUserModelRow]> =
@@ -260,7 +260,7 @@ function presetDeltaToInsert(
   };
 }
 
-function buildCreateValues(input: CreateModelInput): ModelInputWithoutOrderKey {
+export function buildModelInsertValues(input: CreateModelInput): ModelInputWithoutOrderKey {
   if (!input.registryData?.presetModel) {
     return customInputToInsert(input);
   }
@@ -410,9 +410,10 @@ export class ModelService {
   }
 
   async create(input: CreateModelInput): Promise<Model> {
+    providerRegistryService.assertReady();
     const row = (await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
-      return insertWithOrderKey(tx, userModelTable, buildCreateValues(input), {
+      return insertWithOrderKey(tx, userModelTable, buildModelInsertValues(input), {
         pkColumn: userModelTable.id,
         scope: eq(userModelTable.providerId, input.providerId),
       });
@@ -424,7 +425,8 @@ export class ModelService {
     if (inputs.length === 0) {
       return [];
     }
-    const values = inputs.map(buildCreateValues);
+    providerRegistryService.assertReady();
+    const values = inputs.map(buildModelInsertValues);
     const rows = await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(tx, inputs.map(toCreateModelEndpointWrite));
       const result: UserModelRow[] = [];
@@ -450,6 +452,7 @@ export class ModelService {
   }
 
   async update(providerId: string, modelId: string, dto: UpdateModelDto): Promise<Model> {
+    providerRegistryService.assertReady();
     return this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select()
@@ -481,6 +484,7 @@ export class ModelService {
     if (items.length === 0) {
       return [];
     }
+    providerRegistryService.assertReady();
     const rows = await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(
         tx,
@@ -655,10 +659,12 @@ export class ModelService {
       return result;
     }
     const rows = await this.db.select().from(userModelTable).where(inArray(userModelTable.id, ids));
-    for (const model of rows.map(enrichModelFromRegistry)) {
-      if (model.name) {
-        result.set(model.id, model.name);
-      }
+    for (const row of rows) {
+      // History can display stored names before the first catalog download completes.
+      const name = providerRegistryService.isReady()
+        ? enrichModelFromRegistry(row).name
+        : (row.name ?? row.modelId);
+      if (name) result.set(row.id, name);
     }
     return result;
   }
@@ -723,7 +729,7 @@ export class ModelService {
       const registryData =
         model.registryData ??
         providerRegistryService.lookupModel(providerId, model.modelId, providerConfig);
-      return buildCreateValues({ ...model, providerId, registryData });
+      return buildModelInsertValues({ ...model, providerId, registryData });
     });
     const defaultIds = await this.getUserDefaultModelIds();
 

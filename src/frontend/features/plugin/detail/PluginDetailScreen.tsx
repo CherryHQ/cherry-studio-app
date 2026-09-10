@@ -1,0 +1,151 @@
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, Text, View } from 'react-native';
+
+import { RouteHeader } from '@/frontend/appShell/header';
+import { useBackendModule } from '@/frontend/data';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
+import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
+
+import { PluginIcon } from '../components/PluginIcon';
+import { PLUGIN_LINKS } from '../pluginCatalog';
+import { usePluginConnections, useRefreshPluginConnections } from '../usePluginConnections';
+
+export function PluginDetailScreen() {
+  const { pluginId } = useLocalSearchParams<{ pluginId: string }>();
+  const parsed = PluginIdSchema.safeParse(pluginId);
+  const { t } = useTranslation();
+  if (!parsed.success) return <ContentState.Empty title={t('plugins.notFound')} />;
+  return <PluginDetail key={parsed.data} pluginId={parsed.data} />;
+}
+
+function PluginDetail({ pluginId }: { pluginId: PluginId }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { alert } = useAlert();
+  const { toast } = useToast();
+  const plugins = useBackendModule('plugins');
+  const connections = usePluginConnections();
+  const refresh = useRefreshPluginConnections();
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const connection = connections.data?.find((item) => item.pluginId === pluginId);
+  const name = t(`plugins.catalog.${pluginId}.name`);
+
+  async function disconnect() {
+    setIsDisconnecting(true);
+    try {
+      await plugins.disconnect(pluginId);
+      await refresh();
+      toast.show({ label: t('plugins.disconnected'), variant: 'success' });
+    } catch {
+      toast.show({ label: t('plugins.disconnectFailed'), variant: 'danger' });
+    } finally {
+      setIsDisconnecting(false);
+    }
+  }
+
+  return (
+    <>
+      <RouteHeader title={name} />
+      <ScrollView
+        className="flex-1 bg-background"
+        contentContainerClassName="gap-8 px-6 py-6"
+        contentInsetAdjustmentBehavior="automatic"
+        testID={`plugin-detail-${pluginId}`}
+      >
+        <View className="gap-4">
+          <View className="flex-row items-center gap-3">
+            <PluginIcon pluginId={pluginId} size="large" />
+            <Text className="flex-1 text-2xl font-semibold text-foreground">{name}</Text>
+          </View>
+          <Text className="text-base text-foreground">
+            {t(`plugins.catalog.${pluginId}.description`)}
+          </Text>
+        </View>
+        <View className="gap-3">
+          <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
+          <Text className="text-sm text-muted-foreground">
+            {t(`plugins.catalog.${pluginId}.access`)}
+          </Text>
+          <Text className="text-sm text-muted-foreground">{t('plugins.privacyDescription')}</Text>
+          <View className="flex-row flex-wrap gap-4">
+            <Button
+              variant="link"
+              size="inline"
+              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].website)}
+            >
+              {t('plugins.website')}
+            </Button>
+            <Button
+              variant="link"
+              size="inline"
+              onPress={() => void openExternalUrl(PLUGIN_LINKS[pluginId].privacy)}
+            >
+              {t('plugins.privacyPolicy')}
+            </Button>
+          </View>
+        </View>
+        {connections.isLoading ? (
+          <ContentState.Loading title={t('plugins.loading')} />
+        ) : connections.isError ? (
+          <ContentState.Error
+            title={t('plugins.loadFailed')}
+            primaryAction={{
+              children: t('common.retry'),
+              onPress: () => void connections.refetch(),
+            }}
+          />
+        ) : connection ? (
+          <View className="gap-4">
+            <View className="flex-row items-center gap-2">
+              <CheckIcon className="size-5 text-success" />
+              <Text className="flex-1 text-sm text-foreground">
+                {t('plugins.connectedAccount', { account: connection.accountLabel })}
+              </Text>
+            </View>
+            <View className="flex-row flex-wrap gap-3">
+              <Button
+                variant="outline"
+                disabled={isDisconnecting}
+                onPress={() =>
+                  router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
+                }
+              >
+                {t('plugins.reconnect')}
+              </Button>
+              <Button
+                variant="ghost"
+                loading={isDisconnecting}
+                testID="plugin-disconnect"
+                onPress={() =>
+                  alert.confirm({
+                    title: t('plugins.disconnectTitle', { name }),
+                    description: t('plugins.disconnectMessage'),
+                    confirmLabel: t('plugins.disconnect'),
+                    role: 'destructive',
+                    onConfirm: () => void disconnect(),
+                  })
+                }
+              >
+                {t('plugins.disconnect')}
+              </Button>
+            </View>
+          </View>
+        ) : (
+          <Button
+            size="lg"
+            onPress={() =>
+              router.push({ pathname: '/plugins/[pluginId]/connect', params: { pluginId } })
+            }
+            testID="plugin-add"
+          >
+            {t('plugins.connect')}
+          </Button>
+        )}
+      </ScrollView>
+    </>
+  );
+}

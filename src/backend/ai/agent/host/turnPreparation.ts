@@ -379,13 +379,7 @@ function applyTurnOverrides(
 
   const options = { ...agent.options };
   if (input.reasoningEffort !== undefined) {
-    if (input.reasoningEffort === 'default' || input.reasoningEffort === 'auto') {
-      // Pi resolves an absent effort to the selected model's default. Removing
-      // the Agent setting here makes an explicit composer "default" win.
-      delete options.reasoningEffort;
-    } else {
-      options.reasoningEffort = input.reasoningEffort === 'none' ? 'off' : input.reasoningEffort;
-    }
+    options.reasoningEffort = input.reasoningEffort;
   }
 
   return {

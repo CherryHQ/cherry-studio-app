@@ -4,6 +4,7 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
@@ -76,6 +77,8 @@ const CASES = [
   },
 ] as const;
 
+beforeEach(installProviderRegistryTestSnapshot);
+
 describe('Pi model resolver', () => {
   let resolver: PiRuntimeDependencies;
 
@@ -108,9 +111,17 @@ describe('Pi model resolver', () => {
       reasoning: true,
     });
     expect(resolution.model.compat).toEqual(
-      testCase.api === 'openai-completions' || testCase.api === 'openai-responses'
-        ? { supportsDeveloperRole: false }
-        : undefined,
+      testCase.api === 'openai-completions'
+        ? {
+            maxTokensField: 'max_tokens',
+            supportsDeveloperRole: false,
+            supportsStore: false,
+            supportsStrictMode: false,
+            supportsUsageInStreaming: provider.apiFeatures.streamOptions,
+          }
+        : testCase.api === 'openai-responses'
+          ? { supportsDeveloperRole: false }
+          : undefined,
     );
     expect(resolution.streamFn).toBe(mockBoundStreamFn);
     expect(resolution.supportsTools).toBe(true);
@@ -136,6 +147,53 @@ describe('Pi model resolver', () => {
         timeoutMs: 600_000,
       }),
     );
+  });
+
+  test('keeps the independent input cap separate from the default output reservation', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+    const model = makeModel(endpoint, {
+      contextWindow: 128_000,
+      maxInputTokens: 120_000,
+      maxOutputTokens: 32_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://chat.test/v1', 'openai-compatible'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
+
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(resolution.maxInputTokens).toBe(120_000);
+    expect(resolution.model.contextWindow).toBe(128_000);
+    expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
+  test('uses endpoint usage declarations and preserves the materialized effort vocabulary', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://proxy.test/v1',
+      'openai-compatible',
+    );
+    provider.apiFeatures.streamOptions = true;
+    provider.endpointConfigs![ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]!.dialect = {
+      streamOptions: false,
+    };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS));
+
+    const resolution = await resolve(resolver, { reasoningEffort: 'auto' });
+    expect(resolution.model.compat).toMatchObject({
+      supportsUsageInStreaming: false,
+      maxTokensField: 'max_tokens',
+    });
+    const parameters = mockBindPiStream.mock.calls[0][1].requestParameters;
+    expect(parameters?.selection).toBe('auto');
+    expect(parameters?.model.reasoning?.selectableEfforts).toEqual(['high']);
+    expect(parameters?.profile.effort?.operations).toContainEqual({
+      target: 'reasoningEffort',
+      value: { source: 'effort' },
+    });
   });
 
   test('preflights image input from the model registry without selecting credentials', async () => {

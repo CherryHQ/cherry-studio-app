@@ -82,8 +82,9 @@ above a multiline filename on a compact neutral tile; `card` puts the filename f
 at the bottom on a roomier surface. The `icon`, `attachment`, and `card` variants retain image
 thumbnails and caller-controlled opening. An
 optional `badge` slot sits beside the document icon or over an image; callers own its meaning and
-localized content. The complete filename remains the accessible label when its extension is
-omitted from the visible title.
+localized content. Library cards show the complete filename so its type remains visible; compact
+attachment tiles may omit the extension from the title while retaining the complete accessible
+label and type metadata.
 
 `file-preview/utils/file-presentation.ts` owns extension-to-icon routing and categorical theme
 colors. Its icon choices follow desktop's `composer/tokenView/fileTokenPresentation.tsx`. The
@@ -93,8 +94,9 @@ where the current native Lucide version has renamed or redrawn them. They need n
 `MarkdownText` is the shared GitHub-flavored Markdown renderer. Static content uses the enriched
 native renderer. A part that has streamed keeps the streaming renderer for its full mounted
 lifetime, including terminal state, so completion does not remount its native subtree. Both receive
-the same theme tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the
-active font size step and decides how links open:
+the same theme tokens, syntax palette, LaTeX flags, and typography scale. Native streaming mode ends
+with each part, releasing pending tail blocks and requesting a final layout even when the text
+itself is unchanged. Product code supplies the active font size step and decides how links open:
 
 ```tsx
 <MarkdownText
@@ -107,8 +109,15 @@ active font size step and decides how links open:
 
 The enriched-renderer patch keeps overflowing tables horizontally scrollable across layout
 updates and exposes native scroll indicators. Table cells do not open a copy menu; whole-message
-copy stays with the message actions. This behavior is native and requires a development-client
-rebuild after changing the patch.
+copy stays with the message actions. Standalone code blocks have a 192-point maximum height,
+including their header, in both native layout and shadow measurement. Short blocks keep their
+natural height; longer blocks keep their complete content in a native vertical scroll viewport
+with horizontal scrolling for long lines. The limit applies during streaming and after completion,
+including reasoning and final answers. Code-pane drags use native scroll recognition and cancel
+text long presses; Android gives an overflowing code pane priority over the outer message list
+for that touch sequence. These behaviors are native and require a development-client rebuild
+after changing the patch. The upstream `codeBlock` style has no `maxHeight` property; limiting
+the outer Markdown view would constrain the whole message instead of each code block.
 
 When rendering selectable content inside a scroll surface, follow the selection and
 scroll-cancellation contract in
@@ -138,6 +147,10 @@ translations, file identifiers, or application navigation:
 `MessagePart.Process` is the inline disclosure used for one total-duration row before an answer.
 The product adapter supplies its localized duration and every visible pre-result child; the
 primitive owns the quiet divider, running shimmer, disclosure state, and compact chevron.
+
+`MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
+already communicates live progress. The running state, status text, and detail action remain intact;
+the default title animation is `shimmer`.
 
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
 `Message Parts/Playground` collects every public message-part primitive and state on one interactive
@@ -256,9 +269,10 @@ value and persistence. The default grouped `Section` supplies its surface and se
 </Section>
 ```
 
-`Switch` and `Slider` keep one controlled CherryUI contract while private platform adapters render
-native SwiftUI controls on iOS and native Android controls on Android. Feature code never imports a
-platform UI SDK or branches on the operating system. Web keeps the CherryUI fallback controls.
+`Switch` and `Slider` keep one controlled CherryUI contract. Android and Web use Cherry-owned
+controls with circular switch thumbs, thin slider tracks, and mobile touch targets. Their geometry
+follows the desktop visual direction while colors use Mobile theme tokens. iOS retains its private
+SwiftUI adapters. Feature code never imports a platform UI SDK or branches on the operating system.
 
 `Section.SwitchItem` is the controlled setting row for one boolean action. The row is the only
 press target and switch accessibility node; its trailing switch is a package-private visual
@@ -426,8 +440,8 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
-`ActionMenu` and `ContextMenu` are the shared native action menus. Each accepts one trigger element
-and a flat, stable `items` array; the package owns Nitro wiring, native action dispatch, and the
+`ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
+and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
 component instead of configuring a trigger:
 
@@ -462,9 +476,30 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMenuInteraction`, while
-Android uses `PopupMenu`. Each keeps the system style for destructive items. Expo Router page
-previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
+unchanged. Android `ActionMenu` and `ContextMenu` share the composer add menu's surface, rounded
+rows, expanding panel, and slide/blur/fade motion. Use these shared components for anchored action
+lists throughout the app instead of adding another menu presentation. iOS retains native action
+and context menus.
+
+Android tap menus own one press target even when their trigger contains a `Button` or `Pressable`.
+The child remains presentation-only; `disabled`, accessibility disabled state, and
+`pointerEvents="none"` all disable the menu trigger. Long-press menus retain the child's ordinary
+tap and accessibility actions.
+
+The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
+bounded scrolling, and safe-area positioning. They open above or below the trigger according to
+available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
+`MenuOverlay`, `MenuRow`, `MenuPanel`, and lifecycle hooks. The transparent system modal isolates
+background accessibility, preserves the caller's theme/context, and owns Back/Escape. Opening
+focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
+change dismisses the measured presentation instead of retaining a stale anchor.
+
+Outside taps and system back close them; closing immediately disables item interaction and retains
+the modal until its animation and native dismissal finish. Reduced motion skips the animation.
+An enabled selection is accepted once and runs after native dismissal, so actions can safely open
+a system picker or navigate; it does not restore old focus over the destination. Searchable pickers,
+selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
+Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
 
 Wrap every scroll component containing an Android `ContextMenu` in one
 `ContextMenuScrollBoundary`. The boundary supplies drag, momentum, and touch handlers through its
@@ -479,8 +514,9 @@ target.
 [Interaction And Gesture Arbitration](../../docs/references/interaction-and-gesture-arbitration.md):
 on iOS the system `UIContextMenuInteraction` owns the long press and its coordination with scroll
 ancestors; on Android the long press is a `react-native-gesture-handler` recognizer in the shared
-gesture arena, so committed scrolling and pan gestures cancel it, and the native view only presents
-the already-arbitrated menu. Recognition timing and touch slop come from Android
+gesture arena, so committed scrolling and pan gestures cancel it. Its native view is only a system
+configuration bridge with no menu items and never presents a popup. Recognition timing and touch
+slop come from Android
 `ViewConfiguration`, including the user's system long-press timeout. On Android the enabled items
 are also exposed as accessibility custom actions on the trigger child, so the contextual operations
 do not depend on long press; iOS accessibility stays with the system interaction. Verify changed
@@ -553,6 +589,10 @@ const dock = useComposerDockLayout();
 </Composer.Dock>;
 ```
 
+`getComposerActionCenterOffset(bottomInset)` exposes the toolbar action center's distance from the
+screen bottom with the keyboard closed, so adjacent controls can align without duplicating composer
+padding.
+
 `Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
 what it does — the model in use, a mode. Same height and material, but sized to its label, and it is
 the one thing in the row that can be arbitrarily wide, so it is also the one thing that gives: it
@@ -580,9 +620,12 @@ only when a conditional row should animate the surface height:
 ```
 
 The package deliberately ships no attachment strip; callers compose their own row and pass its
-presence through `canSend`. `Composer.Menu` is private to the composer and supports nested content:
-use `closeOnPress={false}` for an item that replaces the panel contents. `width` is a floor, and
-callers that need most of the screen must bound their children to the window.
+presence through `canSend`. `Composer.Menu` owns the add-button trigger and its morph. Its menu rows,
+bounded scrolling, panel material, motion lifecycle, dismissal, and action dispatch are shared with
+Android action/context menus. Labels wrap and grow with text size. Toggle rows own one accessible
+switch action and render a private decorative indicator. `width` is a floor bounded by the viewport.
+Panel radius comes from `rounded-4xl`; padding and row gaps belong to the panel, including when its
+content scrolls. `useComposerMenu().close(afterClose)` can defer a composed action until dismissal.
 
 ## Motion
 

@@ -13,6 +13,7 @@ This page branch owns the `/settings/provider` list and its child pages.
 ## Organization
 
 - `catalog/` and `new/` own direct provider-list child pages.
+- `desktopSync/` owns provider import from a paired desktop device.
 - `detail/` owns `/settings/provider/[providerId]`; its `edit/`, `modelAdd/`, and `modelPull/`
   directories own the dynamic route's child pages. Model synchronization and manual model creation
   are separate entry points and do not switch modes inside either task.
@@ -51,6 +52,20 @@ item in the recommended section; preset rows keep their explicit Add action. Bot
 `new/ProviderCreationScreen`, which renders the shared provider form before model synchronization. The
 catalog carries a validated `returnTo` href through creation and model selection; finishing setup
 returns to the requesting surface, or to the provider list when settings opened the flow.
+
+## Desktop Provider Synchronization
+
+The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
+PC. Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
+only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
+ones to synchronize, and refreshes provider/model queries after the import transaction succeeds.
+Selected providers receive the PC configuration and are enabled, including already installed
+presets with no missing models. Only enabled PC models are compared by provider ID and model ID;
+missing models are added and existing model rows remain unchanged. Mobile-only providers and models
+are retained. Custom providers also retain endpoint entries absent from the PC so existing mobile
+models can keep using them; matching endpoint entries use the PC configuration.
+Preview and import both exclude CherryAI and local providers (Ollama, LM Studio, GPUStack, and
+OpenVINO Model Server), including copies identified by their preset provider ID or legacy type.
 
 ## Provider Form
 

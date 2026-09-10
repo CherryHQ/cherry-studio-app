@@ -71,7 +71,7 @@ export function buildAgentMcpServerOptions(input: {
     ...input.servers
       .filter(
         (server) =>
-          isStreamableHttpServer(server) ||
+          isRunnableMcpServer(server) ||
           draftBindings.has(server.id) ||
           originalBindings.has(server.id),
       )
@@ -140,7 +140,7 @@ export function getAgentMcpToolBindingStatus(input: {
   if (!server) {
     return 'deleted';
   }
-  if (!isStreamableHttpServer(server)) {
+  if (!isRunnableMcpServer(server)) {
     return 'unsupported';
   }
   if (!server.isEnabled) {
@@ -164,11 +164,9 @@ export function getAgentMcpToolBindingStatus(input: {
   return 'available';
 }
 
-export function isStreamableHttpServer(server: Pick<McpServer, 'endpointUrl'>): boolean {
-  // Mobile's McpServer entity represents Streamable HTTP by contract and has
-  // no desktop transport discriminator. The URL scheme is the remaining
-  // executable boundary for legacy or otherwise invalid rows.
-  return /^https?:\/\//i.test(server.endpointUrl);
+export function isRunnableMcpServer(server: Pick<McpServer, 'endpointUrl' | 'origin'>): boolean {
+  // Built-in plugins execute locally; remote servers require an HTTP transport.
+  return server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 
 function getAgentMcpServerOptionStatus(
@@ -178,7 +176,7 @@ function getAgentMcpServerOptionStatus(
   if (!server) {
     return 'deleted';
   }
-  if (!isStreamableHttpServer(server)) {
+  if (!isRunnableMcpServer(server)) {
     return 'unsupported';
   }
   if (!server.isEnabled) {

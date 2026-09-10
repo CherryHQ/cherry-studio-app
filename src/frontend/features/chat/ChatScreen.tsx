@@ -7,7 +7,7 @@ import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
@@ -26,10 +26,10 @@ import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
-import { ChatDraftState, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
-import { useAgentChatDraftHandoff } from './runtime';
+import { useAgentChatControls, useAgentChatDraftHandoff } from './runtime';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 
@@ -66,8 +66,16 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const composerSession = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
   const resolvedAgentId = session.data?.agentId ?? composerSession.draftAgentId ?? agentId;
+  const controls = useAgentChatControls({
+    agentId: resolvedAgentId,
+    sessionId,
+    composerKey: composerSession.key,
+  });
   const agent = useAgentApiById(resolvedAgentId);
-  const messageWindow = useAgentMessageHistoryWindow(sessionId);
+  const messageWindow = useAgentMessageHistoryWindow(
+    sessionId,
+    target.kind === 'session' ? target : undefined,
+  );
   const isSessionAvailable =
     Boolean(sessionId) && !session.error && (session.isLoading || Boolean(session.data));
   const isNewAgentAvailable =
@@ -92,43 +100,46 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      {sessionId && session.error ? (
-        <View className="flex-1 justify-center px-8 py-16">
-          <ContentState.Error
-            primaryAction={{
-              children: t('agent.actions.retry'),
-              onPress: () => void session.refetch(),
-            }}
-            prominence="prominent"
-            title={t('navigation.chatsLoadFailed')}
+      {/* Dismiss after the outside touch ends so the keyboard cannot move a
+          message action before release. The composer is outside this boundary. */}
+      <View className="flex-1" onTouchEnd={Keyboard.dismiss}>
+        {sessionId && session.error ? (
+          <View className="flex-1 justify-center px-8 py-16">
+            <ContentState.Error
+              primaryAction={{
+                children: t('agent.actions.retry'),
+                onPress: () => void session.refetch(),
+              }}
+              prominence="prominent"
+              title={t('navigation.chatsLoadFailed')}
+            />
+          </View>
+        ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+          <ChatWorkspace
+            pendingSend={controls.pendingSend}
+            enteringUserMessageId={controls.enteringUserMessageId}
+            onPendingSendDisplayed={controls.completePendingSend}
+            assistantAvatar={agent.agent?.avatar}
+            assistantAvatarUri={agent.agent?.avatarUri}
+            assistantName={agent.agent?.name}
+            isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+            contentBottomInset={contentBottomInset}
+            forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+            forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+            keyboardOffset={keyboardOffset}
+            messageWindow={messageWindow}
+            sessionId={sessionId}
           />
-        </View>
-      ) : isSessionAvailable && sessionId ? (
-        <ChatWorkspace
-          assistantAvatarUri={agent.agent?.avatarUri}
-          assistantName={agent.agent?.name}
-          isAssistantToolbarEnabled={!isPreview}
-          contentBottomInset={contentBottomInset}
-          forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-          forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-          keyboardOffset={keyboardOffset}
-          messageWindow={messageWindow}
-          sessionId={sessionId}
-        />
-      ) : target.kind === 'draft' ? (
-        <ChatDraftState
-          assistantAvatarUri={agent.agent?.avatarUri}
-          assistantName={agent.agent?.name}
-          contentBottomInset={contentBottomInset}
-        />
-      ) : (
-        <ChatEmptyState contentBottomInset={contentBottomInset} />
-      )}
+        ) : (
+          <ChatEmptyState contentBottomInset={contentBottomInset} />
+        )}
+      </View>
       {hasComposer ? (
         <ComposerSessionProvider key={composerSession.key}>
           <ComposerDock layoutMode="flow">
             <ChatInput
               agentId={resolvedAgentId}
+              controls={controls}
               dismissKeyboardOnSend={false}
               sessionId={sessionId}
             />

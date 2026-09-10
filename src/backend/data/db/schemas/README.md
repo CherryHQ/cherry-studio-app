@@ -11,6 +11,8 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
 - Agent, Agent tool binding, Agent Session, MCP, file, job, painting, provider/model, preference,
   and AI usage tables are the active mobile subset. Knowledge, translate, miniapp, and Agent
   workspace domains are not migrated yet.
+- Mobile adds `agent_session_message_created_id_idx` to support bounded global history scans for
+  short search terms that cannot use the trigram index. It changes no persisted message fields.
 
 ## Migration Flow
 

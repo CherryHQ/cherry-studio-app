@@ -10,6 +10,7 @@ import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
 import type { AgentMessageHistoryWindow } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import {
   createAgentMessageListProjectionCache,
@@ -17,8 +18,10 @@ import {
   toAgentMessageListItems,
   useAgentChatActions,
   useAgentChatSession,
+  type PendingChatSend,
 } from '../../runtime';
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
+import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
@@ -30,8 +33,13 @@ import {
 } from './hooks/useMessageListInitialRenderGate';
 
 const logger = loggerService.withContext('AgentChatWorkspace');
+const MESSAGE_TIME_INTERVAL_MS = 5 * 60 * 1000;
 
 type ChatWorkspaceProps = {
+  enteringUserMessageId?: string;
+  pendingSend?: PendingChatSend;
+  onPendingSendDisplayed: (userMessageId: string) => void;
+  assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
@@ -42,10 +50,14 @@ type ChatWorkspaceProps = {
   forkedFromSessionId?: string;
   keyboardOffset: number;
   messageWindow: AgentMessageHistoryWindow;
-  sessionId: string;
+  sessionId?: string;
 };
 
 export function ChatWorkspace({
+  enteringUserMessageId,
+  pendingSend,
+  onPendingSendDisplayed,
+  assistantAvatar,
   assistantAvatarUri,
   assistantName,
   contentBottomInset,
@@ -56,25 +68,64 @@ export function ChatWorkspace({
   isAssistantToolbarEnabled,
   sessionId,
 }: ChatWorkspaceProps) {
-  const { error, isLoadingInitial, isLoadingOlder, loadOlder, messages, retry } = messageWindow;
+  const {
+    dataKey,
+    error,
+    hasNewerMessages,
+    initialScrollTarget,
+    isLoadingInitial,
+    isLoadingOlder,
+    isLoadingNewer,
+    loadOlder,
+    loadNewer,
+    messages,
+    returnToLatest,
+    retry,
+  } = messageWindow;
   const live = useAgentChatSession(sessionId);
+  const listKey = sessionId ?? pendingSend?.sessionId;
   const client = useAgentChatActions();
   const headerHeight = useHeaderHeight();
   const { top: safeAreaTop } = useSafeAreaInsets();
   const { t } = useTranslation();
   const { toast } = useToast();
   useEffect(() => {
-    client.reconcilePersistedMessages(sessionId, messages);
+    if (sessionId) {
+      client.reconcilePersistedMessages(sessionId, messages);
+    }
   }, [client, messages, sessionId]);
   const mergedMessages = useMemo(
-    () => mergeAgentMessageViews(messages, live.liveMessages),
-    [live.liveMessages, messages],
+    () => (hasNewerMessages ? messages : mergeAgentMessageViews(messages, live.liveMessages)),
+    [hasNewerMessages, live.liveMessages, messages],
   );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- sessionId keys the cache lifetime, not its contents
-  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [sessionId]);
-  const projectedMessages = useMemo(
-    () => toAgentMessageListItems(mergedMessages, projectionCache),
-    [mergedMessages, projectionCache],
+  useEffect(() => {
+    if (
+      pendingSend &&
+      pendingSend.messages.every((pending) =>
+        mergedMessages.some((message) => message.id === pending.id),
+      )
+    ) {
+      onPendingSendDisplayed(pendingSend.messages[0].id);
+    }
+  }, [mergedMessages, onPendingSendDisplayed, pendingSend]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- listKey keys the cache lifetime, not its contents
+  const projectionCache = useMemo(() => createAgentMessageListProjectionCache(), [listKey]);
+  const projectedMessages = useMemo(() => {
+    const projected = toAgentMessageListItems(mergedMessages, projectionCache);
+    if (!pendingSend) return projected;
+    const [user, assistant] = pendingSend.messages;
+    const userIndex = projected.findIndex((message) => message.id === user.id);
+    const assistantIndex = projected.findIndex((message) => message.id === assistant.id);
+    if (userIndex >= 0 && assistantIndex >= 0) return projected;
+    const result = [...projected];
+    if (userIndex >= 0) result.splice(userIndex + 1, 0, assistant);
+    else if (assistantIndex >= 0) result.splice(assistantIndex, 0, user);
+    else result.push(user, assistant);
+    return result;
+  }, [mergedMessages, pendingSend, projectionCache]);
+  const timestampMessageIds = useMemo(
+    () => getTimestampMessageIds(projectedMessages),
+    [projectedMessages],
   );
   const listMessages = useMemo(() => {
     if (!forkBoundaryMessageId || !forkedFromSessionId) {
@@ -108,10 +159,11 @@ export function ChatWorkspace({
   }, [forkBoundaryMessageId, forkedFromSessionId, projectedMessages, sessionId]);
   const assistantPresentation = useMemo(
     () => ({
+      avatar: assistantAvatar,
       avatarUri: assistantAvatarUri,
       name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
     }),
-    [assistantAvatarUri, assistantName, t],
+    [assistantAvatar, assistantAvatarUri, assistantName, t],
   );
   const renderChatMessage = useCallback(
     (message: MessageListItem) => {
@@ -126,14 +178,15 @@ export function ChatWorkspace({
           assistantPresentation={assistantPresentation}
           isMessageActionsEnabled={isAssistantToolbarEnabled}
           message={message}
+          shouldShowTimestamp={timestampMessageIds.has(message.id)}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled],
+    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
   );
   const messageListExtraData = useMemo(
-    () => ({ assistantPresentation, isAssistantToolbarEnabled }),
-    [assistantPresentation, isAssistantToolbarEnabled],
+    () => ({ assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds }),
+    [assistantPresentation, isAssistantToolbarEnabled, timestampMessageIds],
   );
   const pendingApprovals = useMemo<readonly PendingToolApproval[]>(
     () =>
@@ -148,6 +201,9 @@ export function ChatWorkspace({
   );
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean }) => {
+      if (!sessionId) {
+        return;
+      }
       try {
         await client.respondApproval(
           sessionId,
@@ -162,6 +218,9 @@ export function ChatWorkspace({
     [client, sessionId, t, toast],
   );
   const handleApprovalCancel = useCallback(async () => {
+    if (!sessionId) {
+      return;
+    }
     try {
       await client.cancelTurn(sessionId);
     } catch (cancelError) {
@@ -169,13 +228,17 @@ export function ChatWorkspace({
       toast.show({ label: t('chat.input.stopFailed'), variant: 'danger' });
     }
   }, [client, sessionId, t, toast]);
-  const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
-    isLoadingInitial,
-    messageCount: messages.length,
-  });
+  const requiresInitialHistoryLayout =
+    typeof initialScrollTarget === 'object' ||
+    (Boolean(sessionId) &&
+      !pendingSend?.isNewSession &&
+      shouldWaitForInitialHistoryLayout({
+        hasHistoryBeforeActiveTurn: live.hasHistoryBeforeActiveTurn,
+        isLoadingInitial,
+        messageCount: messages.length,
+      }));
   const { isCoverVisible, markListLoaded } = useMessageListInitialRenderGate({
-    renderGateKey: sessionId,
+    renderGateKey: dataKey ?? listKey,
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(
@@ -183,12 +246,35 @@ export function ChatWorkspace({
     safeAreaTop + mainHeaderRowHeight,
   );
 
+  if (!sessionId && listMessages.length === 0) {
+    return (
+      <ChatDraftState
+        assistantAvatar={assistantAvatar}
+        assistantAvatarUri={assistantAvatarUri}
+        assistantName={assistantName}
+        contentBottomInset={contentBottomInset}
+      />
+    );
+  }
+
   if (error && !isLoadingInitial && listMessages.length === 0) {
     return (
       <View className="flex-1 justify-center px-8 py-16">
         <ContentState.Error
           primaryAction={{ children: t('agent.actions.retry'), onPress: () => void retry() }}
-          title={t('chat.history.loadFailed')}
+          secondaryAction={
+            returnToLatest
+              ? {
+                  children: t('chat.history.returnToLatest'),
+                  onPress: returnToLatest,
+                }
+              : undefined
+          }
+          title={t(
+            error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND
+              ? 'chat.history.messageUnavailable'
+              : 'chat.history.loadFailed',
+          )}
         />
       </View>
     );
@@ -196,22 +282,26 @@ export function ChatWorkspace({
 
   return (
     <View className="flex-1 bg-chat-background">
-      <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
+      <ChatOlderMessagesIndicator isLoading={isLoadingOlder || isLoadingNewer} />
       <AssistantMessageActionsProvider
-        key={`assistant-actions-${sessionId}`}
+        key={`assistant-actions-${listKey}`}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         sessionId={sessionId}
       >
         <MessageList
           contentBottomInset={contentBottomInset}
           contentTopInset={contentTopInset}
-          dataKey={sessionId}
-          enteringMessageId={live.enteringUserMessageId}
+          dataKey={dataKey ?? listKey}
+          enteringMessageId={enteringUserMessageId ?? live.enteringUserMessageId}
           extraData={messageListExtraData}
           initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+          initialScrollTarget={initialScrollTarget}
+          hasNewerMessages={hasNewerMessages}
           keyboardOffset={keyboardOffset}
           messages={listMessages}
           onLoadOlder={loadOlder}
+          onLoadNewer={loadNewer}
+          onReturnToLatest={returnToLatest}
           onReady={markListLoaded}
           renderMessage={renderChatMessage}
         />
@@ -226,4 +316,26 @@ export function ChatWorkspace({
       />
     </View>
   );
+}
+
+function getTimestampMessageIds(messages: readonly MessageListItem[]): ReadonlySet<string> {
+  const ids = new Set<string>();
+  let previousTimestamp: number | undefined;
+
+  for (const message of messages) {
+    if (message.role === 'system' || !message.createdAt) continue;
+
+    const timestamp = new Date(message.createdAt).getTime();
+    if (Number.isNaN(timestamp)) continue;
+
+    if (
+      previousTimestamp === undefined ||
+      timestamp - previousTimestamp >= MESSAGE_TIME_INTERVAL_MS
+    ) {
+      ids.add(message.id);
+    }
+    previousTimestamp = timestamp;
+  }
+
+  return ids;
 }

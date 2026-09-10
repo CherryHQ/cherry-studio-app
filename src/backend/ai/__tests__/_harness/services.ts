@@ -1,6 +1,7 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
 import type { AiServiceDependencies } from '@/backend/ai/AiService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -14,6 +15,7 @@ type ContractFixtureOptions = {
 export type ContractFixture = ReturnType<typeof createContractFixture>;
 
 export function createContractFixture(options: ContractFixtureOptions = {}) {
+  installProviderRegistryTestSnapshot();
   const provider = createProvider(options.providerOverrides);
   const model = createModel(provider.id, options.modelId ?? 'gpt-4o-mini', {
     capabilities: options.capabilities ?? [],

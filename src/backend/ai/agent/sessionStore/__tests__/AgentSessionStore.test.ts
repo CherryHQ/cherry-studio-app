@@ -12,7 +12,9 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
+import { v7 as uuidv7 } from 'uuid';
 
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
@@ -207,12 +209,16 @@ describe.each([
 
   test('reserveSubmission writes the correlated user/assistant pair', async () => {
     const session = await harness.createEmptySession({ agentId });
+    const ids = messageIds();
     const reserved = await store.reserveSubmission({
+      ...ids,
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
 
+    expect(reserved.userMessage.id).toBe(ids.userMessageId);
+    expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
     expect(reserved.userMessage.turnId).toBe(reserved.turnId);
     expect(reserved.assistantMessage.turnId).toBe(reserved.turnId);
     expect(reserved.userMessage.role).toBe('user');
@@ -236,18 +242,62 @@ describe.each([
       reserved.assistantMessage,
     ]);
     await expect(
-      store.reserveSubmission({ ...RESERVATION_FACTS, sessionId: 'missing', userParts: [] }),
+      store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: 'missing',
+        userParts: [],
+      }),
     ).rejects.toThrow();
   });
 
+  test.each(['existing session', 'existing message', 'duplicate pair'] as const)(
+    'rejects an %s identity collision without overwriting history or leaving a partial Session',
+    async (collision) => {
+      const initial = await store.reserveInitialSubmission({
+        ...RESERVATION_FACTS,
+        sessionId: uuidv7(),
+        ...messageIds(),
+        agentId,
+        executionTarget: { kind: 'local' },
+        userParts: [],
+      });
+      const ids = { sessionId: uuidv7(), ...messageIds() };
+      if (collision === 'existing session') ids.sessionId = initial.session.id;
+      if (collision === 'existing message') ids.userMessageId = initial.userMessage.id;
+      if (collision === 'duplicate pair') ids.assistantMessageId = ids.userMessageId;
+      await expect(
+        store.reserveInitialSubmission({
+          ...RESERVATION_FACTS,
+          ...ids,
+          agentId,
+          executionTarget: { kind: 'local' },
+          userParts: [],
+        }),
+      ).rejects.toThrow();
+      expect(await store.getSession(initial.session.id)).toEqual(initial.session);
+      expect(await store.listMessages(initial.session.id)).toEqual([
+        initial.userMessage,
+        initial.assistantMessage,
+      ]);
+      if (ids.sessionId !== initial.session.id)
+        expect(await store.getSession(ids.sessionId)).toBeNull();
+    },
+  );
+
   test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
+    const ids = { sessionId: uuidv7(), ...messageIds() };
     const reserved = await store.reserveInitialSubmission({
+      ...ids,
       ...RESERVATION_FACTS,
       agentId,
       executionTarget: { kind: 'local' },
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
 
+    expect(reserved.session.id).toBe(ids.sessionId);
+    expect(reserved.userMessage.id).toBe(ids.userMessageId);
+    expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
     expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
     expect(await store.listMessages(reserved.session.id)).toEqual([
       reserved.userMessage,
@@ -266,6 +316,7 @@ describe.each([
 
       jest.setSystemTime(reservationTime);
       const reserved = await store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
@@ -295,6 +346,7 @@ describe.each([
   test('finalizeAssistantMessage settles status, parts, usage, and turn error', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hi', state: 'done' }],
@@ -343,6 +395,7 @@ describe.each([
     const session = await harness.createEmptySession({ agentId });
     for (const text of ['one', 'two']) {
       const reserved = await store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text, state: 'done' }],
@@ -381,6 +434,7 @@ describe.each([
     const source = await harness.createEmptySession({ agentId, title: 'Maths' });
     for (const text of ['one', 'two', 'three']) {
       const reserved = await store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: source.id,
         userParts: [{ id: 'input-0', type: 'text', text, state: 'done' }],
@@ -470,6 +524,7 @@ describe.each([
     try {
       const source = await harness.createEmptySession({ agentId });
       const reserved = await store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: source.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -509,6 +564,7 @@ describe.each([
   test('nested forks record the direct source and their own copied boundary', async () => {
     const source = await harness.createEmptySession({ agentId, title: 'Source' });
     const sourceTurn = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: source.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -530,6 +586,7 @@ describe.each([
     if (firstResult.status !== 'forked') return;
 
     const forkTurn = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: firstResult.session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
@@ -564,6 +621,7 @@ describe.each([
   test('forkSession names the copy from the caller when one is supplied', async () => {
     const source = await harness.createEmptySession({ agentId, title: 'Maths' });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: source.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -588,6 +646,7 @@ describe.each([
     try {
       const source = await harness.createEmptySession({ agentId, title: 'Source' });
       const reserved = await store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: source.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -626,6 +685,7 @@ describe.each([
     const source = await harness.createEmptySession({ agentId });
     const other = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: source.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -653,6 +713,7 @@ describe.each([
   test('loads a checkpoint tail separately from full-transcript authorization indexes', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [
@@ -685,6 +746,7 @@ describe.each([
       runtimeStats: { runtimeTiming: terminalTiming() },
     });
     const second = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
@@ -717,6 +779,7 @@ describe.each([
   test('stores a checkpoint on the assistant terminal write and reads the newest candidate', async () => {
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -746,6 +809,7 @@ describe.each([
   test('reconcileInterrupted settles unsettled assistant placeholders once', async () => {
     const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
@@ -776,6 +840,7 @@ describe.each([
   test('updateStreamingAssistantMessage records produced parts until the row settles', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Write a note.', state: 'done' }],
@@ -832,6 +897,7 @@ describe.each([
   test('reconcileInterrupted keeps streamed parts and closes open text', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Search.', state: 'done' }],
@@ -888,6 +954,7 @@ describe.each([
   test('deleteSession removes the transcript with the session', async () => {
     const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
@@ -909,6 +976,89 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('publishes a committed automatic title without an active session observer', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        row: raw.prepare('SELECT name AS title FROM agent_session WHERE id = ?').get(session.id),
+      });
+    });
+    try {
+      await store.autoRenameSession(session.id, '', 'Background title');
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
+          inTransaction: false,
+          row: { title: 'Background title' },
+        },
+      ]);
+      await store.autoRenameSession(session.id, '', 'Stale title');
+      expect(notices).toHaveLength(1);
+      await store.renameSession(session.id, 'Manual title');
+      notices.length = 0;
+      await store.autoRenameSession(session.id, 'Manual title', 'Unwanted title');
+      expect(notices).toEqual([]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test('publishes background completion activity after commit and skips failed writes', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+    });
+    const completedAt = Date.now() + 1_000;
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        row: raw.prepare('SELECT last_activity_at FROM agent_session WHERE id = ?').get(session.id),
+      });
+    });
+    const finalization = {
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success' as const,
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming(completedAt) },
+    };
+    try {
+      await store.finalizeAssistantMessage(finalization);
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
+          inTransaction: false,
+          row: { last_activity_at: completedAt },
+        },
+      ]);
+      await expect(
+        store.finalizeAssistantMessage({
+          ...finalization,
+          assistantMessageId: uuidv7(),
+        }),
+      ).rejects.toThrow();
+      expect(notices).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('rolls back the Session when its initial message reservation fails', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -916,6 +1066,8 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
     await expect(
       store.reserveInitialSubmission({
+        sessionId: uuidv7(),
+        ...messageIds(),
         ...RESERVATION_FACTS,
         agentId,
         executionTarget: { kind: 'local' },
@@ -934,6 +1086,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const first = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
@@ -943,6 +1096,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     // and post-settle assertions below pin that the unique index caused it.
     await expect(
       store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
@@ -965,6 +1119,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
     await expect(
       store.reserveSubmission({
+        ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
         userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
@@ -978,6 +1133,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'quantum sailboat', state: 'done' }],
@@ -1028,6 +1184,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     ] as const;
 
     const finalized = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'first', state: 'done' }],
@@ -1051,6 +1208,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
 
     // Boot reconciliation is the other settling write and indexes the same way.
     const interrupted = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-1', type: 'text', text: 'second', state: 'done' }],
@@ -1072,6 +1230,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const source = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: source.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'quantum sailboat', state: 'done' }],
@@ -1167,6 +1326,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
@@ -1216,6 +1376,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
@@ -1256,6 +1417,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
@@ -1295,6 +1457,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
@@ -1324,6 +1487,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Remember the model.', state: 'done' }],
@@ -1342,6 +1506,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Use the tool.', state: 'done' }],
@@ -1415,4 +1580,8 @@ function applyMigrations(database: DatabaseSync) {
  */
 function hybridRow(row: Record<string, unknown>): unknown[] {
   return Object.assign(Object.values(row), row);
+}
+
+function messageIds() {
+  return { userMessageId: uuidv7(), assistantMessageId: uuidv7() };
 }

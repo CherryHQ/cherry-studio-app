@@ -87,6 +87,21 @@ stay in their own message parts and are never duplicated in the tool sheet. A su
 may summarize user-facing metadata such as its filename and size, but it does not expose internal
 entry ids or repeat the file body.
 
+Inline file content uses lightweight, read-only text without Markdown parsing or syntax highlighting.
+During generation, four stable line slots show the latest source text with a small per-line character
+budget. This live preview passes gestures to the message list and stays out of accessibility
+navigation because the tool summary already announces its state.
+
+Once input generation ends, completed arguments supply the full content in a height-capped scroll
+area. Long content uses virtualized text chunks with character and line budgets, so even minified
+files do not create one unbounded native text layout. Chunks preserve the full source and stable
+offset keys; only the viewport height is capped. Short content sizes naturally up to the same cap.
+The finished content supports scrolling and accessibility reading without selection, copying,
+editing, or link actions. Dragging it detaches the message list from live-edge following through
+the same reading-interaction boundary used by inline disclosures. If an interrupted call has no
+complete input, only its retained partial preview is available; completed input always takes
+precedence over that fallback.
+
 Reasoning expands inline: `MessagePart.Reasoning` owns the toggle and the left-rail container its
 markdown renders into, so a reader keeps their place in the transcript. While a response streams,
 its process parts remain visible without a total-duration wrapper. Once the response settles, every
@@ -97,6 +112,10 @@ views must use `MessagePart.Detail`. The source group stays out of layout while 
 streaming and appears once the message reaches any terminal status. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
+
+A process uses tighter internal spacing than the separation between the process and the answer,
+both during streaming and when expanded after completion. Settled blank text parts are excluded
+from the visual partition so they cannot insert empty layout rows between status summaries.
 
 A manual inline disclosure toggle is a reading interaction. Before changing local disclosure state,
 the part adapter notifies the list scroll controller, which leaves live-edge following and cancels
@@ -193,8 +212,8 @@ geometry contract when list layout depends on it.
 
 ## List Behavior
 
-`MessageList` owns its `LegendList` ref, role-based recycling types, keyboard lift, at-bottom shared
-value, row frames, and the business wiring for the optional CherryUI scroll-to-bottom button.
+`MessageList` owns its `LegendList` ref, role-based recycling types, keyboard lift, visible-bottom
+geometry, row frames, and the business wiring for the optional CherryUI scroll-to-bottom button.
 Callers provide stable message item references and only the layout insets and callbacks they own.
 
 One list-owned scroll controller owns product-level scroll state. It starts detached while restoring either a saved
@@ -205,8 +224,9 @@ scroll button, or sending a local message re-enters following mode. The scroll b
 means “return to the live edge,” not merely one untracked imperative scroll.
 
 The controller keeps imperative mode reads in a ref for native scroll callbacks and exposes only a
-reactive following boolean to button rendering. Dataset generations own drag and momentum events;
-callbacks from an outgoing Session cannot transition or save state for the incoming Session.
+reactive following boolean to keyboard lift and button rendering. Dataset generations own drag and
+momentum events; callbacks from an outgoing Session cannot transition or save state for the incoming
+Session.
 
 Chat Sessions store `{ message key, offset inside the row }` in the frontend memory cache. Restore
 uses `scrollToIndex`, so prepends and changing row measurements do not invalidate a raw pixel
@@ -219,11 +239,21 @@ state.
 Stateless single-turn consumers have no restoration key. They use LegendList's initial-end
 bootstrap once, and the controller adopts following mode without issuing a second initial scroll.
 
-Keyboard lift remains `whenAtEnd`: focusing the composer must not move a viewport that is reading
-history. The keyboard controller is a platform geometry adapter; it never transitions the product
-following/reading state. A local send keeps keyboard geometry updates active while awaiting
-dismissal, then scrolls to the live edge after the keyboard inset clears. A dataset switch or
-committed drag during dismissal cancels that pending scroll.
+`initialScrollTarget` takes precedence over saved scroll memory for a dataset. Message targets align
+the entire row below the header, with no highlight; an explicit end target returns to the live edge.
+The caller changes `dataKey` for a new navigation request or a replacement history window. A window
+with `hasNewerMessages` remains in reading mode even at its loaded end, requests newer pages through
+`onLoadNewer`, and keeps the return-to-latest control available. `onReturnToLatest` lets the data
+owner replace that window before the controller resumes following; local sends use the same path.
+
+Keyboard lift uses `persistent` while following and `never` while reading history. Composer
+expansion must not disable following just because the viewport has already resized when keyboard
+motion starts. Native keyboard motion owns scrolling during the transition; application corrections
+for content and composer-size changes resume once it ends, only if still following. The return button
+moves with the keyboard and any floating composer, and checks the visible bottom including the
+keyboard inset. A local send immediately positions the message at the live edge, keeps
+keyboard geometry updates active during dismissal, and corrects the final inset without replaying
+scroll motion. A dataset switch or committed drag during dismissal cancels that final correction.
 
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 wrapping attachment group sits above the optional bubble, keeping every card inside the user
@@ -252,3 +282,5 @@ scroll, which avoids a second animation writing geometry during layout. Scroll-b
 uses the shared CherryUI motion vocabulary. Pending assistant and reasoning rows consume
 `PrismSweep` from the Cherry UI loading family. Running tool, tool-group, and reasoning rows sweep
 their label with the shared `ShimmerText` highlight instead of pulsing row opacity.
+File-input generation uses a static title while its adjacent content updates; the title resumes
+the normal running animation during tool execution.

@@ -6,6 +6,7 @@ import {
   AgentInputPartSchema,
   AgentMessageToolRefSchema,
   AgentMessagePartSchema,
+  AgentMessageDeltaSchema,
   AgentSessionSnapshotSchema,
   AgentSessionStatusSchema,
   AgentStartSessionInputSchema,
@@ -36,15 +37,46 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips bounded input previews separately from tool execution input', () => {
+    const preview = { name: 'page.html', text: '<html>', truncated: false };
+    const delta = { op: 'tool.input.preview', partId: 'tool-1', preview };
+    expect(AgentMessageDeltaSchema.parse(roundTrip(delta))).toEqual(delta);
+    expect(
+      AgentMessageDeltaSchema.safeParse({
+        ...delta,
+        preview: { ...preview, text: 'x'.repeat(8_193) },
+      }).success,
+    ).toBe(false);
+    const part = {
+      id: 'tool-1',
+      type: 'tool',
+      toolCallId: 'call-1',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      state: 'input-streaming',
+      inputPreview: preview,
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).not.toHaveProperty('input');
+  });
   test('rejects the retired turn-only capability field', () => {
     // Capability enablement moved to the Agent record; a stale caller still
     // sending the composer-era field must fail loudly, not silently no-op.
     const input = {
       parts: [{ text: 'Draw it.', type: 'text' }],
       sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
     } as const;
 
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, userMessageId: undefined }).success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, assistantMessageId: '' }).success,
+    ).toBe(false);
     expect(
       AgentSubmitMessageInputSchema.safeParse({
         ...input,
@@ -53,17 +85,20 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
   });
 
-  test('validates a Draft submission without requiring a durable Session id', () => {
+  test('requires preallocated identities for a Draft submission', () => {
     const input = {
       agentId: 'agent-1',
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello.', type: 'text' }],
     } as const;
 
     expect(AgentStartSessionInputSchema.parse(roundTrip(input))).toEqual(input);
-    expect(
-      AgentStartSessionInputSchema.safeParse({ ...input, sessionId: 'session-1' }).success,
-    ).toBe(false);
+    expect(AgentStartSessionInputSchema.safeParse({ ...input, sessionId: undefined }).success).toBe(
+      false,
+    );
   });
 
   test('round-trips the active first exchange used for Session handoff', () => {

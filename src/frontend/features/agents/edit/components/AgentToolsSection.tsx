@@ -17,7 +17,7 @@ import {
   type AgentMcpToolBindingStatus,
   buildAgentMcpServerOptions,
   getAgentMcpToolBindingStatus,
-  isStreamableHttpServer,
+  isRunnableMcpServer,
   type McpToolBindingDraft,
   type McpToolCatalog,
   removeAgentToolBinding,
@@ -60,7 +60,7 @@ export function AgentToolsSection({
       ...new Set(
         perToolBindings.flatMap((binding) => {
           const server = serversById.get(binding.serverId);
-          return server?.isEnabled && isStreamableHttpServer(server) ? [server.id] : [];
+          return server?.isEnabled && isRunnableMcpServer(server) ? [server.id] : [];
         }),
       ),
     ],
@@ -102,7 +102,7 @@ export function AgentToolsSection({
             const canEnable =
               option.server !== undefined &&
               option.server.isEnabled &&
-              isStreamableHttpServer(option.server);
+              isRunnableMcpServer(option.server);
             const isEnabled = option.binding?.enabled === true;
             const isStored = option.binding !== undefined;
             const displayName = option.displayName || t('agent.tools.server');

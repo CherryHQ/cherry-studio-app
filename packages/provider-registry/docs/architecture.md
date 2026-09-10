@@ -1,13 +1,26 @@
 # provider-registry architecture
 
-The catalog of AI **models** (what exists) and **providers** (how to reach them), plus the **M:N link** between them. It is a **code-generation pipeline**: hand-maintained TypeScript source + pinned upstream snapshots → three generated JSON files → read at runtime by the app.
+The catalog of AI **models** (what exists) and **providers** (how to reach them), plus the **M:N link** between them. The Mobile runtime downloads model metadata from the Desktop-published catalog and bundles only
+trusted provider connection definitions. The retained **code-generation pipeline** produces Node
+tooling/regression snapshots; its model JSON files are not Mobile runtime inputs.
+
+`mobile-loader.ts` requires an installed snapshot for model reads. Startup restores persistent
+snapshots and downloads only when none exists; model-selection surfaces await
+`ensureRegistryReady()`, and opening a provider's model list requests a newer catalog.
+The updater validates the manifest, schema, and matching payload versions before saving into the
+inactive one of two document-storage slots. It then installs the snapshot and invalidates mounted
+model projections. An older compatible slot remains usable after interrupted or invalid updates.
+The legacy cache can migrate after validation. No model update writes user database rows.
+
+Runtime parser/adapter changes belong here. Model metadata corrections belong upstream; tests may
+explicitly install the retained generated snapshots as fixtures.
 
 Reasoning controls have an additional model-capability/request-encoding boundary documented in
 [reasoning-control.md](./reasoning-control.md).
 
 > The three `data/*.json` files are **pure artifacts**. Never hand-edit them — edit the source and run `pnpm generate`. See [../CLAUDE.md](../CLAUDE.md).
 
-## Data flow
+## Retained generator data flow
 
 ```
   SOURCE (hand-maintained)                 GENERATOR                 OUTPUT (generated)            RUNTIME
@@ -17,7 +30,7 @@ Reasoning controls have an additional model-capability/request-encoding boundary
   src/providers/<prov>.ts  ─┤──►  scripts/generate-catalog.ts  ──►   data/models.json          ─┐
     (defineProvider)       │       buildIndex                       data/providers.json        ├─► src/registry-loader.ts
   models.dev    (live)    ─┤       assignCreators   → ownedBy            data/provider-models.json ─┘     + src/schemas/*
-  OpenRouter text + image ─┘       buildModels / buildProviders /                                    (app reads these)
+  OpenRouter text + image ─┘       buildModels / buildProviders /                                    (Node tooling / tests)
                                    buildProviderModels
 ```
 

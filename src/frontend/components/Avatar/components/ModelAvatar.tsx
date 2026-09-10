@@ -1,6 +1,6 @@
-import { resolveModelIcon, resolveModelProviderIcon } from '@cherrystudio/ui/icons';
 import { useUniwind } from 'uniwind';
 
+import { resolveModelIconSources } from '@/frontend/utils/modelIcons';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -25,8 +25,7 @@ export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const providerIconId = provider?.presetProviderId ?? provider?.id ?? model.providerId;
-  const modelIconSource = resolveModelIcon(model.modelId);
-  const iconSource = modelIconSource ?? resolveModelProviderIcon(model.modelId, providerIconId);
+  const { iconSource, modelIconSource } = resolveModelIconSources(model.modelId, providerIconId);
   const frameProps = { label: model.name, ...(size !== undefined && { size }) };
 
   if (!iconSource) {

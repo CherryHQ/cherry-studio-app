@@ -33,6 +33,7 @@ import type {
 } from '../../types';
 import {
   estimatePiContextFixedCosts,
+  estimatePiLoopContextHeadroomTokens,
   PI_CONTEXT_SAFETY_MARGIN_TOKENS,
   PI_IMAGE_CONTEXT_TOKEN_RESERVE,
 } from '../contextCompaction';
@@ -668,7 +669,7 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 }
 
 describe('PiRuntime mapping', () => {
-  test('publishes tool input generation without forwarding every argument delta', async () => {
+  test('previews opted-in file content without exposing executable partial input', async () => {
     const runtime = createTestRuntime();
     const fullInput = {
       filename: 'page.html',
@@ -682,6 +683,7 @@ describe('PiRuntime mapping', () => {
       approval: 'auto',
       description: 'Write a managed file.',
       inputSchema: { type: 'object' },
+      inputPreview: { textField: 'content', nameField: 'filename' },
       execute: async ({ input }) => {
         executedInput = input;
         return { value: { status: 'created', filename: 'page.html' }, artifacts: [] };
@@ -700,7 +702,7 @@ describe('PiRuntime mapping', () => {
             type: 'toolCall',
             id: 'write-call',
             name: piTool.name,
-            arguments: { filename: 'page.html' },
+            arguments: { filename: 'page.html', content: '<html>large generated' },
           },
         ],
         stopReason: 'toolUse',
@@ -728,6 +730,7 @@ describe('PiRuntime mapping', () => {
           partial,
         },
       });
+      expect(executedInput).toBeUndefined();
       await context.emit({
         type: 'message_update',
         message: completed,
@@ -770,6 +773,11 @@ describe('PiRuntime mapping', () => {
     });
     expect(toolEvents[0]).not.toHaveProperty('input');
     expect(toolEvents.filter((part) => part.state === 'input-streaming')).toHaveLength(1);
+    expect(events).toContainEqual({
+      type: 'tool.input.preview',
+      partId: 'tool-write-call',
+      preview: { name: 'page.html', text: '<html>large generated', truncated: false },
+    });
     expect(toolEvents).toContainEqual(
       expect.objectContaining({ input: fullInput, state: 'input-available' }),
     );
@@ -1230,6 +1238,156 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
+  test('reserves output once while respecting independent input and total context limits', () => {
+    const context = { messages: [], systemPrompt: 'x'.repeat(400), tools: [] };
+    const inputCosts = 100 + PI_CONTEXT_SAFETY_MARGIN_TOKENS;
+    for (const outputReserveTokens of [512, 32_768]) {
+      expect(
+        estimatePiLoopContextHeadroomTokens({
+          ...context,
+          contextWindow: 128_000,
+          maxInputTokens: 8_000,
+          outputReserveTokens,
+        }),
+      ).toBe(8_000 - inputCosts);
+      expect(
+        estimatePiLoopContextHeadroomTokens({
+          ...context,
+          contextWindow: 128_000,
+          outputReserveTokens,
+        }),
+      ).toBe(128_000 - outputReserveTokens - inputCosts);
+    }
+    expect(
+      estimatePiLoopContextHeadroomTokens({
+        ...context,
+        contextWindow: 6_000,
+        maxInputTokens: 8_000,
+        outputReserveTokens: 2_048,
+      }),
+    ).toBe(6_000 - 2_048 - inputCosts);
+  });
+
+  test.each(['text', 'text-attachment'] as const)(
+    'rejects %s input above the independent cap before executing the model',
+    async (type) => {
+      const runtime = createTestRuntime();
+      const holder = arrange(runtime, (context) => emitText(context, 'Must not run.'));
+      holder.resolution = { ...holder.resolution, maxInputTokens: 8_000 };
+      const session = await runtime.open();
+      const text = 'x'.repeat(40_000);
+      const input: RuntimeExecutionRequest['input'] =
+        type === 'text'
+          ? [{ type, text }]
+          : [
+              {
+                type,
+                text,
+                fileEntryId: '00000000-0000-7000-8000-000000000001',
+                mediaType: 'text/plain',
+                name: 'large.txt',
+                truncated: false,
+                trust: 'untrusted-user-content',
+              },
+            ];
+
+      const events = await collect(session.execute(baseRequest('turn-input-cap', { input })));
+
+      expect(holder.lastOptions).toBeUndefined();
+      expect(events).toEqual([
+        expect.objectContaining({
+          type: 'failed',
+          error: expect.objectContaining({ code: 'context_window_exceeded' }),
+        }),
+      ]);
+      await session.close();
+    },
+  );
+
+  test('compacts at the independent input cap and discards usage for the old prefix', async () => {
+    let summaryCalls = 0;
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('Retained fact.', () => {
+          summaryCalls += 1;
+        }),
+        { estimateHistoryTokens: () => 11_000 },
+      ),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Continued.'));
+    holder.resolution = { ...holder.resolution, maxInputTokens: 12_000 };
+    const history: RuntimeExecutionRequest['history'] = compactableHistory();
+    history[1].messages[1] = {
+      ...history[1].messages[1],
+      usage: { inputTokens: 120_000, outputTokens: 8, totalTokens: 120_008 },
+    };
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-input-compaction', { history })),
+    );
+
+    expect(summaryCalls).toBe(1);
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(true);
+    expect(events.some((event) => event.type === 'failed')).toBe(false);
+    expect(holder.lastOptions?.initialState?.model?.contextWindow).toBe(128_000);
+    expect(holder.lastOptions?.initialState?.messages?.[0].role).toBe('compactionSummary');
+    await session.close();
+  });
+
+  test('rejects an oversized summary request before sending it to the provider', async () => {
+    let summaryCalls = 0;
+    const runtime = createCompactionRuntime(
+      compactionOptions(
+        summaryCompletion('Must not run.', () => {
+          summaryCalls += 1;
+        }),
+      ),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Must not run.'));
+    holder.resolution = { ...holder.resolution, maxInputTokens: 8_000 };
+    const history = compactableHistory();
+    history[0].messages[0].parts = [{ type: 'text', text: 'x'.repeat(40_000) }];
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-summary-input-cap', { history })),
+    );
+
+    expect(summaryCalls).toBe(0);
+    expect(holder.lastOptions).toBeUndefined();
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'failed',
+        error: expect.objectContaining({ code: 'context_window_exceeded' }),
+      }),
+    ]);
+    await session.close();
+  });
+
+  test('does not start the agent when compaction still exceeds the input cap', async () => {
+    const runtime = createCompactionRuntime(
+      compactionOptions(summaryCompletion('x'.repeat(40_000))),
+    );
+    const holder = arrange(runtime, (context) => emitText(context, 'Must not run.'));
+    holder.resolution = { ...holder.resolution, maxInputTokens: 8_000 };
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-compacted-input-cap', { history: compactableHistory() })),
+    );
+
+    expect(holder.lastOptions).toBeUndefined();
+    expect(events.some((event) => event.type === 'context.checkpoint')).toBe(false);
+    expect(events.at(-1)).toEqual(
+      expect.objectContaining({
+        type: 'failed',
+        error: expect.objectContaining({ code: 'context_window_exceeded' }),
+      }),
+    );
+    await session.close();
+  });
+
   test('rejects oversized fixed costs before summary or agent model calls', async () => {
     let summaryCalls = 0;
     const runtime = createCompactionRuntime(
@@ -1266,15 +1424,21 @@ describe('PiRuntime mapping', () => {
     await session.close();
   });
 
-  test.each([20, 1])(
-    'stops on exhausted context even at the tool budget (%i steps)',
-    async (maxToolSteps) => {
+  test.each([
+    { maxToolSteps: 20, contextWindow: 8_000, maxInputTokens: undefined },
+    { maxToolSteps: 1, contextWindow: 8_000, maxInputTokens: undefined },
+    { maxToolSteps: 20, contextWindow: 128_000, maxInputTokens: 8_000 },
+    { maxToolSteps: 1, contextWindow: 128_000, maxInputTokens: 8_000 },
+  ])(
+    'stops on exhausted context at $maxToolSteps steps (window $contextWindow, input $maxInputTokens)',
+    async ({ maxToolSteps, contextWindow, maxInputTokens }) => {
       const runtime = createTestRuntime({ ...DEFAULT_PI_RUNTIME_LIMITS, maxToolSteps });
       const holder = holders.get(runtime);
       if (!holder) throw new Error('missing Runtime holder');
       holder.resolution = {
         ...holder.resolution,
-        model: { ...holder.resolution.model, contextWindow: 8_000, maxTokens: 512 },
+        maxInputTokens,
+        model: { ...holder.resolution.model, contextWindow, maxTokens: 512 },
       };
       arrange(runtime, async (context) => {
         const toolMessage = assistantMessage({
@@ -2373,6 +2537,87 @@ describe('PiRuntime mapping', () => {
         output: errorDetails,
       },
     });
+    expect(events.at(-1)).toEqual({ type: 'completed' });
+    await session.close();
+  });
+
+  test('keeps input correction details in the model loop and executes only the corrected call', async () => {
+    const runtime = createTestRuntime();
+    const execute = jest.fn(async () => ({ value: { total: 1 }, artifacts: [] }));
+    const targetTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'server-1', rawToolName: 'search_repositories' },
+      providerName: 'mcp_search_repositories_a1b2',
+      displayName: 'Search repositories',
+      description: 'Search GitHub repositories.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          page: { type: 'integer', minimum: 1, maximum: 100, default: 1 },
+        },
+        required: ['query'],
+      },
+      approval: 'auto',
+      execute,
+    };
+    const corrections: unknown[] = [];
+    arrange(runtime, async (context) => {
+      const call = context.options.initialState?.tools?.find(
+        (tool) => tool.name === PI_TOOL_CALL_TOOL_NAME,
+      );
+      if (!call) throw new Error('Missing tool_call.');
+      for (const [id, params] of [
+        ['uninspected-call', { query: 'private-query-marker' }],
+        ['invalid-call', { query: 'private-query-marker', page: 0 }],
+      ] as const) {
+        corrections.push(
+          (await call.execute(id, { name: targetTool.providerName, params }, context.signal))
+            .details,
+        );
+      }
+      await call.execute(
+        'corrected-call',
+        { name: targetTool.providerName, params: { query: 'cherry' } },
+        context.signal,
+      );
+      await emitText(context, 'Found one repository.');
+    });
+    const session = await runtime.open();
+
+    const events = await collect(
+      session.execute(baseRequest('turn-tool-input-correction', { tools: [targetTool] })),
+    );
+
+    expect(corrections).toMatchObject([
+      { value: { error: { code: 'tool_schema_not_inspected' } } },
+      {
+        value: {
+          error: { code: 'tool_input_invalid', message: expect.stringContaining('params.page:') },
+        },
+      },
+    ]);
+    expect(JSON.stringify(corrections)).toContain('Expected signature:');
+    expect(JSON.stringify(corrections)).toContain('page?: number');
+    for (const toolCallId of ['uninspected-call', 'invalid-call']) {
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'part.replace',
+          part: expect.objectContaining({
+            toolCallId,
+            toolRef: { source: 'meta', name: PI_TOOL_CALL_TOOL_NAME },
+            state: 'error',
+            input: { name: targetTool.providerName },
+          }),
+        }),
+      );
+    }
+    expect(JSON.stringify(events)).not.toContain('Expected signature:');
+    expect(JSON.stringify(events)).not.toContain('params.page:');
+    expect(JSON.stringify(events)).not.toContain('private-query-marker');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { query: 'cherry' }, toolCallId: 'corrected-call' }),
+    );
     expect(events.at(-1)).toEqual({ type: 'completed' });
     await session.close();
   });

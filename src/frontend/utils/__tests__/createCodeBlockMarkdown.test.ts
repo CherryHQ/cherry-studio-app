@@ -1,6 +1,14 @@
 import { createCodeBlockMarkdown } from '../createCodeBlockMarkdown';
 
 describe('createCodeBlockMarkdown', () => {
+  it('keeps a streaming fence open so native code highlighting waits for completion', () => {
+    expect(createCodeBlockMarkdown('const value =', 'typescript', true)).toBe(
+      '```typescript\nconst value =',
+    );
+    expect(createCodeBlockMarkdown('before\n```\nafter', 'markdown', true)).toBe(
+      '````markdown\nbefore\n```\nafter',
+    );
+  });
   it('uses the requested language for ordinary code', () => {
     expect(createCodeBlockMarkdown('const answer = 42;', 'typescript')).toBe(
       '```typescript\nconst answer = 42;\n```',

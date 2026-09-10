@@ -55,7 +55,7 @@ body:
     attributes:
       label: 应用版本
       description: 您正在运行的 Cherry Studio 版本是什么？
-      placeholder: 例如：v0.1.0
+      placeholder: 例如：v0.0.1
     validations:
       required: true
 

@@ -8,6 +8,7 @@ import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
+  avatar?: null | string;
   avatarUri?: null | string;
   name: string;
 }>;
@@ -16,6 +17,7 @@ type ChatMessageProps = {
   assistantPresentation: AssistantMessagePresentation;
   isMessageActionsEnabled: boolean;
   message: MessageListItem;
+  shouldShowTimestamp: boolean;
 };
 
 function renderChatAssistantMessage(
@@ -23,13 +25,12 @@ function renderChatAssistantMessage(
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
 ) {
-  const createdAt = formatMessageCreatedAt(message.createdAt);
-
   return (
     <View className="w-full gap-2.5">
       <View className="w-full flex-row items-center gap-2">
         <AgentAvatar
           accessibilityLabel={presentation.name}
+          avatar={presentation.avatar}
           name={presentation.name}
           size={24}
           uri={presentation.avatarUri}
@@ -45,15 +46,6 @@ function renderChatAssistantMessage(
                 {message.model.name}
               </Text>
             </View>
-          ) : null}
-          {createdAt ? (
-            <Text
-              className="shrink-0 text-foreground-tertiary text-xs tabular-nums"
-              numberOfLines={1}
-              testID="assistant-message-time"
-            >
-              {createdAt}
-            </Text>
           ) : null}
         </View>
       </View>
@@ -93,11 +85,21 @@ export const ChatMessage = memo(function ChatMessage({
   assistantPresentation,
   isMessageActionsEnabled,
   message,
+  shouldShowTimestamp,
 }: ChatMessageProps) {
   const isTextSelectionEnabled = !isMessageActionsEnabled;
+  const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
 
   return (
-    <View className="w-full" testID={`chat-message-${message.id}`}>
+    <View className="w-full gap-3" testID={`chat-message-${message.id}`}>
+      {createdAt ? (
+        <Text
+          className="text-center font-mono text-muted-foreground text-xs"
+          testID="chat-message-time"
+        >
+          {createdAt}
+        </Text>
+      ) : null}
       {message.role === 'user' ? (
         <UserMessage message={message} />
       ) : (

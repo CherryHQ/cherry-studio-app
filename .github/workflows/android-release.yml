@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v1.0.0)'
+        description: 'Release tag (e.g. v0.0.1)'
         required: true
-        default: 'v1.0.0'
+        default: 'v0.0.1'
   push:
     tags:
       - 'v*.*.*'
@@ -55,11 +55,11 @@ jobs:
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           fi
 
-      # Step 7: Update package.json version (DISABLED - using manual version from package.json)
+      # Step 7: Update package.json version (DISABLED - app version is configured in app.json)
       # - name: Update package.json version
       #   run: |
       #     VERSION="${{ steps.version.outputs.tag }}"
-      #     # Remove 'v' prefix if present (e.g., v1.0.0 -> 1.0.0)
+      #     # Remove 'v' prefix if present (e.g., v0.0.1 -> 0.0.1)
       #     VERSION_NUMBER="${VERSION#v}"
       #     echo "Updating package.json version to $VERSION_NUMBER"
       #
@@ -74,7 +74,7 @@ jobs:
       #     echo "✅ package.json updated to version $VERSION_NUMBER"
       #     cat package.json | grep '"version"'
 
-      # Step 8: Set APP_VERSION environment variable (DISABLED - using manual version from package.json)
+      # Step 8: Set APP_VERSION environment variable (DISABLED - app version is configured in app.json)
       # - name: Export APP_VERSION for EAS Build
       #   run: |
       #     VERSION="${{ steps.version.outputs.tag }}"
@@ -86,7 +86,7 @@ jobs:
       - name: Build Android on EAS
         id: build_android
         run: |
-          echo "Building Android APK on EAS (version from package.json)..."
+          echo "Building Android APK on EAS (version from app.json)..."
           eas build --platform android --profile production --non-interactive --no-wait --json > android_build.json
           BUILD_ID=$(cat android_build.json | jq -r '.[0].id')
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT

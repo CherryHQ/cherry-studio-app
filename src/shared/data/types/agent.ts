@@ -8,15 +8,16 @@ export const AgentToolApprovalModeSchema = z.enum(['default', 'auto']);
 export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
 
 export const DEFAULT_AGENT_TOOL_APPROVAL_MODE: AgentToolApprovalMode = 'default';
+export const CHERRY_AGENT_AVATAR = '🍒';
 
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
-  /** Stable avatar file reference; null renders the default avatar. Managed by the avatar workflow, not the CRUD DTOs. */
+  /** Built-in Cherry emoji or a managed avatar file reference; null uses the name fallback. */
   avatar: z.string().nullable(),
   /**
    * Read-time projection of `avatar` into a device-local image URI; null when
-   * unset or when the file is gone. Absolute paths are never persisted — iOS
+   * an emoji, unset, or when the file is gone. Absolute paths are never persisted — iOS
    * relocates the app container — so this is rebuilt on every read.
    */
   avatarUri: z.string().nullable(),

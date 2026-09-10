@@ -2,7 +2,7 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Alert, Button, ContentState, Spinner, useToast } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -10,7 +10,9 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { ProviderBrandAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
+import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { SelectionToolbar } from '@/frontend/components/Selection';
+import { useBackendModule } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { Model } from '@/shared/data/types/model';
 
@@ -60,6 +62,13 @@ function ProviderDetailSettings({
   const { toast } = useToast();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const activeTab: ProviderDetailTab = tab === 'models' ? 'models' : 'configuration';
+  const providers = useBackendModule('providers');
+  useEffect(() => {
+    if (activeTab !== 'models') return;
+    // Opening a model list is the only catalog refresh after the first download. Offline or
+    // unchanged catalogs keep the saved snapshot, and a first download failing shows in the gate.
+    void providers.applyRegistryUpdate().catch(() => undefined);
+  }, [activeTab, providers]);
   const { isPreparing, openSetup } = useProviderSetup();
   const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
   const [modelPurpose, setModelPurpose] = useState<ProviderModelPurpose>('all');
@@ -343,7 +352,7 @@ function ProviderDetailSettings({
           )}
         </KeyboardAwareScrollView>
       ) : (
-        <>
+        <ModelRegistryGate>
           {managedModels.length > 0 ? (
             <View className="px-4 py-2">
               <Text className="text-muted-foreground text-sm">
@@ -405,7 +414,7 @@ function ProviderDetailSettings({
               selectedCount={management.selectedIds.size}
             />
           ) : null}
-        </>
+        </ModelRegistryGate>
       )}
     </>
   );

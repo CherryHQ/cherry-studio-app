@@ -5,8 +5,13 @@ import { fetch as expoFetch } from 'expo/fetch';
 
 import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
+import {
+  projectRuntimeReasoning,
+  providerRegistryService,
+} from '@/backend/data/services/ProviderRegistryService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import { resolveEndpointDialect } from '@/shared/data/types/provider';
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
@@ -50,11 +55,40 @@ export function createPiModelResolver(): PiRuntimeDependencies {
 
       const modelId = connection.wireModelId;
       const headers = connection.headers;
+      const reasoningProfile = providerRegistryService.resolveReasoningProfile(
+        provider,
+        model,
+        connection.endpointType,
+      );
+      const invocationModel = reasoningProfile.support
+        ? {
+            ...model,
+            reasoning: projectRuntimeReasoning(reasoningProfile.support, reasoningProfile.wire),
+          }
+        : model;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
         baseUrl: adapter.formatBaseUrl(connection.baseUrl.trim()),
         ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
-          ? { compat: { supportsDeveloperRole: false } }
+          ? {
+              compat: {
+                supportsDeveloperRole: false,
+                ...(adapter.api === 'openai-completions'
+                  ? {
+                      maxTokensField:
+                        connection.adapterFamily === 'openai'
+                          ? 'max_completion_tokens'
+                          : 'max_tokens',
+                      supportsStore: connection.adapterFamily === 'openai',
+                      supportsStrictMode: connection.adapterFamily === 'openai',
+                      supportsUsageInStreaming: resolveEndpointDialect(
+                        provider,
+                        connection.endpointType,
+                      ).streamOptions,
+                    }
+                  : {}),
+              },
+            }
           : {}),
         contextWindow: preflight.contextWindow,
         cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
@@ -64,7 +98,7 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         maxTokens: preflight.maxOutputTokens,
         name: model.name,
         provider: provider.id,
-        reasoning: model.reasoning !== undefined,
+        reasoning: invocationModel.reasoning !== undefined,
       };
       const streamFn = await bindPiStream(adapter, {
         apiKey: selectedApiKey.value,
@@ -72,6 +106,15 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         headers,
         maxRetries: 0,
         maxTokens: runtimeOptions.maxOutputTokens ?? piModel.maxTokens,
+        requestParameters: {
+          model: invocationModel,
+          profile: reasoningProfile.wire,
+          selection: runtimeOptions.reasoningEffort,
+          summary:
+            typeof provider.settings.summaryText === 'string'
+              ? provider.settings.summaryText
+              : undefined,
+        },
         temperature: runtimeOptions.temperature,
         timeoutMs: DEFAULT_PI_TIMEOUT_MS,
       });
@@ -99,7 +142,8 @@ export function createPiModelResolver(): PiRuntimeDependencies {
       };
 
       return {
-        defaultThinkingLevel: resolveDefaultThinkingLevel(model),
+        defaultThinkingLevel: resolveDefaultThinkingLevel(invocationModel),
+        maxInputTokens: model.maxInputTokens,
         model: piModel,
         redactionValues: collectRedactionValues(selectedApiKey.value, headers),
         streamFn,

@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -8,7 +8,7 @@ import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { queryKeys } from '@/frontend/data/queryKeys';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
-import { FileEntrySchema } from '@/shared/data/types/file';
+import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 
 import { useFileEntries } from '../useFileEntries';
 
@@ -64,12 +64,12 @@ const generatePreviewUri = jest.fn(
       completePreview = resolve;
     }),
 );
-const fileChangeListeners = new Set<() => void>();
+const fileChangeListeners = new Set<(entryId: FileEntryId) => void>();
 const backend = {
   file: {
     generatePreviewUri,
     resolveUris,
-    subscribeChanges: (listener: () => void) => {
+    subscribeChanges: (listener: (entryId: FileEntryId) => void) => {
       fileChangeListeners.add(listener);
       return () => fileChangeListeners.delete(listener);
     },
@@ -237,7 +237,7 @@ describe('useFileEntries', () => {
     // Background generation finishes with only the app-wide bridge mounted.
     await act(async () => renderer?.update(<Providers>{null}</Providers>));
     dataApi.get.mockResolvedValueOnce({ items: [generatedEntry, entry, documentEntry] });
-    await act(async () => notifyFileChange());
+    await act(async () => notifyFileChange(generatedEntry.id));
     expect(dataApi.get).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -288,7 +288,7 @@ describe('useFileEntries', () => {
     const previews = previewKeys.map((key) => queryClient.getQueryData(key));
 
     dataApi.get.mockResolvedValueOnce({ items: [generatedEntry, entry, documentEntry] });
-    await act(async () => notifyFileChange());
+    await act(async () => notifyFileChange(generatedEntry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
 
@@ -304,16 +304,16 @@ describe('useFileEntries', () => {
     }
     expect(generatePreviewUri).toHaveBeenCalledTimes(1);
 
-    const rewrittenEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024, updatedAt: 4 });
+    const rewrittenEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024 });
     dataApi.get.mockResolvedValueOnce({ items: [rewrittenEntry, entry, documentEntry] });
-    await act(async () => notifyFileChange());
+    await act(async () => notifyFileChange(generatedEntry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
     expect(latestResult?.entries[0].entry).toEqual(rewrittenEntry);
 
     // Deletion uses the same notification, regardless of which workflow owns it.
     dataApi.get.mockResolvedValueOnce({ items: [documentEntry] });
-    await act(async () => notifyFileChange());
+    await act(async () => notifyFileChange(entry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
     expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([documentEntry.id]);
@@ -328,13 +328,111 @@ describe('useFileEntries', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
 
-    notifyFileChange();
+    notifyFileChange(generatedEntry.id);
     expect(queryClient.getQueryState(pagesKey)?.isInvalidated).toBe(false);
+  });
+
+  test('refreshes an open draft and its detail even when the timestamp has not changed', async () => {
+    let currentEntry = generatedEntry;
+    let content = 'old content';
+    let displayedText: string | undefined;
+    const detailKey = [`/files/entries/${generatedEntry.id}`];
+    const textKey = queryKeys.files.viewerText(generatedEntry, 'file:///draft.txt');
+    const affectedPage = queryKeys.files.previewUriPage([generatedEntry, documentEntry]);
+    const otherTextKey = queryKeys.files.viewerText(documentEntry, 'file:///notes.pdf');
+    const readText = jest.fn(async () => content);
+    function DraftProbe() {
+      const detail = useQuery({ queryKey: detailKey, queryFn: async () => currentEntry });
+      const text = useQuery({ queryKey: textKey, queryFn: readText, staleTime: Infinity });
+      useEffect(() => {
+        displayedText = text.data;
+      }, [detail.data, text.data]);
+      return null;
+    }
+    queryClient.setQueryData(affectedPage, []);
+    queryClient.setQueryData(otherTextKey, 'unchanged');
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <DraftProbe />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    expect(displayedText).toBe('old content');
+
+    content = 'rewritten content';
+    currentEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024 });
+    await act(async () => notifyFileChange(generatedEntry.id));
+    await flushQueryNotifications();
+
+    expect(displayedText).toBe('rewritten content');
+    expect(readText).toHaveBeenCalledTimes(2);
+    expect(queryClient.getQueryData(detailKey)).toEqual(currentEntry);
+    expect(queryClient.getQueryState(affectedPage)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherTextKey)?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryData(otherTextKey)).toBe('unchanged');
+  });
+
+  test.each(['entries', 'uris'] as const)(
+    'exposes a failed %s load and recovers on retry',
+    async (source) => {
+      const error = new Error('File load failed');
+      if (source === 'entries') dataApi.get.mockRejectedValueOnce(error);
+      else resolveUris.mockRejectedValueOnce(error);
+      await act(async () => {
+        renderer = create(
+          <Providers>
+            <Probe enabled />
+          </Providers>,
+        );
+      });
+      await flushQueryNotifications();
+      await flushQueryNotifications();
+
+      expect(latestResult?.error).toBe(error);
+      expect(latestResult?.entries).toEqual([]);
+      expect(latestResult?.isLoading).toBe(false);
+      const callsBeforeLoadMore = dataApi.get.mock.calls.length;
+      await act(async () => latestResult?.loadMore());
+      expect(dataApi.get).toHaveBeenCalledTimes(callsBeforeLoadMore);
+
+      await act(async () => {
+        await latestResult?.refresh();
+      });
+      await flushQueryNotifications();
+      await flushQueryNotifications();
+      expect(latestResult?.error).toBeUndefined();
+      expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+        entry.id,
+        documentEntry.id,
+      ]);
+    },
+  );
+
+  test('keeps loaded entries and stops automatic pagination after a later page fails', async () => {
+    const error = new Error('Next page failed');
+    dataApi.get.mockResolvedValueOnce({ items: [documentEntry], nextCursor: 'next' });
+    dataApi.get.mockRejectedValueOnce(error);
+    await act(async () => {
+      renderer = create(
+        <Providers>
+          <Probe enabled />
+        </Providers>,
+      );
+    });
+    await flushQueryNotifications();
+    await flushQueryNotifications();
+    expect(latestResult?.error).toBe(error);
+    expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([documentEntry.id]);
+    await act(async () => latestResult?.loadMore());
+    await flushQueryNotifications();
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
   });
 });
 
-function notifyFileChange() {
-  for (const listener of fileChangeListeners) listener();
+function notifyFileChange(entryId: FileEntryId) {
+  for (const listener of fileChangeListeners) listener(entryId);
 }
 
 async function flushQueryNotifications() {

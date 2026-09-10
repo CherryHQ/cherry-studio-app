@@ -9,6 +9,8 @@ surfaces.
 - `AgentListScreen` is the root page. `edit/AgentEditScreen` is shared by the edit and create route
   adapters.
 - The list header's plus action opens the create-Agent route.
+- Creating from the chat header's Agent picker opens a draft conversation with the saved Agent.
+  Creating from the management list returns to that list.
 - Tapping a list row opens that Agent's editor.
 - Long-pressing a row enters multi-selection and selects that Agent. Rows keep one press target
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
@@ -19,17 +21,24 @@ surfaces.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   its two-mode tool-approval preference, and Agent-specific MCP extensions. Inference parameters
   and system capability switches are not part of the Agent editor surface.
+- Existing agents save edits automatically without a Save action. Name and instructions wait for
+  600 ms of idle input, then save; blur, leaving the page, and backgrounding flush pending text.
+  Other fields save immediately. Writes run in order and retain only the latest queued change per
+  field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
+  replaces the stored name. New agents still require an explicit Save to create the record.
 - Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
   selection; image generation is selected for one submission. Neither is saved on the Agent.
 - Tool approval defaults to preserving each tool's application policy. Automatic approval promotes
   only interactive `ask` tools for future turns; it cannot enable a missing/disabled tool or bypass
   system permission and managed-resource checks.
-- The avatar is a managed file, not a mutable Agent field, so it has its own endpoint
+- Uploaded avatars are managed files with their own endpoint
   (`PUT /agents/:id/avatar`) and is written after the record lands — on create, only once the POST
-  returns an id. Picking one only updates the draft; Save commits it. An avatar can be set and
-  replaced but not cleared. Unset avatars render the name's first character over a generated colour,
-  falling back to a neutral badge while the name is still blank.
+  returns an id. Picking one saves immediately when editing; on create, Save commits the draft.
+  An avatar can be set and replaced but not cleared. The preinstalled Cherry Agent stores `🍒`;
+  onboarding uses the same emoji when it creates an Agent. Renaming preserves the stored emoji,
+  and choosing a photo replaces it. Unset avatars render the name's first character over a generated
+  colour, falling back to a neutral badge while the name is still blank.
 
 ## Organization
 

@@ -1,6 +1,8 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import type { AgentToolInputPreview } from '@/shared/contracts/agent';
+import { createTextPreview } from '@/shared/utils/textPreview';
 
 export const STORY_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000101';
 export const STORY_WRITTEN_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000102';
@@ -10,6 +12,12 @@ export type MessageExample = {
   label: string;
   message: MessageListItem;
 };
+
+type MessageExamplePart =
+  | CherryMessagePart
+  | (Extract<CherryMessagePart, { type: 'dynamic-tool' }> & {
+      inputPreview: AgentToolInputPreview;
+    });
 
 const markdown = [
   '## Messages',
@@ -31,6 +39,26 @@ const markdown = [
   '$$',
   '\\int_0^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}',
   '$$',
+].join('\n');
+
+const LONG_CODE_BLOCK_CONTENT = [
+  ...Array.from({ length: 48 }, (_, index) => `const item${index} = ${index};`),
+  `const summary = '${'Horizontal overflow remains readable. '.repeat(12)}';`,
+  '// Last line: vertical scrolling must reach this content.',
+].join('\n');
+
+const LONG_CODE_BLOCK_MARKDOWN = [
+  'Text before the code stays in the message flow.',
+  '',
+  '```ts',
+  LONG_CODE_BLOCK_CONTENT,
+  '```',
+  '',
+  'Text after the code stays visible. The next short block uses its natural height.',
+  '',
+  '```ts',
+  'const answer = 42;',
+  '```',
 ].join('\n');
 
 const managedAttachment: CherryMessagePart = {
@@ -135,6 +163,73 @@ const writeFileParts: CherryMessagePart[] = [
     type: 'dynamic-tool',
   },
 ];
+
+const FILE_PROCESS_INPUT = {
+  filename: '雷霆战机.html',
+  content: [
+    '<script>',
+    'const enemies = [',
+    ...Array.from({ length: 64 }, (_, index) => `  { x: ${index * 12}, y: 0 },`),
+    '];',
+    'function loop() {',
+    '  enemies.forEach(drawEnemy);',
+    '  drawPlayer();',
+    '  requestAnimationFrame(loop);',
+    '}',
+    'loop();',
+    '</script>',
+  ].join('\n'),
+};
+
+const fileProcessParts: CherryMessagePart[] = [
+  { state: 'done', text: '先创建游戏页面，再检查绘制循环。', type: 'reasoning' },
+  {
+    input: FILE_PROCESS_INPUT,
+    output: { filename: FILE_PROCESS_INPUT.filename, status: 'created' },
+    state: 'output-available',
+    toolCallId: 'file-process-write',
+    toolName: 'write_file',
+    type: 'dynamic-tool',
+  },
+  { state: 'done', text: '检查游戏结束时的画面更新。', type: 'reasoning' },
+  { state: 'done', text: '游戏结束后仍在绘制玩家，需要修复这一处。', type: 'text' },
+  {
+    input: {
+      file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID,
+      old_string: '  drawPlayer();',
+      new_string: "  if (state !== 'over') drawPlayer();",
+      replace_all: false,
+    },
+    output: { filename: FILE_PROCESS_INPUT.filename, replacements: 1, status: 'edited' },
+    state: 'output-available',
+    toolCallId: 'file-process-edit',
+    toolName: 'edit_file',
+    type: 'dynamic-tool',
+  },
+  { state: 'done', text: '已完成游戏页面，并修复结束状态的绘制逻辑。', type: 'text' },
+];
+
+const readFileProcessParts: CherryMessagePart[] = Array.from(
+  { length: 3 },
+  (_, index): CherryMessagePart[] => [
+    { state: 'done', text: '检查文件中的状态保存逻辑。', type: 'reasoning' },
+    { state: 'done', text: '\n', type: 'text' },
+    {
+      input: { file_entry_id: STORY_WRITTEN_FILE_ENTRY_ID },
+      output: {
+        filename: 'game.html',
+        lineCount: 40,
+        startLine: index * 40 + 1,
+        totalLines: 120,
+        status: 'ok',
+      },
+      state: 'output-available',
+      toolCallId: `file-process-read-${index}`,
+      toolName: 'read_file',
+      type: 'dynamic-tool',
+    },
+  ],
+).flat();
 
 const editFileParts: CherryMessagePart[] = [
   {
@@ -279,6 +374,37 @@ export const messageExamples: readonly MessageExample[] = [
     ),
   },
   {
+    label: 'Code block height — streaming reasoning',
+    message: createMessage(
+      'assistant-code-reasoning-live',
+      'assistant',
+      [{ type: 'reasoning', state: 'streaming', text: `\`\`\`ts\n${LONG_CODE_BLOCK_CONTENT}` }],
+      'pending',
+    ),
+  },
+  {
+    label: 'Code block height — streaming answer',
+    message: createMessage(
+      'assistant-code-answer-live',
+      'assistant',
+      [{ type: 'text', state: 'streaming', text: `\`\`\`ts\n${LONG_CODE_BLOCK_CONTENT}` }],
+      'pending',
+    ),
+  },
+  {
+    label: 'Code block height — completed reasoning and final answer',
+    message: createMessage('assistant-code-complete', 'assistant', [
+      { type: 'reasoning', state: 'done', text: LONG_CODE_BLOCK_MARKDOWN },
+      { type: 'text', state: 'done', text: LONG_CODE_BLOCK_MARKDOWN },
+    ]),
+  },
+  {
+    label: 'Code block height — data-code part',
+    message: createMessage('assistant-code-data', 'assistant', [
+      { type: 'data-code', data: { content: LONG_CODE_BLOCK_CONTENT, language: 'ts' } },
+    ]),
+  },
+  {
     label: 'Translation and data parts',
     message: createMessage('assistant-data', 'assistant', [
       {
@@ -335,6 +461,79 @@ export const messageExamples: readonly MessageExample[] = [
     message: createMessage('assistant-edit-file', 'assistant', editFileParts),
   },
   {
+    label: 'Reasoning and file reads — live process spacing',
+    message: createMessage(
+      'assistant-read-process-live',
+      'assistant',
+      readFileProcessParts,
+      'pending',
+    ),
+  },
+  {
+    label: 'Reasoning and file reads — expand completed process',
+    message: createMessage('assistant-read-process-complete', 'assistant', [
+      ...readFileProcessParts,
+      { state: 'done', text: '已找到问题，接下来修复状态保存逻辑。', type: 'text' },
+    ]),
+  },
+  {
+    label: 'File generation — live preview',
+    message: createMessage(
+      'assistant-file-streaming',
+      'assistant',
+      [
+        fileProcessParts[0]!,
+        {
+          input: { filename: FILE_PROCESS_INPUT.filename },
+          inputPreview: createTextPreview(FILE_PROCESS_INPUT.content),
+          state: 'input-streaming',
+          toolCallId: 'file-streaming-write',
+          toolName: 'write_file',
+          type: 'dynamic-tool',
+        },
+      ],
+      'pending',
+    ),
+  },
+  {
+    label: 'File generation — single-line source stays passive',
+    message: createMessage(
+      'assistant-file-minified',
+      'assistant',
+      [
+        {
+          input: { filename: 'game.js' },
+          inputPreview: createTextPreview('requestAnimationFrame(loop);'.repeat(400)),
+          state: 'input-streaming',
+          toolCallId: 'file-minified-write',
+          toolName: 'write_file',
+          type: 'dynamic-tool',
+        },
+      ],
+      'pending',
+    ),
+  },
+  {
+    label: 'File generation — complete minified source in a capped viewport',
+    message: createMessage('assistant-file-minified-complete', 'assistant', [
+      {
+        input: { filename: 'game.js', content: 'requestAnimationFrame(loop);'.repeat(4_000) },
+        output: { filename: 'game.js', status: 'created' },
+        state: 'output-available',
+        toolCallId: 'file-minified-complete-write',
+        toolName: 'write_file',
+        type: 'dynamic-tool',
+      },
+    ]),
+  },
+  {
+    label: 'File generation — expand process to inspect step spacing',
+    message: {
+      ...createMessage('assistant-file-process', 'assistant', fileProcessParts),
+      stats: { runtimeTiming: { startedAt: 0, completedAt: 94_000, spans: [] } },
+    },
+  },
+  {
     label: 'Meta tools',
     message: createMessage('assistant-meta-tools', 'assistant', metaToolParts),
   },
@@ -343,7 +542,7 @@ export const messageExamples: readonly MessageExample[] = [
 function createMessage(
   id: string,
   role: MessageListItem['role'],
-  parts: CherryMessagePart[],
+  parts: MessageExamplePart[],
   status: MessageListItem['status'] = 'success',
 ): MessageListItem {
   return { data: { parts }, id, role, status };

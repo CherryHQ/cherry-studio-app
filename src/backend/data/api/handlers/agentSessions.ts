@@ -30,8 +30,8 @@ export function createAgentSessionHandlers(
 ): HandlersFor<AgentSessionSchemas> {
   return {
     '/agent-sessions': {
-      GET: async ({ query }) =>
-        service.listByCursor(ListAgentSessionsQuerySchema.parse(query ?? {})),
+      GET: async ({ query, signal }) =>
+        service.listByCursor(ListAgentSessionsQuerySchema.parse(query ?? {}), signal),
     },
     '/agent-sessions/:id': {
       DELETE: async ({ params }) => {

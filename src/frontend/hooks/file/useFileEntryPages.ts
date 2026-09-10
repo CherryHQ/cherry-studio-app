@@ -80,7 +80,10 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
   );
   const combinePreviews = useCallback(
     (results: readonly FilePreviewResult[]) =>
-      results.map((result, index) => result.data ?? uriPages.entries[index]),
+      results.map((result, index) => {
+        const item = uriPages.entries[index];
+        return fileEntryPreviewKind(item.entry) === 'image' ? (result.data ?? item) : item;
+      }),
     [uriPages.entries],
   );
   const entries = useQueries({ combine: combinePreviews, queries: previewQueries });

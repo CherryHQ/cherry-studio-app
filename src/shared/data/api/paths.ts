@@ -13,8 +13,27 @@ export type ConcreteApiPaths = {
 export type TemplateApiPaths = keyof ApiSchemas & string;
 export type ApiPath = ConcreteApiPaths | TemplateApiPaths;
 
+// A regular parameter consumes one segment, unlike a splat used for model IDs.
+// Template-literal `${string}` alone would also match a nested endpoint.
+type HasMatchingSegmentCount<
+  Path extends string,
+  Template extends string,
+> = Template extends `${string}:${string}*${string}`
+  ? true
+  : Path extends `${string}/${infer PathTail}`
+    ? Template extends `${string}/${infer TemplateTail}`
+      ? HasMatchingSegmentCount<PathTail, TemplateTail>
+      : false
+    : Template extends `${string}/${string}`
+      ? false
+      : true;
+
 export type MatchApiPath<Path extends string> = {
-  [K in keyof ApiSchemas]: Path extends ResolvedPath<K & string> ? K : never;
+  [K in keyof ApiSchemas]: Path extends ResolvedPath<K & string>
+    ? HasMatchingSegmentCount<Path, K & string> extends true
+      ? K
+      : never
+    : never;
 }[keyof ApiSchemas];
 
 type SchemaKeyForPath<Path extends string> = Path extends TemplateApiPaths

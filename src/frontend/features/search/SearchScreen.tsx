@@ -1,12 +1,13 @@
-import { ContentState, SearchField, Spinner } from '@cherrystudio/ui/components';
+import XIcon from '@cherrystudio/app-icons/icons/x';
+import { Button, ContentState, SearchField, Spinner, Surface } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, use, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RouteHeader } from '@/frontend/appShell/header';
 import {
   cancelScheduledAppSearchFinish,
   finishAppSearchSession,
@@ -14,14 +15,19 @@ import {
   scheduleAppSearchFinish,
   selectAppSearchItem,
   type AppSearchGroup,
-  type AppSearchPage,
   type AppSearchRequest,
 } from '@/frontend/appShell/search';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
-const SEARCH_RESULT_ESTIMATED_HEIGHT = 52;
+import { useAppSearchResults } from './useAppSearchResults';
 
-type SearchPhase = 'idle' | 'loading' | 'ready' | 'error';
+const SEARCH_RESULT_ESTIMATED_HEIGHT = 72;
+
+const SearchPaginationContext = createContext<Pick<
+  ReturnType<typeof useAppSearchResults>,
+  'loadingGroupKey' | 'loadMore'
+> | null>(null);
+
 type StoredSearchRequest = AppSearchRequest<unknown, unknown, unknown>;
 type AppSearchNavigation = {
   addListener: (
@@ -32,7 +38,8 @@ type AppSearchNavigation = {
 
 type AppSearchListItem =
   | { key: string; title: string; type: 'header' }
-  | { item: unknown; key: string; type: 'result' };
+  | { item: unknown; key: string; type: 'result' }
+  | { groupKey: string; hasResults: boolean; key: string; type: 'more' };
 
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ searchSessionId?: string | string[] }>();
@@ -81,89 +88,22 @@ function AppSearchRoutePage({
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState(() => request.filter?.initialValue);
-  const [groups, setGroups] = useState<readonly AppSearchGroup<unknown>[]>([]);
-  const [nextCursor, setNextCursor] = useState<string>();
-  const [phase, setPhase] = useState<SearchPhase>('idle');
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [reloadVersion, setReloadVersion] = useState(0);
-  const requestNumberRef = useRef(0);
-  const searchAbortRef = useRef<AbortController | null>(null);
-  const paginationAbortRef = useRef<AbortController | null>(null);
+  const {
+    changeFilters: handleFiltersChange,
+    changeQuery: handleQueryChange,
+    filters,
+    groups,
+    loadingGroupKey,
+    loadMore,
+    phase,
+    query,
+    retry,
+  } = useAppSearchResults(request);
+  const pagination = useMemo(() => ({ loadingGroupKey, loadMore }), [loadingGroupKey, loadMore]);
   const isLeavingRef = useRef(false);
-
-  useEffect(() => {
-    const searchQuery = query.trim();
-    if (!searchQuery) {
-      return;
-    }
-
-    const requestNumber = ++requestNumberRef.current;
-    const abortController = new AbortController();
-    searchAbortRef.current?.abort();
-    searchAbortRef.current = abortController;
-    paginationAbortRef.current?.abort();
-
-    void Promise.resolve()
-      .then(() => request.search({ filters, query: searchQuery, signal: abortController.signal }))
-      .then(
-        (page) => {
-          if (abortController.signal.aborted || requestNumber !== requestNumberRef.current) {
-            return;
-          }
-
-          setGroups(page.groups);
-          setNextCursor(page.nextCursor);
-          setPhase('ready');
-        },
-        () => {
-          if (abortController.signal.aborted || requestNumber !== requestNumberRef.current) {
-            return;
-          }
-
-          setGroups([]);
-          setNextCursor(undefined);
-          setPhase('error');
-        },
-      );
-
-    return () => abortController.abort();
-  }, [filters, query, reloadVersion, request]);
-
-  useEffect(
-    () => () => {
-      searchAbortRef.current?.abort();
-      paginationAbortRef.current?.abort();
-    },
-    [],
-  );
-
   const listItems = useMemo(() => buildListItems(groups, request), [groups, request]);
-  const handleQueryChange = useCallback((value: string) => {
-    searchAbortRef.current?.abort();
-    paginationAbortRef.current?.abort();
-    requestNumberRef.current += 1;
-    setQuery(value);
-    setGroups([]);
-    setNextCursor(undefined);
-    setPhase(value.trim() ? 'loading' : 'idle');
-    setIsLoadingMore(false);
-  }, []);
   const clearQuery = useCallback(() => handleQueryChange(''), [handleQueryChange]);
-  const handleFiltersChange = useCallback(
-    (value: unknown) => {
-      searchAbortRef.current?.abort();
-      paginationAbortRef.current?.abort();
-      requestNumberRef.current += 1;
-      setFilters(value);
-      setGroups([]);
-      setNextCursor(undefined);
-      setPhase(query.trim() ? 'loading' : 'idle');
-      setIsLoadingMore(false);
-    },
-    [query],
-  );
+  const handleEndReached = useCallback(() => loadMore(), [loadMore]);
   const handleSelect = useCallback(
     (item: unknown) => {
       if (isLeavingRef.current) {
@@ -176,14 +116,25 @@ function AppSearchRoutePage({
     },
     [router, searchSessionId],
   );
+  const handleClose = useCallback(() => {
+    if (isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    router.back();
+  }, [router]);
   const renderItem = useCallback(
     ({ item }: LegendListRenderItemProps<AppSearchListItem>) => {
       if (item.type === 'header') {
         return (
-          <View className="px-4 pt-4 pb-1">
-            <Text className="font-medium text-muted-foreground text-sm">{item.title}</Text>
+          <View className="px-5 pt-4 pb-2">
+            <Text accessibilityRole="header" className="font-medium text-base text-foreground">
+              {item.title}
+            </Text>
           </View>
         );
+      }
+
+      if (item.type === 'more') {
+        return <SearchGroupContinuation groupKey={item.groupKey} hasResults={item.hasResults} />;
       }
 
       return (
@@ -191,7 +142,7 @@ function AppSearchRoutePage({
           accessibilityLabel={request.getAccessibilityLabel(item.item)}
           accessibilityRole="button"
           accessibilityState={request.getAccessibilityState?.(item.item)}
-          className="min-h-12 justify-center px-4 active:bg-foreground/5"
+          className="min-h-12 justify-center px-5 active:bg-foreground/5"
           onPress={() => handleSelect(item.item)}
         >
           {request.renderItem(item.item)}
@@ -200,121 +151,127 @@ function AppSearchRoutePage({
     },
     [handleSelect, request],
   );
-  const loadMore = useCallback(() => {
-    if (!nextCursor || isLoadingMore || phase !== 'ready') {
-      return;
-    }
-
-    const cursor = nextCursor;
-    const requestNumber = requestNumberRef.current;
-    const abortController = new AbortController();
-    paginationAbortRef.current?.abort();
-    paginationAbortRef.current = abortController;
-    setIsLoadingMore(true);
-
-    void Promise.resolve()
-      .then(() =>
-        request.search({
-          cursor,
-          filters,
-          query: query.trim(),
-          signal: abortController.signal,
-        }),
-      )
-      .then(
-        (page) => {
-          if (abortController.signal.aborted || requestNumber !== requestNumberRef.current) {
-            return;
-          }
-
-          setGroups((current) => mergeSearchGroups(current, page, request.keyExtractor));
-          setNextCursor(page.nextCursor);
-          setIsLoadingMore(false);
-        },
-        () => {
-          if (!abortController.signal.aborted && requestNumber === requestNumberRef.current) {
-            setIsLoadingMore(false);
-          }
-        },
-      );
-  }, [filters, isLoadingMore, nextCursor, phase, query, request]);
-  const retry = useCallback(() => {
-    setPhase('loading');
-    setReloadVersion((current) => current + 1);
-  }, []);
   const FilterComponent = request.filter?.component;
 
   return (
-    <>
-      <RouteHeader title={t('navigation.search')} />
-      <View className="flex-1">
-        <View className={request.filter ? 'px-4 pt-3 pb-2' : 'px-4 py-3'}>
-          <SearchField
-            accessibilityLabel={request.placeholder}
-            autoFocus
-            clearAccessibilityLabel={t('common.clear')}
-            onChangeText={handleQueryChange}
-            onClear={clearQuery}
-            placeholder={request.placeholder}
-            testID="app-search-input"
-            value={query}
-          />
+    <SearchPaginationContext value={pagination}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        // The dock already includes this inset; keep its 12px gap when the keyboard replaces it.
+        keyboardVerticalOffset={-insets.bottom}
+        style={styles.page}
+      >
+        <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
+          {request.filter && FilterComponent ? (
+            <View className="px-5 pt-4 pb-3">
+              <FilterComponent
+                context={request.filter.context}
+                onChange={handleFiltersChange}
+                query={query.trim()}
+                value={filters}
+              />
+            </View>
+          ) : null}
+          {phase === 'idle' ? (
+            <View className="flex-1" />
+          ) : phase === 'loading' && listItems.length === 0 ? (
+            <View className="flex-1 justify-center px-6">
+              <ContentState.Loading title={t('appSearch.loading')} />
+            </View>
+          ) : phase === 'error' && listItems.length === 0 ? (
+            <View className="flex-1 justify-center px-6">
+              <ContentState.Error
+                primaryAction={{ children: t('appSearch.retry'), onPress: retry }}
+                title={t('appSearch.loadFailed')}
+              />
+            </View>
+          ) : (
+            <LegendList
+              contentContainerStyle={styles.listContent}
+              data={listItems}
+              estimatedItemSize={SEARCH_RESULT_ESTIMATED_HEIGHT}
+              getItemType={getListItemType}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+              keyExtractor={listKeyExtractor}
+              ListEmptyComponent={
+                query.trim() ? (
+                  <View className="px-6 py-12">
+                    <ContentState.Empty description={request.emptyText} />
+                  </View>
+                ) : null
+              }
+              ListFooterComponent={
+                loadingGroupKey === null ? (
+                  <View className="items-center py-4">
+                    <Spinner accessibilityLabel={t('appSearch.loading')} />
+                  </View>
+                ) : null
+              }
+              maintainVisibleContentPosition
+              onEndReached={handleEndReached}
+              onEndReachedThreshold={0.7}
+              recycleItems
+              renderItem={renderItem}
+              showsVerticalScrollIndicator={false}
+              style={styles.list}
+            />
+          )}
+          <View
+            className="flex-row items-center gap-3 px-4 pt-3"
+            style={{ paddingBottom: insets.bottom + 12 }}
+          >
+            <SearchField
+              accessibilityLabel={request.placeholder}
+              autoFocus
+              clearAccessibilityLabel={t('common.clear')}
+              onChangeText={handleQueryChange}
+              onClear={clearQuery}
+              placeholder={request.placeholder}
+              style={styles.searchField}
+              testID="app-search-input"
+              value={query}
+              variant="filled"
+            />
+            <Surface interactive shape="circle">
+              <Button
+                accessibilityLabel={t('common.close')}
+                icon={<XIcon />}
+                onPress={handleClose}
+                shape="pill"
+                size="lg"
+                testID="app-search-close"
+                variant="ghost"
+              />
+            </Surface>
+          </View>
         </View>
-        {request.filter && FilterComponent ? (
-          <View className="px-4 pb-3">
-            <FilterComponent
-              context={request.filter.context}
-              onChange={handleFiltersChange}
-              query={query.trim()}
-              value={filters}
-            />
-          </View>
-        ) : null}
-        {phase === 'idle' ? (
-          <View className="flex-1" />
-        ) : phase === 'loading' && listItems.length === 0 ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Loading title={t('appSearch.loading')} />
-          </View>
-        ) : phase === 'error' && listItems.length === 0 ? (
-          <View className="flex-1 justify-center px-6">
-            <ContentState.Error
-              primaryAction={{ children: t('appSearch.retry'), onPress: retry }}
-              title={t('appSearch.loadFailed')}
-            />
-          </View>
-        ) : (
-          <LegendList
-            contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
-            data={listItems}
-            estimatedItemSize={SEARCH_RESULT_ESTIMATED_HEIGHT}
-            getItemType={getListItemType}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled"
-            keyExtractor={listKeyExtractor}
-            ListEmptyComponent={
-              <View className="px-6 py-12">
-                <ContentState.Empty description={request.emptyText} />
-              </View>
-            }
-            ListFooterComponent={
-              isLoadingMore ? (
-                <View className="items-center py-4">
-                  <Spinner accessibilityLabel={t('appSearch.loading')} />
-                </View>
-              ) : null
-            }
-            maintainVisibleContentPosition={false}
-            onEndReached={loadMore}
-            onEndReachedThreshold={0.7}
-            recycleItems
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-            style={styles.list}
-          />
-        )}
-      </View>
-    </>
+      </KeyboardAvoidingView>
+    </SearchPaginationContext>
+  );
+}
+
+function SearchGroupContinuation({
+  groupKey,
+  hasResults,
+}: {
+  groupKey: string;
+  hasResults: boolean;
+}) {
+  const { t } = useTranslation();
+  const pagination = use(SearchPaginationContext);
+  if (!pagination) return null;
+  return (
+    <View className="items-start px-5 py-3">
+      <Button
+        disabled={pagination.loadingGroupKey !== undefined}
+        loading={pagination.loadingGroupKey === groupKey}
+        onPress={() => pagination.loadMore(groupKey)}
+        variant="ghost"
+      >
+        {t(hasResults ? 'appSearch.loadMore' : 'appSearch.continueSearch')}
+      </Button>
+    </View>
   );
 }
 
@@ -322,43 +279,28 @@ function buildListItems(
   groups: readonly AppSearchGroup<unknown>[],
   request: StoredSearchRequest,
 ): AppSearchListItem[] {
-  return groups.flatMap((group) => [
-    ...(group.title
-      ? [{ key: `header:${group.key}`, title: group.title, type: 'header' as const }]
-      : []),
-    ...group.items.map((item) => ({
-      item,
-      key: `result:${group.key}:${request.keyExtractor(item)}`,
-      type: 'result' as const,
-    })),
-  ]);
-}
-
-function mergeSearchGroups(
-  currentGroups: readonly AppSearchGroup<unknown>[],
-  page: AppSearchPage<unknown>,
-  keyExtractor: (item: unknown) => string,
-): readonly AppSearchGroup<unknown>[] {
-  const pageGroups = new Map(page.groups.map((group) => [group.key, group]));
-  const mergedGroups = currentGroups.map((group) => {
-    const incoming = pageGroups.get(group.key);
-    if (!incoming) {
-      return group;
-    }
-
-    pageGroups.delete(group.key);
-    const existingKeys = new Set(group.items.map(keyExtractor));
-    return {
-      ...group,
-      items: [
-        ...group.items,
-        ...incoming.items.filter((item) => !existingKeys.has(keyExtractor(item))),
-      ],
-      title: incoming.title ?? group.title,
-    };
-  });
-
-  return [...mergedGroups, ...pageGroups.values()];
+  return groups
+    .filter((group) => group.items.length > 0 || group.nextCursor)
+    .flatMap((group) => [
+      ...(group.title
+        ? [{ key: `header:${group.key}`, title: group.title, type: 'header' as const }]
+        : []),
+      ...group.items.map((item) => ({
+        item,
+        key: `result:${group.key}:${request.keyExtractor(item)}`,
+        type: 'result' as const,
+      })),
+      ...(group.nextCursor
+        ? [
+            {
+              groupKey: group.key,
+              hasResults: group.items.length > 0,
+              key: `more:${group.key}`,
+              type: 'more' as const,
+            },
+          ]
+        : []),
+    ]);
 }
 
 function listKeyExtractor(item: AppSearchListItem) {
@@ -370,6 +312,8 @@ function getListItemType(item: AppSearchListItem) {
 }
 
 const styles = StyleSheet.create({
+  page: { flex: 1 },
   list: { flex: 1 },
-  listContent: { flexGrow: 1 },
+  listContent: { flexGrow: 1, paddingBottom: 12 },
+  searchField: { flex: 1 },
 });

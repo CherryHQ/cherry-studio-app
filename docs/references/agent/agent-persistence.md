@@ -98,8 +98,10 @@ denial becomes `denied`. Cancellation, failure, or startup reconciliation conver
 before the assistant message settles. Later model history therefore contains paired calls/results
 and never replays an unanswerable approval. No `agent_approval` table.
 
-**Avatar is a stable file reference, not emoji and not `file_entry`.** Agent avatars follow the
-user-avatar pattern ([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
+**Avatar stores the built-in Cherry emoji or a stable file reference.** The initial Cherry Agent
+and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. Existing records are
+preserved. Uploaded avatars follow the user-avatar pattern
+([File Model](../data/file-model.md), `userAvatarStorage.ts`): processed to
 WebP under `{documentDirectory}/agent-avatars/`, referenced as
 `agent-avatar-file:{agentId}.{uuid}.webp`, never as an absolute `file://` path. `file_entry` is for
 user-visible library content with independent lifecycle; an avatar is replace-in-place and remains
@@ -107,11 +109,13 @@ attached to a soft-deleted Agent for historical Sessions.
 
 Implemented as `agentAvatarStorage.ts` over the parameterized `userContentImageStorage`, driven by
 `PUT /agents/:id/avatar`: store the new image, write the column, then drop the previous file, with a
-column-write failure compensating the new file. The CRUD DTOs still refuse `avatar` — the column has
-no other writer. The uuid rotates on every replace so the uri, which doubles as the image cache key,
+column-write failure compensating the new file. Creation accepts only the built-in `🍒` value;
+updates reject direct avatar writes, and managed file references always use the image workflow.
+The uuid rotates on every replace so the uri, which doubles as the image cache key,
 changes with it.
 
-Reads project the column into a device-local `Agent.avatarUri`, rebuilt per read because the
+Emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
+device-local `Agent.avatarUri`, rebuilt per read because the
 absolute path does not survive container relocation. That projection happens at the Data API
 boundary, not in `AgentService`: resolving it is file-system work under `backend/services`, which
 `backend/data` must not depend on. `createAgentAvatars` owns both directions and is injected through
@@ -149,6 +153,11 @@ Skill configuration remains deferred. Pi reads neither tool nor Skill persistenc
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
 store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (like `assistant`);
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
+For chat sends, the send action allocates these IDs before asynchronous preparation so the displayed
+rows and persisted rows have identical identities. The store inserts those supplied IDs inside the
+existing reservation transaction; it still creates a new Session together with its first message
+pair. Record timestamps and turn IDs remain store-generated. Primary-key collisions reject the
+transaction without overwriting records or leaving a partial Session.
 Agent updates advance `updatedAt` with `max(previous + 1, wall clock)` inside the serialized write
 transaction. The composer can therefore use it as a strict row version when reconciling optimistic
 model selection with Agent definition edits and inactive query caches.
@@ -168,7 +177,7 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `id` | text | PK, UUID v4 | |
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
-| `avatar` | text | NULL | Stable file reference; NULL renders the default avatar |
+| `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
 | `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |

@@ -1,5 +1,5 @@
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Section, Spinner, useToast } from '@cherrystudio/ui/components';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import { type MenuItem, Section, Spinner, useToast } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -199,18 +199,36 @@ export default function ProviderListScreen() {
   const openProviderCatalog = useCallback(() => {
     router.push('/settings/provider/catalog');
   }, [router]);
+  const openDesktopSync = useCallback(() => {
+    router.push('/settings/provider/desktop-sync');
+  }, [router]);
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'open-provider-catalog',
+        label: t('settings.provider.actions.add'),
+        onPress: openProviderCatalog,
+      },
+      {
+        id: 'sync-from-desktop',
+        label: t('settings.provider.desktopSync.menuLabel'),
+        onPress: openDesktopSync,
+      },
+    ],
+    [openDesktopSync, openProviderCatalog, t],
+  );
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('settings.provider.catalog.title'),
-        icon: PlusIcon,
-        key: 'open-provider-catalog',
-        onPress: openProviderCatalog,
-        testID: 'provider-catalog-open',
-        type: 'icon',
+        accessibilityLabel: t('common.more'),
+        icon: EllipsisIcon,
+        items: menuItems,
+        key: 'provider-actions',
+        testID: 'provider-actions',
+        type: 'menu',
       },
     ],
-    [openProviderCatalog, t],
+    [menuItems, t],
   );
 
   return (

@@ -10,6 +10,15 @@ import { DependencyResolver } from '@/backend/core/lifecycle/DependencyResolver'
 import { ServiceContainer } from '@/backend/core/lifecycle/ServiceContainer';
 import { Phase, type ServiceConstructor } from '@/backend/core/lifecycle/types';
 
+// Registry metadata does not depend on native authorization; DevicePermissions tests own it.
+jest.mock('@/backend/services/permissions', () => ({
+  devicePermissions: {
+    getStatuses: jest.fn(),
+    openSystemSettings: jest.fn(),
+    request: jest.fn(),
+  },
+}));
+
 /**
  * Guards the registry itself rather than any one service.
  *

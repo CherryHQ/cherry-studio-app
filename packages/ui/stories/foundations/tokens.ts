@@ -38,7 +38,7 @@ export const PALETTE_SCALES: PaletteScale[] = [
     variables: scale('gray-alpha', neutralSteps),
   },
   { title: 'Blue', hint: 'info、reference', variables: scale('blue', hueSteps) },
-  { title: 'Green', hint: 'success', variables: scale('green', hueSteps) },
+  { title: 'Green', hint: 'primary、success', variables: scale('green', hueSteps) },
   { title: 'Amber', hint: 'warning、highlight', variables: scale('amber', hueSteps) },
   { title: 'Red', hint: 'error、destructive、inline-code', variables: scale('red', hueSteps) },
 ];
@@ -87,8 +87,8 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
     variables: ['--secondary', '--secondary-active', '--muted', '--accent'],
   },
   {
-    title: '品牌',
-    hint: '--primary 是主操作颜色；--brand 是固定的 Cherry Studio Logo 红（#ff5757）。两者当前取值相同，但语义仍分开。',
+    title: '主操作与品牌',
+    hint: '--primary 采用与 PC 一致的绿色方向，明暗模式使用对应绿色阶及配套前景；--brand 仅用于固定的 Cherry Studio Logo 红（#ff5757），不用于操作和内容。',
     kind: 'surface',
     variables: ['--primary', '--primary-foreground', '--brand'],
   },

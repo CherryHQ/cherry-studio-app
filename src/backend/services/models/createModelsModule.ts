@@ -183,7 +183,11 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
     const result = await dependencies.models.reconcile(
       providerId,
       {
-        toAdd: (input.toAdd ?? []).map(modelToAddInput),
+        // Discovery previews can outlive a background registry update. Resolve defaults again
+        // before persistence so stale catalog values do not become user-owned overrides.
+        toAdd: dependencies
+          .materializeRemoteModels(provider, input.toAdd ?? [])
+          .map(modelToAddInput),
         toRemove: [...(input.toRemove ?? [])],
       },
       provider,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { TextInput } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -14,6 +14,9 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/frontend/appShell/header', () => ({ RouteHeader: () => null }));
+jest.mock('@/frontend/components/ModelRegistry', () => ({
+  ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
+}));
 jest.mock('@cherrystudio/ui/components', () => ({
   ContentState: { Error: () => null, Loading: () => null },
 }));

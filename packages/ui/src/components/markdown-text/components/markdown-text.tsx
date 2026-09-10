@@ -144,6 +144,8 @@ export function MarkdownText({
   // A streamed part keeps one native renderer for its full lifetime. Switching
   // component types at terminal status remounts the whole Markdown subtree and
   // invalidates the list's measured height and native selection state.
+  // Its native streaming mode still ends with the part, releasing pending tail
+  // blocks and forcing a final layout even when the Markdown hasn't changed.
   const MarkdownRenderer = isStreaming || hasStreamed ? StreamdownText : EnrichedMarkdownText;
   const handleLinkPress = ({ url }: LinkPressEvent) => onLinkPress(url);
   const markdownStyle = useMemo<MarkdownStyle>(() => {
@@ -244,6 +246,7 @@ export function MarkdownText({
       md4cFlags={{ latexMath: true, superscript: true, underline: false }}
       onLinkPress={handleLinkPress}
       selectable={selectable}
+      streamingAnimation={isStreaming}
     />
   );
 }

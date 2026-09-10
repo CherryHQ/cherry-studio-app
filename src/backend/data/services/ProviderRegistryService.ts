@@ -384,14 +384,18 @@ export class ProviderRegistryService {
     return this.loader.getProviderModelsVersion();
   }
 
-  getCatalogVersion(file: RemoteRegistryFileName): string {
+  getCatalogVersion(file: RemoteRegistryFileName): string | undefined {
     return file === 'models.json'
       ? this.loader.getModelsVersion()
       : this.loader.getProviderModelsVersion();
   }
 
-  getBundledCatalogVersions() {
-    return this.loader.getBundledCatalogVersions();
+  assertReady(): void {
+    this.loader.assertReady();
+  }
+
+  isReady(): boolean {
+    return this.loader.isReady();
   }
 
   parseRemoteSnapshot(input: { models: unknown; providerModels: unknown }) {
@@ -420,6 +424,10 @@ export class ProviderRegistryService {
 
   getExcludedProviderIds(): readonly string[] {
     return this.loader.getExcludedProviderIds();
+  }
+
+  isProviderExcludedFromCatalog(providerId: string): boolean {
+    return this.loader.isProviderExcludedFromCatalog(providerId);
   }
 
   getProviderDisplayMetadata(
@@ -578,7 +586,16 @@ export class ProviderRegistryService {
     const presetReasoning = this.loader.findModel(
       matchedOverride?.modelId ?? model.presetModelId ?? '',
     )?.reasoning;
-    const support = mergeReasoningSupport(presetReasoning ?? model.reasoning, contract?.support);
+    const materializedReasoning = model.reasoning
+      ? {
+          ...model.reasoning,
+          supportedEfforts: model.reasoning.supportedEfforts ?? model.reasoning.selectableEfforts,
+        }
+      : undefined;
+    const support = mergeReasoningSupport(
+      presetReasoning ?? materializedReasoning,
+      contract?.support,
+    );
     const wireDialect =
       support?.wireDialect ?? this.loader.findModel(model.apiModelId ?? '')?.reasoning?.wireDialect;
     const resolved = resolveReasoningProfileFromRegistry({

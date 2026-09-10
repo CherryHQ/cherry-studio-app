@@ -4,10 +4,12 @@ import { agentSessionMessageTable } from './agentSessionMessage';
 import { agentToolBindingTable } from './agentToolBinding';
 import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
+import { desktopConnectionTable } from './desktopConnection';
 import { fileEntryTable } from './file';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { paintingTable } from './painting';
+import { pluginAuthorizationTable } from './pluginAuthorization';
 import { preferenceTable } from './preference';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
@@ -17,10 +19,12 @@ export * from './agentToolBinding';
 export * from './agentSession';
 export * from './agentSessionMessage';
 export * from './aiUsageRecord';
+export * from './desktopConnection';
 export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
 export * from './painting';
+export * from './pluginAuthorization';
 export * from './userModel';
 export * from './userProvider';
 
@@ -42,9 +46,11 @@ export const schema = {
   agentSessionMessageTable,
   aiUsageRecordTable,
   appStateTable,
+  desktopConnectionTable,
   fileEntryTable,
   jobTable,
   mcpServerTable,
+  pluginAuthorizationTable,
   paintingTable,
   preferenceTable,
   userModelTable,

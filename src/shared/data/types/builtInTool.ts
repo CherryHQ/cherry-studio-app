@@ -9,7 +9,10 @@
  * permission, and application configuration.
  */
 
-import type { DevicePermissionScope } from '@/shared/contracts/permissions';
+import {
+  type DevicePermissionScope,
+  HEALTH_PERMISSION_SCOPES,
+} from '@/shared/contracts/permissions';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
@@ -53,8 +56,10 @@ export type BuiltInToolDescriptor = {
    * tool's `ask`: enabling a capability is not consent to spend or destroy.
    */
   autoApprovalEligible: boolean;
-  /** OS permission scopes that must not be denied before the tool is offered. */
+  /** OS scopes that must be usable or requestable before the tool is offered. */
   permissionScopes: readonly DevicePermissionScope[];
+  /** Summaries can use independently authorized metrics; other tools require every scope. */
+  permissionMatch?: 'any';
   /** `null` means every platform. */
   platforms: readonly ('android' | 'ios')[] | null;
   /** Needs a drawing model configured in Settings > Model. */
@@ -132,11 +137,12 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   }),
   describe('health_get_summary', 'auto', {
     agentCapability: 'health',
-    permissionScopes: ['health.read'],
+    permissionScopes: HEALTH_PERMISSION_SCOPES.filter((scope) => scope !== 'health.workouts.read'),
+    permissionMatch: 'any',
   }),
   describe('health_list_workouts', 'auto', {
     agentCapability: 'health',
-    permissionScopes: ['health.read'],
+    permissionScopes: ['health.workouts.read'],
   }),
   describe('location_get_current', 'auto', {
     agentCapability: 'location',

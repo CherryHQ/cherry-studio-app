@@ -54,6 +54,7 @@ describe('MarkdownText', () => {
           markdown: 'Hello',
           md4cFlags: { latexMath: true, superscript: true, underline: false },
           selectable: true,
+          streamingAnimation: isStreaming,
         }),
       );
       expect(props.markdownStyle).toEqual(
@@ -131,25 +132,38 @@ describe('MarkdownText', () => {
     );
   });
 
-  test('keeps the streaming renderer mounted when the part reaches terminal state', () => {
+  test.each([
+    ['with the last text update', 'Partial', 'Complete'],
+    [
+      'without another text update',
+      '| Item |\n| --- |\n| Final row',
+      '| Item |\n| --- |\n| Final row',
+    ],
+  ])('settles the native tail %s without remounting the renderer', (_label, partial, complete) => {
     const onLinkPress = jest.fn();
     const renderer = render(
-      <MarkdownText fontSizeStep={0} isStreaming markdown="Partial" onLinkPress={onLinkPress} />,
+      <MarkdownText fontSizeStep={0} isStreaming markdown={partial} onLinkPress={onLinkPress} />,
     );
+    const block = renderer.root.findByType('StreamdownText');
+    expect(block.props.streamingAnimation).toBe(true);
 
     act(() => {
       renderer.update(
         <MarkdownText
           fontSizeStep={0}
           isStreaming={false}
-          markdown="Complete"
+          markdown={complete}
           onLinkPress={onLinkPress}
         />,
       );
     });
 
-    expect(renderer.root.findByType('StreamdownText').props.markdown).toBe('Complete');
+    expect(renderer.root.findByType('StreamdownText')).toBe(block);
+    expect(block.props.markdown).toBe(complete);
+    expect(block.props.streamingAnimation).toBe(false);
     expect(renderer.root.findAllByType('EnrichedMarkdownText')).toHaveLength(0);
+
+    act(() => renderer.unmount());
   });
 });
 

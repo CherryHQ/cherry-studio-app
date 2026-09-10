@@ -36,7 +36,7 @@ export function MainHeaderAgentPickerSheet({
   };
   const createAgent = () => {
     onClose();
-    router.push('/agents/new');
+    router.push({ params: { startChat: 'true' }, pathname: '/agents/new' });
   };
 
   return (
@@ -116,7 +116,7 @@ function AgentPickerRow({
         className="min-w-0 flex-1 flex-row items-center gap-3 rounded-xl py-1 active:opacity-60"
         onPress={() => onSelect(agent.id)}
       >
-        <AgentAvatar name={agent.name} size={36} uri={agent.avatarUri} />
+        <AgentAvatar avatar={agent.avatar} name={agent.name} size={36} uri={agent.avatarUri} />
         <View className="min-w-0 flex-1 gap-0.5">
           <Text className="font-semibold text-base text-foreground">{agent.name}</Text>
           <Text className="text-muted-foreground text-xs" numberOfLines={1}>

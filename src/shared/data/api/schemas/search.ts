@@ -65,7 +65,7 @@ export const CONTENT_SEARCH_DEFAULT_LIMIT = 50;
 export const CONTENT_SEARCH_MAX_LIMIT = 1000;
 
 /**
- * Content search reads one source — Agent Session messages over FTS. The
+ * Content search reads visible user/assistant text from Agent Session messages over FTS. The
  * former multi-source shell described desktop surfaces mobile never had.
  */
 export const ContentSearchQuerySchema = z.strictObject({
@@ -101,6 +101,7 @@ export interface SessionMessageContentSearchItem {
 export type ContentSearchResponse = {
   query: string;
   items: SessionMessageContentSearchItem[];
+  /** More history remains to search; a bounded scan may return this with no items. */
   nextCursor?: string;
 };
 

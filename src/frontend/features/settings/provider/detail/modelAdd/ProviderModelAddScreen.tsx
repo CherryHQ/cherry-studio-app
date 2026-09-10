@@ -8,12 +8,21 @@ import {
   readProviderSetupReturnTo,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
+import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 
 import { useProviderDetailSettings } from '../hooks/useProviderDetailSettings';
 import { ProviderModelManualForm } from './components/ProviderModelManualForm';
 import { ProviderModelSyncTask } from './components/ProviderModelSyncTask';
 
 export default function ProviderModelAddScreen() {
+  return (
+    <ModelRegistryGate>
+      <ProviderModelAddScreenContent />
+    </ModelRegistryGate>
+  );
+}
+
+function ProviderModelAddScreenContent() {
   const {
     mode,
     enableProvider,

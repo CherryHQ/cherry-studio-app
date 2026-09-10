@@ -8,6 +8,7 @@ import {
   getChatInputReasoningEffortOption,
   getChatInputReasoningEffortSnapshot,
   getChatInputReasoningEffortsForModel,
+  resolveAvailableChatInputReasoningEffort,
 } from '../chatInputReasoning';
 
 describe('chat input reasoning', () => {
@@ -19,6 +20,7 @@ describe('chat input reasoning', () => {
       'low',
       'medium',
       'high',
+      'xhigh',
       'max',
       'auto',
     ]);
@@ -48,17 +50,32 @@ describe('chat input reasoning', () => {
     ]);
   });
 
-  test('normalizes xhigh model options to the mobile max effort', () => {
+  test('keeps xhigh and max as distinct model-supported request values', () => {
     const model = createModel({
       reasoning: {
-        selectableEfforts: [REASONING_EFFORT.XHIGH],
+        selectableEfforts: [REASONING_EFFORT.XHIGH, REASONING_EFFORT.MAX],
       },
     });
 
     expect(getChatInputReasoningEffortsForModel(model)).toEqual([
       CHAT_INPUT_DEFAULT_REASONING_EFFORT,
+      REASONING_EFFORT.XHIGH,
       REASONING_EFFORT.MAX,
     ]);
+    expect(getChatInputReasoningEffortSnapshot('xhigh', true)).toBe('xhigh');
+    expect(getChatInputReasoningEffortOption('xhigh')?.labelKey).toBe('chat.reasoning.xhigh');
+  });
+
+  test('projects a previous model selection onto the next model without adding unsupported levels', () => {
+    expect(resolveAvailableChatInputReasoningEffort('max', ['default', 'low', 'xhigh'])).toBe(
+      'xhigh',
+    );
+    expect(resolveAvailableChatInputReasoningEffort('none', ['default', 'low', 'high'])).toBe(
+      'low',
+    );
+    expect(
+      getChatInputReasoningEffortsForModel(createModel({ reasoning: { selectableEfforts: [] } })),
+    ).toEqual([]);
   });
 
   test('snapshots the model default until the user selects a request override', () => {

@@ -95,12 +95,24 @@ describe('turn preparation', () => {
         kind === 'initial'
           ? await prepareInitialTurn(
               harness.dependencies,
-              { agentId: AGENT_ID, executionTarget: { kind: 'local' }, parts },
+              {
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
               new AbortController().signal,
             )
           : await prepareTurn(
               harness.dependencies,
-              { sessionId: SESSION_ID, parts },
+              {
+                sessionId: SESSION_ID,
+                userMessageId: 'user-1',
+                assistantMessageId: 'assistant-1',
+                parts,
+              },
               new AbortController().signal,
             );
       expect(mode).toBe('builtin');
@@ -172,6 +184,9 @@ describe('turn preparation', () => {
       harness.dependencies,
       {
         agentId: AGENT_ID,
+        sessionId: SESSION_ID,
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
         executionTarget: { kind: 'local' },
         parts: [{ text: 'Hello.', type: 'text' }],
       },
@@ -186,10 +201,29 @@ describe('turn preparation', () => {
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
   });
 
+  test.each(['default', 'none', 'auto', 'xhigh', 'max'] as const)(
+    'preserves the explicit %s reasoning selection over the agent default',
+    async (reasoningEffort) => {
+      const harness = createHarness();
+      const plan = await prepareTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          reasoningEffort,
+        },
+        new AbortController().signal,
+      );
+      expect(plan.agent.options.reasoningEffort).toBe(reasoningEffort);
+      expect(AGENT.options.reasoningEffort).toBe('low');
+    },
+  );
+
   test('builds a canonical turn plan from frozen model, tool, and attachment facts', async () => {
     const harness = createHarness();
     const input: AgentSubmitMessageInput = {
       sessionId: SESSION_ID,
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
       parts: [
         { type: 'text', text: 'Review this file.' },
         {
@@ -242,7 +276,7 @@ describe('turn preparation', () => {
     expect(plan.agent).toEqual({
       ...AGENT,
       model: OVERRIDE_MODEL,
-      options: { maxOutputTokens: 512, temperature: 0.2 },
+      options: { maxOutputTokens: 512, reasoningEffort: 'default', temperature: 0.2 },
     });
     expect(plan.inputParts).toEqual([
       { type: 'text', text: 'Review this file.' },
@@ -451,7 +485,12 @@ function createHarness() {
 }
 
 function textInput(): AgentSubmitMessageInput {
-  return { sessionId: SESSION_ID, parts: [{ type: 'text', text: 'Continue.' }] };
+  return {
+    sessionId: SESSION_ID,
+    userMessageId: 'user-1',
+    assistantMessageId: 'assistant-1',
+    parts: [{ type: 'text', text: 'Continue.' }],
+  };
 }
 
 function fact(

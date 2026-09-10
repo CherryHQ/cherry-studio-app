@@ -40,6 +40,7 @@ import {
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
+import { useBackendModule } from '@/frontend/data';
 import {
   type PaintingGalleryItem,
   usePaintingGalleryEntries,
@@ -48,6 +49,7 @@ import {
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
+import { canUseDevicePermission } from '@/shared/contracts';
 
 import { usePaintingSelectionSource } from '../hooks/usePaintingSelectionSource';
 import {
@@ -596,6 +598,7 @@ function renderTileContent({
 }
 
 function useRecentPaintingPhotos(enabled: boolean) {
+  const permissions = useBackendModule('permissions');
   const [isLoading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const isActiveRef = useRef(false);
@@ -607,18 +610,23 @@ function useRecentPaintingPhotos(enabled: boolean) {
       }
 
       try {
-        let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+        let permission = (await permissions.getStatuses(['photos.read']))['photos.read'];
         if (shouldRequestPhotoPreviewAccess(permission, isUserInitiated)) {
-          permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+          permission = (await permissions.request(['photos.read']))['photos.read'];
         }
-        const nextPhotos = permission.granted
+        const granted = canUseDevicePermission('photos.read', permission);
+        const nextPhotos = granted
           ? (await loadPhotoPreviewPage(0)).photoPreviews.slice(0, recentPhotoLimit)
           : [];
         if (isActiveRef.current) {
           setPhotos(nextPhotos);
           setLoading(false);
         }
-        return permission.granted ? 'granted' : permission.canAskAgain ? 'denied' : 'blocked';
+        return granted
+          ? 'granted'
+          : permission?.state === 'denied' && !permission.canAskAgain
+            ? 'blocked'
+            : 'denied';
       } catch {
         if (isActiveRef.current) {
           setPhotos([]);
@@ -627,7 +635,7 @@ function useRecentPaintingPhotos(enabled: boolean) {
         return 'denied';
       }
     },
-    [enabled],
+    [enabled, permissions],
   );
 
   useEffect(() => {

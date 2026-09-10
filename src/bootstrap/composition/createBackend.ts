@@ -10,6 +10,7 @@ import {
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { DbService } from '@/backend/data/db/DbService';
+import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
@@ -17,10 +18,11 @@ import {
   type AgentAvatars,
   createAgentAvatars,
 } from '@/backend/services/agents/createAgentAvatars';
+import { createPluginsModule } from '@/backend/services/builtInMcp';
+import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
-import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
   replaceUserAvatar,
@@ -54,12 +56,14 @@ export function createBackend(
   services: BackendServices,
   infrastructure: {
     dbService: DbService;
+    desktopConnections: DesktopConnectionRuntime;
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime;
-    providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
+    providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
+  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService));
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
   );
@@ -138,7 +142,7 @@ export function createBackend(
       resolve: getProviderAvatarUri,
     },
     catalog: {
-      isExcluded: (providerId) => providerRegistryService.isProviderExcluded(providerId),
+      isExcluded: (providerId) => providerRegistryService.isProviderExcludedFromCatalog(providerId),
       list: () => providerRegistryService.loadProviders(),
     },
     providers: {
@@ -154,16 +158,9 @@ export function createBackend(
       list: () => services.provider.list(),
     },
     registryUpdates: {
+      ensureReady: () => infrastructure.providerRegistryUpdater.ensureReady(),
       apply: () => infrastructure.providerRegistryUpdater.applyUpdate(),
-      check: () => infrastructure.providerRegistryUpdater.checkForUpdate(),
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
-    },
-  });
-  const permissions = createPermissionsModule({
-    device: {
-      getStatus: (scope) => services.devicePermissions.getStatusForScope(scope),
-      openSystemSettings: (permission) => services.devicePermissions.openSystemSettings(permission),
-      request: (scope) => services.devicePermissions.requestForScope(scope),
     },
   });
   const agentAvatars = createAgentAvatars({
@@ -186,6 +183,7 @@ export function createBackend(
   return {
     backend: {
       agent: services.agent,
+      desktopConnections: infrastructure.desktopConnections,
       diagnostics: infrastructure.diagnostics,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
@@ -199,7 +197,8 @@ export function createBackend(
       mcp: services.mcpRuntime,
       models,
       paintings,
-      permissions,
+      permissions: services.devicePermissions,
+      plugins: createPluginsModule(services.mcpRuntime),
       profile,
       providers,
       webSearch: services.webSearch,

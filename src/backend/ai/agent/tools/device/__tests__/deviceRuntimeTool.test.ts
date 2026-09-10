@@ -1,6 +1,10 @@
 import * as z from 'zod';
 
-import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
+import type {
+  DevicePermissionScope,
+  PermissionStatuses,
+  SystemPermissionState,
+} from '@/shared/contracts';
 
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../../runtime';
 import { createDeviceRuntimeTool } from '../deviceRuntimeTool';
@@ -16,7 +20,9 @@ describe('createDeviceRuntimeTool', () => {
       value: { ok: true },
       artifacts: [],
     });
-    expect(run).toHaveBeenCalledWith({ id: 'event-1' }, expect.any(AbortSignal));
+    expect(run).toHaveBeenCalledWith({ id: 'event-1' }, expect.any(AbortSignal), {
+      'calendar.write': { state: 'granted', canAskAgain: false },
+    });
   });
 
   test('rechecks permission immediately before the side effect', async () => {
@@ -35,25 +41,82 @@ describe('createDeviceRuntimeTool', () => {
     // The tool entered the catalog as `ask`, so in-app consent already
     // happened; execution fires the one-shot system prompt and proceeds.
     const run = jest.fn(async () => ({ ok: true }));
-    const requestForScope = jest.fn(async (_scope: DevicePermissionScope) => 'granted' as const);
-    const tool = build({ run, status: 'undetermined', requestForScope });
+    const request = jest.fn(
+      async (): Promise<PermissionStatuses> => ({
+        'calendar.write': { state: 'granted', canAskAgain: false },
+      }),
+    );
+    const tool = build({ run, status: 'undetermined', request });
 
     await expect(execute(tool, { id: 'event-1' })).resolves.toEqual({
       value: { ok: true },
       artifacts: [],
     });
-    expect(requestForScope).toHaveBeenCalledWith('calendar.write');
+    expect(request).toHaveBeenCalledWith(['calendar.write'], expect.any(AbortSignal));
   });
 
   test('settles as a terminal failure when the user denies the system prompt', async () => {
     const run = jest.fn();
-    const requestForScope = jest.fn(async (_scope: DevicePermissionScope) => 'denied' as const);
-    const tool = build({ run, status: 'undetermined', requestForScope });
+    const request = jest.fn(
+      async (): Promise<PermissionStatuses> => ({
+        'calendar.write': { state: 'denied', canAskAgain: false },
+      }),
+    );
+    const tool = build({ run, status: 'undetermined', request });
 
     const result = await execute(tool, { id: 'event-1' });
 
     expect(run).not.toHaveBeenCalled();
     expect(result.value).toMatchObject({ status: 'error', retryable: false });
+  });
+
+  test('cancellation during the system prompt prevents the authorized side effect', async () => {
+    const controller = new AbortController();
+    const run = jest.fn(async () => ({ ok: true }));
+    const tool = build({
+      run,
+      status: 'undetermined',
+      request: async () => {
+        controller.abort();
+        return { 'calendar.write': { state: 'granted', canAskAgain: false } };
+      },
+    });
+    await expect(
+      tool.execute({ input: { id: 'event-1' }, signal: controller.signal, toolCallId: 'call-1' }),
+    ).rejects.toThrow();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  test('forwards cancellation and releases the tool without waiting for an open native sheet', async () => {
+    const controller = new AbortController();
+    const run = jest.fn();
+    let finishRequest!: (statuses: PermissionStatuses) => void;
+    let requestStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const request = jest.fn(
+      () =>
+        new Promise<PermissionStatuses>((resolve) => {
+          finishRequest = resolve;
+          requestStarted();
+        }),
+    );
+    const tool = build({ run, status: 'undetermined', request });
+    const result = tool.execute({
+      input: { id: 'event-1' },
+      signal: controller.signal,
+      toolCallId: 'call-1',
+    });
+    const cancelled = expect(result).rejects.toThrow();
+    await started;
+    controller.abort();
+
+    await cancelled;
+    expect(request).toHaveBeenCalledWith(['calendar.write'], controller.signal);
+    finishRequest({ 'calendar.write': { state: 'granted', canAskAgain: false } });
+    await Promise.resolve();
+    expect(run).not.toHaveBeenCalled();
   });
 
   test('returns a malformed call as a value the model can correct', async () => {
@@ -122,16 +185,23 @@ describe('createDeviceRuntimeTool', () => {
 function build(input: {
   run: (parsed: { id: string }, signal: AbortSignal) => Promise<unknown>;
   status?: SystemPermissionState;
-  requestForScope?: (scope: DevicePermissionScope) => Promise<SystemPermissionState>;
+  request?: (scopes: readonly DevicePermissionScope[]) => Promise<PermissionStatuses>;
 }) {
   return createDeviceRuntimeTool({
     capabilityId: 'calendar_delete_event',
     deps: {
       devicePermissions: {
-        getStatusForScope: async (_scope: DevicePermissionScope) => input.status ?? 'granted',
-        requestForScope:
-          input.requestForScope ??
-          (async (_scope: DevicePermissionScope) => input.status ?? 'granted'),
+        getStatuses: async (scopes) =>
+          Object.fromEntries(
+            scopes.map((scope) => [
+              scope,
+              {
+                state: input.status ?? 'granted',
+                canAskAgain: input.status === 'undetermined',
+              },
+            ]),
+          ),
+        request: input.request ?? (async () => ({})),
       },
     },
     description: 'Delete an event.',

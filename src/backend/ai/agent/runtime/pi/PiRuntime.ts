@@ -40,6 +40,7 @@ import type {
   RuntimeModelPreflight,
   RuntimeOutputPart,
   RuntimeTool,
+  RuntimeToolInputPreview,
   RuntimeToolResult,
   RuntimeTextAttachmentPart,
   RuntimeUsage,
@@ -62,10 +63,13 @@ import {
   type PiMetaToolExecution,
 } from './piDeferredToolDiscovery';
 import { disablePiToolCalls } from './piToolChoice';
+import { PiToolInputPreviewBuffer } from './PiToolInputPreviewBuffer';
 import { tracePiStream } from './tracePiStream';
 
 export type PiModelResolution = {
   defaultThinkingLevel: ModelThinkingLevel;
+  /** Independent provider input cap, before reserving this request's output. */
+  maxInputTokens?: number;
   model: PiModel<PiApi>;
   redactionValues: readonly string[];
   streamFn: AgentOptions['streamFn'];
@@ -194,6 +198,7 @@ type ToolPartBase = {
   displayName: string;
   id: string;
   input?: RuntimeJsonValue;
+  inputPreview?: RuntimeToolInputPreview;
   providerName: string;
   toolCallId: string;
   toolRef: RuntimeMessageToolRef;
@@ -235,6 +240,7 @@ type ActiveTurn = {
   runtimeTimingSink?: MessageRuntimeTimingSink;
   settledToolCalls: Set<string>;
   streamingToolCalls: Set<string>;
+  inputPreviews: PiToolInputPreviewBuffer;
   terminalMessage?: AssistantMessage;
   timeoutHandle?: ReturnType<typeof setTimeout>;
   toolCallCount: number;
@@ -635,7 +641,12 @@ function resolveThinkingLevel(
   resolution: PiModelResolution,
 ): ModelThinkingLevel {
   if (!resolution.model.reasoning) return 'off';
-  return request.options.reasoningEffort ?? resolution.defaultThinkingLevel;
+  const effort = request.options.reasoningEffort;
+  if (effort === 'none') return 'off';
+  if (effort === undefined || effort === 'default' || effort === 'auto') {
+    return resolution.defaultThinkingLevel;
+  }
+  return effort;
 }
 
 function toRuntimeJson(value: unknown, fallback: RuntimeJsonValue = null): RuntimeJsonValue {
@@ -695,6 +706,19 @@ class PiRuntimeSession implements AgentRuntimeSession {
       runtimeTimingSink: request.runtimeTimingSink,
       settledToolCalls: new Set(),
       streamingToolCalls: new Set(),
+      inputPreviews: new PiToolInputPreviewBuffer((toolCallId, preview) => {
+        if (turn.phase !== 'running' || !turn.streamingToolCalls.has(toolCallId)) return;
+        const part = turn.toolParts.get(toolCallId);
+        if (!part) return;
+        if (
+          part.inputPreview?.text === preview.text &&
+          part.inputPreview.name === preview.name &&
+          part.inputPreview.truncated === preview.truncated
+        )
+          return;
+        turn.toolParts.set(toolCallId, { ...part, inputPreview: preview });
+        this.emit(turn, { type: 'tool.input.preview', partId: part.id, preview });
+      }),
       toolCallCount: 0,
       toolBindingsByProviderName: new Map(),
       toolParts: new Map(),
@@ -837,6 +861,24 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const streamFn = tracePiStream(providerStream, request.trace);
       const models: Pick<Models, 'completeSimple'> = {
         completeSimple: async (model, context, options) => {
+          if (
+            estimatePiLoopContextHeadroomTokens({
+              contextWindow: model.contextWindow,
+              maxInputTokens: resolution.maxInputTokens,
+              messages: context.messages,
+              outputReserveTokens: options?.maxTokens ?? model.maxTokens,
+              systemPrompt: context.systemPrompt ?? '',
+              tools: context.tools ?? [],
+            }) < 0
+          ) {
+            throw Object.assign(
+              new Error('The compaction request exceeds the model input budget.'),
+              {
+                code: 'context_window_exceeded',
+                retryable: false,
+              },
+            );
+          }
           const response = this.contextOptions.completeSimple
             ? await this.contextOptions.completeSimple(model, context, options)
             : await (await streamFn(model, context, options)).result();
@@ -850,6 +892,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
         planPiContext({
           checkpoint: request.contextCheckpoint,
           conversation,
+          maxInputTokens: resolution.maxInputTokens,
           model: resolution.model,
           models,
           options: this.contextOptions,
@@ -885,6 +928,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       const updateModelContextHeadroom = (messages: PiAgentMessage[]) => {
         turn.modelContextHeadroomTokens = estimatePiLoopContextHeadroomTokens({
           contextWindow: resolution.model.contextWindow,
+          maxInputTokens: resolution.maxInputTokens,
           messages,
           outputReserveTokens,
           systemPrompt: modelContext.systemPrompt,
@@ -1139,12 +1183,17 @@ class PiRuntimeSession implements AgentRuntimeSession {
         }
         break;
       }
-      case 'toolcall_delta':
-        // The lifecycle is already visible. Keep the growing provider payload
-        // inside Pi so a large file body is not copied through Host/UI state on
-        // every token; toolcall_end publishes the complete JSON-safe input once.
+      case 'toolcall_delta': {
+        const call = event.partial.content[event.contentIndex];
+        if (call?.type !== 'toolCall') break;
+        const binding = turn.toolBindingsByProviderName.get(call.name);
+        if (binding?.kind === 'runtime' && binding.runtimeTool.inputPreview) {
+          turn.inputPreviews.update(call.id, binding.runtimeTool.inputPreview, call.arguments);
+        }
         break;
+      }
       case 'toolcall_end':
+        turn.inputPreviews.flush(event.toolCall.id);
         this.ensureToolPartFromProviderCall(
           turn,
           event.toolCall.id,
@@ -1233,11 +1282,18 @@ class PiRuntimeSession implements AgentRuntimeSession {
         this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, output);
         return output;
       }
-      const { activityOutput, modelOutput } = operation(modelOutputCharacterLimit);
+      const { activityError, activityOutput, modelOutput } = operation(modelOutputCharacterLimit);
       if (turn.phase !== 'running' || signal?.aborted) {
         return this.interruptToolCall(turn, part);
       }
-      this.replaceToolPart(turn, part, { state: 'output-available', output: activityOutput });
+      this.replaceToolPart(
+        turn,
+        part,
+        activityError
+          ? { state: 'error', error: activityError, output: activityOutput }
+          : { state: 'output-available', output: activityOutput },
+      );
+      if (activityError) turn.failedToolCalls.add(toolCallId);
       turn.settledToolCalls.add(toolCallId);
       this.consumeModelToolResultBudget(turn, toolCallId, activity.providerName, modelOutput);
       return modelOutput;
@@ -1734,6 +1790,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled';
     if (isTerminal) {
       if (turn.timeoutHandle) clearTimeout(turn.timeoutHandle);
+      turn.inputPreviews.dispose();
       turn.abortController.abort();
       this.interruptUnsettledToolParts(turn);
       turn.phase = 'terminated';

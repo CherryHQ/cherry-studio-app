@@ -180,12 +180,8 @@ export function useProviderConfigurationForm(providerId: string) {
       savePending.current = true;
       setIsPersisting(true);
       Keyboard.dismiss();
-      void Promise.all([
-        queries.saveProviderMutation.mutateAsync(updates),
-        shouldSaveApiKeys
-          ? queries.replaceApiKeysMutation.mutateAsync(nextApiKeys)
-          : Promise.resolve(),
-      ])
+      void queries.saveProviderMutation
+        .mutateAsync({ ...updates, ...(shouldSaveApiKeys ? { apiKeys: nextApiKeys } : {}) })
         .then(async () => {
           if (state.avatarUri !== (storedAvatarUri ?? null)) {
             if (state.avatarUri) await providerAvatars.persist(providerId, state.avatarUri);

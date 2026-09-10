@@ -3,6 +3,7 @@ import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
+import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import PackageIcon from '@cherrystudio/app-icons/icons/package';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
@@ -60,6 +61,11 @@ export default function SettingsScreen() {
               leading={<CloudIcon className="size-4 text-foreground" />}
               onPress={openProviderList}
               onPressIn={prepareProviderList}
+            />
+            <Section.Item
+              label={t('settings.items.deviceConnections')}
+              leading={<NetworkIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/device-connections')}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}

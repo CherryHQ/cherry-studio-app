@@ -4,6 +4,8 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
+import { v7 as uuidv7 } from 'uuid';
+
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -271,6 +273,8 @@ describe('MobileAgentHost', () => {
     });
     const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, { traces });
     const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'private input' }],
@@ -315,6 +319,7 @@ describe('MobileAgentHost', () => {
     expect(host.getSessionStatus(session.id)).toBeNull();
 
     const firstTurn = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'First question' }],
     });
@@ -331,6 +336,7 @@ describe('MobileAgentHost', () => {
     unsubscribeOther();
 
     const secondTurn = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Another question while the list is unmounted' }],
     });
@@ -355,8 +361,9 @@ describe('MobileAgentHost', () => {
 
   test('creates the durable Session together with an admitted first submission', async () => {
     const host = hostWithText(['Hi']);
-
+    const ids = { sessionId: uuidv7(), ...messageIds() };
     const session = await host.startSession({
+      ...ids,
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
@@ -365,6 +372,12 @@ describe('MobileAgentHost', () => {
       async () => (await store.listMessages(session.id))[1]?.status === 'success',
       'the initial turn to settle',
     );
+
+    expect(session.id).toBe(ids.sessionId);
+    expect((await store.listMessages(session.id)).map((message) => message.id)).toEqual([
+      ids.userMessageId,
+      ids.assistantMessageId,
+    ]);
 
     // Settling the turn stamps conversation activity on the Session row, so
     // the update timestamp is the one field allowed to move past the snapshot
@@ -390,6 +403,8 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime);
 
     const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
@@ -426,6 +441,8 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.startSession({
+        sessionId: uuidv7(),
+        ...messageIds(),
         agentId: AGENT_ID,
         executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'Hello.' }],
@@ -460,6 +477,8 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.startSession({
+        sessionId: uuidv7(),
+        ...messageIds(),
         agentId: AGENT_ID,
         executionTarget: { kind: 'local' },
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
@@ -498,6 +517,7 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.hasHistoryBeforeActiveTurn).toBeNull();
 
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -612,7 +632,11 @@ describe('MobileAgentHost', () => {
     const secondEvents: AgentEvent[] = [];
     const second = await host.observeSession(session.id, (event) => secondEvents.push(event));
     expect(second.snapshot.activeTurn).toBeNull();
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'More.' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'More.' }],
+    });
     await waitFor(() => terminalTurnEvent(secondEvents) !== undefined, 'the second turn');
     expect(
       requests[1]?.history.flatMap((turn) => turn.messages.map((message) => message.role)),
@@ -650,7 +674,11 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello' }],
+    });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the failed turn to settle');
     expect(usage.record).toHaveBeenCalledTimes(2);
     expect(usage.record.mock.calls.map(([input]) => input.report.requestId)).toEqual([
@@ -687,11 +715,13 @@ describe('MobileAgentHost', () => {
         .length;
 
     const first = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'First.' }],
     });
     await waitFor(() => completedCount() === 1, 'the first checkpoint turn');
     const second = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Second.' }],
     });
@@ -713,6 +743,7 @@ describe('MobileAgentHost', () => {
     const restartedEvents: AgentEvent[] = [];
     await restartedHost.observeSession(session.id, (event) => restartedEvents.push(event));
     await restartedHost.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Third.' }],
     });
@@ -761,7 +792,11 @@ describe('MobileAgentHost', () => {
       ).length;
 
     for (const [index, text] of ['anchor', 'fail', 'cancel'].entries()) {
-      await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text }] });
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text }],
+      });
       await waitFor(() => terminalCount() === index + 1, `${text} turn`);
     }
 
@@ -794,9 +829,17 @@ describe('MobileAgentHost', () => {
       events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
         .length;
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'one' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'one' }],
+    });
     await waitFor(() => completedCount() === 1, 'the anchor turn');
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'two' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'two' }],
+    });
     await waitFor(() => completedCount() === 2, 'the oversized checkpoint turn');
 
     expect(await store.getLatestContextCheckpoint(session.id)).toBeNull();
@@ -817,13 +860,21 @@ describe('MobileAgentHost', () => {
       events.filter((event) => event.type === 'turn.updated' && event.turn.status === 'completed')
         .length;
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'First.' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First.' }],
+    });
     await waitFor(() => completedCount() === 1, 'the first turn');
     jest.spyOn(store, 'getLatestContextCheckpoint').mockResolvedValueOnce({
       assistantMessageId: 'checkpoint-row',
       checkpoint,
     });
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Second.' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second.' }],
+    });
     await waitFor(() => completedCount() === 2, 'the fallback turn');
 
     expect(requests[1]?.contextCheckpoint).toBeNull();
@@ -845,6 +896,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Save it.' }],
     });
@@ -909,6 +961,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Create an image.' }],
     });
@@ -930,6 +983,95 @@ describe('MobileAgentHost', () => {
 
     expect(resources).toBeDefined();
     expect([...(resources?.fileEntryIds ?? [])]).toEqual([SECOND_FILE_ENTRY_ID]);
+  });
+
+  test('recovers file input previews without persisting or updating background reply on each tick', async () => {
+    const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+    const releasePreview = createDeferred();
+    const releaseResult = createDeferred();
+    const toolPart = {
+      id: 'tool-1',
+      type: 'tool',
+      toolCallId: 'call-1',
+      toolRef: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      state: 'input-streaming',
+    } as const;
+    const preview = { text: 'latest content', name: 'report.txt', truncated: true };
+    const input = { filename: 'report.txt', content: 'complete file with latest content' };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({ type: 'part.add', index: 0, part: toolPart });
+      await releasePreview.promise;
+      controller.emit({ type: 'tool.input.preview', partId: toolPart.id, preview });
+      await releaseResult.promise;
+      controller.emit({
+        type: 'part.replace',
+        part: { ...toolPart, state: 'input-available', input, inputPreview: preview },
+      });
+      controller.emit({
+        type: 'tool.input.preview',
+        partId: toolPart.id,
+        preview: { text: 'stale', truncated: false },
+      });
+      controller.emit({
+        type: 'part.replace',
+        part: {
+          ...toolPart,
+          state: 'output-available',
+          input,
+          inputPreview: preview,
+          output: { value: { status: 'created' }, artifacts: [] },
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    const observation = await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Write a report.' }],
+    });
+    try {
+      await waitFor(
+        () => backgroundReplyTurn.update.mock.calls.length > 0,
+        'the initial tool state',
+      );
+      backgroundReplyTurn.update.mockClear();
+      releasePreview.resolve();
+      await waitFor(
+        () =>
+          events.some(
+            (event) => event.type === 'message.delta' && event.delta.op === 'tool.input.preview',
+          ),
+        'the file input preview',
+      );
+      const resumed = await host.observeSession(session.id, () => {});
+      expect(resumed.snapshot.streamingMessage?.parts).toEqual([
+        { ...toolPart, inputPreview: preview },
+      ]);
+      resumed.unsubscribe();
+      expect(saveSnapshot).not.toHaveBeenCalled();
+      expect(backgroundReplyTurn.update).not.toHaveBeenCalled();
+    } finally {
+      releasePreview.resolve();
+      releaseResult.resolve();
+    }
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the file turn to settle');
+    expect(
+      events.filter(
+        (event) => event.type === 'message.delta' && event.delta.op === 'tool.input.preview',
+      ),
+    ).toHaveLength(1);
+    expect((await store.listMessages(session.id))[1]?.parts[0]).toMatchObject({
+      state: 'output-available',
+      input,
+      inputPreview: preview,
+    });
+    observation.unsubscribe();
   });
 
   test.each(['output-available', 'denied', 'error'] as const)(
@@ -1006,6 +1148,7 @@ describe('MobileAgentHost', () => {
       const events: AgentEvent[] = [];
       await host.observeSession(session.id, (event) => events.push(event));
       await host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Delete it.' }],
       });
@@ -1096,6 +1239,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Create an image.' }],
     });
@@ -1134,6 +1278,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete it.' }],
     });
@@ -1222,6 +1367,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete both.' }],
     });
@@ -1296,7 +1442,11 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello' }],
+    });
 
     try {
       await waitFor(
@@ -1337,7 +1487,11 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
@@ -1358,7 +1512,11 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
 
-    await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'Hello.' }] });
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).not.toHaveBeenCalled();
@@ -1376,6 +1534,7 @@ describe('MobileAgentHost', () => {
         .length;
 
     await host.submitMessage({
+      ...messageIds(),
       modelId: 'override-provider::override-model',
       parts: [{ type: 'text', text: 'Override both.' }],
       reasoningEffort: 'max',
@@ -1388,6 +1547,7 @@ describe('MobileAgentHost', () => {
     });
 
     await host.submitMessage({
+      ...messageIds(),
       parts: [{ type: 'text', text: 'Use the model default.' }],
       reasoningEffort: 'default',
       sessionId: session.id,
@@ -1395,11 +1555,11 @@ describe('MobileAgentHost', () => {
     await waitFor(() => completedTurnCount() === 2, 'the default-effort turn');
     expect(requests[1]).toMatchObject({
       model: { modelId: 'mock-model', providerId: 'mock-provider' },
-      options: { maxOutputTokens: 512, temperature: 0.2 },
+      options: { maxOutputTokens: 512, reasoningEffort: 'default', temperature: 0.2 },
     });
-    expect(requests[1]?.options).not.toHaveProperty('reasoningEffort');
 
     await host.submitMessage({
+      ...messageIds(),
       parts: [{ type: 'text', text: 'Use the Agent configuration again.' }],
       sessionId: session.id,
     });
@@ -1426,6 +1586,7 @@ describe('MobileAgentHost', () => {
         status: 'supported',
         snapshot: {
           model: { uniqueModelId: 'mock-provider::mock-model' },
+          reasoningEffort: 'default',
           parameters: { maxOutputTokens: 512, temperature: 0.2 },
           tools: [],
         },
@@ -1451,6 +1612,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not reserve this.' }],
       }),
@@ -1487,6 +1649,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       parts: [{ type: 'text', text: 'Search.' }],
       sessionId: session.id,
     });
@@ -1541,6 +1704,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       parts: [{ type: 'text', text: 'Run tools.' }],
       sessionId: session.id,
     });
@@ -1584,6 +1748,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.submitMessage({
+        ...messageIds(),
         parts: [{ type: 'text', text: 'Do not reserve this.' }],
         sessionId: session.id,
       }),
@@ -1614,13 +1779,18 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
 
     // A concurrent submit while the turn is active fails closed (invariant 1).
     await expect(
-      host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'again' }] }),
+      host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'again' }],
+      }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
 
     await waitFor(
@@ -1678,6 +1848,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime, naming);
     const session = await createStoredSession();
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Keep working.' }],
     });
@@ -1706,6 +1877,7 @@ describe('MobileAgentHost', () => {
     });
 
     const submission = host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Stop before admission completes.' }],
     });
@@ -1716,6 +1888,7 @@ describe('MobileAgentHost', () => {
     await expect(submission).rejects.toThrow('The Agent Host is stopping.');
     await expect(
       host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not admit after stop.' }],
       }),
@@ -1735,6 +1908,7 @@ describe('MobileAgentHost', () => {
     const host = createHost(runtime);
     const session = await createStoredSession();
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1762,6 +1936,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1793,6 +1968,7 @@ describe('MobileAgentHost', () => {
     });
     const session = await createStoredSession();
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -1809,6 +1985,7 @@ describe('MobileAgentHost', () => {
     // restore after a process death.
     const session = await store.createEmptySession({ agentId: AGENT_ID });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       modelId: 'mock-provider::mock-model',
       inferenceSnapshot: {
         version: 1,
@@ -1845,6 +2022,7 @@ describe('MobileAgentHost', () => {
     // restore after a process death.
     const session = await store.createEmptySession({ agentId: AGENT_ID });
     const reserved = await store.reserveSubmission({
+      ...messageIds(),
       modelId: 'mock-provider::mock-model',
       inferenceSnapshot: {
         version: 1,
@@ -1902,6 +2080,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete this Session.' }],
     });
@@ -1939,6 +2118,7 @@ describe('MobileAgentHost', () => {
     });
 
     const submission = host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Admit before deleting.' }],
     });
@@ -2019,6 +2199,7 @@ describe('MobileAgentHost', () => {
     });
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Start the old turn.' }],
     });
@@ -2028,6 +2209,7 @@ describe('MobileAgentHost', () => {
 
     const resubmission = await host
       .submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Must not start during deletion.' }],
       })
@@ -2117,6 +2299,7 @@ describe('MobileAgentHost', () => {
     const events: AgentEvent[] = [];
     await host.observeSession(session.id, (event) => events.push(event));
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Delete it.' }],
     });
@@ -2211,6 +2394,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [
         { type: 'text', text: 'Remember this image.' },
@@ -2248,6 +2432,7 @@ describe('MobileAgentHost', () => {
     // fail a text-only turn. Its content is omitted from Pi history.
     events.length = 0;
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Continue.' }],
     });
@@ -2295,12 +2480,14 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first image turn');
     events.length = 0;
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'What was in that image?' }],
     });
@@ -2339,6 +2526,7 @@ describe('MobileAgentHost', () => {
       .mockRejectedValueOnce(new Error('database busy'));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Retry the terminal write.' }],
     });
@@ -2363,6 +2551,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'text', text: 'Do not persist this.' }],
       }),
@@ -2436,6 +2625,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
@@ -2443,6 +2633,7 @@ describe('MobileAgentHost', () => {
     events.length = 0;
     await expect(
       host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [
           { type: 'text', text: 'Continue.' },
@@ -2454,6 +2645,7 @@ describe('MobileAgentHost', () => {
     expect(await store.listMessages(session.id)).toHaveLength(2);
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Continue without a new image.' }],
     });
@@ -2502,6 +2694,7 @@ describe('MobileAgentHost', () => {
     const endpointSession = await createStoredSession();
     await expect(
       endpointHost.submitMessage({
+        ...messageIds(),
         sessionId: endpointSession.id,
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
@@ -2541,6 +2734,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     const submitted = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
     });
@@ -2601,6 +2795,7 @@ describe('MobileAgentHost', () => {
     await host.observeSession(session.id, (event) => events.push(event));
 
     await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [
         { type: 'text', text: 'Compare these files.' },
@@ -2709,6 +2904,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       unsupportedHost.submitMessage({
+        ...messageIds(),
         sessionId: unsupportedSession.id,
         parts: [
           {
@@ -2735,6 +2931,7 @@ describe('MobileAgentHost', () => {
     const binarySession = await createStoredSession();
     await expect(
       binaryHost.submitMessage({
+        ...messageIds(),
         sessionId: binarySession.id,
         parts: [
           {
@@ -2776,6 +2973,7 @@ describe('MobileAgentHost', () => {
 
     await expect(
       availableHost.submitMessage({
+        ...messageIds(),
         sessionId: availableSession.id,
         parts: [
           {
@@ -2797,6 +2995,7 @@ describe('MobileAgentHost', () => {
     const unavailableSession = await createStoredSession();
     await expect(
       unavailableHost.submitMessage({
+        ...messageIds(),
         sessionId: unavailableSession.id,
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
@@ -2818,6 +3017,7 @@ describe('MobileAgentHost', () => {
     const session = await createStoredSession();
 
     const first = await host.submitMessage({
+      ...messageIds(),
       sessionId: session.id,
       parts: [{ type: 'text', text: 'Hello.' }],
     });
@@ -2859,13 +3059,19 @@ describe('MobileAgentHost', () => {
 
     await expect(
       host.startSession({
+        sessionId: uuidv7(),
+        ...messageIds(),
         agentId: 'missing',
         executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'x' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
     await expect(
-      host.submitMessage({ sessionId: 'missing', parts: [{ type: 'text', text: 'x' }] }),
+      host.submitMessage({
+        ...messageIds(),
+        sessionId: 'missing',
+        parts: [{ type: 'text', text: 'x' }],
+      }),
     ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
     await expect(host.observeSession('missing', () => {})).rejects.toMatchObject({
       view: { code: 'SESSION_NOT_FOUND' },
@@ -2875,6 +3081,7 @@ describe('MobileAgentHost', () => {
     // Raw or unknown ids are rejected before any reservation.
     await expect(
       host.submitMessage({
+        ...messageIds(),
         sessionId: session.id,
         parts: [{ type: 'file', fileEntryId: 'file:///private/image.png', mediaType: 'image/png' }],
       }),
@@ -2891,3 +3098,7 @@ describe('MobileAgentHost', () => {
     });
   });
 });
+
+function messageIds() {
+  return { userMessageId: uuidv7(), assistantMessageId: uuidv7() };
+}

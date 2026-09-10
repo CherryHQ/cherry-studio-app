@@ -17,6 +17,7 @@ import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
 
 type MessagePartRendererProps = {
+  messageId?: string;
   isStreaming: boolean;
   isTextSelectionEnabled: boolean;
   messageParts?: readonly CherryMessagePart[];
@@ -28,20 +29,21 @@ type MessagePartRendererProps = {
 export const MessagePartRenderer = memo(function MessagePartRenderer({
   isStreaming,
   isTextSelectionEnabled,
+  messageId,
   messageParts,
   part,
   renderMode = 'markdown',
   resolvedText,
 }: MessagePartRendererProps) {
   if (isToolMessagePart(part)) {
-    return <ToolPartRenderer messageParts={messageParts} part={part} />;
+    return <ToolPartRenderer messageId={messageId} messageParts={messageParts} part={part} />;
   }
 
   switch (part.type) {
     case 'text':
       return (
         <TextPart
-          isStreaming={isStreaming}
+          isStreaming={isStreaming && part.state !== 'done'}
           isTextSelectionEnabled={isTextSelectionEnabled}
           part={part}
           renderMode={renderMode}
@@ -49,7 +51,7 @@ export const MessagePartRenderer = memo(function MessagePartRenderer({
         />
       );
     case 'reasoning':
-      return <ReasoningPart isStreaming={isStreaming} part={part} />;
+      return <ReasoningPart isStreaming={isStreaming && part.state !== 'done'} part={part} />;
     case 'data-code':
       return (
         <CodePart
@@ -97,6 +99,7 @@ function areMessagePartRendererPropsEqual(
 ) {
   if (
     previous.isStreaming !== next.isStreaming ||
+    previous.messageId !== next.messageId ||
     previous.isTextSelectionEnabled !== next.isTextSelectionEnabled ||
     previous.part !== next.part ||
     previous.renderMode !== next.renderMode ||

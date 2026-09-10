@@ -132,6 +132,7 @@ export function estimatePiMessagesTokens(messages: AgentMessage[]): number {
 /** Remaining room for model-loop messages before another provider request. */
 export function estimatePiLoopContextHeadroomTokens(input: {
   contextWindow: number;
+  maxInputTokens?: number;
   messages: AgentMessage[];
   outputReserveTokens: number;
   systemPrompt: string;
@@ -145,7 +146,21 @@ export function estimatePiLoopContextHeadroomTokens(input: {
     tools: input.tools,
   });
 
-  return input.contextWindow - messageTokens - fixedCosts.totalTokens;
+  return resolveContextBudget(input) - messageTokens - fixedCosts.totalTokens;
+}
+
+/** Fixed costs include output once; an independent input cap does not reserve it again. */
+function resolveContextBudget(input: {
+  contextWindow: number;
+  maxInputTokens?: number;
+  outputReserveTokens: number;
+}): number {
+  return Math.min(
+    input.contextWindow,
+    input.maxInputTokens === undefined
+      ? input.contextWindow
+      : Math.max(0, input.maxInputTokens) + Math.max(0, input.outputReserveTokens),
+  );
 }
 
 export function estimatePiContextFixedCosts(input: {
@@ -170,6 +185,7 @@ export function estimatePiContextFixedCosts(input: {
 export async function planPiContext(input: {
   checkpoint: RuntimeContextCheckpoint | null;
   conversation: PiConversation;
+  maxInputTokens?: number;
   model: PiModel<PiApi>;
   models: Pick<Models, 'completeSimple'>;
   options?: PiContextCompactionOptions;
@@ -180,7 +196,16 @@ export async function planPiContext(input: {
   tools: readonly PiToolSchema[];
 }): Promise<PiContextPlan> {
   const projected = projectContext(input.checkpoint, input.conversation.historyTurns);
-  const settings = input.options?.settings ?? resolveCompactionSettings(input.model.contextWindow);
+  const contextBudget = resolveContextBudget({
+    contextWindow: input.model.contextWindow,
+    maxInputTokens: input.maxInputTokens,
+    outputReserveTokens: input.outputReserveTokens,
+  });
+  const settings =
+    input.options?.settings ??
+    resolveCompactionSettings(
+      Math.min(input.model.contextWindow, input.maxInputTokens ?? input.model.contextWindow),
+    );
   const estimateHistory =
     input.options?.estimateHistoryTokens ??
     ((messages: AgentMessage[]) => estimateContextTokens(messages).tokens);
@@ -190,7 +215,7 @@ export async function planPiContext(input: {
     outputReserveTokens: input.outputReserveTokens,
     tools: input.tools,
   });
-  const compactionThreshold = Math.max(0, input.model.contextWindow - settings.reserveTokens);
+  const compactionThreshold = Math.max(0, contextBudget - settings.reserveTokens);
 
   if (fixedCosts.totalTokens > compactionThreshold) {
     return {
@@ -202,7 +227,7 @@ export async function planPiContext(input: {
   }
 
   const totalTokens = historyTokens + fixedCosts.totalTokens;
-  if (!shouldCompact(totalTokens, input.model.contextWindow, settings)) {
+  if (!shouldCompact(totalTokens, contextBudget, settings)) {
     return { ok: true, messages: projected.messages, checkpoint: null, usage: null };
   }
 
@@ -220,7 +245,7 @@ export async function planPiContext(input: {
     (preparation.value.messagesToSummarize.length === 0 &&
       preparation.value.turnPrefixMessages.length === 0)
   ) {
-    return totalTokens > input.model.contextWindow
+    return totalTokens > contextBudget
       ? {
           ok: false,
           code: 'context_window_exceeded',
@@ -255,6 +280,43 @@ export async function planPiContext(input: {
   }
 
   const summary = input.redactSummary(result.value.summary);
+  const messages = [
+    createCompactionSummary(summary, result.value.tokensBefore),
+    ...result.value.retainedTail.map((message) =>
+      // Provider usage includes the discarded prefix. Estimate the compacted
+      // content until the next live response reports usage for the new context.
+      message.role === 'assistant'
+        ? {
+            ...message,
+            usage: {
+              ...message.usage,
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+            },
+          }
+        : message,
+    ),
+  ];
+  if (
+    estimatePiLoopContextHeadroomTokens({
+      contextWindow: input.model.contextWindow,
+      maxInputTokens: input.maxInputTokens,
+      messages: [...messages, input.conversation.prompt],
+      outputReserveTokens: input.outputReserveTokens,
+      systemPrompt: input.conversation.systemPrompt,
+      tools: input.tools,
+    }) < 0
+  ) {
+    return {
+      ok: false,
+      code: 'context_window_exceeded',
+      message: 'The compacted conversation exceeds the model input budget.',
+      retryable: false,
+    };
+  }
   const checkpoint = createCheckpoint(
     projected.checkpoint,
     input.conversation.historyTurns,
@@ -265,10 +327,7 @@ export async function planPiContext(input: {
   );
   return {
     ok: true,
-    messages: [
-      createCompactionSummary(summary, result.value.tokensBefore),
-      ...result.value.retainedTail,
-    ],
+    messages,
     checkpoint,
     usage: result.value.usage ?? null,
   };

@@ -1,12 +1,21 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
+import { PluginError } from '@/shared/contracts/plugins';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import type { TraceRecorder } from '../../observability';
 import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import { McpRuntimeService } from '../McpRuntimeService';
+
+jest.mock('@/backend/services/builtInMcp', () => ({
+  isBuiltInMcpToolAllowed: jest.requireActual(
+    '@/backend/services/builtInMcp/createBuiltInMcpClient',
+  ).isBuiltInMcpToolAllowed,
+  createBuiltInMcpClient: (pluginId: string, authorizationId: string, signal: AbortSignal) =>
+    mockSdkInitContract({ pluginId, authorizationId, initializationOptions: { signal } }),
+}));
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
@@ -79,7 +88,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<RemoteMcpServer> = {}): RemoteMcpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
     disabledTools: [],
@@ -373,7 +382,7 @@ describe('Runtime tool adapter', () => {
     const descriptors = await service.listExecutableToolDescriptors(server.id);
     expect(descriptors).toEqual([
       {
-        description: 'Search issues',
+        description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
         generation: expect.any(Number),
@@ -583,3 +592,94 @@ function retainedSnapshotCount(service: McpRuntimeService): number {
   const internals = service as unknown as { runtimeSnapshots: Map<string, unknown> };
   return internals.runtimeSnapshots.size;
 }
+
+describe('built-in plugin identities', () => {
+  it('preserves a non-retryable unknown write outcome through the runtime boundary', async () => {
+    const client = makeClient(makeRawTools(['issue_write']));
+    client.callTool.mockRejectedValue(
+      new PluginError('unknown-write', 'Check GitHub before retrying.'),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'github',
+      authorizationId: 'grant-1',
+    };
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    await expect(
+      tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'write' }),
+    ).rejects.toMatchObject({
+      code: 'mcp_tool_call_failed',
+      message: 'Check GitHub before retrying.',
+      retryable: false,
+    });
+    expect(client.callTool).toHaveBeenCalledTimes(1);
+    service.invalidateServer(server.id);
+  });
+
+  it.each([
+    ['github', 'GitHub', 'get_me'],
+    ['amap', '高德地图', 'maps_weather'],
+  ] as const)(
+    'includes the %s platform name and id in the executable catalog',
+    async (builtinId, name, toolName) => {
+      const client = makeClient(makeRawTools([toolName, 'unreviewed_upstream_tool']));
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server: McpServer = {
+        ...makeServer(),
+        origin: 'builtin',
+        endpointUrl: null,
+        headers: undefined,
+        builtinId,
+        authorizationId: 'grant-1',
+        name,
+      };
+      const { service } = makeService([server]);
+
+      const descriptors = await service.listExecutableToolDescriptors(server.id);
+
+      expect(descriptors).toEqual([
+        expect.objectContaining({
+          description: `${name} (${builtinId}): desc ${toolName}`,
+          rawToolName: toolName,
+          serverId: server.id,
+        }),
+      ]);
+      await expect(service.listTools(server.id)).resolves.toEqual([
+        { name: toolName, description: `desc ${toolName}` },
+      ]);
+      service.invalidateServer(server.id);
+    },
+  );
+
+  it('uses the grant-bound cloud client and rejects a frozen catalog after grant rotation', async () => {
+    const client = makeClient(makeRawTools(['search_repositories']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server: McpServer = {
+      ...makeServer(),
+      origin: 'builtin',
+      endpointUrl: null,
+      headers: undefined,
+      builtinId: 'github',
+      authorizationId: 'grant-1',
+    };
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    expect(descriptor?.endpointUrl).toBeNull();
+    expect(mockCreateMCPClient).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginId: 'github', authorizationId: 'grant-1' }),
+    );
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    server.authorizationId = 'grant-2';
+    await expect(
+      tool!.execute({ input: {}, signal: new AbortController().signal, toolCallId: 'call-1' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(client.callTool).not.toHaveBeenCalled();
+    service.invalidateServer(server.id);
+  });
+});

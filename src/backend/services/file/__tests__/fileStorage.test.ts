@@ -541,6 +541,7 @@ describe('fileStorage', () => {
     expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
     expect(rewritten.size).toBe(14);
     expect(onFileChange).toHaveBeenCalledTimes(1);
+    expect(onFileChange).toHaveBeenCalledWith(entry.id);
   });
 
   test('refuses to rewrite a draft whose bytes are missing', async () => {

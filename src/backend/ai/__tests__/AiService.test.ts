@@ -1,6 +1,7 @@
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
@@ -18,6 +19,8 @@ jest.mock('@/backend/ai/generation/AiSdkGenerator', () => ({
     return { generate: mockGenerate };
   }),
 }));
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('AiService.listModels', () => {
   afterEach(() => {

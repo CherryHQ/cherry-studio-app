@@ -41,7 +41,7 @@ function storedAvatarName(avatar: string): string | undefined {
 /**
  * Resolve the column value into an image URI for this device, rebuilding the
  * absolute path per call. Unlike the user avatar there is no direct-URI escape
- * hatch: this column is only ever written by {@link replaceAgentAvatar}.
+ * hatch. Built-in emoji avatars have no file to resolve.
  */
 export async function resolveAgentAvatarUri(
   images: UserContentImageStorage,

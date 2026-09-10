@@ -1,6 +1,12 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  REASONING_FORMAT_PROFILES,
+  selectFormatWire,
+} from '@cherrystudio/provider-registry';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
 import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+
+import type { Model } from '@/shared/data/types/model';
 
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
 import type { PiLanguageEndpointType } from '../piLanguageBinding';
@@ -108,5 +114,41 @@ describe('Pi API adapters', () => {
         timeoutMs: 60_000,
       }),
     );
+  });
+
+  test('composes existing payload hooks and recomputes thinking budgets for each request cap', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);
+    const streamFn = await bindPiStream(adapter, {
+      apiKey: 'key',
+      fetch: mockFetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 8192,
+      timeoutMs: 60_000,
+      requestParameters: {
+        model: {
+          reasoning: { selectableEfforts: ['high'], thinkingTokenLimits: { min: 1024, max: 8192 } },
+        } as Model,
+        profile: selectFormatWire(REASONING_FORMAT_PROFILES.anthropic, 'budget'),
+        selection: 'high',
+      },
+    });
+    const piModel = { api: 'anthropic-messages' } as PiModel<SupportedPiApi>;
+    await streamFn(piModel, context, {
+      maxTokens: 2048,
+      onPayload: async () => ({
+        model: 'rewritten-model',
+        max_tokens: 8192,
+        tool_choice: { type: 'none' },
+      }),
+    });
+    const options = mockAnthropicStreamSimple.mock.calls.at(-1)![2];
+    expect(await options.onPayload({}, piModel)).toEqual({
+      model: 'rewritten-model',
+      max_tokens: 2048,
+      tool_choice: { type: 'none' },
+      thinking: { type: 'enabled', budget_tokens: 2047 },
+    });
   });
 });

@@ -24,6 +24,7 @@ export type CreateProviderInput = {
 
 export type UpdateProviderInput = {
   apiFeatures?: Partial<RuntimeApiFeatures> | null;
+  apiKeys?: ApiKeyEntry[];
   authConfig?: AuthConfig | null;
   defaultChatEndpoint?: EndpointType | null;
   endpointConfigs?: EndpointConfigs | null;

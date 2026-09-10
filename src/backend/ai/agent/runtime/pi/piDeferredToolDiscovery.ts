@@ -1,7 +1,8 @@
 import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 import * as z from 'zod';
 
-import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
+import { createErrorToolResult } from '../toolResults';
+import type { RuntimeError, RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 
 export const PI_TOOL_SEARCH_TOOL_NAME = 'tool_search';
 export const PI_TOOL_DESCRIBE_TOOL_NAME = 'tool_describe';
@@ -9,7 +10,7 @@ export const PI_TOOL_CALL_TOOL_NAME = 'tool_call';
 
 export const PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT = `## MCP Tool Discovery
 
-MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
+MCP tools are available through a searchable catalog. Use \`${PI_TOOL_SEARCH_TOOL_NAME}\` only for tool discovery, not for web search or general research. Use it to discover relevant tools and their TypeScript signatures, and narrow the query when a result reports \`truncated: true\`. Use \`${PI_TOOL_DESCRIBE_TOOL_NAME}\` when you need the bounded signature for one exact tool name. Inspect each tool with search or describe in the current turn before calling it, even if its name or signature appears in conversation history. Use \`${PI_TOOL_CALL_TOOL_NAME}\` with an exact discovered name and params matching that signature. If \`${PI_TOOL_CALL_TOOL_NAME}\` returns a signature, read it and retry with corrected params. Never guess tool names or parameters.`;
 
 const SEARCH_RESULT_LIMIT = 20;
 const SEARCH_RESULT_CHARACTER_LIMIT = 32_000;
@@ -19,6 +20,7 @@ const MIN_TOOL_DECLARATION_CHARACTER_LIMIT = 512;
 const DISPATCH_ACTIVITY_NAME_CHARACTER_LIMIT = 256;
 const TOOL_SCHEMA_RENDER_CHARACTER_LIMIT = 32_000;
 const TOOL_CORRECTION_DECLARATION_CHARACTER_LIMIT = 3_000;
+const TOOL_CORRECTION_MESSAGE_CHARACTER_LIMIT = 1_000;
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const MAX_NESTING_DEPTH = 5;
@@ -67,6 +69,7 @@ export type PiMetaToolActivity = {
 };
 
 export type PiMetaToolExecution = {
+  activityError?: RuntimeError;
   activityOutput: RuntimeToolResult;
   modelOutput: RuntimeToolResult;
 };
@@ -169,12 +172,12 @@ export function createPiDeferredToolDiscoveryTools(
     name: PI_TOOL_CALL_TOOL_NAME,
     label: 'Call tool',
     description:
-      'Call one MCP tool using an exact name and params matching a signature returned by tool_search or tool_describe. An unseen or invalid call returns the expected signature for a corrected retry.',
+      'Call one MCP tool using an exact name and params matching a signature returned in the current turn by tool_search or tool_describe. An unseen or invalid call returns the expected signature for a corrected retry.',
     parameters: CALL_INPUT_SCHEMA as never,
     async execute(toolCallId, params, signal) {
       const input = isRecord(params) ? params : {};
       const name = typeof input.name === 'string' ? input.name : '';
-      const targetInput = (isRecord(input.params) ? input.params : {}) as RuntimeJsonValue;
+      const targetInput = input.params as RuntimeJsonValue;
       const tool = catalog.get(name);
       if (!tool) {
         const output = await runMetaTool(
@@ -199,32 +202,31 @@ export function createPiDeferredToolDiscoveryTools(
           toolCallId,
           signal,
           runMetaTool,
-          (modelOutputCharacterLimit) => {
-            throw toolSignatureError(
+          (modelOutputCharacterLimit) =>
+            toolInputCorrection(
               tool,
               'tool_schema_not_inspected',
               `Tool "${name}" has not been inspected yet. Read the signature below, then call tool_call again with matching params.`,
               modelOutputCharacterLimit,
-            );
-          },
+            ),
         );
         return toPiToolResult(output);
       }
 
-      if (!matchesToolInput(tool, targetInput, inputValidators)) {
+      const inputError = getToolInputError(tool, targetInput, inputValidators);
+      if (inputError) {
         const output = await runRejectedDispatch(
           input,
           toolCallId,
           signal,
           runMetaTool,
-          (modelOutputCharacterLimit) => {
-            throw toolSignatureError(
+          (modelOutputCharacterLimit) =>
+            toolInputCorrection(
               tool,
               'tool_input_invalid',
-              `Invalid params for "${name}". Read the expected signature below, then call tool_call again with corrected params.`,
+              `Invalid params for "${name}". Correct these fields, then call tool_call again:\n${inputError}`,
               modelOutputCharacterLimit,
-            );
-          },
+            ),
         );
         return toPiToolResult(output);
       }
@@ -256,7 +258,7 @@ function runRejectedDispatch(
   toolCallId: string,
   signal: AbortSignal | undefined,
   runMetaTool: RunMetaTool,
-  reject: (modelOutputCharacterLimit: number) => never,
+  correction: (modelOutputCharacterLimit: number) => PiMetaToolExecution,
 ) {
   return runMetaTool(
     toolCallId,
@@ -266,16 +268,16 @@ function runRejectedDispatch(
       input: createPiDispatchActivityInput(input),
       providerName: PI_TOOL_CALL_TOOL_NAME,
     },
-    reject,
+    correction,
   );
 }
 
-function toolSignatureError(
+function toolInputCorrection(
   tool: RuntimeTool,
-  code: string,
+  code: 'tool_schema_not_inspected' | 'tool_input_invalid',
   message: string,
   modelOutputCharacterLimit: number,
-) {
+): PiMetaToolExecution {
   const declaration = toolToTypeScript(
     tool,
     Math.min(
@@ -283,17 +285,38 @@ function toolSignatureError(
       Math.max(1, Math.floor(modelOutputCharacterLimit / 2)),
     ),
   );
-  return Object.assign(new Error(`${message}\n\nExpected signature:\n${declaration}`), {
+  const activityError: RuntimeError = {
     code,
+    message:
+      code === 'tool_schema_not_inspected'
+        ? 'The tool was not executed. Its input schema must be inspected in this turn first.'
+        : 'The tool was not executed. Its arguments do not match the input schema.',
     retryable: false,
-  });
+    origin: 'tool',
+  };
+  const correctionMessage = boundedText(
+    message,
+    Math.min(
+      TOOL_CORRECTION_MESSAGE_CHARACTER_LIMIT,
+      Math.max(1, Math.floor(modelOutputCharacterLimit / 4)),
+    ),
+  );
+  return {
+    activityError,
+    activityOutput: createErrorToolResult(activityError),
+    modelOutput: createErrorToolResult({
+      ...activityError,
+      message: `${correctionMessage}\n\nExpected signature:\n${declaration}`,
+    }),
+  };
 }
 
-function matchesToolInput(
+function getToolInputError(
   tool: RuntimeTool,
   input: RuntimeJsonValue,
   inputValidators: Map<string, z.ZodType | null>,
-): boolean {
+): string | undefined {
+  if (!isRecord(input)) return 'params: Expected an object.';
   if (!inputValidators.has(tool.providerName)) {
     inputValidators.set(tool.providerName, createToolInputValidator(tool));
   }
@@ -302,7 +325,16 @@ function matchesToolInput(
   // satisfy, so rejecting its params would return the same signature forever
   // and burn the turn's tool-call budget. Let those calls through.
   const validator = inputValidators.get(tool.providerName);
-  return validator ? validator.safeParse(input).success : true;
+  if (!validator) return undefined;
+  const parsed = validator.safeParse(input);
+  if (parsed.success) return undefined;
+  return parsed.error.issues
+    .slice(0, 5)
+    .map((issue) => {
+      const path = ['params', ...issue.path].map(String).join('.');
+      return `${boundedText(path, 256)}: ${boundedText(issue.message, 256)}`;
+    })
+    .join('\n');
 }
 
 function createToolInputValidator(tool: RuntimeTool): z.ZodType | null {
@@ -362,11 +394,15 @@ function rankTools(tools: readonly RuntimeTool[], query: string): RuntimeTool[] 
 }
 
 function tokenize(value: string): string[] {
-  const normalized = value
-    .replace(/([\p{Lu}]+)([\p{Lu}][\p{Ll}])/gu, '$1 $2')
-    .replace(/([\p{Ll}\d])([\p{Lu}])/gu, '$1 $2')
-    .toLowerCase();
-  return normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return (value.match(/[\p{L}\p{N}]+/gu) ?? []).flatMap((word) => {
+    const parts = word
+      .replace(/([\p{Lu}]+)([\p{Lu}][\p{Ll}])/gu, '$1 $2')
+      .replace(/([\p{Ll}\d])([\p{Lu}])/gu, '$1 $2')
+      .toLowerCase()
+      .split(' ');
+    // Keep GitHub searchable as both "github" and "git hub".
+    return parts.length > 1 ? [word.toLowerCase(), ...parts] : parts;
+  });
 }
 
 function toolToTypeScript(

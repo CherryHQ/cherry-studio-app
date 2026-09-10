@@ -53,7 +53,7 @@ export function MessagePartProcess({
   };
 
   return (
-    <View className={`gap-1.5 border-border-subtle border-b ${isOpen ? 'pb-2' : ''}`}>
+    <View className={`gap-3 border-border-subtle border-b ${isOpen ? 'pb-4' : ''}`}>
       <MessagePartStatus
         accessibilityLabel={title}
         expanded={isOpen}
@@ -75,7 +75,7 @@ export function MessagePartProcess({
           <MessagePartDisclosureIcon isOpen={isOpen} />
         </View>
       </MessagePartStatus>
-      <MessagePartCollapsible className="gap-0.5" isOpen={isOpen} testID={`${testID}-detail`}>
+      <MessagePartCollapsible className="gap-1" isOpen={isOpen} testID={`${testID}-detail`}>
         <MessagePartStatusDensityScope density="compact">{children}</MessagePartStatusDensityScope>
       </MessagePartCollapsible>
     </View>
@@ -209,6 +209,7 @@ export function MessagePartTool({
   statusTone = 'default',
   testID = 'tool-part',
   title,
+  titleAnimation,
 }: MessagePartToolProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -221,6 +222,7 @@ export function MessagePartTool({
         statusTone={statusTone}
         testID={testID}
         title={title}
+        titleAnimation={titleAnimation}
       />
       {isOpen ? (
         <MessagePartDetail
@@ -246,6 +248,7 @@ export function MessagePartSummary({
   statusTone = 'default',
   testID = 'message-part-summary',
   title,
+  titleAnimation = 'shimmer',
 }: MessagePartSummaryProps) {
   const colorClassName = toneClassName[statusTone];
   const isRunning = state === 'running';
@@ -267,7 +270,7 @@ export function MessagePartSummary({
         <Icon className={`size-4 ${colorClassName}`} />
       ) : null}
       <View className="min-w-0 shrink">
-        {isRunning ? (
+        {isRunning && titleAnimation === 'shimmer' ? (
           <ShimmerText className="text-sm" numberOfLines={1} testID={`${testID}-running-title`}>
             {title}
           </ShimmerText>

@@ -7,6 +7,7 @@ import { type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useCameraAccess } from '@/frontend/hooks/useCameraAccess';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerPresentationActions } from '../context/ComposerProvider';
@@ -50,12 +51,11 @@ export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerM
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const openDocumentPicker = useComposerDocumentPicker();
+  const requestCameraAccess = useCameraAccess();
 
   const openCamera = useCallback(async () => {
     await runInputReplacement(async () => {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-
-      if (!permission.granted) {
+      if (!(await requestCameraAccess())) {
         return;
       }
 
@@ -67,7 +67,7 @@ export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerM
 
       addAttachments(result.assets.map((asset) => createCameraAttachmentDraft({ uri: asset.uri })));
     });
-  }, [addAttachments, runInputReplacement]);
+  }, [addAttachments, requestCameraAccess, runInputReplacement]);
   const openPhotoLibrary = useCallback(async () => {
     await runInputReplacement(async () => {
       const result = await ImagePicker.launchImageLibraryAsync({

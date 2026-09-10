@@ -80,10 +80,13 @@ Calls use only the configured provider. A failed web lookup stops both tools for
 retains successful content and failure details, and directs the model to answer from existing
 content. See [Web Search](../web-search.md) for the request and partial-result policy.
 `generate_image` additionally requires a configured drawing model. An OS permission scope
-that was never requested does not hide a device tool: it is offered as `ask`, and execution
-triggers the one-shot system permission prompt after the user approves the call in-app. A denied or
-unavailable scope removes the tool for the turn. The inference snapshot records the tools that
-entered the immutable turn.
+that can still be requested keeps a device tool available as `ask`; execution prompts after
+in-app approval, including after a denial when the OS allows another request. Permanently denied,
+unavailable, or unreadable permission states remove dependent tools for the turn. Health summaries
+need only one usable or requestable metric; execution checks the metrics selected by the call.
+HealthKit's `requested` state permits a query without claiming that read access was granted.
+The inference snapshot records the tools that entered the immutable turn. Enabling an Agent
+capability changes its preference; it does not itself request OS permission.
 
 The logical binding model is:
 
@@ -165,7 +168,9 @@ The Pi binding keeps a per-turn inspected-name ledger. Each tool whose signature
 approval or execution boundary: the failed meta result returns the bounded signature and records
 the name so a corrected retry can proceed. Before dispatch, `tool_call` also validates `params`
 against the frozen MCP JSON Schema; a mismatch returns the same bounded signature without invoking
-the target.
+the target, together with bounded field paths and validation reasons. The model receives these
+correction details, while failed meta activity retains only the failure code and a short summary.
+The message detail sheet translates the correction code rather than displaying the model's signature.
 
 These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
 and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives
@@ -309,6 +314,11 @@ retry; cancellation still propagates without becoming a cached failure.
 - Calendar adapters own Expo/native API calls and translate platform results into portable JSON.
 - Read and mutation tools are separate capabilities so policy can distinguish private-data access
   from side effects.
+- iOS add-only calendar authorization is separate from full access. Reading, updating, and deleting
+  events require full access; adding can use add-only access. Android uses its calendar permission
+  group. The Expo Calendar requester patch persists completed full-access inquiries, so Settings
+  offer the initial add-only upgrade and switch to system management after refusal, including
+  after an app restart. A system privacy reset clears that inquiry history.
 - OS permission is not an approval substitute. The callback checks both current OS permission and
   the Runtime approval decision immediately before access.
 - A missing platform API or denied permission returns a normalized unavailable/permission result;
@@ -317,6 +327,30 @@ retry; cancellation still propagates without becoming a cached failure.
   always failing.
 - A device failure settles as a `{ status: 'error', message, retryable }` value rather than a throw,
   because a thrown error reaches the model only as an opaque failure it cannot act on.
+- `DevicePermissions` directly implements `PermissionsModule` and serializes system prompts.
+  Tool cancellation reaches the queue, which skips cancelled requests and remaining prompts in a
+  batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
+  until its native callback settles.
+
+### System Health
+
+- [Health Access](../../../modules/health-access/README.md) owns native read authorization;
+  `src/backend/services/permissions` maps its results to the shared permission contract. Data
+  queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
+- The Nitro HealthKit Android patch propagates record-read failures after quota retries and native
+  aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
+  marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
+  calendar requester patch require a new native build.
+- Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
+  result on earlier versions, then reads grants per data type. Settings open Health Connect
+  management even when all permissions are already granted.
+  Unsupported devices hide the capability; a missing or outdated provider retains an install path.
+- Apple Health never discloses whether a read permission was granted. `requested` means the system
+  no longer needs to ask, and settings explain how to review access in Apple Health.
+- Summaries request only selected metrics, skip known denied metrics, and preserve successful
+  metrics when another query fails. Absent data is `null` in range summaries, with per-metric
+  `no-data` or `error` states; it must not be interpreted as zero activity. Daily results omit
+  missing values. Queries remain subject to the system's history limits.
 
 ### Image Generation
 

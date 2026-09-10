@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 import type { McpServer } from '@/shared/data/types/mcpServer';
-import { McpServerSchema } from '@/shared/data/types/mcpServer';
+import { RemoteMcpServerSchema } from '@/shared/data/types/mcpServer';
 
 const MCP_SERVER_MUTABLE_FIELDS = {
   disabledTools: true,
@@ -11,13 +11,13 @@ const MCP_SERVER_MUTABLE_FIELDS = {
   name: true,
 } as const;
 
-export const CreateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
+export const CreateMcpServerSchema = RemoteMcpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
   .required({ endpointUrl: true, name: true })
   .strict();
 export type CreateMcpServerDto = z.infer<typeof CreateMcpServerSchema>;
 
-export const UpdateMcpServerSchema = McpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
+export const UpdateMcpServerSchema = RemoteMcpServerSchema.pick(MCP_SERVER_MUTABLE_FIELDS)
   .partial()
   .strict();
 export type UpdateMcpServerDto = z.infer<typeof UpdateMcpServerSchema>;

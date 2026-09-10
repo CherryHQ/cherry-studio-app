@@ -95,6 +95,46 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     expect(JSON.stringify(result.value)).toContain('mcp_server_1_getHTTPResponse');
   });
 
+  test.each(['github', 'GitHub', 'GITHUB', 'git hub'])(
+    'finds GitHub tools with the query "%s"',
+    async (query) => {
+      const search = createPiDeferredToolDiscoveryTools(
+        [
+          mcpTool('mcp_search_repositories_1f31g3w', 'Search GitHub repositories.'),
+          mcpTool('mcp_weather_1234567', 'Get current weather.'),
+        ],
+        async () => ({ value: null, artifacts: [] }),
+        runMetaTool,
+      ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+      if (!search) throw new Error('Missing tool_search.');
+
+      const result = (await execute(search, { query })).details as RuntimeToolResult;
+
+      expect(JSON.stringify(result.value)).toContain('mcp_search_repositories_1f31g3w');
+      expect(JSON.stringify(result.value)).not.toContain('mcp_weather_1234567');
+    },
+  );
+
+  test.each(['amap', 'Amap', '高德地图'])(
+    'finds tools by the platform identity in their catalog description: %s',
+    async (query) => {
+      const search = createPiDeferredToolDiscoveryTools(
+        [
+          mcpTool('mcp_weather_1234567', '高德地图 (amap): Get current weather.'),
+          mcpTool('mcp_get_me_1234567', 'GitHub (github): Get the authenticated account.'),
+        ],
+        async () => ({ value: null, artifacts: [] }),
+        runMetaTool,
+      ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME);
+      if (!search) throw new Error('Missing tool_search.');
+
+      const result = (await execute(search, { query })).details as RuntimeToolResult;
+
+      expect(JSON.stringify(result.value)).toContain('mcp_weather_1234567');
+      expect(JSON.stringify(result.value)).not.toContain('mcp_get_me_1234567');
+    },
+  );
+
   test('describes and delegates an exact discovered tool', async () => {
     const target = mcpTool('mcp_server_1_search_issues', 'Find repository issues');
     const targetResult: RuntimeToolResult = { value: { total: 1 }, artifacts: [] };
@@ -133,10 +173,17 @@ describe('createPiDeferredToolDiscoveryTools', () => {
       name: target.providerName,
       params: { query: 'bug' },
     };
-    await expect(execute(callTool, catalogCallInput, 'uninspected-call')).rejects.toMatchObject({
-      code: 'tool_schema_not_inspected',
-      message: expect.stringContaining(`name: "${target.providerName}"`),
-      retryable: false,
+    await expect(execute(callTool, catalogCallInput, 'uninspected-call')).resolves.toMatchObject({
+      details: {
+        value: {
+          status: 'error',
+          error: {
+            code: 'tool_schema_not_inspected',
+            message: expect.stringContaining(`name: "${target.providerName}"`),
+            retryable: false,
+          },
+        },
+      },
     });
     expect(invokeTarget).not.toHaveBeenCalled();
 
@@ -156,19 +203,48 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     if (!searchTool || !callTool) throw new Error('Missing deferred-discovery tools.');
 
     await execute(searchTool, { query: 'repository' }, 'search-1');
-    await expect(
-      execute(
+    const result = (
+      await execute(
         callTool,
         { name: target.providerName, params: { wrongParameter: true } },
         'invalid-call',
-      ),
-    ).rejects.toMatchObject({
-      code: 'tool_input_invalid',
-      message: expect.stringContaining('params: { query: string }'),
-      retryable: false,
+      )
+    ).details as RuntimeToolResult;
+    expect(result.value).toMatchObject({
+      status: 'error',
+      error: {
+        code: 'tool_input_invalid',
+        message: expect.stringContaining('params.query: Invalid input: expected string'),
+        retryable: false,
+      },
     });
+    expect(JSON.stringify(result.value)).toContain('params: { query: string }');
     expect(invokeTarget).not.toHaveBeenCalled();
   });
+
+  test.each([{ params: null }, { params: [] }, { params: 'not-an-object' }])(
+    'rejects non-object params without silently replacing them with an empty object: $params',
+    async ({ params }) => {
+      const target = mcpTool('mcp_get_me', 'Get the account', { type: 'object' });
+      const invokeTarget = jest.fn(async () => ({ value: null, artifacts: [] }));
+      const tools = createPiDeferredToolDiscoveryTools([target], invokeTarget, runMetaTool);
+      const describe = tools.find((tool) => tool.name === PI_TOOL_DESCRIBE_TOOL_NAME)!;
+      const call = tools.find((tool) => tool.name === PI_TOOL_CALL_TOOL_NAME)!;
+      await execute(describe, { name: target.providerName });
+
+      const result = (await execute(call, { name: target.providerName, params }))
+        .details as RuntimeToolResult;
+
+      expect(result.value).toMatchObject({
+        status: 'error',
+        error: {
+          code: 'tool_input_invalid',
+          message: expect.stringContaining('params: Expected an object.'),
+        },
+      });
+      expect(invokeTarget).not.toHaveBeenCalled();
+    },
+  );
 
   test('dispatches a tool whose schema Zod cannot convert instead of rejecting it forever', async () => {
     // Draft-07 `#/definitions` refs are what most MCP servers publish, and

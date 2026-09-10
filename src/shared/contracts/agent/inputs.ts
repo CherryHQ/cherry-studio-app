@@ -19,6 +19,9 @@ export const AgentDeleteSessionInputSchema = z.strictObject({
 });
 export const AgentSubmitMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
+  /** Allocated once by the send action and reused for display and persistence. */
+  userMessageId: z.string().min(1),
+  assistantMessageId: z.string().min(1),
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
@@ -28,6 +31,9 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
   agentId: z.string().min(1),
+  sessionId: z.string().min(1),
+  userMessageId: z.string().min(1),
+  assistantMessageId: z.string().min(1),
   executionTarget: AgentExecutionTargetSchema,
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */

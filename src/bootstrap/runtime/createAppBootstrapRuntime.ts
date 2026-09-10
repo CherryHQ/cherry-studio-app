@@ -15,6 +15,7 @@ import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
+import type { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
@@ -61,6 +62,9 @@ export function createAppBootstrapRuntime(
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
+  const desktopConnections = host.container.get<DesktopConnectionRuntime>(
+    'DesktopConnectionRuntime',
+  );
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -81,6 +85,7 @@ export function createAppBootstrapRuntime(
   });
   const { backend, dataApiDependencies } = createBackend(services, {
     dbService,
+    desktopConnections,
     diagnostics,
     languageServing,
     providerRegistryUpdater,
@@ -96,6 +101,7 @@ export function createAppBootstrapRuntime(
       agentSessions: services.agentSession,
       aiUsageRecords: services.aiUsageRecord,
       contentSearch: services.contentSearch,
+      desktopConnections: services.desktopConnection,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
@@ -103,6 +109,7 @@ export function createAppBootstrapRuntime(
       mcpServers: services.mcpServer,
       models: services.model,
       paintings: services.painting,
+      pluginConnections: services.pluginAuthorization,
       providers: services.provider,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),

@@ -22,9 +22,9 @@ type EffortSliderTrackProps = {
 };
 
 /**
- * A 64dp neutral capsule surrounds a 44dp brand progress pill. The capsule and
+ * A 64dp opaque capsule surrounds a 44dp primary progress pill. The capsule and
  * exposed ticks follow the active theme. The thumb sits inside the progress end
- * cap, leaving its four-pixel brand ring visible at the endpoints.
+ * cap, leaving its four-pixel primary ring visible at the endpoints.
  */
 export function EffortSliderTrack({
   trackHeight,
@@ -32,20 +32,19 @@ export function EffortSliderTrack({
   position,
   measuredWidth,
 }: EffortSliderTrackProps) {
-  const [brandColor, trackColor, trackForegroundColor, constantBlack, constantWhite] =
+  const [primaryColor, primaryForegroundColor, trackColor, trackForegroundColor, constantBlack] =
     useThemeColor([
-      'brand',
-      'secondary',
-      'secondary-foreground',
+      'primary',
+      'primary-foreground',
+      'popover',
+      'popover-foreground',
       'constant-black',
-      'constant-white',
     ]);
   const scale = trackHeight / effortSliderTrackHeight;
   const progressHeight = effortSliderProgressHeight * scale;
   const thumbInset = effortSliderThumbInset * scale;
   const thumbSize = effortSliderThumbSize * scale;
   const tickSize = effortSliderTickSize * scale;
-  const trackRadius = trackHeight / 2;
   const { thumbCenterStart, tickCenters, travelDistance } = getEffortSliderTrackGeometry(
     measuredWidth,
     stopCount,
@@ -67,20 +66,14 @@ export function EffortSliderTrack({
 
   return (
     <View className="w-full" style={{ height: trackHeight }}>
-      <View
-        className="absolute inset-0"
-        style={{
-          backgroundColor: trackColor,
-          borderRadius: trackRadius,
-        }}
-      >
+      <View className="absolute inset-0 rounded-full" style={{ backgroundColor: trackColor }}>
         {stops.map(({ centerX, fraction }) => (
           <View
             key={fraction}
+            className="rounded-full"
             pointerEvents="none"
             style={{
               backgroundColor: trackForegroundColor,
-              borderRadius: tickSize / 2,
               height: tickSize,
               left: centerX - tickSize / 2,
               opacity: 0.2,
@@ -91,11 +84,10 @@ export function EffortSliderTrack({
           />
         ))}
         <Animated.View
-          className="absolute overflow-hidden"
+          className="absolute overflow-hidden rounded-full"
           style={[
             {
-              backgroundColor: brandColor,
-              borderRadius: progressHeight / 2,
+              backgroundColor: primaryColor,
               height: progressHeight,
               left: progressInset,
               top: (trackHeight - progressHeight) / 2,
@@ -110,9 +102,9 @@ export function EffortSliderTrack({
             {stops.map(({ centerX, fraction }) => (
               <View
                 key={fraction}
+                className="rounded-full"
                 style={{
-                  backgroundColor: constantWhite,
-                  borderRadius: tickSize / 2,
+                  backgroundColor: primaryForegroundColor,
                   height: tickSize,
                   left: centerX - tickSize / 2,
                   opacity: 0.16,
@@ -124,27 +116,12 @@ export function EffortSliderTrack({
             ))}
           </View>
         </Animated.View>
-        <View
-          pointerEvents="none"
-          style={{
-            borderColor: trackForegroundColor,
-            borderRadius: trackRadius,
-            borderWidth: 1,
-            bottom: 0,
-            left: 0,
-            opacity: 0.04,
-            position: 'absolute',
-            right: 0,
-            top: 0,
-          }}
-        />
       </View>
       <Animated.View
-        className="absolute"
+        className="absolute rounded-full"
         style={[
           {
-            backgroundColor: constantWhite,
-            borderRadius: thumbSize / 2,
+            backgroundColor: primaryForegroundColor,
             elevation: 1,
             height: thumbSize,
             left: 0,

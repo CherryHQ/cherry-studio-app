@@ -13,6 +13,7 @@ type RouteHandler = (input: {
   body?: unknown;
   params: Record<string, string>;
   query?: unknown;
+  signal?: AbortSignal;
 }) => Promise<unknown>;
 
 type CompiledRoute = {
@@ -42,11 +43,12 @@ export class DataApiService implements ApiClient {
 
   get<TPath extends ConcreteApiPaths>(
     path: TPath,
-    options?: { query?: QueryParamsForPath<TPath, 'GET'> },
+    options?: { query?: QueryParamsForPath<TPath, 'GET'>; signal?: AbortSignal },
   ): Promise<ResponseForPath<TPath, 'GET'>> {
-    return this.request('GET', path, { query: options?.query }) as Promise<
-      ResponseForPath<TPath, 'GET'>
-    >;
+    return this.request('GET', path, {
+      query: options?.query,
+      ...(options?.signal ? { signal: options.signal } : {}),
+    }) as Promise<ResponseForPath<TPath, 'GET'>>;
   }
 
   patch<TPath extends ConcreteApiPaths>(
@@ -82,8 +84,9 @@ export class DataApiService implements ApiClient {
   private async request(
     method: HttpMethod,
     path: string,
-    payload: { body?: unknown; query?: unknown },
+    payload: { body?: unknown; query?: unknown; signal?: AbortSignal },
   ): Promise<unknown> {
+    payload.signal?.throwIfAborted();
     const pathSegments = splitPath(path);
     let matchedTemplate: string | undefined;
 
@@ -96,7 +99,9 @@ export class DataApiService implements ApiClient {
       matchedTemplate = route.template;
       const handler = route.handlers[method];
       if (handler) {
-        return await handler({ ...payload, params });
+        const result = await handler({ ...payload, params });
+        payload.signal?.throwIfAborted();
+        return result;
       }
     }
 

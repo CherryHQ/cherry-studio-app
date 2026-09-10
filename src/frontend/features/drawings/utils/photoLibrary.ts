@@ -1,5 +1,7 @@
 import * as MediaLibrary from 'expo-media-library';
 
+import { canRequestDevicePermission, type DevicePermissionStatus } from '@/shared/contracts';
+
 /**
  * Reading the photo library directly, for the drawing list's recent-photos
  * strip. Picking photos goes through the system picker instead; this is only
@@ -14,10 +16,10 @@ export type PhotoPreview = {
 };
 
 export function shouldRequestPhotoPreviewAccess(
-  permission: { canAskAgain: boolean; granted: boolean },
+  permission: DevicePermissionStatus | undefined,
   isUserInitiated: boolean,
 ): boolean {
-  return isUserInitiated && !permission.granted && permission.canAskAgain;
+  return isUserInitiated && canRequestDevicePermission(permission);
 }
 
 type PhotoPreviewPage = {

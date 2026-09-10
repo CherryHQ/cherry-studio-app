@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { queryKeys } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { ApiClient } from '@/shared/data/api/types';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import { useMcpServerMutations } from '../useMcpServers';
 
@@ -33,7 +33,7 @@ function Probe() {
   return null;
 }
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<RemoteMcpServer> = {}): RemoteMcpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
     disabledTools: [],

@@ -61,14 +61,14 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `home`, `library`,
-  `agents`, `drawings`, `onboarding`, `search`, `sessions` (Agent Session management), `settings`,
+  `agents`, `drawings`, `onboarding`, `search`, `settings`,
   and `paintings` flows. Directories with their own nested Stack hide the root header and draw the
   page header inside that nested Stack.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
   only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
   and the full-width drawer gesture exists only on the chat surface.
 - The sidebar is the `frontend/appShell/sidebar` compound. Its destinations close the drawer and push
-  `library`, `agents`, `drawings`, `sessions`, or `settings` onto the root Stack. Their root
+  `library`, `agents`, `drawings`, `search`, or `settings` onto the root Stack. Their root
   headers lead with back; popping returns to the exact chat route that opened them. A cold-start
   deep link with no back history replaces to `/` when that leading action is pressed.
 - Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
@@ -98,12 +98,17 @@ The chat route has two complete identities:
 - A draft is `{ kind: 'draft', agentId }`.
 
 Every in-app entry constructs one of these targets through `chatHref` or `chatRouteParams`. A
-Session link carries only `sessionId`; the destination reads the Session entity to derive its Agent
+Session link identifies its conversation by `sessionId`; the destination reads the Session entity to derive its Agent
 for presentation and composer behavior. Drafts have no Session entity yet, so `agentId` is their
 complete route identity. If a Session no longer exists, the destination shows a loading state while
 it requests the globally most recently active Session, then replaces the missing identity with that
 result. If no Session remains, it uses the same draft or no-Agent fallbacks as an identity-free
 launch.
+
+A message search result additionally carries `messageId` and `messageRequestId`. These describe a
+one-time viewport destination, not another conversation/composer identity. The message window
+loads the target and its neighbors directly, pages both older and newer, and gives the list an
+explicit initial scroll target. A fresh request id permits selecting the same result again.
 
 Opening `/` without an identity restores the globally most recently active Session ordered by its
 persisted `lastActivityAt`. If no Session exists, it opens a draft for the first available Agent,
@@ -113,11 +118,12 @@ one-row Session request; an earlier result is never used to choose the destinati
 
 | Entry | Destination |
 | --- | --- |
-| Sidebar or Session-list Session row | That Session id |
+| Sidebar Session row or title search result | That Session id |
+| Sidebar search entry | Global conversation search on `/search` |
+| Message search result | Its Session and message id |
 | Sidebar dock or chat-header new-chat action | Draft for the current available Agent, otherwise the first Agent |
 | Agent-list row | That Agent's editor |
 | Chat-header Agent picker row | A new draft for the selected Agent |
-| Chat-header history action | `/sessions?agentId=<current Agent>` |
 | Assistant-message fork | The returned fork Session id |
 
 The Agent list manages Agent definitions; the transient header picker changes the Agent for a new
@@ -175,8 +181,10 @@ carry filters, or are not the rows the screen already draws — uses the root `/
 one fixed view: callers adapt data, matching, optional filters, and result content rather than
 supplying business-specific search screens. Native back or an interactive pop cancels without
 calling business logic; selection resolves only after the route's exit transition completes. The
-route title is always Search, and it does not query or render a full result set until the user
-enters non-whitespace text. Session search and provider model search are this shape.
+route has no navigation header: it owns a bottom query input and close button, with the result list
+above them. It handles safe-area and keyboard insets at that boundary. Empty queries only load
+recent items when the request supplies `loadRecent`; they never trigger a full search. Session
+search and provider model search are this shape.
 
 The two share their matching rules through `frontend/utils/search`, which is keyword-based: a query
 splits on whitespace and every keyword has to appear across an item's searchable fields. They share
@@ -231,8 +239,11 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 
 Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The
 chat-only drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); non-chat
-routes live above it in the root Stack and cannot expose it. On Android, the chat gesture still
-coexists with system edge back and must be re-validated whenever predictive back is enabled.
+routes live above it in the root Stack and cannot expose it. The drawer pan commits only after
+the platform scroll threshold, so native horizontal scroll surfaces inside chat (markdown tables,
+code blocks, math) claim their own touches first and cancel the drawer. On Android, the chat
+gesture still coexists with system edge back and must be re-validated whenever predictive back is
+enabled.
 
 ## Acceptance
 

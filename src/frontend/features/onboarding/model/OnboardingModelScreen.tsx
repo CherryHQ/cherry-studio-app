@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
 import { ModelPickerIcon } from '@/frontend/components/ModelPicker';
+import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Model } from '@/shared/data/types/model';
 
@@ -20,7 +21,11 @@ export function OnboardingModelScreen() {
   const params = useLocalSearchParams<{ providerId?: string | string[] }>();
   const providerId = getSingleRouteParam(params.providerId);
   // Changing providers discards the previous provider's selection and manual draft.
-  return <OnboardingModelSelection key={providerId ?? 'all'} providerId={providerId} />;
+  return (
+    <ModelRegistryGate>
+      <OnboardingModelSelection key={providerId ?? 'all'} providerId={providerId} />
+    </ModelRegistryGate>
+  );
 }
 
 function OnboardingModelSelection({ providerId }: { providerId?: string }) {

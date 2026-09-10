@@ -1,6 +1,7 @@
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
+import { userModelTable, type UserModelRow } from '@/backend/data/db/schemas/userModel';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { REASONING_EFFORT } from '@/shared/data/types/model';
 
 import type { PreferenceService } from '../../PreferenceService';
@@ -28,9 +29,105 @@ jest.mock('../utils/orderKey', () => ({
 
 afterEach(uninstallTestHost);
 
+beforeEach(installProviderRegistryTestSnapshot);
+
 describe('ModelService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  test('rejects model writes before download instead of committing rows and then failing to read them', async () => {
+    const writes = jest.fn();
+    const service = await createService({ withWriteTx: writes } as unknown as DbService);
+    providerRegistryService.clearRemoteSnapshot();
+    const input = { providerId: 'custom', modelId: 'mine' };
+    await expect(service.create(input)).rejects.toThrow('not been downloaded');
+    await expect(service.batchCreate([input])).rejects.toThrow('not been downloaded');
+    await expect(service.update('custom', 'mine', { name: 'Edited' })).rejects.toThrow(
+      'not been downloaded',
+    );
+    await expect(service.bulkUpdate([{ ...input, patch: { name: 'Edited' } }])).rejects.toThrow(
+      'not been downloaded',
+    );
+    expect(writes).not.toHaveBeenCalled();
+  });
+
+  test('keeps user overrides and custom models while inherited fields follow catalog updates', async () => {
+    const row: UserModelRow = {
+      createdAt: 0,
+      updatedAt: 0,
+      orderKey: 'a0',
+      inputModalitiesExplicit: false,
+      id: 'openai::test-model',
+      providerId: 'openai',
+      modelId: 'test-model',
+      presetModelId: 'test-model',
+      name: 'My name',
+      maxOutputTokens: 8192,
+      contextWindow: null,
+      maxInputTokens: null,
+      capabilities: null,
+      description: null,
+      endpointTypes: null,
+      group: null,
+      inputModalities: null,
+      outputModalities: null,
+      parameters: null,
+      pricing: null,
+      reasoning: null,
+      supportsStreaming: null,
+      notes: null,
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+    };
+    const db = {
+      select: () => ({ from: () => ({ where: () => ({ limit: async () => [row] }) }) }),
+    };
+    const writes = jest.fn();
+    const service = await createService({
+      getDb: () => db,
+      withWriteTx: writes,
+    } as unknown as DbService);
+    const install = (contextWindow: number, maxOutputTokens: number) => {
+      providerRegistryService.installRemoteSnapshot(
+        providerRegistryService.parseRemoteSnapshot({
+          models: {
+            version: String(contextWindow),
+            models: [{ id: 'test-model', name: 'Official', contextWindow, maxOutputTokens }],
+          },
+          providerModels: { version: String(contextWindow), overrides: [] },
+        }),
+      );
+    };
+    install(64000, 16384);
+    await expect(service.getById(row.id)).resolves.toMatchObject({
+      name: 'My name',
+      maxOutputTokens: 8192,
+      contextWindow: 64000,
+    });
+    install(128000, 32768);
+    await expect(service.getById(row.id)).resolves.toMatchObject({
+      name: 'My name',
+      maxOutputTokens: 8192,
+      contextWindow: 128000,
+    });
+    expect(writes).not.toHaveBeenCalled();
+
+    // Clearing the stored override restores the current remote default.
+    row.maxOutputTokens = null;
+    await expect(service.getById(row.id)).resolves.toMatchObject({ maxOutputTokens: 32768 });
+
+    row.presetModelId = null;
+    row.capabilities = [];
+    row.supportsStreaming = true;
+    row.maxOutputTokens = 4096;
+    install(256000, 65536);
+    await expect(service.getById(row.id)).resolves.toMatchObject({
+      name: 'My name',
+      maxOutputTokens: 4096,
+      presetModelId: null,
+    });
   });
 
   test('preserves persisted reasoning when enriching a model from the registry', async () => {

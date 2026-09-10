@@ -2,13 +2,15 @@ import type { LegendListRef } from '@legendapp/list/react-native';
 import type { RefObject } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { KeyboardController } from 'react-native-keyboard-controller';
+import { KeyboardController, useGenericKeyboardHandler } from 'react-native-keyboard-controller';
+import { runOnJS, useSharedValue } from 'react-native-reanimated';
 
 import { cacheService } from '@/frontend/data/CacheService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { ChatScrollAnchor } from '@/shared/data/cache/cacheSchemas';
 
-import type { MessageListItem } from '../types';
+import type { MessageListItem, MessageListProps } from '../types';
+import { isMessageListAtBottom } from './messageListLayout';
 import { computeScrollAnchor, resolveRestoreTarget } from './messageListScrollMemory';
 import {
   type FollowingReason,
@@ -20,12 +22,16 @@ const SAVE_THROTTLE_MS = 200;
 const scrollLog = loggerService.withContext('ChatScroll');
 
 type MessageListScrollControllerInputs = {
+  contentTopInset: number;
   dataKey: string | undefined;
   enteringMessageId: string | undefined;
   initialLayoutReady: boolean;
+  initialScrollTarget?: MessageListProps['initialScrollTarget'];
+  hasNewerMessages: boolean;
   listRef: RefObject<LegendListRef | null>;
   messages: readonly MessageListItem[];
   onReady: (() => void) | undefined;
+  onReturnToLatest?: () => void;
 };
 
 type ObservedScrollAnchor = Readonly<{
@@ -40,6 +46,7 @@ function cacheKeyFor(dataKey: string): `chat.scroll_anchor.${string}` {
 export function useMessageListScrollController(inputs: MessageListScrollControllerInputs) {
   const inputsRef = useRef(inputs);
   const { controller: follow, isFollowingForRender } = useViewportFollowState();
+  const isKeyboardTransitioning = useSharedValue(false);
   const activeDataKeyRef = useRef<string | undefined>(inputs.dataKey);
   const didListLoadRef = useRef(false);
   const didRestoreRef = useRef(false);
@@ -92,7 +99,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     const generation = restoreGenerationRef.current;
     stickFrameRef.current = requestAnimationFrame(() => {
       stickFrameRef.current = null;
-      if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+      if (
+        generation !== restoreGenerationRef.current ||
+        !follow.isFollowing() ||
+        isKeyboardTransitioning.get()
+      ) {
         return;
       }
 
@@ -101,7 +112,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         void list.scrollToEnd({ animated: false });
       }
     });
-  }, [follow]);
+  }, [follow, isKeyboardTransitioning]);
 
   const scrollToLiveEdge = useCallback(
     async (reason: FollowingReason, options: { animated: boolean; closeKeyboard: boolean }) => {
@@ -112,6 +123,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
       try {
         if (options.closeKeyboard) {
+          // Make the submitted row visible before keyboard dismissal changes the viewport.
+          await inputsRef.current.listRef.current?.scrollToEnd({ animated: false });
+          if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
+            return;
+          }
           // Keep keyboard geometry updates active so dismissal clears its bottom
           // inset before we resolve the list's new live edge.
           await KeyboardController.dismiss();
@@ -119,7 +135,14 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
             return;
           }
         }
-        await inputsRef.current.listRef.current?.scrollToEnd({ animated: options.animated });
+        const current = inputsRef.current;
+        if (current.onReturnToLatest) {
+          current.onReturnToLatest();
+        } else {
+          await current.listRef.current?.scrollToEnd({
+            animated: options.animated && !options.closeKeyboard,
+          });
+        }
       } catch (error) {
         scrollLog.warn('[SCROLL] liveEdgeScroll failed', error as Error, { reason });
       } finally {
@@ -139,6 +162,27 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       scheduleStickToBottom();
     }
   }, [follow, scheduleStickToBottom]);
+
+  // The native keyboard adapter owns scrolling during its animation. Layout
+  // changes from the composer settle through one correction after it finishes.
+  useGenericKeyboardHandler(
+    {
+      onStart: () => {
+        'worklet';
+        isKeyboardTransitioning.set(true);
+      },
+      onInteractive: () => {
+        'worklet';
+        isKeyboardTransitioning.set(true);
+      },
+      onEnd: () => {
+        'worklet';
+        isKeyboardTransitioning.set(false);
+        runOnJS(stickToBottomIfFollowing)();
+      },
+    },
+    [isKeyboardTransitioning, stickToBottomIfFollowing],
+  );
 
   const saveScrollAnchor = useCallback(
     (immediate = false) => {
@@ -279,8 +323,15 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
       return;
     }
 
+    const explicitTarget = current.initialScrollTarget;
     const saved =
-      pendingMessageId || !current.dataKey ? null : cacheService.get(cacheKeyFor(current.dataKey));
+      pendingMessageId || explicitTarget === 'end'
+        ? null
+        : explicitTarget
+          ? { key: explicitTarget.messageId, offset: -current.contentTopInset }
+          : current.dataKey
+            ? cacheService.get(cacheKeyFor(current.dataKey))
+            : null;
     const target = resolveRestoreTarget(
       saved,
       (key) => current.messages.findIndex((message) => message.id === key),
@@ -373,8 +424,11 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   }, [enterReadingForUser]);
 
   const finishUserScroll = useCallback(() => {
-    const isAtEnd = inputsRef.current.listRef.current?.getState().isAtEnd ?? false;
-    if (isAtEnd) {
+    const state = inputsRef.current.listRef.current?.getState();
+    // LegendList's isAtEnd excludes the keyboard inset from its edge check.
+    const isAtEnd =
+      state && isMessageListAtBottom(state.scroll, state.contentLength, state.scrollLength);
+    if (isAtEnd && !inputsRef.current.hasNewerMessages) {
       follow.enterFollowing('user-reached-bottom');
       clearStoredAnchor();
     } else {

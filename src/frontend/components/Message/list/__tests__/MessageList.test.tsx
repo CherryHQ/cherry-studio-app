@@ -1,7 +1,11 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
 import { Platform, Pressable, type LayoutChangeEvent } from 'react-native';
-import { KeyboardController } from 'react-native-keyboard-controller';
+import {
+  KeyboardController,
+  useGenericKeyboardHandler,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -28,6 +32,7 @@ type MockLegendListProps = {
   keyboardDismissMode?: string;
   keyboardLiftBehavior?: string;
   keyboardOffset?: number;
+  keyExtractor?: (item: MessageListItem) => string;
   maintainScrollAtEnd?: unknown;
   maintainVisibleContentPosition?: unknown;
   onContentSizeChange?: (width: number, height: number) => void;
@@ -43,7 +48,7 @@ type MockLegendListProps = {
   recycleItems?: boolean;
   ref?: Ref<LegendListRef>;
   renderItem?: (info: { extraData?: unknown; index: number; item: MessageListItem }) => ReactNode;
-  sharedValues?: { isAtEnd: SharedValue<boolean> };
+  sharedValues?: { scrollOffset: SharedValue<number> };
   showsVerticalScrollIndicator?: boolean;
 };
 
@@ -51,6 +56,11 @@ let mockLatestListProps: MockLegendListProps | undefined;
 const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
+const mockUseKeyboardHandler = jest.mocked(useGenericKeyboardHandler);
+const mockUseKeyboardAnimation = jest.mocked(useReanimatedKeyboardAnimation);
+let mockKeyboardHandlers: Parameters<typeof useGenericKeyboardHandler>[0];
+let mockKeyboardHeight: SharedValue<number>;
+let mockKeyboardProgress: SharedValue<number>;
 const mockListScrollToEnd = jest.fn(async () => undefined);
 const mockListScrollToIndex = jest.fn(async () => undefined);
 let mockListState = {
@@ -87,9 +97,18 @@ let mockScrollButtonProps:
   | undefined;
 type MockAnimatedReaction = {
   prepare: () => unknown;
+  previous?: unknown;
   react: (current: unknown, previous: unknown) => void;
 };
 let mockAnimatedReactions: MockAnimatedReaction[] = [];
+
+function flushAnimatedReactions() {
+  for (const reaction of mockAnimatedReactions) {
+    const current = reaction.prepare();
+    reaction.react(current, reaction.previous ?? null);
+    reaction.previous = current;
+  }
+}
 
 jest.mock('@legendapp/list/keyboard', () => {
   const { Fragment } = jest.requireActual('react');
@@ -118,7 +137,7 @@ jest.mock('@legendapp/list/keyboard', () => {
       return (
         <View testID="message-list">
           {props.data?.map((item, index) => (
-            <Fragment key={item.id}>
+            <Fragment key={props.keyExtractor?.(item) ?? item.id}>
               {props.renderItem?.({ extraData: props.extraData, index, item })}
             </Fragment>
           ))}
@@ -172,6 +191,17 @@ jest.mock('react-native-reanimated', () => {
         reactionRef.current = { prepare, react };
         mockAnimatedReactions.push(reactionRef.current);
       }
+    },
+    useDerivedValue: <T,>(factory: () => T) => {
+      const factoryRef = React.useRef(factory);
+      factoryRef.current = factory;
+      const derivedRef = React.useRef({
+        get: () => factoryRef.current(),
+        get value() {
+          return factoryRef.current();
+        },
+      });
+      return derivedRef.current;
     },
     useSharedValue: <T,>(initial: T) => {
       const ref = React.useRef<SharedValue<T> | null>(null);
@@ -247,6 +277,15 @@ describe('MessageList scroll-controller ownership', () => {
     mockAnimatedReactions = [];
     mockLatestListProps = undefined;
     mockScrollButtonProps = undefined;
+    mockKeyboardHeight = mockCreateSharedValue(0);
+    mockKeyboardProgress = mockCreateSharedValue(0);
+    mockUseKeyboardAnimation.mockReturnValue({
+      height: mockKeyboardHeight,
+      progress: mockKeyboardProgress,
+    });
+    mockUseKeyboardHandler.mockImplementation((handlers) => {
+      mockKeyboardHandlers = handlers;
+    });
     mockListState = {
       contentLength: 900,
       isAtEnd: true,
@@ -290,7 +329,7 @@ describe('MessageList scroll-controller ownership', () => {
 
     expect(mockLatestListProps).toMatchObject({
       dataKey: 'session-1',
-      keyboardLiftBehavior: 'whenAtEnd',
+      keyboardLiftBehavior: 'never',
       maintainVisibleContentPosition: { data: true },
       recycleItems: false,
     });
@@ -302,6 +341,7 @@ describe('MessageList scroll-controller ownership', () => {
 
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
     expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('persistent');
     expect(onReady).toHaveBeenCalledTimes(1);
   });
 
@@ -402,6 +442,69 @@ describe('MessageList scroll-controller ownership', () => {
     expect(mockLatestListProps?.dataKey).toBe('session-2');
   });
 
+  test('places a search target below the header instead of restoring the saved anchor', async () => {
+    const messages = [createMessage('target', 'user'), createMessage('saved', 'assistant')];
+    cacheService.set('chat.scroll_anchor.session-1', { key: 'saved', offset: 24 });
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(messages, {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    expect(mockListScrollToIndex).toHaveBeenCalledWith({
+      animated: false,
+      index: 0,
+      viewOffset: 96,
+      viewPosition: 0,
+    });
+    mockListScrollToIndex.mockClear();
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([...messages, createMessage('later', 'assistant')], {
+            contentTopInset: 96,
+            initialScrollTarget: { messageId: 'target' },
+            hasNewerMessages: true,
+          })}
+        />,
+      );
+    });
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+  });
+
+  test('keeps the end of an incomplete history window in reading mode', async () => {
+    const onReturnToLatest = jest.fn();
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('target', 'user')], {
+            hasNewerMessages: true,
+            initialScrollTarget: { messageId: 'target' },
+            onReturnToLatest,
+          })}
+        />,
+      );
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onContentSizeChange?.(320, 1200);
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    await act(async () => mockScrollButtonProps?.onPress());
+    expect(onReturnToLatest).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
   test('auto-sticks only while following and yields immediately to a user drag', async () => {
     const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
     act(() => {
@@ -410,6 +513,8 @@ describe('MessageList scroll-controller ownership', () => {
     await loadList();
     mockListScrollToEnd.mockClear();
     mockListState.isAtEnd = false;
+
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('persistent');
 
     act(() => mockLatestListProps?.onContentSizeChange?.(390, 1_000));
     act(flushAnimationFrames);
@@ -422,6 +527,104 @@ describe('MessageList scroll-controller ownership', () => {
     });
     act(flushAnimationFrames);
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+  });
+
+  test('defers queued and ongoing layout corrections until the keyboard animation finishes', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(500));
+      mockKeyboardHandlers.onStart?.({} as never);
+      flushAnimationFrames();
+      mockLatestListProps?.onLayout?.(layoutEvent(460));
+      mockLatestListProps?.onContentSizeChange?.(390, 1_100);
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+
+    act(() => {
+      mockKeyboardHandlers.onEnd?.({} as never);
+      mockLatestListProps?.onLayout?.(layoutEvent(440));
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
+
+    // Multiline text and attachments also resize the composer while the keyboard is still.
+    mockListScrollToEnd.mockClear();
+    act(() => mockLatestListProps?.onLayout?.(layoutEvent(400)));
+    act(flushAnimationFrames);
+    act(() => mockLatestListProps?.onLayout?.(layoutEvent(440)));
+    act(flushAnimationFrames);
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
+  });
+
+  test('corrects the live edge after keyboard dismissal even without a viewport resize', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+
+    act(() => {
+      mockKeyboardHandlers.onInteractive?.({} as never);
+      mockLatestListProps?.onContentSizeChange?.(390, 1_100);
+      flushAnimationFrames();
+    });
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    act(() => mockKeyboardHandlers.onEnd?.({} as never));
+    act(flushAnimationFrames);
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not resume following when the user drags during a keyboard transition', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+    act(() => {
+      mockKeyboardHandlers.onStart?.({} as never);
+      mockLatestListProps?.onLayout?.(layoutEvent(440));
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockKeyboardHandlers.onEnd?.({} as never);
+      flushAnimationFrames();
+    });
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+  });
+
+  test('resumes following only at the visible bottom including the keyboard inset', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    mockListScrollToEnd.mockClear();
+    // The library reports isAtEnd at the old bottom even with 200px of keyboard inset.
+    mockListState.contentLength = 1_100;
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onContentSizeChange?.(390, 1_200);
+      flushAnimationFrames();
+    });
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('never');
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+
+    mockListState.scroll = 700;
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScrollEndDrag?.();
+      mockLatestListProps?.onLayout?.(layoutEvent(440));
+      flushAnimationFrames();
+    });
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('persistent');
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
   });
 
   test('keeps a tapped disclosure anchored instead of sticking its growth to the end', async () => {
@@ -454,9 +657,7 @@ describe('MessageList scroll-controller ownership', () => {
       mockLatestListProps?.onContentSizeChange?.(390, 500);
     });
 
-    const reaction = mockAnimatedReactions[0];
-    mockLatestListProps?.sharedValues?.isAtEnd.set(false);
-    act(() => reaction.react(reaction.prepare(), true));
+    act(flushAnimatedReactions);
     expect(mockScrollButtonProps?.isAtBottom).toBe(true);
 
     act(() => mockLatestListProps?.onScrollBeginDrag?.());
@@ -476,15 +677,63 @@ describe('MessageList scroll-controller ownership', () => {
       mockLatestListProps?.onContentSizeChange?.(390, 300);
       mockLatestListProps?.onScrollBeginDrag?.();
     });
-    const reaction = mockAnimatedReactions[0];
-    mockLatestListProps?.sharedValues?.isAtEnd.set(false);
-    act(() => reaction.react(reaction.prepare(), true));
+    act(flushAnimatedReactions);
 
     expect(mockScrollButtonProps?.isAtBottom).toBe(true);
 
     act(() => mockLatestListProps?.onContentSizeChange?.(390, 500));
+    act(flushAnimatedReactions);
 
     expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+  });
+
+  test('keeps the return button above the keyboard when short content becomes obscured', async () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+    });
+    await loadList();
+    act(() => {
+      mockLatestListProps?.onLayout?.(layoutEvent(400));
+      mockLatestListProps?.onContentSizeChange?.(390, 300);
+      mockLatestListProps?.onScrollBeginDrag?.();
+      flushAnimatedReactions();
+    });
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+
+    mockKeyboardHeight.set(-200);
+    mockKeyboardProgress.set(1);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(false);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(174);
+
+    mockLatestListProps?.sharedValues?.scrollOffset.set(74);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+
+    mockLatestListProps?.sharedValues?.scrollOffset.set(0);
+    mockKeyboardHeight.set(0);
+    mockKeyboardProgress.set(0);
+    act(flushAnimatedReactions);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(true);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(0);
+  });
+
+  test('adds floating composer growth to the keyboard position of the return button', () => {
+    const accessoryHeight = mockCreateSharedValue(80);
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([createMessage('user-1', 'user')], {
+            bottomAccessoryHeight: accessoryHeight,
+          })}
+        />,
+      );
+    });
+    mockKeyboardHeight.set(-100);
+    mockKeyboardProgress.set(0.5);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(167);
+    accessoryHeight.set(120);
+    expect(mockScrollButtonProps?.bottomAccessoryHeight?.get()).toBe(207);
   });
 
   test('rerenders only the changed row during a streaming update', () => {
@@ -582,7 +831,7 @@ describe('MessageList scroll-controller ownership', () => {
     });
   });
 
-  test('a local send keeps keyboard insets active and waits for dismissal before scrolling', async () => {
+  test('shows a local send before keyboard dismissal and corrects the settled viewport without replaying motion', async () => {
     const messages = [createMessage('user-1', 'user')];
     act(() => {
       renderer = create(<MessageList {...listProps(messages)} />);
@@ -600,16 +849,17 @@ describe('MessageList scroll-controller ownership', () => {
         <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
       );
     });
-    act(flushAnimationFrames);
+    await act(async () => flushAnimationFrames());
 
     expect(mockLatestListProps?.freeze).toBeUndefined();
     expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
-    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
 
     await act(async () => finishDismiss());
 
-    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
-    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
+    expect(mockListScrollToEnd).toHaveBeenLastCalledWith({ animated: false });
   });
 
   test.each(['drag', 'dataset switch'] as const)(
@@ -632,7 +882,9 @@ describe('MessageList scroll-controller ownership', () => {
           <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
         );
       });
-      act(flushAnimationFrames);
+      await act(async () => flushAnimationFrames());
+      expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+      mockListScrollToEnd.mockClear();
 
       act(() => {
         if (interruption === 'drag') {
@@ -655,6 +907,53 @@ describe('MessageList scroll-controller ownership', () => {
     },
   );
 
+  test('hands a Draft list to its durable Session without restoring or scrolling again', async () => {
+    const pending = [
+      { ...createMessage('user-1', 'user'), status: 'pending' as const },
+      { ...createMessage('assistant-1', 'assistant'), status: 'pending' as const },
+    ];
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps(pending, {
+            dataKey: 'session-1',
+            enteringMessageId: 'user-1',
+          })}
+        />,
+      );
+    });
+    await loadList();
+    const keys = pending.map((message) => mockLatestListProps!.keyExtractor!(message));
+    mockListScrollToEnd.mockClear();
+    mockListScrollToIndex.mockClear();
+    mockKeyboardDismiss.mockClear();
+    const accepted = pending.map((message) => ({ ...message, status: 'success' as const }));
+    await act(async () => {
+      renderer?.update(
+        <MessageList
+          {...listProps(accepted, {
+            dataKey: 'session-1',
+            enteringMessageId: 'user-1',
+          })}
+        />,
+      );
+    });
+    act(flushAnimationFrames);
+    expect(accepted.map((message) => mockLatestListProps!.keyExtractor!(message))).toEqual(keys);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+    expect(mockListScrollToIndex).not.toHaveBeenCalled();
+    expect(mockKeyboardDismiss).not.toHaveBeenCalled();
+
+    mockListState.isAtEnd = false;
+    mockListState.start = 0;
+    mockListState.scroll = 32;
+    act(() => {
+      mockLatestListProps?.onScrollBeginDrag?.();
+      mockLatestListProps?.onScroll?.({} as never);
+    });
+    expect(cacheService.get('chat.scroll_anchor.session-1')).toEqual({ key: 'user-1', offset: 32 });
+  });
+
   test('the explicit scroll button returns reading mode to the live edge', async () => {
     const messages = [createMessage('user-1', 'user')];
     act(() => {
@@ -669,9 +968,7 @@ describe('MessageList scroll-controller ownership', () => {
       mockLatestListProps?.onContentSizeChange?.(390, 500);
       mockLatestListProps?.onScrollBeginDrag?.();
     });
-    const reaction = mockAnimatedReactions[0];
-    mockLatestListProps?.sharedValues?.isAtEnd.set(false);
-    act(() => reaction.react(reaction.prepare(), true));
+    act(flushAnimatedReactions);
     expect(mockScrollButtonProps?.isAtBottom).toBe(false);
 
     act(() => mockScrollButtonProps?.onPress());

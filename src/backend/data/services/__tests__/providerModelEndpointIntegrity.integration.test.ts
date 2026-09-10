@@ -4,11 +4,14 @@ import { eq } from 'drizzle-orm';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
 import { ProviderService } from '../ProviderService';
 import { createTestDb, type TestDb } from './_testDb';
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('custom provider model endpoint integrity', () => {
   let sqlite: DatabaseSync;
@@ -64,6 +67,44 @@ describe('custom provider model endpoint integrity', () => {
         },
       }),
     ).resolves.toMatchObject({ defaultChatEndpoint: 'anthropic-messages' });
+  });
+
+  it('commits configuration and keys together and preserves both on validation failure', async () => {
+    const providerId = 'atomic-config';
+    await createProvider(providerId);
+    const apiKeys = [{ id: 'key-1', key: 'sk-new', isEnabled: true }];
+    await providers.update(providerId, {
+      name: 'Saved configuration',
+      apiKeys,
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://new.example.com/v1' },
+      },
+    });
+    await expect(providers.listApiKeys(providerId)).resolves.toMatchObject({ keys: apiKeys });
+    await expect(providers.getByProviderId(providerId)).resolves.toMatchObject({
+      name: 'Saved configuration',
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://new.example.com/v1' },
+      },
+    });
+
+    await expect(
+      providers.update(providerId, {
+        name: 'Invalid keys',
+        apiKeys: [{ ...apiKeys[0], key: ' ' }],
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      providers.update(providerId, {
+        name: 'Invalid endpoint',
+        apiKeys: [{ ...apiKeys[0], key: 'sk-should-not-save' }],
+        defaultChatEndpoint: 'anthropic-messages',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(providers.getByProviderId(providerId)).resolves.toMatchObject({
+      name: 'Saved configuration',
+    });
+    await expect(providers.listApiKeys(providerId)).resolves.toMatchObject({ keys: apiKeys });
   });
 
   it('rejects a model endpoint write after the provider endpoint was removed', async () => {

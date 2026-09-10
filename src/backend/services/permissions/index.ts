@@ -1,6 +1,6 @@
 export { DevicePermissions, devicePermissions } from './DevicePermissions';
 export type {
   DevicePermission,
-  DevicePermissionAccess,
+  DevicePermissionStatus,
   SystemPermissionState,
 } from '@/shared/contracts';

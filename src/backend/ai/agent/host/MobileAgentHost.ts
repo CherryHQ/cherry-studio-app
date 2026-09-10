@@ -60,6 +60,7 @@ import {
   AgentSessionSnapshotSchema,
   AgentSessionStatusSchema,
   AgentProtocolError,
+  AgentToolInputPreviewSchema,
   type AgentApprovalView,
   type AgentCapabilities,
   type AgentErrorView,
@@ -420,6 +421,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       const reserved = await this.store.reserveInitialSubmission({
         agentId: parsed.agentId,
+        sessionId: parsed.sessionId,
+        userMessageId: parsed.userMessageId,
+        assistantMessageId: parsed.assistantMessageId,
         executionTarget: parsed.executionTarget,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
@@ -563,6 +567,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       // Invariant 2: reservation commits before execution starts.
       const reserved = await this.store.reserveSubmission({
         sessionId,
+        userMessageId: parsed.userMessageId,
+        assistantMessageId: parsed.assistantMessageId,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
@@ -902,6 +908,19 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'text.append', partId: event.partId, text: event.text },
         });
+        return false;
+      }
+      case 'tool.input.preview': {
+        const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
+        if (part?.type === 'tool' && part.state === 'input-streaming') {
+          const preview = AgentToolInputPreviewSchema.parse(event.preview);
+          part.inputPreview = preview;
+          this.publish(sessionId, {
+            type: 'message.delta',
+            messageId: state.assistantMessage.id,
+            delta: { op: 'tool.input.preview', partId: part.id, preview },
+          });
+        }
         return false;
       }
       case 'part.replace': {

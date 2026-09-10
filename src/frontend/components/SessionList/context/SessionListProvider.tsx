@@ -29,7 +29,6 @@ type SessionListSessionsContextValue = {
 
 type SessionListActionsContextValue = {
   deleteSession: (sessionId: string) => Promise<void>;
-  deleteSessions: (sessionIds: readonly string[]) => Promise<void>;
   loadMoreSessions: () => void;
   renameSession: (sessionId: string, title: string) => Promise<void>;
 };
@@ -40,7 +39,7 @@ const SessionListActionsContext = createContext<SessionListActionsContextValue |
 export function SessionListProvider({ agentId, children }: SessionListProviderProps) {
   const queryClient = useQueryClient();
   const sessionList = useAgentSessions({ agentId });
-  const { deleteAgentSession, deleteAgentSessions } = useAgentSessionMutations();
+  const { deleteAgentSession } = useAgentSessionMutations();
 
   const renameSessionMutation = useMutation('PATCH', '/agent-sessions/:id', {
     onMutate: async (variables) => {
@@ -117,11 +116,10 @@ export function SessionListProvider({ agentId, children }: SessionListProviderPr
   const actionsValue = useMemo(
     () => ({
       deleteSession: deleteAgentSession,
-      deleteSessions: deleteAgentSessions,
       loadMoreSessions: sessionList.loadMore,
       renameSession,
     }),
-    [deleteAgentSession, deleteAgentSessions, renameSession, sessionList.loadMore],
+    [deleteAgentSession, renameSession, sessionList.loadMore],
   );
 
   return (

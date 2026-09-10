@@ -6,12 +6,14 @@ import { agentSessionService } from '@/backend/data/services/AgentSessionService
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
+import { desktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { jobService } from '@/backend/data/services/JobService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
+import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { providerService } from '@/backend/data/services/ProviderService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
@@ -41,12 +43,14 @@ export function createDataServices({
     aiUsageRecord: aiUsageRecordService,
     cache,
     contentSearch: contentSearchService,
+    desktopConnection: desktopConnectionService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
     job: jobService,
     mcpServer: mcpServerService,
     model: modelService,
     painting: paintingService,
+    pluginAuthorization: pluginAuthorizationService,
     preference,
     provider: providerService,
   };

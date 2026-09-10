@@ -121,16 +121,16 @@ function RootStack() {
       <Stack.Screen name="home" options={{ headerShown: false }} />
       <Stack.Screen name="library" options={{ headerShown: false }} />
       <Stack.Screen name="agents" options={{ headerShown: false }} />
+      <Stack.Screen name="plugins" options={{ headerShown: false }} />
       <Stack.Screen name="drawings" options={{ headerShown: false }} />
       <Stack.Screen
         name="search"
         options={{
           animation: 'fade_from_bottom',
           animationDuration: APP_SEARCH_TRANSITION_DURATION_MS,
-          headerTransparent: false,
+          headerShown: false,
         }}
       />
-      <Stack.Screen name="sessions" />
       <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
       {/* Settings owns a nested stack and draws its headers there, so the root
           stack only needs to push the page without adding another header. */}

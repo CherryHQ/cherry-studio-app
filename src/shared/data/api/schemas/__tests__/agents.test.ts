@@ -40,11 +40,21 @@ describe('agent api schemas', () => {
   );
 
   test.each([CreateAgentSchema, UpdateAgentSchema])(
-    'rejects avatar writes — the avatar workflow owns that column',
+    'rejects managed avatar references — the image workflow owns those writes',
     (schema) => {
       expect(schema.safeParse({ avatar: 'agent-avatar-file:x.webp', name: 'Agent' }).success).toBe(
         false,
       );
     },
   );
+
+  test('accepts the built-in Cherry avatar only at creation', () => {
+    expect(CreateAgentSchema.parse({ avatar: '🍒', name: 'Cherry Agent' })).toMatchObject({
+      avatar: '🍒',
+    });
+    expect(UpdateAgentSchema.safeParse({ avatar: '🍒' }).success).toBe(false);
+    expect(
+      CreateAgentSchema.safeParse({ avatar: 'file:///avatar.webp', name: 'Cherry Agent' }).success,
+    ).toBe(false);
+  });
 });

@@ -1,3 +1,5 @@
+import { MobileRegistryLoader } from '@cherrystudio/provider-registry/mobile';
+
 import { ProviderSetupError } from '@/shared/contracts';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
@@ -30,12 +32,47 @@ function subject() {
         return provider;
       }),
     },
-    registryUpdates: { apply: jest.fn(), check: jest.fn(), subscribe: jest.fn() },
+    registryUpdates: {
+      ensureReady: jest.fn(),
+      apply: jest.fn(),
+      subscribe: jest.fn(),
+    },
   };
   return { backend: createProvidersModule(dependencies), dependencies };
 }
 
 describe('explicit provider activation', () => {
+  it('filters unavailable presets from setup and rejects direct imports before creating records', async () => {
+    const { dependencies } = subject();
+    const loader = new MobileRegistryLoader();
+    dependencies.catalog = {
+      isExcluded: (providerId) => loader.isProviderExcludedFromCatalog(providerId),
+      list: () => loader.loadProviders(),
+    };
+    jest.mocked(dependencies.providers.list).mockResolvedValue([]);
+    const backend = createProvidersModule(dependencies);
+    const catalogIds = (await backend.listCatalog()).map(({ id }) => id);
+
+    for (const providerId of [
+      'copilot',
+      'grok-cli',
+      'openai-codex',
+      'claude-code',
+      'azure-openai',
+      'vertexai',
+      'aws-bedrock',
+      'jina',
+      'voyageai',
+    ]) {
+      expect(catalogIds).not.toContain(providerId);
+      await expect(backend.importPreset(providerId)).rejects.toThrow(
+        `Provider preset '${providerId}' is unavailable`,
+      );
+    }
+    expect(dependencies.providers.create).not.toHaveBeenCalled();
+    expect(catalogIds).toEqual(expect.arrayContaining(['ollama', 'lmstudio', 'ovms', 'new-api']));
+  });
+
   it('prepares without enabling, then enables a configured provider with local models', async () => {
     const { backend, dependencies } = subject();
     expect(await backend.getSetupStatus('custom')).toMatchObject({

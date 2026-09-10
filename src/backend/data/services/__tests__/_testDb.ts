@@ -9,7 +9,7 @@
  * nest BEGIN IMMEDIATE and throw.
  */
 import { readFileSync } from 'node:fs';
-import type { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
@@ -102,7 +102,14 @@ export function createTestDb(sqlite: DatabaseSync): TestDb {
     }
   };
 
-  const dbService = { getDb: () => database, withWriteTx } as unknown as DbService;
+  const dbService = {
+    getDb: () => database,
+    getSqlite: () => ({
+      getAllAsync: async (sql: string, params: SQLInputValue[]) =>
+        sqlite.prepare(sql).all(...params),
+    }),
+    withWriteTx,
+  } as unknown as DbService;
   return {
     database,
     dbService,

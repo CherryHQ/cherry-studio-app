@@ -31,7 +31,13 @@ export function useProviderApiServiceQueries(providerId: string) {
       '/models',
       '/providers',
       '/providers/page',
-      ...(args ? [`/providers/${args.params.id}`, `/providers/${args.params.id}/auth`] : []),
+      ...(args
+        ? [
+            `/providers/${args.params.id}`,
+            `/providers/${args.params.id}/auth`,
+            ...(args.body?.apiKeys !== undefined ? [`/providers/${args.params.id}/api-keys`] : []),
+          ]
+        : []),
     ],
   });
   const replaceMutation = useMutation('PUT', '/providers/:id/api-keys', {

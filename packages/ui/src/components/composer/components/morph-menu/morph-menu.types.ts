@@ -8,7 +8,8 @@ export type MorphMenuProps = {
   accessibilityLabel: string;
   /**
    * Floor for the panel's width. Both axes are measured from the children, so
-   * content wider than this drives the panel. Defaults to 60% of the screen.
+   * content wider than this drives the panel, bounded by the viewport.
+   * Defaults to 60% of the screen.
    */
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
@@ -21,7 +22,7 @@ export type MorphMenuItemProps = {
   /** Rendered before the label; size it via className on the icon itself. */
   icon?: ReactNode;
   label: string;
-  /** The menu closes itself before this fires, so callers don't have to. */
+  /** Runs once after the menu's native dismissal, so it can open another surface safely. */
   onPress: () => void;
   /** Announced to assistive tech. What it looks like selected is the caller's, via `icon` and `trailing`. */
   selected?: boolean;

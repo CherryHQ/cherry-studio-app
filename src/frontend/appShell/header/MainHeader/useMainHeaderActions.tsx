@@ -1,4 +1,3 @@
-import HistoryIcon from '@cherrystudio/app-icons/icons/history';
 import { useTranslation } from 'react-i18next';
 
 import NewConversationIcon from '../../icons/NewConversationIcon';
@@ -10,7 +9,7 @@ import { useMainHeaderAgent } from './MainHeaderAgentButton';
 export function useMainHeaderActions() {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
-  const { agent, currentAgentId, openAgentHistory, openNewSession } = useMainHeaderAgent();
+  const { agent, currentAgentId, openNewSession } = useMainHeaderAgent();
   const rightActions: HeaderToolbarAction[] = [
     {
       accessibilityLabel: t('navigation.newChat'),
@@ -21,17 +20,6 @@ export function useMainHeaderActions() {
       type: 'icon',
     },
   ];
-
-  if (currentAgentId) {
-    rightActions.push({
-      accessibilityLabel: t('agent.actions.viewSessions'),
-      icon: HistoryIcon,
-      key: 'agent-history',
-      onPress: openAgentHistory,
-      testID: 'main-header-agent-history',
-      type: 'icon',
-    });
-  }
 
   return { agent, currentAgentId, leadingAction, rightActions };
 }

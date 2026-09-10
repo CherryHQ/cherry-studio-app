@@ -1,6 +1,7 @@
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
+  origin?: 'remote';
   endpointUrl: string;
   headers?: Record<string, string>;
 };
