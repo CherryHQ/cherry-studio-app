@@ -21,7 +21,8 @@ pairing and configuration import.
   absolute URL from redirecting credentials to another authority.
 - The wire format for queries is owned here, not by the Axios version: values serialize as repeated
   keys (`tag=a&tag=b`) and `null` or `undefined` values are omitted.
-- `GET` and `DELETE` requests carry no body, and timeouts must be positive milliseconds. Both rules
+- `GET` requests carry no body; `DELETE` may carry one when required by an API, such as GitHub token
+  revocation. Timeouts must be positive milliseconds. These rules
   are enforced at the type level and revalidated after interceptors run.
 - Domains that download text artifacts can request `responseType: 'text'` and impose a positive
   `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before

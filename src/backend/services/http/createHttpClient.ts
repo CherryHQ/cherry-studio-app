@@ -111,8 +111,8 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
-  if ((request.method === 'DELETE' || request.method === 'GET') && request.body !== undefined) {
-    throw new HttpError('HTTP GET and DELETE requests must not include a body.', {
+  if (request.method === 'GET' && request.body !== undefined) {
+    throw new HttpError('HTTP GET requests must not include a body.', {
       code: 'INVALID_REQUEST_BODY',
       kind: 'internal',
     });
