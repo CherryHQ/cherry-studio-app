@@ -197,7 +197,7 @@ export function createBackend(
       models,
       paintings,
       permissions: services.devicePermissions,
-      plugins: createPluginsModule(services.mcpRuntime),
+      plugins: createPluginsModule(services.mcpRuntime, services.mcpRuntime.feishuAuthorization),
       profile,
       providers,
       webSearch: services.webSearch,

@@ -1,7 +1,10 @@
+import { PluginError } from '@/shared/contracts/plugins';
+
 import { createOfficialMcpClient } from '../createOfficialMcpClient';
 import {
   createFeishuTokenProvider,
   FEISHU_CREDENTIAL_FIELDS,
+  isFeishuUserCredential,
   parseFeishuAppCredentials,
 } from '../feishuAuthorization';
 import type { PluginDefinition } from '../pluginDefinition';
@@ -15,26 +18,26 @@ export const feishuPlugin: PluginDefinition = {
       'zh-cn': '飞书',
     },
     summary: {
-      default: 'Read and edit cloud documents as an application',
-      'zh-cn': '以应用身份读取和编辑云文档',
+      default: 'Connect your Feishu account to read and edit cloud documents',
+      'zh-cn': '连接飞书账号，读取和编辑云文档',
     },
     description: {
       default:
-        "Use Feishu's official cloud tools to read documents, browse knowledge-space nodes, create and update documents, and read and add comments. Connects as your custom application and accesses only resources shared with that application.",
+        "Use Feishu's official cloud tools to read documents, browse knowledge-space nodes, create and update documents, and read and add comments. Authorize your account in Feishu without copying application credentials. Existing application-identity connections remain supported.",
       'zh-cn':
-        '通过飞书官方云端工具读取文档、浏览知识空间目录、创建和更新文档、查看和添加评论。连接使用自建应用身份，仅能访问授予该应用的资源。',
+        '通过飞书官方云端工具读取文档、浏览知识空间目录、创建和更新文档、查看和添加评论。在飞书确认账号授权，无需复制应用凭证；也保留已有应用身份的接入方式。',
     },
     access: {
       default:
-        "The application secret is sent only to Feishu's official authorization endpoint; document links and content go to its official MCP service. Enable the required API scopes and share target documents or knowledge spaces with your application. This is not your personal account and does not support personal document search, calendars, or Base.",
+        "Browser authorization stores application secrets and user tokens in this device's secure storage. Credentials go only to official Feishu services; document links and content go to its official MCP service. Your document access and organization approval rules still apply. This plugin does not provide document search, calendars, or Base.",
       'zh-cn':
-        '应用密钥仅发送到飞书官方授权接口，文档链接和内容发送到飞书官方 MCP 服务。需要在飞书开通相应 API 权限并授予应用目标文档或知识库访问权限。此连接不代表你的个人账号，不支持个人文档搜索、日历或多维表格。',
+        '浏览器授权取得的应用密钥和用户令牌保存在本机系统安全存储中，凭证仅发送到飞书官方服务。文档链接和内容发送到飞书官方 MCP 服务，仍受你的文档权限及企业审批规则约束。此插件暂不提供文档搜索、日历或多维表格工具。',
     },
     setup: {
       default:
-        'Create and publish your own custom application on Feishu Open Platform. Follow the guide below to enable the document tool scopes and grant access to target documents or knowledge spaces. Enter its App ID and App Secret from Credentials & Basic Info; application access tokens are obtained automatically. A successful connection does not grant access to every document.',
+        'First confirm application setup on Feishu, then authorize document access. Return to Cherry after each confirmation. Feishu may show its CLI setup page and require administrator approval. This flow supports Feishu accounts, not international Lark accounts. A successful connection does not grant access to every document.',
       'zh-cn':
-        '在飞书开放平台创建并发布你自己的自建应用，按下方接入指南开通云文档工具所需权限，并将目标文档或知识库授权给该应用。填写“凭证与基础信息”中的 App ID 和 App Secret；应用访问令牌将自动换取。连接成功不代表拥有所有文档的访问权限。',
+        '先在飞书确认应用设置，再授权文档访问，每次确认后返回 Cherry。飞书可能显示 CLI 应用配置页面，并要求管理员审批。目前仅支持飞书账号，不支持国际版 Lark。连接成功不代表拥有所有文档的访问权限。',
     },
     credentialLinkLabel: {
       default: 'View Feishu application setup and permissions',
@@ -48,6 +51,7 @@ export const feishuPlugin: PluginDefinition = {
       privacy: 'https://www.feishu.cn/privacy',
     },
     credentialFields: FEISHU_CREDENTIAL_FIELDS,
+    interactiveAuthorization: 'feishu-device',
   },
   tools: {
     'fetch-doc': 'read',
@@ -58,6 +62,7 @@ export const feishuPlugin: PluginDefinition = {
     'add-comments': 'write',
   },
   authMethod: 'app_credentials',
+  additionalAuthMethods: ['feishu_user'],
   encodeCredentials: (fields) => JSON.stringify(fields),
   createClient(context) {
     const tokens = createFeishuTokenProvider();
@@ -65,7 +70,15 @@ export const feishuPlugin: PluginDefinition = {
       url: 'https://mcp.feishu.cn/mcp',
       authorization: {
         async apply(credential, { headers, signal }) {
-          headers.set('X-Lark-MCP-TAT', await tokens.getToken(credential, signal));
+          if (isFeishuUserCredential(credential)) {
+            if (!context.getUserToken)
+              throw new PluginError('authorization', 'Feishu user authorization is unavailable.');
+            headers.delete('X-Lark-MCP-TAT');
+            headers.set('X-Lark-MCP-UAT', await context.getUserToken(credential, signal));
+          } else {
+            headers.delete('X-Lark-MCP-UAT');
+            headers.set('X-Lark-MCP-TAT', await tokens.getToken(credential, signal));
+          }
           headers.set('X-Lark-MCP-Allowed-Tools', Object.keys(context.tools).join(','));
         },
         invalidate: () => tokens.invalidate(),
@@ -74,6 +87,9 @@ export const feishuPlugin: PluginDefinition = {
   },
   validation: {
     tool: 'fetch-doc',
-    accountLabel: (_result, credential) => parseFeishuAppCredentials(credential).appId,
+    accountLabel: (_result, credential) =>
+      isFeishuUserCredential(credential)
+        ? 'Feishu user'
+        : parseFeishuAppCredentials(credential).appId,
   },
 };

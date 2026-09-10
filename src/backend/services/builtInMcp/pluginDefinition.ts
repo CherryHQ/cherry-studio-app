@@ -9,6 +9,7 @@ export type PluginClientContext = {
   readonly tools: PluginToolPolicy;
   readonly getCredential: () => Promise<string>;
   readonly signal: AbortSignal;
+  readonly getUserToken?: (credential: string, signal?: AbortSignal) => Promise<string>;
 };
 
 /** A bundled plugin owns its metadata, credential format, client and read-only setup check. */
@@ -17,6 +18,7 @@ export interface PluginDefinition {
   /** Optional saved server name, independent of the UI's active language. */
   readonly serverName?: string;
   readonly authMethod: string;
+  readonly additionalAuthMethods?: readonly string[];
   readonly tools: PluginToolPolicy;
   encodeCredentials(fields: Record<string, string>): string;
   createClient(context: PluginClientContext): Promise<MCPClient>;

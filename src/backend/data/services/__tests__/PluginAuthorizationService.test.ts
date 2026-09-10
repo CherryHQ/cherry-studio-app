@@ -95,6 +95,24 @@ it('rotates grant identity without retargeting an old credential reference', asy
   });
 });
 
+it('reconciles opaque user references for disabled connections without making their tokens executable', async () => {
+  const credential = 'feishu-user:00000000-0000-4000-8000-000000000001';
+  const connection = await service.connect({
+    ...input,
+    pluginId: 'feishu',
+    authMethod: 'feishu_user',
+    credential,
+  });
+  const server = await new McpServerService().getById(connection.serverId);
+  if (server.origin !== 'builtin') throw new Error('Expected a plugin');
+  await new McpServerService().update(connection.serverId, { isEnabled: false });
+  expect(await service.getCurrentCredential('feishu')).toBe(credential);
+  await expect(service.getCredentialGrant('feishu', server.authorizationId)).rejects.toThrow();
+  expect(await service.getCurrentCredential('github')).toBeUndefined();
+  await service.disconnect('feishu');
+  expect(await service.getCurrentCredential('feishu')).toBeUndefined();
+});
+
 it('rolls back both the grant and server when committing a credential change fails', async () => {
   const first = await service.connect(input);
   const oldServer = await new McpServerService().getById(first.serverId);

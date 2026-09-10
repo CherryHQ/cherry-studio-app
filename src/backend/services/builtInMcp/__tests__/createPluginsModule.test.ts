@@ -1,4 +1,15 @@
-import { createPluginsModule } from '../createPluginsModule';
+import { createPluginsModule as createModule } from '../createPluginsModule';
+import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
+
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+}));
+
+function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
+  return createModule(runtime, new FeishuAuthorizationRuntime(async () => undefined));
+}
 
 const mockConnect = jest.fn();
 const mockDisconnect = jest.fn();
@@ -28,6 +39,48 @@ beforeEach(() => {
   mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
   mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
+});
+afterEach(() => jest.restoreAllMocks());
+
+it('commits only an opaque user-grant reference after read-only MCP validation', async () => {
+  const auth = new FeishuAuthorizationRuntime(async () => undefined);
+  const credential = 'feishu-user:00000000-0000-4000-8000-000000000001';
+  const signal = auth.attemptSignal;
+  jest
+    .spyOn(auth, 'prepare')
+    .mockResolvedValue({ credential, accountLabel: 'Cherry (ou_cherry)', signal });
+  jest
+    .spyOn(auth, 'commit')
+    .mockImplementation(async <T>(_id: string, _signal: AbortSignal, save: () => Promise<T>) =>
+      save(),
+    );
+  const invalidateServer = jest.fn();
+  const plugins = createModule({ invalidateServer }, auth);
+  await plugins.authorization.complete('feishu', '00000000-0000-4000-8000-000000000001');
+  expect(mockValidateCredential).toHaveBeenCalledWith(
+    'feishu',
+    credential,
+    signal,
+    auth.getUserToken,
+  );
+  expect(mockConnect.mock.calls[0][0]).toEqual({
+    pluginId: 'feishu',
+    credential,
+    accountLabel: 'Cherry (ou_cherry)',
+    authMethod: 'feishu_user',
+    serverName: '飞书',
+  });
+  expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
+  await auth.stop();
+});
+
+it('invalidates pending user authorization synchronously when disconnect is requested', async () => {
+  const auth = new FeishuAuthorizationRuntime(async () => undefined);
+  const signal = auth.attemptSignal;
+  const disconnect = createModule({ invalidateServer: jest.fn() }, auth).disconnect('feishu');
+  expect(signal.aborted).toBe(true);
+  await disconnect;
+  await auth.stop();
 });
 
 it('validates credentials upstream before storing anything', async () => {

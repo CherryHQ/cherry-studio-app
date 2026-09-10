@@ -30,10 +30,38 @@ export class PluginError extends Error {
   }
 }
 
+/** Route-local projection only. Device codes, client secrets and tokens never cross this boundary. */
+export type PluginAuthorizationState =
+  | { status: 'idle' | 'application-ready' }
+  | {
+      status: 'waiting';
+      attemptId: string;
+      stage: 'registration' | 'user';
+      verificationUrl: string;
+      userCode: string;
+      expiresAt: number;
+      nextPollAt: number;
+    }
+  | { status: 'expired' | 'denied' | 'unsupported-account'; attemptId: string }
+  | { status: 'ready'; attemptId: string };
+
 export interface PluginsModule {
   connect(
     input: z.infer<typeof ConnectPluginSchema>,
     signal?: AbortSignal,
   ): Promise<PluginConnection>;
   disconnect(pluginId: PluginId): Promise<void>;
+  authorization: {
+    getState(pluginId: PluginId): Promise<PluginAuthorizationState>;
+    begin(pluginId: PluginId): Promise<PluginAuthorizationState>;
+    /** Cancelling observation prevents queued polls; it does not discard already issued credentials. */
+    poll(
+      pluginId: PluginId,
+      attemptId: string,
+      observationSignal?: AbortSignal,
+    ): Promise<PluginAuthorizationState>;
+    complete(pluginId: PluginId, attemptId: string): Promise<PluginConnection>;
+    cancel(pluginId: PluginId): Promise<PluginAuthorizationState>;
+    resetApplication(pluginId: PluginId): Promise<PluginAuthorizationState>;
+  };
 }

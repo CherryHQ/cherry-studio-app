@@ -5,7 +5,12 @@ import { fetch as expoFetch } from 'expo/fetch';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
-import { createBuiltInMcpClient, isBuiltInMcpToolAllowed } from '@/backend/services/builtInMcp';
+import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
+import {
+  createBuiltInMcpClient,
+  FeishuAuthorizationRuntime,
+  isBuiltInMcpToolAllowed,
+} from '@/backend/services/builtInMcp';
 import type {
   McpConnectionConfig,
   McpModule,
@@ -135,9 +140,15 @@ async function listAllTools(
 function createMcpClient(
   config: McpRuntimeConnectionConfig,
   signal: AbortSignal,
+  feishuAuthorization: FeishuAuthorizationRuntime,
 ): Promise<MCPClient> {
   if (config.origin === 'builtin') {
-    return createBuiltInMcpClient(config.builtinId, config.authorizationId, signal);
+    return createBuiltInMcpClient(
+      config.builtinId,
+      config.authorizationId,
+      signal,
+      feishuAuthorization.getUserToken,
+    );
   }
   const headers = normalizeMcpHeaders(config.headers);
   return createMCPClient({
@@ -183,6 +194,9 @@ function isMcpToolCallingClient(client: MCPClient): client is McpToolCallingClie
 @ServicePhase(Phase.PostReady)
 @DependsOn(['TraceStorageService'])
 export class McpRuntimeService extends BaseService implements McpModule {
+  readonly feishuAuthorization = new FeishuAuthorizationRuntime(() =>
+    pluginAuthorizationService.getCurrentCredential('feishu'),
+  );
   private nextGeneration = 0;
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
@@ -289,12 +303,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * Drop every server's runtime. Without it the pooled clients stay open
    * against a service nothing will read again.
    */
-  protected onStop(): void {
+  protected async onStop(): Promise<void> {
     for (const state of [...this.runtimeStates.values()]) {
       this.retireState(state);
     }
 
     this.runtimeSnapshots.clear();
+    await this.feishuAuthorization.stop();
   }
 
   /** Drop one server's runtime after transport change, disable, or delete. */
@@ -401,7 +416,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.server.id': state.serverId,
       'mcp.connection.generation': generation,
     });
-    const initPromise: Promise<MCPClient> = createMcpClient(state.connectionConfig, signal)
+    const initPromise: Promise<MCPClient> = createMcpClient(
+      state.connectionConfig,
+      signal,
+      this.feishuAuthorization,
+    )
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
           this.closeQuietly(client);
@@ -440,7 +459,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     });
     let client: MCPClient | undefined;
     try {
-      client = await createMcpClient(config, bound.signal);
+      client = await createMcpClient(config, bound.signal, this.feishuAuthorization);
       trace?.end('ok');
       return await operation(client);
     } catch (error) {

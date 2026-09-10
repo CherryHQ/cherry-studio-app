@@ -95,6 +95,56 @@ afterEach(() => jest.restoreAllMocks());
 
 const feishuCredential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'private-app-secret' });
 
+it('rotates user tokens behind a stable grant reference without rejecting the grant or using TAT', async () => {
+  const credential = 'feishu-user:00000000-0000-4000-8000-000000000001';
+  mockGetGrant.mockResolvedValue({ credential, authMethod: 'feishu_user' });
+  const getUserToken = jest.fn(async () => 'user-token-first');
+  const client = await createBuiltInMcpClient(
+    'feishu',
+    'user-grant',
+    new AbortController().signal,
+    getUserToken,
+  );
+  try {
+    getUserToken.mockResolvedValue('user-token-rotated');
+    mockFetch.mockClear();
+    await client.listTools();
+    expect(mockTokenRequest).not.toHaveBeenCalled();
+    expect(mockFetch).toHaveBeenCalled();
+    for (const [, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+      const headers = new Headers(init.headers);
+      expect(headers.get('X-Lark-MCP-UAT')).toBe('user-token-rotated');
+      expect(headers.has('X-Lark-MCP-TAT')).toBe(false);
+    }
+    const tools = await client.tools();
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.body && JSON.parse(init.body).method === 'tools/call')
+        return new Response(null, { status: 401 });
+      return respond(url, init);
+    });
+    await expect(
+      tools['create-doc'].execute({}, { toolCallId: 'write', messages: [] }),
+    ).rejects.toMatchObject({ reason: 'authorization' });
+    expect(toolRequests()).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+});
+
+it('does not send a user token if its durable authorization is revoked during refresh', async () => {
+  mockGetGrant.mockResolvedValue({
+    credential: 'feishu-user:00000000-0000-4000-8000-000000000001',
+    authMethod: 'feishu_user',
+  });
+  await expect(
+    createBuiltInMcpClient('feishu', 'user-grant', new AbortController().signal, async () => {
+      mockGetGrant.mockRejectedValue(new Error('revoked'));
+      return 'user-token';
+    }),
+  ).rejects.toMatchObject({ reason: 'authorization' });
+  expect(mockFetch).not.toHaveBeenCalled();
+});
+
 it('connects Feishu as the application without storing credentials in MCP configuration or calling business tools', async () => {
   await expect(validatePluginCredential('feishu', feishuCredential)).resolves.toBe('cli_cherry');
   expect(toolRequests()).toEqual([]);

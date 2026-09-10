@@ -38,6 +38,12 @@ export const FEISHU_CREDENTIAL_FIELDS = [
 
 const FeishuAppCredentialsSchema = createPluginCredentialsSchema(FEISHU_CREDENTIAL_FIELDS);
 
+export const FEISHU_USER_CREDENTIAL_PREFIX = 'feishu-user:';
+
+export function isFeishuUserCredential(credential: string) {
+  return credential.startsWith(FEISHU_USER_CREDENTIAL_PREFIX);
+}
+
 const feishuHttp = createHttpClient({
   baseUrl: 'https://open.feishu.cn',
   timeoutMs: 15_000,

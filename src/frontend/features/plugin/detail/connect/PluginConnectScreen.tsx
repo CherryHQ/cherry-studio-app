@@ -16,6 +16,7 @@ import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials'
 import { getPluginText } from '../../pluginCatalog';
 import { usePluginCatalog } from '../../usePluginCatalog';
 import { useRefreshPluginConnections } from '../../usePluginConnections';
+import { FeishuConnect } from './FeishuConnect';
 
 export function PluginConnectScreen() {
   const { pluginId } = useLocalSearchParams<{ pluginId: string }>();
@@ -37,6 +38,24 @@ export function PluginConnectScreen() {
 }
 
 function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
+  const [useCredentials, setUseCredentials] = useState(false);
+  if (entry.interactiveAuthorization === 'feishu-device' && !useCredentials)
+    return <FeishuConnect entry={entry} onUseCredentials={() => setUseCredentials(true)} />;
+  return (
+    <CredentialConnect
+      entry={entry}
+      onUseBrowser={entry.interactiveAuthorization ? () => setUseCredentials(false) : undefined}
+    />
+  );
+}
+
+function CredentialConnect({
+  entry,
+  onUseBrowser,
+}: {
+  entry: PluginCatalogEntry;
+  onUseBrowser?: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const plugins = useBackendModule('plugins');
@@ -94,7 +113,9 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
         testID="plugin-connect"
       >
         <Text className="text-base text-muted-foreground">
-          {getPluginText(entry.setup, i18n.language)}
+          {onUseBrowser
+            ? t('plugins.feishu.manualSetup')
+            : getPluginText(entry.setup, i18n.language)}
         </Text>
         <View className="gap-4">
           {entry.credentialFields.map((field) => {
@@ -156,6 +177,11 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
         >
           {t('plugins.authorize')}
         </Button>
+        {onUseBrowser ? (
+          <Button variant="link" disabled={isConnecting} onPress={onUseBrowser}>
+            {t('plugins.feishu.useBrowser')}
+          </Button>
+        ) : null}
       </KeyboardAwareScrollView>
     </>
   );

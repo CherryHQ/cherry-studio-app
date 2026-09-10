@@ -3,6 +3,10 @@
 > Reviewed 2026-09-10 against official documentation and source. Implementation in this change:
 > Feishu application-identity cloud MCP and a single extensible bundled plugin registry. No authenticated service calls, builds, tests or device
 > acceptance were run. GitHub and Amap were already implemented.
+>
+> Follow-up: browser registration, user device authorization and token renewal are now implemented.
+> The earlier assessment below is historical; see [Feishu Browser Authorization](./built-in-mcp-design.md#feishu-browser-authorization)
+> for current behavior and the still-pending live-account/device acceptance.
 
 ## Selection
 

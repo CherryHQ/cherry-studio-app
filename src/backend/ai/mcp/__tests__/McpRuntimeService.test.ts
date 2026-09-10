@@ -10,6 +10,9 @@ import { createTraceRecorder } from '../../observability/__tests__/_traceRecorde
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('@/backend/services/builtInMcp', () => ({
+  FeishuAuthorizationRuntime: jest.requireActual(
+    '@/backend/services/builtInMcp/FeishuAuthorizationRuntime',
+  ).FeishuAuthorizationRuntime,
   isBuiltInMcpToolAllowed: jest.requireActual(
     '@/backend/services/builtInMcp/createBuiltInMcpClient',
   ).isBuiltInMcpToolAllowed,

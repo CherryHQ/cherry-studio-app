@@ -33,6 +33,7 @@ export type PluginCatalogEntry = {
     readonly privacy: string;
   };
   readonly credentialFields: readonly PluginCredentialField[];
+  readonly interactiveAuthorization?: 'feishu-device';
 };
 
 /** Public connection metadata; credentials remain backend-owned. */

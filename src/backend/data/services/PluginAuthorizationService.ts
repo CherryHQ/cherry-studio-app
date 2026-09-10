@@ -52,6 +52,22 @@ export class PluginAuthorizationService {
     return row.grant;
   }
 
+  /** Backend-only reconciliation, including disabled connections that still own their grant. */
+  async getCurrentCredential(pluginId: PluginId): Promise<string | undefined> {
+    const [row] = await this.db
+      .select({ credential: pluginAuthorizationTable.credential })
+      .from(pluginAuthorizationTable)
+      .innerJoin(mcpServerTable, eq(mcpServerTable.authorizationId, pluginAuthorizationTable.id))
+      .where(
+        and(
+          eq(pluginAuthorizationTable.pluginId, pluginId),
+          eq(mcpServerTable.builtinId, pluginId),
+        ),
+      )
+      .limit(1);
+    return row?.credential;
+  }
+
   async connect(
     input: {
       pluginId: PluginId;

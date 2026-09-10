@@ -1,11 +1,12 @@
 # Built-In MCP Integrations
 
 > Status (2026-09-10): GitHub, Amap and Feishu connect directly to official hosted MCP services.
-> Feishu now supports application identity and six document tools, with application-token renewal.
+> Feishu supports browser-based user authorization and renewal, plus legacy application identity,
+> for six document tools. The user flow is implemented but not accepted on a device or live account.
 > No self-hosting is required. Coverage is based on official documentation/source, not authenticated
 > cloud calls. Regression tests are updated but not executed; cloud flows have no device acceptance.
-> Earlier iOS evidence belongs to the superseded local implementation. Canva, Gmail, Yuque, Feishu
-> user identity, multiple accounts and renewable OAuth remain planned. See
+> Earlier iOS evidence belongs to the superseded local implementation. Canva, Gmail, Yuque,
+> multiple accounts and other providers' renewable OAuth remain planned. See
 > [Plugin Expansion Research](./plugin-expansion-research.md) for current availability and prerequisites.
 
 ## First Delivery: Plugins
@@ -19,13 +20,13 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | --- | --- | --- |
 | GitHub | User-supplied personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
-| Feishu | User-supplied custom application ID/secret; token exchange, initialization and `fetch-doc` discovery, without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
+| Feishu | Browser-confirmed personal-agent registration and user device authorization by default; legacy application ID/secret entry under Advanced. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | `fetch-doc`, `list-docs`, `get-comments`, `create-doc`, `update-doc`, `add-comments` |
 
 ### Official Cloud Coverage
 
 GitHub's hosted endpoint is `https://api.githubcopilot.com/mcp/`, authenticated with a Bearer token.
 Amap's is `https://mcp.amap.com/mcp?key=...`. Feishu's is `https://mcp.feishu.cn/mcp`, authenticated
-with `X-Lark-MCP-TAT`. All use the existing SDK's Streamable HTTP transport.
+with `X-Lark-MCP-UAT` for users or `X-Lark-MCP-TAT` for legacy applications. All use the existing SDK's Streamable HTTP transport.
 The Amap key is injected only when sending a request; the SDK endpoint and saved server identity
 contain no key. Routing is fixed in backend code and redirects cannot forward credentials elsewhere.
 GitHub also receives `X-MCP-Tools` for the admitted subset; Cherry enforces the allowlist locally for
@@ -68,13 +69,11 @@ Sources: [GitHub remote service](https://github.com/github/github-mcp-server/blo
 source evidence, not a bundled dependency or proof of live remote schema parity.
 
 The current `plugin_authorization` table stores the integration, authorization method,
-account label, provider credential (encoded application credentials for Feishu), and timestamps.
-The credential is not encrypted at rest:
-provider API keys and remote MCP headers already live unencrypted in the same sandboxed SQLite
-database, and a plugin-only encryption layer would not raise that baseline while adding a native
-dependency and a second store to keep consistent. No refresh-token or expiry behavior is claimed
-for personal user grants. Feishu stores the user's application ID/secret as `app_credentials` and
-exchanges them for an in-memory application token before expiry; it does not store a refresh token.
+account label, provider credential or secure reference, and timestamps. GitHub/Amap credentials and
+legacy Feishu `app_credentials` remain in local SQLite. Legacy Feishu exchanges application secrets
+for in-memory application tokens before expiry. New Feishu `feishu_user` grants store only an opaque
+`feishu-user:<uuid>` reference in SQLite; application secrets, device codes, user tokens and renewal
+metadata use the already installed Expo SecureStore with device-only, unlocked Keychain access.
 Migration `0024_extensible-plugin-authorizations` removes the old platform/method enumeration while
 preserving existing grants and server identities. Platform registration no longer changes SQL.
 The larger authorization schema below is the target for later OAuth
@@ -87,7 +86,9 @@ requires explicit Agent enablement. Credentials stay out of frontend query cache
 
 Catalog metadata comes from `GET /plugin-catalog`; connection metadata comes from
 `GET /plugin-connections` on the Data API. The
-`PluginsModule` workflow contract owns only connect and disconnect; shared plugin entities live
+`PluginsModule` owns connect/disconnect and interactive authorization state/begin/poll/complete/cancel,
+plus explicit application-setup reset;
+shared plugin entities live
 under `shared/data/types`, and the MCP runtime's connection configuration remains backend-private.
 
 `createBuiltInMcpClient` resolves a registered plugin and checks its stored authorization method.
@@ -97,6 +98,44 @@ transport-level `authProvider`, so a `401` cannot trigger a resend. HTTP errors 
 diagnostics; ambiguous submitted writes tell the caller to check the service before retrying. Input
 validation and result-size limits remain in the existing MCP runtime. GitHub token permissions and
 Amap quota/access restrictions remain upstream authority. No device-location grant is requested.
+
+### Feishu Browser Authorization
+
+`FeishuAuthorizationRuntime` is owned and stopped by `McpRuntimeService`. The frontend observes it
+only while the connection route is focused and the app is active. Each poll is bounded by the
+original server expiry and interval; `slow_down` increases the interval. Route departure does not
+cancel the attempt. Browser close and foreground return trigger a check, not a success/denial guess.
+No Cherry callback is promised: users return manually after each official confirmation.
+
+Registration uses the official `PersonalAgent` flow, then saves the issued application before the
+separate user device grant. Retries reuse that application. An explicit, confirmed recovery action
+can forget unusable setup without dropping a live grant. The official page may retain CLI wording
+and require organization approval; Cherry sends no invented CLI version or third-party brand alias.
+Only domestic Feishu accounts are supported; cross-brand Lark handoff is rejected.
+
+The requested scopes are the union for the existing six tools plus `offline_access`. Task/chat,
+contact, media and board scopes are dependencies of those document tools, not new tool offerings.
+This first slice requires the complete returned scope set; partial/unknown scope grants cannot
+connect. It does not advertise a partially enabled tool catalog. Profile lookup and MCP discovery
+follow authorization, so merely receiving application credentials is not connection success.
+
+One backend queue serializes exchanges, rotation, secure writes and grant commits. Cancellation
+invalidates the attempt before late work can commit. SQLite keeps a stable reference across token
+rotation, retaining the transport's before/after grant checks and write non-replay rule. Secure
+candidate material is saved before SQLite commits. On the next read, DB ownership reconciles an
+interrupted promotion or disconnect; secure storage alone never recreates a connection. A failed
+secure write retains the issued result only in backend memory for a persistence retry. Process death
+before that retry may require authorization again. SecureStore size/access failures never fall back
+to plaintext. Disconnect removes local secrets and bindings, not the application or consent in Feishu;
+users manage upstream revocation in Feishu.
+
+Live iOS/Android login, organization approval, process interruption and actual token renewal still
+need user-authorized acceptance. The public registration mechanism's support for Cherry as a
+third-party mobile client is not established by source inspection alone.
+
+Protocol references: [official registration](https://github.com/larksuite/cli/blob/9aaedb981b036ca94bd8ec9c630adf0ead9b6d1c/internal/auth/app_registration.go),
+[device authorization](https://github.com/larksuite/cli/blob/9aaedb981b036ca94bd8ec9c630adf0ead9b6d1c/internal/auth/device_flow.go),
+[user-token renewal](https://github.com/larksuite/cli/blob/9aaedb981b036ca94bd8ec9c630adf0ead9b6d1c/internal/auth/uat_client.go).
 
 The `development-simulator` EAS profile builds an ARM64 development client: the currently pinned
 Anydoc native dependency provides only an ARM64 simulator slice. It is a simulator `.app` archive,
@@ -109,7 +148,8 @@ GitHub, Amap and Feishu definitions from `plugins/`. Each definition owns:
 
 - A stable `catalog.id`, localized copy, links, optional icon name and credential field descriptors.
   An optional `serverName` preserves the default saved MCP name independently of UI language.
-- A stable `authMethod` identifier and `encodeCredentials` for its opaque stored credential format.
+- A stable `authMethod` identifier, explicitly admitted additional methods, and `encodeCredentials`
+  for its manual credential format. `catalog.interactiveAuthorization` selects a bundled workflow.
 - `createClient`, which receives the grant resolver, cancellation signal and admitted tool policy.
 - Reviewed tool names classified as `read` or `write`, plus a read-only connection validation rule.
 
@@ -117,7 +157,7 @@ The database stores open strings for `pluginId` and `authMethod`. SQL checks onl
 nonempty; it still preserves foreign keys, remote/built-in source constraints and the single
 connection per plugin index. The serialized MCP schema validates identifier syntax rather than
 listing provider names. Runtime availability is a separate decision: only registered definitions
-can create clients or admit tools, and a stored grant must match that definition's auth method.
+can create clients or admit tools, and a stored grant must match one of that definition's auth methods.
 Unknown definitions are retained in storage and shown as unavailable; their connections can be
 disconnected. They cannot execute, even when an old Agent binding still exists. This supports
 forward-compatible records across versions that use the open identifier contract.
@@ -127,8 +167,9 @@ no credential, auth implementation or client factory. The list, detail and conne
 from that projection. Plugin-owned copy carries a required English fallback and optional language
 tags; the frontend selects its active language. Credential fields declare labels, validation errors,
 secret display, maximum length and an optional pattern. `createPluginCredentialsSchema` derives
-strict validation for both the form and backend workflow. There is no per-provider frontend list,
-form branch or global translation-key tree. Unknown icon names use a generic document icon.
+strict validation for both the form and backend workflow. Credential forms remain generic; the
+explicit Feishu interactive branch owns its staged UI and translations. Unknown icon names use a
+generic document icon.
 
 To add another credential-based hosted MCP plugin:
 
@@ -150,9 +191,9 @@ or tool-catalog edits do not justify changing a durable ID.
 
 This is bundled code registration, not downloaded executable plugins. The `createClient` boundary
 can later host an in-process adapter without adding provider switches to storage or screens.
-Interactive OAuth and multiple accounts remain future features: browser/callback sessions and
-atomic token renewal need their own shared workflow contracts when implemented. Those are actual
-new lifecycle/storage requirements, not reasons to reintroduce platform-name SQL constraints.
+Feishu device authorization uses the interactive workflow contract above. Other OAuth providers and
+multiple accounts remain future features; their browser/callback and storage requirements do not
+justify reintroducing platform-name SQL constraints.
 
 Migration `0024_extensible-plugin-authorizations` is a one-time compatibility step for databases
 that already contain the old checks. Its rebuild preserves grants, server identities, disabled tools
@@ -194,7 +235,7 @@ marketplace are outside this follow-up's initial scope.
 Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, chooses
 which Agent may use it, and then uses its tools through ordinary conversation. The application owns
 authorization and tool orchestration on the device; official MCP services execute their business
-tools remotely. Credential renewal belongs to future OAuth slices. No
+tools remotely. Feishu user grants renew on demand; other OAuth providers remain later slices. No
 Cherry-operated authorization proxy, command-line program, local HTTP listener, or desktop process
 is required by this design.
 
@@ -213,7 +254,7 @@ The initial scope is:
 | International | `gmail` | Search/read threads; create drafts; modify labels | Planned official hosted MCP after Developer Preview access and mobile OAuth setup. Sending drafts is not in the current official MCP catalog. [Official setup](https://developers.google.com/workspace/gmail/api/guides/configure-mcp-server) |
 | China | `amap` | Search places; search nearby; geocode; plan a route; weather forecasts | Official hosted MCP with a user-supplied Web Service key. [Getting started](https://lbs.amap.com/api/mcp-server/gettingstarted) |
 | China | `yuque` | Search/read documents; list knowledge books; create/update documents | Local functions and OpenAPI with a user-supplied personal or space token. [Official API client](https://github.com/yuque/yuque-open-cli/blob/main/README.zh-CN.md) |
-| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with user-supplied application credentials. User authorization and curated OpenAPI functions remain later slices. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
+| China | `feishu` | Current: read/create/update documents, browse knowledge-space nodes and read/add comments. Planned: personal search, Base records, calendars and tasks | Official developer MCP with browser user authorization or legacy application credentials. Live user-flow acceptance and curated OpenAPI functions remain pending. [Official developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server) |
 
 Future local integrations may use Cherry-owned names such as `read_document`;
 remote integrations preserve official names. Full API coverage, local file
@@ -246,11 +287,13 @@ dependency for credential storage.
 flowchart TD
   Registry["Bundled PluginDefinition registry"] --> Catalog["GET /plugin-catalog: public metadata"]
   Catalog --> Settings["Plugins: catalog and connected accounts"]
-  Registry --> Workflow["PluginsModule: connect and disconnect"]
+  Registry --> Workflow["PluginsModule: connection and authorization workflow"]
   Settings --> Workflow
   Registry --> Client["Grant-bound official cloud client"]
   Workflow --> Auth["PluginAuthorizationService"]
-  Auth --> AuthTable["plugin_authorization: metadata and credentials"]
+  Auth --> AuthTable["plugin_authorization: metadata and credentials or secure references"]
+  Workflow --> UserAuth["FeishuAuthorizationRuntime: device flow and renewal"]
+  UserAuth --> Secure["Device-only SecureStore"]
   Workflow --> Server["mcp_server: connected integration instance"]
   Server --> Binding["agent_tool_binding: Agent access"]
   Binding --> Host["MobileAgentHost: frozen tool catalog"]
@@ -262,7 +305,7 @@ flowchart TD
   Client --> Remote["SDK Streamable HTTP over expo/fetch"]
   Remote --> GitHub["Official GitHub MCP"]
   Remote --> Amap["Official Amap MCP"]
-  Remote --> Feishu["Official Feishu MCP: application identity"]
+  Remote --> Feishu["Official Feishu MCP: user or application identity"]
 ```
 
 There are three durable facts with different owners:
