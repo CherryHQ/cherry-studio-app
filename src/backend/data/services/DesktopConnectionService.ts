@@ -124,6 +124,16 @@ function getProviderImportUnavailableReason(
     : undefined;
 }
 
+function getEnabledDesktopProviders(snapshot: DesktopProvidersSnapshot) {
+  // Preserve support for version 1 snapshots that omit explicit enabled flags.
+  return snapshot.providers
+    .filter((provider) => provider.isEnabled !== false)
+    .map((provider) => ({
+      ...provider,
+      models: provider.models.filter((model) => model.isEnabled !== false),
+    }));
+}
+
 function mapProvider(provider: DesktopProviderSnapshot): Omit<InsertUserProviderRow, 'orderKey'> {
   const seenKeyIds = new Set<string>();
   const seenKeyValues = new Set<string>();
@@ -291,10 +301,10 @@ export class DesktopConnectionService {
     const existingProviders = new Set(providerRows.map((row) => row.id));
     const existingModels = new Set(modelRows.map((row) => row.id));
     return {
-      providers: snapshot.providers.map((provider) => {
+      providers: getEnabledDesktopProviders(snapshot).map((provider) => {
         const unavailableReason = getProviderImportUnavailableReason(provider);
         return {
-          action: existingProviders.has(provider.id) ? 'skip' : 'add',
+          action: existingProviders.has(provider.id) ? 'update' : 'add',
           id: provider.id,
           models: provider.models.map((model) => ({
             action: existingModels.has(createUniqueModelId(provider.id, model.modelId))
@@ -321,7 +331,9 @@ export class DesktopConnectionService {
     if (selectedModes.size !== selections.length) {
       throw desktopError('invalid-selection', 'A provider can only be selected once');
     }
-    const providersById = new Map(snapshot.providers.map((provider) => [provider.id, provider]));
+    const providersById = new Map(
+      getEnabledDesktopProviders(snapshot).map((provider) => [provider.id, provider]),
+    );
     for (const providerId of selectedModes.keys()) {
       const provider = providersById.get(providerId);
       if (!provider) {
@@ -341,7 +353,7 @@ export class DesktopConnectionService {
         modelsAdded: 0,
         modelsSkipped: 0,
         providersAdded: 0,
-        providersSkipped: 0,
+        providersUpdated: 0,
       };
       for (const [providerId, mode] of selectedModes) {
         signal.throwIfAborted();
@@ -351,14 +363,22 @@ export class DesktopConnectionService {
           .from(userProviderTable)
           .where(eq(userProviderTable.providerId, providerId))
           .limit(1);
-        // Never map or write the incoming configuration of an existing provider.
-        const configuration = existingProvider ?? mapProvider(provider);
+        const configuration = mapProvider(provider);
+        if (!configuration.presetProviderId) {
+          // Retained mobile models may still use endpoints absent from the PC.
+          configuration.endpointConfigs = {
+            ...existingProvider?.endpointConfigs,
+            ...configuration.endpointConfigs,
+          };
+          assertCustomProviderEndpointConfiguration(configuration);
+        }
         if (existingProvider) {
-          result.providersSkipped += 1;
+          await tx
+            .update(userProviderTable)
+            .set(configuration)
+            .where(eq(userProviderTable.providerId, providerId));
+          result.providersUpdated += 1;
         } else {
-          if (!configuration.presetProviderId) {
-            assertCustomProviderEndpointConfiguration(configuration);
-          }
           await insertWithOrderKey(tx, userProviderTable, configuration, {
             pkColumn: userProviderTable.providerId,
           });

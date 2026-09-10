@@ -6,7 +6,7 @@ import type {
 } from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
-/** One-way, incremental import. Existing provider configuration and models are never changed. */
+/** Sync enabled PC provider configuration; add missing enabled models and preserve existing models. */
 export interface DesktopConnectionsModule {
   pair(input: PairDesktopConnectionDto, signal: AbortSignal): Promise<DesktopConnection>;
   remove(id: string, signal: AbortSignal): Promise<void>;
