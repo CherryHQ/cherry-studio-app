@@ -1,4 +1,5 @@
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { Ref } from 'react';
+import type { StyleProp, TextInput, ViewStyle } from 'react-native';
 
 export type SearchFieldProps = {
   accessibilityLabel: string;
@@ -11,6 +12,7 @@ export type SearchFieldProps = {
   onFocus?: () => void;
   onSubmitEditing?: () => void;
   placeholder?: string;
+  ref?: Ref<TextInput>;
   style?: StyleProp<ViewStyle>;
   testID?: string;
   value: string;

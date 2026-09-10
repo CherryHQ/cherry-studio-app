@@ -61,6 +61,7 @@ function MorphMenuRoot({
   children,
   style,
   testID,
+  triggerRef: providedTriggerRef,
   triggerSize = defaultTriggerSize,
   width,
 }: MorphMenuProps) {
@@ -71,7 +72,8 @@ function MorphMenuRoot({
     width ?? Math.round(windowWidth * defaultPanelWidthRatio),
     maxPanelWidth,
   );
-  const triggerRef = useRef<View>(null);
+  const fallbackTriggerRef = useRef<View>(null);
+  const triggerRef = providedTriggerRef ?? fallbackTriggerRef;
   const { anchor, close, finishClose, isOpen, open } = useMenuState(triggerRef);
   const { progress, isVisible } = useMenuMotion(isOpen);
   const cornerRadius = useMenuPanelRadius();

@@ -37,6 +37,27 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips explicit plugin selections for initial and subsequent messages', () => {
+    const input = {
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Find the document.' }],
+      pluginServerIds: ['00000000-0000-4000-8000-000000000001'],
+    };
+    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({ ...input, pluginServerIds: ['github'] }).success,
+    ).toBe(false);
+    expect(
+      AgentStartSessionInputSchema.safeParse({ ...initial, pluginServerIds: ['github'] }).success,
+    ).toBe(false);
+    expect(
+      AgentSubmitMessageInputSchema.parse({ ...input, pluginServerIds: [] }).pluginServerIds,
+    ).toEqual([]);
+  });
   test('round-trips bounded input previews separately from tool execution input', () => {
     const preview = { name: 'page.html', text: '<html>', truncated: false };
     const delta = { op: 'tool.input.preview', partId: 'tool-1', preview };

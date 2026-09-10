@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ReactNode, RefObject } from 'react';
+import type { StyleProp, View, ViewStyle } from 'react-native';
 
 export type MorphMenuProps = {
   /** `Composer.Menu.Item`s. They lay out at full size from the first frame — the closed button is a clip window over them, not a smaller version of them. */
@@ -14,6 +14,8 @@ export type MorphMenuProps = {
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
   triggerSize?: number;
+  /** The native trigger, for restoring focus after a composed picker closes. */
+  triggerRef?: RefObject<View | null>;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };

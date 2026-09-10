@@ -3,7 +3,7 @@ import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
 import { Composer } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
-import { type PropsWithChildren, useCallback } from 'react';
+import { type PropsWithChildren, type RefObject, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -44,9 +44,15 @@ const logger = loggerService.withContext('ComposerMenu');
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
   onPickFiles?: () => void;
+  triggerRef?: RefObject<View | null>;
 }>;
 
-export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerMenuProps) {
+export function ComposerMenu({
+  children,
+  media = 'all',
+  onPickFiles,
+  triggerRef,
+}: ComposerMenuProps) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
@@ -117,7 +123,11 @@ export function ComposerMenu({ children, media = 'all', onPickFiles }: ComposerM
   }, []);
 
   return (
-    <Composer.Menu accessibilityLabel={t('chat.media.attach')} testID="composer-menu">
+    <Composer.Menu
+      accessibilityLabel={t('chat.media.attach')}
+      testID="composer-menu"
+      triggerRef={triggerRef}
+    >
       <Composer.Menu.Item
         icon={<CameraIcon className="size-5 text-foreground" />}
         label={t('chat.media.camera')}

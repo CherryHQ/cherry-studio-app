@@ -13,10 +13,18 @@
 
 ## Plugins
 
-The product entry is **Plugins** in the chat drawer. Each plugin has a detail page, capability and
-privacy information, and an explicit **Add** action before authorization. Connecting does not
-enable every Agent: the user selects an Agent to enable the plugin and start a conversation.
-Remote MCP servers remain in Settings; connected plugins also participate in Agent tool settings.
+The chat drawer's **Plugins** page manages connected accounts and authorization. To use a plugin,
+choose **+ > Plugins** in the composer. The add menu closes before a searchable popover appears
+above the input, keeping the keyboard and draft available. Selecting a connected plugin inserts a
+named reference at the editor's current selection; an unconnected plugin opens authorization.
+There is no `@` trigger. Removing the reference cancels that message's selection. A successful send
+clears the references with the draft; a failed send restores them with the text.
+
+The composer extracts `pluginServerIds` from its internal references and sends readable names in
+the text. The Host validates the connection identities and freezes only explicitly selected
+plugins into that turn's tool catalog. Connecting an account and legacy Agent bindings never
+activate a plugin. Remote MCP servers retain their existing Agent binding policy and settings.
+Plugin references and popover interactions still require device acceptance on both platforms.
 
 | Integration | Implemented authorization | Implemented tools |
 | --- | --- | --- |
@@ -41,7 +49,7 @@ admitted.
 | GitHub profile, repository search, file reads, PR listing | `get_me`, `search_repositories`, `get_file_contents`, `list_pull_requests` | Upstream schemas and result shapes |
 | GitHub issue/PR search | `search_issues`, `search_pull_requests` | Separate tools |
 | GitHub issue/PR detail | `issue_read`, `pull_request_read` | Upstream `method` selects the read operation |
-| GitHub issue creation | `issue_write` | Supports creation and updates; requires renewed Agent consent |
+| GitHub issue creation | `issue_write` | Supports creation and updates; follows explicit message selection and tool approval |
 | GitHub comments and PR creation | `add_issue_comment`, `create_pull_request` | Existing-branch PR workflow retained |
 | Amap place and nearby search | `maps_text_search`, `maps_around_search` | Former pagination inputs are not guaranteed |
 | Amap address/coordinate conversion | `maps_geo`, `maps_regeocode` | Upstream schemas and result shapes |
@@ -56,8 +64,8 @@ tool is unavailable, not an invitation to fall back to the deleted local impleme
 
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings while retaining
 credentials, server UUIDs, old per-tool selections, approval settings, disabled tools and history.
-Users review and re-enable access; old per-tool identities are not retargeted automatically. Custom
-MCP servers are unchanged. The plugin detail page explains the cloud destination and re-enable step.
+Old per-tool identities are not retargeted automatically. Custom MCP servers are unchanged. The
+plugin detail page explains the cloud destination; users select plugins explicitly in each message.
 
 The merged sequence preserves v0.2's `0020_desktop-connection`, followed by
 `0021_plugin-authorizations`. Migration `0023_reconcile-desktop-connection` also creates the desktop
@@ -103,7 +111,7 @@ There is no legacy credential import, startup migration, orphan scan or persiste
 `PluginAuthorizationService` commits each grant and its MCP reference together. Updating
 authorization preserves the server UUID but allocates a new grant identity; disconnecting disables
 existing Agent bindings, deletes the server and grant, and invalidates active calls. Reconnecting
-after disconnect requires explicit Agent enablement. Credentials stay out of frontend query caches
+after disconnect requires a new composer selection. Credentials stay out of frontend query caches
 and tool arguments.
 
 Catalog metadata comes from `GET /plugin-catalog`; connection metadata comes from
@@ -278,8 +286,8 @@ can later host an in-process adapter without adding provider switches to storage
 
 ## Scope
 
-Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, chooses
-which Agent may use it, and then uses its tools through ordinary conversation. The application owns
+Cherry Mobile plans six integrations in its Plugins directory. A user connects an account, selects
+the plugin for a message, and then uses its tools through ordinary conversation. The application owns
 authorization and tool orchestration on the device; official MCP services execute their business
 tools remotely. Expiring GitHub and Feishu user grants renew on demand; other OAuth providers remain
 later slices. No Cherry-operated authorization proxy, command-line program, local HTTP listener,
@@ -328,8 +336,9 @@ flowchart TD
   UserAuth --> Secrets["PluginCredentialStore: native credentials and application"]
   Secrets --> AuthTable
   Workflow --> Server["mcp_server: connected integration instance"]
-  Server --> Binding["agent_tool_binding: Agent access"]
-  Binding --> Host["MobileAgentHost: frozen tool catalog"]
+  Catalog --> Picker["Composer + > Plugins: explicit message selection"]
+  Server --> Picker
+  Picker --> Host["MobileAgentHost: frozen tool catalog"]
   Host --> Pi["Pi: search, describe and call tools"]
   Pi --> Approval["Existing approval and execution boundary"]
   Approval --> MCP["McpRuntimeService"]
@@ -348,14 +357,15 @@ There are three durable facts with different owners:
    code and are not copied into a database catalog.
 2. An authorization records a particular account/grant and its credentials. It does not enable
    tools or assign them to Agents.
-3. An MCP server instance connects a definition to an authorization. Existing Agent bindings decide
-   which of that instance's tools may enter a turn.
+3. An MCP server instance connects a definition to an authorization. The selected message's
+   `pluginServerIds` decide which connected plugins may enter a turn; these are not Agent bindings.
 
-Connecting an account and enabling an integration for an Agent are separate actions. Settings may
-offer them together, but connecting never silently grants every Agent access.
+Connecting an account and selecting an integration for a message are separate actions. The Host
+ignores legacy Agent plugin bindings and accepts plugin selections only for enabled built-in
+connections. Supplying a remote server as a plugin never bypasses its Agent binding policy.
 
 Every plugin tool keeps the existing identity `{ source: 'mcp', serverId, rawToolName }`, so it
-inherits current aliasing, discovery, binding, approval, audit and history behavior. The `builtin`
+inherits current aliasing, discovery, approval, audit and history behavior. The `builtin`
 ToolRef variant remains reserved for the device/system capability catalog. The Host freezes the
 tool snapshot with its callback per turn; execution rechecks the grant before touching the
 platform. Changing accounts, reconnecting a different grant, disconnecting, or reducing permissions

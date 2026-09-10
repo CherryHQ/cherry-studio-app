@@ -17,6 +17,7 @@ import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
+import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -64,6 +65,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     super();
     this.runtimeTools = createAgentRuntimeToolResolver({
       bindings: agentToolBindingService,
+      servers: mcpServerService,
       getMcpRuntime: () => mcpRuntime,
     });
   }

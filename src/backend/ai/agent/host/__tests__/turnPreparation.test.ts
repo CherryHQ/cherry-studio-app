@@ -269,7 +269,7 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID);
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, undefined);
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -346,6 +346,37 @@ describe('turn preparation', () => {
     // The Agent runs in auto mode, but a consent-bearing ask must survive it.
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
+
+  test.each(['existing', 'initial'] as const)(
+    '%s messages freeze only their selected plugins into the tool snapshot',
+    async (kind) => {
+      const harness = createHarness();
+      const serverId = '00000000-0000-4000-8000-000000000001';
+      harness.getSystemTools.mockResolvedValue([]);
+      harness.dependencies.runtimeTools.resolve = async (_agentId, pluginServerIds) =>
+        pluginServerIds?.includes(serverId) ? [harness.configuredTool] : [];
+      const prepare = (input: AgentSubmitMessageInput) =>
+        kind === 'initial'
+          ? prepareInitialTurn(
+              harness.dependencies,
+              {
+                ...input,
+                agentId: AGENT_ID,
+                executionTarget: { kind: 'local' },
+              },
+              new AbortController().signal,
+            )
+          : prepareTurn(harness.dependencies, input, new AbortController().signal);
+
+      const selected = await prepare({ ...textInput(), pluginServerIds: [serverId] });
+      const unselected = await prepare(textInput());
+      expect(selected.tools).toEqual([harness.configuredTool]);
+      expect(selected.inferenceSnapshot.tools).toHaveLength(1);
+      expect(unselected.tools).toEqual([]);
+      expect(unselected.inferenceSnapshot.tools).toEqual([]);
+      expect(selected.agent).toEqual(AGENT);
+    },
+  );
 
   test('stops at session admission when the session does not exist', async () => {
     const harness = createHarness();

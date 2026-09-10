@@ -80,21 +80,26 @@ export function buildAgentMcpServerOptions(input: {
     ...draftBindings.keys(),
   ]);
 
-  return orderedServerIds.map((serverId) => {
-    const binding = draftBindings.get(serverId);
-    const originalBinding = originalBindings.get(serverId);
-    const server = serversById.get(serverId);
+  return orderedServerIds
+    .filter((id) => serversById.get(id)?.origin !== 'builtin')
+    .map((serverId) => {
+      const binding = draftBindings.get(serverId);
+      const originalBinding = originalBindings.get(serverId);
+      const server = serversById.get(serverId);
 
-    return {
-      binding,
-      displayName:
-        server?.name ?? binding?.displayNameSnapshot ?? originalBinding?.displayNameSnapshot ?? '',
-      originalBinding,
-      server,
-      serverId,
-      status: getAgentMcpServerOptionStatus(binding, server),
-    };
-  });
+      return {
+        binding,
+        displayName:
+          server?.name ??
+          binding?.displayNameSnapshot ??
+          originalBinding?.displayNameSnapshot ??
+          '',
+        originalBinding,
+        server,
+        serverId,
+        status: getAgentMcpServerOptionStatus(binding, server),
+      };
+    });
 }
 
 export function setAgentMcpServerEnabled(
@@ -165,8 +170,8 @@ export function getAgentMcpToolBindingStatus(input: {
 }
 
 export function isRunnableMcpServer(server: Pick<McpServer, 'endpointUrl' | 'origin'>): boolean {
-  // Built-in plugins execute locally; remote servers require an HTTP transport.
-  return server.origin === 'builtin' || /^https?:\/\//i.test(server.endpointUrl ?? '');
+  // Plugins are selected from the composer, outside Agent MCP settings.
+  return server.origin !== 'builtin' && /^https?:\/\//i.test(server.endpointUrl ?? '');
 }
 
 function getAgentMcpServerOptionStatus(

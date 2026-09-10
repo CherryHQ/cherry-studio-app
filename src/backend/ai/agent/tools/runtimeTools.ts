@@ -1,5 +1,6 @@
 import type { McpExecutableToolDescriptor, McpRuntimeToolSelection } from '@/backend/ai/mcp';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 import { clampMcpToolApproval } from '@/shared/utils/agentToolApproval';
 
 import type { RuntimeTool } from '../runtime';
@@ -18,34 +19,55 @@ type McpRuntimeToolCapability = {
 };
 
 export type AgentRuntimeToolResolver = {
-  resolve(agentId: string): Promise<RuntimeTool[]>;
+  resolve(agentId: string, pluginServerIds?: readonly string[]): Promise<RuntimeTool[]>;
 };
 
 /**
- * Resolve the current persisted MCP policy into one immutable Runtime catalog.
+ * Combine remote MCP policy with explicitly selected plugins for this message.
+ * Legacy Agent bindings never enable plugins; selecting a plugin does not write Agent policy.
  * Discovery failures remove that server from this turn without changing its bindings.
  */
 export function createAgentRuntimeToolResolver(input: {
   bindings: AgentToolBindingResolver;
+  servers: { getById(id: string): Promise<McpServer> };
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    async resolve(agentId) {
+    async resolve(agentId, pluginServerIds = []) {
       const { items } = await input.bindings.list(agentId);
-      const serverIds = [
-        ...new Set(
-          items.flatMap((binding) =>
-            binding.source === 'mcp' && binding.enabled ? [binding.serverId] : [],
-          ),
+      const boundServerIds = new Set(
+        items.flatMap((binding) =>
+          binding.source === 'mcp' && binding.enabled ? [binding.serverId] : [],
         ),
-      ];
-      if (serverIds.length === 0) {
+      );
+      const selectedPluginIds = new Set(pluginServerIds);
+      const candidates = await Promise.all(
+        [...new Set([...boundServerIds, ...selectedPluginIds])].map(async (id) => {
+          try {
+            return await input.servers.getById(id);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const servers = candidates.filter(
+        (server): server is McpServer =>
+          server !== null &&
+          server.isEnabled &&
+          (server.origin === 'builtin'
+            ? selectedPluginIds.has(server.id)
+            : boundServerIds.has(server.id)),
+      );
+      if (servers.length === 0) {
         return [];
       }
+      const pluginIds = new Set(
+        servers.filter((server) => server.origin === 'builtin').map((server) => server.id),
+      );
 
       const mcpRuntime = input.getMcpRuntime();
       const catalogs = await Promise.all(
-        serverIds.map(async (serverId) => {
+        servers.map(async ({ id: serverId }) => {
           try {
             return await mcpRuntime.listExecutableToolDescriptors(serverId);
           } catch {
@@ -59,11 +81,13 @@ export function createAgentRuntimeToolResolver(input: {
       const resolutions = await Promise.all(
         descriptors.map(async (descriptor) => ({
           descriptor,
-          resolved: await input.bindings.resolveMcpTool(agentId, {
-            isToolAvailable: true,
-            rawToolName: descriptor.rawToolName,
-            serverId: descriptor.serverId,
-          }),
+          resolved: pluginIds.has(descriptor.serverId)
+            ? { approval: 'ask' as const, enabled: true }
+            : await input.bindings.resolveMcpTool(agentId, {
+                isToolAvailable: true,
+                rawToolName: descriptor.rawToolName,
+                serverId: descriptor.serverId,
+              }),
         })),
       );
       const selections: McpRuntimeToolSelection[] = resolutions.flatMap(
