@@ -41,3 +41,21 @@ ALTER TABLE `__new_mcp_server` RENAME TO `mcp_server`;
 CREATE INDEX `mcp_server_is_active_idx` ON `mcp_server` (`is_active`);
 --> statement-breakpoint
 CREATE UNIQUE INDEX `mcp_server_builtin_idx` ON `mcp_server` (`builtin_id`);
+--> statement-breakpoint
+-- Historical formats only. New authorization methods own their JSON object schema in code.
+UPDATE `plugin_authorization`
+SET `credential` = CASE
+  WHEN `plugin_id` = 'github' AND `auth_method` = 'personal_token'
+    THEN json_object('version', 1, 'token', `credential`)
+  WHEN `plugin_id` = 'amap' AND `auth_method` = 'api_key'
+    THEN json_object('version', 1, 'key', `credential`)
+  WHEN `plugin_id` = 'feishu' AND `auth_method` = 'feishu_user'
+    THEN json_object('legacyReference', `credential`)
+  WHEN `plugin_id` = 'feishu' AND `auth_method` = 'app_credentials' AND json_valid(`credential`)
+    THEN json_set(`credential`, '$.version', 1)
+  WHEN json_valid(`credential`) THEN CASE
+    WHEN json_type(`credential`) = 'object' THEN `credential`
+    ELSE json_object('legacyValue', `credential`)
+  END
+  ELSE json_object('legacyValue', `credential`)
+END;

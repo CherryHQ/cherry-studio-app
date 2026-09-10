@@ -1,5 +1,9 @@
+import * as SecureStore from 'expo-secure-store';
+
 import { createPluginsModule as createModule } from '../createPluginsModule';
-import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
+import type { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
+import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
+import { authorizationStoreFixture } from './authorizationStoreFixture';
 
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async () => null),
@@ -8,7 +12,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
-  return createModule(runtime, new FeishuAuthorizationRuntime(async () => undefined));
+  return createModule(runtime, authorizations);
 }
 
 const mockConnect = jest.fn();
@@ -17,6 +21,7 @@ const mockList = jest.fn();
 const mockValidateCredential = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
+    authorizationStore: () => mockFixture.store,
     connect: (...args: unknown[]) => mockConnect(...args),
     disconnect: (...args: unknown[]) => mockDisconnect(...args),
     listConnections: (...args: unknown[]) => mockList(...args),
@@ -26,60 +31,101 @@ jest.mock('../createBuiltInMcpClient', () => ({
   validatePluginCredential: (...args: unknown[]) => mockValidateCredential(...args),
 }));
 
-const input = { pluginId: 'github', fields: { token: 'test-token' } };
+const input = { pluginId: 'github', authMethod: 'personal_token', fields: { token: 'test-token' } };
 const connection = {
   pluginId: 'github',
   accountLabel: 'cherry',
   serverId: 'server-1',
   connectedAt: '2026-09-09T00:00:00.000Z',
 };
+let mockFixture: ReturnType<typeof authorizationStoreFixture>;
+let authorizations: PluginAuthorizationManager;
 beforeEach(() => {
   jest.resetAllMocks();
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
+  jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
+  mockFixture = authorizationStoreFixture();
+  authorizations = new PluginAuthorizationManager();
   mockValidateCredential.mockResolvedValue('cherry');
   mockConnect.mockResolvedValue(connection);
   mockList.mockResolvedValue([connection]);
   mockDisconnect.mockResolvedValue({ serverId: 'server-1' });
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(async () => {
+  await authorizations.stop();
+  jest.restoreAllMocks();
+});
 
-it('commits only an opaque user-grant reference after read-only MCP validation', async () => {
-  const auth = new FeishuAuthorizationRuntime(async () => undefined);
-  const credential = 'feishu-user:00000000-0000-4000-8000-000000000001';
+it('commits an observed ready attempt only after read-only validation of its selected method', async () => {
+  const auth = authorizations.get('feishu', 'feishu_user') as FeishuAuthorizationRuntime;
+  const credential = {
+    version: 1,
+    application: { appId: 'cli_cherry', appSecret: 'secret' },
+    tokens: { accessToken: 'user-token' },
+  };
   const signal = auth.attemptSignal;
+  jest
+    .spyOn(auth, 'getState')
+    .mockResolvedValue({ status: 'ready', attemptId: '00000000-0000-4000-8000-000000000001' });
   jest
     .spyOn(auth, 'prepare')
     .mockResolvedValue({ credential, accountLabel: 'Cherry (ou_cherry)', signal });
-  jest
-    .spyOn(auth, 'commit')
-    .mockImplementation(async <T>(_id: string, _signal: AbortSignal, save: () => Promise<T>) =>
-      save(),
-    );
+  const commit = jest.spyOn(auth, 'commit').mockResolvedValue(connection);
   const invalidateServer = jest.fn();
-  const plugins = createModule({ invalidateServer }, auth);
-  await plugins.authorization.complete('feishu', '00000000-0000-4000-8000-000000000001');
-  expect(mockValidateCredential).toHaveBeenCalledWith(
-    'feishu',
-    credential,
-    signal,
-    auth.getUserToken,
-  );
-  expect(mockConnect.mock.calls[0][0]).toEqual({
-    pluginId: 'feishu',
-    credential,
-    accountLabel: 'Cherry (ou_cherry)',
-    authMethod: 'feishu_user',
-    serverName: '飞书',
+  const plugins = createModule({ invalidateServer }, authorizations);
+  const connected = new Promise<unknown>((resolve) => {
+    plugins.authorization.observe('feishu', 'feishu_user', (observation) => {
+      if (observation.connection) resolve(observation.connection);
+    });
   });
+  await expect(connected).resolves.toEqual(connection);
+  expect(mockValidateCredential).toHaveBeenCalledWith('feishu', 'feishu_user', credential, signal);
+  expect(commit).toHaveBeenCalledWith(
+    '00000000-0000-4000-8000-000000000001',
+    'Cherry (ou_cherry)',
+    signal,
+  );
   expect(invalidateServer).toHaveBeenCalledWith(connection.serverId);
   await auth.stop();
 });
 
-it('invalidates pending user authorization synchronously when disconnect is requested', async () => {
-  const auth = new FeishuAuthorizationRuntime(async () => undefined);
+it('saves an existing application through the plugin field rules before user authorization', async () => {
+  const auth = authorizations.get('feishu', 'feishu_user') as FeishuAuthorizationRuntime;
+  const useApplication = jest
+    .spyOn(auth, 'useApplication')
+    .mockResolvedValue({ status: 'application-ready', applicationId: 'cli_cherry' });
+  const plugins = createModule({ invalidateServer: jest.fn() }, authorizations);
+  expect(() =>
+    plugins.authorization.useApplication('feishu', 'feishu_user', {
+      appId: 'bad id',
+      appSecret: 'secret',
+    }),
+  ).toThrow();
+  expect(() =>
+    plugins.authorization.useApplication('github', 'personal_token', { token: 'secret' }),
+  ).toThrow('unavailable');
+  await expect(
+    plugins.authorization.useApplication('feishu', 'feishu_user', {
+      appId: ' cli_cherry ',
+      appSecret: 'secret',
+    }),
+  ).resolves.toEqual({ status: 'application-ready', applicationId: 'cli_cherry' });
+  expect(useApplication).toHaveBeenCalledWith({ appId: 'cli_cherry', appSecret: 'secret' });
+  await auth.stop();
+});
+
+it('invalidates pending user authorization synchronously and keeps the application on disconnect', async () => {
+  const auth = authorizations.get('feishu', 'feishu_user') as FeishuAuthorizationRuntime;
+  const cancel = jest
+    .spyOn(auth, 'cancel')
+    .mockResolvedValue({ status: 'application-ready', applicationId: 'cli_cherry' });
   const signal = auth.attemptSignal;
-  const disconnect = createModule({ invalidateServer: jest.fn() }, auth).disconnect('feishu');
+  const disconnect = createModule({ invalidateServer: jest.fn() }, authorizations).disconnect(
+    'feishu',
+  );
   expect(signal.aborted).toBe(true);
   await disconnect;
+  expect(cancel).toHaveBeenCalledTimes(1);
   await auth.stop();
 });
 
@@ -96,15 +142,22 @@ it('validates credentials upstream before storing anything', async () => {
 
 it('requires Feishu application credentials and stores both only in the backend grant', async () => {
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
-  expect(() => plugins.connect({ pluginId: 'feishu', fields: { appSecret: 'secret' } })).toThrow();
+  expect(() =>
+    plugins.connect({
+      pluginId: 'feishu',
+      authMethod: 'app_credentials',
+      fields: { appSecret: 'secret' },
+    }),
+  ).toThrow();
   expect(mockValidateCredential).not.toHaveBeenCalled();
   mockValidateCredential.mockResolvedValue('cli_cherry');
   await plugins.connect({
     pluginId: 'feishu',
+    authMethod: 'app_credentials',
     fields: { appId: 'cli_cherry', appSecret: 'secret' },
   });
-  const credential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'secret' });
-  expect(mockValidateCredential.mock.calls[0][1]).toBe(credential);
+  const credential = { version: 1, appId: 'cli_cherry', appSecret: 'secret' };
+  expect(mockValidateCredential.mock.calls[0][2]).toEqual(credential);
   expect(mockConnect.mock.calls[0][0]).toEqual({
     pluginId: 'feishu',
     authMethod: 'app_credentials',
@@ -128,7 +181,7 @@ it('invalidates the runtime only after the new grant commits', async () => {
     authMethod: 'personal_token',
     serverName: 'GitHub',
     accountLabel: 'cherry',
-    credential: 'test-token',
+    credential: { version: 1, token: 'test-token' },
   });
 });
 
@@ -172,15 +225,21 @@ it('does not commit when the authorization form is cancelled after validation', 
 
 it('rejects unregistered plugins and invalid plugin-owned fields before network or persistence', () => {
   const plugins = createPluginsModule({ invalidateServer: jest.fn() });
-  expect(() => plugins.connect({ pluginId: 'future', fields: { token: 'secret' } })).toThrow(
-    'not available',
-  );
+  expect(() =>
+    plugins.connect({
+      pluginId: 'future',
+      authMethod: 'personal_token',
+      fields: { token: 'secret' },
+    }),
+  ).toThrow('not available');
   for (const fields of [
     { token: 'bad key' },
     { token: 'secret', unexpected: 'value' },
     {},
   ] as Record<string, string>[]) {
-    expect(() => plugins.connect({ pluginId: 'github', fields })).toThrow();
+    expect(() =>
+      plugins.connect({ pluginId: 'github', authMethod: 'personal_token', fields }),
+    ).toThrow();
   }
   expect(mockValidateCredential).not.toHaveBeenCalled();
   expect(mockConnect).not.toHaveBeenCalled();

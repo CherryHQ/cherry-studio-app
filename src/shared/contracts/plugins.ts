@@ -4,6 +4,7 @@ import { type PluginConnection, type PluginId, PluginIdSchema } from '@/shared/d
 
 export const ConnectPluginSchema = z.strictObject({
   pluginId: PluginIdSchema,
+  authMethod: PluginIdSchema,
   fields: z.record(z.string().min(1).max(128), z.string().max(16_384)),
 });
 
@@ -32,18 +33,30 @@ export class PluginError extends Error {
 
 /** Route-local projection only. Device codes, client secrets and tokens never cross this boundary. */
 export type PluginAuthorizationState =
-  | { status: 'idle' | 'application-ready' }
+  | { status: 'idle' }
+  | { status: 'application-ready'; applicationId: string }
   | {
       status: 'waiting';
       attemptId: string;
-      stage: 'registration' | 'user';
+      stage: string;
       verificationUrl: string;
-      userCode: string;
+      userCode?: string;
       expiresAt: number;
       nextPollAt: number;
     }
   | { status: 'expired' | 'denied' | 'unsupported-account'; attemptId: string }
   | { status: 'ready'; attemptId: string };
+
+/** What an observing screen renders: the durable state plus the backend's transient progress. */
+export type PluginAuthorizationObservation = {
+  state: PluginAuthorizationState;
+  /** True while the backend is reading, polling or completing. */
+  busy: boolean;
+  /** Last failure since the previous successful step; cleared when a new step starts. */
+  error?: PluginErrorReason;
+  /** Set once the grant is committed as a connection. */
+  connection?: PluginConnection;
+};
 
 export interface PluginsModule {
   connect(
@@ -52,16 +65,25 @@ export interface PluginsModule {
   ): Promise<PluginConnection>;
   disconnect(pluginId: PluginId): Promise<void>;
   authorization: {
-    getState(pluginId: PluginId): Promise<PluginAuthorizationState>;
-    begin(pluginId: PluginId): Promise<PluginAuthorizationState>;
-    /** Cancelling observation prevents queued polls; it does not discard already issued credentials. */
-    poll(
+    /**
+     * The backend polls and completes only while at least one observer is attached. Detaching
+     * stops scheduling; it does not discard issued credentials or cancel the attempt.
+     */
+    observe(
       pluginId: PluginId,
-      attemptId: string,
-      observationSignal?: AbortSignal,
+      authMethod: string,
+      listener: (observation: PluginAuthorizationObservation) => void,
+    ): () => void;
+    /** Run one step now, for example after the user returns from the browser. */
+    check(pluginId: PluginId, authMethod: string): void;
+    begin(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
+    /** Authorize with an existing application instead of registering a new one. */
+    useApplication(
+      pluginId: PluginId,
+      authMethod: string,
+      fields: Record<string, string>,
     ): Promise<PluginAuthorizationState>;
-    complete(pluginId: PluginId, attemptId: string): Promise<PluginConnection>;
-    cancel(pluginId: PluginId): Promise<PluginAuthorizationState>;
-    resetApplication(pluginId: PluginId): Promise<PluginAuthorizationState>;
+    cancel(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
+    resetApplication(pluginId: PluginId, authMethod: string): Promise<PluginAuthorizationState>;
   };
 }

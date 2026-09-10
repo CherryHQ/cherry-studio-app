@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { PluginId } from '@/shared/data/types/plugin';
+import type { PluginCredential, PluginId } from '@/shared/data/types/plugin';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 
@@ -16,7 +16,7 @@ export const pluginAuthorizationTable = sqliteTable(
     pluginId: text().$type<PluginId>().notNull(),
     authMethod: text().notNull(),
     accountLabel: text().notNull(),
-    credential: text().notNull(),
+    credential: text({ mode: 'json' }).$type<PluginCredential>().notNull(),
     ...createUpdateTimestamps,
   },
   (t) => [

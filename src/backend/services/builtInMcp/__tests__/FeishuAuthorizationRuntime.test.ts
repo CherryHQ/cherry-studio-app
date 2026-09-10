@@ -3,7 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
-import { FEISHU_USER_SCOPES, feishuOauth } from '../feishuOauth';
+import { FEISHU_DOCUMENT_SCOPES, feishuOauth } from '../feishuOauth';
+import { authorizationStoreFixture } from './authorizationStoreFixture';
 
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({
@@ -33,7 +34,7 @@ const tokens = {
   refreshToken: 'private-refresh',
   expiresAt: 3600000,
   refreshExpiresAt: 86400000,
-  scope: FEISHU_USER_SCOPES.join(' '),
+  scope: FEISHU_DOCUMENT_SCOPES.join(' '),
 };
 const challenge = {
   deviceCode: 'private-device',
@@ -43,28 +44,23 @@ const challenge = {
   nextPollAt: 6000,
   intervalMs: 5000,
 };
-let stored: string | null;
-let committedCredential: string | undefined;
+const applicationReady = { status: 'application-ready', applicationId: 'cli_cherry' };
+let fixture: ReturnType<typeof authorizationStoreFixture>;
+const stored = () => JSON.stringify(fixture.data);
 let now: jest.SpyInstance;
 const runtimes: FeishuAuthorizationRuntime[] = [];
 function createRuntime() {
-  const runtime = new FeishuAuthorizationRuntime(async () => committedCredential);
+  const runtime = new FeishuAuthorizationRuntime(fixture.store);
   runtimes.push(runtime);
   return runtime;
 }
 beforeEach(() => {
   jest.resetAllMocks();
   mockNextId = 0;
-  stored = null;
-  committedCredential = undefined;
+  fixture = authorizationStoreFixture();
   now = jest.spyOn(Date, 'now').mockReturnValue(1000);
-  jest.mocked(SecureStore.getItemAsync).mockImplementation(async () => stored);
-  jest.mocked(SecureStore.setItemAsync).mockImplementation(async (_key, text) => {
-    stored = text;
-  });
-  jest.mocked(SecureStore.deleteItemAsync).mockImplementation(async () => {
-    stored = null;
-  });
+  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
+  jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
   jest.mocked(feishuOauth.beginRegistration).mockResolvedValue(challenge);
   jest.mocked(feishuOauth.beginUser).mockResolvedValue(challenge);
   jest.mocked(feishuOauth.pollRegistration).mockResolvedValue({ status: 'approved', application });
@@ -97,15 +93,34 @@ it('recovers registration after route/process interruption without exposing devi
   await runtime.stop();
   expect(await createRuntime().getState()).toEqual(state);
   expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(1);
-  expect(SecureStore.setItemAsync).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
-    keychainAccessible: 'device-only',
-  });
+  expect(fixture.data.state).toMatchObject({ pending: { deviceCode: 'private-device' } });
+  expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+});
+
+it('commits the complete credential object and clears the pending state without duplicating active tokens', async () => {
+  const runtime = createRuntime();
+  await connected(runtime);
+  expect(fixture.data.grant?.credential).toEqual({ version: 1, application, tokens });
+  expect(fixture.data.state).toEqual({ version: 1, application });
+  expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+});
+
+it('authorizes with an existing application instead of registering, and reuses it after cancellation', async () => {
+  const runtime = createRuntime();
+  expect(await runtime.useApplication(application)).toEqual(applicationReady);
+  expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'user' });
+  expect(feishuOauth.beginRegistration).not.toHaveBeenCalled();
+  expect(feishuOauth.beginUser).toHaveBeenCalledWith(application, expect.any(AbortSignal));
+  expect(await runtime.cancel()).toEqual(applicationReady);
+  await expect(
+    runtime.useApplication({ appId: 'not-an-app-id', appSecret: 'x' }),
+  ).rejects.toThrow();
 });
 
 it('retains the registered app across user authorization failure and cancellation', async () => {
   const runtime = createRuntime();
   await registered(runtime);
-  expect(await runtime.getState()).toEqual({ status: 'application-ready' });
+  expect(await runtime.getState()).toEqual(applicationReady);
   jest.mocked(feishuOauth.beginUser).mockRejectedValueOnce(new PluginError('network', 'safe'));
   await expect(runtime.begin()).rejects.toMatchObject({ reason: 'network' });
   await runtime.cancel();
@@ -131,7 +146,7 @@ it('enforces persisted intervals, slow_down, and an absolute expiry that removes
     status: 'expired',
     attemptId: state.attemptId,
   });
-  expect(stored).not.toContain('private-device');
+  expect(stored()).not.toContain('private-device');
 });
 
 it('does not apply a late registration result after explicit cancellation', async () => {
@@ -156,45 +171,16 @@ it('does not apply a late registration result after explicit cancellation', asyn
   release();
   await rejected;
   expect(await cancel).toEqual({ status: 'idle' });
-  expect(stored).not.toContain('private-secret');
+  expect(stored()).not.toContain('private-secret');
 });
 
-it('skips a queued background poll without cancelling its durable authorization attempt', async () => {
-  const runtime = createRuntime();
-  const state = await runtime.begin();
-  if (state.status !== 'waiting') throw new Error('Expected registration');
-  now.mockReturnValue(6000);
-  const observation = new AbortController();
-  const poll = runtime.poll(state.attemptId, observation.signal);
-  observation.abort();
-  expect(await poll).toEqual(state);
-  expect(feishuOauth.pollRegistration).not.toHaveBeenCalled();
-  expect(await runtime.poll(state.attemptId)).toEqual({ status: 'application-ready' });
-});
-
-it('saves an already issued result when only the observing route goes away', async () => {
-  const runtime = createRuntime();
-  const state = await runtime.begin();
-  if (state.status !== 'waiting') throw new Error('Expected registration');
-  now.mockReturnValue(6000);
-  const observation = new AbortController();
-  jest.mocked(feishuOauth.pollRegistration).mockImplementationOnce(async () => {
-    observation.abort();
-    return { status: 'approved', application };
-  });
-  expect(await runtime.poll(state.attemptId, observation.signal)).toEqual({
-    status: 'application-ready',
-  });
-  expect(stored).toContain('private-secret');
-});
-
-it('keeps a one-time token result in backend memory until a failed secure write can be retried', async () => {
+it('keeps a one-time token result in backend memory until a failed SQLite write can be retried', async () => {
   const runtime = createRuntime();
   await registered(runtime);
   const waiting = await runtime.begin();
   if (waiting.status !== 'waiting') throw new Error('Expected user authorization');
   jest.mocked(feishuOauth.pollUser).mockImplementationOnce(async () => {
-    jest.mocked(SecureStore.setItemAsync).mockRejectedValueOnce(new Error('Keychain unavailable'));
+    fixture.store.writeState.mockRejectedValueOnce(new Error('SQLite unavailable'));
     return { status: 'approved', tokens };
   });
   await expect(runtime.poll(waiting.attemptId)).rejects.toMatchObject({ reason: 'storage' });
@@ -202,113 +188,261 @@ it('keeps a one-time token result in backend memory until a failed secure write 
   expect(feishuOauth.pollUser).toHaveBeenCalledTimes(1);
 });
 
-it('does not commit partial scopes, and preserves the app for another user authorization', async () => {
+it('names missing document scopes, requires a refresh token, and preserves the app for another authorization', async () => {
   const runtime = createRuntime();
   jest.mocked(feishuOauth.pollUser).mockResolvedValue({
     status: 'approved',
     tokens: { ...tokens, scope: 'docx:document:readonly' },
   });
   const id = await authorized(runtime);
-  await expect(runtime.prepare(id)).rejects.toMatchObject({ reason: 'access' });
-  expect(await runtime.cancel()).toEqual({ status: 'application-ready' });
+  await expect(runtime.prepare(id)).rejects.toMatchObject({
+    reason: 'access',
+    message: expect.stringContaining('wiki:node:read'),
+  });
+  expect(await runtime.cancel()).toEqual(applicationReady);
+  jest.mocked(feishuOauth.pollUser).mockResolvedValue({
+    status: 'approved',
+    tokens: { ...tokens, refreshToken: undefined, scope: `${tokens.scope} offline_access` },
+  });
+  const next = await runtime.begin();
+  if (next.status !== 'waiting') throw new Error('Expected user authorization');
+  await runtime.poll(next.attemptId);
+  await expect(runtime.prepare(next.attemptId)).rejects.toMatchObject({
+    reason: 'access',
+    message: expect.stringContaining('offline access'),
+  });
 });
 
-it('resolves a securely saved candidate before DB commit and preserves it when DB commit fails', async () => {
+it('preserves an approved candidate across a failed connection transaction and a process restart', async () => {
   const runtime = createRuntime();
   const id = await authorized(runtime);
   const prepared = await runtime.prepare(id);
-  expect(prepared.credential).toBe(`feishu-user:${id}`);
-  expect(prepared.accountLabel).toBe('Cherry (ou_cherry)');
-  const commit = jest.fn(async () => {
-    throw new Error('SQLite failed');
-  });
-  await expect(runtime.commit(id, prepared.signal, commit)).rejects.toThrow('SQLite failed');
-  expect(await createRuntime().getUserToken(prepared.credential)).toBe(tokens.accessToken);
-  expect(await runtime.getState()).toEqual({ status: 'ready', attemptId: id });
-});
-
-it('deduplicates refresh, stores the rotated credential, and never changes the DB reference', async () => {
-  const runtime = createRuntime();
-  const id = await authorized(runtime);
-  const prepared = await runtime.prepare(id);
-  await runtime.commit(id, prepared.signal, async () => {
-    committedCredential = prepared.credential;
-    return 'connected';
-  });
-  now.mockReturnValue(tokens.expiresAt);
-  jest.mocked(feishuOauth.refresh).mockResolvedValue({
-    ...tokens,
-    accessToken: 'rotated-access',
-    refreshToken: 'rotated-refresh',
-    expiresAt: 7200000,
-  });
-  expect(
-    await Promise.all([
-      runtime.getUserToken(prepared.credential),
-      runtime.getUserToken(prepared.credential),
-    ]),
-  ).toEqual(['rotated-access', 'rotated-access']);
-  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
-  expect(stored).toContain('rotated-refresh');
-  expect(await createRuntime().getUserToken(prepared.credential)).toBe('rotated-access');
-});
-
-it('reconciles a DB commit interrupted before candidate promotion, so cancel cannot delete the live grant', async () => {
-  const runtime = createRuntime();
-  const id = await authorized(runtime);
-  const prepared = await runtime.prepare(id);
-  await expect(
-    runtime.commit(id, prepared.signal, async () => {
-      committedCredential = prepared.credential;
-      jest
-        .mocked(SecureStore.setItemAsync)
-        .mockRejectedValueOnce(new Error('Keychain unavailable'));
-      return 'connected';
-    }),
-  ).resolves.toBe('connected');
-  // Simulate process death: discard the in-memory write retry; keep both durable stores.
-  await runtime.stop();
+  expect(prepared.credential).toEqual({ version: 1, application, tokens });
+  fixture.store.commit.mockRejectedValueOnce(new Error('SQLite failed'));
+  await expect(runtime.commit(id, prepared.accountLabel, prepared.signal)).rejects.toThrow(
+    'SQLite failed',
+  );
+  expect(fixture.data.grant).toBeUndefined();
   const restarted = createRuntime();
+  expect(await restarted.getState()).toEqual({ status: 'ready', attemptId: id });
+  await restarted.commit(id, prepared.accountLabel, restarted.attemptSignal);
   await restarted.cancel();
-  expect(await restarted.getUserToken(prepared.credential)).toBe(tokens.accessToken);
-  expect(JSON.parse(stored!).pending).toBeUndefined();
+  expect(await restarted.resolveCredential(fixture.data.grant!)).toMatchObject({ tokens });
 });
 
-it('finishes secure cleanup if the process stopped after DB disconnect', async () => {
+it('deduplicates refresh and persists all rotated fields without changing the authorization identity', async () => {
   const runtime = createRuntime();
-  const id = await authorized(runtime);
-  const prepared = await runtime.prepare(id);
-  await runtime.commit(id, prepared.signal, async () => {
-    committedCredential = prepared.credential;
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  jest.mocked(feishuOauth.refresh).mockResolvedValue(rotatedTokens);
+  const results = await Promise.all([
+    runtime.resolveCredential(grant),
+    runtime.resolveCredential(grant),
+  ]);
+  expect(results).toEqual([
+    { version: 1, application, tokens: rotatedTokens },
+    { version: 1, application, tokens: rotatedTokens },
+  ]);
+  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+  expect(fixture.data.grant?.id).toBe(grant.id);
+  expect(fixture.data.grant?.credential.tokens).toEqual(rotatedTokens);
+  expect(await createRuntime().resolveCredential(grant)).toMatchObject({ tokens: rotatedTokens });
+});
+
+it('does not restore a grant removed from SQLite, while retaining the application for reconnecting', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  fixture.data.grant = undefined;
+  const restarted = createRuntime();
+  expect(await restarted.getState()).toEqual(applicationReady);
+  await expect(restarted.resolveCredential(grant)).rejects.toMatchObject({
+    reason: 'authorization',
   });
-  committedCredential = undefined;
-  expect(await createRuntime().getState()).toEqual({ status: 'idle' });
-  expect(stored).not.toMatch(/private-secret|private-access|private-refresh/);
+  expect(stored()).not.toMatch(/private-access|private-refresh/);
 });
 
 it('can explicitly replace an unusable application without dropping a working connection', async () => {
   const runtime = createRuntime();
-  const id = await authorized(runtime);
-  const prepared = await runtime.prepare(id);
-  await runtime.commit(id, prepared.signal, async () => {
-    committedCredential = prepared.credential;
-  });
+  const grant = await connected(runtime);
   expect(await runtime.resetApplication()).toEqual({ status: 'idle' });
-  expect(await runtime.getUserToken(prepared.credential)).toBe(tokens.accessToken);
+  expect(await runtime.resolveCredential(grant)).toMatchObject({ tokens });
   expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'registration' });
   expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(2);
 });
 
-it('preserves credentials on transient refresh failure and clears them only on explicit disconnect', async () => {
+it('preserves credentials on transient refresh failure; disconnect removes the grant but keeps the application', async () => {
   const runtime = createRuntime();
-  const id = await authorized(runtime);
-  const { credential } = await runtime.prepare(id);
+  const grant = await connected(runtime);
   now.mockReturnValue(tokens.expiresAt);
   jest.mocked(feishuOauth.refresh).mockRejectedValue(new PluginError('network', 'safe'));
-  await expect(runtime.getUserToken(credential)).rejects.toMatchObject({ reason: 'network' });
-  expect(stored).toContain('private-refresh');
-  runtime.interrupt();
-  await runtime.clear();
-  await expect(runtime.getUserToken(credential)).rejects.toMatchObject({ reason: 'authorization' });
-  expect(stored).toBeNull();
+  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'network' });
+  expect(stored()).toContain('private-refresh');
+  runtime.invalidateGrant();
+  await runtime.cancel();
+  fixture.data.grant = undefined;
+  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'authorization' });
+  expect(stored()).not.toMatch(/private-access|private-refresh|private-device/);
+  expect(await runtime.getState()).toEqual(applicationReady);
+  expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'user' });
+  expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(1);
+});
+
+const rotatedTokens = {
+  ...tokens,
+  accessToken: 'rotated-access',
+  refreshToken: 'rotated-refresh',
+  expiresAt: 7200000,
+};
+async function connected(runtime: FeishuAuthorizationRuntime) {
+  const id = await authorized(runtime);
+  const prepared = await runtime.prepare(id);
+  await runtime.commit(id, prepared.accountLabel, prepared.signal);
+  return fixture.data.grant!;
+}
+
+function pendingRefresh() {
+  let release!: () => void;
+  let signal!: AbortSignal;
+  const started = new Promise<void>((resolve) => {
+    jest
+      .mocked(feishuOauth.refresh)
+      .mockImplementationOnce(async (_application, _tokens, requestSignal) => {
+        signal = requestSignal;
+        resolve();
+        await new Promise<void>((finish) => {
+          release = finish;
+        });
+        return rotatedTokens;
+      });
+  });
+  return { started, release: () => release(), signal: () => signal };
+}
+
+it('cancels only one caller wait while the shared refresh continues and is saved for the other caller', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  const refresh = pendingRefresh();
+  const controller = new AbortController();
+  const first = runtime.resolveCredential(grant, controller.signal);
+  const cancelled = expect(first).rejects.toMatchObject({ reason: 'cancelled' });
+  const second = runtime.resolveCredential(grant);
+  await refresh.started;
+  controller.abort();
+  await cancelled;
+  expect(refresh.signal().aborted).toBe(false);
+  refresh.release();
+  await expect(second).resolves.toMatchObject({ tokens: rotatedTokens });
+  expect(fixture.data.grant?.credential.tokens).toEqual(rotatedTokens);
+  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+});
+
+it('finishes persisting renewal even after its only caller stops waiting', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  const refresh = pendingRefresh();
+  const controller = new AbortController();
+  const result = runtime.resolveCredential(grant, controller.signal);
+  const cancelled = expect(result).rejects.toMatchObject({ reason: 'cancelled' });
+  await refresh.started;
+  controller.abort();
+  await cancelled;
+  refresh.release();
+  await runtime.getState();
+  expect(fixture.data.grant?.credential.tokens).toEqual(rotatedTokens);
+});
+
+it('does not start renewal for an already cancelled caller', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  const controller = new AbortController();
+  controller.abort();
+  await expect(runtime.resolveCredential(grant, controller.signal)).rejects.toMatchObject({
+    reason: 'cancelled',
+  });
+  expect(feishuOauth.refresh).not.toHaveBeenCalled();
+});
+
+it('shares a failed refresh without submitting another rotation for each queued caller', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  jest.mocked(feishuOauth.refresh).mockRejectedValue(new PluginError('network', 'safe'));
+  const results = await Promise.allSettled([
+    runtime.resolveCredential(grant),
+    runtime.resolveCredential(grant),
+  ]);
+  expect(results.every((result) => result.status === 'rejected')).toBe(true);
+  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+  expect(fixture.data.grant?.credential.tokens).toEqual(tokens);
+});
+
+it('retries saving an issued token after SQLite fails, without rotating the old refresh token again', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  jest.mocked(feishuOauth.refresh).mockResolvedValue(rotatedTokens);
+  fixture.store.updateCredential.mockRejectedValueOnce(new Error('disk full'));
+  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'storage' });
+  expect(fixture.data.grant?.credential.tokens).toEqual(tokens);
+  await expect(runtime.resolveCredential(grant)).resolves.toMatchObject({ tokens: rotatedTokens });
+  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+});
+
+it.each(['disconnect', 'stop'] as const)(
+  'aborts renewal on %s and discards a late successful response',
+  async (action) => {
+    const runtime = createRuntime();
+    const grant = await connected(runtime);
+    now.mockReturnValue(tokens.expiresAt);
+    const refresh = pendingRefresh();
+    const result = runtime.resolveCredential(grant);
+    const cancelled = expect(result).rejects.toMatchObject({ reason: 'cancelled' });
+    await refresh.started;
+    if (action === 'disconnect') runtime.invalidateGrant();
+    const closing = action === 'stop' ? runtime.stop() : runtime.cancel();
+    if (action === 'disconnect') fixture.data.grant = undefined;
+    expect(refresh.signal().aborted).toBe(true);
+    refresh.release();
+    await cancelled;
+    await closing;
+    expect(fixture.store.updateCredential).not.toHaveBeenCalled();
+    if (action === 'disconnect') expect(await createRuntime().getState()).toEqual(applicationReady);
+  },
+);
+
+it('does not overwrite a replacement grant when the old renewal finishes', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  const refresh = pendingRefresh();
+  const result = runtime.resolveCredential(grant);
+  const rejected = expect(result).rejects.toMatchObject({ reason: 'authorization' });
+  await refresh.started;
+  const replacement = {
+    id: 'replacement-grant',
+    credential: {
+      version: 1,
+      application,
+      tokens: { ...rotatedTokens, accessToken: 'replacement' },
+    },
+  };
+  fixture.data.grant = replacement;
+  refresh.release();
+  await rejected;
+  expect(fixture.data.grant).toEqual(replacement);
+});
+
+it('saves rotated credentials before reporting reduced permissions', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  now.mockReturnValue(tokens.expiresAt);
+  const reduced = { ...rotatedTokens, scope: 'docx:document:readonly' };
+  jest.mocked(feishuOauth.refresh).mockResolvedValue(reduced);
+  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'access' });
+  expect(fixture.data.grant?.credential.tokens).toEqual(reduced);
+  await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'access' });
+  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
 });

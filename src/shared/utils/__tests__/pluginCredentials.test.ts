@@ -3,21 +3,8 @@ import type { PluginCredentialField } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '../pluginCredentials';
 
 const fields: PluginCredentialField[] = [
-  {
-    id: 'tenant',
-    label: { default: 'Tenant' },
-    error: { default: 'Invalid tenant' },
-    secret: false,
-    maxLength: 20,
-    pattern: '^tenant-[a-z]+$',
-  },
-  {
-    id: 'signingKey',
-    label: { default: 'Signing key' },
-    error: { default: 'Invalid key' },
-    secret: true,
-    maxLength: 8,
-  },
+  { id: 'tenant', secret: false, maxLength: 20, pattern: '^tenant-[a-z]+$' },
+  { id: 'signingKey', secret: true, maxLength: 8 },
 ];
 
 it('validates and normalizes fields supplied by a new plugin without a platform-specific schema', () => {

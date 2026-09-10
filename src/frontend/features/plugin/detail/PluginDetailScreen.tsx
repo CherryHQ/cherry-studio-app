@@ -11,7 +11,6 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PluginIcon } from '../components/PluginIcon';
-import { getPluginText } from '../pluginCatalog';
 import { usePluginCatalog } from '../usePluginCatalog';
 import { usePluginConnections, useRefreshPluginConnections } from '../usePluginConnections';
 
@@ -24,7 +23,7 @@ export function PluginDetailScreen() {
 }
 
 function PluginDetail({ pluginId }: { pluginId: PluginId }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const { alert } = useAlert();
   const { toast } = useToast();
@@ -35,7 +34,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const connection = connections.data?.find((item) => item.pluginId === pluginId);
   const entry = catalog.data?.find((item) => item.id === pluginId);
-  const name = entry ? getPluginText(entry.name, i18n.language) : pluginId;
+  const name = entry ? t(`plugins.catalog.${pluginId}.name`) : pluginId;
 
   async function disconnect() {
     setIsDisconnecting(true);
@@ -81,7 +80,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
           </View>
           <Text className="text-base text-foreground">
             {entry
-              ? getPluginText(entry.description, i18n.language)
+              ? t(`plugins.catalog.${pluginId}.description`)
               : t('plugins.unavailableDescription')}
           </Text>
         </View>
@@ -89,7 +88,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
           <View className="gap-3">
             <Text className="text-base font-medium text-foreground">{t('plugins.privacy')}</Text>
             <Text className="text-sm text-muted-foreground">
-              {getPluginText(entry.access, i18n.language)}
+              {t(`plugins.catalog.${pluginId}.access`)}
             </Text>
             <Text className="text-sm text-muted-foreground">{t('plugins.privacyDescription')}</Text>
             <View className="flex-row flex-wrap gap-4">

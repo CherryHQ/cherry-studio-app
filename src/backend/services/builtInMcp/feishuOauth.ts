@@ -12,8 +12,7 @@ const TOKEN_PATH = '/open-apis/authen/v2/oauth/token';
 
 // Exact union for the six admitted document tools in the official remote MCP guide.
 // Task/chat read permissions are dependencies of fetch-doc, not standalone tools.
-export const FEISHU_USER_SCOPES = [
-  'offline_access',
+export const FEISHU_DOCUMENT_SCOPES = [
   'docx:document:readonly',
   'docx:document:create',
   'docx:document:write_only',
@@ -28,6 +27,8 @@ export const FEISHU_USER_SCOPES = [
   'docs:document.comment:create',
   'contact:contact.base:readonly',
 ] as const;
+// Renewal capability is proven by an issued refresh token, not by an echoed scope name.
+const FEISHU_REQUESTED_SCOPES = ['offline_access', ...FEISHU_DOCUMENT_SCOPES];
 
 const secret = z.string().min(1).max(16_384);
 export const FeishuApplicationSchema = z.object({
@@ -199,9 +200,10 @@ function tokensFromResponse(
   };
 }
 
-export function hasFeishuDocumentScopes(tokens: FeishuTokens) {
+/** Document scopes absent from the granted set; scope names are safe to display. */
+export function missingFeishuDocumentScopes(tokens: FeishuTokens): string[] {
   const granted = new Set(tokens.scope.split(/\s+/));
-  return FEISHU_USER_SCOPES.every((scope) => granted.has(scope));
+  return FEISHU_DOCUMENT_SCOPES.filter((scope) => !granted.has(scope));
 }
 
 export const feishuOauth = {
@@ -248,7 +250,7 @@ export const feishuOauth = {
       '/oauth/v1/device_authorization',
       {
         client_id: application.appId,
-        scope: FEISHU_USER_SCOPES.join(' '),
+        scope: FEISHU_REQUESTED_SCOPES.join(' '),
       },
       signal,
       { basic: btoa(`${application.appId}:${application.appSecret}`) },

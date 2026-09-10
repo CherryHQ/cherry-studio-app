@@ -4,9 +4,10 @@
 > Feishu application-identity cloud MCP and a single extensible bundled plugin registry. No authenticated service calls, builds, tests or device
 > acceptance were run. GitHub and Amap were already implemented.
 >
-> Follow-up: browser registration, user device authorization and token renewal are now implemented.
-> The earlier assessment below is historical; see [Feishu Browser Authorization](./built-in-mcp-design.md#feishu-browser-authorization)
-> for current behavior and the still-pending live-account/device acceptance.
+> Follow-up: browser registration, authorization with an existing application, user device
+> authorization and token renewal are now implemented. The earlier assessment below is historical;
+> see [Feishu Browser Authorization](./built-in-mcp-design.md#feishu-browser-authorization) for
+> current behavior and the still-pending live-account/device acceptance.
 
 ## Selection
 
@@ -91,8 +92,8 @@ coverage, port the command semantics in small slices:
 | CLI responsibility | Mobile implementation | Status |
 | --- | --- | --- |
 | Application token and cloud document calls | Backend token helper plus the existing MCP runtime | Implemented in this change |
-| Personal-agent application registration | Browser verification plus bounded, cancellable polling; keep issued credentials backend-owned | Source-assessed only |
-| User authorization and renewal | Device authorization, expiry/scopes and atomic refresh-token persistence; account/grant isolation | Source-assessed only |
+| Personal-agent application registration | Browser verification plus bounded, cancellable polling; keep issued credentials backend-owned; an existing application may be entered instead | Implemented; live acceptance pending |
+| User authorization and renewal | Device authorization, expiry/scopes and atomic refresh-token persistence in plaintext SQLite credential objects; account/grant isolation | Implemented; live acceptance pending |
 | Curated Base, Calendar and Tasks shortcuts | Typed inputs and dedicated OpenAPI functions exposed through the existing tool approval pipeline | Planned |
 | Pagination and structured command output | Bounded pages, cancellation and normalized results in the owning adapter | Planned |
 | CLI skills | App-owned instruction resources with attribution, adapted to tool names available in the turn | Separate instruction-resource work |
@@ -116,8 +117,10 @@ alone. Reviewed source revision: `4fddd6bc3763f2105a2e31f0a992f19554aa350f`.
    implementation should share authorization ownership with cloud document calls.
 4. Assess Yuque's curated API slice using its official server as protocol/workflow evidence.
 
-Regression cases were added for open identifiers, synthetic plugin registration, shared field rules,
+Regression cases cover open identifiers, synthetic plugin registration, shared field rules,
 unknown-plugin refusal/disconnect, Feishu input/storage contracts, migration preservation under foreign
 keys, grant revocation during token exchange, cached-token expiry/cancellation, redirect rejection,
-and write non-replay. They have **not been executed**. No build, type check, cloud acceptance or
-device acceptance is claimed. Formatting and lint results are reported separately after implementation.
+write non-replay, existing-application authorization, legacy secure-storage import, caller-independent
+renewal and observer-driven polling/completion. The updated suites have not been run after the
+authorization and persistence changes. No current type-check, build, cloud acceptance or device
+acceptance result is claimed.

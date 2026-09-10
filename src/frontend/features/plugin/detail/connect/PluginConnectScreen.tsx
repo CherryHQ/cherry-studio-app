@@ -1,6 +1,6 @@
-import { Button, ContentState, Input, TextField, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -10,13 +10,17 @@ import { useBackendModule } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { PluginError } from '@/shared/contracts/plugins';
-import { PluginIdSchema, type PluginCatalogEntry } from '@/shared/data/types/plugin';
+import {
+  PluginIdSchema,
+  type PluginCatalogEntry,
+  type PluginCredentialMethod,
+} from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import { getPluginText } from '../../pluginCatalog';
 import { usePluginCatalog } from '../../usePluginCatalog';
 import { useRefreshPluginConnections } from '../../usePluginConnections';
-import { FeishuConnect } from './FeishuConnect';
+import { CredentialFields, hasEveryField } from './CredentialFields';
+import { InteractiveConnect } from './InteractiveConnect';
 
 export function PluginConnectScreen() {
   const { pluginId } = useLocalSearchParams<{ pluginId: string }>();
@@ -38,25 +42,42 @@ export function PluginConnectScreen() {
 }
 
 function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
-  const [useCredentials, setUseCredentials] = useState(false);
-  if (entry.interactiveAuthorization === 'feishu-device' && !useCredentials)
-    return <FeishuConnect entry={entry} onUseCredentials={() => setUseCredentials(true)} />;
-  return (
-    <CredentialConnect
-      entry={entry}
-      onUseBrowser={entry.interactiveAuthorization ? () => setUseCredentials(false) : undefined}
-    />
+  const { t } = useTranslation();
+  const [methodId, setMethodId] = useState(entry.authMethods[0]?.id);
+  const method = entry.authMethods.find((candidate) => candidate.id === methodId);
+  if (!method) return <ContentState.Empty title={t('plugins.unavailable')} />;
+  const alternatives = (
+    <View className="gap-2">
+      {entry.authMethods
+        .filter((candidate) => candidate.id !== method.id)
+        .map((candidate) => (
+          <Button key={candidate.id} variant="link" onPress={() => setMethodId(candidate.id)}>
+            {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`)}
+          </Button>
+        ))}
+    </View>
+  );
+  return method.kind === 'interactive' ? (
+    <InteractiveConnect key={method.id} entry={entry} method={method}>
+      {alternatives}
+    </InteractiveConnect>
+  ) : (
+    <CredentialConnect key={method.id} entry={entry} method={method}>
+      {alternatives}
+    </CredentialConnect>
   );
 }
 
 function CredentialConnect({
   entry,
-  onUseBrowser,
+  method,
+  children,
 }: {
   entry: PluginCatalogEntry;
-  onUseBrowser?: () => void;
+  method: PluginCredentialMethod;
+  children: ReactNode;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const plugins = useBackendModule('plugins');
   const refresh = useRefreshPluginConnections();
@@ -66,11 +87,11 @@ function CredentialConnect({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [isConnecting, setIsConnecting] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
-  const name = getPluginText(entry.name, i18n.language);
+  const name = t(`plugins.catalog.${entry.id}.name`);
 
   async function connect() {
     if (pendingConnection.current) return;
-    const parsed = createPluginCredentialsSchema(entry.credentialFields).safeParse(fields);
+    const parsed = createPluginCredentialsSchema(method.fields).safeParse(fields);
     if (!parsed.success) {
       setInvalidFields(new Set(parsed.error.issues.map((issue) => String(issue.path[0]))));
       return;
@@ -81,7 +102,10 @@ function CredentialConnect({
     setIsConnecting(true);
     try {
       // Keep credentials out of query/mutation caches and route parameters.
-      await plugins.connect({ pluginId: entry.id, fields: parsed.data }, controller.signal);
+      await plugins.connect(
+        { pluginId: entry.id, authMethod: method.id, fields: parsed.data },
+        controller.signal,
+      );
       setFields({});
       await refresh();
       toast.show({ label: t('plugins.connectSuccess', { name }), variant: 'success' });
@@ -108,80 +132,49 @@ function CredentialConnect({
         className="flex-1 bg-background"
         contentContainerClassName="gap-6 px-6 py-6"
         contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
         bottomOffset={keyboardBottomOffset}
+        keyboardShouldPersistTaps="handled"
         testID="plugin-connect"
       >
         <Text className="text-base text-muted-foreground">
-          {onUseBrowser
-            ? t('plugins.feishu.manualSetup')
-            : getPluginText(entry.setup, i18n.language)}
+          {t(`plugins.catalog.${entry.id}.authMethods.${method.id}.setup`)}
         </Text>
         <View className="gap-4">
-          {entry.credentialFields.map((field) => {
-            const invalid = invalidFields.has(field.id);
-            const label = getPluginText(field.label, i18n.language);
-            return (
-              <TextField key={field.id} invalid={invalid} disabled={isConnecting}>
-                <TextField.Label>{label}</TextField.Label>
-                <Input
-                  accessibilityLabel={label}
-                  {...(field.secret
-                    ? {
-                        type: 'password' as const,
-                        visibilityAccessibilityLabels: {
-                          hide: t('plugins.hideCredential'),
-                          show: t('plugins.showCredential'),
-                        },
-                      }
-                    : {
-                        type: 'text' as const,
-                        autoCapitalize: 'none' as const,
-                        autoCorrect: false,
-                      })}
-                  value={fields[field.id] ?? ''}
-                  onChangeText={(value) => {
-                    setFields((previous) => ({ ...previous, [field.id]: value }));
-                    setInvalidFields((previous) => {
-                      const next = new Set(previous);
-                      next.delete(field.id);
-                      return next;
-                    });
-                  }}
-                  disabled={isConnecting}
-                  invalid={invalid}
-                  maxLength={field.maxLength}
-                  onSubmitEditing={() => void connect()}
-                  returnKeyType="done"
-                  testID={`plugin-field-${field.id}`}
-                />
-                <TextField.Error>{getPluginText(field.error, i18n.language)}</TextField.Error>
-              </TextField>
-            );
-          })}
+          <CredentialFields
+            pluginId={entry.id}
+            fields={method.fields}
+            values={fields}
+            invalidFields={invalidFields}
+            disabled={isConnecting}
+            onChange={(fieldId, value) => {
+              setFields((previous) => ({ ...previous, [fieldId]: value }));
+              setInvalidFields((previous) => {
+                const next = new Set(previous);
+                next.delete(fieldId);
+                return next;
+              });
+            }}
+            onSubmit={() => void connect()}
+          />
           <Button
             variant="link"
             size="inline"
             onPress={() => void openExternalUrl(entry.links.credentials)}
           >
-            {getPluginText(entry.credentialLinkLabel, i18n.language)}
+            {t(`plugins.catalog.${entry.id}.credentialLink`)}
           </Button>
         </View>
         <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
         <Button
           size="lg"
           loading={isConnecting}
-          disabled={entry.credentialFields.some((field) => !fields[field.id]?.trim())}
+          disabled={!hasEveryField(method.fields, fields)}
           onPress={() => void connect()}
           testID="plugin-connect-submit"
         >
           {t('plugins.authorize')}
         </Button>
-        {onUseBrowser ? (
-          <Button variant="link" disabled={isConnecting} onPress={onUseBrowser}>
-            {t('plugins.feishu.useBrowser')}
-          </Button>
-        ) : null}
+        {children}
       </KeyboardAwareScrollView>
     </>
   );

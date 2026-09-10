@@ -1,69 +1,38 @@
 import { randomUUID } from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
-import * as z from 'zod';
 
+import type {
+  PluginAuthorizationStore,
+  PluginGrant,
+} from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError, type PluginAuthorizationState } from '@/shared/contracts/plugins';
+import type { PluginCredential } from '@/shared/data/types/plugin';
 
-import { FEISHU_USER_CREDENTIAL_PREFIX, isFeishuUserCredential } from './feishuAuthorization';
 import {
-  FeishuApplicationSchema,
-  feishuOauth,
-  FeishuTokensSchema,
-  hasFeishuDocumentScopes,
-} from './feishuOauth';
+  FeishuAuthorizationStateSchema,
+  type FeishuAuthorizationStoredState,
+  FeishuUserCredentialSchema,
+  type FeishuUserCredential,
+} from './feishuAuthorizationState';
+import { FeishuApplicationSchema, feishuOauth, missingFeishuDocumentScopes } from './feishuOauth';
+import { migrateFeishuAuthorization } from './migrateFeishuAuthorization';
+import type { PluginAuthorizationRuntime } from './pluginDefinition';
 
-const STORE_KEY = 'plugins.feishu.authorization.v1';
-const STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-const GrantSchema = z.object({
-  id: z.string().uuid(),
-  application: FeishuApplicationSchema,
-  tokens: FeishuTokensSchema,
-});
-const WaitingSchema = z.object({
-  status: z.literal('waiting'),
-  id: z.string().uuid(),
-  stage: z.enum(['registration', 'user']),
-  deviceCode: z.string().min(1).max(16_384),
-  userCode: z.string().min(1).max(512),
-  verificationUrl: z.string().max(4096),
-  expiresAt: z.number().finite(),
-  intervalMs: z.number().positive(),
-  nextPollAt: z.number().finite(),
-});
-const StateSchema = z.object({
-  application: FeishuApplicationSchema.optional(),
-  current: GrantSchema.optional(),
-  pending: z
-    .discriminatedUnion('status', [
-      WaitingSchema,
-      z.object({ status: z.literal('ready'), grant: GrantSchema }),
-      z.object({
-        status: z.enum(['expired', 'denied', 'unsupported-account']),
-        id: z.string().uuid(),
-      }),
-    ])
-    .optional(),
-});
-type StoredState = z.infer<typeof StateSchema>;
-type Grant = z.infer<typeof GrantSchema>;
-
-/**
- * Owned and stopped by McpRuntimeService, one per application host generation.
- * No autonomous timers: screens request one poll at a time only while foregrounded.
- * One queue coordinates device exchanges, rotated tokens, grant commits and deletion.
- */
-export class FeishuAuthorizationRuntime {
-  private pending: Promise<unknown> = Promise.resolve();
-  private lifetime = new AbortController();
+/** One method runtime owns durable attempts and renewal; observation only schedules its steps. */
+export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
+  private operations: Promise<unknown> = Promise.resolve();
+  private readonly lifetime = new AbortController();
   private attempt = new AbortController();
-  // If Keychain rejects a write after a one-time exchange, retain the issued material only
-  // in backend memory and retry persistence before doing any more network work.
-  private unsaved: StoredState | undefined;
+  private renewal = new AbortController();
+  private readonly resolutions = new Map<string, Promise<PluginCredential>>();
+  private initialized = false;
+  // Preserve one-time exchange results in memory if SQLite rejects the first write.
+  private unsavedState: FeishuAuthorizationStoredState | undefined;
+  private unsavedGrant: { previous: PluginGrant; credential: FeishuUserCredential } | undefined;
 
-  constructor(private readonly getCommittedCredential: () => Promise<string | undefined>) {}
+  constructor(private readonly store: PluginAuthorizationStore) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.pending
+    const result = this.operations
       .catch(() => {})
       .then(() => {
         this.lifetime.signal.throwIfAborted();
@@ -74,61 +43,46 @@ export class FeishuAuthorizationRuntime {
           throw new PluginError('cancelled', 'Feishu authorization cancelled.');
         throw error;
       });
-    this.pending = result;
+    this.operations = result;
     return result;
   }
 
-  private async save(state: StoredState) {
-    this.unsaved = state;
+  private async save(state: FeishuAuthorizationStoredState) {
+    this.unsavedState = state;
     try {
-      await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(state), STORE_OPTIONS);
-      this.unsaved = undefined;
+      await this.store.writeState(JSON.parse(JSON.stringify(state)));
+      this.unsavedState = undefined;
     } catch {
-      throw new PluginError('storage', 'Could not securely save Feishu authorization.');
+      throw new PluginError('storage', 'Could not save Feishu authorization.');
     }
   }
 
-  private async read(): Promise<StoredState> {
-    if (this.unsaved) await this.save(this.unsaved);
+  private async read(): Promise<FeishuAuthorizationStoredState> {
     try {
-      const text = await SecureStore.getItemAsync(STORE_KEY);
-      const state = text ? StateSchema.parse(JSON.parse(text)) : {};
-      if (state.current || state.pending?.status === 'ready') {
-        const committed = await this.getCommittedCredential();
-        if (
-          state.pending?.status === 'ready' &&
-          committed === `${FEISHU_USER_CREDENTIAL_PREFIX}${state.pending.grant.id}`
-        ) {
-          // SQLite committed before the process stopped, but Keychain still has the
-          // candidate. Promote it before cancellation can discard a live credential.
-          state.current = state.pending.grant;
-          state.pending = undefined;
-          await this.save(state);
-        } else if (
-          state.current &&
-          committed !== `${FEISHU_USER_CREDENTIAL_PREFIX}${state.current.id}`
-        ) {
-          // Finish interrupted disconnect/manual replacement cleanup. Never resurrect
-          // a connection from Keychain alone after a DB restore or removal.
-          state.current = undefined;
-          if (!state.pending) state.application = undefined;
-          await this.save(state);
-        }
+      if (!this.initialized) {
+        await migrateFeishuAuthorization(this.store);
+        this.initialized = true;
       }
+      if (this.unsavedState) await this.save(this.unsavedState);
+      const state = FeishuAuthorizationStateSchema.parse(await this.store.readState());
       if (state.pending?.status === 'waiting' && Date.now() >= state.pending.expiresAt) {
         state.pending = { status: 'expired', id: state.pending.id };
         await this.save(state);
       }
       return state;
-    } catch {
-      throw new PluginError('storage', 'Could not read secure Feishu authorization.');
+    } catch (error) {
+      if (error instanceof PluginError) throw error;
+      throw new PluginError('storage', 'Could not read Feishu authorization.');
     }
   }
 
-  private project(state: StoredState): PluginAuthorizationState {
+  private project(state: FeishuAuthorizationStoredState): PluginAuthorizationState {
     const pending = state.pending;
-    if (!pending) return { status: state.application ? 'application-ready' : 'idle' };
-    if (pending.status === 'ready') return { status: 'ready', attemptId: pending.grant.id };
+    if (!pending)
+      return state.application
+        ? { status: 'application-ready', applicationId: state.application.appId }
+        : { status: 'idle' };
+    if (pending.status === 'ready') return { status: 'ready', attemptId: pending.id };
     if (pending.status !== 'waiting') return { status: pending.status, attemptId: pending.id };
     return {
       status: 'waiting',
@@ -146,7 +100,7 @@ export class FeishuAuthorizationRuntime {
   }
 
   begin() {
-    const signal = this.attempt.signal;
+    const signal = this.attemptSignal;
     return this.serialize(async () => {
       signal.throwIfAborted();
       const state = await this.read();
@@ -163,22 +117,29 @@ export class FeishuAuthorizationRuntime {
     });
   }
 
-  poll(attemptId: string, observationSignal?: AbortSignal) {
-    const signal = this.attempt.signal;
+  useApplication(fields: Record<string, string>) {
+    this.interrupt();
+    return this.serialize(async () => {
+      const state = await this.read();
+      state.application = FeishuApplicationSchema.parse(fields);
+      delete state.pending;
+      await this.save(state);
+      return this.project(state);
+    });
+  }
+
+  poll(attemptId: string) {
+    const signal = this.attemptSignal;
     return this.serialize(async () => {
       signal.throwIfAborted();
       const state = await this.read();
       const pending = state.pending;
-      if (observationSignal?.aborted) return this.project(state);
       if (!pending || pending.status !== 'waiting') return this.project(state);
       if (pending.id !== attemptId)
         throw new PluginError('cancelled', 'Feishu authorization replaced.');
       if (Date.now() < pending.nextPollAt) return this.project(state);
-      // Persist scheduling before dispatch: a network failure or process restart must not
-      // reset the server's interval. The absolute deadline also bounds the HTTP request.
       pending.nextPollAt = Date.now() + pending.intervalMs;
       await this.save(state);
-      if (observationSignal?.aborted) return this.project(state);
       if (Date.now() >= pending.expiresAt) {
         state.pending = { status: 'expired', id: pending.id };
         await this.save(state);
@@ -210,14 +171,14 @@ export class FeishuAuthorizationRuntime {
       signal.throwIfAborted();
       if (result.status === 'approved') {
         if ('application' in result) {
-          // Save registration immediately. A retry of step two never creates another app.
           state.application = result.application;
-          state.pending = undefined;
+          delete state.pending;
         } else {
           state.pending = {
             status: 'ready',
-            grant: {
-              id: pending.id,
+            id: pending.id,
+            credential: {
+              version: 1,
               application: this.requireApplication(state),
               tokens: result.tokens,
             },
@@ -226,95 +187,152 @@ export class FeishuAuthorizationRuntime {
       } else if (result.status === 'pending' || result.status === 'slow-down') {
         if (result.status === 'slow-down') pending.intervalMs += 5000;
         pending.nextPollAt = Date.now() + pending.intervalMs;
-      } else {
-        state.pending = { status: result.status, id: pending.id };
-      }
+      } else state.pending = { status: result.status, id: pending.id };
       await this.save(state);
       return this.project(state);
     });
   }
 
-  private requireApplication(state: StoredState) {
+  private requireApplication(state: FeishuAuthorizationStoredState) {
     if (!state.application)
       throw new PluginError('authorization', 'Feishu application is missing.');
     return state.application;
   }
 
-  private findGrant(state: StoredState, id: string): Grant {
-    if (state.pending?.status === 'ready' && state.pending.grant.id === id)
-      return state.pending.grant;
-    if (state.current?.id === id) return state.current;
+  private requirePending(state: FeishuAuthorizationStoredState, id: string) {
+    if (state.pending?.status === 'ready' && state.pending.id === id) return state.pending;
     throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
   }
 
-  private async validToken(state: StoredState, grant: Grant, signal: AbortSignal) {
-    if (!hasFeishuDocumentScopes(grant.tokens))
+  private assertGrantedScopes(credential: FeishuUserCredential, reduced: boolean) {
+    const missing = missingFeishuDocumentScopes(credential.tokens);
+    if (missing.length)
       throw new PluginError(
         'access',
-        'Approve all document tool permissions in Feishu before connecting.',
+        reduced
+          ? `Feishu document permissions were reduced (${missing.join(', ')}). Reauthorize.`
+          : `Approve the missing Feishu document permissions before connecting: ${missing.join(', ')}.`,
       );
-    if (grant.tokens.expiresAt <= Date.now() + 60_000) {
-      if (!grant.tokens.refreshToken || grant.tokens.refreshExpiresAt <= Date.now())
+    if (!credential.tokens.refreshToken)
+      throw new PluginError(
+        'access',
+        'Feishu did not grant offline access, so this authorization cannot renew. Approve offline access and retry.',
+      );
+  }
+
+  private async refresh(credential: FeishuUserCredential, signal: AbortSignal) {
+    signal.throwIfAborted();
+    this.assertGrantedScopes(credential, false);
+    if (credential.tokens.expiresAt > Date.now() + 60_000) return credential;
+    if (credential.tokens.refreshExpiresAt <= Date.now())
+      throw new PluginError(
+        'authorization',
+        'Feishu user authorization expired. Reauthorize the existing application.',
+      );
+    const tokens = await feishuOauth.refresh(credential.application, credential.tokens, signal);
+    signal.throwIfAborted();
+    return { ...credential, tokens };
+  }
+
+  private async saveGrant(signal: AbortSignal) {
+    const unsaved = this.unsavedGrant;
+    if (!unsaved) return;
+    signal.throwIfAborted();
+    let saved;
+    try {
+      saved = await this.store.updateCredential(
+        unsaved.previous,
+        JSON.parse(JSON.stringify(unsaved.credential)),
+        signal,
+      );
+    } catch {
+      if (signal.aborted) throw new PluginError('cancelled', 'Feishu authorization cancelled.');
+      throw new PluginError('storage', 'Could not save renewed Feishu authorization.');
+    }
+    this.unsavedGrant = undefined;
+    if (!saved)
+      throw new PluginError(
+        'authorization',
+        'Feishu user authorization was replaced or disconnected.',
+      );
+  }
+
+  resolveCredential(grant: PluginGrant, callerSignal?: AbortSignal): Promise<PluginCredential> {
+    if (callerSignal?.aborted)
+      return Promise.reject(new PluginError('cancelled', 'Feishu authorization cancelled.'));
+    const shared = this.resolutions.get(grant.id);
+    if (shared) return callerSignal ? waitForCaller(shared, callerSignal) : shared;
+    const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+    const operation = this.serialize(async () => {
+      signal.throwIfAborted();
+      await this.read();
+      await this.saveGrant(signal);
+      const current = await this.store.getGrant(grant.id);
+      if (!current)
+        throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
+      const parsed = FeishuUserCredentialSchema.safeParse(current.credential);
+      if (!parsed.success)
         throw new PluginError(
           'authorization',
-          'Feishu user authorization expired. Reauthorize the existing application.',
+          'Feishu user credentials are unavailable. Reauthorize the account.',
         );
-      // Check secure storage is writable before consuming a rotating refresh token.
-      await this.save(state);
-      grant.tokens = await feishuOauth.refresh(grant.application, grant.tokens, signal);
-      // Save a successful exchange even if its caller cancelled while it was arriving.
-      await this.save(state);
-      if (!hasFeishuDocumentScopes(grant.tokens))
-        throw new PluginError('access', 'Feishu document permissions were reduced. Reauthorize.');
-    }
-    signal.throwIfAborted();
-    return grant.tokens.accessToken;
-  }
-
-  getUserToken = (credential: string, callerSignal?: AbortSignal): Promise<string> => {
-    const signal = callerSignal
-      ? AbortSignal.any([callerSignal, this.lifetime.signal])
-      : this.lifetime.signal;
-    return this.serialize(async () => {
+      const credential = await this.refresh(parsed.data, signal);
+      if (credential !== parsed.data) {
+        this.unsavedGrant = { previous: current, credential };
+        await this.saveGrant(signal);
+        this.assertGrantedScopes(credential, true);
+      }
       signal.throwIfAborted();
-      const state = await this.read();
-      if (!isFeishuUserCredential(credential))
-        throw new PluginError('authorization', 'Invalid Feishu user credential reference.');
-      const grant = this.findGrant(state, credential.slice(FEISHU_USER_CREDENTIAL_PREFIX.length));
-      return this.validToken(state, grant, signal);
+      return JSON.parse(JSON.stringify(credential)) as PluginCredential;
     });
-  };
+    this.resolutions.set(grant.id, operation);
+    void operation
+      .finally(() => {
+        if (this.resolutions.get(grant.id) === operation) this.resolutions.delete(grant.id);
+      })
+      .catch(() => {});
+    return callerSignal ? waitForCaller(operation, callerSignal) : operation;
+  }
 
   get attemptSignal() {
-    return this.attempt.signal;
+    return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
   }
 
-  prepare(attemptId: string, signal = this.attempt.signal) {
+  prepare(attemptId: string, signal = this.attemptSignal) {
     return this.serialize(async () => {
       signal.throwIfAborted();
       const state = await this.read();
-      const grant = this.findGrant(state, attemptId);
-      const token = await this.validToken(state, grant, signal);
-      const accountLabel = await feishuOauth.getAccountLabel(token, signal);
+      const pending = this.requirePending(state, attemptId);
+      const credential = await this.refresh(pending.credential, signal);
+      if (credential !== pending.credential) {
+        pending.credential = credential;
+        await this.save(state);
+        this.assertGrantedScopes(credential, true);
+      }
+      const accountLabel = await feishuOauth.getAccountLabel(credential.tokens.accessToken, signal);
       signal.throwIfAborted();
-      return { credential: `${FEISHU_USER_CREDENTIAL_PREFIX}${grant.id}`, accountLabel, signal };
+      return {
+        credential: JSON.parse(JSON.stringify(credential)) as PluginCredential,
+        accountLabel,
+        signal,
+      };
     });
   }
 
-  commit<T>(attemptId: string, signal: AbortSignal, saveConnection: () => Promise<T>) {
+  commit(attemptId: string, accountLabel: string, signal: AbortSignal) {
     return this.serialize(async () => {
       signal.throwIfAborted();
       const state = await this.read();
-      const grant = this.findGrant(state, attemptId);
-      const connection = await saveConnection();
-      // SecureStore and SQLite are not one transaction. The already durable pending grant
-      // resolves the DB reference after a crash here; repeating completion is safe.
-      state.current = grant;
-      state.pending = undefined;
-      // This is compaction, not the first credential write: the candidate is already
-      // durable and the DB commit succeeded. Retain a retry without reporting a false
-      // connection failure (which would send the user through authorization again).
-      await this.save(state).catch(() => {});
+      const pending = this.requirePending(state, attemptId);
+      delete state.pending;
+      // The grant, MCP identity and removal of the candidate commit in one SQLite transaction.
+      const connection = await this.store.commit(
+        JSON.parse(JSON.stringify(pending.credential)),
+        accountLabel,
+        JSON.parse(JSON.stringify(state)),
+        signal,
+      );
+      this.invalidateGrant();
       return connection;
     });
   }
@@ -323,46 +341,55 @@ export class FeishuAuthorizationRuntime {
     this.interrupt();
     return this.serialize(async () => {
       const state = await this.read();
-      state.pending = undefined;
+      delete state.pending;
       await this.save(state);
       return this.project(state);
     });
   }
 
-  /** Explicit recovery when the registered application was deleted or cannot be authorized. */
   resetApplication() {
     this.interrupt();
     return this.serialize(async () => {
       const state = await this.read();
-      state.pending = undefined;
-      state.application = undefined;
-      // An already connected grant keeps its own application until replacement succeeds.
+      delete state.pending;
+      delete state.application;
       await this.save(state);
       return this.project(state);
     });
   }
 
-  /** Invalidate immediately, before a queued completion can commit after disconnect. */
   interrupt() {
     this.attempt.abort();
     this.attempt = new AbortController();
   }
 
-  clear() {
-    return this.serialize(async () => {
-      try {
-        await SecureStore.deleteItemAsync(STORE_KEY);
-        this.unsaved = undefined;
-      } catch {
-        throw new PluginError('storage', 'Could not remove secure Feishu authorization.');
-      }
-    });
+  invalidateGrant() {
+    this.renewal.abort();
+    this.renewal = new AbortController();
+    this.unsavedGrant = undefined;
+    this.resolutions.clear();
   }
 
   async stop() {
     this.attempt.abort();
+    this.renewal.abort();
     this.lifetime.abort();
-    await this.pending.catch(() => {});
-    this.unsaved = undefined;
+    await this.operations.catch(() => {});
+    this.unsavedState = undefined;
+    this.unsavedGrant = undefined;
+    this.resolutions.clear();
   }
+}
+
+/** Cancellation releases this waiter immediately and consumes the shared operation's late result. */
+function waitForCaller<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(new PluginError('cancelled', 'Feishu authorization cancelled.'));
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+    operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
 }

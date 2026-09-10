@@ -3,10 +3,14 @@ import * as z from 'zod';
 
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
-import type { PluginId } from '@/shared/data/types/plugin';
+import type { PluginCredential, PluginId } from '@/shared/data/types/plugin';
 
-import type { PluginClientContext } from './pluginDefinition';
-import { getPluginDefinition, requirePluginDefinition } from './pluginRegistry';
+import type { PluginAuthorizationManager } from './PluginAuthorizationManager';
+import {
+  getPluginDefinition,
+  requirePluginAuthMethod,
+  requirePluginDefinition,
+} from './pluginRegistry';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
 
@@ -20,26 +24,43 @@ export async function createBuiltInMcpClient(
   pluginId: PluginId,
   authorizationId: string,
   signal: AbortSignal,
-  getUserToken?: PluginClientContext['getUserToken'],
+  authorizations: Pick<PluginAuthorizationManager, 'get'>,
 ): Promise<MCPClient> {
   const plugin = requirePluginDefinition(pluginId);
+  const initial = await pluginAuthorizationService
+    .getCredentialGrant(pluginId, authorizationId)
+    .catch(() => {
+      throw new PluginError('authorization', 'The plugin authorization is no longer available.');
+    });
+  const method = plugin.authMethods.find((candidate) => candidate.id === initial.authMethod);
+  if (!method)
+    throw new PluginError(
+      'authorization',
+      'The plugin authorization method is unavailable. Reconnect the plugin.',
+    );
+  const methodId = method.id;
+  async function readGrant() {
+    const grant = await pluginAuthorizationService.getCredentialGrant(pluginId, authorizationId);
+    if (grant.authMethod !== methodId)
+      throw new PluginError(
+        'authorization',
+        'The plugin authorization method changed. Reconnect the plugin.',
+      );
+    return grant;
+  }
   return plugin.createClient({
     pluginId,
     tools: plugin.tools,
     signal,
-    getUserToken,
-    async getCredential() {
-      const grant = await pluginAuthorizationService.getCredentialGrant(pluginId, authorizationId);
-      if (
-        grant.authMethod !== plugin.authMethod &&
-        !plugin.additionalAuthMethods?.includes(grant.authMethod)
-      ) {
-        throw new PluginError(
-          'authorization',
-          'The plugin authorization method is unavailable. Reconnect the plugin.',
-        );
-      }
-      return grant.credential;
+    authorization: method.createRequestAuthorization(plugin.tools),
+    async assertAuthorized() {
+      await readGrant();
+    },
+    async getCredential(callerSignal) {
+      const grant = await readGrant();
+      return method.kind === 'interactive'
+        ? authorizations.get(pluginId, method.id).resolveCredential(grant, callerSignal)
+        : grant.credential;
     },
   });
 }
@@ -47,11 +68,12 @@ export async function createBuiltInMcpClient(
 /** Verify new credentials through read-only connection checks before committing them. */
 export async function validatePluginCredential(
   pluginId: PluginId,
-  credential: string,
+  authMethod: string,
+  credential: PluginCredential,
   signal?: AbortSignal,
-  getUserToken?: PluginClientContext['getUserToken'],
 ): Promise<string> {
   const plugin = requirePluginDefinition(pluginId);
+  const method = requirePluginAuthMethod(plugin, authMethod);
   const deadline = new AbortController();
   const timer = setTimeout(() => deadline.abort(), CONNECTION_TIMEOUT_MS);
   const operationSignal = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
@@ -62,8 +84,11 @@ export async function validatePluginCredential(
       pluginId,
       tools: plugin.tools,
       getCredential: async () => credential,
+      assertAuthorized: async () => {
+        operationSignal.throwIfAborted();
+      },
+      authorization: method.createRequestAuthorization(plugin.tools),
       signal: operationSignal,
-      getUserToken,
     });
     const name = plugin.validation.tool;
     const cursors = new Set<string>();

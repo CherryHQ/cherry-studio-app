@@ -6,7 +6,7 @@ jest.mock('@/backend/services/http', () => ({
   isHttpError: () => false,
 }));
 
-const credential = JSON.stringify({ appId: 'cli_cherry', appSecret: 'private-secret' });
+const credential = { version: 1, appId: 'cli_cherry', appSecret: 'private-secret' };
 
 beforeEach(() => {
   mockRequest.mockReset().mockResolvedValue({
@@ -28,7 +28,7 @@ it('reuses a token only for the same credential and replaces it before expiry', 
   now.mockReturnValue(7_141_000);
   await expect(provider.getToken(credential)).resolves.toBe('token-next');
   expect(mockRequest).toHaveBeenCalledTimes(2);
-  await provider.getToken(JSON.stringify({ appId: 'cli_other', appSecret: 'other-secret' }));
+  await provider.getToken({ version: 1, appId: 'cli_other', appSecret: 'other-secret' });
   expect(mockRequest).toHaveBeenCalledTimes(3);
 });
 

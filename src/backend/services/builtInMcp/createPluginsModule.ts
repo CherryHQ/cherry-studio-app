@@ -1,15 +1,20 @@
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
-import { ConnectPluginSchema, PluginError, type PluginsModule } from '@/shared/contracts/plugins';
+import {
+  ConnectPluginSchema,
+  PluginError,
+  type PluginAuthorizationState,
+  type PluginsModule,
+} from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import { validatePluginCredential } from './createBuiltInMcpClient';
-import type { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
-import { requirePluginDefinition } from './pluginRegistry';
+import type { PluginAuthorizationManager } from './PluginAuthorizationManager';
+import { requirePluginAuthMethod, requirePluginDefinition } from './pluginRegistry';
 
 export function createPluginsModule(
   runtime: { invalidateServer(id: string): void },
-  feishuAuthorization: FeishuAuthorizationRuntime,
+  authorizations: PluginAuthorizationManager,
 ): PluginsModule {
   const pending = new Map<PluginId, Promise<unknown>>();
   function serialize<T>(pluginId: PluginId, operation: () => Promise<T>): Promise<T> {
@@ -22,99 +27,127 @@ export function createPluginsModule(
       .catch(() => {});
     return result;
   }
-  function authorization(pluginId: PluginId) {
-    const plugin = requirePluginDefinition(pluginId);
-    if (plugin.catalog.interactiveAuthorization !== 'feishu-device')
-      throw new PluginError(
-        'unavailable',
-        'Interactive authorization is unavailable for this plugin.',
-      );
-    return feishuAuthorization;
+  function complete(pluginId: PluginId, methodId: string, attemptId: string) {
+    const auth = authorizations.get(pluginId, methodId);
+    const attemptSignal = auth.attemptSignal;
+    authorizations.interrupt(pluginId, methodId);
+    return serialize(pluginId, async () => {
+      await authorizations.cancelAttempts(pluginId, methodId);
+      const { credential, accountLabel, signal } = await auth.prepare(attemptId, attemptSignal);
+      await validatePluginCredential(pluginId, methodId, credential, signal);
+      let connection;
+      try {
+        connection = await auth.commit(attemptId, accountLabel, signal);
+      } catch (error) {
+        if (signal.aborted) throw new PluginError('cancelled', 'Plugin authorization cancelled.');
+        if (error instanceof PluginError) throw error;
+        throw new PluginError('storage', 'Could not save plugin authorization.');
+      }
+      authorizations.invalidateGrant(pluginId);
+      runtime.invalidateServer(connection.serverId);
+      return connection;
+    });
+  }
+  function observer(pluginId: PluginId, methodId: string) {
+    return authorizations.observer(pluginId, methodId, (attemptId) =>
+      complete(pluginId, methodId, attemptId),
+    );
+  }
+  async function step(
+    pluginId: PluginId,
+    methodId: string,
+    action: () => Promise<PluginAuthorizationState>,
+  ) {
+    try {
+      return await action();
+    } finally {
+      observer(pluginId, methodId).check();
+    }
   }
   return {
     authorization: {
-      getState: (pluginId) => authorization(pluginId).getState(),
-      begin: (pluginId) => authorization(pluginId).begin(),
-      poll: (pluginId, attemptId, observationSignal) =>
-        authorization(pluginId).poll(attemptId, observationSignal),
-      cancel: (pluginId) => authorization(pluginId).cancel(),
-      resetApplication: (pluginId) => authorization(pluginId).resetApplication(),
-      complete(pluginId, attemptId) {
-        const auth = authorization(pluginId);
-        const attemptSignal = auth.attemptSignal;
-        return serialize(pluginId, async () => {
-          const { credential, accountLabel, signal } = await auth.prepare(attemptId, attemptSignal);
-          await validatePluginCredential(pluginId, credential, signal, auth.getUserToken);
-          const plugin = requirePluginDefinition(pluginId);
-          return auth.commit(attemptId, signal, async () => {
-            let connection;
-            try {
-              connection = await pluginAuthorizationService.connect(
-                {
-                  pluginId,
-                  credential,
-                  accountLabel,
-                  authMethod: 'feishu_user',
-                  serverName: plugin.serverName ?? plugin.catalog.name.default,
-                },
-                signal,
-              );
-            } catch {
-              if (signal.aborted)
-                throw new PluginError('cancelled', 'Feishu authorization cancelled.');
-              throw new PluginError('storage', 'Could not save plugin authorization.');
-            }
-            runtime.invalidateServer(connection.serverId);
-            return connection;
-          });
-        });
+      observe: (pluginId, methodId, listener) => observer(pluginId, methodId).observe(listener),
+      check: (pluginId, methodId) => observer(pluginId, methodId).check(),
+      begin: (pluginId, methodId) =>
+        step(pluginId, methodId, () => authorizations.get(pluginId, methodId).begin()),
+      useApplication(pluginId, methodId, fields) {
+        const method = requirePluginAuthMethod(requirePluginDefinition(pluginId), methodId);
+        const auth = authorizations.get(pluginId, methodId);
+        if (method.kind !== 'interactive' || !method.applicationFields || !auth.useApplication)
+          throw new PluginError(
+            'unavailable',
+            'This method does not accept an existing application.',
+          );
+        const parsed = createPluginCredentialsSchema(method.applicationFields).parse(fields);
+        return step(pluginId, methodId, () => auth.useApplication!(parsed));
+      },
+      cancel: (pluginId, methodId) =>
+        step(pluginId, methodId, () => authorizations.get(pluginId, methodId).cancel()),
+      resetApplication(pluginId, methodId) {
+        const auth = authorizations.get(pluginId, methodId);
+        if (!auth.resetApplication)
+          throw new PluginError('unavailable', 'This method does not store an application.');
+        return step(pluginId, methodId, () => auth.resetApplication!());
       },
     },
     connect(input, signal) {
       const parsed = ConnectPluginSchema.parse(input);
       const plugin = requirePluginDefinition(parsed.pluginId);
-      const fields = createPluginCredentialsSchema(plugin.catalog.credentialFields).parse(
-        parsed.fields,
-      );
+      const method = requirePluginAuthMethod(plugin, parsed.authMethod);
+      if (method.kind !== 'credentials')
+        throw new PluginError(
+          'unavailable',
+          'Use the interactive authorization flow for this method.',
+        );
+      const fields = createPluginCredentialsSchema(method.fields).parse(parsed.fields);
+      authorizations.interrupt(parsed.pluginId);
       return serialize(parsed.pluginId, async () => {
-        if (plugin.catalog.interactiveAuthorization) feishuAuthorization.interrupt();
         signal?.throwIfAborted();
-        const credential = plugin.encodeCredentials(fields);
-        const accountLabel = await validatePluginCredential(parsed.pluginId, credential, signal);
+        const credential = method.encodeCredentials(fields);
+        const accountLabel = await validatePluginCredential(
+          parsed.pluginId,
+          method.id,
+          credential,
+          signal,
+        );
         signal?.throwIfAborted();
-        let connection: Awaited<ReturnType<typeof pluginAuthorizationService.connect>>;
+        await authorizations.cancelAttempts(parsed.pluginId);
+        let connection;
         try {
           connection = await pluginAuthorizationService.connect(
             {
               pluginId: parsed.pluginId,
-              authMethod: plugin.authMethod,
-              serverName: plugin.serverName ?? plugin.catalog.name.default,
+              authMethod: method.id,
+              serverName: plugin.serverName,
               accountLabel,
               credential,
             },
             signal,
           );
         } catch {
+          if (signal?.aborted) throw new PluginError('cancelled', 'Plugin connection cancelled.');
           throw new PluginError(
             'storage',
             'Could not save plugin authorization. Try connecting again.',
           );
         }
+        authorizations.invalidateGrant(parsed.pluginId);
         runtime.invalidateServer(connection.serverId);
-        if (plugin.catalog.interactiveAuthorization) await feishuAuthorization.clear();
         return connection;
       });
     },
     disconnect(pluginId) {
       PluginIdSchema.parse(pluginId);
-      if (pluginId === 'feishu') feishuAuthorization.interrupt();
+      authorizations.interrupt(pluginId);
+      authorizations.invalidateGrant(pluginId);
       return serialize(pluginId, async () => {
         const connection = (await pluginAuthorizationService.listConnections()).find(
           (item) => item.pluginId === pluginId,
         );
         if (connection) runtime.invalidateServer(connection.serverId);
+        // Remove resumable attempts before the connection, retaining each method's application.
+        await authorizations.cancelAttempts(pluginId);
         await pluginAuthorizationService.disconnect(pluginId);
-        if (pluginId === 'feishu') await feishuAuthorization.clear();
       });
     },
   };

@@ -10,13 +10,6 @@ type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' 
 
 type OfficialMcpConnection = {
   readonly url: string;
-  readonly authorization: {
-    apply(
-      credential: string,
-      request: { url: URL; headers: Headers; signal?: AbortSignal },
-    ): void | Promise<void>;
-    invalidate?(): void;
-  };
 };
 
 /** Shared fixed-endpoint HTTP mechanics; platform authorization belongs to the plugin. */
@@ -44,12 +37,18 @@ export function createOfficialMcpClient(
         }
       }
       init?.signal?.throwIfAborted();
-      const credential = await context.getCredential().catch(() => {
-        throw new PluginError('authorization', 'The plugin authorization is no longer available.');
-      });
+      const credential = await context
+        .getCredential(init?.signal ?? undefined)
+        .catch((error: unknown) => {
+          if (error instanceof PluginError) throw error;
+          throw new PluginError(
+            'authorization',
+            'The plugin authorization is no longer available.',
+          );
+        });
       init?.signal?.throwIfAborted();
       const headers = new Headers(init?.headers);
-      await connection.authorization.apply(credential, {
+      await context.authorization.apply(credential, {
         url,
         headers,
         signal: init?.signal ?? undefined,
@@ -63,11 +62,10 @@ export function createOfficialMcpClient(
       ) {
         throw new PluginError('request', 'The plugin authorization changed the request target.');
       }
-      const currentCredential = await context.getCredential().catch(() => undefined);
-      if (currentCredential !== credential) {
-        connection.authorization.invalidate?.();
+      await context.assertAuthorized().catch(() => {
+        context.authorization.invalidate?.();
         throw new PluginError('authorization', 'The plugin authorization is no longer available.');
-      }
+      });
       init?.signal?.throwIfAborted();
       submitted = true;
       const response = await expoFetch(url.href, {
@@ -80,7 +78,7 @@ export function createOfficialMcpClient(
       if (!response.ok && !(init?.method === 'GET' && response.status === 405)) {
         void response.body?.cancel().catch(() => undefined);
         if (response.status === 401) {
-          connection.authorization.invalidate?.();
+          context.authorization.invalidate?.();
           throw new PluginError(
             'authorization',
             'The official MCP service rejected the credential.',

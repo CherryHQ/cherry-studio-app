@@ -6,6 +6,70 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('converts historical and development credentials into JSON objects without changing connection identities or unknown object formats', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      const target = entries.findIndex(
+        ({ tag }) => tag === '0024_extensible-plugin-authorizations',
+      );
+      expect(target).toBeGreaterThan(0);
+      for (const { sql } of entries.slice(0, target)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+        VALUES ('github', 'github', 'personal_token', 'cherry', 'github-"secret', 1, 1),
+               ('amap', 'amap', 'api_key', 'Web Service', '12345', 1, 1);
+      `);
+      // Seed formats accepted by the earlier development schema, which already opened methods.
+      // Restore CHECK enforcement before running the merged migration itself.
+      database.exec(`
+        PRAGMA ignore_check_constraints = ON;
+        INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)
+        VALUES ('app', 'feishu', 'app_credentials', 'cli_cherry', '{"appId":"cli_cherry","appSecret":"secret"}', 1, 1),
+               ('user', 'feishu', 'feishu_user', 'Cherry', 'feishu-user:legacy-id', 1, 1),
+               ('future', 'future', 'future_method', 'Future', '{"version":2,"nested":{"key":"future-secret"}}', 1, 1);
+        PRAGMA ignore_check_constraints = OFF;
+        INSERT INTO mcp_server (id, name, origin, builtin_id, authorization_id, disabled_tools, is_active, created_at, updated_at)
+        VALUES ('github-server', 'GitHub', 'builtin', 'github', 'github', '["issue_write"]', 1, 1, 1),
+               ('feishu-server', 'Feishu', 'builtin', 'feishu', 'user', '[]', 0, 1, 1);
+      `);
+      const servers = database.prepare('SELECT * FROM mcp_server ORDER BY id').all();
+      const metadata = database
+        .prepare(
+          'SELECT id, plugin_id, auth_method, account_label, created_at, updated_at FROM plugin_authorization ORDER BY id',
+        )
+        .all();
+      database.exec('BEGIN IMMEDIATE');
+      applyMigrationSql(database, entries[target].sql);
+      database.exec('COMMIT');
+      const credentials = Object.fromEntries(
+        database
+          .prepare('SELECT id, credential FROM plugin_authorization')
+          .all()
+          .map((row) => [row.id, JSON.parse(String(row.credential))]),
+      );
+      expect(credentials).toEqual({
+        github: { version: 1, token: 'github-"secret' },
+        amap: { version: 1, key: '12345' },
+        app: { version: 1, appId: 'cli_cherry', appSecret: 'secret' },
+        user: { legacyReference: 'feishu-user:legacy-id' },
+        future: { version: 2, nested: { key: 'future-secret' } },
+      });
+      expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
+      expect(
+        database
+          .prepare(
+            'SELECT id, plugin_id, auth_method, account_label, created_at, updated_at FROM plugin_authorization ORDER BY id',
+          )
+          .all(),
+      ).toEqual(metadata);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('opens plugin identifiers and authorization methods while preserving referenced grants, servers and Agent settings', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -39,7 +103,14 @@ describe('bundled SQLite migrations', () => {
       applyMigrationSql(database, entries[target].sql);
       database.exec('COMMIT');
       expect(database.prepare('SELECT * FROM plugin_authorization ORDER BY id').all()).toEqual(
-        grants,
+        grants.map((grant) => ({
+          ...grant,
+          credential: JSON.stringify(
+            grant.plugin_id === 'github'
+              ? { version: 1, token: grant.credential }
+              : { version: 1, key: grant.credential },
+          ),
+        })),
       );
       expect(database.prepare('SELECT * FROM mcp_server ORDER BY id').all()).toEqual(servers);
       expect(database.prepare('SELECT * FROM agent_tool_binding').all()).toEqual(bindings);
@@ -193,7 +264,12 @@ describe('bundled SQLite migrations', () => {
         );
 
         expect(columnNames(database, 'desktop_connection')).toContain('active_base_url');
-        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(grants);
+        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(
+          grants.map((grant) => ({
+            ...grant,
+            credential: JSON.stringify({ version: 1, token: grant.credential }),
+          })),
+        );
         expect(database.prepare('SELECT * FROM mcp_server').all()).toEqual(servers);
         expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       } finally {

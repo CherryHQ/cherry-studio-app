@@ -7,12 +7,11 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { RouteHeader } from '@/frontend/appShell/header';
 
 import { PluginIcon } from './components/PluginIcon';
-import { getPluginText } from './pluginCatalog';
 import { usePluginCatalog } from './usePluginCatalog';
 import { usePluginConnections } from './usePluginConnections';
 
 export function PluginListScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const router = useRouter();
   const catalog = usePluginCatalog();
   const connections = usePluginConnections();
@@ -46,7 +45,7 @@ export function PluginListScreen() {
         <View>
           {ids.map((id) => {
             const entry = entries.find((item) => item.id === id);
-            const name = entry ? getPluginText(entry.name, i18n.language) : id;
+            const name = entry ? t(`plugins.catalog.${id}.name`) : id;
             return (
               <Pressable
                 accessibilityRole="button"
@@ -62,7 +61,7 @@ export function PluginListScreen() {
                 <View className="flex-1 gap-1">
                   <Text className="text-base font-medium text-foreground">{name}</Text>
                   <Text className="text-sm text-muted-foreground">
-                    {entry ? getPluginText(entry.summary, i18n.language) : t('plugins.unavailable')}
+                    {entry ? t(`plugins.catalog.${id}.summary`) : t('plugins.unavailable')}
                   </Text>
                   {connections.data?.some((item) => item.pluginId === id) ? (
                     <Text className="text-xs text-success">{t('plugins.connected')}</Text>
