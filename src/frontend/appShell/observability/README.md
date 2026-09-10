@@ -13,8 +13,17 @@ come from inside a screen, so entry routes mount `StartupInteractiveMarker` them
 
 `configureSentry` configures JavaScript error and native crash reporting. The root layout composes
 `Sentry.wrap` with the existing `ObserveRoot.wrap`. Performance tracing, session replay, and log
-streaming are not enabled. Default PII collection is disabled, as are JavaScript console and HTTP
-breadcrumbs, which can contain conversation data or provider credentials.
+streaming are not enabled. Default PII collection is disabled. `maxBreadcrumbs: 0` disables all
+breadcrumbs in both JavaScript and the native SDKs, including native HTTP breadcrumbs whose URLs
+can contain conversation data or provider credentials. JavaScript console and HTTP breadcrumb
+instrumentation is also disabled. Error stacks and native crash reporting remain enabled.
+
+`app.json` explicitly declares crash, performance, and other diagnostic data for observability in
+`ios.privacyManifests`, without identity linkage or tracking. It also declares Sentry's required
+UserDefaults, system boot time, and file timestamp API reasons from the
+[official privacy manifest guide](https://docs.sentry.io/platforms/react-native/data-management/apple-privacy-manifest/).
+These declarations are the app's baseline; React Native aggregates additional API reasons from
+native dependencies during CocoaPods installation.
 
 Reporting and native initialization are disabled in development mode or when
 `EXPO_PUBLIC_SENTRY_DSN` is absent. `app.config.ts` supplies the build's `PROFILE` through

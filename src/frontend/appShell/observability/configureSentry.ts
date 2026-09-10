@@ -11,7 +11,9 @@ export function configureSentry() {
     enableNative: isEnabled,
     environment: Constants.expoConfig?.extra?.sentryEnvironment,
     sendDefaultPii: false,
-    // Console arguments and request URLs can contain chat data or provider credentials.
+    // Also reaches the native SDKs, so iOS request URLs cannot become crash breadcrumbs.
+    maxBreadcrumbs: 0,
+    // Avoid instrumenting JS console and requests when breadcrumbs are disabled.
     integrations: [Sentry.breadcrumbsIntegration({ console: false, fetch: false, xhr: false })],
   });
 }
