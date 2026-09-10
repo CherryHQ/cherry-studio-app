@@ -60,7 +60,7 @@ function createStore() {
     preview: jest.fn(async () => ({ providers: [] })),
     import: jest.fn(async () => ({
       providersAdded: 0,
-      providersSkipped: 0,
+      providersUpdated: 0,
       modelsAdded: 0,
       modelsSkipped: 0,
     })),

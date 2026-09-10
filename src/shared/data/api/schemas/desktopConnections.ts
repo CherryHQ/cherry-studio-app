@@ -175,6 +175,7 @@ export const DesktopProviderModelSchema = z
     id: z.string().min(1),
     inputModalities: z.array(z.enum(objectValues(MODALITY))).optional(),
     isDeprecated: z.boolean().optional(),
+    isEnabled: z.boolean().optional(),
     isHidden: z.boolean().optional(),
     maxInputTokens: z.number().int().positive().optional(),
     maxOutputTokens: z.number().int().positive().optional(),
@@ -216,6 +217,7 @@ export const DesktopProviderSnapshotSchema = z
       .partialRecord(z.enum(objectValues(ENDPOINT_TYPE)), EndpointConfigSchema)
       .optional(),
     id: ProviderIdSchema,
+    isEnabled: z.boolean().optional(),
     models: z.array(DesktopProviderModelSchema),
     name: z.string().min(1),
     presetProviderId: ProviderIdSchema.optional(),
@@ -273,7 +275,7 @@ export type DesktopImportSelectionsDto = z.infer<typeof DesktopImportSelectionsS
 
 export type DesktopImportPreview = {
   providers: {
-    action: 'add' | 'skip';
+    action: 'add' | 'update';
     id: string;
     models: { action: 'add' | 'skip'; modelId: string; name: string }[];
     name: string;
@@ -285,7 +287,7 @@ export type DesktopImportResult = {
   modelsAdded: number;
   modelsSkipped: number;
   providersAdded: number;
-  providersSkipped: number;
+  providersUpdated: number;
 };
 
 export type DesktopConnectionSchemas = {

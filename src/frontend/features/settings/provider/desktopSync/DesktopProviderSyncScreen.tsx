@@ -58,7 +58,7 @@ export default function DesktopProviderSyncScreen() {
         setSelectedProviderIds(
           new Set(
             nextPreview.providers
-              .filter((provider) => !provider.unavailableReason && hasNewData(provider))
+              .filter((provider) => !provider.unavailableReason)
               .map((provider) => provider.id),
           ),
         );
@@ -129,7 +129,7 @@ export default function DesktopProviderSyncScreen() {
           models: result.modelsAdded,
           providers: result.providersAdded,
           modelsSkipped: result.modelsSkipped,
-          providersSkipped: result.providersSkipped,
+          providersUpdated: result.providersUpdated,
         }),
         variant: 'success',
       });
@@ -241,7 +241,7 @@ function ProviderSelection({
         })}
       >
         {loadedPreview.preview.providers.map((provider) => {
-          const isUnavailable = Boolean(provider.unavailableReason) || !hasNewData(provider);
+          const isUnavailable = Boolean(provider.unavailableReason);
           const isSelected = selectedProviderIds.has(provider.id);
           return (
             <Section.Item
@@ -275,8 +275,4 @@ function ProviderSelection({
       </Text>
     </>
   );
-}
-
-function hasNewData(provider: DesktopImportPreview['providers'][number]) {
-  return provider.action === 'add' || provider.models.some((model) => model.action === 'add');
 }

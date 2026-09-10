@@ -30,12 +30,14 @@ describe('desktop connection api schemas', () => {
           authType: 'api-key',
           defaultChatEndpoint: 'openai-chat-completions',
           id: 'openai-work',
+          isEnabled: true,
           models: [
             {
               apiModelId: 'deployment-gpt-5',
               capabilities: [],
               id: 'openai-work::deployment-gpt-5',
               isDeprecated: true,
+              isEnabled: false,
               isHidden: true,
               presetModelId: 'gpt-5',
               providerId: 'openai-work',
@@ -53,11 +55,13 @@ describe('desktop connection api schemas', () => {
       authMethods: ['api-key'],
       authOptional: false,
       authType: 'api-key',
+      isEnabled: true,
       presetProviderId: 'openai',
       reportsActualCost: true,
     });
     expect(snapshot.providers[0]?.models[0]).toMatchObject({
       isDeprecated: true,
+      isEnabled: false,
       isHidden: true,
       modelId: 'deployment-gpt-5',
       presetModelId: 'gpt-5',

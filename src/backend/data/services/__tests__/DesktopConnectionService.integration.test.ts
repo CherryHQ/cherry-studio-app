@@ -47,7 +47,7 @@ function snapshot(...providers: ReturnType<typeof provider>[]) {
 
 beforeEach(installProviderRegistryTestSnapshot);
 
-describe('DesktopConnectionService incremental import', () => {
+describe('DesktopConnectionService provider synchronization', () => {
   let testDb: TestDb;
   let service: DesktopConnectionService;
 
@@ -83,7 +83,7 @@ describe('DesktopConnectionService incremental import', () => {
     );
   }
 
-  it('keeps every existing provider/model column and only appends missing models', async () => {
+  it('syncs provider configuration while keeping every existing model column', async () => {
     await importSnapshot(snapshot(provider()));
     await testDb.database.update(userProviderTable).set({
       name: 'Local provider',
@@ -94,6 +94,7 @@ describe('DesktopConnectionService incremental import', () => {
       },
       defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
       providerSettings: { notes: 'Local provider notes' },
+      logoKey: 'icon:local-provider',
     });
     await testDb.database.update(userModelTable).set({
       name: 'Local model',
@@ -106,17 +107,36 @@ describe('DesktopConnectionService incremental import', () => {
     const [beforeProvider] = await testDb.database.select().from(userProviderTable);
     const [beforeModel] = await testDb.database.select().from(userModelTable);
     const data = snapshot(provider('relay', ['existing', 'missing']));
+    data.providers[0]!.authConfig = { type: 'api-key', headerName: 'x-api-key' };
+    data.providers[0]!.providerSettings = { notes: 'Desktop provider notes' };
+    data.providers[0]!.apiFeatures = { reportsActualCost: true };
 
     expect(await service.preview(data)).toMatchObject({
-      providers: [{ action: 'skip', models: [{ action: 'skip' }, { action: 'add' }] }],
+      providers: [{ action: 'update', models: [{ action: 'skip' }, { action: 'add' }] }],
     });
     await expect(importSnapshot(data)).resolves.toEqual({
       providersAdded: 0,
-      providersSkipped: 1,
+      providersUpdated: 1,
       modelsAdded: 1,
       modelsSkipped: 1,
     });
-    expect(await testDb.database.select().from(userProviderTable)).toEqual([beforeProvider]);
+    const [syncedProvider] = await testDb.database.select().from(userProviderTable);
+    expect(syncedProvider).toMatchObject({
+      apiFeatures: { reportsActualCost: true },
+      apiKeys: data.providers[0]!.apiKeys,
+      authConfig: { type: 'api-key', headerName: 'x-api-key' },
+      createdAt: beforeProvider!.createdAt,
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://desktop.example.com/v1' },
+        [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://local.example.com' },
+      },
+      isEnabled: true,
+      logoKey: beforeProvider!.logoKey,
+      name: 'Desktop provider',
+      orderKey: beforeProvider!.orderKey,
+      providerSettings: { notes: 'Desktop provider notes' },
+    });
     expect(
       await testDb.database
         .select()
@@ -133,11 +153,111 @@ describe('DesktopConnectionService incremental import', () => {
     const beforeRepeat = await testDb.database.select().from(userModelTable);
     await expect(importSnapshot(data)).resolves.toEqual({
       providersAdded: 0,
-      providersSkipped: 1,
+      providersUpdated: 1,
       modelsAdded: 0,
       modelsSkipped: 2,
     });
     expect(await testDb.database.select().from(userModelTable)).toEqual(beforeRepeat);
+  });
+
+  it.each(['cherryin', 'aihubmix'])(
+    'syncs and enables the installed %s provider even when every model already exists',
+    async (providerId) => {
+      const data = snapshot(provider(providerId));
+      await importSnapshot(data);
+      await testDb.database.update(userProviderTable).set({ apiKeys: [], isEnabled: false });
+      const beforeModels = await testDb.database.select().from(userModelTable);
+
+      expect(await service.preview(data)).toMatchObject({
+        providers: [{ id: providerId, action: 'update', models: [{ action: 'skip' }] }],
+      });
+      await expect(importSnapshot(data)).resolves.toEqual({
+        providersAdded: 0,
+        providersUpdated: 1,
+        modelsAdded: 0,
+        modelsSkipped: 1,
+      });
+      expect(await testDb.database.select().from(userProviderTable)).toMatchObject([
+        {
+          providerId,
+          presetProviderId: providerId,
+          isEnabled: true,
+          apiKeys: data.providers[0]!.apiKeys,
+        },
+      ]);
+      expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
+    },
+  );
+
+  it('previews and imports only enabled PC providers and models', async () => {
+    const data = snapshot(
+      provider('enabled', ['enabled', 'disabled', 'legacy']),
+      provider('disabled'),
+    );
+    data.providers[0]!.isEnabled = true;
+    data.providers[0]!.models[0]!.isEnabled = true;
+    data.providers[0]!.models[1]!.isEnabled = false;
+    data.providers[1]!.isEnabled = false;
+    const preview = await service.preview(data);
+    expect(preview.providers).toHaveLength(1);
+    expect(preview.providers[0]!.models.map((model) => model.modelId)).toEqual([
+      'enabled',
+      'legacy',
+    ]);
+
+    await expect(
+      service.import(
+        connectionId,
+        data,
+        { selections: [{ providerId: 'enabled', mode: 'provider-models' }] },
+        signal(),
+      ),
+    ).resolves.toEqual({
+      providersAdded: 1,
+      providersUpdated: 0,
+      modelsAdded: 2,
+      modelsSkipped: 0,
+    });
+    expect(await testDb.database.select().from(userProviderTable)).toMatchObject([
+      { providerId: 'enabled', isEnabled: true },
+    ]);
+    const models = await testDb.database.select().from(userModelTable);
+    expect(new Set(models.map((model) => model.modelId))).toEqual(new Set(['enabled', 'legacy']));
+    expect(models.every((model) => model.isEnabled)).toBe(true);
+  });
+
+  it('rejects a selected provider disabled on PC after preview without changing mobile data', async () => {
+    const data = snapshot(provider());
+    await importSnapshot(data);
+    const beforeProviders = await testDb.database.select().from(userProviderTable);
+    const beforeModels = await testDb.database.select().from(userModelTable);
+    data.providers[0]!.isEnabled = false;
+
+    await expect(importSnapshot(data)).rejects.toMatchObject({
+      details: { reason: 'invalid-selection' },
+    });
+    expect(await testDb.database.select().from(userProviderTable)).toEqual(beforeProviders);
+    expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
+  });
+
+  it('syncs provider configuration without requiring any PC models', async () => {
+    const data = snapshot(provider('relay', []));
+    await expect(importSnapshot(data)).resolves.toEqual({
+      providersAdded: 1,
+      providersUpdated: 0,
+      modelsAdded: 0,
+      modelsSkipped: 0,
+    });
+    data.providers[0]!.apiKeys = [{ id: 'replacement', key: 'new-secret', isEnabled: true }];
+    await expect(importSnapshot(data)).resolves.toEqual({
+      providersAdded: 0,
+      providersUpdated: 1,
+      modelsAdded: 0,
+      modelsSkipped: 0,
+    });
+    expect(await testDb.database.select().from(userProviderTable)).toMatchObject([
+      { apiKeys: data.providers[0]!.apiKeys, isEnabled: true },
+    ]);
   });
 
   it('does not delete models absent from the desktop snapshot', async () => {
@@ -147,20 +267,44 @@ describe('DesktopConnectionService incremental import', () => {
     expect(await testDb.database.select().from(userModelTable)).toEqual(before);
   });
 
-  it('validates new models against local endpoints and rolls back the whole import', async () => {
+  it('validates new models against synced endpoints and rolls back the whole import', async () => {
     await importSnapshot(snapshot(provider()));
-    const data = snapshot(provider('new-provider'), provider('relay', ['unsupported']));
+    const data = snapshot(
+      provider('relay', ['missing']),
+      provider('new-provider', ['unsupported']),
+    );
     data.providers[1]!.models[0]!.endpointTypes = [ENDPOINT_TYPE.ANTHROPIC_MESSAGES];
-    // The incoming provider has that endpoint, but the existing mobile provider does not.
-    data.providers[1]!.endpointConfigs = {
-      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://desktop.example.com' },
-    };
+    data.providers[0]!.apiKeys = [{ id: 'replacement', key: 'new-secret', isEnabled: true }];
     const beforeProviders = await testDb.database.select().from(userProviderTable);
     const beforeModels = await testDb.database.select().from(userModelTable);
 
     await expect(importSnapshot(data)).rejects.toThrow('Model endpoint configuration is invalid');
     expect(await testDb.database.select().from(userProviderTable)).toEqual(beforeProviders);
     expect(await testDb.database.select().from(userModelTable)).toEqual(beforeModels);
+  });
+
+  it('uses the PC endpoint configuration when adding models to an existing provider', async () => {
+    await importSnapshot(snapshot(provider()));
+    const data = snapshot(provider('relay', ['missing']));
+    data.providers[0]!.models[0]!.endpointTypes = [ENDPOINT_TYPE.ANTHROPIC_MESSAGES];
+    data.providers[0]!.defaultChatEndpoint = ENDPOINT_TYPE.ANTHROPIC_MESSAGES;
+    data.providers[0]!.endpointConfigs = {
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://desktop.example.com' },
+    };
+
+    await expect(importSnapshot(data)).resolves.toMatchObject({
+      providersUpdated: 1,
+      modelsAdded: 1,
+    });
+    expect(await testDb.database.select().from(userProviderTable)).toMatchObject([
+      {
+        defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: { baseUrl: 'https://desktop.example.com' },
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://desktop.example.com/v1' },
+        },
+      },
+    ]);
   });
 
   it('rejects invalid new custom provider configuration without writing rows', async () => {
