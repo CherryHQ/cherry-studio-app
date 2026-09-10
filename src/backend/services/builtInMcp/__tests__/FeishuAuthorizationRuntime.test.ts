@@ -1,5 +1,3 @@
-import * as SecureStore from 'expo-secure-store';
-
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
@@ -9,12 +7,6 @@ import { authorizationStoreFixture } from './_authorizationStoreFixture';
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({
   randomUUID: () => `00000000-0000-4000-8000-${String(++mockNextId).padStart(12, '0')}`,
-}));
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(),
-  setItemAsync: jest.fn(),
-  deleteItemAsync: jest.fn(),
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'device-only',
 }));
 jest.mock('../feishuOauth', () => ({
   ...jest.requireActual('../feishuOauth'),
@@ -59,8 +51,6 @@ beforeEach(() => {
   mockNextId = 0;
   fixture = authorizationStoreFixture();
   now = jest.spyOn(Date, 'now').mockReturnValue(1000);
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
-  jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
   jest.mocked(feishuOauth.beginRegistration).mockResolvedValue(challenge);
   jest.mocked(feishuOauth.beginUser).mockResolvedValue(challenge);
   jest.mocked(feishuOauth.pollRegistration).mockResolvedValue({ status: 'approved', application });
@@ -86,23 +76,24 @@ async function authorized(runtime: FeishuAuthorizationRuntime) {
   return state.attemptId;
 }
 
-it('recovers registration after route/process interruption without exposing device codes or secrets', async () => {
+it('keeps attempt secrets in memory and starts over after a process interruption', async () => {
   const runtime = createRuntime();
   const state = await runtime.begin();
   expect(JSON.stringify(state)).not.toMatch(/private-device|private-secret|private-access/);
+  expect(stored()).not.toContain('private-device');
   await runtime.stop();
-  expect(await createRuntime().getState()).toEqual(state);
-  expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(1);
-  expect(fixture.data.state).toMatchObject({ pending: { deviceCode: 'private-device' } });
-  expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  const restarted = createRuntime();
+  expect(await restarted.getState()).toEqual({ status: 'idle' });
+  expect(await restarted.begin()).not.toEqual(state);
+  expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(2);
 });
 
-it('commits the complete credential object and clears the pending state without duplicating active tokens', async () => {
+it('saves the complete grant and retains only the application after completion', async () => {
   const runtime = createRuntime();
   await connected(runtime);
   expect(fixture.data.grant?.credential).toEqual({ version: 1, application, tokens });
-  expect(fixture.data.state).toEqual({ version: 1, application });
-  expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  expect(fixture.data.application).toEqual(application);
+  expect(await runtime.getState()).toEqual(applicationReady);
 });
 
 it('authorizes with an existing application instead of registering, and reuses it after cancellation', async () => {
@@ -129,7 +120,7 @@ it('retains the registered app across user authorization failure and cancellatio
   expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(1);
 });
 
-it('enforces persisted intervals, slow_down, and an absolute expiry that removes device codes', async () => {
+it('enforces polling intervals, slow_down, and an absolute expiry that removes device codes', async () => {
   const runtime = createRuntime();
   const state = await runtime.begin();
   if (state.status !== 'waiting') throw new Error('Expected registration');
@@ -142,7 +133,7 @@ it('enforces persisted intervals, slow_down, and an absolute expiry that removes
     expiresAt: 601000,
   });
   now.mockReturnValue(601000);
-  expect(await createRuntime().getState()).toEqual({
+  expect(await runtime.getState()).toEqual({
     status: 'expired',
     attemptId: state.attemptId,
   });
@@ -174,18 +165,14 @@ it('does not apply a late registration result after explicit cancellation', asyn
   expect(stored()).not.toContain('private-secret');
 });
 
-it('keeps a one-time token result in backend memory until a failed SQLite write can be retried', async () => {
+it('reports an application save failure so the user can start registration again', async () => {
   const runtime = createRuntime();
-  await registered(runtime);
-  const waiting = await runtime.begin();
-  if (waiting.status !== 'waiting') throw new Error('Expected user authorization');
-  jest.mocked(feishuOauth.pollUser).mockImplementationOnce(async () => {
-    fixture.store.writeState.mockRejectedValueOnce(new Error('SQLite unavailable'));
-    return { status: 'approved', tokens };
-  });
-  await expect(runtime.poll(waiting.attemptId)).rejects.toMatchObject({ reason: 'storage' });
-  expect(await runtime.getState()).toEqual({ status: 'ready', attemptId: waiting.attemptId });
-  expect(feishuOauth.pollUser).toHaveBeenCalledTimes(1);
+  fixture.store.writeApplication.mockRejectedValueOnce(new PluginError('storage', 'Save failed'));
+  await expect(registered(runtime)).rejects.toMatchObject({ reason: 'storage' });
+  expect(fixture.data.application).toBeUndefined();
+  await runtime.cancel();
+  expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'registration' });
+  expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(2);
 });
 
 it('names missing document scopes, requires a refresh token, and preserves the app for another authorization', async () => {
@@ -213,21 +200,19 @@ it('names missing document scopes, requires a refresh token, and preserves the a
   });
 });
 
-it('preserves an approved candidate across a failed connection transaction and a process restart', async () => {
+it('requires a fresh user authorization after a failed connection commit', async () => {
   const runtime = createRuntime();
   const id = await authorized(runtime);
   const prepared = await runtime.prepare(id);
-  expect(prepared.credential).toEqual({ version: 1, application, tokens });
   fixture.store.commit.mockRejectedValueOnce(new Error('SQLite failed'));
   await expect(runtime.commit(id, prepared.accountLabel, prepared.signal)).rejects.toThrow(
     'SQLite failed',
   );
   expect(fixture.data.grant).toBeUndefined();
+  expect(await runtime.getState()).toEqual(applicationReady);
   const restarted = createRuntime();
-  expect(await restarted.getState()).toEqual({ status: 'ready', attemptId: id });
-  await restarted.commit(id, prepared.accountLabel, restarted.attemptSignal);
-  await restarted.cancel();
-  expect(await restarted.resolveCredential(fixture.data.grant!)).toMatchObject({ tokens });
+  expect(await restarted.getState()).toEqual(applicationReady);
+  expect(await restarted.begin()).toMatchObject({ status: 'waiting', stage: 'user' });
 });
 
 it('deduplicates refresh and persists all rotated fields without changing the authorization identity', async () => {
@@ -379,7 +364,7 @@ it('shares a failed refresh without submitting another rotation for each queued 
   expect(fixture.data.grant?.credential.tokens).toEqual(tokens);
 });
 
-it('retries saving an issued token after SQLite fails, without rotating the old refresh token again', async () => {
+it('reports a renewal save failure without retrying persistence on later state reads', async () => {
   const runtime = createRuntime();
   const grant = await connected(runtime);
   now.mockReturnValue(tokens.expiresAt);
@@ -387,8 +372,10 @@ it('retries saving an issued token after SQLite fails, without rotating the old 
   fixture.store.updateCredential.mockRejectedValueOnce(new Error('disk full'));
   await expect(runtime.resolveCredential(grant)).rejects.toMatchObject({ reason: 'storage' });
   expect(fixture.data.grant?.credential.tokens).toEqual(tokens);
-  await expect(runtime.resolveCredential(grant)).resolves.toMatchObject({ tokens: rotatedTokens });
-  expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+  expect(await runtime.getState()).toEqual(applicationReady);
+  expect(fixture.store.updateCredential).toHaveBeenCalledTimes(1);
+  await runtime.cancel();
+  expect(await runtime.begin()).toMatchObject({ status: 'waiting', stage: 'user' });
 });
 
 it.each(['disconnect', 'stop'] as const)(

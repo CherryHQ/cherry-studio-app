@@ -24,7 +24,9 @@ export async function createBuiltInMcpClient(
   pluginId: PluginId,
   authorizationId: string,
   signal: AbortSignal,
-  authorizations: Pick<PluginAuthorizationManager, 'get'>,
+  authorizations: Pick<PluginAuthorizationManager, 'get'> & {
+    credentials: Pick<PluginAuthorizationManager['credentials'], 'getCredentialGrant'>;
+  },
 ): Promise<MCPClient> {
   const plugin = requirePluginDefinition(pluginId);
   const initial = await pluginAuthorizationService
@@ -60,7 +62,8 @@ export async function createBuiltInMcpClient(
       const grant = await readGrant();
       return method.kind === 'interactive'
         ? authorizations.get(pluginId, method.id).resolveCredential(grant, callerSignal)
-        : grant.credential;
+        : (await authorizations.credentials.getCredentialGrant(pluginId, authorizationId))
+            .credential;
     },
   });
 }

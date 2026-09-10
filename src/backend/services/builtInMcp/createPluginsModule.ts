@@ -114,7 +114,7 @@ export function createPluginsModule(
         await authorizations.cancelAttempts(parsed.pluginId);
         let connection;
         try {
-          connection = await pluginAuthorizationService.connect(
+          connection = await authorizations.credentials.connect(
             {
               pluginId: parsed.pluginId,
               authMethod: method.id,
@@ -145,9 +145,8 @@ export function createPluginsModule(
           (item) => item.pluginId === pluginId,
         );
         if (connection) runtime.invalidateServer(connection.serverId);
-        // Remove resumable attempts before the connection, retaining each method's application.
         await authorizations.cancelAttempts(pluginId);
-        await pluginAuthorizationService.disconnect(pluginId);
+        await authorizations.credentials.disconnect(pluginId);
       });
     },
   };

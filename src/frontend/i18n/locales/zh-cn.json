@@ -1352,7 +1352,7 @@
   "plugins.connectSuccess": "已连接 {{name}}",
   "plugins.hideCredential": "隐藏密钥",
   "plugins.showCredential": "显示密钥",
-  "plugins.credentialPrivacy": "密钥保存在此设备，仅发送到平台官方的授权接口或 MCP 服务，不会发送给模型或写入聊天。连接时只验证凭证和可用能力，不会创建或修改内容。",
+  "plugins.credentialPrivacy": "密钥保存在此设备的系统安全存储中，不参与同步，仅发送到平台官方的授权接口或 MCP 服务，不会发送给模型或写入聊天。连接时只验证凭证和可用能力，不会创建或修改内容。",
   "plugins.authorize": "验证并连接",
   "plugins.errors.authorization": "密钥未通过验证，请检查密钥类型、有效期和访问限制。",
   "plugins.errors.access": "当前授权没有访问权限，请检查应用权限和目标资源的授权。",
@@ -1391,7 +1391,7 @@
   "plugins.authorization.userCode": "如果授权页面要求输入确认码：{{code}}",
   "plugins.authorization.openAgain": "打开授权页面",
   "plugins.authorization.checkAgain": "已完成，再次检查",
-  "plugins.authorization.expired": "本次请求已过期，重试将从已保存的阶段继续。",
+  "plugins.authorization.expired": "本次请求已过期，请重新发起授权。已保存的应用会保留。",
   "plugins.authorization.denied": "本次授权已被拒绝，可以重新发起。",
   "plugins.authorization.applicationReady": "将使用应用 {{applicationId}} 授权你的账号，不会再创建新应用。",
   "plugins.authorization.useExisting": "使用已有应用",
@@ -1419,5 +1419,5 @@
   "plugins.catalog.feishu.authMethods.feishu_user.stages.registration.waiting": "等待飞书应用设置完成",
   "plugins.catalog.feishu.authMethods.feishu_user.stages.user.waiting": "等待你在飞书确认授权",
   "plugins.catalog.feishu.authMethods.app_credentials.label": "以应用身份连接",
-  "plugins.catalog.feishu.authMethods.app_credentials.setup": "此方式以应用身份连接，不代表你的个人账号。填写已发布应用的 App ID 和 App Secret，开通文档工具所需权限，并向应用共享目标文档或知识库。此旧版方式的凭证保存在应用本地数据库中。"
+  "plugins.catalog.feishu.authMethods.app_credentials.setup": "此方式以应用身份连接，不代表你的个人账号。填写已发布应用的 App ID 和 App Secret，开通文档工具所需权限，并向应用共享目标文档或知识库。凭证保存在此设备的系统安全存储中，不参与同步。"
 }

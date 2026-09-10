@@ -1,9 +1,5 @@
 import type { MCPClient } from '@ai-sdk/mcp';
 
-import type {
-  PluginAuthorizationStore,
-  PluginGrant,
-} from '@/backend/data/services/PluginAuthorizationService';
 import type { PluginAuthorizationState } from '@/shared/contracts/plugins';
 import type {
   PluginCatalogEntry,
@@ -12,6 +8,25 @@ import type {
   PluginCredentialMethod,
   PluginInteractiveMethod,
 } from '@/shared/data/types/plugin';
+
+/** Logical credentials stay inside the backend; SQLite owns only their references. */
+export type PluginGrant = { id: string; credential: PluginCredential };
+
+export interface PluginAuthorizationStore {
+  readApplication(): Promise<PluginCredential | undefined>;
+  writeApplication(application: PluginCredential | undefined): Promise<void>;
+  getGrant(authorizationId?: string): Promise<PluginGrant | undefined>;
+  updateCredential(
+    authorizationId: string,
+    credential: PluginCredential,
+    signal: AbortSignal,
+  ): Promise<boolean>;
+  commit(
+    credential: PluginCredential,
+    accountLabel: string,
+    signal: AbortSignal,
+  ): Promise<PluginConnection>;
+}
 
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
 

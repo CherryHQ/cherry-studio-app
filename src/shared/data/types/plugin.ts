@@ -13,7 +13,7 @@ export type PluginCredentialField = {
   readonly pattern?: string;
 };
 
-/** Backend-owned JSON payload. Each authorization method validates its own object format. */
+/** Backend-only logical payload; native storage holds values, SQLite holds opaque references. */
 export const PluginCredentialSchema = z.record(z.string(), z.json());
 export type PluginCredential = z.infer<typeof PluginCredentialSchema>;
 

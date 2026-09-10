@@ -7,7 +7,7 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 
 /**
  * Opaque plugin grants: identifiers and credential formats are owned by bundled definitions.
- * Storage matches provider API keys and remote MCP headers in this sandboxed database.
+ * Credentials are opaque SecureStore references; secrets never enter SQLite.
  */
 export const pluginAuthorizationTable = sqliteTable(
   'plugin_authorization',

@@ -56,8 +56,9 @@ Implementation ownership:
 
 - `PluginsModule` validates input, checks the upstream connection, commits the grant and invalidates
   the old runtime connection. Feishu credentials are encoded only in backend persistence.
-- `PluginAuthorizationService` stores `app_credentials` grants with the existing local credential
-  storage policy. Connection projections and MCP server rows expose no secrets.
+- `PluginAuthorizationService` stores `app_credentials` grant references, while
+  `PluginCredentialStore` owns native secret values without sync. Connection projections and MCP
+  server rows expose no secrets.
 - `createBuiltInMcpClient` resolves the registered definition and binds token use to its grant/method.
   `createOfficialMcpClient` rechecks that grant after token exchange, rejects redirects and enforces
   tool admission on invocation as well as discovery.
@@ -93,7 +94,7 @@ coverage, port the command semantics in small slices:
 | --- | --- | --- |
 | Application token and cloud document calls | Backend token helper plus the existing MCP runtime | Implemented in this change |
 | Personal-agent application registration | Browser verification plus bounded, cancellable polling; keep issued credentials backend-owned; an existing application may be entered instead | Implemented; live acceptance pending |
-| User authorization and renewal | Device authorization, expiry/scopes and atomic refresh-token persistence in plaintext SQLite credential objects; account/grant isolation | Implemented; live acceptance pending |
+| User authorization and renewal | Device authorization, expiry/scopes and refresh-token replacement in local native secure storage; SQLite references and account/grant isolation; no sync | Implemented; live acceptance pending |
 | Curated Base, Calendar and Tasks shortcuts | Typed inputs and dedicated OpenAPI functions exposed through the existing tool approval pipeline | Planned |
 | Pagination and structured command output | Bounded pages, cancellation and normalized results in the owning adapter | Planned |
 | CLI skills | App-owned instruction resources with attribution, adapted to tool names available in the turn | Separate instruction-resource work |

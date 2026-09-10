@@ -1,11 +1,12 @@
-import {
-  pluginAuthorizationService,
-  type PluginAuthorizationStore,
-} from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { createAuthorizationObserver } from './createAuthorizationObserver';
-import type { PluginAuthorizationRuntime, PluginDefinition } from './pluginDefinition';
+import { PluginCredentialStore } from './PluginCredentialStore';
+import type {
+  PluginAuthorizationStore,
+  PluginAuthorizationRuntime,
+  PluginDefinition,
+} from './pluginDefinition';
 import { getPluginDefinition, requirePluginAuthMethod } from './pluginRegistry';
 
 type Entry = {
@@ -15,6 +16,7 @@ type Entry = {
 
 /** Owns method runtimes and observers for one McpRuntimeService generation. */
 export class PluginAuthorizationManager {
+  readonly credentials = new PluginCredentialStore();
   private readonly entries = new Map<string, Map<string, Entry>>();
   private stopped = false;
 
@@ -24,7 +26,7 @@ export class PluginAuthorizationManager {
       plugin: PluginDefinition,
       method: string,
     ) => PluginAuthorizationStore = (plugin, method) =>
-      pluginAuthorizationService.authorizationStore(plugin.catalog.id, method, plugin.serverName),
+      this.credentials.authorizationStore(plugin.catalog.id, method, plugin.serverName),
   ) {}
 
   get(pluginId: string, methodId: string) {
@@ -94,7 +96,8 @@ export class PluginAuthorizationManager {
     this.stopped = true;
     const entries = [...this.entries.values()].flatMap((methods) => [...methods.values()]);
     for (const entry of entries) entry.observer?.stop();
-    await Promise.all(entries.map((entry) => entry.runtime.stop()));
+    const stopping = entries.map((entry) => entry.runtime.stop());
+    await Promise.all([...stopping, this.credentials.stop()]);
     this.entries.clear();
   }
 }

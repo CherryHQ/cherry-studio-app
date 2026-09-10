@@ -1,15 +1,7 @@
-import * as SecureStore from 'expo-secure-store';
-
 import { createPluginsModule as createModule } from '../createPluginsModule';
 import type { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { PluginAuthorizationManager } from '../PluginAuthorizationManager';
 import { authorizationStoreFixture } from './_authorizationStoreFixture';
-
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async () => null),
-  setItemAsync: jest.fn(async () => undefined),
-  deleteItemAsync: jest.fn(async () => undefined),
-}));
 
 function createPluginsModule(runtime: Parameters<typeof createModule>[0]) {
   return createModule(runtime, authorizations);
@@ -21,14 +13,25 @@ const mockList = jest.fn();
 const mockValidateCredential = jest.fn();
 jest.mock('@/backend/data/services/PluginAuthorizationService', () => ({
   pluginAuthorizationService: {
-    authorizationStore: () => mockFixture.store,
-    connect: (...args: unknown[]) => mockConnect(...args),
-    disconnect: (...args: unknown[]) => mockDisconnect(...args),
     listConnections: (...args: unknown[]) => mockList(...args),
   },
 }));
 jest.mock('../createBuiltInMcpClient', () => ({
   validatePluginCredential: (...args: unknown[]) => mockValidateCredential(...args),
+}));
+jest.mock('../PluginCredentialStore', () => ({
+  PluginCredentialStore: class {
+    authorizationStore() {
+      return mockFixture.store;
+    }
+    connect(...args: unknown[]) {
+      return mockConnect(...args);
+    }
+    disconnect(...args: unknown[]) {
+      return mockDisconnect(...args);
+    }
+    async stop() {}
+  },
 }));
 
 const input = { pluginId: 'github', authMethod: 'personal_token', fields: { token: 'test-token' } };
@@ -42,8 +45,6 @@ let mockFixture: ReturnType<typeof authorizationStoreFixture>;
 let authorizations: PluginAuthorizationManager;
 beforeEach(() => {
   jest.resetAllMocks();
-  jest.mocked(SecureStore.getItemAsync).mockResolvedValue(null);
-  jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
   mockFixture = authorizationStoreFixture();
   authorizations = new PluginAuthorizationManager();
   mockValidateCredential.mockResolvedValue('cherry');

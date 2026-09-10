@@ -1,7 +1,7 @@
 # Built-In MCP Plugins
 
 This module owns official cloud MCP connections and the connect/disconnect workflow for **Plugins**.
-GitHub, Amap and Feishu are implemented. Shipped behavior is documented in the
+GitHub, Amap and Feishu are implemented. Current behavior is documented in the
 [integration reference](../../../../docs/references/agent/built-in-mcp-design.md); proposed designs
 are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 
@@ -16,15 +16,13 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 - `createPluginsModule` coordinates read-only validation, persistence and connection invalidation.
   Mutations serialize per plugin. Each interactive action identifies both plugin and method.
 - `PluginAuthorizationManager` creates one runtime and observer per interactive method. Its owner,
-  `McpRuntimeService`, stops observers and drains runtimes on host disposal.
+  `McpRuntimeService`, stops observers and drains runtimes and native storage work on host disposal.
 - `createAuthorizationObserver` schedules polling and completion while a screen observes. It
   reports state, progress and outcomes and leaves retries after failures to explicit user actions.
   Screens subscribe only while focused and active and request a check after browser return.
-- `PluginAuthorizationService` owns grants and MCP references in SQLite. Every credential is a
-  versioned plaintext JSON object in one column. Reusable applications and pending attempts use
-  `app_state` under a plugin/method key. Interactive completion commits the credential, connection
-  and candidate removal together. `GET /plugin-connections` exposes metadata only; credentials
-  never enter frontend query caches, tool arguments or saved MCP headers.
+- `PluginCredentialStore` keeps reusable applications and completed grants in local SecureStore,
+  without sync. SQLite owns connection metadata and opaque credential references. See the
+  [storage contract](../../../../docs/references/agent/built-in-mcp-design.md#grants-and-connections).
 - `createBuiltInMcpClient` binds the selected method to one grant. `createOfficialMcpClient` uses
   `@ai-sdk/mcp` Streamable HTTP and `expo/fetch`, checks authorization before and after credential
   resolution, enforces fixed endpoints and admitted tools, rejects redirects and never replays
@@ -35,18 +33,16 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
   `fetch-doc` discovery without a business write. Each method owns credential injection.
 - `feishuAuthorization` owns the application-token exchange and per-client cache. `feishuOauth`
   implements personal-agent registration, device authorization and renewal through the existing
-  HTTP service. `FeishuAuthorizationRuntime` serializes durable steps, requires every document
+  HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every document
   scope and an issued refresh token, and retains application identity across disconnect.
 - Callers share one credential renewal, including its failure. A caller cancels only its wait;
-  disconnect, successful replacement and host disposal invalidate the renewal owner. Updates
-  compare the grant ID and previous credential object. Failed persistence retains the issued
-  result in backend memory for a save retry before another renewal; process death can lose it.
-- `migrateFeishuAuthorization` is a one-way upgrade from combined or split SecureStore data.
-  SQLite becomes authoritative in one transaction before legacy keys are removed. New credentials
-  never use SecureStore, and old keys cannot revive a replaced or deleted grant.
+  disconnect, successful replacement and host disposal invalidate the renewal owner. Saving replaces
+  the complete native token bundle after checking the grant ID.
+- Pending authorization stays in memory. Errors and process interruption require a new flow;
+  reusable applications survive. No legacy imports, recovery journals or automatic cleanup retries.
 
 A grant change cannot retarget a tool from an already frozen turn catalog. Disconnect disables
-existing Agent bindings and removes the server/grant while keeping reusable application information.
+existing Agent bindings and revokes the server/grant before best-effort native cleanup.
 
 Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval, deferred discovery,
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.
@@ -58,9 +54,7 @@ allowlist. The existing runtime validates discovered input schemas and applies r
 
 Migration `0022_official-cloud-plugins` disables existing GitHub/Amap Agent bindings for review,
 preserving credentials, server IDs, approval settings and history. Migration
-`0024_extensible-plugin-authorizations` removes the former provider enumeration and converts
-historical credentials to JSON objects in the same migration, retaining all existing grants, MCP
-identities and Agent settings. `pluginId` and `authMethod` are open durable strings. Keep IDs stable
+`0024_extensible-plugin-authorizations` removes the former provider enumeration. `pluginId` and `authMethod` are open durable strings. Keep IDs stable
 and version objects inside each method.
 
 The current version supports one connection per bundled provider. Feishu's six tools support
@@ -78,5 +72,5 @@ Official service references: [GitHub remote MCP](https://github.com/github/githu
 [Amap tool catalog](https://lbs.amap.com/api/mcp-server/summary),
 [Feishu developer MCP](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server).
 
-The authorization-method and SQLite regression suites were updated but were not run in this session.
+The authorization-method, SQLite and secure-storage regression suites were updated but not run.
 No compilation, build, simulator, device or live-account acceptance was performed.

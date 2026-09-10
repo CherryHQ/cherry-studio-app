@@ -10,19 +10,17 @@
    method's field rules or interactive runtime factory and request authorization. The runtime
    manager and connection page select methods from that registry. GitHub and Amap can add OAuth
    alongside their existing methods; their OAuth protocols are not implemented yet.
-2. **One plaintext SQLite storage policy.** A grant keeps one versioned credential JSON object.
-   Provider-specific fields, tokens, scopes and expirations stay inside it. Reusable application
-   data and pending attempts use the existing SQLite state table; completion updates both tables
-   in one transaction. SecureStore is only read and cleared during the legacy Feishu import.
+2. **Local native credentials, without sync.** SecureStore owns applications and completed grants;
+   SQLite owns connection metadata and references. Pending authorization lives only in memory.
+   Failures require the user to repeat the flow; no legacy credential compatibility is provided.
 3. **Caller-independent renewal.** Callers share one renewal result. Cancelling a tool call stops
-   only its wait; disconnect, successful grant replacement or host disposal invalidates renewal.
-   Conditional writes match the grant ID and previous credential object.
+   only its wait. The complete native token bundle is replaced while the grant identity still matches.
 
 ## Persistence
 
 ### Authorization Table
 
-The current `plugin_authorization` table stores plugin ID, auth method, account label, credential
+The current `plugin_authorization` table stores plugin ID, auth method, account label, secret reference
 and timestamps. The target for later OAuth and multi-account slices adds:
 
 | Field | Shape and responsibility |
@@ -44,11 +42,10 @@ Disabled tool names, Agent IDs, approval preferences, and tool schemas do not be
 
 ### Credential Storage And Atomic Renewal
 
-The current implementation stores a plaintext credential object in the authorization row. Keep
-provider-specific tokens, returned scopes and expiration metadata inside that object. The current
-conditional update matches the grant ID and previous JSON value; introduce a separate revision
-column only if later concurrency requirements justify it. Do not create a column per OAuth field
-or reintroduce a per-feature secret store.
+The current implementation stores an opaque native-secret reference in the authorization row.
+Keep provider-specific tokens, returned scopes and expiration metadata inside the native object.
+The manager-owned storage queue checks the grant ID before replacing its native item; introduce a separate revision only if later concurrency requirements justify it. Future
+methods should reuse this adapter rather than create a per-feature secret store.
 
 Future methods own validated variants for personal tokens, API keys, OAuth token bundles and client
 registration data, or native SDK account references. Do not manufacture a missing refresh token or
@@ -61,9 +58,10 @@ in-memory revocation capability before clearing storage and perform best-effort 
 when supported. Recheck grant state when an in-flight refresh finishes so it cannot recreate a
 disconnected grant.
 
-Grant objects travel with the database. Restored credentials still depend on provider validity;
-legacy device-only material missing before migration requires reauthorization. Ordinary export does not include grants. An unavailable SDK account requires
-reconnecting. Do not promise continuous execution while the OS suspends the application.
+Grant secrets do not travel with the database and do not participate in sync. A database restored
+without its native items or an unavailable SDK account requires reconnecting.
+Ordinary export does not include grants. Do not promise continuous execution while the OS suspends
+the application.
 
 ### Connection Identity
 
@@ -88,9 +86,9 @@ Do not invent a fake URL for a local server or use display names as lookup keys.
 ## Authorization Runtime
 
 The existing `PluginAuthorizationManager` belongs to the ApplicationHost generation and owns one
-`PluginAuthorizationRuntime` per interactive method. Each method receives scoped SQLite
-persistence. Disposal stops observers, aborts active work and drops in-memory credentials. Startup
-does not prompt for login or renew credentials before first paint.
+`PluginAuthorizationRuntime` per interactive method. Each method receives a scoped native-storage
+adapter backed by SQLite references. Disposal stops observers, drains work and drops in-memory
+credentials. Startup does not prompt for login or renew credentials before first paint.
 
 Further callback and native SDK methods should preserve the existing request sequence:
 

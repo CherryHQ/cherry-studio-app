@@ -10,7 +10,10 @@ const mockFetch = jest.fn();
 const mockGetGrant = jest.fn();
 const mockTokenRequest = jest.fn();
 const mockResolveCredential = jest.fn();
-const authorizations = { get: jest.fn() };
+const authorizations = {
+  get: jest.fn(),
+  credentials: { getCredentialGrant: (...args: unknown[]) => mockGetGrant(...args) },
+};
 function createBuiltInMcpClient(pluginId: string, authorizationId: string, signal: AbortSignal) {
   return createClient(pluginId, authorizationId, signal, authorizations);
 }

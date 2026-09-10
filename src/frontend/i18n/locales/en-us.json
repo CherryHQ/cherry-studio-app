@@ -1355,7 +1355,7 @@
   "plugins.connectSuccess": "{{name}} connected",
   "plugins.hideCredential": "Hide credential",
   "plugins.showCredential": "Show credential",
-  "plugins.credentialPrivacy": "Credentials are stored on this device and sent only to the provider's official authorization or MCP service, never to the model or chat. Connecting checks credentials and available capabilities without creating or changing content.",
+  "plugins.credentialPrivacy": "Credentials are kept in this device's secure storage without sync and sent only to the provider's official authorization or MCP service, never to the model or chat. Connecting checks credentials and available capabilities without creating or changing content.",
   "plugins.authorize": "Verify and connect",
   "plugins.errors.authorization": "The credential was rejected. Check its type, expiry, and access restrictions.",
   "plugins.errors.access": "Access was denied. Check application permissions and access to the target resource.",
@@ -1394,7 +1394,7 @@
   "plugins.authorization.userCode": "If a confirmation code is requested: {{code}}",
   "plugins.authorization.openAgain": "Open authorization page",
   "plugins.authorization.checkAgain": "I've finished. Check again",
-  "plugins.authorization.expired": "This request expired. Retry to continue from the saved stage.",
+  "plugins.authorization.expired": "This request expired. Start authorization again; your saved application is retained.",
   "plugins.authorization.denied": "Authorization was declined. You can start a new request.",
   "plugins.authorization.applicationReady": "Application {{applicationId}} will authorize your account; another application will not be created.",
   "plugins.authorization.useExisting": "Use an existing application",
@@ -1422,5 +1422,5 @@
   "plugins.catalog.feishu.authMethods.feishu_user.stages.registration.waiting": "Waiting for application setup",
   "plugins.catalog.feishu.authMethods.feishu_user.stages.user.waiting": "Waiting for your authorization",
   "plugins.catalog.feishu.authMethods.app_credentials.label": "Connect as an application",
-  "plugins.catalog.feishu.authMethods.app_credentials.setup": "Connect as an application, not your personal account. Enter the App ID and App Secret of an existing published application, enable document tool permissions, and share target documents or knowledge spaces with it. Credentials are stored in the app's local database."
+  "plugins.catalog.feishu.authMethods.app_credentials.setup": "Connect as an application, not your personal account. Enter the App ID and App Secret of an existing published application, enable document tool permissions, and share target documents or knowledge spaces with it. Credentials are kept in this device's secure storage without sync."
 }

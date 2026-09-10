@@ -75,27 +75,25 @@ source evidence, not a bundled dependency or proof of live remote schema parity.
 
 ### Grants And Connections
 
-The `plugin_authorization` table stores plugin ID, authorization method, account label, one
-`credential` JSON object and timestamps. All plugin secrets use plaintext SQLite, matching provider
-API keys and remote MCP headers. Each authorization method owns and validates its versioned object:
+The `plugin_authorization` table stores plugin ID, authorization method, account label, an opaque
+`credential` reference and timestamps. `PluginCredentialStore`, owned by the authorization manager,
+keeps plugin secrets in `expo-secure-store` with `WHEN_UNLOCKED_THIS_DEVICE_ONLY` and no biometric
+prompt. Credentials are local to this installation and do not participate in sync. This policy is
+specific to plugins; provider API keys and remote MCP headers are outside this change.
+Each authorization method owns and validates its versioned object before native persistence:
 GitHub stores `{ version: 1, token }`, Amap stores `{ version: 1, key }`, Feishu applications store
 `{ version: 1, appId, appSecret }`, and Feishu user authorization stores
 `{ version: 1, application, tokens }`. Token values, scope and expiration metadata belong inside
 that object; adding an authorization field does not add a database column.
 
-Reusable application information and pending interactive attempts live in the existing `app_state`
-table under `plugin-authorization:<pluginId>:<authMethod>`, also as a versioned JSON object.
-They have a different lifetime from a connected grant. Disconnect clears the grant and pending
-attempt but keeps the application. Completing an attempt commits its full credential object, MCP
-reference and removal of the pending candidate in one SQLite transaction.
+Reusable application information and completed grants occupy separate native items. Browser
+challenges and uncommitted user credentials stay in the method runtime's memory. Leaving the page
+keeps the attempt within the same process; restarting the app requires starting authorization again.
 
-The same `0024_extensible-plugin-authorizations` migration converts historical raw GitHub/Amap
-credentials and Feishu application JSON without changing their identities. Feishu's former secure references are
-marked for a one-way import: the first use migrates either the combined or split SecureStore layout
-into SQLite atomically, then removes the old keys. SQLite state prevents stale keys from being
-reimported. SecureStore is used only for this upgrade, never for new credentials. A legacy reference
-whose device-only secret is already missing requires user reauthorization; migration cannot recover
-that secret from the reference.
+Completion saves the native credential first, then commits its reference and MCP connection in
+SQLite. Failure is reported for the user to retry the flow. Replacement and disconnect delete known
+obsolete native items on a best-effort basis; SQLite determines which authorization is usable.
+There is no legacy credential import, startup migration, orphan scan or persistence-retry journal.
 
 `PluginAuthorizationService` commits each grant and its MCP reference together. Updating
 authorization preserves the server UUID but allocates a new grant identity; disconnecting disables
@@ -124,8 +122,8 @@ observer per registered interactive method. Feishu supplies `FeishuAuthorization
 call and keeps no timers. A backend authorization observer schedules those steps: while at least one
 screen observes, it polls at the server's interval (increased on `slow_down`, bounded by the
 original expiry), completes an approved attempt once, and pushes the state, progress and outcome to
-the screen. Detaching stops scheduling only; the attempt and any issued credentials stay durable for
-the next visit. The connection screen observes while it is focused and the app is active, and asks
+the screen. Detaching stops scheduling only; the attempt stays in memory for the next visit
+within the same process. The connection screen observes while it is focused and the app is active, and asks
 for one immediate check when the browser closes. No Cherry callback is promised: users return
 manually after each official confirmation, and browser close is a check, not a success or denial
 guess.
@@ -147,21 +145,21 @@ is proven by an issued refresh token rather than an echoed `offline_access` scop
 cannot connect and no partially enabled catalog is advertised. Profile lookup and MCP discovery
 follow authorization, so merely holding application credentials is not connection success.
 
-One method queue serializes exchanges, renewal, SQLite writes and grant commits. Explicit
+One method queue serializes exchanges, renewal, persistence and grant commits. Explicit
 authorization cancellation invalidates the attempt before late work can commit. Ordinary tool-call
 cancellation only releases that caller's wait: shared renewal uses the runtime and grant lifetime,
 continues for other callers, and saves the returned token object even when every caller has left.
 Concurrent callers share the same pending result, including failures. Disconnect, successful grant
 replacement and host disposal invalidate the old renewal owner.
 
-Renewal updates the credential with a conditional check on the grant ID and previous object. It
+Renewal replaces one native item under a stable reference after checking the grant ID
+in the manager-owned storage queue. It requires no second SQLite write and
 cannot recreate a deleted row or overwrite a replacement. The grant ID remains stable during
 ordinary rotation; the HTTP transport rechecks that ID and authorization method after credential
 resolution and before sending. Updating a token therefore does not itself invalidate the connection.
-A failed SQLite write retains the issued result only in backend memory and retries persistence
-before attempting another renewal. Process death before that retry can still require authorization
-again. Disconnect removes local authorization and disables Agent bindings; it keeps the application
-and does not revoke consent at Feishu.
+A failed save is reported and requires the user to authorize again; no issued result is retained for
+an automatic persistence retry. Disconnect removes local authorization and disables Agent bindings;
+it keeps the application and does not revoke consent at Feishu.
 
 Live iOS/Android login, organization approval, process interruption and actual token renewal still
 need user-authorized acceptance. The public registration mechanism's support for Cherry as a
@@ -277,13 +275,14 @@ flowchart TD
   Settings --> Workflow
   Registry --> Client["Grant-bound official cloud client"]
   Workflow --> Auth["PluginAuthorizationService"]
-  Auth --> AuthTable["plugin_authorization: metadata and credential JSON"]
+  Auth --> AuthTable["plugin_authorization: metadata and secure reference"]
   Workflow --> Manager["PluginAuthorizationManager: method runtimes and observers"]
   Registry --> Manager
   Manager --> Observer["Authorization observer: polling and completion while observed"]
   Observer --> UserAuth["FeishuAuthorizationRuntime: device flow and renewal"]
-  UserAuth --> State["SQLite app_state: application and pending attempt"]
-  UserAuth --> AuthTable
+  UserAuth --> State["In-memory authorization attempt"]
+  UserAuth --> Secrets["PluginCredentialStore: native credentials and application"]
+  Secrets --> AuthTable
   Workflow --> Server["mcp_server: connected integration instance"]
   Server --> Binding["agent_tool_binding: Agent access"]
   Binding --> Host["MobileAgentHost: frozen tool catalog"]

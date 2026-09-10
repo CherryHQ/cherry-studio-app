@@ -1,33 +1,41 @@
 import { randomUUID } from 'expo-crypto';
 
-import type {
-  PluginAuthorizationStore,
-  PluginGrant,
-} from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError, type PluginAuthorizationState } from '@/shared/contracts/plugins';
 import type { PluginCredential } from '@/shared/data/types/plugin';
 
+import { FeishuUserCredentialSchema, type FeishuUserCredential } from './feishuAuthorizationState';
 import {
-  FeishuAuthorizationStateSchema,
-  type FeishuAuthorizationStoredState,
-  FeishuUserCredentialSchema,
-  type FeishuUserCredential,
-} from './feishuAuthorizationState';
-import { FeishuApplicationSchema, feishuOauth, missingFeishuDocumentScopes } from './feishuOauth';
-import { migrateFeishuAuthorization } from './migrateFeishuAuthorization';
-import type { PluginAuthorizationRuntime } from './pluginDefinition';
+  FeishuApplicationSchema,
+  feishuOauth,
+  missingFeishuDocumentScopes,
+  type FeishuApplication,
+} from './feishuOauth';
+import type {
+  PluginAuthorizationRuntime,
+  PluginAuthorizationStore,
+  PluginGrant,
+} from './pluginDefinition';
 
-/** One method runtime owns durable attempts and renewal; observation only schedules its steps. */
+type AuthorizationState = {
+  application?: FeishuApplication;
+  pending?:
+    | (Awaited<ReturnType<typeof feishuOauth.beginUser>> & {
+        status: 'waiting';
+        id: string;
+        stage: 'registration' | 'user';
+      })
+    | { status: 'ready'; id: string; credential: FeishuUserCredential }
+    | { status: 'expired' | 'denied' | 'unsupported-account'; id: string };
+};
+
+/** One method runtime owns in-memory attempts and shared renewal. Restart interrupted flows. */
 export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   private operations: Promise<unknown> = Promise.resolve();
   private readonly lifetime = new AbortController();
   private attempt = new AbortController();
   private renewal = new AbortController();
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
-  private initialized = false;
-  // Preserve one-time exchange results in memory if SQLite rejects the first write.
-  private unsavedState: FeishuAuthorizationStoredState | undefined;
-  private unsavedGrant: { previous: PluginGrant; credential: FeishuUserCredential } | undefined;
+  private state: AuthorizationState | undefined;
 
   constructor(private readonly store: PluginAuthorizationStore) {}
 
@@ -54,36 +62,20 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     return result;
   }
 
-  private async save(state: FeishuAuthorizationStoredState) {
-    this.unsavedState = state;
-    try {
-      await this.store.writeState(JSON.parse(JSON.stringify(state)));
-      this.unsavedState = undefined;
-    } catch {
-      throw new PluginError('storage', 'Could not save Feishu authorization.');
+  private async read(): Promise<AuthorizationState> {
+    if (!this.state) {
+      const application = await this.store.readApplication();
+      this.state = {
+        application: application ? FeishuApplicationSchema.parse(application) : undefined,
+      };
     }
+    const pending = this.state.pending;
+    if (pending?.status === 'waiting' && Date.now() >= pending.expiresAt)
+      this.state.pending = { status: 'expired', id: pending.id };
+    return this.state;
   }
 
-  private async read(): Promise<FeishuAuthorizationStoredState> {
-    try {
-      if (!this.initialized) {
-        await migrateFeishuAuthorization(this.store);
-        this.initialized = true;
-      }
-      if (this.unsavedState) await this.save(this.unsavedState);
-      const state = FeishuAuthorizationStateSchema.parse(await this.store.readState());
-      if (state.pending?.status === 'waiting' && Date.now() >= state.pending.expiresAt) {
-        state.pending = { status: 'expired', id: state.pending.id };
-        await this.save(state);
-      }
-      return state;
-    } catch (error) {
-      if (error instanceof PluginError) throw error;
-      throw new PluginError('storage', 'Could not read Feishu authorization.');
-    }
-  }
-
-  private project(state: FeishuAuthorizationStoredState): PluginAuthorizationState {
+  private project(state: AuthorizationState): PluginAuthorizationState {
     const pending = state.pending;
     if (!pending)
       return state.application
@@ -119,7 +111,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         : await feishuOauth.beginRegistration(signal);
       signal.throwIfAborted();
       state.pending = { ...challenge, id: randomUUID(), status: 'waiting', stage };
-      await this.save(state);
       return this.project(state);
     });
   }
@@ -127,11 +118,10 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   useApplication(fields: Record<string, string>) {
     this.interrupt();
     return this.serialize(async () => {
-      const state = await this.read();
-      state.application = FeishuApplicationSchema.parse(fields);
-      delete state.pending;
-      await this.save(state);
-      return this.project(state);
+      const application = FeishuApplicationSchema.parse(fields);
+      await this.store.writeApplication(application);
+      this.state = { application };
+      return this.project(this.state);
     });
   }
 
@@ -146,10 +136,8 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         throw new PluginError('cancelled', 'Feishu authorization replaced.');
       if (Date.now() < pending.nextPollAt) return this.project(state);
       pending.nextPollAt = Date.now() + pending.intervalMs;
-      await this.save(state);
       if (Date.now() >= pending.expiresAt) {
         state.pending = { status: 'expired', id: pending.id };
-        await this.save(state);
         return this.project(state);
       }
       const deadline = new AbortController();
@@ -168,7 +156,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       } catch (error) {
         if (deadline.signal.aborted && !signal.aborted) {
           state.pending = { status: 'expired', id: pending.id };
-          await this.save(state);
           return this.project(state);
         }
         throw error;
@@ -178,6 +165,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       signal.throwIfAborted();
       if (result.status === 'approved') {
         if ('application' in result) {
+          await this.store.writeApplication(result.application);
           state.application = result.application;
           delete state.pending;
         } else {
@@ -195,18 +183,17 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         if (result.status === 'slow-down') pending.intervalMs += 5000;
         pending.nextPollAt = Date.now() + pending.intervalMs;
       } else state.pending = { status: result.status, id: pending.id };
-      await this.save(state);
       return this.project(state);
     });
   }
 
-  private requireApplication(state: FeishuAuthorizationStoredState) {
+  private requireApplication(state: AuthorizationState) {
     if (!state.application)
       throw new PluginError('authorization', 'Feishu application is missing.');
     return state.application;
   }
 
-  private requirePending(state: FeishuAuthorizationStoredState, id: string) {
+  private requirePending(state: AuthorizationState, id: string) {
     if (state.pending?.status === 'ready' && state.pending.id === id) return state.pending;
     throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
   }
@@ -241,29 +228,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     return { ...credential, tokens };
   }
 
-  private async saveGrant(signal: AbortSignal) {
-    const unsaved = this.unsavedGrant;
-    if (!unsaved) return;
-    signal.throwIfAborted();
-    let saved;
-    try {
-      saved = await this.store.updateCredential(
-        unsaved.previous,
-        JSON.parse(JSON.stringify(unsaved.credential)),
-        signal,
-      );
-    } catch {
-      if (signal.aborted) throw new PluginError('cancelled', 'Feishu authorization cancelled.');
-      throw new PluginError('storage', 'Could not save renewed Feishu authorization.');
-    }
-    this.unsavedGrant = undefined;
-    if (!saved)
-      throw new PluginError(
-        'authorization',
-        'Feishu user authorization was replaced or disconnected.',
-      );
-  }
-
   resolveCredential(grant: PluginGrant, callerSignal?: AbortSignal): Promise<PluginCredential> {
     if (callerSignal?.aborted)
       return Promise.reject(new PluginError('cancelled', 'Feishu authorization cancelled.'));
@@ -272,8 +236,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
     const operation = this.serialize(async () => {
       signal.throwIfAborted();
-      await this.read();
-      await this.saveGrant(signal);
       const current = await this.store.getGrant(grant.id);
       if (!current)
         throw new PluginError('authorization', 'Feishu user authorization is no longer available.');
@@ -285,8 +247,21 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         );
       const credential = await this.refresh(parsed.data, signal);
       if (credential !== parsed.data) {
-        this.unsavedGrant = { previous: current, credential };
-        await this.saveGrant(signal);
+        const saved = await this.store
+          .updateCredential(current.id, JSON.parse(JSON.stringify(credential)), signal)
+          .catch(() => {
+            if (signal.aborted)
+              throw new PluginError('cancelled', 'Feishu authorization cancelled.');
+            throw new PluginError(
+              'storage',
+              'Could not save renewed Feishu authorization. Authorize again.',
+            );
+          });
+        if (!saved)
+          throw new PluginError(
+            'authorization',
+            'Feishu authorization was replaced or disconnected.',
+          );
         this.assertGrantedScopes(credential, true);
       }
       signal.throwIfAborted();
@@ -313,7 +288,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       const credential = await this.refresh(pending.credential, signal);
       if (credential !== pending.credential) {
         pending.credential = credential;
-        await this.save(state);
         this.assertGrantedScopes(credential, true);
       }
       const accountLabel = await feishuOauth.getAccountLabel(credential.tokens.accessToken, signal);
@@ -332,11 +306,9 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       const state = await this.read();
       const pending = this.requirePending(state, attemptId);
       delete state.pending;
-      // The grant, MCP identity and removal of the candidate commit in one SQLite transaction.
       const connection = await this.store.commit(
         JSON.parse(JSON.stringify(pending.credential)),
         accountLabel,
-        JSON.parse(JSON.stringify(state)),
         signal,
       );
       this.invalidateGrant();
@@ -347,21 +319,17 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   cancel() {
     this.interrupt();
     return this.serialize(async () => {
-      const state = await this.read();
-      delete state.pending;
-      await this.save(state);
-      return this.project(state);
+      if (this.state) delete this.state.pending;
+      return this.project(this.state ?? {});
     });
   }
 
   resetApplication() {
     this.interrupt();
     return this.serialize(async () => {
-      const state = await this.read();
-      delete state.pending;
-      delete state.application;
-      await this.save(state);
-      return this.project(state);
+      await this.store.writeApplication(undefined);
+      this.state = {};
+      return this.project(this.state);
     });
   }
 
@@ -373,7 +341,6 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   invalidateGrant() {
     this.renewal.abort();
     this.renewal = new AbortController();
-    this.unsavedGrant = undefined;
     this.resolutions.clear();
   }
 
@@ -382,8 +349,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     this.renewal.abort();
     this.lifetime.abort();
     await this.operations.catch(() => {});
-    this.unsavedState = undefined;
-    this.unsavedGrant = undefined;
+    this.state = undefined;
     this.resolutions.clear();
   }
 }

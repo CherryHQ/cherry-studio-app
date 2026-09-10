@@ -222,12 +222,7 @@ export function InteractiveConnect({
             description={t(`${textKey}.recovery`)}
             primaryAction={{
               children: t('common.retry'),
-              onPress: () => {
-                setActionError(null);
-                if (waiting || state?.status === 'ready')
-                  plugins.authorization.check(entry.id, method.id);
-                else void begin();
-              },
+              onPress: () => void begin(true),
             }}
           />
         ) : null}
