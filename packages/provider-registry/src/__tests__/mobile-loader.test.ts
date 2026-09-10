@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
+import models from '../../data/models.json';
+import providerModels from '../../data/provider-models.json';
 import {
   isCatalogManifestCompatible,
   MobileRegistryLoader,
   REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
   REGISTRY_SCHEMA_VERSION,
 } from '../mobile-loader';
+
+function downloadedLoader(): MobileRegistryLoader {
+  const loader = new MobileRegistryLoader();
+  loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providerModels }));
+  return loader;
+}
 
 const compatibleManifest = {
   files: {
@@ -19,11 +27,29 @@ const compatibleManifest = {
 };
 
 describe('remote catalog compatibility', () => {
-  it('accepts only the inclusive Desktop semantic range implemented by Mobile', () => {
+  it('accepts supported minimum versions, including older saved snapshots', () => {
     expect(isCatalogManifestCompatible(compatibleManifest)).toBe(true);
-    expect(isCatalogManifestCompatible({ ...compatibleManifest, minAppVersion: '2.0.9' })).toBe(
-      false,
-    );
+    expect(
+      isCatalogManifestCompatible({
+        ...compatibleManifest,
+        minAppVersion: '2.0.8',
+        sourceAppVersion: '2.0.8',
+      }),
+    ).toBe(true);
+    expect(
+      isCatalogManifestCompatible({
+        ...compatibleManifest,
+        minAppVersion: '2.0.9',
+        sourceAppVersion: '2.0.14',
+      }),
+    ).toBe(true);
+    expect(
+      isCatalogManifestCompatible({
+        ...compatibleManifest,
+        minAppVersion: '2.0.15',
+        sourceAppVersion: '2.0.15',
+      }),
+    ).toBe(false);
     expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: '2.0.7' })).toBe(
       false,
     );
@@ -43,8 +69,51 @@ describe('remote catalog compatibility', () => {
 });
 
 describe('MobileRegistryLoader', () => {
-  it('parses the bundled desktop registry JSON', () => {
+  it('keeps trusted providers available but blocks model reads before download and after clearing', () => {
     const loader = new MobileRegistryLoader();
+    expect(loader.loadProviders().length).toBeGreaterThan(0);
+    expect(loader.isReady()).toBe(false);
+    expect(() => loader.loadModels()).toThrow('not been downloaded');
+    expect(() => loader.loadProviderModels()).toThrow('not been downloaded');
+    loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providerModels }));
+    expect(loader.isReady()).toBe(true);
+    loader.clearRemoteSnapshot();
+    expect(() => loader.findModel('gpt-4o')).toThrow('not been downloaded');
+  });
+
+  it('preserves input-length pricing tiers at the remote schema boundary', () => {
+    const loader = new MobileRegistryLoader();
+    const tier = {
+      minInputTokens: 272001,
+      input: { perMillionTokens: 12 },
+      output: { perMillionTokens: 60 },
+      cacheRead: { perMillionTokens: 1.2 },
+    };
+    const snapshot = {
+      models: {
+        version: 'tiered',
+        models: [
+          {
+            id: 'tiered',
+            name: 'Tiered',
+            pricing: {
+              input: { perMillionTokens: 6 },
+              output: { perMillionTokens: 30 },
+              inputTokenTiers: [tier],
+            },
+          },
+        ],
+      },
+      providerModels: { version: 'tiered', overrides: [] },
+    };
+    loader.installRemoteSnapshot(loader.parseRemoteSnapshot(snapshot));
+    expect(loader.findModel('tiered')?.pricing?.inputTokenTiers).toEqual([tier]);
+    tier.minInputTokens = -1;
+    expect(() => loader.parseRemoteSnapshot(snapshot)).toThrow();
+  });
+
+  it('parses an explicitly downloaded desktop registry snapshot', () => {
+    const loader = downloadedLoader();
 
     expect(loader.loadProviders().length).toBeGreaterThan(0);
     expect(loader.loadModels().length).toBeGreaterThan(0);
@@ -53,7 +122,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('resolves exact apiModelId before normalized fallback collisions', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     expect(loader.findOverride('aws-bedrock', 'google.gemma-3-27b-it')).toMatchObject({
       apiModelId: 'google.gemma-3-27b-it',
@@ -63,7 +132,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('keeps parameter-size siblings distinct for prefixed provider ids', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     expect(loader.findModel('nvidia/gpt-oss-20b')?.id).toBe('gpt-oss-20b');
     expect(loader.findModel('nvidia/gpt-oss-120b')?.id).toBe('gpt-oss-120b');
@@ -72,14 +141,14 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('does not resolve an unknown parameter size through a family sibling', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     expect(loader.findModel('nvidia/gpt-oss-9b')).toBeNull();
     expect(loader.findOverride('nvidia', 'nvidia/gpt-oss-9b')).toBeNull();
   });
 
   it('exposes standalone provider-model rows and image-generation metadata', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     expect(loader.findOverride('302ai', 'chatgpt-4o-latest')).toMatchObject({
       apiModelId: 'chatgpt-4o-latest',
@@ -92,7 +161,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('exposes provider metadata from the desktop catalog', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     expect(loader.findProvider('tokenhub')).toMatchObject({
       id: 'tokenhub',
@@ -101,7 +170,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('excludes preset providers whose only auth path is OAuth, without dropping their catalog rows', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
     const overrides = loader.loadProviderModels();
 
     expect(loader.getExcludedProviderIds()).toEqual(['copilot', 'grok-cli', 'openai-codex']);
@@ -116,7 +185,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('keeps mixed api-key/OAuth providers selectable with their catalog metadata untouched', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     for (const providerId of ['302ai', 'aihubmix', 'aionly', 'cherryin', 'ppio', 'silicon']) {
       expect(loader.isProviderExcluded(providerId)).toBe(false);
@@ -128,7 +197,7 @@ describe('MobileRegistryLoader', () => {
   });
 
   it('hides unsupported setup presets without excluding saved providers or catalog metadata', () => {
-    const loader = new MobileRegistryLoader();
+    const loader = downloadedLoader();
 
     for (const providerId of [
       'claude-code',
@@ -145,11 +214,9 @@ describe('MobileRegistryLoader', () => {
     }
   });
 
-  it('overlays Mobile-only provider overrides onto a remote Desktop snapshot', () => {
-    const loader = new MobileRegistryLoader();
-    const bundledGithubOverrides = loader.getOverridesForProvider('github');
-
-    expect(bundledGithubOverrides.length).toBeGreaterThan(0);
+  it('replaces all model metadata without a second bundled provider catalog', () => {
+    const loader = downloadedLoader();
+    expect(loader.getOverridesForProvider('github').length).toBeGreaterThan(0);
 
     loader.installRemoteSnapshot(
       loader.parseRemoteSnapshot({
@@ -172,8 +239,12 @@ describe('MobileRegistryLoader', () => {
       }),
     );
 
-    expect(loader.getOverridesForProvider('github')).toEqual(bundledGithubOverrides);
-    expect(loader.findOverride('github', 'remote-only-mobile-extension')).toBeNull();
+    expect(loader.getOverridesForProvider('github')).toHaveLength(1);
+    expect(loader.findOverride('github', 'remote-only-mobile-extension')).toMatchObject({
+      modelId: 'remote-only-mobile-extension',
+      providerId: 'github',
+    });
+    expect(loader.findModel('gpt-4o')).toBeNull();
     expect(loader.findOverride('openrouter', 'remote-model')).toMatchObject({
       apiModelId: 'remote-model',
       providerId: 'openrouter',

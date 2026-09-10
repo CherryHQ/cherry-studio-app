@@ -57,6 +57,32 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
 }
 
 describe('createModelsModule', () => {
+  it('refreshes discovered defaults before saving an older preview and preserves custom metadata', async () => {
+    const oldPreview = model('known', { presetModelId: 'known', maxOutputTokens: 16384 });
+    const custom = model('custom', { name: 'My model', maxOutputTokens: 4096 });
+    const { backend, dependencies } = createSubject({
+      materializeRemoteModels: (_provider, previews) =>
+        previews.map((preview) =>
+          preview.modelId === 'known'
+            ? ({ ...preview, maxOutputTokens: 32768 } as Model)
+            : (preview as Model),
+        ),
+    });
+    await backend.reconcile('openai', { toAdd: [oldPreview, custom] });
+    expect(dependencies.models.reconcile).toHaveBeenCalledWith(
+      'openai',
+      {
+        toAdd: [
+          expect.objectContaining({ modelId: 'known', maxOutputTokens: 32768 }),
+          expect.objectContaining({ modelId: 'custom', name: 'My model', maxOutputTokens: 4096 }),
+        ],
+        toRemove: [],
+      },
+      provider,
+    );
+    expect(oldPreview.maxOutputTokens).toBe(16384);
+  });
+
   it('returns a pull preview and keeps persistence behind reconcile', async () => {
     const local = model('old', { presetModelId: 'old' });
     const remote = model('new');

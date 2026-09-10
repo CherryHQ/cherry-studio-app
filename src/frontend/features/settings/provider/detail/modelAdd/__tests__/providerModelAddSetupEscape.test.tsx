@@ -41,6 +41,10 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/frontend/components/ModelRegistry', () => ({
+  ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
+}));
+
 jest.mock('@cherrystudio/ui/components', () => {
   const {
     Text: MockText,

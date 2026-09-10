@@ -32,7 +32,11 @@ function subject() {
         return provider;
       }),
     },
-    registryUpdates: { apply: jest.fn(), check: jest.fn(), subscribe: jest.fn() },
+    registryUpdates: {
+      ensureReady: jest.fn(),
+      apply: jest.fn(),
+      subscribe: jest.fn(),
+    },
   };
   return { backend: createProvidersModule(dependencies), dependencies };
 }

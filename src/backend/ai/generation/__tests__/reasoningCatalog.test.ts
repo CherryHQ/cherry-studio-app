@@ -17,7 +17,11 @@ import {
   providerRegistryService,
   resolveReasoningProfileFromRegistry,
 } from '@/backend/data/services/ProviderRegistryService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+
+installProviderRegistryTestSnapshot();
+beforeEach(installProviderRegistryTestSnapshot);
 
 type WireLeaf = string | number | boolean;
 type FlatWire = Record<string, WireLeaf>;
@@ -460,6 +464,7 @@ function buildCatalogCases(): CatalogCase[] {
     }),
   );
   const loader = new MobileRegistryLoader();
+  installProviderRegistryTestSnapshot(loader);
 
   for (const provider of loader.loadProviders()) {
     for (const [endpointType, config] of Object.entries(provider.endpointConfigs ?? {})) {

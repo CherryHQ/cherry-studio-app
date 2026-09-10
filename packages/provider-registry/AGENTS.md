@@ -1,6 +1,14 @@
 # provider-registry — module instructions
 
-The bundled AI **provider + model catalog**. This package has two faces:
+The AI catalog reader and trusted provider definitions. Mobile bundles only `data/providers.json`.
+The complete model catalog is downloaded and persisted by `ProviderRegistryUpdaterService`.
+
+Model metadata fixes belong in the upstream published catalog, not a second Mobile catalog. Keep
+user overrides and custom models local. The generator and the two generated model JSON files remain
+Node tooling/regression fixtures; do not refresh them for routine Mobile model updates. Trusted
+provider connection changes still use `src/providers/` plus `pnpm generate:providers`.
+
+This package retains two faces:
 
 - **Build-time**: a generation pipeline (`src/creators/` + `src/providers/` + `scripts/generate-catalog.ts`) that emits the three `data/*.json` files.
 - **Runtime**: schemas and lookup utilities, with `registry-loader.ts` for Node consumers and

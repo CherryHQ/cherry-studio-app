@@ -5,10 +5,13 @@ import { installTestHost, uninstallTestHost } from '@/backend/core/application/t
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createTestDb } from '@/backend/data/services/__tests__/_testDb';
 import { agentService } from '@/backend/data/services/AgentService';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
 import { createAgentTableDefinitionSource } from '../agentDefinitions';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('agent-table definition source', () => {
   let sqlite: DatabaseSync;

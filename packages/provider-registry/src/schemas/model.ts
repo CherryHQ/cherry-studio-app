@@ -366,6 +366,18 @@ export const ModelPricingSchema = z.object({
   cacheRead: PricePerTokenSchema.optional(),
   cacheWrite: PricePerTokenSchema.optional(),
 
+  inputTokenTiers: z
+    .array(
+      z.object({
+        minInputTokens: z.number().int().positive().refine(Number.isSafeInteger),
+        input: PricePerTokenSchema,
+        output: PricePerTokenSchema,
+        cacheRead: PricePerTokenSchema.optional(),
+        cacheWrite: PricePerTokenSchema.optional(),
+      }),
+    )
+    .optional(),
+
   perImage: z
     .object({
       price: z.number(),

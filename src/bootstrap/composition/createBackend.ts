@@ -57,7 +57,7 @@ export function createBackend(
     dbService: DbService;
     desktopConnections: DesktopConnectionRuntime;
     languageServing: LanguageServingSupport & AgentRuntime;
-    providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'checkForUpdate'>;
+    providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -156,8 +156,8 @@ export function createBackend(
       list: () => services.provider.list(),
     },
     registryUpdates: {
+      ensureReady: () => infrastructure.providerRegistryUpdater.ensureReady(),
       apply: () => infrastructure.providerRegistryUpdater.applyUpdate(),
-      check: () => infrastructure.providerRegistryUpdater.checkForUpdate(),
       subscribe: (listener) => providerRegistryUpdates.subscribe(listener),
     },
   });

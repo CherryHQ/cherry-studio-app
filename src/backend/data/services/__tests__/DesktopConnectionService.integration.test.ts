@@ -8,6 +8,7 @@ import {
   userModelTable,
   userProviderTable,
 } from '@/backend/data/db/schemas';
+import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import {
   DesktopProvidersSnapshotSchema,
   type DesktopProvidersSnapshot,
@@ -43,6 +44,8 @@ function provider(id = 'relay', modelIds = ['existing']) {
 function snapshot(...providers: ReturnType<typeof provider>[]) {
   return DesktopProvidersSnapshotSchema.parse({ version: 1, providers });
 }
+
+beforeEach(installProviderRegistryTestSnapshot);
 
 describe('DesktopConnectionService provider synchronization', () => {
   let testDb: TestDb;
