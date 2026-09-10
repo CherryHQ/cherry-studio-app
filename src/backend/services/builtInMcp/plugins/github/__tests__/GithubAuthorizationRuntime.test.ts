@@ -25,7 +25,7 @@ jest.mock('../githubOauth', () => {
 });
 
 const application = {
-  clientId: 'cherry-oauth-client',
+  clientId: 'cherry_oauth_client',
   clientSecret: 'public-client-secret',
   redirectUrl: 'cherrystudio-dev://plugins/github/callback' as const,
 };

@@ -84,7 +84,7 @@ export function CredentialConnect({
         keyboardShouldPersistTaps="handled"
         testID="plugin-connect"
       >
-        <Text className="text-base text-muted-foreground">
+        <Text className="text-sm text-muted-foreground">
           {t(`plugins.catalog.${entry.id}.authMethods.${method.id}.setup`)}
         </Text>
         <View className="gap-4">
@@ -104,25 +104,29 @@ export function CredentialConnect({
             }}
             onSubmit={() => void connect()}
           />
+          <View className="items-start">
+            <Button
+              variant="link"
+              size="inline"
+              onPress={() => void openExternalUrl(entry.links.credentials)}
+            >
+              {t(`plugins.catalog.${entry.id}.credentialLink`)}
+            </Button>
+          </View>
+        </View>
+        <View className="gap-3">
           <Button
-            variant="link"
-            size="inline"
-            onPress={() => void openExternalUrl(entry.links.credentials)}
+            size="lg"
+            loading={isConnecting}
+            disabled={!hasEveryField(method.fields, fields)}
+            onPress={() => void connect()}
+            testID="plugin-connect-submit"
           >
-            {t(`plugins.catalog.${entry.id}.credentialLink`)}
+            {t('plugins.authorize')}
           </Button>
+          {children}
         </View>
         <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
-        <Button
-          size="lg"
-          loading={isConnecting}
-          disabled={!hasEveryField(method.fields, fields)}
-          onPress={() => void connect()}
-          testID="plugin-connect-submit"
-        >
-          {t('plugins.authorize')}
-        </Button>
-        {children}
       </KeyboardAwareScrollView>
     </>
   );

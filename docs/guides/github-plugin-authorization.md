@@ -7,15 +7,11 @@ an installation's repositories in Cherry.
 
 ## Publisher Configuration
 
-Create an OAuth App under GitHub developer settings, not a GitHub App. GitHub supports up to
-10 callback URLs per OAuth App, so one registration can serve development, preview and production.
-Add the full callback URL for each enabled environment; keep the production callback when adding
-development. Separate registrations remain an option when credentials should be isolated.
+Create an OAuth App under GitHub developer settings, not a GitHub App. Configure publisher-owned
+browser authorization only for production and register its full callback URL:
 
 | Expo profile | Authorization callback URL |
 | --- | --- |
-| `development` / `development-simulator` | `cherrystudio-dev://plugins/github/callback` |
-| `preview` | `cherrystudio-preview://plugins/github/callback` |
 | `production` | `cherrystudio://plugins/github/callback` |
 
 The callback comes from the native application's configured scheme. A cold launch during OAuth
@@ -32,11 +28,10 @@ Organization policies and the user's actual access still constrain MCP operation
 rotation and also accepts a non-expiring access token without inventing an expiry or refresh token.
 An incomplete refresh response requires reconnecting instead of reusing an uncertain refresh token.
 
-## Development And EAS Environments
+## Production EAS Configuration
 
-Set these project-level variables in each enabled EAS environment (`development`, `preview` or
-`production`) on the Expo project's Environment variables page. Reuse the same values when sharing
-one OAuth App, or supply the matching registration's credentials when using separate apps.
+Set these project-level variables only in the EAS `production` environment on the Expo project's
+Environment variables page. Remove their assignments to `development` and `preview` if present.
 
 | Variable | Value | EAS visibility |
 | --- | --- | --- |
@@ -45,21 +40,20 @@ one OAuth App, or supply the matching registration's credentials when using sepa
 
 There is no App Slug variable. The earlier GitHub App variable names are not used.
 
-For local development, pull the development environment:
+For local production builds, pull the production environment:
 
 ```bash
-eas env:pull --environment development
+eas env:pull --environment production
 ```
 
 This writes the root `.env.local`; preserve any existing unrelated entries when updating it.
 Alternatively copy the empty entries from [`.env.example`](../../.env.example) and supply the
-development values manually. Do not commit populated files. Both Git and the EAS source archive
+production values manually. Do not commit populated files. Both Git and the EAS source archive
 ignore `.env` and `.env*.local`.
 
-Restart the development server and fully reload the app after changing values so plugin registration
-runs with the new configuration. The existing development scripts use `PROFILE=development`.
-The [local build wrapper](./local-builds.md) also loads `.env` and `.env.local` before EAS starts;
-it does not select a profile-specific env file. Keep local values matched to the intended profile.
+Development and preview use personal-token entry without publisher OAuth credentials. Keep these
+variables out of local development env files. The [local build wrapper](./local-builds.md) loads
+`.env` and `.env.local` before EAS starts; it does not select a profile-specific env file.
 
 [eas.json](../../eas.json) explicitly selects the matching EAS environment for development, preview
 and production builds; the simulator profile inherits development. Production cloud builds use EAS

@@ -25,7 +25,7 @@ jest.mock('@ai-sdk/mcp', () => {
 jest.mock('../../plugins/github/githubOauth', () => ({
   ...jest.requireActual('../../plugins/github/githubOauth'),
   getGithubApplication: () => ({
-    clientId: 'cherry-oauth-client',
+    clientId: 'cherry_oauth_client',
     clientSecret: 'public-client-secret',
     redirectUrl: 'cherrystudio-dev://plugins/github/callback',
   }),
@@ -517,7 +517,7 @@ it('injects the latest GitHub user credential for each independent request witho
   const credential = {
     version: 1,
     application: {
-      clientId: 'cherry-oauth-client',
+      clientId: 'cherry_oauth_client',
       clientSecret: 'public-client-secret',
       redirectUrl: 'cherrystudio-dev://plugins/github/callback',
     },

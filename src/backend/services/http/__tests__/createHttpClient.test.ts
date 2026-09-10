@@ -359,11 +359,7 @@ describe('createHttpClient', () => {
   });
 
   it('preserves DELETE bodies required by token revocation endpoints', async () => {
-    const adapter = mockAdapter(async (config) => {
-      expect(config.method).toBe('delete');
-      expect(JSON.parse(config.data)).toEqual({ access_token: 'private-token' });
-      return response(config, 204, undefined);
-    });
+    const adapter = mockAdapter(async (config) => response(config, 204, undefined));
     const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
     await createClient({ baseUrl: 'https://api.github.com' }).request({
       method: 'DELETE',
@@ -371,6 +367,9 @@ describe('createHttpClient', () => {
       body: { access_token: 'private-token' },
     });
     expect(adapter).toHaveBeenCalledTimes(1);
+    const config = adapter.mock.calls[0][0];
+    expect(config.method).toBe('DELETE');
+    expect(JSON.parse(config.data)).toEqual({ access_token: 'private-token' });
   });
 
   it('rejects a body on GET requests, including one added by an interceptor', async () => {

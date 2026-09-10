@@ -27,7 +27,7 @@ jest.mock('expo-crypto', () => ({
     jest.requireActual('node:crypto').createHash(algorithm).update(value).digest(options.encoding),
 }));
 const application = {
-  clientId: 'cherry-oauth-client',
+  clientId: 'cherry_oauth_client',
   clientSecret: 'public-client-secret',
   redirectUrl: 'cherrystudio-dev://plugins/github/callback' as const,
 };
@@ -48,6 +48,7 @@ afterEach(() => jest.restoreAllMocks());
 
 it('loads only OAuth App credentials and derives the callback from the native scheme', () => {
   jest.replaceProperty(process, 'env', {
+    NODE_ENV: 'test',
     EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
     EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: application.clientSecret,
   });
@@ -61,6 +62,7 @@ it('loads only OAuth App credentials and derives the callback from the native sc
 
 it('keeps browser authorization unavailable when OAuth credentials are incomplete', () => {
   jest.replaceProperty(process, 'env', {
+    NODE_ENV: 'test',
     EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
   });
   expect(getGithubApplication()).toBeUndefined();
@@ -198,10 +200,10 @@ it('revokes only the current token using GitHub’s DELETE body contract', async
     'https://api.github.com',
     expect.objectContaining({
       method: 'DELETE',
-      path: '/applications/cherry-oauth-client/token',
+      path: `/applications/${application.clientId}/token`,
       body: { access_token: 'private-access' },
       headers: expect.objectContaining({
-        Authorization: `Basic ${btoa('cherry-oauth-client:public-client-secret')}`,
+        Authorization: `Basic ${btoa(`${application.clientId}:${application.clientSecret}`)}`,
       }),
       redirect: 'error',
     }),

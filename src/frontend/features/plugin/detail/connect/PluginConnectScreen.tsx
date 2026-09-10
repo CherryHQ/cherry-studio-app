@@ -39,11 +39,16 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
   if (!method) return <ContentState.Empty title={t('plugins.unavailable')} />;
   const alternatives =
     entry.authMethods.length > 1 ? (
-      <View className="gap-2">
+      <View className="gap-3">
         {entry.authMethods
           .filter((candidate) => candidate.id !== method.id)
           .map((candidate) => (
-            <Button key={candidate.id} variant="outline" onPress={() => setMethodId(candidate.id)}>
+            <Button
+              key={candidate.id}
+              size="lg"
+              variant="outline"
+              onPress={() => setMethodId(candidate.id)}
+            >
               {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`)}
             </Button>
           ))}
@@ -61,10 +66,11 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
     if (connections.data?.some((connection) => connection.pluginId === entry.id))
       return (
         <View className="flex-1 gap-4 bg-background px-6 py-6">
-          <Text className="text-base text-foreground">
+          <Text className="text-sm text-muted-foreground">
             {t('plugins.authorization.requiresDisconnect')}
           </Text>
           <Button
+            size="lg"
             onPress={() =>
               router.dismissTo({ pathname: '/plugins/[pluginId]', params: { pluginId: entry.id } })
             }
