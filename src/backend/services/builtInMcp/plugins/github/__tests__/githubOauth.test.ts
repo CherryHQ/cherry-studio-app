@@ -31,6 +31,10 @@ const application = {
   clientSecret: 'public-client-secret',
   redirectUrl: 'cherrystudio-dev://plugins/github/callback' as const,
 };
+const originalOauthEnv = [
+  'EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID',
+  'EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET',
+].map((name) => [name, process.env[name]] as const);
 const signal = new AbortController().signal;
 const response = {
   access_token: 'private-access',
@@ -44,11 +48,17 @@ beforeEach(() => {
   mockRequest.mockReset().mockResolvedValue({ data: response });
   jest.spyOn(Date, 'now').mockReturnValue(1000);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.restoreAllMocks();
+  for (const [name, value] of originalOauthEnv) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+});
 
 it('loads only OAuth App credentials and derives the callback from the native scheme', () => {
-  jest.replaceProperty(process, 'env', {
-    NODE_ENV: 'test',
+  // Expo's virtual env module retains this object, so update its entries in place.
+  Object.assign(process.env, {
     EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
     EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET: application.clientSecret,
   });
@@ -61,10 +71,8 @@ it('loads only OAuth App credentials and derives the callback from the native sc
 });
 
 it('keeps browser authorization unavailable when OAuth credentials are incomplete', () => {
-  jest.replaceProperty(process, 'env', {
-    NODE_ENV: 'test',
-    EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID: application.clientId,
-  });
+  process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID = application.clientId;
+  delete process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET;
   expect(getGithubApplication()).toBeUndefined();
 });
 
