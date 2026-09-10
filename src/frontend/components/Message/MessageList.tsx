@@ -4,11 +4,18 @@ import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/l
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Platform, View } from 'react-native';
-import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import {
+  runOnJS,
+  useAnimatedReaction,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
 
 import { MessageListDisclosureProvider } from './list/MessageListDisclosureContext';
 import {
   getMessageRowType,
+  isMessageListAtBottom,
   MAINTAIN_VISIBLE_CONTENT_POSITION,
   MESSAGE_LIST_TOP_PADDING,
   messageKeyExtractor,
@@ -64,53 +71,57 @@ export function MessageList({
     onReady,
     onReturnToLatest,
   });
-  const isAtBottom = useSharedValue(true);
-  const contentHeightRef = useRef({ dataKey, height: 0 });
-  const viewportHeightRef = useRef(0);
-  const [contentScrollability, setContentScrollability] = useState({
-    dataKey,
-    isScrollable: false,
-  });
-  const isContentScrollable =
-    contentScrollability.dataKey === dataKey && contentScrollability.isScrollable;
-  const [isNativeAtBottomForButton, setIsNativeAtBottomForButton] = useState(true);
-  const syncScrollButtonVisibility = useCallback((atBottom: boolean) => {
-    setIsNativeAtBottomForButton(atBottom);
+  const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const keyboardLift = useDerivedValue(() =>
+    Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
+  );
+  const scrollButtonBottom = useDerivedValue(
+    () => (bottomAccessoryHeight?.get() ?? 0) + keyboardLift.get(),
+  );
+  const contentHeight = useSharedValue({ dataKey, height: 0 });
+  const viewportHeight = useSharedValue(0);
+  const scrollOffset = useSharedValue(0);
+  const [bottomState, setBottomState] = useState({ dataKey, isAtBottom: true });
+  const syncScrollButtonVisibility = useCallback((key: string | undefined, isAtBottom: boolean) => {
+    setBottomState({ dataKey: key, isAtBottom });
   }, []);
-  const syncContentScrollability = useCallback(() => {
-    const contentHeight =
-      contentHeightRef.current.dataKey === dataKey ? contentHeightRef.current.height : 0;
-    const nextIsScrollable =
-      viewportHeightRef.current > 0 && contentHeight > viewportHeightRef.current;
-    setContentScrollability((current) => {
-      if (current.dataKey === dataKey && current.isScrollable === nextIsScrollable) {
-        return current;
-      }
-      return { dataKey, isScrollable: nextIsScrollable };
-    });
-  }, [dataKey]);
   const handleListContentSizeChange = useCallback(
     (_width: number, height: number) => {
-      contentHeightRef.current = { dataKey, height };
-      syncContentScrollability();
+      contentHeight.set({ dataKey, height });
       handleContentSizeChange();
     },
-    [dataKey, handleContentSizeChange, syncContentScrollability],
+    [contentHeight, dataKey, handleContentSizeChange],
   );
   const handleListLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      viewportHeightRef.current = event.nativeEvent.layout.height;
-      syncContentScrollability();
+      viewportHeight.set(event.nativeEvent.layout.height);
       handleLayout(event);
     },
-    [handleLayout, syncContentScrollability],
+    [handleLayout, viewportHeight],
   );
 
   useAnimatedReaction(
-    () => isAtBottom.get(),
+    () => {
+      const content = contentHeight.get();
+      const viewport = viewportHeight.get();
+      // Match the keyboard adapter's capped inset, including short conversations
+      // that become scrollable only once the keyboard covers part of the list.
+      const inset = Math.min(viewport, keyboardLift.get());
+      return {
+        dataKey,
+        isAtBottom:
+          content.dataKey !== dataKey ||
+          viewport <= 0 ||
+          isMessageListAtBottom(scrollOffset.get(), content.height + inset, viewport),
+      };
+    },
     (current, previous) => {
-      if (previous === null || current !== previous) {
-        runOnJS(syncScrollButtonVisibility)(current);
+      if (
+        previous === null ||
+        current.dataKey !== previous.dataKey ||
+        current.isAtBottom !== previous.isAtBottom
+      ) {
+        runOnJS(syncScrollButtonVisibility)(current.dataKey, current.isAtBottom);
       }
     },
   );
@@ -136,7 +147,7 @@ export function MessageList({
 
     void onLoadOlder();
   }, [onLoadOlder]);
-  const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
+  const sharedValues = useMemo(() => ({ scrollOffset }), [scrollOffset]);
   const handleEndReached = useCallback(() => {
     void onLoadNewer?.();
   }, [onLoadNewer]);
@@ -167,7 +178,7 @@ export function MessageList({
               getItemType={getMessageRowType}
               keyExtractor={messageKeyExtractor}
               keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
-              keyboardLiftBehavior="whenAtEnd"
+              keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
               keyboardOffset={keyboardOffset}
               keyboardShouldPersistTaps="handled"
               ListHeaderComponent={listHeader}
@@ -196,11 +207,11 @@ export function MessageList({
         {messages.length > 0 ? (
           <ScrollToBottomButton
             accessibilityLabel={t('chat.message.scrollToBottom')}
-            bottomAccessoryHeight={bottomAccessoryHeight}
+            bottomAccessoryHeight={scrollButtonBottom}
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
             isAtBottom={
               !hasNewerMessages &&
-              (!isContentScrollable || isNativeAtBottomForButton || isFollowing)
+              (isFollowing || bottomState.dataKey !== dataKey || bottomState.isAtBottom)
             }
             // The press only enters following mode, which already hides the
             // button. Mirroring an optimistic at-end state here would stick at
