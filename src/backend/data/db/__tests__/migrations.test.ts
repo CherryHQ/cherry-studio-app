@@ -193,12 +193,7 @@ describe('bundled SQLite migrations', () => {
         );
 
         expect(columnNames(database, 'desktop_connection')).toContain('active_base_url');
-        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(
-          grants.map((grant) => ({
-            ...grant,
-            credential: JSON.stringify({ version: 1, token: grant.credential }),
-          })),
-        );
+        expect(database.prepare('SELECT * FROM plugin_authorization').all()).toEqual(grants);
         expect(database.prepare('SELECT * FROM mcp_server').all()).toEqual(servers);
         expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       } finally {
