@@ -6,6 +6,7 @@ import chinese from '../../../../../../../assets/paintings/templates/locales/zh-
 import {
   createPaintingTemplatePrompt,
   getPaintingTemplates,
+  isPaintingTemplateInputValid,
   type PaintingTemplate,
   shufflePaintingTemplates,
 } from '../paintingTemplates';
@@ -86,4 +87,37 @@ describe('painting templates', () => {
       random.mockRestore();
     }
   });
+
+  test.each(['en-US', 'zh-CN'])(
+    'keeps generation requirements independent of %s copy',
+    (language) => {
+      const templates = getPaintingTemplates(language);
+      expect(
+        templates.find((template) => template.id === 'human-fragments-motion')?.aspectRatio,
+      ).toBe('9:16');
+      expect(templates.find((template) => template.id === 'birthday-poster')?.aspectRatio).toBe(
+        '3:4',
+      );
+      expect(templates.find((template) => template.id === 'tuscan-residence')?.aspectRatio).toBe(
+        '4:5',
+      );
+
+      const referenceTemplate = templates.find((template) => template.id === 'doodle-shadow')!;
+      const values = referenceTemplate.fields.map((field) => field.value);
+      expect(isPaintingTemplateInputValid(referenceTemplate, values, 0)).toBe(false);
+      expect(isPaintingTemplateInputValid(referenceTemplate, values, 1)).toBe(true);
+
+      const textTemplate = templates.find((template) => template.id === 'birthday-poster')!;
+      const textValues = textTemplate.fields.map((field) => field.value);
+      expect(isPaintingTemplateInputValid(textTemplate, textValues, 0)).toBe(true);
+      expect(isPaintingTemplateInputValid(textTemplate, textValues.slice(1), 0)).toBe(false);
+      expect(
+        isPaintingTemplateInputValid(
+          textTemplate,
+          textValues.map(() => ' '),
+          1,
+        ),
+      ).toBe(false);
+    },
+  );
 });

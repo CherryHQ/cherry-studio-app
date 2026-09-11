@@ -13,7 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
-import { KeyboardAwareScrollView, KeyboardController } from 'react-native-keyboard-controller';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import {
@@ -33,8 +33,8 @@ import {
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import {
+  createImageParamDraftForAspectRatio,
   prepareImageParamValues,
-  reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
 import {
@@ -45,7 +45,11 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { resolvePaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
-import { createPaintingTemplatePrompt, type PaintingTemplate } from './paintingTemplates';
+import {
+  createPaintingTemplatePrompt,
+  isPaintingTemplateInputValid,
+  type PaintingTemplate,
+} from './paintingTemplates';
 
 const logger = loggerService.withContext('PaintingTemplateBottomSheet');
 
@@ -78,12 +82,13 @@ export function PaintingTemplateBottomSheet({
   const { attachments, addAttachments, removeAttachment } = useManagedComposerAttachments();
   const { getModelItem } = useModelPickerData({ modelType: 'image' });
   const selectedModel = getModelItem(selectedModelId ?? defaultModelId);
-  const mode = resolvePaintingGenerationMode(selectedModel?.model, attachments.length > 0);
+  const shouldAcceptImages = template.isReferenceImageRequired || attachments.length > 0;
+  const mode = resolvePaintingGenerationMode(selectedModel?.model, shouldAcceptImages);
   const isModelCompatible = mode !== undefined;
   const canCreate =
     Boolean(selectedModel) &&
     isModelCompatible &&
-    values.every((value) => value.trim().length > 0) &&
+    isPaintingTemplateInputValid(template, values, attachments.length) &&
     attachments.every(isComposerAttachmentReady) &&
     !isPickingImages;
   const prompt = createPaintingTemplatePrompt(template, values);
@@ -103,7 +108,7 @@ export function PaintingTemplateBottomSheet({
         modelId: selectedModel.modelId,
         modelName: selectedModel.model.name,
         paramValues: prepareImageParamValues(
-          reconcileImageParamDraft({}, resolvedMode),
+          createImageParamDraftForAspectRatio(template.aspectRatio, resolvedMode),
           support,
           resolvedMode,
         ),
@@ -201,8 +206,7 @@ export function PaintingTemplateBottomSheet({
         testID="painting-template"
         title={template.title}
       >
-        <KeyboardAwareScrollView
-          bottomOffset={16}
+        <BottomSheet.ScrollView
           contentContainerClassName="gap-6 px-5 pb-6 pt-2"
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
@@ -253,7 +257,11 @@ export function PaintingTemplateBottomSheet({
           <View className="gap-3">
             <View className="flex-row items-center justify-between gap-3">
               <Text className="text-sm font-medium text-foreground">
-                {t('painting.templates.referenceImages')}
+                {t(
+                  template.isReferenceImageRequired
+                    ? 'painting.templates.referenceImagesRequired'
+                    : 'painting.templates.referenceImages',
+                )}
               </Text>
               <Button
                 disabled={isSubmitting || isPickingImages}
@@ -265,6 +273,11 @@ export function PaintingTemplateBottomSheet({
                 {t('chat.media.photos')}
               </Button>
             </View>
+            {template.isReferenceImageRequired && attachments.length === 0 ? (
+              <Text className="text-sm text-muted-foreground">
+                {t('painting.templates.referenceImageHint')}
+              </Text>
+            ) : null}
             {attachments.length > 0 ? (
               <View pointerEvents={isSubmitting ? 'none' : 'auto'}>
                 <ComposerAttachmentStrip
@@ -317,13 +330,13 @@ export function PaintingTemplateBottomSheet({
               </Text>
             ) : null}
           </View>
-        </KeyboardAwareScrollView>
+        </BottomSheet.ScrollView>
       </BottomSheet>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           emptyText={t('painting.input.noCompatibleModels')}
           isModelVisible={(item) =>
-            resolvePaintingGenerationMode(item.model, attachments.length > 0) !== undefined
+            resolvePaintingGenerationMode(item.model, shouldAcceptImages) !== undefined
           }
           modelType="image"
           onAddProvider={() => {

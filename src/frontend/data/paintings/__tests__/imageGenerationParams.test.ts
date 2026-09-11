@@ -1,6 +1,7 @@
 import {
   ENDPOINT_TYPE,
   type ImageGenerationSupport,
+  type ImageModeDef,
   MODALITY,
   MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
@@ -12,6 +13,7 @@ import {
 } from '@/shared/utils/paintingModelSupport';
 
 import {
+  createImageParamDraftForAspectRatio,
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
   isImageParamDraftValid,
@@ -51,6 +53,72 @@ const support = {
     },
   },
 } satisfies ImageGenerationSupport;
+
+describe('requested painting aspect ratios', () => {
+  const sizeSupport = {
+    modes: {
+      generate: {
+        supports: {
+          size: {
+            type: 'enum',
+            default: '1024x1024',
+            options: ['1024x1024', '1792x1024', '1024x1792'],
+          },
+          quality: { type: 'enum', default: 'hd', options: ['standard', 'hd'] },
+        },
+      },
+    },
+  } satisfies ImageGenerationSupport;
+
+  it.each([
+    ['9:16', '1024x1792'],
+    ['3:4', '1024x1792'],
+    ['16:9', '1792x1024'],
+    ['1:1', '1024x1024'],
+  ])('maps %s to the closest available request size', (ratio, size) => {
+    const mode = resolveImageGenerationMode(sizeSupport, 'generate');
+    const draft = createImageParamDraftForAspectRatio(ratio, mode);
+    expect(prepareImageParamValues(draft, sizeSupport, mode)).toEqual({ size, quality: 'hd' });
+  });
+
+  it.each(['generate', 'edit'] as const)(
+    'uses the %s mode ratio vocabulary and preserves resolution',
+    (selectedMode) => {
+      const definition = {
+        supports: {
+          aspectRatio: {
+            type: 'enum',
+            default: 'auto',
+            options: ['auto', 'ASPECT_1_1', 'ASPECT_3_4', 'ASPECT_9_16'],
+          },
+          imageResolution: { type: 'enum', default: '2K', options: ['1K', '2K', '4K'] },
+        },
+      } satisfies ImageModeDef;
+      const ratioSupport = { modes: { [selectedMode]: definition } };
+      const mode = resolveImageGenerationMode(ratioSupport, selectedMode);
+      const draft = createImageParamDraftForAspectRatio('9:16', mode);
+      expect(prepareImageParamValues(draft, ratioSupport, mode)).toEqual({
+        aspectRatio: 'ASPECT_9_16',
+        imageResolution: '2K',
+      });
+      expect(
+        imageParamsAspectRatio(prepareImageParamValues(draft, ratioSupport, mode)),
+      ).toBeCloseTo(9 / 16);
+    },
+  );
+
+  it('keeps defaults when no ratio is requested or no geometry control is available', () => {
+    const mode = resolveImageGenerationMode(sizeSupport, 'generate');
+    expect(createImageParamDraftForAspectRatio(undefined, mode)).toEqual({
+      size: '1024x1024',
+      quality: 'hd',
+    });
+    expect(
+      createImageParamDraftForAspectRatio('9:16', resolveImageGenerationMode(support, 'edit')),
+    ).toEqual({ strength: 0.5 });
+    expect(createImageParamDraftForAspectRatio('9:16', undefined)).toEqual({});
+  });
+});
 
 describe('image generation parameter resolution', () => {
   it('prefers generate without inputs and edit with inputs', () => {

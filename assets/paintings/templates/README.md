@@ -12,6 +12,10 @@ When syncing the catalog, update the static image imports in `paintingTemplates.
 field labels together; its catalog tests protect their correspondence.
 
 Mobile presents a one-use creation form. Field changes do not modify the bundled template. The
-form substitutes values literally, uses the selected model's default generation parameters, and
-enqueues the existing painting job before navigating to the painting receipt. Reference images
-are user-selected library imports; template previews are never submitted as image inputs.
+form substitutes values literally and enqueues the existing painting job before navigating to the
+painting receipt. Mobile-owned requirements in `paintingTemplates.ts` declare the explicit prompt
+aspect ratios and templates that need a reference image. The selected model's defaults are seeded
+with the closest supported ratio or pixel size; controls unrelated to composition retain their
+defaults. Models without geometry controls keep their defaults and receive the ratio in the prompt.
+The doodle-shadow template requires a reference photo and an image-input model. Other reference
+images are optional user-selected library imports; template previews are never submitted as inputs.

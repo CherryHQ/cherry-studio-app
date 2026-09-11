@@ -9,12 +9,34 @@ import chineseTemplates from '../../../../../../assets/paintings/templates/local
 type PaintingTemplateId = keyof typeof englishTemplates;
 
 export type PaintingTemplate = Readonly<{
+  aspectRatio?: `${number}:${number}`;
   fields: readonly { label: string; value: string }[];
   id: PaintingTemplateId;
   preview: ImageProps['source'];
   prompt: string;
+  isReferenceImageRequired: boolean;
   title: string;
 }>;
+
+// Mobile-owned generation requirements, independent of the localized desktop prompts.
+const TEMPLATE_REQUIREMENTS: Partial<
+  Record<
+    PaintingTemplateId,
+    Partial<Pick<PaintingTemplate, 'aspectRatio' | 'isReferenceImageRequired'>>
+  >
+> = {
+  'human-fragments-motion': { aspectRatio: '9:16' },
+  'human-fragments-sport': { aspectRatio: '9:16' },
+  'underwater-editorial': { aspectRatio: '9:16' },
+  'wuxia-swordswoman': { aspectRatio: '9:16' },
+  'literary-art-poster': { aspectRatio: '9:16' },
+  'tuscan-residence': { aspectRatio: '4:5' },
+  'summer-hillside': { aspectRatio: '9:16' },
+  'slow-shutter-fashion': { aspectRatio: '9:16' },
+  'circular-cutout': { aspectRatio: '3:4' },
+  'doodle-shadow': { isReferenceImageRequired: true },
+  'birthday-poster': { aspectRatio: '3:4' },
+};
 
 const previews = {
   'human-fragments-motion': require('../../../../../../assets/paintings/templates/human-fragments-motion.webp'),
@@ -55,6 +77,7 @@ export function getPaintingTemplates(language: string): PaintingTemplate[] {
     const id = catalogId as PaintingTemplateId;
     const { label, prompt } = translations[id];
     return {
+      aspectRatio: TEMPLATE_REQUIREMENTS[id]?.aspectRatio,
       fields: [...prompt.matchAll(variablePattern)].map((match, index) => ({
         label: labels[id][index],
         value: match[1],
@@ -62,6 +85,7 @@ export function getPaintingTemplates(language: string): PaintingTemplate[] {
       id,
       preview: previews[id],
       prompt,
+      isReferenceImageRequired: TEMPLATE_REQUIREMENTS[id]?.isReferenceImageRequired ?? false,
       title: label,
     };
   });
@@ -88,4 +112,16 @@ export function createPaintingTemplatePrompt(
       (values[index++] ?? defaultValue).trim(),
     )
     .trim();
+}
+
+export function isPaintingTemplateInputValid(
+  template: PaintingTemplate,
+  values: readonly string[],
+  referenceImageCount: number,
+): boolean {
+  return (
+    (!template.isReferenceImageRequired || referenceImageCount > 0) &&
+    values.length === template.fields.length &&
+    values.every((value) => value.trim().length > 0)
+  );
 }
