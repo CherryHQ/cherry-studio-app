@@ -11,6 +11,7 @@ import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHando
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { PaintingComposer } from './components/PaintingComposer';
+import { paintingOpenState } from './utils/paintingOpenState';
 
 export function PaintingScreen() {
   const { t } = useTranslation();
@@ -29,12 +30,12 @@ export function PaintingScreen() {
   }>();
   const handoffToken = getSingleRouteParam(params.handoff);
   const paintingId = getSingleRouteParam(params.paintingId);
-  // Frozen at mount: only the painting this screen opened with owns the loading
-  // gate. A generation writes a new receipt id into the route; letting that id
-  // re-enter the gate would tear the composer down mid-generation.
-  const [openedPaintingId] = useState(() => paintingId);
-  const [hasOpenedPainting, setHasOpenedPainting] = useState(paintingId === undefined);
   const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
+  // Opening a persisted painting gates the composer on its data. The gate closes
+  // for good once that data has seeded the composer: a generation later writes
+  // its receipt id into the route, and re-entering the gate would tear the
+  // composer down mid-generation.
+  const [isOpeningPainting, setIsOpeningPainting] = useState(paintingId !== undefined);
   const paintingQuery = usePainting(paintingId);
   const painting = paintingQuery.data;
   // A handoff (edit / resize / album) already seeds the composer — the source
@@ -42,15 +43,26 @@ export function PaintingScreen() {
   // must not surface: the canvas stays blank for the fresh result instead of
   // echoing the old output back at the user. Skip resolving them entirely then.
   const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
+  const openState = isOpeningPainting
+    ? paintingOpenState({
+        files: filesQuery.data,
+        filesError: filesQuery.error,
+        hasHandoff: Boolean(handoff),
+        isFilesLoading: filesQuery.isLoading,
+        isPaintingLoading: paintingQuery.isLoading,
+        painting,
+        paintingError: paintingQuery.error,
+      })
+    : 'ready';
+  // Render-phase adjustment (not an effect): the guard makes the setState
+  // idempotent, so the extra render pass converges immediately.
+  if (isOpeningPainting && openState === 'ready') {
+    setIsOpeningPainting(false);
+  }
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
-  const isLoading =
-    !hasOpenedPainting &&
-    openedPaintingId !== undefined &&
-    paintingId === openedPaintingId &&
-    (paintingQuery.isLoading || filesQuery.isLoading);
   useBackgroundTaskNotifications(
     paintingId ? { kind: 'painting', paintingId } : undefined,
-    !handoffToken && Boolean(painting) && !isLoading,
+    !handoffToken && Boolean(painting) && openState !== 'loading',
   );
   const handleReceipt = useCallback(
     // Admission changes the draft's route identity to its own task. Keep its
@@ -59,41 +71,30 @@ export function PaintingScreen() {
       navigation.setParams({ handoff: undefined, paintingId: receiptId }),
     [navigation],
   );
-  const isOpeningPainting =
-    !hasOpenedPainting && openedPaintingId !== undefined && paintingId === openedPaintingId;
-  const loadError =
-    isOpeningPainting &&
-    ((!painting && paintingQuery.error) || (!handoff && !filesQuery.data && filesQuery.error));
-  const hasUnavailableOutputs =
-    !handoff &&
-    painting &&
-    painting.files.output.length > 0 &&
-    filesQuery.data?.outputs.length === 0;
-  const isUnavailable = isOpeningPainting && !isLoading && (!painting || hasUnavailableOutputs);
-  if (
-    isOpeningPainting &&
-    !isLoading &&
-    !loadError &&
-    !isUnavailable &&
-    painting &&
-    (handoff || filesQuery.data)
-  ) {
-    setHasOpenedPainting(true);
-  }
   const initialAttachments = handoff?.attachments ?? [];
   const initialDraft = handoff?.draft ?? '';
 
   return (
     <View className="flex-1">
       <RouteHeader />
-      {isLoading ? (
+      {openState === 'loading' ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading />
         </View>
-      ) : loadError || isUnavailable ? (
+      ) : openState === 'ready' ? (
+        <PaintingComposer
+          initialAttachments={initialAttachments}
+          initialDraft={initialDraft}
+          initialFiles={paintingFiles}
+          initialParamValues={handoff?.paramValues}
+          isHandoff={Boolean(handoff)}
+          onReceipt={handleReceipt}
+          painting={painting}
+        />
+      ) : (
         <View className="flex-1 justify-center px-8 py-16">
           <ContentState.Error
-            title={t(loadError ? 'painting.loadFailed' : 'painting.unavailable')}
+            title={t(openState === 'loadFailed' ? 'painting.loadFailed' : 'painting.unavailable')}
             primaryAction={{
               children: t('common.retry'),
               onPress: () => {
@@ -107,16 +108,6 @@ export function PaintingScreen() {
             }}
           />
         </View>
-      ) : (
-        <PaintingComposer
-          initialAttachments={initialAttachments}
-          initialDraft={initialDraft}
-          initialFiles={paintingFiles}
-          initialParamValues={handoff?.paramValues}
-          isHandoff={Boolean(handoff)}
-          onReceipt={handleReceipt}
-          painting={painting}
-        />
       )}
     </View>
   );
