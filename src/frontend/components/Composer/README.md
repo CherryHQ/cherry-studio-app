@@ -59,8 +59,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `useComposerPresentationState` — exposes `isEditing` independently of native field focus,
   alongside dock keyboard tracking. Screens derive their expanded state from editing and content.
 - `useComposerPresentationActions` — activates editing on field focus, ends it on explicit outside
-  dismissal, and presents a Sheet or native picker while retaining the editing state. The media
-  menu uses the replacement action; caller-owned replacement buttons, such
+  dismissal, and presents a Sheet or native picker while retaining the editing state. The model
+  pill and media menu already use the replacement action; caller-owned replacement buttons, such
   as painting settings, use the same action.
 - `ComposerDock` — connects that input-context state to CherryUI's
   `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
@@ -112,9 +112,9 @@ walk to verify it.
 
 ## Behavior notes
 
-- Input surfaces have two policies. The ＋ menu, chat effort slider, and model picker
-  preserve field focus and the live keyboard. Explicitly focusing model search transfers input
-  to that field. A replacement (settings Sheet, camera, photo library, or file picker) first disables dock
+- Input surfaces have two policies. An overlay (the ＋ menu or chat effort
+  slider) preserves field focus and the live keyboard. A replacement (model or
+  settings Sheet, camera, photo library, or file picker) first disables dock
   keyboard tracking, retains the editing state, blurs the field, awaits keyboard dismissal, and leaves one
   render frame for the closed UI to become inert before presenting. The dock
   stays at its resting bottom position after the replacement closes; the next

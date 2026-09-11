@@ -6,10 +6,7 @@ import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
 
 let mockGroups: ModelPickerGroup[] = [];
-let mockListProps:
-  | { emptyText?: string; isSearchFocused?: boolean; listItems: readonly ModelPickerListItem[] }
-  | undefined;
-let mockDismissKeyboardOnClose: boolean | undefined;
+let mockListProps: { emptyText?: string; listItems: readonly ModelPickerListItem[] } | undefined;
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
   ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
@@ -21,22 +18,17 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: ({
       children,
-      dismissKeyboardOnClose,
       size,
       testID,
     }: {
       children: ReactNode;
-      dismissKeyboardOnClose?: boolean;
       size: string;
       testID: string;
-    }) => {
-      mockDismissKeyboardOnClose = dismissKeyboardOnClose;
-      return (
-        <MockView accessibilityValue={{ text: size }} testID={`${testID}-surface`}>
-          {children}
-        </MockView>
-      );
-    },
+    }) => (
+      <MockView accessibilityValue={{ text: size }} testID={`${testID}-surface`}>
+        {children}
+      </MockView>
+    ),
     SearchField: (props: Record<string, unknown>) => <MockTextInput {...props} />,
   };
 });
@@ -88,19 +80,13 @@ describe('ModelPickerDrawer', () => {
     const search = () => renderer.root.findByProps({ testID: 'model-picker-search' });
 
     expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
-    expect(mockDismissKeyboardOnClose).toBe(false);
-    expect(mockListProps?.isSearchFocused).toBe(false);
 
     act(() => search().props.onFocus());
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
-    expect(mockDismissKeyboardOnClose).toBe(true);
-    expect(mockListProps?.isSearchFocused).toBe(true);
 
     act(() => search().props.onChangeText('qwen'));
     act(() => search().props.onBlur());
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
-    expect(mockDismissKeyboardOnClose).toBe(false);
-    expect(mockListProps?.isSearchFocused).toBe(false);
 
     act(() => search().props.onClear());
     expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });

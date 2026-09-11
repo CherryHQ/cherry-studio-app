@@ -22,10 +22,7 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 - Long press, selection-handle dragging, Select All, Copy, and editing-menu dismissal preserve the
   composer's current presentation and keyboard state. Raw touches on a popover's composer anchor
   must not close the panel while the editor is interpreting that sequence.
-- Opening, browsing, selecting, or cancelling the model picker preserves the composer's input
-  context. Only explicitly focusing model search transfers input to that field; its own keyboard
-  can then dismiss on search-list dragging or sheet close.
-- Explicit file, camera, and photo selection keep the existing input-transfer behavior.
+- Explicit model, file, camera, and photo selection keep the existing input-transfer behavior.
   Their presentation, draft semantics, and animations are not redesigned by this patch.
 
 ## Operation Boundaries
@@ -37,8 +34,7 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 | Tap chat background outside the composer | Blur the editor and end editing through the existing composer transition |
 | Open/close add or reasoning controls | Existing control and animation; no new global keyboard policy |
 | Choose a plugin | Insert once or retain the existing reference; no forced text focus |
-| Open/browse/select/cancel models | Preserve composer focus and keyboard; model search takes focus only when tapped |
-| Choose media/files | Existing picker and input-transfer path |
+| Select a model or choose media/files | Existing picker and input-transfer path |
 | Send or stop | Existing submission/cancellation flow; local-send scrolling does not dismiss input |
 | Admission/import failure or approval arrival | Existing recovery, attachment, and approval workflow |
 | Scroll or use message content | Message/list owner; no blanket parent touch dismissal |
@@ -64,10 +60,7 @@ or selection conformance. With explicit device-verification authorization, check
 - With the keyboard open and then closed, open the add menu and plugin picker, scroll the plugins,
   select/reselect a plugin, and cancel through the backdrop or Back. The keyboard stays in its
   original state throughout, without a brief hide/show cycle.
-- With the keyboard open and then closed, open the model picker, browse and select/reselect a
-  model, or cancel without focusing search. Keep the original keyboard state. Explicitly focus
-  search separately and verify its existing input behavior.
-- Open/cancel media pickers and continue editing through their existing handoff.
+- Open/cancel model and media pickers and continue editing through their existing handoff.
 
 See the [Chat Input README](../../../src/frontend/features/chat/components/ChatInput/README.md),
 [shared Composer README](../../../src/frontend/components/Composer/README.md), and

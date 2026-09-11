@@ -27,7 +27,6 @@ type ModelPickerListProps = {
   isLoading?: boolean;
   /** Whether the picker is on screen; it scrolls to the selection once per showing. */
   isOpen?: boolean;
-  isSearchFocused?: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
   onSelect: (item: ModelPickerModelItem) => void;
@@ -44,7 +43,6 @@ export function ModelPickerList({
   emptyText,
   isLoading = false,
   isOpen = false,
-  isSearchFocused = false,
   listItems,
   loadingText,
   onSelect,
@@ -197,9 +195,8 @@ export function ModelPickerList({
         estimatedItemSize={modelPickerEstimatedItemSize}
         extraData={listExtraData}
         getItemType={getItemType}
-        // Browsing models must not dismiss the editor behind the sheet.
-        keyboardDismissMode={isSearchFocused ? 'on-drag' : 'none'}
-        keyboardShouldPersistTaps={isSearchFocused ? 'handled' : 'always'}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
         keyExtractor={keyExtractor}
         maintainVisibleContentPosition={false}
         nestedScrollEnabled
