@@ -15,8 +15,9 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
   tap handling separate from drag dismissal.
 - Keyboard show/hide notifications describe native state. They do not establish that the user
   ended editing and must not trigger an additional composer blur or layout transition.
-- Plugin insertion uses the editor's retained insertion position. It does not request text focus;
-  an already closed keyboard must not be reopened by an application `focus()` call.
+- The complete add-menu → plugin picker → select/reselect or cancel flow preserves the keyboard's
+  current open/closed state. Insertion uses the editor's retained position without requesting focus.
+  Popover accessibility isolation keeps its native ancestor mounted throughout the flow.
 - Long press, selection-handle dragging, Select All, Copy, and editing-menu dismissal preserve the
   composer's current presentation and keyboard state. Raw touches on a popover's composer anchor
   must not close the panel while the editor is interpreting that sequence.
@@ -51,7 +52,9 @@ or selection conformance. With explicit device-verification authorization, check
   dismiss the editing menu. The selected range may change; the outer composer and keyboard state
   remain stable without a brief hide/show cycle.
 - Send, scroll, and use message actions without unintended keyboard dismissal.
-- Insert or reselect a plugin without reopening a closed keyboard.
+- With the keyboard open and then closed, open the add menu and plugin picker, scroll the plugins,
+  select/reselect a plugin, and cancel through the backdrop or Back. The keyboard stays in its
+  original state throughout, without a brief hide/show cycle.
 - Open/cancel model and media pickers and continue editing through their existing handoff.
 
 See the [Chat Input README](../../../src/frontend/features/chat/components/ChatInput/README.md),
