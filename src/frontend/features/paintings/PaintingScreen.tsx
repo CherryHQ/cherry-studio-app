@@ -1,6 +1,7 @@
 import { ContentState } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
@@ -12,6 +13,8 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { PaintingComposer } from './components/PaintingComposer';
 
 export function PaintingScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
   // Screen-scoped rather than `router.setParams`: the receipt id can land after
   // the user has already navigated away, and the router's version would write
   // it into whatever route is focused by then.
@@ -30,6 +33,7 @@ export function PaintingScreen() {
   // gate. A generation writes a new receipt id into the route; letting that id
   // re-enter the gate would tear the composer down mid-generation.
   const [openedPaintingId] = useState(() => paintingId);
+  const [hasOpenedPainting, setHasOpenedPainting] = useState(paintingId === undefined);
   const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
   const paintingQuery = usePainting(paintingId);
   const painting = paintingQuery.data;
@@ -40,6 +44,7 @@ export function PaintingScreen() {
   const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
   const isLoading =
+    !hasOpenedPainting &&
     openedPaintingId !== undefined &&
     paintingId === openedPaintingId &&
     (paintingQuery.isLoading || filesQuery.isLoading);
@@ -54,6 +59,27 @@ export function PaintingScreen() {
       navigation.setParams({ handoff: undefined, paintingId: receiptId }),
     [navigation],
   );
+  const isOpeningPainting =
+    !hasOpenedPainting && openedPaintingId !== undefined && paintingId === openedPaintingId;
+  const loadError =
+    isOpeningPainting &&
+    ((!painting && paintingQuery.error) || (!handoff && !filesQuery.data && filesQuery.error));
+  const hasUnavailableOutputs =
+    !handoff &&
+    painting &&
+    painting.files.output.length > 0 &&
+    filesQuery.data?.outputs.length === 0;
+  const isUnavailable = isOpeningPainting && !isLoading && (!painting || hasUnavailableOutputs);
+  if (
+    isOpeningPainting &&
+    !isLoading &&
+    !loadError &&
+    !isUnavailable &&
+    painting &&
+    (handoff || filesQuery.data)
+  ) {
+    setHasOpenedPainting(true);
+  }
   const initialAttachments = handoff?.attachments ?? [];
   const initialDraft = handoff?.draft ?? '';
 
@@ -63,6 +89,23 @@ export function PaintingScreen() {
       {isLoading ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading />
+        </View>
+      ) : loadError || isUnavailable ? (
+        <View className="flex-1 justify-center px-8 py-16">
+          <ContentState.Error
+            title={t(loadError ? 'painting.loadFailed' : 'painting.unavailable')}
+            primaryAction={{
+              children: t('common.retry'),
+              onPress: () => {
+                void paintingQuery.refetch();
+                void filesQuery.refetch();
+              },
+            }}
+            secondaryAction={{
+              children: t('common.back'),
+              onPress: () => (router.canGoBack() ? router.back() : router.replace('/drawings')),
+            }}
+          />
         </View>
       ) : (
         <PaintingComposer

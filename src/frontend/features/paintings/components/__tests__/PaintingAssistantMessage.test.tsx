@@ -26,6 +26,19 @@ jest.mock('@cherrystudio/ui/components', () => {
     }),
     Image: (props: object) => React.createElement(View, props),
     ImageGenerationLoader: (props: object) => React.createElement(View, props),
+    MessagePart: {
+      Detail: ({ children, ...props }: { children?: ReactNode }) =>
+        React.createElement(View, props, children),
+      Error: ({ message, title, ...props }: { message: string; title: string }) =>
+        React.createElement(
+          Pressable,
+          props,
+          React.createElement(MockText, null, title),
+          React.createElement(MockText, null, message),
+        ),
+      ValueSection: () => null,
+      TextSection: ({ value }: { value: string }) => React.createElement(MockText, null, value),
+    },
   };
 });
 
@@ -69,6 +82,9 @@ jest.mock('react-native-worklets', () => ({
 }));
 
 jest.mock('@/frontend/components/ArtifactPreview', () => ({
+  ArtifactImage: jest.requireActual(
+    '@/frontend/components/ArtifactPreview/components/ArtifactImage',
+  ).ArtifactImage,
   ArtifactPreviewLink: ({ children }: { children: ReactNode }) => children,
 }));
 
@@ -79,7 +95,7 @@ describe('PaintingAssistantMessage', () => {
     act(() => renderer?.unmount());
   });
 
-  it('shows localized recovery copy and retries without exposing provider diagnostics', () => {
+  it('shows provider diagnostics only after opening the failure details and keeps retry available', () => {
     const onRetry = jest.fn();
     act(() => {
       renderer = create(
@@ -97,12 +113,20 @@ describe('PaintingAssistantMessage', () => {
     });
 
     const text = renderer?.root.findAllByType(Text).map((node) => node.props.children);
-    expect(text).toContain('painting.status.failed');
+    expect(text).toContain('chat.errorPart.reason.parse');
     expect(text).toContain('painting.status.failedHint');
     expect(text).not.toContain('Invalid JSON response from provider');
-    expect(
-      renderer?.root.findByProps({ testID: 'painting-status-icon' }).props.className,
-    ).toContain('text-error');
+
+    const failure = renderer?.root.findByProps({
+      accessibilityHint: 'chat.errorPart.detail.hint',
+    });
+    act(() => failure?.props.onPress());
+    const detail = renderer?.root.findByProps({ testID: 'painting-error-detail' });
+    expect(detail?.findAllByType(Text).map((node) => node.props.children)).toContain(
+      'Invalid JSON response from provider',
+    );
+    act(() => detail?.props.onClose());
+    expect(renderer?.root.findAllByProps({ testID: 'painting-error-detail' })).toHaveLength(0);
 
     const retry = renderer?.root.findByProps({ accessibilityLabel: 'painting.status.retry' });
     act(() => retry?.props.onPress());
@@ -159,6 +183,37 @@ describe('PaintingAssistantMessage', () => {
         'painting.outputAccessibility:{"count":2,"index":2,"prompt":"Draw a cherry"}',
       ]),
     );
+  });
+
+  it('shows a recoverable preview failure for any output in a multi-image result', () => {
+    act(() => {
+      renderer = create(
+        <PaintingAssistantMessage
+          aspectRatio={1}
+          error={null}
+          interruption={null}
+          outputs={[
+            { fileEntryId: 'output-1', uri: 'file:///one.png' },
+            { fileEntryId: 'output-2', uri: 'file:///two.png' },
+          ]}
+          paintingId="painting-1"
+          prompt="Draw a cherry"
+          resolution="Auto"
+          status="idle"
+        />,
+      );
+    });
+    const image = renderer?.root
+      .findAllByProps({ testID: 'painting-result-image-output-2' })
+      .find((node) => typeof node.props.onError === 'function');
+    expect(image).toBeDefined();
+    act(() => image?.props.onError({ error: 'missing file' }));
+    expect(renderer?.root.findAllByType(Text).map((node) => node.props.children)).toContain(
+      'fileViewer.previewFailed',
+    );
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-output-output-2' }).props.pointerEvents,
+    ).toBe('auto');
   });
 
   it('makes the result visible when persisted files end its fade before the image displays', () => {

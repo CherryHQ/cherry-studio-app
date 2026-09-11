@@ -122,6 +122,8 @@ function PaintingViewerContent({
     <>
       <PaintingViewerChrome
         aspectRatios={paintingViewer.aspectRatios}
+        canShare={actions.canShare}
+        onShare={() => void actions.share()}
         onDelete={() => void actions.remove()}
         onDownload={() => void actions.download()}
         onEdit={actions.edit}

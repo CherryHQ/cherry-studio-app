@@ -1,9 +1,9 @@
-import { readErrorPartDetail } from '../errorPartDetail';
+import { readAiFailureDetail } from '../aiFailureDetail';
 
-describe('readErrorPartDetail', () => {
+describe('readAiFailureDetail', () => {
   test('keeps only the facts that exist, in reading order', () => {
     expect(
-      readErrorPartDetail({
+      readAiFailureDetail({
         code: 'EXECUTION_FAILED',
         message: '  OpenAI API error (403): access denied  ',
         reasonCode: 'permission',
@@ -24,7 +24,7 @@ describe('readErrorPartDetail', () => {
 
   test('falls back to the serialized error name and tolerates missing snapshot fields', () => {
     expect(
-      readErrorPartDetail({
+      readAiFailureDetail({
         code: 'EXECUTION_FAILED',
         message: '',
         name: 'TypeError',

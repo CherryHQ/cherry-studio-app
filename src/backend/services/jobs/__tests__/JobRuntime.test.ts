@@ -7,6 +7,7 @@ import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 import { JobService } from '@/backend/data/services/JobService';
 import { JOB_ERROR_CODES, type JobProgress } from '@/shared/data/api/schemas/jobs';
 
+import { JobExecutionError } from '../JobExecutionError';
 import { JobRuntime } from '../JobRuntime';
 import { GC_TERMINAL_TTL_MS, type JobHandler, MAX_INPUT_BYTES } from '../types';
 import {
@@ -352,6 +353,25 @@ describe('JobRuntime', () => {
     } finally {
       gate.release();
     }
+  });
+
+  it('persists structured execution diagnostics and honors a non-retryable failure', async () => {
+    const error = {
+      code: JOB_ERROR_CODES.HANDLER_THREW,
+      message: 'The provider rejected the request',
+      params: { failure: { reasonCode: 'auth', context: { statusCode: 401 } } },
+      retryable: false,
+    };
+    const handler: JobHandler = {
+      executionClass: 'foreground-only',
+      recovery: 'abandon',
+      execute: async () => {
+        throw new JobExecutionError(error);
+      },
+    } as JobHandler;
+    const { runtime } = await setup([['internal.rejected', handler]]);
+    const handle = await enqueueTest(runtime, 'internal.rejected', {}, { maxAttempts: 3 });
+    await expect(handle.finished).resolves.toMatchObject({ status: 'failed', attempt: 0, error });
   });
 
   it('fails terminally once attempts are exhausted', async () => {

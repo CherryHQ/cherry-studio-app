@@ -22,6 +22,8 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 // SelectionToolbar.
 export function PaintingViewerChrome({
   aspectRatios,
+  canShare,
+  onShare,
   onDelete,
   onDownload,
   onEdit,
@@ -33,6 +35,7 @@ export function PaintingViewerChrome({
   const leadingAction = useRouteHeaderLeadingAction();
   const overflowMenuItems = useMemo<readonly MenuItem[]>(
     () => [
+      { id: 'share', disabled: !canShare, label: t('fileViewer.share'), onPress: onShare },
       {
         id: 'view-conversation',
         label: t('painting.viewer.viewConversation'),
@@ -45,7 +48,7 @@ export function PaintingViewerChrome({
         onPress: onDelete,
       },
     ],
-    [onDelete, onViewConversation, t],
+    [canShare, onDelete, onShare, onViewConversation, t],
   );
   const resizeMenuItems = useMemo<readonly MenuItem[]>(
     () =>

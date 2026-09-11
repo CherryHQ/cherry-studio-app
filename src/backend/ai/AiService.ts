@@ -29,16 +29,19 @@ import {
   type ProviderRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
+import { createAiFailure } from '@/shared/utils/createAiFailure';
 
 import { AiSdkGenerator, buildAgentParams } from './generation';
 import { createAiUsagePlugin } from './generation/aiUsagePlugin';
 import type { BuildAgentParamsDependencies } from './generation/buildAgentParams';
 import { listModels as listProviderModels } from './generation/listModels';
 import { VertexAuthClient } from './generation/VertexAuthClient';
+import { normalizeAiError } from './normalizeAiError';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -352,7 +355,21 @@ export class AiService extends BaseService {
         }),
         onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
       },
-    );
+    ).catch((error: unknown) => {
+      if (signal?.aborted) throw error;
+      const apiKey =
+        sdkConfig.providerSettings && 'apiKey' in sdkConfig.providerSettings
+          ? sdkConfig.providerSettings.apiKey
+          : undefined;
+      throw new AiRequestError(
+        createAiFailure(
+          normalizeAiError(error, typeof apiKey === 'string' ? [apiKey] : [], {
+            providerId: provider.id,
+            modelId: model.apiModelId ?? model.modelId,
+          }),
+        ),
+      );
+    });
 
     return {
       images: result.images.map((image) => ({

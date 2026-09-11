@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessageListProps } from '@/frontend/components/Message';
 import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
+import type { PaintingGenerationStart } from '@/shared/contracts';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { Painting } from '@/shared/data/types/painting';
 
@@ -15,7 +16,7 @@ import { PaintingComposer } from '../PaintingComposer';
 type PaintingInputProps = {
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
-  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
+  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationStart | null>;
 };
 
 const painting: Painting = {
@@ -85,6 +86,7 @@ const result: PaintingGenerationResult = {
     id: 'painting-2',
   },
 };
+const started: PaintingGenerationStart = { jobId: 'job-2', paintingId: result.painting.id };
 const input: PaintingGenerationInput = {
   attachments: [],
   mode: 'generate',
@@ -96,7 +98,7 @@ const input: PaintingGenerationInput = {
 
 const mockCancel = jest.fn();
 const mockAlertShow = jest.fn();
-const mockGenerate = jest.fn<Promise<PaintingGenerationResult | null>, [PaintingGenerationInput]>();
+const mockGenerate = jest.fn<Promise<PaintingGenerationStart | null>, [PaintingGenerationInput]>();
 const mockGeneration = {
   aspectRatio: 16 / 9,
   cancel: mockCancel,
@@ -143,6 +145,8 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 
 jest.mock('@/frontend/components/Composer', () => ({
+  ComposerDismissArea: ({ children }: { children: React.ReactNode }) => children,
+  useComposerSendError: () => mockAlertShow,
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
     const { useEffect } = jest.requireActual('react');
@@ -213,7 +217,8 @@ describe('PaintingComposer', () => {
     mockGeneration.interruption = null;
     mockGeneration.outputs = [...files.outputs];
     mockGeneration.status = 'idle';
-    mockGenerate.mockResolvedValue(result);
+    mockGenerate.mockResolvedValue(started);
+    mockCancel.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -284,7 +289,7 @@ describe('PaintingComposer', () => {
   });
 
   it('replaces the persisted turn with a pending request and then its result', async () => {
-    let resolveGeneration: ((value: PaintingGenerationResult) => void) | undefined;
+    let resolveGeneration: ((value: PaintingGenerationStart) => void) | undefined;
     mockGenerate.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -293,10 +298,10 @@ describe('PaintingComposer', () => {
     );
     renderComposer();
 
-    let generationPromise: Promise<PaintingGenerationResult | null> | undefined;
+    let generationPromise: Promise<PaintingGenerationStart | null> | undefined;
     await act(async () => {
-      mockGeneration.status = 'generating';
       generationPromise = mockInputProps?.onGenerate(input);
+      mockGeneration.status = 'generating';
       await Promise.resolve();
     });
 
@@ -310,7 +315,7 @@ describe('PaintingComposer', () => {
     await act(async () => {
       mockGeneration.status = 'idle';
       mockGeneration.outputs = result.outputs;
-      resolveGeneration?.(result);
+      resolveGeneration?.(started);
       await generationPromise;
     });
 
@@ -324,6 +329,33 @@ describe('PaintingComposer', () => {
     expect(mockMessageListUnmounts).toBe(0);
     expect(mockProviderMounts).toBe(1);
     expect(mockProviderProps?.initialAttachments).toEqual([]);
+  });
+
+  it('ignores a duplicate retry while acceptance is pending without replacing the pending turn', async () => {
+    let accept: ((value: PaintingGenerationStart) => void) | undefined;
+    mockGenerate.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          accept = resolve;
+        }),
+    );
+    renderComposer();
+    let first: Promise<PaintingGenerationStart | null> | undefined;
+    await act(async () => {
+      first = mockInputProps?.onGenerate(input);
+      await Promise.resolve();
+    });
+    const pendingMessages = mockMessageListProps?.messages;
+    await act(async () => {
+      await mockInputProps?.onGenerate(input);
+    });
+    expect(mockGenerate).toHaveBeenCalledTimes(1);
+    expect(mockMessageListProps?.messages).toBe(pendingMessages);
+    await act(async () => {
+      accept?.(started);
+      await first;
+    });
+    expect(mockAssistantProps?.paintingId).toBe(started.paintingId);
   });
 
   it('restores the previous painting after attachment rejection and lets the submit surface explain it', async () => {
@@ -342,7 +374,7 @@ describe('PaintingComposer', () => {
     renderComposer();
     mockGenerate.mockImplementationOnce(async () => {
       mockGeneration.error = new Error('provider unavailable');
-      throw mockGeneration.error;
+      return started;
     });
 
     await act(async () => {
@@ -364,14 +396,14 @@ describe('PaintingComposer', () => {
     renderComposer();
     mockGenerate.mockImplementationOnce(async () => {
       mockGeneration.error = new Error('provider unavailable');
-      throw mockGeneration.error;
+      return started;
     });
     await act(async () => {
       await mockInputProps?.onGenerate(input).catch(() => undefined);
     });
 
     mockGeneration.error = null;
-    mockGenerate.mockResolvedValueOnce(result);
+    mockGenerate.mockResolvedValueOnce(started);
     act(() => (mockAssistantProps?.onRetry as (() => void) | undefined)?.());
     await act(async () => {
       await Promise.resolve();
