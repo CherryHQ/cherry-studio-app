@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import * as z from 'zod';
 
 import { application } from '@/backend/core/application/Application';
-import type { Database } from '@/backend/data/db/DbService';
+import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { FileEntryListQuery } from '@/shared/data/api/schemas/files';
@@ -34,13 +34,15 @@ const defaultLimit = 30;
 const maxLimit = 100;
 
 export class FileEntryService {
+  constructor(private readonly hostDbService?: DbService) {}
+
   /**
-   * Resolved per call rather than injected once, so the instance holds no
-   * reference to a particular host generation and a replaced host cannot leave
-   * this singleton writing to a closed connection.
+   * Ordinary singleton callers resolve the current host per call. A lifecycle-owned
+   * workflow may instead inject its originating database so late cancellation
+   * cannot redirect an old operation into a replacement host.
    */
   private get dbService() {
-    return application.get('DbService');
+    return this.hostDbService ?? application.get('DbService');
   }
 
   private get db() {

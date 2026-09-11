@@ -10,6 +10,10 @@ const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
+jest.mock('../../../../share', () => ({
+  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
+}));
+
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
 }));

@@ -54,6 +54,7 @@ They are the source of truth for how the repository works today.
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [File Preview And Viewer](./references/file-preview-and-viewer.md) | File kinds, open policy, in-app viewing and export; native acceptance pending |
+| [Document Export](./references/document-export.md) | Application-level Markdown, HTML, and long-image export, file-library retention, limits, and pending device acceptance |
 | [Job Runtime](./references/job-runtime.md) | Durable job ledger, dispatch, cancellation, recovery, and painting generation |
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |

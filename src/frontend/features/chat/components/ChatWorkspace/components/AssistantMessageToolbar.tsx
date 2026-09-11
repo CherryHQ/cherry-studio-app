@@ -1,5 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
 import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
@@ -22,8 +23,10 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isAssistantToolbarEnabled } = useAssistantMessageActionsState();
-  const { copyAssistantMessage, forkFromAssistantMessage } = useAssistantMessageActions();
+  const { copiedMessageId, isAssistantToolbarEnabled, sharingMessageId } =
+    useAssistantMessageActionsState();
+  const { copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage } =
+    useAssistantMessageActions();
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
     () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
@@ -59,6 +62,16 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         onPress={() => forkFromAssistantMessage({ messageId: message.id })}
         size="xs"
         testID="assistant-message-fork"
+        variant="ghost"
+      />
+      <Button
+        accessibilityLabel={t('chat.share.title')}
+        disabled={Boolean(sharingMessageId)}
+        loading={sharingMessageId === message.id}
+        icon={<ShareIcon className="text-muted-foreground" size={15} />}
+        onPress={() => shareAssistantMessage({ messageId: message.id })}
+        size="xs"
+        testID="assistant-message-share"
         variant="ghost"
       />
     </View>

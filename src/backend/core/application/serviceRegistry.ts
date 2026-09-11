@@ -13,6 +13,7 @@ import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActi
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
+import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliveSource';
@@ -43,6 +44,7 @@ export const services = {
   CacheService,
   DbService,
   DesktopConnectionRuntime,
+  DocumentExportRuntime,
   PreferenceService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,

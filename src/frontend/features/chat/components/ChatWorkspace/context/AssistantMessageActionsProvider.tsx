@@ -16,6 +16,7 @@ import { useAgentSession } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatFork } from '../../../runtime';
+import { useShareChatMessage } from '../../../share';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 /** Matches the Session title column, which the fork input also caps at 255. */
@@ -24,10 +25,12 @@ const logger = loggerService.withContext('AssistantMessageActions');
 
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
+  sharingMessageId?: string;
   isAssistantToolbarEnabled: boolean;
 };
 
 type AssistantMessageActions = {
+  shareAssistantMessage: (input: { messageId: string }) => void;
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage: (input: { messageId: string }) => void;
@@ -51,6 +54,7 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const forkSession = useAgentChatFork();
+  const { shareAssistantMessage, sharingMessageId } = useShareChatMessage(sessionId);
   // Already in cache: the chat screen resolves this same Session to render.
   const sourceTitle = useAgentSession(sessionId).data?.title?.trim();
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
@@ -120,12 +124,12 @@ export function AssistantMessageActionsProvider({
   );
 
   const stateValue = useMemo(
-    () => ({ copiedMessageId, isAssistantToolbarEnabled }),
-    [copiedMessageId, isAssistantToolbarEnabled],
+    () => ({ copiedMessageId, isAssistantToolbarEnabled, sharingMessageId }),
+    [copiedMessageId, isAssistantToolbarEnabled, sharingMessageId],
   );
   const actionsValue = useMemo(
-    () => ({ copyAssistantMessage, forkFromAssistantMessage }),
-    [copyAssistantMessage, forkFromAssistantMessage],
+    () => ({ copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage }),
+    [copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage],
   );
 
   useEffect(() => {
