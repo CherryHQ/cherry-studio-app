@@ -113,6 +113,13 @@ export function requirePluginAuthMethod(plugin: PluginDefinition, id: string) {
 }
 
 export function isBuiltInMcpToolAllowed(pluginId: PluginId, name: string): boolean {
+  return getBuiltInMcpToolEffect(pluginId, name) !== undefined;
+}
+
+export function getBuiltInMcpToolEffect(
+  pluginId: PluginId,
+  name: string,
+): 'read' | 'write' | undefined {
   const plugin = getPluginDefinition(pluginId);
-  return plugin !== undefined && Object.hasOwn(plugin.tools, name);
+  return plugin && Object.hasOwn(plugin.tools, name) ? plugin.tools[name] : undefined;
 }

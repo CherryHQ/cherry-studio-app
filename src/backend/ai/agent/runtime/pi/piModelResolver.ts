@@ -3,7 +3,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { resolveProviderConnection } from '@/backend/ai/provider/providerConnection';
+import {
+  resolveProviderConnection,
+  shouldAppendProviderApiVersion,
+} from '@/backend/ai/provider/providerConnection';
 import { modelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,
@@ -68,7 +71,10 @@ export function createPiModelResolver(): PiRuntimeDependencies {
         : model;
       const piModel: PiModel<SupportedPiApi> = {
         api: adapter.api,
-        baseUrl: adapter.formatBaseUrl(connection.baseUrl.trim()),
+        baseUrl: adapter.formatBaseUrl(
+          connection.baseUrl.trim(),
+          shouldAppendProviderApiVersion(provider),
+        ),
         ...(adapter.api === 'openai-completions' || adapter.api === 'openai-responses'
           ? {
               compat: {

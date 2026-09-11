@@ -121,8 +121,14 @@ export class FileEntryService {
     return entry;
   }
 
-  async create(values: CreateFileEntry): Promise<FileEntry> {
-    return this.dbService.withWriteTx((tx) => this.createTx(tx, values));
+  async create(values: CreateFileEntry, signal?: AbortSignal): Promise<FileEntry> {
+    signal?.throwIfAborted();
+    return this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
+      const entry = await this.createTx(tx, values);
+      signal?.throwIfAborted();
+      return entry;
+    });
   }
 
   async createTx(tx: Database, values: CreateFileEntry): Promise<FileEntry> {

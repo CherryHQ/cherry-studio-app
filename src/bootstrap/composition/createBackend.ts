@@ -63,7 +63,9 @@ export function createBackend(
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
-  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService));
+  infrastructure.desktopConnections.configure(new DesktopConnectionService(dbService), () =>
+    infrastructure.providerRegistryUpdater.ensureReady(),
+  );
   const { filterModelsSupportedBySystem, isModelSupportedBySystem } = createSystemModelSupport(
     infrastructure.languageServing,
   );

@@ -121,7 +121,12 @@ connection configuration remains backend-private.
 before every network request, propagates cancellation, and does not replay writes. There is no
 transport-level `authProvider`, so a `401` cannot trigger a resend. HTTP errors expose only safe
 diagnostics; ambiguous submitted writes tell the caller to check the service before retrying. Input
-validation and result-size limits remain in the existing MCP runtime. GitHub token permissions and
+validation and result-size limits remain in the existing MCP runtime. Its frozen descriptors carry
+the bundled read/write policy. Unclassified write failures, including SDK response-body failures
+and the execution deadline, return non-retryable `mcp_tool_write_outcome_unknown`. This is conservative:
+it does not assert transmission when the deadline expires while authorization is still pending.
+Already classified failures retain their category when they reach the adapter before cancellation.
+GitHub token permissions and
 Amap quota/access restrictions remain upstream authority. No device-location grant is requested.
 
 ### GitHub Browser Authorization

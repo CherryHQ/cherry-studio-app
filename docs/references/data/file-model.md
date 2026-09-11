@@ -188,11 +188,20 @@ not to `file_entry`.
 just wrote. A crash between the two leaves an orphan blob, reclaimable by the future cache-cleanup
 sweep.
 
+Agent file tools carry their cancellation signal through storage. New entries check cancellation
+after writing bytes and inside the insert transaction, including after a queued write starts and
+after insertion; rejected creation rolls back the row and discards its unregistered bytes. Once
+creation passes its final transaction check, cancellation may leave the committed entry in place.
+Storage does not discard bytes for a successful commit.
+
 **Rewrite** — `rewriteInternalTextEntry` overwrites a draft's bytes at the same path, then records
 the new `size`. Bytes first: a crash in between leaves a row whose `size` lags the blob, which every
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
+Storage checks cancellation after loading the draft entry, before the synchronous native text
+write. Once bytes have changed, the size update finishes even if the turn is cancelled while that
+metadata write is queued.
 
 **Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
 bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. Cancelling an

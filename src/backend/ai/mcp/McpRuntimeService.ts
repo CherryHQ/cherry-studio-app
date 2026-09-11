@@ -7,6 +7,7 @@ import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backe
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import {
   createBuiltInMcpClient,
+  getBuiltInMcpToolEffect,
   PluginAuthorizationManager,
   isBuiltInMcpToolAllowed,
   type PluginClient,
@@ -299,6 +300,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
             // Pin the catalog to both its endpoint and live connection generation;
             // edits, invalidation, or reconnects cannot retarget a frozen tool.
             endpointUrl: server.endpointUrl,
+            ...(server.origin === 'builtin'
+              ? { effect: getBuiltInMcpToolEffect(server.builtinId, tool.name) }
+              : {}),
             generation: state.generation,
             inputSchema,
             rawToolName: tool.name,
@@ -615,7 +619,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
       }
       if (error instanceof PluginError) {
         throw new McpRuntimeToolError(
-          'mcp_tool_call_failed',
+          error.reason === 'unknown-write'
+            ? 'mcp_tool_write_outcome_unknown'
+            : 'mcp_tool_call_failed',
           error.message,
           error.reason === 'network' || error.reason === 'quota',
         );

@@ -58,6 +58,7 @@ describe('explicit provider activation', () => {
       'grok-cli',
       'openai-codex',
       'claude-code',
+      'lmstudio',
       'azure-openai',
       'vertexai',
       'aws-bedrock',
@@ -70,7 +71,7 @@ describe('explicit provider activation', () => {
       );
     }
     expect(dependencies.providers.create).not.toHaveBeenCalled();
-    expect(catalogIds).toEqual(expect.arrayContaining(['ollama', 'lmstudio', 'ovms', 'new-api']));
+    expect(catalogIds).toEqual(expect.arrayContaining(['ollama', 'ovms', 'new-api']));
   });
 
   it('prepares without enabling, then enables a configured provider with local models', async () => {
