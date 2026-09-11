@@ -1,10 +1,13 @@
 # Chat Sharing
 
-The toolbar opens this child page with a source Session and message ID. It owns explicit message
-selection, persisted reloads, source options, and conversion of Agent message views into the generic
-export document. It does not own rendering, filesystem output or sharing UI.
+The last action in the assistant toolbar opens the generic share preview directly. A bounded
+persisted read supplies the clicked settled answer and its same-turn question, rejecting missing or
+unfinished content. There is no history browser, message selector, or timestamp option.
 
-History browsing uses a bounded window while selected IDs remain independent of loaded pages.
-Confirmation reloads every selected ID, checks settled status and ordering, then hands an immutable
-document to `appShell/documentExport`. Process and timestamps are opt-in. Raw tool payloads and
-diagnostic metadata never enter the document.
+The source adapter supplies two immutable document snapshots when thinking content exists: included
+by default, and omitted when the preview checkbox is cleared. Thinking covers the visible reasoning,
+intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
+the document. The export page receives only a source-owned label and documents; it has no chat reads.
+
+Rendering, temporary files, permanent storage and system delivery remain in the application export
+capability. Opening the preview prepares Markdown text; other formats convert only when selected.

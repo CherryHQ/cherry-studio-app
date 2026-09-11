@@ -2,10 +2,13 @@ import { randomUUID } from 'expo-crypto';
 
 import type { DocumentExportSession, ExportFormat } from '@/shared/contracts/documentExport';
 
+export type DocumentExportOption = { label: string; uncheckedSession: DocumentExportSession };
+
 type ExportRequest = {
   id: string;
   session: DocumentExportSession;
   initialFormat: ExportFormat;
+  option?: DocumentExportOption;
   resolve(): void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -14,6 +17,7 @@ let active: ExportRequest | undefined;
 export function createDocumentExportRequest(
   session: DocumentExportSession,
   initialFormat: ExportFormat,
+  option?: DocumentExportOption,
 ) {
   if (active) return undefined;
   const id = randomUUID();
@@ -25,6 +29,7 @@ export function createDocumentExportRequest(
     id,
     session,
     initialFormat,
+    option,
     resolve,
     // Release a navigation request that never reached its route.
     timer: setTimeout(() => {
@@ -46,7 +51,10 @@ export async function finishDocumentExportRequest(id: string) {
   // Retain admission until disposal settles, including late native capture.
   clearTimeout(request.timer);
   try {
-    await request.session.dispose().catch(() => {});
+    await Promise.allSettled([
+      request.session.dispose(),
+      request.option?.uncheckedSession.dispose(),
+    ]);
   } finally {
     if (active === request) active = undefined;
     request.resolve();

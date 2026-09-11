@@ -14,6 +14,7 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import { readableFilename } from '@/shared/data/types/file';
 
 import { normalizeDocument } from './normalizeDocument';
+import { renderMarkdown } from './renderMarkdown';
 import type { PreparedAsset, ReadManagedImage } from './resolveDocumentAssets';
 
 export type DocumentExportDependencies = {
@@ -28,6 +29,7 @@ export function createDocumentExportSession(
   onDisposed: () => void,
 ): DocumentExportSession & { cancel(): void } {
   const document = normalizeDocument(input);
+  const markdown = renderMarkdown(document);
   const directory = new Directory(Paths.cache, 'DocumentExport', randomUUID());
   const assets = new Map<string, PreparedAsset>();
   let operation: { controller: AbortController; promise: Promise<unknown> } | undefined;
@@ -66,6 +68,13 @@ export function createDocumentExportSession(
     signal: AbortSignal,
     onProgress?: (progress: DocumentExportProgress) => void,
   ): Promise<DocumentExportArtifact> {
+    signal.throwIfAborted();
+    if (
+      target.format === 'markdown' &&
+      current?.format === 'markdown' &&
+      new File(current.file.uri).exists
+    )
+      return current;
     const progress = (stage: DocumentExportProgress) => {
       signal.throwIfAborted();
       assertActive();
@@ -91,9 +100,7 @@ export function createDocumentExportSession(
             : 'image/png';
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
-        const { renderMarkdown } = await import('./renderMarkdown');
-        signal.throwIfAborted();
-        text = renderMarkdown(document);
+        text = markdown;
         content = { format: 'markdown', issues: [] };
       } else {
         progress('resolving-assets');
@@ -185,6 +192,7 @@ export function createDocumentExportSession(
   }
 
   const session: DocumentExportSession & { cancel(): void } = {
+    markdown,
     render: (target, context) =>
       run(context?.signal, (signal) => render(target, signal, context?.onProgress)),
     save: (artifact, signal) =>

@@ -6,49 +6,22 @@ import type {
 
 import { isChatMessageExportable } from './toChatExportDocument';
 
+/** Read the clicked answer and its own question, without opening a history selector. */
 export async function loadChatExportMessages(
-  selectedIds: readonly string[],
+  messageId: string,
   readPage: (query: ListAgentSessionMessagesQueryParams) => Promise<AgentSessionMessagePage>,
   signal: AbortSignal,
 ): Promise<AgentMessageView[]> {
-  const selected = new Set(selectedIds);
-  if (!selected.size || selected.size > 128) throw new Error('Invalid selection size');
-  const found = new Map<string, AgentMessageView>();
-  for (const id of selected) {
-    signal.throwIfAborted();
-    if (found.has(id)) continue;
-    const page = await readPage({ aroundMessageId: id, limit: 200 });
-    signal.throwIfAborted();
-    for (const message of page.items) {
-      if (selected.has(message.id)) {
-        if (!isChatMessageExportable(message)) throw new Error('Message is not settled');
-        found.set(message.id, message);
-      }
-    }
-    if (!found.has(id)) throw new Error('Selected message unavailable');
-  }
-  return [...found.values()].sort((a, b) =>
-    a.createdAt === b.createdAt ? compare(a.id, b.id) : compare(a.createdAt, b.createdAt),
+  signal.throwIfAborted();
+  const page = await readPage({ aroundMessageId: messageId, limit: 200 });
+  signal.throwIfAborted();
+  const answer = page.items.find((message) => message.id === messageId);
+  if (!answer || answer.role !== 'assistant') throw new Error('Message unavailable');
+  if (!isChatMessageExportable(answer)) throw new Error('Message is not settled');
+  if (!answer.turnId) return [answer];
+  const question = page.items.find(
+    (message) => message.role === 'user' && message.turnId === answer.turnId,
   );
-}
-
-export function initialChatExportSelection(
-  messages: readonly AgentMessageView[],
-  messageId: string,
-): ReadonlySet<string> {
-  const answer = messages.find((message) => message.id === messageId);
-  if (!answer || !isChatMessageExportable(answer)) return new Set();
-  const question = answer.turnId
-    ? messages.find(
-        (message) =>
-          message.role === 'user' &&
-          message.turnId === answer.turnId &&
-          isChatMessageExportable(message),
-      )
-    : undefined;
-  return new Set(question ? [question.id, answer.id] : [answer.id]);
-}
-
-function compare(a: string, b: string) {
-  return a < b ? -1 : a > b ? 1 : 0;
+  if (!question || !isChatMessageExportable(question)) throw new Error('Question unavailable');
+  return [question, answer];
 }

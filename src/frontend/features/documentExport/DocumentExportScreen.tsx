@@ -1,10 +1,17 @@
-import { Button, ContentState, Image, Tabs, useToast } from '@cherrystudio/ui/components';
-import * as Clipboard from 'expo-clipboard';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import {
+  ActionMenu,
+  Button,
+  ContentState,
+  Image,
+  SelectionIndicator,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
@@ -12,8 +19,10 @@ import {
   claimDocumentExportRequest,
   getDocumentExportRequest,
   scheduleDocumentExportFinish,
+  type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -46,7 +55,11 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
       <Stack.Screen options={{ headerTransparent: false }} />
       <RouteHeader title={t('documentExport.title')} />
       {request ? (
-        <DocumentExportBody initialFormat={request.initialFormat} session={request.session} />
+        <DocumentExportBody
+          initialFormat={request.initialFormat}
+          option={request.option}
+          session={request.session}
+        />
       ) : (
         <View className="flex-1 justify-center p-6">
           <ContentState.Error title={t('documentExport.unavailable')} />
@@ -57,16 +70,25 @@ function DocumentExportRoute({ requestId }: { requestId?: string }) {
 }
 
 function DocumentExportBody({
-  session,
+  session: checkedSession,
   initialFormat,
+  option,
 }: {
   session: DocumentExportSession;
   initialFormat: ExportFormat;
+  option?: DocumentExportOption;
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const { bottom } = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const [format, setFormat] = useState(initialFormat);
+  const [selection, setSelection] = useState({
+    format: initialFormat,
+    isOptionChecked: true,
+    revision: 0,
+  });
+  const { format, isOptionChecked, revision } = selection;
+  const session = !isOptionChecked && option ? option.uncheckedSession : checkedSession;
   const [fontStep] = usePreference('ui.font_size_step');
   const [background, foreground, muted, border, link] = useThemeColor([
     'background',
@@ -76,37 +98,89 @@ function DocumentExportBody({
     'link',
   ]);
   const width = Math.floor(Math.min(600, Math.max(280, windowWidth - 32)));
-  // Freeze presentation for this export so a system/theme transition cannot replace an artifact during delivery.
   const [presentation] = useState(() => ({
     width,
     fontSize: 16 + fontStep * 2,
     colors: { background, foreground, muted, border, link },
   }));
   const { capture, surface } = useDocumentExportHtmlCapture();
-  const { state, retry } = useDocumentExportPreview(session, format, presentation, capture);
-  const [isDelivering, setIsDelivering] = useState(false);
-  // A render's result must match the selected tab even before its effect runs.
-  const artifact =
-    state.status === 'ready' && state.artifact.format === format ? state.artifact : undefined;
+  const { state, getArtifact, retry } = useDocumentExportPreview(
+    session,
+    format,
+    presentation,
+    capture,
+    revision,
+  );
+  const [isSharing, setIsSharing] = useState(false);
+  const sharing = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => sharing.current?.abort(), []);
+  const isReady = state.status === 'markdown' || state.status === 'ready';
+  const artifact = state.status === 'ready' ? state.artifact : undefined;
+  const selectFormat = useCallback((value: ExportFormat) => {
+    if (!sharing.current)
+      setSelection((current) =>
+        current.format === value
+          ? current
+          : { ...current, format: value, revision: current.revision + 1 },
+      );
+  }, []);
+  const share = async () => {
+    if (sharing.current || !isReady) return;
+    const controller = new AbortController();
+    sharing.current = controller;
+    setIsSharing(true);
+    try {
+      const selected = await getArtifact(controller.signal);
+      const file = await session.save(selected, controller.signal);
+      controller.signal.throwIfAborted();
+      if (!(await Sharing.isAvailableAsync())) {
+        controller.signal.throwIfAborted();
+        toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
+        return;
+      }
+      controller.signal.throwIfAborted();
+      await shareFile(file);
+    } catch {
+      if (!controller.signal.aborted)
+        toast.show({ label: t('documentExport.deliveryFailed'), variant: 'danger' });
+    } finally {
+      sharing.current = undefined;
+      if (!controller.signal.aborted) setIsSharing(false);
+    }
+  };
 
   return (
     <View className="flex-1">
-      <View className="gap-3 px-4 pt-2 pb-3">
-        <Tabs
-          accessibilityLabel={t('documentExport.format')}
-          items={(['image', 'html', 'markdown'] as const).map((value) => ({
-            label: t(`documentExport.formats.${value}`),
-            value,
-            disabled: isDelivering,
-          }))}
-          onValueChange={(value) => {
-            if (!isDelivering) setFormat(value);
-          }}
-          value={format}
-        />
-        <Text className="text-muted-foreground text-sm">{t('documentExport.retention')}</Text>
+      <View className="flex-row items-center justify-between gap-3 px-4 py-2">
+        <View className="min-w-0 flex-1">
+          {option ? (
+            <Pressable
+              accessibilityLabel={option.label}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isOptionChecked, disabled: isSharing }}
+              className="min-h-11 flex-row items-center gap-2 active:opacity-60 disabled:opacity-40"
+              disabled={isSharing}
+              onPress={() => {
+                if (!sharing.current)
+                  setSelection((current) => ({
+                    ...current,
+                    isOptionChecked: !current.isOptionChecked,
+                    revision: current.revision + 1,
+                  }));
+              }}
+            >
+              <SelectionIndicator selected={isOptionChecked} />
+              <Text className="flex-shrink text-foreground text-sm">{option.label}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <ExportFormatMenu disabled={isSharing} format={format} onSelect={selectFormat} />
       </View>
-      {artifact ? (
+      {state.status === 'markdown' ? (
+        <ScrollView className="flex-1" contentContainerClassName="p-4">
+          <MarkdownText markdown={state.text} />
+        </ScrollView>
+      ) : artifact ? (
         <ArtifactPreview key={artifact.id} artifact={artifact} width={width} />
       ) : (
         <ScrollView
@@ -120,7 +194,7 @@ function DocumentExportBody({
               primaryAction={{ children: t('common.retry'), onPress: retry }}
               secondaryAction={
                 state.code === 'size-limit' && format === 'image'
-                  ? { children: t('documentExport.useHtml'), onPress: () => setFormat('html') }
+                  ? { children: t('documentExport.useHtml'), onPress: () => selectFormat('html') }
                   : undefined
               }
               title={t('documentExport.failed')}
@@ -135,22 +209,50 @@ function DocumentExportBody({
           {surface}
         </ScrollView>
       )}
-      {artifact ? (
-        <View className="gap-3 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
-          {artifact.issues.length > 0 ? (
-            <Text className="text-muted-foreground text-sm">
-              {t('documentExport.issues', { count: artifact.issues.length })}
-            </Text>
-          ) : null}
-          <ExportActions
-            key={artifact.id}
-            artifact={artifact}
-            onBusyChange={setIsDelivering}
-            session={session}
-          />
-        </View>
-      ) : null}
+      <View className="gap-3 px-4 pt-3" style={{ paddingBottom: Math.max(bottom, 16) }}>
+        {artifact && artifact.issues.length > 0 ? (
+          <Text className="text-muted-foreground text-sm">
+            {t('documentExport.issues', { count: artifact.issues.length })}
+          </Text>
+        ) : null}
+        <Button disabled={!isReady || isSharing} loading={isSharing} onPress={() => void share()}>
+          {t('documentExport.share')}
+        </Button>
+      </View>
     </View>
+  );
+}
+
+function ExportFormatMenu({
+  disabled,
+  format,
+  onSelect,
+}: {
+  disabled: boolean;
+  format: ExportFormat;
+  onSelect(format: ExportFormat): void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ActionMenu
+      items={(['markdown', 'html', 'image'] as const).map((value) => ({
+        id: value,
+        label: t(`documentExport.formats.${value}`),
+        checked: format === value,
+        disabled,
+        onPress: () => onSelect(value),
+      }))}
+    >
+      <Button
+        accessibilityLabel={`${t('documentExport.format')}: ${t(`documentExport.formats.${format}`)}`}
+        disabled={disabled}
+        icon={<ChevronDownIcon size={16} />}
+        size="sm"
+        variant="ghost"
+      >
+        {t(`documentExport.formats.${format}`)}
+      </Button>
+    </ActionMenu>
   );
 }
 
@@ -176,102 +278,16 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
         thirdPartyCookiesEnabled={false}
       />
     );
+  if (artifact.format !== 'image') return null;
   return (
     <ScrollView className="flex-1" contentContainerClassName="items-center px-4 py-2">
-      {artifact.format === 'markdown' ? (
-        <Text className="w-full font-mono text-foreground text-sm" selectable>
-          {artifact.text}
-        </Text>
-      ) : (
-        <Image
-          accessibilityLabel={t('documentExport.imagePreview')}
-          contentFit="contain"
-          onError={() => setFailed(true)}
-          source={{ uri: artifact.file.uri }}
-          style={{ width, height: (width * artifact.height) / artifact.width }}
-        />
-      )}
+      <Image
+        accessibilityLabel={t('documentExport.imagePreview')}
+        contentFit="contain"
+        onError={() => setFailed(true)}
+        source={{ uri: artifact.file.uri }}
+        style={{ width, height: (width * artifact.height) / artifact.width }}
+      />
     </ScrollView>
-  );
-}
-
-function ExportActions({
-  artifact,
-  session,
-  onBusyChange,
-}: {
-  artifact: DocumentExportArtifact;
-  session: DocumentExportSession;
-  onBusyChange(busy: boolean): void;
-}) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const busy = useRef(false);
-  const mounted = useRef(true);
-  const [isBusy, setIsBusy] = useState(false);
-  const [isSaved, setIsSaved] = useState(false);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const deliver = async (action: 'copy' | 'save' | 'share') => {
-    if (busy.current) return;
-    busy.current = true;
-    setIsBusy(true);
-    onBusyChange(true);
-    try {
-      if (action === 'copy' && artifact.format === 'markdown') {
-        await Clipboard.setStringAsync(artifact.text);
-        if (mounted.current)
-          toast.show({ label: t('chat.messageActions.copied'), variant: 'success' });
-      } else {
-        if (action === 'share' && !(await Sharing.isAvailableAsync())) {
-          if (mounted.current)
-            toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
-          return;
-        }
-        const file = await session.save(artifact);
-        if (!mounted.current) return;
-        setIsSaved(true);
-        if (action === 'share') await shareFile(file);
-        else toast.show({ label: t('documentExport.saved'), variant: 'success' });
-      }
-    } catch {
-      if (mounted.current)
-        toast.show({ label: t('documentExport.deliveryFailed'), variant: 'danger' });
-    } finally {
-      busy.current = false;
-      onBusyChange(false);
-      if (mounted.current) {
-        setIsBusy(false);
-      }
-    }
-  };
-  return (
-    <View className="gap-2">
-      <View className="flex-row gap-3">
-        <View className="flex-1">
-          <Button
-            disabled={isBusy || isSaved}
-            onPress={() => void deliver('save')}
-            variant="secondary"
-          >
-            {t(isSaved ? 'documentExport.savedLabel' : 'documentExport.save')}
-          </Button>
-        </View>
-        <View className="flex-1">
-          <Button disabled={isBusy} loading={isBusy} onPress={() => void deliver('share')}>
-            {t('documentExport.share')}
-          </Button>
-        </View>
-      </View>
-      {artifact.format === 'markdown' ? (
-        <Button disabled={isBusy} onPress={() => void deliver('copy')} variant="ghost">
-          {t('documentExport.copyMarkdown')}
-        </Button>
-      ) : null}
-    </View>
   );
 }

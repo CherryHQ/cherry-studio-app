@@ -93,23 +93,30 @@ beforeEach(() => {
   mockCopy.mockClear();
 });
 
-test('preview files are temporary, while explicit save is idempotent and survives disposal', async () => {
+test('Markdown preview stays in memory and repeated sharing reuses its persistent file', async () => {
   const saveFile = jest.fn(async (file: { uri: string }) => {
     mockFiles.set(savedFile.uri, mockFiles.get(file.uri)!);
     return savedFile;
   });
+  const readManagedImage = jest.fn();
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },
-    { readManagedImage: jest.fn(), saveFile },
+    { readManagedImage, saveFile },
     () => {},
     () => {},
   );
+  expect(session.markdown).toBe('Content\n');
+  expect(mockFiles.size).toBe(0);
+  expect(mockDirectories.size).toBe(0);
+  expect(readManagedImage).not.toHaveBeenCalled();
   const artifact = await session.render({ format: 'markdown' });
   expect(mockFiles.get(artifact.file.uri)).toBe('Content\n');
   expect(saveFile).not.toHaveBeenCalled();
   expect(Object.isFrozen(artifact.file)).toBe(true);
   await expect(session.save(artifact)).resolves.toEqual(savedFile);
-  await expect(session.save(artifact)).resolves.toEqual(savedFile);
+  const repeated = await session.render({ format: 'markdown' });
+  expect(repeated).toBe(artifact);
+  await expect(session.save(repeated)).resolves.toEqual(savedFile);
   expect(saveFile).toHaveBeenCalledTimes(1);
   await session.dispose();
   expect(mockFiles.has(artifact.file.uri)).toBe(false);

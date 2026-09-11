@@ -13,7 +13,9 @@ const mockToastShow = jest.fn();
 const mockLoggerError = jest.fn();
 let mockSourceTitle: string | undefined;
 
-jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
+jest.mock('../../../../share', () => ({
+  useShareChatMessage: () => ({ shareAssistantMessage: jest.fn(), sharingMessageId: undefined }),
+}));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),

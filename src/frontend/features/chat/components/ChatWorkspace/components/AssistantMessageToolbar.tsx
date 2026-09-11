@@ -23,7 +23,8 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isAssistantToolbarEnabled } = useAssistantMessageActionsState();
+  const { copiedMessageId, isAssistantToolbarEnabled, sharingMessageId } =
+    useAssistantMessageActionsState();
   const { copyAssistantMessage, forkFromAssistantMessage, shareAssistantMessage } =
     useAssistantMessageActions();
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
@@ -56,19 +57,21 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         />
       ) : null}
       <Button
-        accessibilityLabel={t('chat.share.title')}
-        icon={<ShareIcon className="text-muted-foreground" size={15} />}
-        onPress={() => shareAssistantMessage({ messageId: message.id })}
-        size="xs"
-        testID="assistant-message-share"
-        variant="ghost"
-      />
-      <Button
         accessibilityLabel={t('chat.messageActions.fork')}
         icon={<SplitIcon className="text-muted-foreground" size={15} />}
         onPress={() => forkFromAssistantMessage({ messageId: message.id })}
         size="xs"
         testID="assistant-message-fork"
+        variant="ghost"
+      />
+      <Button
+        accessibilityLabel={t('chat.share.title')}
+        disabled={Boolean(sharingMessageId)}
+        loading={sharingMessageId === message.id}
+        icon={<ShareIcon className="text-muted-foreground" size={15} />}
+        onPress={() => shareAssistantMessage({ messageId: message.id })}
+        size="xs"
+        testID="assistant-message-share"
         variant="ghost"
       />
     </View>

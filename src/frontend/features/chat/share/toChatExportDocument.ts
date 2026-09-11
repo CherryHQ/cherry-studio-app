@@ -11,13 +11,11 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 export type ChatExportOptions = {
   title: string;
   includeProcess: boolean;
-  includeTimestamps: boolean;
   labels: {
     user: string;
     assistant: string;
     process: string;
     reasoning: string;
-    timestamp: string;
     file: string;
     status: string;
     messageStatuses: Record<AgentMessageView['status'], string>;
@@ -88,8 +86,6 @@ export function toChatExportDocument(
         })),
       });
     const metadata: { label: string; value: string }[] = [];
-    if (options.includeTimestamps)
-      metadata.push({ label: options.labels.timestamp, value: message.createdAt });
     if (message.status !== 'success')
       metadata.push({
         label: options.labels.status,

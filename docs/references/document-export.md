@@ -15,7 +15,7 @@ acceptance run. No build or application test was run during implementation.
 | `bootstrap/composition/createBackend.ts` | Connects the runtime to a file-entry store bound to the originating database |
 | `frontend/appShell/documentExport` | Opens the export page and hands off a transient request; URLs contain only its ID |
 | `frontend/features/documentExport` | Format choice, preview, controlled HTML capture and user-triggered delivery |
-| `frontend/features/chat/share` | Message selection, persisted reads, inclusion policy and the chat-to-document adapter |
+| `frontend/features/chat/share` | Current exchange reads, thinking inclusion policy and the chat-to-document adapter |
 | `frontend/features/library` | The existing file stream, with an additional Sharing source filter |
 
 The service follows [Code Organization](./code-organization.md),
@@ -34,10 +34,12 @@ flowchart TD
     Normalize --> Resources[Prepare image resources]
     Resources --> HTML[Controlled HTML and MathML]
     HTML --> Capture[Page-owned bounded capture]
-    Markdown --> Preview[Temporary artifact and preview]
-    HTML --> Preview
+    Markdown --> TextPreview[In-memory default preview]
+    HTML --> Preview[Temporary artifact and preview]
     Capture --> Preview
-    Preview --> Save[Explicit Save or Share]
+    TextPreview --> Materialize[Share creates Markdown file]
+    Materialize --> Save[Explicit Share]
+    Preview --> Save
     Save --> Library[Managed file with document-export source]
     Library --> Delivery[Retained readable copy and system share sheet]
 ```
@@ -65,8 +67,9 @@ const session = backend.documentExport.createSession({
   source: '# Notes\n\nDocument content.',
 });
 try {
+  const previewText = session.markdown; // No files or image reads.
+  // An explicit persistence/delivery action materializes the file.
   const artifact = await session.render({ format: 'markdown' });
-  // Preview is temporary. Call save only for an explicit persistence/delivery action.
   const file = await session.save(artifact);
 } finally {
   await session.dispose();
@@ -81,7 +84,8 @@ file during delivery. Programmatic input presentation is validated and copied by
 An artifact contains one file descriptor plus Markdown text, HTML text, or image dimensions. It also
 contains structured image/formula issues. The returned artifact and file descriptor are frozen.
 The session admits one operation at a time, including saving, and accepts only its current artifact
-for persistence. A new completed render replaces the previous temporary output.
+for persistence. A new completed render replaces the previous temporary output. Rendering Markdown
+again reuses its current file and saved entry while they remain available.
 
 ## Output Behavior
 
@@ -112,7 +116,7 @@ full visual parity with the native chat Markdown renderer.
 ## Limits And Capture
 
 The initial image format is **one bounded PNG**, with no stitching or multi-page output. A document
-that exceeds the budget offers HTML or a smaller message selection.
+that exceeds the budget offers HTML; Markdown remains available in the format menu.
 
 | Resource | Limit |
 | --- | --- |
@@ -162,10 +166,13 @@ WebView rendering works on all devices; that requires the pending iOS/Android ac
 - The app-shell request has a 30-second deadline before route handoff. Missing requests after
   process death show an unavailable state. Route cleanup is deferred one task so development
   remounts can reclaim the same request, then it waits for disposal before admitting another.
-- **Save or Share first commits the final artifact into the existing managed file store.** Repeated
-  actions on the same artifact reuse the saved entry. Changing formats creates a new artifact;
-  reopening an export is a new session and may create another file.
-- Copying Markdown text only writes to the clipboard and does not add a library entry.
+- Opening the page displays native Markdown from memory without generating any output file. HTML
+  and PNG convert only when selected. A source can supply one initially checked option and an
+  alternate document; changing it renders only the current format. Both sessions close with the route.
+- **Share first commits the final artifact into the existing managed file store.** It is the page’s
+  only delivery action, including for Markdown. Repeated actions on the current artifact reuse its
+  saved entry. Changing formats creates a new artifact; reopening an export is a new session and
+  may create another file.
 - Saved files have `provenance: 'document-export'`. This extends the existing source enum without
   adding a column or database migration; older files retain their existing provenance. Sharing an
   existing managed file does not change its provenance.
@@ -185,19 +192,21 @@ attachment bundles, or multi-image sharing are introduced.
 
 ## Chat Integration
 
-The assistant message toolbar opens `/chat-share` with the source Session/message IDs. The
-selection page defaults to the settled answer and its same-turn question when available. Users can
-select up to 128 messages, load newer/older history, and explicitly include process or timestamps.
-The browsing window retains at most ten 50-message pages; selected IDs survive window eviction.
+The last action in the assistant message toolbar reads the clicked answer and its same-turn
+question and opens `/document-export` directly. There is no message selection page, history browsing,
+or timestamp option. Markdown is the default; a compact menu switches to HTML or PNG on demand.
 
-Confirmation reloads the selected persisted messages through bounded around-message reads. It
-rejects missing/unsettled IDs and preserves `(createdAt, id)` order. It does not scrape mounted rows
-or silently export a subset. The Data API does not promise one transactional snapshot across
-multiple page reads; settled text becomes fixed when the caller opens the generic export request.
+A single bounded around-message read (up to 200 neighbors) resolves the current exchange. It rejects
+missing or unsettled content instead of silently dropping the question. Messages without a turn ID
+can export their standalone answer. The toolbar shows pending feedback and blocks duplicate opens.
+
+Visible thinking content is included by default. When present, the source supplies two immutable
+document snapshots and a checkbox label so the preview can omit that content without acquiring chat
+dependencies. Only the selected format is rendered for the selected snapshot.
 
 The adapter follows the chat article's final-answer boundary. Earlier prose and reasoning are
 process content; the last visible text is a final answer only when no later process part follows
-it. File parts remain after the answer. Optional process includes reasoning, intermediate prose and
+it. File parts remain after the answer. The thinking option includes reasoning, intermediate prose and
 readable tool names, never raw tool inputs, result envelopes, credentials or diagnostics.
 
 Persisted `[cite:id]` references from web search/fetch outputs become ordinary numbered links.
@@ -208,15 +217,18 @@ The generic export page has no live chat subscription and cannot load a conversa
 
 Behavior tests were added for source copying/limits, Markdown and HTML behavior, resource limits,
 asset retry/reuse, temporary/permanent lifetime, stale artifact rejection, asynchronous capture
-copying, late cancellation cleanup, lifecycle admission/teardown, chat selection and file source persistence.
-The library filter and existing serialization/composition fixtures were updated as well.
+copying, late cancellation cleanup, lifecycle admission/teardown, current-exchange reads and file source persistence. Markdown lifetime
+coverage also checks that preview creates no files or asset reads and repeated sharing reuses its file.
+Preview-hook coverage includes lazy conversion, option changes and stale-format rejection; request
+coverage checks disposal of both option snapshots. The library filter and existing
+serialization/composition fixtures were updated as well.
 
 Only formatting and lint are permitted for this task. Tests, type checks, builds, and interactive
 UI/device verification were intentionally not run. The native dependency requires an explicitly
 authorized development-client build before capture acceptance.
 
-Changed-file formatting and lint completed with no errors; lint reported two existing declaration
-warnings in lifecycle types. Full `pnpm lint` was attempted and reported seven unresolved imports
+Changed-file formatting and lint for the simplified sharing flow completed without errors or
+warnings. During the initial implementation, full `pnpm lint` reported seven unresolved imports
 from the existing `@cherrystudio/ai-core` package, whose `dist` output is absent in this workspace,
 alongside existing warnings. No package build was run to resolve that environment prerequisite.
 

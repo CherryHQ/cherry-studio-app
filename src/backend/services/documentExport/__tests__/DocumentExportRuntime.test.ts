@@ -16,7 +16,13 @@ test('backgrounding cancels active work and returning to the foreground permits 
   });
   let assertActive!: () => void;
   const cancel = jest.fn();
-  const session = { cancel, dispose: jest.fn(async () => {}), render: jest.fn(), save: jest.fn() };
+  const session = {
+    markdown: 'Content',
+    cancel,
+    dispose: jest.fn(async () => {}),
+    render: jest.fn(),
+    save: jest.fn(),
+  };
   jest.mocked(createDocumentExportSession).mockImplementation((_input, _dependencies, assert) => {
     assertActive = assert;
     return session;
@@ -49,6 +55,7 @@ test('shutdown retains a closing session until its cleanup settles', async () =>
     .mockImplementation((_input, _dependencies, _assert, onDisposed) => {
       let promise: Promise<void> | undefined;
       return {
+        markdown: 'Content',
         render: jest.fn(),
         save: jest.fn(),
         cancel: jest.fn(),

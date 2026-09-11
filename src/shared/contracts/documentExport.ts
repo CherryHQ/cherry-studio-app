@@ -84,6 +84,8 @@ export class DocumentExportError extends Error {
 }
 
 export interface DocumentExportSession {
+  /** In-memory text for the default preview; reading it never creates files or resolves assets. */
+  readonly markdown: string;
   render(
     target: DocumentExportTarget,
     context?: {

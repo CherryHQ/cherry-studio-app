@@ -1,6 +1,6 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
-import { initialChatExportSelection, loadChatExportMessages } from '../loadChatExportMessages';
+import { loadChatExportMessages } from '../loadChatExportMessages';
 import {
   replaceChatCitations,
   toChatExportDocument,
@@ -10,13 +10,11 @@ import {
 const options: ChatExportOptions = {
   title: 'Conversation',
   includeProcess: false,
-  includeTimestamps: false,
   labels: {
     user: 'You',
     assistant: 'Assistant',
     process: 'Process',
     reasoning: 'Reasoning',
-    timestamp: 'Time',
     file: 'File',
     status: 'Status',
     messageStatuses: {
@@ -66,7 +64,7 @@ const question = message('a', 'user', [
   { id: 'question', type: 'text', text: 'Question?', state: 'done' },
 ]);
 
-test('the default adapter includes the final answer and files but excludes earlier process text', () => {
+test('disabling process includes the final answer and files but excludes earlier process text', () => {
   const document = toChatExportDocument([question, answer], options);
   expect(document.sections.map((section) => section.heading)).toEqual(['You', 'Assistant']);
   expect(document.sections[1].blocks).toEqual([
@@ -80,15 +78,14 @@ test('the default adapter includes the final answer and files but excludes earli
   });
 });
 
-test('process and timestamps are explicit source options', () => {
+test('process includes the visible reasoning and intermediate text without timestamps', () => {
   const document = toChatExportDocument([answer], {
     ...options,
     includeProcess: true,
-    includeTimestamps: true,
   });
   expect(JSON.stringify(document)).toContain('Private reasoning');
   expect(JSON.stringify(document)).toContain('Let me check.');
-  expect(document.sections[0].metadata).toEqual([{ label: 'Time', value: answer.createdAt }]);
+  expect(document.sections[0].metadata).toEqual([]);
 });
 
 test('reasoning after text is still process rather than a final answer', () => {
@@ -96,40 +93,46 @@ test('reasoning after text is still process rather than a final answer', () => {
   expect(toChatExportDocument([unfinishedAnswer], options).sections[0].blocks).toEqual([]);
 });
 
-test('initial selection contains the settled answer and its own question', () => {
-  expect([...initialChatExportSelection([answer, question], 'b')]).toEqual(['a', 'b']);
-  expect(initialChatExportSelection([{ ...answer, status: 'streaming' }], 'b').size).toBe(0);
+test('loads only the clicked answer and its same-turn question in reading order', async () => {
+  const unrelated = { ...question, id: 'other-question', turnId: 'other-turn' };
+  const readPage = jest.fn(async () => ({ items: [answer, unrelated, question] }));
+  await expect(
+    loadChatExportMessages('b', readPage, new AbortController().signal),
+  ).resolves.toEqual([question, answer]);
+  expect(readPage).toHaveBeenCalledTimes(1);
+  expect(readPage).toHaveBeenCalledWith({ aroundMessageId: 'b', limit: 200 });
 });
 
-test('selection reload follows persisted ordering, deduplicates IDs and rejects missing or streaming content', async () => {
-  const readPage = jest.fn(async () => ({ items: [answer, question] }));
+test('rejects missing, unsettled or incomplete turns instead of silently exporting a subset', async () => {
   const signal = new AbortController().signal;
-  await expect(loadChatExportMessages(['b', 'a', 'a'], readPage, signal)).resolves.toEqual([
-    question,
-    answer,
-  ]);
-  expect(readPage).toHaveBeenCalledTimes(1);
-  await expect(loadChatExportMessages(['missing'], readPage, signal)).rejects.toThrow(
-    'Selected message unavailable',
-  );
+  await expect(
+    loadChatExportMessages('missing', async () => ({ items: [answer, question] }), signal),
+  ).rejects.toThrow('Message unavailable');
   await expect(
     loadChatExportMessages(
-      ['b'],
-      async () => ({ items: [{ ...answer, status: 'streaming' }] }),
+      'b',
+      async () => ({ items: [{ ...answer, status: 'streaming' }, question] }),
       signal,
     ),
   ).rejects.toThrow('Message is not settled');
+  await expect(
+    loadChatExportMessages('b', async () => ({ items: [answer] }), signal),
+  ).rejects.toThrow('Question unavailable');
+  const standalone = { ...answer, turnId: null };
+  await expect(
+    loadChatExportMessages('b', async () => ({ items: [standalone] }), signal),
+  ).resolves.toEqual([standalone]);
 });
 
-test('cancellation after a page arrives prevents continuation reads', async () => {
+test('cancellation after the persisted read prevents opening a preview', async () => {
   const controller = new AbortController();
   const readPage = jest.fn(async () => {
     controller.abort();
-    return { items: [question] };
+    return { items: [answer, question] };
   });
-  await expect(
-    loadChatExportMessages(['a', 'b'], readPage, controller.signal),
-  ).rejects.toMatchObject({ name: 'AbortError' });
+  await expect(loadChatExportMessages('b', readPage, controller.signal)).rejects.toMatchObject({
+    name: 'AbortError',
+  });
   expect(readPage).toHaveBeenCalledTimes(1);
 });
 

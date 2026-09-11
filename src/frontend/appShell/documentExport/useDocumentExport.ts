@@ -2,7 +2,11 @@ import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
-import type { DocumentExportInput, ExportFormat } from '@/shared/contracts/documentExport';
+import type {
+  DocumentExportInput,
+  DocumentExportSession,
+  ExportFormat,
+} from '@/shared/contracts/documentExport';
 
 import { createDocumentExportRequest, finishDocumentExportRequest } from './documentExportRequest';
 
@@ -11,15 +15,29 @@ export function useDocumentExport() {
   const open = useCallback(
     async ({
       input,
-      initialFormat = 'image',
+      initialFormat = 'markdown',
+      option,
     }: {
       input: DocumentExportInput;
       initialFormat?: ExportFormat;
+      /** An initially checked source option, with a complete document for its unchecked state. */
+      option?: { label: string; uncheckedInput: DocumentExportInput };
     }): Promise<'closed' | 'busy'> => {
       const session = module.createSession(input);
-      const request = createDocumentExportRequest(session, initialFormat);
-      if (!request) {
+      let uncheckedSession: DocumentExportSession | undefined;
+      try {
+        uncheckedSession = option ? module.createSession(option.uncheckedInput) : undefined;
+      } catch (error) {
         await session.dispose();
+        throw error;
+      }
+      const request = createDocumentExportRequest(
+        session,
+        initialFormat,
+        option && uncheckedSession ? { label: option.label, uncheckedSession } : undefined,
+      );
+      if (!request) {
+        await Promise.allSettled([session.dispose(), uncheckedSession?.dispose()]);
         return 'busy';
       }
       try {

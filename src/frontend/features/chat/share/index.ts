@@ -1,1 +1,1 @@
-export { ChatExportScreen } from './ChatExportScreen';
+export { useShareChatMessage } from './useShareChatMessage';
