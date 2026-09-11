@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
 
 import {
   useComposerActions,
@@ -27,8 +28,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
   const { resumeKeyboardTracking } = useComposerPresentationActions();
-  const linkColor = useThemeColor('link');
-  const mentionBackground = useThemeColor('secondary');
+  const linkColor = useThemeColor('primary');
 
   const handlePaste = useCallback(
     (payload: PasteEventPayload) => {
@@ -47,9 +47,9 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
 
     return {
       link: mentionStyle,
-      linkVariants: { '^tool:': { ...mentionStyle, backgroundColor: mentionBackground } },
+      linkVariants: getPluginMentionLinkStyles(linkColor),
     };
-  }, [linkColor, mentionBackground]);
+  }, [linkColor]);
 
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
     // Focus is the only event that is allowed to reconnect the dock after a

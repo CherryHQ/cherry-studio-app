@@ -17,10 +17,18 @@ The chat drawer's **Plugins** page manages connected accounts and authorization.
 choose **+ > Plugins** in the composer. The add menu closes before a compact plugin list appears
 above the input, keeping the keyboard and draft available. The list has no title, search field, or
 close button; selecting an item, tapping outside, or going back dismisses it. Selecting a connected
-plugin inserts a named reference at the editor's current selection; an unconnected plugin opens
-authorization.
+plugin inserts a named reference at the editor's current selection. Only currently connected,
+usable plugins appear; when none are connected, the add menu omits its Plugins entry. Account
+connection and reauthorization remain on the Plugins page.
 There is no `@` trigger. Removing the reference cancels that message's selection. A successful send
 clears the references with the draft; a failed send restores them with the text.
+
+References follow the desktop composer's inline icon and primary-colored name, with no chip fill.
+The input's patched native link style replaces its leading object character with a text attachment;
+the label remains real text. Text parts retain `pluginReferences` (plugin ID, label, UTF-16 offset)
+through pending display and persistence. Message rows reuse the same artwork from this snapshot,
+without consulting the current connection or locale. Existing plain-text messages remain readable.
+This native input change requires an updated development client.
 
 The composer extracts `pluginServerIds` from its internal references and sends readable names in
 the text. The Host validates the connection identities and freezes only explicitly selected

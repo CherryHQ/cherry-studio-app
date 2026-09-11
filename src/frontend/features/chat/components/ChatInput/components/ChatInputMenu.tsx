@@ -16,7 +16,7 @@ export function ChatInputMenu({
   onPickPlugins,
   triggerRef,
 }: {
-  onPickPlugins: () => void;
+  onPickPlugins?: () => void;
   triggerRef: RefObject<View | null>;
 }) {
   const { t } = useTranslation();
@@ -37,12 +37,14 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu onPickFiles={() => setIsFilePickerOpen(true)} triggerRef={triggerRef}>
-        <Composer.Menu.Item
-          icon={<BoxesIcon className="size-5 text-foreground" />}
-          label={t('plugins.title')}
-          onPress={onPickPlugins}
-          testID="chat-composer-plugins"
-        />
+        {onPickPlugins && (
+          <Composer.Menu.Item
+            icon={<BoxesIcon className="size-5 text-foreground" />}
+            label={t('plugins.title')}
+            onPress={onPickPlugins}
+            testID="chat-composer-plugins"
+          />
+        )}
       </ComposerMenu>
       {isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />

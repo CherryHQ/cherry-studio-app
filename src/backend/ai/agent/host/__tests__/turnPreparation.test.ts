@@ -368,13 +368,23 @@ describe('turn preparation', () => {
             )
           : prepareTurn(harness.dependencies, input, new AbortController().signal);
 
-      const selected = await prepare({ ...textInput(), pluginServerIds: [serverId] });
+      const pluginReferences = [
+        { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
+      ];
+      const selected = await prepare({
+        ...textInput(),
+        parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
+        pluginServerIds: [serverId],
+      });
       const unselected = await prepare(textInput());
       expect(selected.tools).toEqual([harness.configuredTool]);
       expect(selected.inferenceSnapshot.tools).toHaveLength(1);
       expect(unselected.tools).toEqual([]);
       expect(unselected.inferenceSnapshot.tools).toEqual([]);
       expect(selected.agent).toEqual(AGENT);
+      expect(selected.userParts).toEqual([
+        { id: 'input-0', type: 'text', text: '飞书 查找文档', pluginReferences, state: 'done' },
+      ]);
     },
   );
 

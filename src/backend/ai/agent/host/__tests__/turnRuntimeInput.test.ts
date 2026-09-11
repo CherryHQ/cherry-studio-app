@@ -6,6 +6,32 @@ const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('Turn Runtime input assembly', () => {
+  test('keeps plugin display metadata out of model input and history', () => {
+    const part = {
+      type: 'text' as const,
+      text: '飞书 查找文档',
+      pluginReferences: [{ type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 }],
+    };
+    const plain = { type: 'text', text: part.text };
+    expect(toRuntimeInputParts([part])).toEqual([plain]);
+    const message: AgentMessageView = {
+      id: 'user-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'user',
+      status: 'success',
+      parts: [{ ...part, id: 'input-0', state: 'done' }],
+      usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+    expect(toRuntimeHistory([message])).toEqual([
+      { turnId: 'turn-1', messages: [{ role: 'user', parts: [plain] }] },
+    ]);
+  });
   test('projects only ledger-authorized managed image content into Runtime input', () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const image = {

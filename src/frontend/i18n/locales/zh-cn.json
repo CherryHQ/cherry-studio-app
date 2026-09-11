@@ -1324,8 +1324,6 @@
   "settings.provider.models.classification.imageInputRequired": "图片（必选）",
   "settings.provider.models.classification.textEndpointRequired": "文本模型需要选择已配置的聊天接口。",
   "plugins.title": "插件",
-  "chat.plugins.empty": "暂无插件",
-  "chat.plugins.openFailed": "无法打开插件连接页面，请重试",
   "plugins.connected": "已连接",
   "plugins.connect": "连接",
   "plugins.loading": "正在加载…",

@@ -8,6 +8,7 @@ import * as z from 'zod';
 
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
+import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
@@ -356,6 +357,7 @@ export const AgentMessagePartSchema = z.union([
     id: z.string().min(1),
     type: z.enum(['text', 'reasoning']),
     text: z.string(),
+    pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({
@@ -400,7 +402,28 @@ export const AgentMessageViewSchema = z.strictObject({
 export type AgentMessageView = z.infer<typeof AgentMessageViewSchema>;
 
 export const AgentInputPartSchema = z.union([
-  z.strictObject({ type: z.literal('text'), text: z.string() }),
+  z
+    .strictObject({
+      type: z.literal('text'),
+      text: z.string(),
+      pluginReferences: z.array(PluginTextReferenceSchema).optional(),
+    })
+    .refine(
+      ({ text, pluginReferences }) => {
+        let end = 0;
+        return (pluginReferences ?? []).every((reference) => {
+          if (
+            reference.offset < end ||
+            text.slice(reference.offset, reference.offset + reference.label.length) !==
+              reference.label
+          )
+            return false;
+          end = reference.offset + reference.label.length;
+          return true;
+        });
+      },
+      { message: 'Plugin references must match non-overlapping text ranges.' },
+    ),
   z.strictObject({
     type: z.literal('file'),
     fileEntryId: z.string().min(1),

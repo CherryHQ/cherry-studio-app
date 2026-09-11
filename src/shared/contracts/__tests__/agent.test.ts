@@ -37,6 +37,21 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips plugin display snapshots and rejects mismatched input ranges', () => {
+    const reference = { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 3 };
+    const input = { type: 'text', text: '使用 飞书', pluginReferences: [reference] };
+    expect(AgentInputPartSchema.parse(roundTrip(input))).toEqual(input);
+    const stored = { ...input, id: 'part-1', state: 'done' };
+    expect(AgentMessagePartSchema.parse(roundTrip(stored))).toEqual(stored);
+    expect(
+      AgentInputPartSchema.safeParse({ ...input, pluginReferences: [reference, reference] })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentInputPartSchema.safeParse({ ...input, pluginReferences: [{ ...reference, offset: 0 }] })
+        .success,
+    ).toBe(false);
+  });
   test('round-trips explicit plugin selections for initial and subsequent messages', () => {
     const input = {
       sessionId: 'session-1',

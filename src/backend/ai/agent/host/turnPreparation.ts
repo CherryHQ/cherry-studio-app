@@ -335,8 +335,7 @@ async function prepareResolvedTurn(
   );
 
   const userParts: AgentMessagePart[] = parts.map((part, index) => {
-    if (part.type === 'text')
-      return { id: `input-${index}`, type: 'text', text: part.text, state: 'done' };
+    if (part.type === 'text') return { ...part, id: `input-${index}`, state: 'done' };
     const content = runtimeContentAttachments.get(part.fileEntryId);
     return {
       id: `input-${index}`,

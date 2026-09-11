@@ -30,6 +30,7 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/ModelPicker';
+import { usePluginCatalog, usePluginConnections } from '@/frontend/features/plugin';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -42,6 +43,7 @@ import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelS
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
+import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 import { readPluginMentions } from './utils/pluginMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
@@ -104,10 +106,18 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
     useChatInputReasoningEffortSelection(reasoningEfforts, agentId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
+  const pluginCatalog = usePluginCatalog();
+  const pluginConnections = usePluginConnections();
+  const connectedPlugins =
+    pluginCatalog.isError || pluginConnections.isError
+      ? []
+      : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
+  const hasConnectedPlugins = connectedPlugins.length > 0;
   const pluginMenuRef = useRef<View>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
-  const isPluginPickerVisible = isPluginPickerOpen && !isApprovalPending;
-  if (isApprovalPending && isPluginPickerOpen) setIsPluginPickerOpen(false);
+  const isPluginPickerVisible = isPluginPickerOpen && !isApprovalPending && hasConnectedPlugins;
+  if (isPluginPickerOpen && (isApprovalPending || !hasConnectedPlugins))
+    setIsPluginPickerOpen(false);
   const { fontScale } = useWindowDimensions();
   const inputTextStyle = useResolveClassNames('text-base');
   const compactInputStyle = {
@@ -219,8 +229,8 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
-      const { pluginServerIds, text: prompt } = readPluginMentions(text);
-      const parts = toAgentInputParts({ attachments, text: prompt });
+      const { pluginServerIds, pluginReferences, text: prompt } = readPluginMentions(text);
+      const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
       return sendMessage({
         parts,
         pluginServerIds,
@@ -249,6 +259,7 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
   return (
     <>
       <ChatInputPluginPopover
+        plugins={connectedPlugins}
         onClose={closePluginPicker}
         open={isPluginPickerVisible}
         returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
@@ -300,7 +311,9 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
                   >
                     {/* The primary actions stay reachable while the field is empty and unfocused. */}
                     <ChatInputMenu
-                      onPickPlugins={() => setIsPluginPickerOpen(true)}
+                      onPickPlugins={
+                        hasConnectedPlugins ? () => setIsPluginPickerOpen(true) : undefined
+                      }
                       triggerRef={pluginMenuRef}
                     />
                     <Animated.View
