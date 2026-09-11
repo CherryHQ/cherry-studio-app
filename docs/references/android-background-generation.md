@@ -34,9 +34,34 @@ patch a native service, native notification receiver, or wake-lock manager.
 - Expo retains cold notification responses. App Shell uses `useLastNotificationResponse`, waits for
   navigation to mount, and passes allowed task destinations to Expo Router. Expo Linking owns URL
   parsing. No backend navigation callback or custom pending-link registry is needed.
-- iOS keeps its existing audio/Live Activity behavior. The background-actions native module is
+- iOS keeps its existing audio/Live Activity implementation. Shared session completion and job
+  handoff changes apply to both platforms. The background-actions native module is
   excluded from iOS autolinking. Expo Notifications is installed through its standard Expo plugin;
   this integration only sends Android local notifications and does not register for push tokens.
+
+## Shared iOS And Android Lifecycle
+
+Business services use the same session and execution-lease contracts on both platforms. Each
+[presenter](../../src/backend/services/backgroundActivity/presenter.ts) declares two requirements;
+the shared manager orders updates, completion, and lease release without platform-specific
+decisions in those paths.
+
+| Presenter requirement | iOS Live Activity | Android notification |
+| --- | --- | --- |
+| `canStartInBackground` | `false`: defer creation until foreground | `true`: represent a task already admitted by the execution runtime |
+| `shouldHoldLeaseUntilDelivery` | `false`: preserve immediate audio-lease release | `true`: retain an existing session lease until its latest update or end settles |
+
+Creating an Android surface does not authorize starting a foreground service from the background;
+the Android execution runtime still owns that restriction. A session never acquires an extra lease
+solely for presentation. Callers that own execution, such as painting jobs, await `finish()` before
+releasing their own lease on both platforms. `finish()` waits for the queued delivery attempt;
+presenter failures are logged and cannot retain the lease indefinitely. Manager shutdown releases
+all leases and ends its remaining surfaces.
+
+The manager's lifecycle suite covers both iOS and Android environments using presenter requirements
+independently of the OS. It describes foreground admission, approval and cancellation delivery,
+stale updates, repeated completion, and caller-owned execution. This shared contract coverage does
+not replace native device acceptance or change the existing iOS audio strategy.
 
 ## Android Limits
 

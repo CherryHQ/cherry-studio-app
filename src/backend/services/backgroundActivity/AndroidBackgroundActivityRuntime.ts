@@ -125,6 +125,10 @@ export class AndroidBackgroundActivityRuntime extends BaseService {
 
   createPresenter<Props extends ActivityProps>(): BackgroundActivityPresenter<Props> {
     return {
+      // A queued task can join an already-running service in the background.
+      // Service admission stays in this runtime; final delivery needs its lease.
+      canStartInBackground: true,
+      shouldHoldLeaseUntilDelivery: true,
       clearOrphans: async () => 0,
       start: (props, deepLinkUrl) => {
         const record: ActivityRecord = {

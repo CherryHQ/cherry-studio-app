@@ -7,9 +7,19 @@ import type { BackgroundActivityPresenter } from '../presenter';
 
 type TestProps = BackgroundActivityBaseProps & { detail: string };
 
-function createMockPresenter() {
+function createMockPresenter(
+  capabilities: Partial<
+    Pick<
+      BackgroundActivityPresenter<TestProps>,
+      'canStartInBackground' | 'shouldHoldLeaseUntilDelivery'
+    >
+  > = {},
+) {
   const handles: { end: jest.Mock; update: jest.Mock }[] = [];
   const presenter = {
+    canStartInBackground: false,
+    shouldHoldLeaseUntilDelivery: false,
+    ...capabilities,
     clearOrphans: jest.fn(async () => 0),
     start: jest.fn((_props: TestProps, _deepLinkUrl?: string) => {
       const handle = { end: jest.fn(async () => {}), update: jest.fn(async () => {}) };
@@ -23,7 +33,7 @@ function createMockPresenter() {
   return { handles, presenter };
 }
 
-describe('BackgroundActivityManager', () => {
+describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   const mockLeases: { release: jest.Mock }[] = [];
   const mockPrepareLogo = jest.fn(async () => 'file:///widgets/cherry-studio-logo.png');
@@ -37,7 +47,7 @@ describe('BackgroundActivityManager', () => {
     appStateListener = undefined;
     mockLeases.length = 0;
     jest.clearAllMocks();
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
       appStateListener = listener;
@@ -53,7 +63,7 @@ describe('BackgroundActivityManager', () => {
     jest.restoreAllMocks();
   });
 
-  test('sweeps orphaned surfaces and prepares the shared logo at initialization', async () => {
+  test('sweeps orphaned surfaces and prepares the iOS widget logo at initialization', async () => {
     const first = createMockPresenter();
     const second = createMockPresenter();
     first.presenter.clearOrphans.mockResolvedValueOnce(2);
@@ -62,7 +72,7 @@ describe('BackgroundActivityManager', () => {
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
-    expect(mockPrepareLogo).toHaveBeenCalledTimes(1);
+    expect(mockPrepareLogo).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
     await manager._doStop();
   });
 
@@ -80,7 +90,7 @@ describe('BackgroundActivityManager', () => {
       expect.objectContaining({
         colorScheme: 'dark',
         detail: 'preparing',
-        logoUri: 'file:///widgets/cherry-studio-logo.png',
+        ...(platform === 'ios' ? { logoUri: 'file:///widgets/cherry-studio-logo.png' } : {}),
       }),
       'cherrystudio:///?agentId=agent-1&sessionId=session-1',
     );
@@ -178,9 +188,8 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
-  test('Android delivers an approval update before releasing its last execution lease', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const { presenter, handles } = createMockPresenter();
+  test('protects approval delivery when the presenter requires an execution lease', async () => {
+    const { presenter, handles } = createMockPresenter({ shouldHoldLeaseUntilDelivery: true });
     const manager = await createManager([presenter]);
     const session = manager.startSession({
       keepAlive: true,
@@ -205,11 +214,10 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
-  test.each(['update', 'finish'] as const)(
-    'Android keeps execution through %s delivery when an older progress update is pending',
+  test.each(['update', 'finish', 'cancel'] as const)(
+    'protects %s delivery when an older progress update is pending',
     async (terminalAction) => {
-      Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-      const { presenter, handles } = createMockPresenter();
+      const { presenter, handles } = createMockPresenter({ shouldHoldLeaseUntilDelivery: true });
       const manager = await createManager([presenter]);
       const session = manager.startSession({
         keepAlive: true,
@@ -232,14 +240,15 @@ describe('BackgroundActivityManager', () => {
         new Promise<void>((resolve) => {
           releaseTerminal = resolve;
         });
-      if (terminalAction === 'finish') {
-        handles[0]!.end.mockImplementationOnce(pendingTerminal);
-        void session.finish(makeProps('completed'));
-      } else {
+      if (terminalAction === 'update') {
         handles[0]!.update.mockImplementationOnce(pendingTerminal);
         session.update(makeProps('awaiting-approval'), { keepAlive: false, urgent: true });
         // A repeated projection with identical content must also await delivery.
         session.update(makeProps('awaiting-approval'), { keepAlive: false });
+      } else {
+        handles[0]!.end.mockImplementationOnce(pendingTerminal);
+        if (terminalAction === 'finish') void session.finish(makeProps('completed'));
+        else session.cancel();
       }
       expect(mockLeases[0]!.release).not.toHaveBeenCalled();
       releaseProgress();
@@ -253,10 +262,9 @@ describe('BackgroundActivityManager', () => {
     },
   );
 
-  test('Android represents a background-started queued task without requiring a foreground surface start', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  test('starts a background surface when its presenter supports it', async () => {
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
-    const { presenter, handles } = createMockPresenter();
+    const { presenter, handles } = createMockPresenter({ canStartInBackground: true });
     const manager = await createManager([presenter]);
     const session = manager.startSession({
       presenter,
@@ -264,7 +272,6 @@ describe('BackgroundActivityManager', () => {
       tag: 'painting',
     });
     expect(presenter.start).toHaveBeenCalledTimes(1);
-    expect(mockPrepareLogo).not.toHaveBeenCalled();
     session.finish(makeProps('completed'));
     await flushOperations();
     expect(handles[0]!.end).toHaveBeenCalledWith(
@@ -367,7 +374,6 @@ describe('BackgroundActivityManager', () => {
   });
 
   test('finish waits for queued platform delivery even when the caller owns the execution lease', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
     const session = manager.startSession({

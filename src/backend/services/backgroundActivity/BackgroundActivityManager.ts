@@ -40,7 +40,7 @@ export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseP
 export type BackgroundActivitySession<Props extends BackgroundActivityBaseProps> = {
   /** Terminal: ends the surface immediately (domain cleanup, deletions). */
   cancel(): void;
-  /** Terminal: resolves after final content is delivered to the platform presenter. */
+  /** Terminal: resolves after queued final delivery settles, on every platform. */
   finish(props: Props): Promise<void>;
   update(props: Props, options?: { keepAlive?: boolean; urgent?: boolean }): void;
 };
@@ -72,14 +72,14 @@ type BackgroundActivityEnvironmentPort = {
 };
 
 /**
- * Feature-agnostic driver for background activity surfaces: foreground starts
+ * Feature-agnostic driver for background activity surfaces: admitted starts
  * are synchronous, update/end operations ride one serial queue, updates are
  * throttled (urgent ones jump the throttle), foreground-created surfaces
  * survive AppState transitions, orphans from a dead process are swept during
  * initialization, and each session's `keepAlive` bit is mirrored into a
- * KeepAliveCoordinator lease. Domain meaning (what a session represents, when
- * it is urgent, when to stay alive) belongs to the feature services driving
- * the sessions.
+ * KeepAliveCoordinator lease, with delivery protection declared by its presenter.
+ * Domain meaning (what a session represents, when it is urgent, when to stay
+ * alive) belongs to the feature services driving the sessions.
  */
 @Injectable('BackgroundActivityManager')
 @ServicePhase(Phase.PostReady)
@@ -188,10 +188,13 @@ export class BackgroundActivityManager extends BaseService {
     record.props = props;
     if (options?.keepAlive !== undefined && options.keepAlive !== record.keepAlive) {
       record.keepAlive = options.keepAlive;
-      if (record.keepAlive || Platform.OS !== 'android') this.reconcileLease(record);
+      if (record.keepAlive || !record.presenter.shouldHoldLeaseUntilDelivery) {
+        this.reconcileLease(record);
+      }
     }
 
-    const needsLeaseDrain = Platform.OS === 'android' && !!record.lease && !record.keepAlive;
+    const needsLeaseDrain =
+      record.presenter.shouldHoldLeaseUntilDelivery && !!record.lease && !record.keepAlive;
     if ((!changed && !needsLeaseDrain) || record.surface.status !== 'active') {
       this.reconcileLease(record);
       return;
@@ -219,7 +222,7 @@ export class BackgroundActivityManager extends BaseService {
     record.surface = { status: 'ended' };
     this.sessions.delete(record);
     this.clearUpdateTimer(record);
-    if (Platform.OS !== 'android') this.reconcileLease(record);
+    if (!record.presenter.shouldHoldLeaseUntilDelivery) this.reconcileLease(record);
     if (handle) {
       return this.enqueue(async () => {
         await this.endNative(record, handle, policy);
@@ -232,9 +235,7 @@ export class BackgroundActivityManager extends BaseService {
 
   private startNative(record: SessionRecord): void {
     if (this.disposed || record.surface.status !== 'pending') return;
-    // Live Activities must start in the foreground. Android notifications may
-    // represent an already-running task; the Android runtime gates service starts.
-    if (Platform.OS !== 'android' && this.appState !== 'active') return;
+    if (!record.presenter.canStartInBackground && this.appState !== 'active') return;
     try {
       const handle = record.presenter.start(this.toNativeProps(record), record.deepLinkUrl);
       record.surface = { handle, status: 'active' };
@@ -256,9 +257,9 @@ export class BackgroundActivityManager extends BaseService {
       logger.warn('Background activity update failed', error as Error, { tag: record.tag });
     } finally {
       // A newer update or finish owns delivery of its content. An older pending
-      // update must not release that operation's Android execution protection.
+      // update must not release that operation's execution protection.
       if (
-        Platform.OS !== 'android' ||
+        !record.presenter.shouldHoldLeaseUntilDelivery ||
         (record.surface.status === 'active' && record.props === submittedProps)
       ) {
         this.reconcileLease(record);
