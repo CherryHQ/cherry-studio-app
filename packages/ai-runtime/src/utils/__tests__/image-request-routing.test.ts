@@ -1,8 +1,10 @@
 import type { ImageModelV3CallOptions } from '@ai-sdk/provider';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { generateImage } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDashScopeProvider } from '../../provider/custom/dashscope/dashscopeProvider';
+import { createDmxapiProvider } from '../../provider/custom/dmxapi/dmxapiProvider';
 import type { ImageTransportDescriptor } from '../../provider/custom/imageGenerationModel';
 import { createModelscopeProvider } from '../../provider/custom/modelscope/modelscopeProvider';
 import { createPpioProvider } from '../../provider/custom/ppio/ppioProvider';
@@ -100,6 +102,169 @@ describe('painting parameters through the image provider to the HTTP request', (
       expect(result.images).toEqual([imageUrl]);
     },
   );
+
+  it.each([
+    ['qwen-image-3.0', 'generate', 4],
+    ['qwen-image-3.0-pro', 'edit', 6],
+  ] as const)('keeps %s %s as one native batch of %i images', async (modelId, mode, n) => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      jsonResponse({
+        output: {
+          choices: [
+            { message: { content: Array.from({ length: n }, () => ({ image: referenceImage })) } },
+          ],
+        },
+      }),
+    );
+    const provider = createDashScopeProvider({
+      apiKey: 'test-key',
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
+    const options = callOptions(
+      'dashscope',
+      modelId,
+      { numImages: n, seed: 7 },
+      {
+        id: modelId,
+        endpoint: '/api/v1/services/aigc/multimodal-generation/generation',
+        isSync: true,
+        mode,
+      },
+    );
+
+    const result = await generateImage({
+      model: provider.imageModel(modelId),
+      prompt: mode === 'edit' ? { text: 'a fox', images: [referenceImage] } : 'a fox',
+      n: options.n,
+      seed: options.seed,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetch.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      model: modelId,
+      parameters: { n, seed: 7 },
+    });
+    expect(result.images).toHaveLength(n);
+  });
+
+  it('keeps a four-image batch intact through DashScope async submit and poll', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, request) =>
+      jsonResponse(
+        request?.method === 'POST'
+          ? { output: { task_id: 'batch-task' } }
+          : {
+              output: {
+                task_status: 'SUCCEEDED',
+                results: Array.from({ length: 4 }, () => ({ url: referenceImage })),
+              },
+            },
+      ),
+    );
+    const provider = createDashScopeProvider({
+      apiKey: 'test-key',
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
+    const options = callOptions(
+      'dashscope',
+      'qwen-image',
+      { numImages: 4, seed: 7 },
+      {
+        id: 'qwen-image',
+        endpoint: '/api/v1/services/aigc/text2image/image-synthesis',
+        mode: 'generate',
+      },
+    );
+
+    const result = await generateImage({
+      model: provider.imageModel('qwen-image'),
+      prompt: 'a fox',
+      n: options.n,
+      seed: options.seed,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetch.mock.calls[0]?.[1]?.body as string)).toMatchObject({
+      parameters: { n: 4, seed: 7 },
+    });
+    expect(fetch.mock.calls[1]?.[1]?.method).toBe('GET');
+    expect(result.images).toHaveLength(4);
+  });
+
+  it.each(['qwen-image', 'wan2.6-t2i'])(
+    'preserves the native four-image batch for DMXAPI %s',
+    async (modelId) => {
+      const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+        jsonResponse(
+          modelId === 'qwen-image'
+            ? {
+                extra: {
+                  output: {
+                    task_status: 'SUCCEEDED',
+                    results: Array.from({ length: 4 }, () => ({ url: referenceImage })),
+                  },
+                },
+              }
+            : {
+                output: [{ content: Array.from({ length: 4 }, () => ({ image: referenceImage })) }],
+              },
+        ),
+      );
+      const provider = createDmxapiProvider({
+        apiKey: 'test-key',
+        baseURL: 'https://dmx.example.com/v1',
+      });
+
+      const result = await generateImage({
+        model: provider.imageModel(modelId),
+        prompt: 'a fox',
+        n: 4,
+        maxRetries: 0,
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(fetch.mock.calls[0]?.[1]?.body as string)).toMatchObject(
+        modelId === 'qwen-image' ? { n: 4 } : { parameters: { n: 4 } },
+      );
+      expect(result.images).toHaveLength(4);
+    },
+  );
+
+  it('retains single-image calls for TokenHub models without native n support', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => jsonResponse({ data: [{ url: referenceImage }] }));
+    const provider = createTokenhubProvider({
+      apiKey: 'test-key',
+      baseURL: 'https://tokenhub.example.com/v1',
+      fetch,
+    });
+    const options = callOptions(
+      'tokenhub',
+      'hy-image-v3',
+      { numImages: 2 },
+      {
+        id: 'hy-image-v3',
+        endpoint: '/v1/wand/hunyuan-image/v3-generation',
+        isSync: true,
+        mode: 'generate',
+      },
+    );
+
+    const result = await generateImage({
+      model: provider.imageModel('hy-image-v3'),
+      prompt: 'a fox',
+      n: options.n,
+      providerOptions: options.providerOptions,
+      maxRetries: 0,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(result.images).toHaveLength(2);
+  });
 
   it('preserves ModelScope steps, guidance and negative prompt through async generation', async () => {
     const fetch = vi
