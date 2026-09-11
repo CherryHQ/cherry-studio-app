@@ -15,12 +15,12 @@ export function useDocumentExport() {
   const open = useCallback(
     async ({
       input,
-      initialFormat = 'markdown',
+      initialFormat = 'image',
       option,
     }: {
       input: DocumentExportInput;
       initialFormat?: ExportFormat;
-      /** An initially checked source option, with a complete document for its unchecked state. */
+      /** An initially unchecked source option, with a complete document for its unchecked state. */
       option?: { label: string; uncheckedInput: DocumentExportInput };
     }): Promise<'closed' | 'busy'> => {
       const session = module.createSession(input);

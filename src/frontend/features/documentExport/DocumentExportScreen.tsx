@@ -85,7 +85,7 @@ function DocumentExportBody({
   const { width: windowWidth } = useWindowDimensions();
   const [selection, setSelection] = useState({
     format: initialFormat,
-    isOptionChecked: true,
+    isOptionChecked: false,
     revision: 0,
   });
   const { format, isOptionChecked, revision } = selection;

@@ -1,12 +1,13 @@
 # Document Export Page
 
-Owns the compact format menu, preview, bounded HTML capture and a single Share action. The default
-Markdown preview reads the frozen in-memory document without creating a file. It renders leaf prose
-with the existing Markdown component and composes the actual CherryUI `MessagePart.Process` and
-`MessagePart.Reasoning` components for disclosures. Both start collapsed and retain independent
-toggles; the source snapshot has no live chat reads.
-HTML or WebP is generated only after selecting that format. A source may supply one initially checked
-option and its alternate document; changing it refreshes only the selected format.
+Owns the compact format menu, preview, bounded HTML capture and a single Share action. Image is the
+default format. The Markdown preview reads the frozen in-memory document without creating a file.
+It renders leaf prose with the existing Markdown component and composes the actual CherryUI
+`MessagePart.Process` and `MessagePart.Reasoning` components for disclosures. Both start collapsed
+and retain independent toggles; the source snapshot has no live chat reads.
+HTML or WebP is generated when that format is selected, including the initial image preview. A source
+may supply one initially unchecked option and its alternate document; changing it refreshes only the
+selected format.
 
 HTML and WebP receive the same resolved semantic colors and accessibility typography scale as the
 native chat components. Their content owns its 16-point gutters; the preview does not add another
