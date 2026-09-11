@@ -1,4 +1,3 @@
-import { Pressable, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
@@ -181,7 +180,9 @@ describe('ChatScreen composer dock wiring', () => {
       act(() => {
         renderer = create(<ChatScreen />);
       });
-      const background = renderer!.root.findByType(Pressable).findByType(View);
+      const background = renderer!.root.find(
+        (node) => typeof node.type === 'string' && node.props.testID === 'chat-background',
+      );
       const nativeTarget = {
         measure: (callback: (...bounds: number[]) => void) => callback(0, 0, 400, 800, 0, 0),
       };
