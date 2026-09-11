@@ -13,7 +13,7 @@ const options: ChatExportOptions = {
   labels: {
     user: 'You',
     assistant: 'Assistant',
-    process: 'Process',
+    process: (seconds) => `Took ${seconds}s`,
     reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',
@@ -85,6 +85,14 @@ test('process includes the visible reasoning and intermediate text without times
   });
   expect(JSON.stringify(document)).toContain('Private reasoning');
   expect(JSON.stringify(document)).toContain('Let me check.');
+  expect(document.sections[0].blocks[0]).toMatchObject({
+    kind: 'details',
+    presentation: 'process',
+    summary: 'Took 1s',
+    blocks: expect.arrayContaining([
+      expect.objectContaining({ kind: 'details', presentation: 'reasoning', summary: 'Reasoning' }),
+    ]),
+  });
   expect(document.sections[0].metadata).toEqual([]);
 });
 

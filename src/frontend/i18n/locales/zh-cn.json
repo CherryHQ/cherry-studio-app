@@ -1447,7 +1447,7 @@
   "library.filter.sharing": "分享",
   "documentExport.title": "分享预览",
   "documentExport.format": "导出格式",
-  "documentExport.formats.image": "图片 (PNG)",
+  "documentExport.formats.image": "图片 (WebP)",
   "documentExport.formats.html": "HTML",
   "documentExport.formats.markdown": "Markdown",
   "documentExport.unavailable": "此次导出已失效，请从原内容重新打开。",

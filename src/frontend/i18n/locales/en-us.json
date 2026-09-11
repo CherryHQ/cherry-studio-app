@@ -1450,7 +1450,7 @@
   "library.filter.sharing": "Sharing",
   "documentExport.title": "Share preview",
   "documentExport.format": "Export format",
-  "documentExport.formats.image": "Image (PNG)",
+  "documentExport.formats.image": "Image (WebP)",
   "documentExport.formats.html": "HTML",
   "documentExport.formats.markdown": "Markdown",
   "documentExport.unavailable": "This export is no longer available. Open it again from the source.",

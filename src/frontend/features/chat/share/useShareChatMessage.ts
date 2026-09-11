@@ -56,8 +56,8 @@ export function useShareChatMessage(sessionId?: string) {
             labels: {
               user: t('chat.share.user'),
               assistant: agent.name || t('chat.share.assistant'),
-              process: t('chat.share.process'),
-              reasoning: t('chat.share.reasoning'),
+              process: (seconds) => t('chat.process.duration', { seconds }),
+              reasoning: t('chat.reasoningStatus.thought'),
               file: t('chat.share.file'),
               status: t('chat.share.status'),
               messageStatuses: {

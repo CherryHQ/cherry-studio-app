@@ -26,8 +26,26 @@ const markdownArtifact: DocumentExportArtifact = {
 };
 const presentation = {
   width: 360,
-  fontSize: 16,
-  colors: { background: 'white', foreground: 'black', muted: 'gray', border: 'gray', link: 'blue' },
+  typography: {
+    base: { fontSize: 16, lineHeight: 24 },
+    sm: { fontSize: 14, lineHeight: 20 },
+    lg: { fontSize: 18, lineHeight: 28 },
+    xl: { fontSize: 20, lineHeight: 26 },
+  },
+  colors: {
+    background: 'white',
+    foreground: 'black',
+    muted: 'gray',
+    tertiary: 'gray',
+    border: 'gray',
+    subtleBorder: 'gray',
+    link: 'blue',
+    bubble: 'gray',
+    secondary: 'gray',
+    codeBlock: 'gray',
+    inlineCode: 'gray',
+    inlineCodeForeground: 'black',
+  },
 };
 const capture = jest.fn();
 type Preview = ReturnType<typeof useDocumentExportPreview>;
@@ -48,6 +66,9 @@ function Probe({
 }
 function createSession(markdown = 'Content') {
   return {
+    document: {
+      sections: [{ id: 'document', blocks: [{ kind: 'markdown' as const, source: markdown }] }],
+    },
     markdown,
     render: jest.fn(
       async (

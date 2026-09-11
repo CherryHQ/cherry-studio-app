@@ -3,10 +3,16 @@ import type { FileEntryId } from '@/shared/data/types/file';
 import type { ResolvedFile } from './file';
 
 export type ExportBlock =
+  | { kind: 'text'; text: string }
   | { kind: 'markdown'; source: string }
   | { kind: 'image'; assetId: string; alt: string }
   | { kind: 'attachment'; name: string; mediaType?: string; url?: string }
-  | { kind: 'details'; summary: string; blocks: readonly ExportBlock[] }
+  | {
+      kind: 'details';
+      summary: string;
+      presentation?: 'process' | 'reasoning';
+      blocks: readonly ExportBlock[];
+    }
   | { kind: 'links'; items: readonly { label: string; url: string }[] };
 
 export type ExportDocument = {
@@ -14,6 +20,8 @@ export type ExportDocument = {
   sections: readonly {
     id: string;
     heading?: string;
+    /** Source-owned visual hierarchy, independent of chat models or live UI. */
+    presentation?: 'bubble' | 'message';
     metadata?: readonly { label: string; value: string }[];
     blocks: readonly ExportBlock[];
   }[];
@@ -32,8 +40,21 @@ export type DocumentExportInput =
 export type ExportFormat = 'markdown' | 'html' | 'image';
 export type ExportPresentation = {
   width: number;
-  fontSize: number;
-  colors: { background: string; foreground: string; muted: string; border: string; link: string };
+  typography: Record<'base' | 'sm' | 'lg' | 'xl', { fontSize: number; lineHeight: number }>;
+  colors: {
+    background: string;
+    foreground: string;
+    muted: string;
+    tertiary: string;
+    border: string;
+    subtleBorder: string;
+    link: string;
+    bubble: string;
+    secondary: string;
+    codeBlock: string;
+    inlineCode: string;
+    inlineCodeForeground: string;
+  };
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
 export type ExportFile = { uri: string; filename: string; mediaType: string };
@@ -47,7 +68,7 @@ export type DocumentExportArtifact = {
   | { format: 'image'; width: number; height: number }
 );
 
-/** The page owns capture and must release late/failed native output as well. */
+/** Returns a lossless WebP file. The page also owns cleanup of late/failed native output. */
 export type CaptureExportHtml = (input: {
   html: string;
   width: number;
@@ -84,7 +105,9 @@ export class DocumentExportError extends Error {
 }
 
 export interface DocumentExportSession {
-  /** In-memory text for the default preview; reading it never creates files or resolves assets. */
+  /** Frozen source snapshot for structured previews; does not resolve assets or create files. */
+  readonly document: ExportDocument;
+  /** Portable Markdown text; reading it never creates files or resolves assets. */
   readonly markdown: string;
   render(
     target: DocumentExportTarget,

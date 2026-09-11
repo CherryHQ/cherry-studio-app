@@ -11,6 +11,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 const text = z.string().max(500_000);
 const block: z.ZodType<ExportBlock> = z.lazy(() =>
   z.discriminatedUnion('kind', [
+    z.strictObject({ kind: z.literal('text'), text }),
     z.strictObject({ kind: z.literal('markdown'), source: text }),
     z.strictObject({ kind: z.literal('image'), assetId: text, alt: text }),
     z.strictObject({
@@ -19,7 +20,12 @@ const block: z.ZodType<ExportBlock> = z.lazy(() =>
       mediaType: text.optional(),
       url: text.optional(),
     }),
-    z.strictObject({ kind: z.literal('details'), summary: text, blocks: z.array(block).max(512) }),
+    z.strictObject({
+      kind: z.literal('details'),
+      summary: text,
+      presentation: z.enum(['process', 'reasoning']).optional(),
+      blocks: z.array(block).max(512),
+    }),
     z.strictObject({
       kind: z.literal('links'),
       items: z.array(z.strictObject({ label: text, url: text })).max(256),
@@ -33,6 +39,7 @@ const documentSchema = z.strictObject({
       z.strictObject({
         id: text,
         heading: text.optional(),
+        presentation: z.enum(['bubble', 'message']).optional(),
         metadata: z
           .array(z.strictObject({ label: text, value: text }))
           .max(16)
@@ -77,7 +84,22 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
   if (Object.keys(result.data.assets ?? {}).length > 32)
     throw new DocumentExportError('size-limit');
   // Zod returns new objects; none of the session's values alias caller-owned data.
+  freezeSnapshot(result.data);
   return result.data;
+}
+
+function freezeSnapshot(value: unknown): void {
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach(freezeSnapshot);
+    Object.freeze(value);
+  }
+}
+
+export function escapeHtml(value: string): string {
+  return value.replace(
+    /[&<>"']/g,
+    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!,
+  );
 }
 
 export function safeExportUrl(value: string): string | undefined {

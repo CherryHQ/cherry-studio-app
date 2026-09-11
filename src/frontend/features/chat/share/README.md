@@ -9,5 +9,15 @@ by default, and omitted when the preview checkbox is cleared. Thinking covers th
 intermediate prose and readable tool names. Raw tool payloads and diagnostic metadata never enter
 the document. The export page receives only a source-owned label and documents; it has no chat reads.
 
+The adapter preserves plain user text and supplies bubble/message presentation hints. HTML and WebP
+use the chat hierarchy: right-aligned questions, compact assistant headings and full-width answers,
+with attachments above the question bubble. The conversation title remains the exported filename
+and document title without adding an article heading above the exchange.
+
+Process and reasoning keep explicit presentation hints. Their labels reuse the transcript's
+`chat.process.duration` and `chat.reasoningStatus.thought` translations, and elapsed time uses the
+same approval-wait-aware calculation as the message list. Native previews reuse the CherryUI
+disclosures; HTML and WebP start with the same collapsed process summary.
+
 Rendering, temporary files, permanent storage and system delivery remain in the application export
 capability. Opening the preview prepares Markdown text; other formats convert only when selected.

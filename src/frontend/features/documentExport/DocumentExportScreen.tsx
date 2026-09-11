@@ -7,6 +7,7 @@ import {
   SelectionIndicator,
   useToast,
 } from '@cherrystudio/ui/components';
+import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,7 +23,6 @@ import {
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
 import { RouteHeader } from '@/frontend/appShell/header';
-import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -34,6 +34,7 @@ import type {
 } from '@/shared/contracts/documentExport';
 
 import { useDocumentExportHtmlCapture } from './components/DocumentExportHtmlSurface';
+import { DocumentExportTextPreview } from './components/DocumentExportTextPreview';
 import { useDocumentExportPreview } from './hooks/useDocumentExportPreview';
 
 export function DocumentExportScreen() {
@@ -90,19 +91,54 @@ function DocumentExportBody({
   const { format, isOptionChecked, revision } = selection;
   const session = !isOptionChecked && option ? option.uncheckedSession : checkedSession;
   const [fontStep] = usePreference('ui.font_size_step');
-  const [background, foreground, muted, border, link] = useThemeColor([
+  const [
+    background,
+    foreground,
+    muted,
+    tertiary,
+    border,
+    subtleBorder,
+    link,
+    bubble,
+    secondary,
+    codeBlock,
+    inlineCode,
+    inlineCodeForeground,
+  ] = useThemeColor([
     'background',
     'foreground',
     'muted-foreground',
+    'foreground-tertiary',
     'border',
+    'border-subtle',
     'link',
+    'chat-user',
+    'secondary',
+    'code-block',
+    'inline-code',
+    'inline-code-foreground',
   ]);
-  const width = Math.floor(Math.min(600, Math.max(280, windowWidth - 32)));
-  const [presentation] = useState(() => ({
-    width,
-    fontSize: 16 + fontStep * 2,
-    colors: { background, foreground, muted, border, link },
-  }));
+  const [presentation] = useState(() => {
+    const { base, sm, lg, xl } = resolveTypographyScale(fontStep);
+    return {
+      width: Math.floor(Math.min(600, Math.max(280, windowWidth))),
+      typography: { base, sm, lg, xl },
+      colors: {
+        background,
+        foreground,
+        muted,
+        tertiary,
+        border,
+        subtleBorder,
+        link,
+        bubble,
+        secondary,
+        codeBlock,
+        inlineCode,
+        inlineCodeForeground,
+      },
+    };
+  });
   const { capture, surface } = useDocumentExportHtmlCapture();
   const { state, getArtifact, retry } = useDocumentExportPreview(
     session,
@@ -177,11 +213,15 @@ function DocumentExportBody({
         <ExportFormatMenu disabled={isSharing} format={format} onSelect={selectFormat} />
       </View>
       {state.status === 'markdown' ? (
-        <ScrollView className="flex-1" contentContainerClassName="p-4">
-          <MarkdownText markdown={state.text} />
+        <ScrollView className="flex-1" contentContainerClassName="px-4 pt-3 pb-6">
+          <DocumentExportTextPreview key={revision} document={session.document} />
         </ScrollView>
       ) : artifact ? (
-        <ArtifactPreview key={artifact.id} artifact={artifact} width={width} />
+        <ArtifactPreview
+          key={artifact.id}
+          artifact={artifact}
+          width={Math.min(presentation.width, windowWidth)}
+        />
       ) : (
         <ScrollView
           className="flex-1"
@@ -275,12 +315,13 @@ function ArtifactPreview({ artifact, width }: { artifact: DocumentExportArtifact
         originWhitelist={['*']}
         sharedCookiesEnabled={false}
         source={{ html: artifact.html }}
+        style={{ width, alignSelf: 'center', backgroundColor: 'transparent' }}
         thirdPartyCookiesEnabled={false}
       />
     );
   if (artifact.format !== 'image') return null;
   return (
-    <ScrollView className="flex-1" contentContainerClassName="items-center px-4 py-2">
+    <ScrollView className="flex-1" contentContainerClassName="items-center">
       <Image
         accessibilityLabel={t('documentExport.imagePreview')}
         contentFit="contain"

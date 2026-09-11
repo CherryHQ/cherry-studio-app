@@ -6,6 +6,7 @@ jest.mock('expo-crypto', () => ({ randomUUID: () => 'request' }));
 
 function session(dispose = jest.fn(async () => {})) {
   return {
+    document: { sections: [] },
     markdown: 'Content',
     render: jest.fn(),
     save: jest.fn(),

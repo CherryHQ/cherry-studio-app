@@ -8,13 +8,25 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 const presentation = {
   width: 360,
-  fontSize: 16,
+  typography: {
+    base: { fontSize: 16, lineHeight: 24 },
+    sm: { fontSize: 14, lineHeight: 20 },
+    lg: { fontSize: 18, lineHeight: 28 },
+    xl: { fontSize: 20, lineHeight: 26 },
+  },
   colors: {
     background: '#ffffff',
     foreground: '#111111',
     muted: '#666666',
     border: '#cccccc',
     link: '#006600',
+    tertiary: '#666666',
+    subtleBorder: '#eeeeee',
+    bubble: '#f0f0f0',
+    secondary: '#f5f5f5',
+    codeBlock: '#f5f5f5',
+    inlineCode: '#eeeeee',
+    inlineCodeForeground: '#111111',
   },
 };
 
@@ -68,8 +80,53 @@ test('structured Markdown preserves included details and uses labels for managed
   expect(markdown).toContain('# A \\[title\\]');
   expect(markdown).toContain('[Local image]');
   expect(markdown).toContain('All included words.');
+  expect(markdown).toContain('<details>\n<summary>Process</summary>');
+  expect(markdown).not.toContain('### Process');
   expect(markdown).toContain('report\\.pdf (application/pdf)');
   expect(markdown).not.toContain('file:///');
+});
+
+test('process and reasoning remain nested and initially collapsed without dropping their content', async () => {
+  const document = normalizeDocument({
+    kind: 'document',
+    document: {
+      sections: [
+        {
+          id: 'answer',
+          presentation: 'message',
+          blocks: [
+            {
+              kind: 'details',
+              presentation: 'process',
+              summary: 'Took 12s',
+              blocks: [
+                {
+                  kind: 'details',
+                  presentation: 'reasoning',
+                  summary: 'Thought it through',
+                  blocks: [{ kind: 'markdown', source: 'Included reasoning.' }],
+                },
+              ],
+            },
+            { kind: 'markdown', source: 'Final answer.' },
+          ],
+        },
+      ],
+    },
+  });
+  expect(Object.isFrozen(document.sections[0].blocks[0])).toBe(true);
+  const { html } = await renderHtml(
+    document,
+    presentation,
+    new Map(),
+    jest.fn(),
+    new AbortController().signal,
+  );
+  expect(html).toContain('<details class="process"><summary>Took 12s</summary>');
+  expect(html).toContain('<details class="reasoning"><summary>Thought it through</summary>');
+  expect(html).not.toMatch(/<details\b[^>]*\bopen\b/);
+  expect(html).toContain('Included reasoning.');
+  expect(html).toContain('Final answer.');
 });
 
 test('HTML escapes authored markup, rejects executable links, renders tables and MathML offline', async () => {

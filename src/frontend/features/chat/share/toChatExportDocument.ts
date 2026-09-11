@@ -1,5 +1,6 @@
 import { webSearchOutputSchema } from '@cherrystudio/universal/ai/builtinTools';
 
+import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
 import {
   AgentToolResultSchema,
   type AgentMessagePart,
@@ -14,7 +15,7 @@ export type ChatExportOptions = {
   labels: {
     user: string;
     assistant: string;
-    process: string;
+    process(seconds: number): string;
     reasoning: string;
     file: string;
     status: string;
@@ -46,16 +47,17 @@ export function toChatExportDocument(
     const resultIndex = finalTextIndex(message.parts);
     message.parts.forEach((part, index) => {
       if (part.type === 'text' && part.text.trim()) {
-        const block: ExportBlock = {
-          kind: 'markdown',
-          source: replaceChatCitations(part.text, sources),
-        };
+        const block: ExportBlock =
+          message.role === 'user'
+            ? { kind: 'text', text: part.text }
+            : { kind: 'markdown', source: replaceChatCitations(part.text, sources) };
         if (message.role === 'user' || index === resultIndex) blocks.push(block);
         else if (options.includeProcess) process.push(block);
       } else if (part.type === 'reasoning' && options.includeProcess && part.text.trim()) {
         process.push({
           kind: 'details',
           summary: options.labels.reasoning,
+          presentation: 'reasoning',
           blocks: [{ kind: 'markdown', source: part.text }],
         });
       } else if (part.type === 'tool' && options.includeProcess) {
@@ -63,8 +65,18 @@ export function toChatExportDocument(
         process.push({ kind: 'details', summary: part.displayName, blocks: [] });
       }
     });
-    if (process.length)
-      blocks.unshift({ kind: 'details', summary: options.labels.process, blocks: process });
+    if (process.length) {
+      const seconds = Math.max(
+        1,
+        Math.round((getMessageProcessDurationMs(message.stats) ?? 0) / 1000),
+      );
+      blocks.unshift({
+        kind: 'details',
+        summary: options.labels.process(seconds),
+        presentation: 'process',
+        blocks: process,
+      });
+    }
     for (const part of message.parts) {
       if (part.type !== 'file') continue;
       const name = part.name || options.labels.file;
@@ -94,6 +106,7 @@ export function toChatExportDocument(
     return {
       id: message.id,
       heading: message.role === 'user' ? options.labels.user : options.labels.assistant,
+      presentation: message.role === 'user' ? ('bubble' as const) : ('message' as const),
       metadata,
       blocks,
     };

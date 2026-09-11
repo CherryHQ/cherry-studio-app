@@ -65,13 +65,25 @@ jest.mock('../renderHtml', () => ({
 
 const presentation = {
   width: 360,
-  fontSize: 16,
+  typography: {
+    base: { fontSize: 16, lineHeight: 24 },
+    sm: { fontSize: 14, lineHeight: 20 },
+    lg: { fontSize: 18, lineHeight: 28 },
+    xl: { fontSize: 20, lineHeight: 26 },
+  },
   colors: {
     background: '#ffffff',
     foreground: '#111111',
     muted: '#666666',
     border: '#cccccc',
     link: '#006600',
+    tertiary: '#666666',
+    subtleBorder: '#eeeeee',
+    bubble: '#f0f0f0',
+    secondary: '#f5f5f5',
+    codeBlock: '#f5f5f5',
+    inlineCode: '#eeeeee',
+    inlineCodeForeground: '#111111',
   },
 };
 const savedFile = {
@@ -160,11 +172,11 @@ test('cancelled capture releases a late native file and never publishes a partia
   await expect(session.render({ format: 'markdown' })).rejects.toMatchObject({ code: 'busy' });
   const disposing = session.dispose();
   expect(onDisposed).not.toHaveBeenCalled();
-  mockFiles.set('file:///native.png', 'image');
+  mockFiles.set('file:///native.webp', 'image');
   const release = jest.fn(() => {
-    mockFiles.delete('file:///native.png');
+    mockFiles.delete('file:///native.webp');
   });
-  native.resolve({ uri: 'file:///native.png', width: 360, height: 900, release });
+  native.resolve({ uri: 'file:///native.webp', width: 360, height: 900, release });
   await rejected;
   await disposing;
   expect(release).toHaveBeenCalledTimes(1);
@@ -181,9 +193,9 @@ test('capture output is retained until its asynchronous copy completes', async (
     await copying.promise;
     mockFiles.set(destination, mockFiles.get(source)!);
   });
-  mockFiles.set('file:///native.png', 'image');
+  mockFiles.set('file:///native.webp', 'image');
   const release = jest.fn(() => {
-    mockFiles.delete('file:///native.png');
+    mockFiles.delete('file:///native.webp');
   });
   const session = createDocumentExportSession(
     { kind: 'markdown', source: 'Content' },
@@ -194,14 +206,39 @@ test('capture output is retained until its asynchronous copy completes', async (
   const rendering = session.render({
     format: 'image',
     presentation,
-    capture: async () => ({ uri: 'file:///native.png', width: 360, height: 900, release }),
+    capture: async () => ({ uri: 'file:///native.webp', width: 360, height: 900, release }),
   });
   await started.promise;
   expect(release).not.toHaveBeenCalled();
   copying.resolve();
   const artifact = await rendering;
+  expect(artifact.file).toMatchObject({ filename: 'document.webp', mediaType: 'image/webp' });
   expect(mockFiles.get(artifact.file.uri)).toBe('image');
   expect(release).toHaveBeenCalledTimes(1);
+  await session.dispose();
+});
+
+test.each([
+  { width: 360, height: 16384 },
+  { width: 16384, height: 360 },
+])('rejects WebP dimensions beyond either axis limit: %j', async (dimensions) => {
+  const release = jest.fn();
+  const session = createDocumentExportSession(
+    { kind: 'markdown', source: 'Content' },
+    { readManagedImage: jest.fn(), saveFile: jest.fn() },
+    () => {},
+    () => {},
+  );
+  await expect(
+    session.render({
+      format: 'image',
+      presentation,
+      capture: async () => ({ uri: 'file:///native.webp', ...dimensions, release }),
+    }),
+  ).rejects.toMatchObject({ code: 'size-limit' });
+  expect(mockCopy).not.toHaveBeenCalled();
+  expect(release).toHaveBeenCalledTimes(1);
+  expect(mockFiles.size).toBe(0);
   await session.dispose();
 });
 

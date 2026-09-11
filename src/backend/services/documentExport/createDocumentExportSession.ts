@@ -91,13 +91,13 @@ export function createDocumentExportSession(
         | Awaited<ReturnType<Extract<DocumentExportTarget, { format: 'image' }>['capture']>>
         | undefined;
       const extension =
-        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'png';
+        target.format === 'markdown' ? 'md' : target.format === 'html' ? 'html' : 'webp';
       const mediaType =
         target.format === 'markdown'
           ? 'text/markdown'
           : target.format === 'html'
             ? 'text/html'
-            : 'image/png';
+            : 'image/webp';
       const filename = readableFilename(document.title ?? '', { extension, fallback: 'document' });
       if (target.format === 'markdown') {
         text = markdown;
@@ -139,7 +139,8 @@ export function createDocumentExportSession(
             capture.width < 1 ||
             capture.height < 1 ||
             capture.width * capture.height > 12_000_000 ||
-            capture.height > 16384
+            capture.width > 16383 ||
+            capture.height > 16383
           )
             throw new DocumentExportError('size-limit');
           await new File(capture.uri).copy(file);
@@ -192,6 +193,7 @@ export function createDocumentExportSession(
   }
 
   const session: DocumentExportSession & { cancel(): void } = {
+    document,
     markdown,
     render: (target, context) =>
       run(context?.signal, (signal) => render(target, signal, context?.onProgress)),

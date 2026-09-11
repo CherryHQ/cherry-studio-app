@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PixelRatio, View } from 'react-native';
-import { captureRef, releaseCapture } from 'react-native-view-shot';
 import { WebView } from 'react-native-webview';
 
 import { DocumentExportError, type CaptureExportHtml } from '@/shared/contracts/documentExport';
@@ -84,18 +83,13 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
     if (request.nativeStarted || request.settled || !wrapper.current || !request.height) return;
     request.nativeStarted = true;
     try {
-      const uri = await captureRef(wrapper, { format: 'png', result: 'tmpfile' });
-      let released = false;
+      const { captureWebp } = await import('../utils/captureWebp');
+      if (request.settled) return;
+      const result = await captureWebp(wrapper, input.signal);
       request.finish(undefined, {
-        uri,
+        ...result,
         width: PixelRatio.getPixelSizeForLayoutSize(input.width),
         height: PixelRatio.getPixelSizeForLayoutSize(request.height),
-        release: () => {
-          if (!released) {
-            released = true;
-            releaseCapture(uri);
-          }
-        },
       });
     } catch {
       fail();
@@ -139,15 +133,17 @@ function CaptureSurface({ request }: { request: CaptureRequest }) {
               return;
             }
             const measured = Math.ceil(message.height);
-            const pixels =
-              PixelRatio.getPixelSizeForLayoutSize(input.width) *
-              PixelRatio.getPixelSizeForLayoutSize(measured);
+            const pixelWidth = PixelRatio.getPixelSizeForLayoutSize(input.width);
+            const pixelHeight = PixelRatio.getPixelSizeForLayoutSize(measured);
+            const pixels = pixelWidth * pixelHeight;
             if (
               typeof message.height !== 'number' ||
               !Number.isFinite(message.width) ||
               !Number.isFinite(measured) ||
               measured < 1 ||
               measured > input.maxHeight ||
+              pixelWidth > 16383 ||
+              pixelHeight > 16383 ||
               pixels > input.maxPixels ||
               message.width > input.width + 1
             ) {

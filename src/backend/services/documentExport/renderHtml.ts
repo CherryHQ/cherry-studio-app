@@ -9,7 +9,7 @@ import {
   type ExportPresentation,
 } from '@/shared/contracts/documentExport';
 
-import { safeExportUrl } from './normalizeDocument';
+import { escapeHtml, safeExportUrl } from './normalizeDocument';
 import {
   resolveDocumentAssets,
   type PreparedAsset,
@@ -23,8 +23,14 @@ export async function renderHtml(
   readManagedImage: ReadManagedImage,
   signal: AbortSignal,
 ) {
-  const presentation = { ...inputPresentation, colors: { ...inputPresentation.colors } };
-  validatePresentation(presentation);
+  validatePresentation(inputPresentation);
+  const presentation = {
+    ...inputPresentation,
+    colors: { ...inputPresentation.colors },
+    typography: Object.fromEntries(
+      Object.entries(inputPresentation.typography).map(([key, value]) => [key, { ...value }]),
+    ) as ExportPresentation['typography'],
+  };
   const sources = new Map<string, NonNullable<ExportDocument['assets']>[string]>();
   const issues: DocumentExportIssue[] = [];
   const parser = new MarkdownIt({ html: false, breaks: true, linkify: false, maxNesting: 20 });
@@ -89,7 +95,7 @@ export async function renderHtml(
     }
     return data
       ? `<img src="${data}" alt="${escapeHtml(alt)}">`
-      : `<p class="muted">[${escapeHtml(alt || 'Image')}]</p>`;
+      : `<p class="image-placeholder">[${escapeHtml(alt || 'Image')}]</p>`;
   };
   parser.renderer.rules.image = (tokens, index) =>
     image(tokens[index].attrGet('src') ?? '', tokens[index].content);
@@ -97,29 +103,100 @@ export async function renderHtml(
     blocks
       .map((block) => {
         switch (block.kind) {
+          case 'text':
+            return `<div class="plain-text">${escapeHtml(block.text)}</div>`;
           case 'markdown':
-            return parser.render(block.source);
+            return `<div class="markdown">${parser.render(block.source)}</div>`;
           case 'image':
             return image(`asset:${block.assetId}`, block.alt);
           case 'attachment':
-            return `<p>${link(block.name, block.url)}${block.mediaType ? ` <span class="muted">(${escapeHtml(block.mediaType)})</span>` : ''}</p>`;
+            return `<div class="attachment">${link(block.name, block.url)}${block.mediaType ? ` <span class="muted">${escapeHtml(block.mediaType)}</span>` : ''}</div>`;
           case 'links':
-            return `<ul>${block.items.map((item) => `<li>${link(item.label, item.url)}${safeExportUrl(item.url) ? `<br><span class="muted">${escapeHtml(item.url)}</span>` : ''}</li>`).join('')}</ul>`;
+            return `<ul class="references">${block.items.map((item) => `<li>${link(item.label, item.url)}${safeExportUrl(item.url) ? `<span class="reference-url">${escapeHtml(item.url)}</span>` : ''}</li>`).join('')}</ul>`;
           case 'details':
-            return `<details open><summary>${escapeHtml(block.summary)}</summary>${renderBlocks(block.blocks)}</details>`;
+            return block.blocks.length
+              ? `<details class="${block.presentation ?? 'reasoning'}"><summary>${escapeHtml(block.summary)}</summary><div class="details-content">${renderBlocks(block.blocks)}</div></details>`
+              : `<div class="process-step">${escapeHtml(block.summary)}</div>`;
         }
       })
       .join('\n');
   const body = document.sections
-    .map(
-      (section) =>
-        `<section>${section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : ''}${(section.metadata ?? []).map((item) => `<p class="muted">${escapeHtml(item.label)}: ${escapeHtml(item.value)}</p>`).join('')}${renderBlocks(section.blocks)}</section>`,
-    )
+    .map((section) => {
+      const metadata = (section.metadata ?? [])
+        .map((item) => `<p class="muted">${escapeHtml(item.label)}: ${escapeHtml(item.value)}</p>`)
+        .join('');
+      if (section.presentation === 'bubble') {
+        const attachments = section.blocks.filter(
+          (block) => block.kind === 'image' || block.kind === 'attachment',
+        );
+        const content = section.blocks.filter(
+          (block) => block.kind !== 'image' && block.kind !== 'attachment',
+        );
+        return `<section class="bubble-row" aria-label="${escapeHtml(section.heading ?? '')}"><div class="bubble-column">${attachments.length ? `<div class="attachments">${renderBlocks(attachments)}</div>` : ''}${content.length || metadata ? `<div class="bubble">${metadata}${renderBlocks(content)}</div>` : ''}</div></section>`;
+      }
+      const heading = section.heading
+        ? section.presentation === 'message'
+          ? `<header class="message-heading">${escapeHtml(section.heading)}</header>`
+          : `<h2>${escapeHtml(section.heading)}</h2>`
+        : '';
+      return `<section class="${section.presentation === 'message' ? 'message-row' : 'document-section'}">${heading}<div class="message-content">${metadata}${renderBlocks(section.blocks)}</div></section>`;
+    })
     .join('\n');
-  const { colors, fontSize, width } = presentation;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=${width}, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>
-*{box-sizing:border-box}html,body{margin:0;padding:0;background:${colors.background};color:${colors.foreground}}body{font:${fontSize}px/1.65 -apple-system,BlinkMacSystemFont,Arial,sans-serif;overflow-wrap:anywhere}main{width:100%;padding:24px}h1{font-size:1.5em}h2{font-size:1.2em}h1,h2,h3{line-height:1.35}section+section{border-top:1px solid ${colors.border};margin-top:24px;padding-top:16px}p{margin:12px 0}.muted{color:${colors.muted}}a{color:${colors.link};overflow-wrap:anywhere}img{display:block;max-width:100%;height:auto;margin:12px 0}pre,code{font-family:ui-monospace,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border:1px solid ${colors.border}}table{width:100%;table-layout:fixed;border-collapse:collapse}td,th{border:1px solid ${colors.border};padding:6px;overflow-wrap:anywhere}blockquote{margin:12px 0;padding-left:12px;border-left:3px solid ${colors.border}}details{margin:12px 0}summary{font-weight:600}math{max-width:100%;overflow-wrap:anywhere}ul,ol{padding-left:24px}
-</style></head><body><main>${document.title ? `<h1>${escapeHtml(document.title)}</h1>` : ''}${body}</main></body></html>`;
+  const isConversation = document.sections.some((section) => section.presentation);
+  const { colors, typography, width } = presentation;
+  const { base, sm, lg, xl } = typography;
+  // Match the native message rows and CherryUI Markdown rhythm. The page supplies the
+  // same resolved color tokens and accessibility type scale used by those components.
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtml(document.title ?? '')}</title><style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:${colors.background};color:${colors.foreground}}
+body{font:${base.fontSize}px/${base.lineHeight + 2}px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}
+main{width:100%;max-width:${width}px;margin:0 auto;padding:12px 16px 24px}
+h1,h2,h3,h4,h5,h6,p,ul,ol,pre,blockquote,table,hr{margin:0 0 12px}
+h1,h2,h3,h4,h5,h6,strong,b,th{font-weight:600}
+h1{font-size:${xl.fontSize}px;line-height:${xl.lineHeight}px;margin-bottom:10px}
+h2{font-size:${lg.fontSize}px;line-height:${lg.lineHeight}px;margin-bottom:8px}
+h3,h4,h5{font-size:${base.fontSize}px;line-height:${base.lineHeight}px;margin-bottom:8px}
+h4,h5,h6{margin-bottom:6px}h6{font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+.muted,.image-placeholder{color:${colors.muted};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+a{color:${colors.link};text-decoration:none;overflow-wrap:anywhere}a:focus-visible,summary:focus-visible{outline:2px solid ${colors.link};outline-offset:3px}
+.document-section+.document-section{padding-top:24px}
+.bubble-row{display:flex;justify-content:flex-end;padding:8px 0}
+.bubble-column{width:88%;display:flex;align-items:flex-end;flex-direction:column;gap:8px;min-width:0}
+.bubble{max-width:100%;min-width:0;padding:10px 16px;border-radius:18px;background:${colors.bubble};line-height:${base.lineHeight}px}
+.plain-text{white-space:pre-wrap}.bubble>.plain-text+.plain-text{margin-top:8px}
+.attachments{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;max-width:100%;min-width:0}
+.attachment{max-width:100%;border:1px solid ${colors.border};border-radius:12px;padding:10px 12px;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+.attachment .muted{display:block}
+.message-row{padding:12px 0;display:flex;flex-direction:column;gap:10px}
+.message-heading{font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;font-weight:600}
+.message-content{display:flex;flex-direction:column;gap:16px;min-width:0}
+.message-content>*,.markdown>:last-child,.details-content>:last-child,.bubble>:last-child{margin-bottom:0}
+img{display:block;max-width:100%;height:auto;border-radius:12px;margin:0 0 12px}
+.attachments>img{max-height:320px;max-width:100%;object-fit:contain;margin:0}
+pre,code{font-family:"GeistMono-Regular","SFMono-Regular",Consolas,monospace;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+code{background:${colors.inlineCode};color:${colors.inlineCodeForeground};border-radius:4px;padding:2px 4px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;border-radius:12px;background:${colors.codeBlock}}
+pre code{color:${colors.foreground};background:transparent;border:0;padding:0}
+table{width:100%;table-layout:fixed;border-spacing:0;border:1px solid ${colors.border};border-radius:12px;overflow:hidden;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}
+td,th{padding:9px 12px;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:${colors.secondary}}tr+tr>*{border-top:1px solid ${colors.border}}thead+tbody tr:first-child>*{border-top:1px solid ${colors.border}}td+td,th+th{border-left:1px solid ${colors.border}}
+blockquote{padding:2px 0 2px 12px;border-left:3px solid ${colors.border};color:${colors.muted}}blockquote>:last-child{margin-bottom:0}
+hr{border:0;border-top:1px solid ${colors.border}}
+ul,ol{padding-left:32px}li+li{margin-top:6px}li>p{margin-bottom:6px}li>ul,li>ol{margin-top:6px;margin-bottom:0}
+details{min-width:0}summary{display:flex;align-items:center;gap:4px;min-height:40px;padding:4px 8px;margin:0 -8px;list-style:none;cursor:pointer;color:${colors.tertiary};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;font-weight:400;border-radius:8px}
+summary::-webkit-details-marker{display:none}summary::after{content:"";width:6px;height:6px;border-top:1.5px solid currentColor;border-right:1.5px solid currentColor;transform:rotate(45deg);flex-shrink:0;margin-left:4px}
+details[open]>summary::after{transform:rotate(135deg)}
+.process{border-bottom:1px solid ${colors.subtleBorder}}
+.process[open]{padding-bottom:16px}
+.details-content{display:flex;flex-direction:column;gap:4px}
+details:not([open])>.details-content{display:none}
+.process>.details-content{margin-top:12px}
+.reasoning>.details-content{margin-top:6px;border-left:2px solid ${colors.border};padding-left:12px}
+.process .details-content summary{min-height:32px;padding-top:2px;padding-bottom:2px}
+.process-step{min-height:32px;color:${colors.tertiary};font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px;padding:2px 0;display:flex;align-items:center}
+.references{list-style:none;padding:0;font-size:${sm.fontSize}px;line-height:${sm.lineHeight}px}.reference-url{display:block;color:${colors.muted};overflow-wrap:anywhere}
+math{max-width:100%;overflow-wrap:anywhere}math[display="block"]{padding:12px;margin:0 0 12px;text-align:center}
+</style></head><body><main>${document.title && !isConversation ? `<h1>${escapeHtml(document.title)}</h1>` : ''}${body}</main></body></html>`;
   signal.throwIfAborted();
   return { html, issues };
 }
@@ -129,21 +206,23 @@ function validatePresentation(value: ExportPresentation) {
     !Number.isFinite(value.width) ||
     value.width < 280 ||
     value.width > 800 ||
-    !Number.isFinite(value.fontSize) ||
-    value.fontSize < 12 ||
-    value.fontSize > 24 ||
+    ['base', 'sm', 'lg', 'xl'].some((key) => {
+      const size = value.typography[key as keyof ExportPresentation['typography']];
+      return (
+        !size ||
+        !Number.isFinite(size.fontSize) ||
+        size.fontSize < 12 ||
+        size.fontSize > 40 ||
+        !Number.isFinite(size.lineHeight) ||
+        size.lineHeight < size.fontSize ||
+        size.lineHeight > 56
+      );
+    }) ||
     Object.values(value.colors).some(
       (color) => !/^(#[a-f\d]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color),
     )
   )
     throw new DocumentExportError('invalid-input');
-}
-
-export function escapeHtml(value: string): string {
-  return value.replace(
-    /[&<>"']/g,
-    (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!,
-  );
 }
 
 function link(label: string, url?: string) {

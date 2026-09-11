@@ -1,12 +1,14 @@
 import type { ExportBlock, ExportDocument } from '@/shared/contracts/documentExport';
 
-import { escapeMarkdown, safeExportUrl } from './normalizeDocument';
+import { escapeHtml, escapeMarkdown, safeExportUrl } from './normalizeDocument';
 
 export function renderMarkdown(document: ExportDocument): string {
   const renderBlocks = (blocks: readonly ExportBlock[]): string =>
     blocks
       .map((block) => {
         switch (block.kind) {
+          case 'text':
+            return block.text.split(/\r?\n/).map(escapeMarkdown).join('  \n');
           case 'markdown':
             return block.source;
           case 'image': {
@@ -21,7 +23,9 @@ export function renderMarkdown(document: ExportDocument): string {
           case 'links':
             return block.items.map((item) => `- ${link(item.label, item.url)}`).join('\n');
           case 'details':
-            return `### ${escapeMarkdown(block.summary)}\n\n${renderBlocks(block.blocks)}`;
+            return block.blocks.length
+              ? `<details>\n<summary>${escapeHtml(block.summary)}</summary>\n\n${renderBlocks(block.blocks)}\n\n</details>`
+              : escapeMarkdown(block.summary);
         }
       })
       .join('\n\n');
