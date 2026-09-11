@@ -20,6 +20,7 @@ export function useBackgroundActivityNavigation(): void {
     if (!navigationKey || !response) return;
     const { data } = response.notification.request.content;
     if (
+      !data ||
       data.owner !== BACKGROUND_NOTIFICATION_OWNER ||
       response.actionIdentifier !== DEFAULT_ACTION_IDENTIFIER
     )

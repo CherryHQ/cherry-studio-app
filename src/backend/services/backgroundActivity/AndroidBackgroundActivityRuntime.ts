@@ -64,11 +64,14 @@ export class AndroidBackgroundActivityRuntime extends BaseService {
 
   protected async onInit(): Promise<void> {
     if (Platform.OS !== 'android') return;
-    const [background, notifications] = await Promise.all([
-      import('react-native-background-actions'),
-      import('expo-notifications'),
-    ]);
-    this.background = background.default;
+    // Match the other native services' lazy loading so iOS never evaluates
+    // these modules and CommonJS test environments can use the native mocks.
+    const { default: background } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
+      require('react-native-background-actions') as typeof import('react-native-background-actions');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
+    const notifications = require('expo-notifications') as Notifications;
+    this.background = background;
     this.notifications = notifications;
     notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -110,7 +113,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService {
     if (this.backgroundLimitReached && AppState.currentState !== 'active') {
       void Promise.resolve()
         .then(() => onInterrupt?.(backgroundLimitError()))
-        .catch((error: unknown) => logger.warn('Background task interruption failed', error));
+        .catch((error: unknown) => logger.warn('Background task interruption failed', { error }));
       return { release() {} };
     }
     const lease: LeaseRecord = { onInterrupt };

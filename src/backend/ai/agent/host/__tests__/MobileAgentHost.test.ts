@@ -1867,7 +1867,7 @@ describe('MobileAgentHost', () => {
     persistence.resolve();
     await interrupted;
     expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
-    expect(host.getSessionStatus(session.id).status).toBe('cancelled');
+    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {
