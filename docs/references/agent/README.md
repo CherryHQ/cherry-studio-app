@@ -85,7 +85,9 @@ while transport details remain deferred to a separately versioned adapter contra
   Agent instructions remain a separate role and style section. Capability guidance is included only
   when its supporting tool is in the frozen snapshot. Runtime adapters do not append separate
   application policy, but may add guidance for binding-specific mechanics such as Pi's deferred MCP
-  catalog.
+  catalog. Bundled plugin guides follow the same turn boundary: only sections supported by the
+  Agent's executable plugin tools enter the prompt, with plugin/revision attribution and no history
+  mutation. Guide workflows remain subordinate to the user's request and Agent instructions.
 - Pi owns the model → tool → result loop. Application adapters retain permission, credential,
   managed-file, and approval authority.
 - Managed image and bounded text input are resolved by the Host before execution. Arbitrary paths
@@ -113,9 +115,9 @@ while transport details remain deferred to a separately versioned adapter contra
 | [Agent Persistence](./agent-persistence.md) | SQLite schema, store adapter, deletion semantics, and current limitations |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
-| [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse and instruction-resource designs |
+| [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |
 | [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu personal authorization, and CLI-to-JavaScript feasibility |
-| [Agent Skills](./agent-skills.md) | Explicitly deferred Mobile Skill policy and trust boundary |
+| [Agent Skills](./agent-skills.md) | Bundled plugin guide boundary and deferred general Mobile Skill policy |
 
 ## Related
 

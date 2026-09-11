@@ -381,7 +381,7 @@ describe('turn preparation', () => {
     const harness = createHarness();
     harness.resolveRuntimeTools.mockImplementationOnce(async (_agentId, onUnavailable) => {
       onUnavailable?.('Feishu document tools could not be loaded (network).');
-      return [];
+      return { tools: [], pluginGuides: [] };
     });
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
     expect(plan.tools).toHaveLength(1);
@@ -451,7 +451,10 @@ function createHarness() {
     async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
   );
   const resolveRuntimeTools = jest.fn(
-    async (_agentId: string, _onUnavailable?: (warning: string) => void) => [configuredTool],
+    async (_agentId: string, _onUnavailable?: (warning: string) => void) => ({
+      tools: [configuredTool],
+      pluginGuides: [],
+    }),
   );
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({

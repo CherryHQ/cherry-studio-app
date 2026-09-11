@@ -3,9 +3,11 @@ import { createFeishuClient } from './createFeishuClient';
 import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
 import { FEISHU_CREDENTIAL_FIELDS, FeishuUserCredentialSchema } from './feishuCredentials';
 import { FEISHU_REMOTE_TOOL_POLICY, FEISHU_TOOL_POLICY, getFeishuToolPolicy } from './feishuTools';
+import { feishuGuide } from './guide';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
+  guide: feishuGuide,
   catalog: {
     id: 'feishu',
     icon: 'feishu',

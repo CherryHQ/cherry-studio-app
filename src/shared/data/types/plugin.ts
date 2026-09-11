@@ -33,7 +33,7 @@ export type PluginAuthorizationMethod = PluginCredentialMethod | PluginInteracti
 
 /**
  * Safe catalog projection: no credentials, executable code, or transport configuration.
- * Display copy is translated under `plugins.catalog.<id>` so every string has one source.
+ * Display copy is translated under `plugins.catalog.<id>`; the guide preview retains its authored text.
  */
 export type PluginCatalogEntry = {
   readonly id: PluginId;
@@ -45,6 +45,8 @@ export type PluginCatalogEntry = {
     readonly authorizationManagement?: string;
   };
   readonly authMethods: readonly PluginAuthorizationMethod[];
+  /** Full bundled guide for a read-only preview, with all authored sections joined. */
+  readonly guide?: { readonly revision: number; readonly content: string };
 };
 
 /** Public connection metadata; credentials remain backend-owned. */

@@ -11,20 +11,81 @@ are in the [roadmap](../../../../docs/references/agent/built-in-mcp-roadmap.md).
 | --- | --- |
 | `index.ts` | Public entry point for bootstrap and the MCP runtime |
 | `pluginDefinition.ts`, `pluginRegistry.ts` | Plugin registration, catalog projection and admitted tool policy |
+| `pluginGuide.ts` | Guide data types, authoring validation and the turn instruction snapshot contract |
 | `createPluginsModule.ts` | Connect/disconnect workflow and per-plugin mutation ordering |
 | `authorization/` | Method runtimes and observers, native credential storage, and their backend-only contracts |
 | `transport/` | Grant-bound clients, fixed-endpoint HTTP and `validatePluginConnection` |
-| `plugins/amap.ts` | Self-contained Amap definition |
-| `plugins/github/` | GitHub definition, OAuth App authorization with PKCE, account identity, token rotation and revocation |
-| `plugins/feishu/` | Feishu authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
+| `plugins/amap/` | Amap definition and workflow guide |
+| `plugins/github/` | GitHub definition, workflow guide, OAuth App authorization with PKCE, account identity, token rotation and revocation |
+| `plugins/feishu/` | Feishu workflow guide, authorization, shared tool/scope manifest, hosted/local client composition, curated Base/task/calendar operations and tests |
 
 Keep provider-private code and tests beneath that provider. `authorization` and `transport` are
-internal responsibility groups; they do not add public barrels. Provider directory barrels expose
-only their definition.
+internal responsibility groups; they do not add public barrels. Each plugin exposes only its
+definition through `plugins/<id>/index.ts`.
 
 The [connection page](../../../frontend/features/plugin/detail/connect/PluginConnectScreen.tsx)
 selects between `CredentialConnect` and `InteractiveConnect`. `useInteractiveConnect` owns route
 observation, browser actions and form state; backend observers own polling and completion.
+
+## Plugin Guides
+
+GitHub, Amap and Feishu each own a plain TypeScript guide module at `plugins/<id>/guide.ts` beside
+their plugin definition. `PluginDefinition.guide` references its exported
+data directly. Each guide contains a positive integer `revision` and ordered `sections`; each section
+has a `content` string and a `requiredTools` array of raw MCP names. Template strings can retain
+Markdown formatting for the existing preview renderer. For example:
+
+```ts
+export const feishuGuide = {
+  revision: 1,
+  sections: [
+    { requiredTools: [], content: `Use this plugin for Feishu documents.` },
+    {
+      requiredTools: ['fetch-doc', 'update-doc'],
+      content: `Read the current document before making a targeted update.`,
+    },
+  ],
+} satisfies PluginGuideDefinition;
+```
+
+An empty `requiredTools` array supplies common context; other sections require **all** named tools on
+the same connection. Registration validates the revision, 1–32 nonempty sections, admitted and unique
+prerequisites, and an 8,192-byte UTF-8 limit for the combined trimmed text including section separators.
+A missing guide is optional and does not disable tools; invalid guide data is rejected with the other
+registration errors. A connection with no eligible sections contributes no guide.
+
+Guides use the ordinary module pipeline without custom loaders, marker parsing, filesystem access or
+network reads. Update `revision` with content changes for attribution; it has no cache-invalidation
+role. This is bundled instruction data, not an importer or an executable Skill system.
+
+The MCP descriptor carries the bundled plugin id from the stored server record. The Agent tool
+resolver uses only descriptors admitted by the current Agent's bindings and effective tool policy to
+select guides through the existing registry. Remote names and descriptions cannot identify a plugin.
+Each connection produces at most one frozen guide snapshot with `pluginId`, `serverId`, `revision`
+and selected text. Connections are ordered by plugin id and server id; sections retain authored order.
+Tools from different connections cannot collectively satisfy a workflow's prerequisites.
+
+Keep guides focused on cross-tool workflows and provider-specific pitfalls, not one section per tool.
+Tool descriptions and input schemas own parameter formats, pagination and limits; shared prompt rules
+own target identification, preserving unrelated fields and uncertain writes. Only add guidance that
+helps select or sequence tools beyond those existing descriptions.
+
+Sections retain their own prerequisites so partial grants keep usable workflows. When hosted discovery
+fails or one schema is unsupported, surviving tools still select their guides; the Host also retains
+the existing discovery warnings for the same turn.
+
+The Host keeps these snapshots in `TurnPlan` beside the executable tools and includes them once in
+the application prompt. Pi receives prepared text only. Guides do not change saved Agent instructions,
+chat history, persisted inference metadata, permissions, approval or resource grants. Their text is
+counted in the existing live context budget; it is not silently truncated. Runtime rules and the user's
+request and Agent instructions take precedence over guide workflows. Raw names are discovery hints;
+the model must still inspect each tool's current signature before calling its exact catalog alias.
+
+Changes to bindings, disabled tools, connection availability or bundled revisions affect the next
+prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also
+projects a detached full guide preview by joining all sections. The detail page lazily renders that
+read-only preview when expanded, using the shared Markdown renderer without native text selection.
+Previewing a guide does not enable the plugin or any Agent tool.
 
 ## Workflow And Lifetime
 

@@ -301,7 +301,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
             // edits, invalidation, or reconnects cannot retarget a frozen tool.
             endpointUrl: server.endpointUrl,
             ...(server.origin === 'builtin'
-              ? { effect: getBuiltInMcpToolEffect(server.builtinId, tool.name) }
+              ? {
+                  pluginId: server.builtinId,
+                  effect: getBuiltInMcpToolEffect(server.builtinId, tool.name),
+                }
               : {}),
             generation: state.generation,
             inputSchema,
