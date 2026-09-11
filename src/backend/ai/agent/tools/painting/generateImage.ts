@@ -17,7 +17,7 @@ import type { GenerateImageOutput } from '@cherrystudio/universal/ai/builtinTool
 
 import type { AiService, AiUsageAttribution } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { ProviderRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import type { ModelService } from '@/backend/data/services/ModelService';
 import type { CreateInternalEntryInput } from '@/backend/services/file/fileStorage';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { ResolvedFile } from '@/shared/contracts';
@@ -28,7 +28,7 @@ import {
   FileEntryIdSchema,
   readableFilename,
 } from '@/shared/data/types/file';
-import { isUniqueModelId, parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 import type { TurnFileScope } from '../../resources/managedFileResolver';
@@ -75,7 +75,7 @@ export type PaintingToolDependencies = {
     resolve(id: FileEntryId): Promise<ResolvedFile | null>;
   };
   preference: Pick<PreferenceService, 'get'>;
-  providerRegistry: Pick<ProviderRegistryService, 'getImageGenerationSupport'>;
+  models: Pick<ModelService, 'getById'>;
 };
 
 export type PaintingError = { error: string };
@@ -91,16 +91,15 @@ export function toGenerateImageOutput(entries: readonly FileEntry[]): GenerateIm
 }
 
 export async function resolveConfiguredPaintingModel(
-  dependencies: Pick<PaintingToolDependencies, 'preference' | 'providerRegistry'>,
+  dependencies: Pick<PaintingToolDependencies, 'preference' | 'models'>,
 ): Promise<ConfiguredPaintingModel | null> {
   const uniqueModelId = await dependencies.preference.get('feature.paintings.default_model_id');
   if (!isUniqueModelId(uniqueModelId)) {
     return null;
   }
 
-  const { modelId, providerId } = parseUniqueModelId(uniqueModelId);
-  const support = dependencies.providerRegistry.getImageGenerationSupport(providerId, modelId);
-  return { support: support ?? null, uniqueModelId };
+  const model = await dependencies.models.getById(uniqueModelId);
+  return model ? { support: model.imageGeneration ?? null, uniqueModelId } : null;
 }
 
 export async function generateImageFromPrompt(

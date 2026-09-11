@@ -431,8 +431,9 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
           scenario.paintingModel ? scenario.paintingModel.uniqueModelId : null,
         ),
       },
-      providerRegistry: {
-        getImageGenerationSupport: () => scenario.paintingModel?.support ?? null,
+      models: {
+        getById: async () =>
+          scenario.paintingModel ? { imageGeneration: scenario.paintingModel.support } : null,
       },
     } as unknown as SystemCapabilitySourceDependencies['painting'],
     preference: {
