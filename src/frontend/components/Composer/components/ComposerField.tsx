@@ -6,7 +6,11 @@ import { useTranslation } from 'react-i18next';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
 
-import { useComposerActions, useComposerMeta } from '../context/ComposerProvider';
+import {
+  useComposerActions,
+  useComposerMeta,
+  useComposerPresentationActions,
+} from '../context/ComposerProvider';
 import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
 
 /**
@@ -23,6 +27,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
+  const { activateInput } = useComposerPresentationActions();
   const linkColor = useThemeColor('primary');
 
   const handlePaste = useCallback(
@@ -46,11 +51,18 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
     };
   }, [linkColor]);
 
+  const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
+    // Focus is the only event that is allowed to reconnect the dock after a
+    // sheet or native picker has replaced the input context.
+    activateInput();
+    onFocus?.();
+  }, [activateInput, onFocus]);
+
   return (
     <Composer.Input
       markdownStyle={markdownStyle}
       onBlur={onBlur}
-      onFocus={onFocus}
+      onFocus={handleFocus}
       onPaste={handlePaste}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}

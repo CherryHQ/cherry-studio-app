@@ -35,7 +35,7 @@ let mockComposerState: ReturnType<typeof useComposerState> | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const { Text, View } = jest.requireActual('react-native');
+  const { View } = jest.requireActual('react-native');
 
   function MockComposer(props: MockComposerProps) {
     mockComposerProps = props;
@@ -47,9 +47,6 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
 
   return {
-    Button: Object.assign((props: Record<string, unknown>) => React.createElement(View, props), {
-      Label: Text,
-    }),
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
     Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: { show: mockToastShow } }),
@@ -180,20 +177,15 @@ describe('ComposerSurface', () => {
       await send;
     });
     expect(mockComposerState).toEqual({
-      draft: 'new text',
-      attachments: [added],
+      draft: 'original\nnew text',
+      attachments: [added, original],
     });
-    expect(mockAlertShow).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledTimes(1);
-    const restore = () =>
-      renderer!.root.findByProps({ testID: 'composer-restore-draft' }).props.onPress();
-    act(restore);
-    expect(mockComposerState?.draft).toBe('new text');
-    act(() => mockComposerActions?.setDraft('edited after confirmation'));
-    act(restore);
-    expect(mockComposerState?.draft).toBe('edited after confirmation');
-    act(restore);
-    expect(mockComposerState).toEqual({ draft: 'original', attachments: [original] });
+    expect(mockAlertShow).toHaveBeenCalledTimes(1);
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'attachments.sendRejected',
+      description: 'scan.pdf\n\nattachments.issue.document-empty\n\nattachments.draftKept',
+    });
+    expect(mockToastShow).not.toHaveBeenCalled();
   });
 
   it('uses caller-owned action and failure labels', async () => {
@@ -221,30 +213,6 @@ describe('ComposerSurface', () => {
       label: 'Image failed',
       variant: 'danger',
     });
-  });
-
-  it('does not restore over a next draft that was edited and then emptied', async () => {
-    const pending = deferred<void>();
-    render(
-      <ComposerSurface onSend={() => pending.promise} onStop={jest.fn()} streaming={false}>
-        <StateProbe />
-      </ComposerSurface>,
-      'original',
-    );
-    let send: Promise<void> | undefined;
-    act(() => {
-      send = Promise.resolve(mockComposerProps?.onSend());
-    });
-    act(() => {
-      mockComposerActions?.setDraft('next');
-      mockComposerActions?.setDraft('');
-    });
-    await act(async () => {
-      pending.reject(new Error('rejected'));
-      await send;
-    });
-    expect(mockComposerState?.draft).toBe('');
-    expect(renderer!.root.findByProps({ testID: 'composer-restore-draft' })).toBeDefined();
   });
 
   it('unmounts the attachment row after a successful send clears it', async () => {

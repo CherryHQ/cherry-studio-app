@@ -75,7 +75,7 @@ describe('ModelPickerDrawer', () => {
     act(() => renderer.unmount());
   });
 
-  test('keeps the established search size after blur and clearing', () => {
+  test('expands while searching and collapses only after an empty search loses focus', () => {
     const sheet = () => renderer.root.findByProps({ testID: 'model-picker-surface' });
     const search = () => renderer.root.findByProps({ testID: 'model-picker-search' });
 
@@ -89,7 +89,7 @@ describe('ModelPickerDrawer', () => {
     expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
 
     act(() => search().props.onClear());
-    expect(sheet().props.accessibilityValue).toEqual({ text: 'full' });
+    expect(sheet().props.accessibilityValue).toEqual({ text: 'large' });
   });
 
   test('keeps only caller-compatible models and uses the caller empty copy', () => {

@@ -63,7 +63,9 @@ export function EffortSlider({
 
   const handleCommit = useCallback(
     (index: number) => {
-      // Confirm only the committed stop; cancelled drags do not change the value.
+      // Fires on every stop the drag crosses (not only on final value change),
+      // so a light selection tick lands on each detent — the tactile half of
+      // the snapping. Fire-and-forget; unsupported devices just no-op.
       void Haptics.selectionAsync().catch(() => undefined);
       const option = options[index];
       if (option && option.value !== value) {

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import type { Agent } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -37,13 +37,6 @@ export function useChatInputAgentModelSelection(
   persistModel: PersistModelSelection,
   onPersistenceError?: ModelPersistenceErrorHandler,
 ) {
-  const activeAgentId = useRef<string | undefined>(agentId);
-  useLayoutEffect(() => {
-    activeAgentId.current = agentId;
-    return () => {
-      activeAgentId.current = undefined;
-    };
-  }, [agentId]);
   const [overrides, setOverrides] = useState<ReadonlyMap<string, ModelSelectionOverride>>(
     () => new Map(),
   );
@@ -139,8 +132,8 @@ export function useChatInputAgentModelSelection(
                 }
                 return next;
               });
-              if (activeAgentId.current === targetAgentId) onPersistenceError?.(error, target);
             }
+            onPersistenceError?.(error, target);
             continue;
           }
         }

@@ -51,35 +51,6 @@ describe('useChatInputReasoningEffortSelection', () => {
     });
   });
 
-  test('resets unsupported effort once without resurrecting it when models switch back', async () => {
-    let snapshot: Snapshot | undefined;
-    let renderer: ReactTestRenderer | undefined;
-    const renderHarness = (availableEfforts: readonly ChatInputReasoningEffort[]) => (
-      <Harness
-        agentId="agent-a"
-        availableEfforts={availableEfforts}
-        onSnapshot={(value) => {
-          snapshot = value;
-        }}
-      />
-    );
-    await act(async () => {
-      renderer = create(renderHarness(['default', 'low', 'max']));
-    });
-    await act(async () => snapshot?.selectReasoningEffort('max'));
-    await act(async () => renderer?.update(renderHarness(['default', 'low', 'high'])));
-    expect(snapshot).toMatchObject({
-      reasoningEffort: 'default',
-      isReasoningEffortSelected: false,
-      wasReset: true,
-    });
-    await act(async () => renderer?.update(renderHarness(['default', 'low', 'max'])));
-    expect(snapshot?.reasoningEffort).toBe('default');
-    await act(async () => snapshot?.selectReasoningEffort('low'));
-    expect(snapshot?.wasReset).toBe(false);
-    await act(async () => renderer?.unmount());
-  });
-
   test('clears a composer selection when the Agent changes', async () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;

@@ -1,9 +1,9 @@
 import CameraIcon from '@cherrystudio/app-icons/icons/camera';
 import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaperclipIcon from '@cherrystudio/app-icons/icons/paperclip';
-import { Composer, useToast } from '@cherrystudio/ui/components';
+import { Composer } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
-import { type PropsWithChildren, type RefObject, useCallback, useEffect, useRef } from 'react';
+import { type PropsWithChildren, type RefObject, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -29,8 +29,8 @@ const logger = loggerService.withContext('ComposerMenu');
  * has nothing to add and narrows media to images, so unsupported documents are
  * never offered there.
  *
- * Opening it preserves the current keyboard state. Choosing camera, photos, or files
- * closes the menu, transfers input, then opens its picker;
+ * Opening it leaves the keyboard **up**. Choosing camera, photos, or files
+ * closes the menu, dismisses and blurs the field, then opens its picker;
  * caller-owned tool rows only close the menu and keep the input context live.
  *
  * The keyboard-preserving overlay follows the live ＋ position through input
@@ -39,7 +39,6 @@ const logger = loggerService.withContext('ComposerMenu');
  */
 type ComposerMenuProps = PropsWithChildren<{
   media?: 'all' | 'images';
-  onOpen?: () => void;
   onPickFiles?: () => void;
   triggerRef?: RefObject<View | null>;
 }>;
@@ -47,19 +46,10 @@ type ComposerMenuProps = PropsWithChildren<{
 export function ComposerMenu({
   children,
   media = 'all',
-  onOpen,
   onPickFiles,
   triggerRef,
 }: ComposerMenuProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
   const { addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const openDocumentPicker = useComposerDocumentPicker();
@@ -115,27 +105,22 @@ export function ComposerMenu({
   }, [addAttachments, runInputReplacement]);
   const openFiles = useCallback(async () => {
     if (onPickFiles) {
-      onPickFiles();
+      await runInputReplacement(onPickFiles);
     } else {
       await openDocumentPicker();
     }
-  }, [onPickFiles, openDocumentPicker]);
+  }, [onPickFiles, openDocumentPicker, runInputReplacement]);
   // A picker that fails to open leaves no trace otherwise: the menu has already
   // closed, so the gesture just looks ignored.
-  const present = useCallback(
-    (label: string, open: () => Promise<void>) => {
-      void open().catch((error) => {
-        logger.warn(`${label} picker failed`, error instanceof Error ? error : { error });
-        if (mounted.current) toast.show({ label: t('chat.input.pickerFailed'), variant: 'danger' });
-      });
-    },
-    [t, toast],
-  );
+  const present = useCallback((label: string, open: () => Promise<void>) => {
+    void open().catch((error) => {
+      logger.warn(`${label} picker failed`, error instanceof Error ? error : { error });
+    });
+  }, []);
 
   return (
     <Composer.Menu
       accessibilityLabel={t('chat.media.attach')}
-      onOpen={onOpen}
       testID="composer-menu"
       triggerRef={triggerRef}
     >

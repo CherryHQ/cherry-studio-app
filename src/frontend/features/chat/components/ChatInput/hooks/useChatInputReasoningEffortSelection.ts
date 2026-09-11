@@ -19,30 +19,25 @@ export function useChatInputReasoningEffortSelection(
   reasoningEfforts: readonly ChatInputReasoningEffort[],
   agentId?: string | null,
 ) {
-  const [wasReset, setWasReset] = useState(false);
   const [override, setOverride] = useState<ReasoningEffortOverride | null>(null);
 
   let activeOverride = override;
   if (
     activeOverride &&
-    (activeOverride.agentId !== (agentId ?? null) ||
-      !reasoningEfforts.includes(activeOverride.reasoningEffort))
+    (activeOverride.agentId !== (agentId ?? null) || reasoningEfforts.length === 0)
   ) {
-    setWasReset(activeOverride.agentId === (agentId ?? null) && reasoningEfforts.length > 0);
     activeOverride = null;
     setOverride(null);
   }
 
   const selectReasoningEffort = useCallback(
     (reasoningEffort: ChatInputReasoningEffort) => {
-      setWasReset(false);
       setOverride({ agentId: agentId ?? null, reasoningEffort });
     },
     [agentId],
   );
 
   return {
-    wasReset,
     isReasoningEffortSelected: activeOverride !== null,
     reasoningEffort: resolveAvailableChatInputReasoningEffort(
       activeOverride?.reasoningEffort ?? CHAT_INPUT_DEFAULT_REASONING_EFFORT,

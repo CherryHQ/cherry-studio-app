@@ -3,7 +3,7 @@ import {
   REASONING_EFFORT,
   type ReasoningEffort,
 } from '@cherrystudio/provider-registry';
-import { deriveThinkingOptions } from '@cherrystudio/universal/ai/reasoning';
+import { deriveThinkingOptions, nearestThinkingOption } from '@cherrystudio/universal/ai/reasoning';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import type { Model } from '@/shared/data/types/model';
@@ -108,7 +108,10 @@ export function resolveAvailableChatInputReasoningEffort(
     return normalizedTarget;
   }
 
-  return getFallbackChatInputReasoningEffort(normalizedEfforts);
+  return (
+    nearestThinkingOption(target, normalizedEfforts) ??
+    getFallbackChatInputReasoningEffort(normalizedEfforts)
+  );
 }
 
 export function getChatInputReasoningEffortSnapshot(

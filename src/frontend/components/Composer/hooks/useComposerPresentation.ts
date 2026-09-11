@@ -1,46 +1,50 @@
 import type { ComposerInputHandle } from '@cherrystudio/ui/components';
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useMemo, useState } from 'react';
 import { KeyboardController } from 'react-native-keyboard-controller';
 
-/** Only explicitly presented replacement surfaces suspend this composer's dock. */
+/** Editing belongs to the whole composer, including its menus and pickers. */
 export function useComposerPresentation(inputRef: RefObject<ComposerInputHandle | null>) {
-  const activeReplacement = useRef<symbol | undefined>(undefined);
-  const mounted = useRef(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [isKeyboardTrackingEnabled, setIsKeyboardTrackingEnabled] = useState(true);
 
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-      activeReplacement.current = undefined;
-    };
+  const activateInput = useCallback(() => {
+    setIsEditing(true);
+    setIsKeyboardTrackingEnabled(true);
   }, []);
 
+  const dismissInput = useCallback(() => {
+    setIsEditing(false);
+    inputRef.current?.blur();
+  }, [inputRef]);
+
   const runInputReplacement = useCallback(
-    async <TValue>(present: () => Promise<TValue>): Promise<TValue | undefined> => {
-      if (!mounted.current || activeReplacement.current) return;
-      const operation = Symbol();
-      activeReplacement.current = operation;
+    async <TValue>(present: () => Promise<TValue> | TValue): Promise<TValue> => {
+      // Preserve editing while detaching the dock. On Android an external
+      // Activity can otherwise restore stale keyboard coordinates and move
+      // the composer away from its hit area.
       setIsKeyboardTrackingEnabled(false);
+      inputRef.current?.blur();
+
       try {
-        inputRef.current?.blur();
         await KeyboardController.dismiss();
-        // Give the outgoing menu its removal commit before presenting native UI.
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        if (mounted.current && activeReplacement.current === operation) {
-          return await present();
-        }
       } finally {
-        if (activeReplacement.current === operation) {
-          activeReplacement.current = undefined;
-          if (mounted.current) setIsKeyboardTrackingEnabled(true);
-        }
+        // Let the menu's closed UI become inert before handing off to a picker.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       }
+
+      return present();
     },
     [inputRef],
   );
 
-  const state = useMemo(() => ({ isKeyboardTrackingEnabled }), [isKeyboardTrackingEnabled]);
-  const actions = useMemo(() => ({ runInputReplacement }), [runInputReplacement]);
+  const state = useMemo(
+    () => ({ isEditing, isKeyboardTrackingEnabled }),
+    [isEditing, isKeyboardTrackingEnabled],
+  );
+  const actions = useMemo(
+    () => ({ activateInput, dismissInput, runInputReplacement }),
+    [activateInput, dismissInput, runInputReplacement],
+  );
+
   return { actions, state };
 }

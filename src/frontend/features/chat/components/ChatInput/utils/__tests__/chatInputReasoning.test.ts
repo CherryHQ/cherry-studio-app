@@ -66,12 +66,12 @@ describe('chat input reasoning', () => {
     expect(getChatInputReasoningEffortOption('xhigh')?.labelKey).toBe('chat.reasoning.xhigh');
   });
 
-  test('uses the model default when a previous selection is unsupported', () => {
+  test('projects a previous model selection onto the next model without adding unsupported levels', () => {
     expect(resolveAvailableChatInputReasoningEffort('max', ['default', 'low', 'xhigh'])).toBe(
-      'default',
+      'xhigh',
     );
     expect(resolveAvailableChatInputReasoningEffort('none', ['default', 'low', 'high'])).toBe(
-      'default',
+      'low',
     );
     expect(
       getChatInputReasoningEffortsForModel(createModel({ reasoning: { selectableEfforts: [] } })),
@@ -85,7 +85,7 @@ describe('chat input reasoning', () => {
     );
     expect(getChatInputReasoningEffortSnapshot('high', true)).toBe('high');
     expect(getChatInputReasoningEffortSnapshot('low', true, ['default', 'low', 'high'])).toBe(
-      'default',
+      'low',
     );
   });
 });

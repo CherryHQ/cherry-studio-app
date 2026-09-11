@@ -27,7 +27,7 @@ export type ComposerAttachmentSource = ComposerAttachmentBase & {
 
 export type ComposerAttachmentImporting = ComposerAttachmentBase & {
   fileEntryId?: never;
-  status: 'importing' | 'failed';
+  status: 'importing';
 };
 
 export type ComposerAttachmentReady = ComposerAttachmentBase & {
@@ -201,8 +201,8 @@ export function isComposerAttachmentReady(
   return attachment.status === 'ready';
 }
 
-export function hasUnreadyComposerAttachments(attachments: readonly ComposerAttachmentDraft[]) {
-  return attachments.some((attachment) => !isComposerAttachmentReady(attachment));
+export function hasImportingComposerAttachments(attachments: readonly ComposerAttachmentDraft[]) {
+  return attachments.some((attachment) => attachment.status === 'importing');
 }
 
 export function hasComposerSendableContent(

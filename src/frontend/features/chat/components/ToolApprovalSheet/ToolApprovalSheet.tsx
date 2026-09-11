@@ -1,7 +1,9 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+
+const ignoreClose = () => undefined;
 
 export type PendingToolApproval = {
   approvalId: string;
@@ -32,7 +34,6 @@ export function ToolApprovalSheet({
   onRespond,
 }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
-  const [reviewedApprovalId, setReviewedApprovalId] = useState<string>();
   // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
   if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
@@ -44,63 +45,44 @@ export function ToolApprovalSheet({
     return null;
   }
 
-  const isReviewOpen = isOpen && approvals.length > 0 && approval.approvalId === reviewedApprovalId;
   return (
-    <>
-      {isOpen && !isReviewOpen ? (
-        <View className="px-4 py-2">
-          <Button
-            variant="secondary"
-            onPress={() => {
-              Keyboard.dismiss();
-              setReviewedApprovalId(approval.approvalId);
-            }}
-            testID="chat-review-tool-approval"
-          >
-            <Button.Label>
-              {t('chat.tool.approval.review', { count: approvals.length })}
-            </Button.Label>
-          </Button>
-        </View>
-      ) : null}
-      <BottomSheet
-        closeAction={{ accessibilityLabel: t('common.close') }}
-        footer={
-          <ToolApprovalSheetActions
-            key={approval.approvalId}
-            approval={approval}
-            onCancel={onCancel}
-            onRespond={onRespond}
-          />
-        }
-        onClose={() => setReviewedApprovalId(undefined)}
-        open={isReviewOpen}
-        size="medium"
-        title={t('chat.tool.approval.title')}
-      >
-        <ScrollView
+    <BottomSheet
+      dismissible={false}
+      footer={
+        <ToolApprovalSheetActions
           key={approval.approvalId}
-          className="min-h-0 flex-1"
-          contentContainerClassName="gap-4 px-6 pt-2 pb-4"
-          showsVerticalScrollIndicator={false}
-        >
-          <View className="gap-1">
-            <Text className="text-foreground-tertiary text-sm">
-              {t('chat.tool.approval.description')}
+          approval={approval}
+          onCancel={onCancel}
+          onRespond={onRespond}
+        />
+      }
+      onClose={ignoreClose}
+      open={isOpen}
+      size="medium"
+      title={t('chat.tool.approval.title')}
+    >
+      <ScrollView
+        key={approval.approvalId}
+        className="min-h-0 flex-1"
+        contentContainerClassName="gap-4 px-6 pt-2 pb-4"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="gap-1">
+          <Text className="text-foreground-tertiary text-sm">
+            {t('chat.tool.approval.description')}
+          </Text>
+          <Text className="font-semibold text-base text-foreground" selectable>
+            {approval.displayName}
+          </Text>
+          {approvals.length > 1 ? (
+            <Text className="text-foreground-tertiary text-xs">
+              {t('chat.tool.approval.pendingCount', { count: approvals.length })}
             </Text>
-            <Text className="font-semibold text-base text-foreground" selectable>
-              {approval.displayName}
-            </Text>
-            {approvals.length > 1 ? (
-              <Text className="text-foreground-tertiary text-xs">
-                {t('chat.tool.approval.pendingCount', { count: approvals.length })}
-              </Text>
-            ) : null}
-          </View>
-          <ApprovalArgumentsPreview input={approval.input} />
-        </ScrollView>
-      </BottomSheet>
-    </>
+          ) : null}
+        </View>
+        <ApprovalArgumentsPreview input={approval.input} />
+      </ScrollView>
+    </BottomSheet>
   );
 }
 
@@ -115,14 +97,12 @@ function ToolApprovalSheetActions({
 }) {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const submitting = useRef(false);
 
   const submit = async (action: 'allow' | 'deny' | 'stop') => {
-    if (submitting.current) {
+    if (isSubmitting) {
       return;
     }
 
-    submitting.current = true;
     setIsSubmitting(true);
     try {
       if (action === 'stop') {
@@ -135,7 +115,6 @@ function ToolApprovalSheetActions({
         messageId: approval.messageId,
       });
     } finally {
-      submitting.current = false;
       setIsSubmitting(false);
     }
   };

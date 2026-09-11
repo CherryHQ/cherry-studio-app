@@ -38,10 +38,10 @@ export function ModelPickerDrawer({
   title,
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
-  const [hasActivatedSearch, setHasActivatedSearch] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
-  const isSearchExpanded = hasActivatedSearch;
+  const isSearchExpanded = isSearchFocused || searchText.trim().length > 0;
 
   return (
     <BottomSheet
@@ -59,9 +59,7 @@ export function ModelPickerDrawer({
           modelType={modelType}
           onAddProvider={onAddProvider}
           onSelect={onSelect}
-          onSearchFocusChange={(isFocused) => {
-            if (isFocused) setHasActivatedSearch(true);
-          }}
+          onSearchFocusChange={setIsSearchFocused}
           onSearchTextChange={setSearchText}
           open={open}
           providerId={providerId}

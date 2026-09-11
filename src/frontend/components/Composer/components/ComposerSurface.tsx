@@ -1,7 +1,7 @@
-import { Button, Composer, useToast } from '@cherrystudio/ui/components';
-import { type PropsWithChildren, useCallback, useEffect, useRef, useState } from 'react';
+import { Composer, useAlert, useToast } from '@cherrystudio/ui/components';
+import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 
 import {
   fileAttachmentIssueDescription,
@@ -9,11 +9,11 @@ import {
 } from '@/frontend/utils/fileAttachmentFeedback';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useComposerActions, useComposerMeta, useComposerState } from '../context/ComposerProvider';
+import { useComposerActions, useComposerState } from '../context/ComposerProvider';
 import {
   type ComposerAttachmentReady,
   hasComposerSendableContent,
-  hasUnreadyComposerAttachments,
+  hasImportingComposerAttachments,
   isComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
@@ -27,6 +27,7 @@ export type ComposerSendPayload = {
 type ComposerSurfaceProps = PropsWithChildren<{
   /** Omit for the default: there is text, or there is an attachment. */
   canSend?: boolean;
+  dismissKeyboardOnSend?: boolean;
   /** A message for a failure the caller recognises; `undefined` falls back. */
   getSendErrorLabel?: (error: unknown) => string | undefined;
   labels?: {
@@ -40,10 +41,18 @@ type ComposerSurfaceProps = PropsWithChildren<{
   testID?: string;
 }>;
 
-/** Owns submission, one-at-a-time admission, and revision-safe draft recovery. */
+/**
+ * The composer root, and the one piece of it that is not pluggable. Everything
+ * inside is the caller's to arrange, but sending is a protocol rather than a
+ * part — trim, clear before awaiting, restore the draft *and* the attachments
+ * if it rejects, explain the outcome, and log. Two screens assembling that
+ * separately would be two implementations of it. Since this is what renders the surface, there is no
+ * way to compose a composer that skips it.
+ */
 export function ComposerSurface({
   canSend,
   children,
+  dismissKeyboardOnSend = true,
   getSendErrorLabel,
   labels,
   onSend,
@@ -53,20 +62,11 @@ export function ComposerSurface({
 }: ComposerSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { contentRevision } = useComposerMeta();
+  const { alert } = useAlert();
   const { attachments, draft } = useComposerState();
-  const { addAttachments, clearAttachments, setAttachments, setDraft } = useComposerActions();
+  const { addAttachments, clearAttachments, setDraft } = useComposerActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
   const nextSendAttemptIdRef = useRef(0);
-  const mounted = useRef(true);
-  const [failedDrafts, setFailedDrafts] = useState<(ComposerSendPayload & { id: number })[]>([]);
-  const [replacement, setReplacement] = useState<{ id: number; revision: number }>();
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
 
   const handleSend = useCallback(async () => {
     if (activeSendAttemptIdRef.current !== null) {
@@ -76,7 +76,6 @@ export function ComposerSurface({
       return;
     }
 
-    if (streaming || !(canSend ?? hasComposerSendableContent(draft, attachments))) return;
     const attachmentSnapshot = attachments.filter(isComposerAttachmentReady);
     if (attachmentSnapshot.length !== attachments.length) {
       logger.warn('Ignored message send with attachments that are not ready');
@@ -91,7 +90,11 @@ export function ComposerSurface({
 
     setDraft('');
     clearAttachments();
-    const clearedRevision = contentRevision.current;
+    if (dismissKeyboardOnSend) {
+      // Not animated: an animated dismissal races the message list's
+      // scroll-to-bottom and the two fight over the same pixels.
+      void KeyboardController.dismiss({ animated: false });
+    }
 
     try {
       await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
@@ -100,69 +103,50 @@ export function ComposerSurface({
       const explainedLabel = issue
         ? fileAttachmentIssueDescription(issue, t)
         : getSendErrorLabel?.(error);
-      // Preserve diagnostics independently of the nonmodal user feedback.
-      // Explained rejections stay below the development error-overlay level.
+      // The toast is deliberately vague, so without this the failure leaves no
+      // trace at all and there is nothing to go on when a send breaks on device.
+      // An explained rejection is an expected outcome, so it stays below the
+      // error level that raises the development overlay.
       const errorDetail = error instanceof Error ? error : { error };
       if (explainedLabel) {
         logger.warn('Message send rejected', errorDetail, { attemptId });
       } else {
         logger.error('Message send failed', errorDetail, { attemptId });
       }
-      if (!mounted.current) return;
-      if (contentRevision.current === clearedRevision) {
-        setDraft(draftSnapshot);
-        addAttachments([...attachmentSnapshot]);
+      setDraft((current) =>
+        current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
+      );
+      addAttachments([...attachmentSnapshot]);
+      if (issue) {
+        alert.show({ title: t('attachments.sendRejected'), description: explainedLabel });
       } else {
-        setFailedDrafts((current) => [
-          ...current,
-          { id: attemptId, text: draftSnapshot, attachments: attachmentSnapshot },
-        ]);
+        toast.show({
+          label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
+          variant: 'danger',
+        });
       }
-      toast.show({
-        label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
-        variant: 'danger',
-      });
     } finally {
       activeSendAttemptIdRef.current = null;
     }
   }, [
     attachments,
     clearAttachments,
+    dismissKeyboardOnSend,
     draft,
     getSendErrorLabel,
     labels?.sendFailed,
     onSend,
     addAttachments,
-    canSend,
-    contentRevision,
-    streaming,
+    alert,
     setDraft,
     t,
     toast,
   ]);
 
-  const failedDraft = failedDrafts[0];
-  const isReplacing =
-    replacement?.id === failedDraft?.id && replacement?.revision === contentRevision.current;
-  const discardFailedDraft = () => {
-    setFailedDrafts((current) => current.slice(1));
-    setReplacement(undefined);
-  };
-  const restoreFailedDraft = () => {
-    if (!failedDraft) return;
-    if (!isReplacing && (draft.length > 0 || attachments.length > 0)) {
-      setReplacement({ id: failedDraft.id, revision: contentRevision.current });
-      return;
-    }
-    setDraft(failedDraft.text);
-    setAttachments([...failedDraft.attachments]);
-    discardFailedDraft();
-  };
-
   return (
     <Composer
       canSend={
-        !hasUnreadyComposerAttachments(attachments) &&
+        !hasImportingComposerAttachments(attachments) &&
         (canSend ?? hasComposerSendableContent(draft, attachments))
       }
       labels={{
@@ -176,37 +160,6 @@ export function ComposerSurface({
       testID={testID}
       value={draft}
     >
-      {failedDraft ? (
-        <View className="gap-2 pb-3">
-          <Text className="text-sm text-foreground">
-            {t(isReplacing ? 'chat.input.replaceDraftPrompt' : 'chat.input.failedDraftSaved')}
-          </Text>
-          <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-            {failedDraft.text || t('chat.input.attachmentDraft')}
-          </Text>
-          <View className="flex-row gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onPress={restoreFailedDraft}
-              testID="composer-restore-draft"
-            >
-              <Button.Label>
-                {t(isReplacing ? 'chat.input.replaceDraft' : 'chat.input.restoreDraft')}
-              </Button.Label>
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onPress={isReplacing ? () => setReplacement(undefined) : discardFailedDraft}
-            >
-              <Button.Label>
-                {t(isReplacing ? 'common.cancel' : 'chat.input.discardDraft')}
-              </Button.Label>
-            </Button>
-          </View>
-        </View>
-      ) : null}
       {children}
     </Composer>
   );

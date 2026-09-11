@@ -1443,17 +1443,5 @@
   "plugins.catalog.github.authMethods.github_user.recovery": "请重新发起授权。新授权确认并保存成功前，会保留原有连接。",
   "plugins.catalog.github.authMethods.github_user.stages.user.title": "1. 登录并授权",
   "plugins.catalog.github.authMethods.github_user.stages.user.waiting": "等待 GitHub 授权",
-  "plugins.catalog.github.authMethods.github_user.stages.account.title": "2. 确认账号",
-  "chat.input.reasoningReset": "思考强度已重置为当前模型的默认值。",
-  "chat.input.pickerFailed": "无法打开选择器，请重试。",
-  "chat.input.modelSaveFailed": "模型选择未能保存，已显示上次保存的模型。",
-  "chat.input.failedDraftSaved": "未发送的内容已单独保留，当前草稿未改变。",
-  "chat.input.replaceDraftPrompt": "用这条未发送的内容替换当前草稿？",
-  "chat.input.replaceDraft": "替换草稿",
-  "chat.input.restoreDraft": "恢复",
-  "chat.input.discardDraft": "丢弃",
-  "chat.input.attachmentDraft": "含附件的消息",
-  "chat.attachments.failed": "导入失败，请移除后重新选择。",
-  "chat.tool.approval.review": "查看待确认的工具请求（{{count}}）",
-  "chat.input.pluginsUnavailable": "暂无可用的已连接插件。"
+  "plugins.catalog.github.authMethods.github_user.stages.account.title": "2. 确认账号"
 }

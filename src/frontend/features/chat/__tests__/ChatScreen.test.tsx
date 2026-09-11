@@ -156,6 +156,7 @@ describe('ChatScreen composer dock wiring', () => {
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       controls: mockChatControls,
+      dismissKeyboardOnSend: false,
       sessionId: 'session-1',
     });
     expect(chatWorkspaceProps).toMatchObject({

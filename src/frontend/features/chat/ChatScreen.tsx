@@ -135,7 +135,12 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       {hasComposer ? (
         <ComposerSessionProvider key={composerSession.key}>
           <ComposerDock layoutMode="flow">
-            <ChatInput agentId={resolvedAgentId} controls={controls} sessionId={sessionId} />
+            <ChatInput
+              agentId={resolvedAgentId}
+              controls={controls}
+              dismissKeyboardOnSend={false}
+              sessionId={sessionId}
+            />
           </ComposerDock>
         </ComposerSessionProvider>
       ) : null}

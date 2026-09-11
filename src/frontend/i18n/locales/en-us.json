@@ -1446,17 +1446,5 @@
   "plugins.catalog.github.authMethods.github_user.recovery": "Start a new authorization. An existing connection is kept until the new one is confirmed and saved.",
   "plugins.catalog.github.authMethods.github_user.stages.user.title": "1. Sign in and authorize",
   "plugins.catalog.github.authMethods.github_user.stages.user.waiting": "Waiting for GitHub authorization",
-  "plugins.catalog.github.authMethods.github_user.stages.account.title": "2. Confirm your account",
-  "chat.input.reasoningReset": "Reasoning effort reset to the model default.",
-  "chat.input.pickerFailed": "Could not open the picker. Please try again.",
-  "chat.input.modelSaveFailed": "Could not save the selected model. The last saved model is shown.",
-  "chat.input.failedDraftSaved": "The unsent message is saved separately. Your current draft is unchanged.",
-  "chat.input.replaceDraftPrompt": "Replace the current draft with this unsent message?",
-  "chat.input.replaceDraft": "Replace draft",
-  "chat.input.restoreDraft": "Restore",
-  "chat.input.discardDraft": "Discard",
-  "chat.input.attachmentDraft": "Message with attachments",
-  "chat.attachments.failed": "Could not import. Remove this attachment and select it again.",
-  "chat.tool.approval.review": "Review pending tool requests ({{count}})",
-  "chat.input.pluginsUnavailable": "No connected plugins are available."
+  "plugins.catalog.github.authMethods.github_user.stages.account.title": "2. Confirm your account"
 }
