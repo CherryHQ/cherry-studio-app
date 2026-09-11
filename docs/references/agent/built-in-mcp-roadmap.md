@@ -202,8 +202,8 @@ plugin registry. The [module contract](../../../src/backend/services/builtInMcp/
 defines the TypeScript guide data, source/revision attribution, authoring validation and
 size limits. The Host prepares only guide sections whose required tools are executable for this
 Agent and connection, without changing saved prompts, chat history or MCP permissions. Configuration
-changes apply to the next turn and execution-time revocation remains immediate. Plugin details
-provide a read-only full-guide preview.
+changes apply to the next turn and execution-time revocation remains immediate. Guides are consumed
+by the Agent and are not displayed on plugin detail pages.
 
 General Skill management, imports, on-demand loading of longer guides and task shortcuts remain
 future work. Visual workflow editing, background scheduling, executable extensions, and a third-party
