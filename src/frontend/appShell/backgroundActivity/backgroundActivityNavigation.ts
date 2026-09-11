@@ -1,28 +1,16 @@
-import { parse } from 'expo-linking';
 import type { Href } from 'expo-router';
 
-/** Expo parses the URL; Cherry limits task notification destinations to its own routes. */
+import { parseBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
+
+/** Maps a task link to the route that owns it; anything else opens nothing. */
 export function backgroundActivityHref(url: unknown, scheme: string): Href | undefined {
-  if (typeof url !== 'string') return undefined;
-  try {
-    const link = parse(url);
-    if (link.scheme !== scheme) return undefined;
-    const path = [link.hostname, link.path].filter(Boolean).join('/');
-    if (!path) {
-      const { agentId, sessionId } = link.queryParams ?? {};
-      if (typeof agentId === 'string' && agentId && typeof sessionId === 'string' && sessionId) {
-        return { pathname: '/', params: { agentId, sessionId } };
-      }
-    }
-    const [route, paintingId, extra] = path.split('/');
-    if (route === 'paintings' && paintingId && extra === undefined) {
-      return {
-        pathname: '/paintings/[paintingId]',
-        params: { paintingId: decodeURIComponent(paintingId) },
-      };
-    }
-  } catch {
-    return undefined;
+  const link = parseBackgroundTaskUrl(url, scheme);
+  switch (link?.kind) {
+    case 'chat':
+      return { pathname: '/', params: { agentId: link.agentId, sessionId: link.sessionId } };
+    case 'painting':
+      return { pathname: '/paintings/[paintingId]', params: { paintingId: link.paintingId } };
+    default:
+      return undefined;
   }
-  return undefined;
 }

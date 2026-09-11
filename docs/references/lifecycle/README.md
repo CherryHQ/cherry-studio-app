@@ -32,7 +32,7 @@ Register a module as a lifecycle service when it owns at least one of:
 | A connection or handle outliving one call | SQLite (`DbService`), MCP clients, cache handles |
 | A timer or scheduled loop | job delayed-promotion timer, cache rotation |
 | A subscription or listener | `AppState` subscribers, preference change subscriptions |
-| A native surface | Live Activity presenters, the keep-alive audio session |
+| A native surface | Live Activity presenters, the keep-alive audio session, the Android foreground service |
 | In-memory runtime state that must be released | active Agent turns, in-flight job executions, API-key rotation state |
 | Work that continues after the caller returns | Agent turns, job executions, model pulls |
 

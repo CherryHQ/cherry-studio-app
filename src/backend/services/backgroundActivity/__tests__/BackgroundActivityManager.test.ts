@@ -63,7 +63,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     jest.restoreAllMocks();
   });
 
-  test('sweeps orphaned surfaces and prepares the iOS widget logo at initialization', async () => {
+  test('sweeps orphaned surfaces and prepares the environment logo at initialization', async () => {
     const first = createMockPresenter();
     const second = createMockPresenter();
     first.presenter.clearOrphans.mockResolvedValueOnce(2);
@@ -72,7 +72,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
-    expect(mockPrepareLogo).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
+    expect(mockPrepareLogo).toHaveBeenCalledTimes(1);
     await manager._doStop();
   });
 
@@ -90,7 +90,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       expect.objectContaining({
         colorScheme: 'dark',
         detail: 'preparing',
-        ...(platform === 'ios' ? { logoUri: 'file:///widgets/cherry-studio-logo.png' } : {}),
+        logoUri: 'file:///widgets/cherry-studio-logo.png',
       }),
       'cherrystudio:///?agentId=agent-1&sessionId=session-1',
     );

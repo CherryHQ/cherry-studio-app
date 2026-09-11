@@ -1,5 +1,5 @@
 import type { BackgroundActivityNativePresentation } from '@cherrystudio/ui/background-activity';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import {
   AppStatePolicy,
@@ -100,12 +100,11 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   protected async onInit(): Promise<void> {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
-
     this.appState = AppState.currentState;
     this.registerAppStateListener(this.handleAppStateChange);
     await this.clearOrphanedSurfaces();
-    if (Platform.OS === 'ios') this.logoUri = await this.environment.prepareLogo();
+    // Environments without a logo surface resolve `undefined`; no platform check here.
+    this.logoUri = await this.environment.prepareLogo();
   }
 
   startSession<Props extends BackgroundActivityBaseProps>(

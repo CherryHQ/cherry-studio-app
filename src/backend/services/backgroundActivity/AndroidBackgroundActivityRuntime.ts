@@ -9,7 +9,10 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
@@ -44,7 +47,7 @@ type Notifications = typeof import('expo-notifications');
 @ServicePhase(Phase.PostReady)
 @DependsOn(['BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
-export class AndroidBackgroundActivityRuntime extends BaseService {
+export class AndroidBackgroundActivityRuntime extends BaseService implements KeepAliveSource {
   private readonly activities = new Set<ActivityRecord>();
   private readonly leases = new Set<LeaseRecord>();
   private background?: typeof BackgroundService;

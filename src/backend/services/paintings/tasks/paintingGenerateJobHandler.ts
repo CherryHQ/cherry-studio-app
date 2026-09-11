@@ -12,6 +12,7 @@ import type {
   PaintingActivityPhase,
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import type { PaintingGenerationResult } from '@/shared/contracts';
 import { type FileEntry, type FileEntryId, readableFilename } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -118,7 +119,7 @@ export function createPaintingGenerateJobHandler(
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
       const session = dependencies.activities?.startSession({
-        deepLinkUrl: `${resolveScheme({})}://paintings/${encodeURIComponent(paintingId)}`,
+        deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'painting', paintingId }),
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
         props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),

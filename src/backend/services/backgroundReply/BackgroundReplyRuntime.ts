@@ -1,6 +1,5 @@
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { resolveScheme } from 'expo-linking';
-import { Platform } from 'react-native';
 
 import {
   type Activatable,
@@ -21,6 +20,7 @@ import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
@@ -80,7 +80,8 @@ type EnvironmentPort = {
  * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
  * Throttling, AppState handling, orphan sweeps, and platform keep-alive all live
- * behind the injected session manager.
+ * behind the injected session manager. Platform availability is a presenter
+ * and lease-source concern; this runtime never branches on it.
  */
 @Injectable('BackgroundReplyRuntime')
 @ServicePhase(Phase.PostReady)
@@ -104,20 +105,13 @@ export class BackgroundReplyRuntime
   }
 
   protected onInit(): void {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
-
     this.registerDisposable(
       this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
     );
   }
 
   protected async onReady(): Promise<void> {
-    if (
-      (Platform.OS === 'ios' || Platform.OS === 'android') &&
-      this.preference.readCached(PREFERENCE_KEY)
-    ) {
-      await this.activate();
-    }
+    if (this.preference.readCached(PREFERENCE_KEY)) await this.activate();
   }
 
   onActivate(): void {
@@ -145,8 +139,7 @@ export class BackgroundReplyRuntime
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
-    if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !this.isActivated || this.disposed)
-      return noOpTurn;
+    if (!this.isActivated || this.disposed) return noOpTurn;
 
     const normalized = normalizeTurnInput(input);
     const existing = this.turns.get(normalized.key);
@@ -448,7 +441,11 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   return {
     actorName: input.agentName,
     conversationTitle: input.sessionTitle,
-    deepLinkUrl: `${resolveScheme({})}:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), {
+      agentId: input.agentId,
+      kind: 'chat',
+      sessionId: input.sessionId,
+    }),
     key: input.sessionId,
   };
 }

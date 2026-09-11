@@ -9,7 +9,8 @@ patch a native service, native notification receiver, or wake-lock manager.
 
 ## Ownership And Behavior
 
-- `KeepAliveCoordinator` delegates Android execution leases to `AndroidBackgroundActivityRuntime`.
+- `KeepAliveCoordinator` selects `AndroidBackgroundActivityRuntime` as its lease source on Android.
+  Chat and painting keep acquiring leases through the coordinator and never branch on platform.
   Concurrent chat and painting work share one `dataSync` foreground service. The last lease stops it.
 - `react-native-background-actions` uses React Native's `HeadlessJsTaskService`, which owns the
   Headless JS task and a partial wake lock. The lock supports CPU execution with the screen off;
@@ -32,8 +33,10 @@ patch a native service, native notification receiver, or wake-lock manager.
   notice the user has dismissed. Foreground completion stays silent even if the app backgrounds
   while its title is still being generated.
 - Expo retains cold notification responses. App Shell uses `useLastNotificationResponse`, waits for
-  navigation to mount, and passes allowed task destinations to Expo Router. Expo Linking owns URL
-  parsing. No backend navigation callback or custom pending-link registry is needed.
+  navigation to mount, and passes allowed task destinations to Expo Router. The task URL contract
+  lives in [`taskLink.ts`](../../src/shared/backgroundActivity/taskLink.ts): the backend builds
+  every task URL with it and App Shell maps its parsed links to routes. No backend navigation
+  callback or custom pending-link registry is needed.
 - iOS keeps its existing audio/Live Activity implementation. Shared session completion and job
   handoff changes apply to both platforms. The background-actions native module is
   excluded from iOS autolinking. Expo Notifications is installed through its standard Expo plugin;

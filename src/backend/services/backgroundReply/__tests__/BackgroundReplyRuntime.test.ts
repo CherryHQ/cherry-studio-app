@@ -1,5 +1,4 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
@@ -47,7 +46,6 @@ describe('BackgroundReplyRuntime', () => {
     preferenceListener = undefined;
     mockSessions.length = 0;
     jest.clearAllMocks();
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -442,19 +440,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
   });
 
-  test('uses no-op turns on unsupported platforms and when the preference is disabled at startup', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'web' });
-    const unsupportedRuntime = await createRuntime();
-    unsupportedRuntime.startTurn({
-      agentId: 'agent-1',
-      agentName: 'Alpha',
-      sessionId: 'session-1',
-      sessionTitle: 'First session',
-    });
-    expect(mockStartSession).not.toHaveBeenCalled();
-    await unsupportedRuntime._doStop();
-
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+  test('uses no-op turns when the preference is disabled at startup', async () => {
     enabled = false;
     const translate = jest.fn((key: string) => key);
     const disabledRuntime = await createRuntime(translate);
@@ -472,8 +458,7 @@ describe('BackgroundReplyRuntime', () => {
     await disabledRuntime._doStop();
   });
 
-  test('Android shares the reply lifecycle and interruption targets a superseding turn', async () => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+  test('execution interruption targets the superseding turn of a shared session', async () => {
     const runtime = await createRuntime();
     const firstInterrupted = jest.fn();
     const nextInterrupted = jest.fn();

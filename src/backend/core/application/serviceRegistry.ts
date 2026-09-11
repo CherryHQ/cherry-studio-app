@@ -15,6 +15,7 @@ import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { DesktopConnectionRuntime } from '@/backend/services/desktopConnections/DesktopConnectionRuntime';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import { AudioKeepAliveSource } from '@/backend/services/keepAlive/AudioKeepAliveSource';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -45,6 +46,7 @@ export const services = {
   PreferenceService,
   BackgroundActivityEnvironment,
   AndroidBackgroundActivityRuntime,
+  AudioKeepAliveSource,
   KeepAliveCoordinator,
   BackgroundActivityManager,
   BackgroundReplyRuntime,
