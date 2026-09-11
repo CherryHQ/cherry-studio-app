@@ -117,7 +117,7 @@ describe('keyboard-preserving menu overlay', () => {
   let renderer: ReactTestRenderer;
   let frames: Map<number, FrameRequestCallback>;
   let nextFrame: number;
-  let back: () => boolean | null | undefined;
+  let back: Parameters<typeof BackHandler.addEventListener>[1];
   const removeBack = jest.fn();
   const close = jest.fn();
   const closed = jest.fn();
@@ -181,10 +181,10 @@ describe('keyboard-preserving menu overlay', () => {
   });
 
   it('consumes Back while visible and dispatches completion only after overlay removal', () => {
-    act(() => expect(back()).toBe(true));
+    act(() => expect(back({ type: 'hardwareBackPress', timeStamp: 0 })).toBe(true));
     expect(close).toHaveBeenCalledTimes(1);
     act(() => renderer.update(render(false, true)));
-    act(() => expect(back()).toBe(true));
+    act(() => expect(back({ type: 'hardwareBackPress', timeStamp: 0 })).toBe(true));
     expect(close).toHaveBeenCalledTimes(1);
     expect(closed).not.toHaveBeenCalled();
 

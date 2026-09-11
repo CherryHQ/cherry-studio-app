@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
+import type { ComponentProps, ReactNode } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import { ScrollView } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
@@ -24,7 +24,7 @@ export function MenuPanel({
   testID,
 }: {
   children: ReactNode;
-  contentStyle?: StyleProp<ViewStyle>;
+  contentStyle?: ComponentProps<typeof Animated.View>['style'];
   isOpen: boolean;
   maxHeight?: number;
   onLayout: (event: LayoutChangeEvent) => void;

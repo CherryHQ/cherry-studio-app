@@ -279,7 +279,9 @@ describe('MorphMenu', () => {
     }
 
     moveTrigger(18, 240);
-    const panel = portal(tree).findByProps({ testID: 'menu-panel' });
+    const panel = portal(tree).find(
+      (node) => node.props.testID === 'menu-panel' && node.props.style !== undefined,
+    );
     expect(StyleSheet.flatten(panel.props.style).maxHeight).toBe(256);
     expect(
       portal(tree).findAll((node) => StyleSheet.flatten(node.props.style)?.height === 256).length,
