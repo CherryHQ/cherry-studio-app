@@ -6,24 +6,6 @@ import { BottomSheet } from '..';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
-let mockKeyboardHeight = 0;
-
-jest.mock('react-native-keyboard-controller', () => {
-  const { View } = jest.requireActual('react-native');
-  return {
-    KeyboardAwareScrollView: View,
-    useReanimatedKeyboardAnimation: () => ({ height: { get: () => mockKeyboardHeight } }),
-  };
-});
-
-jest.mock('react-native-reanimated', () => {
-  const { View } = jest.requireActual('react-native');
-  return {
-    __esModule: true,
-    default: { View },
-    useAnimatedStyle: (updater: () => unknown) => updater(),
-  };
-});
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -65,7 +47,6 @@ describe('BottomSheet', () => {
   beforeEach(() => {
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
-    mockKeyboardHeight = 0;
     backHandlerSpy = jest
       .spyOn(BackHandler, 'addEventListener')
       .mockImplementation((_event, handler) => {
@@ -233,55 +214,8 @@ describe('BottomSheet', () => {
     );
 
     expect(footer?.props.className).toContain('px-4');
-    expect(StyleSheet.flatten(footer?.props.style)).toMatchObject({ paddingBottom: 34 });
+    expect(StyleSheet.flatten(footer?.props.style)).toEqual({ paddingBottom: 34 });
     expect(footer?.findAllByProps({ testID: 'sheet-content' })).toHaveLength(0);
-  });
-
-  test('keeps the footer and focused fields above the keyboard, then restores the resting layout', () => {
-    const renderSheet = (open = true) => (
-      <BottomSheet
-        footer={<Text testID="footer-action">Create</Text>}
-        onClose={jest.fn()}
-        open={open}
-        size="large"
-        title="Template"
-      >
-        <BottomSheet.ScrollView testID="form-scroll">
-          <Text>Fields</Text>
-        </BottomSheet.ScrollView>
-      </BottomSheet>
-    );
-    const getFooter = () =>
-      renderer!.root.find(
-        (node) =>
-          typeof node.props.className === 'string' &&
-          node.props.className.includes('border-t border-border'),
-      );
-
-    act(() => {
-      renderer = create(renderSheet());
-    });
-    act(() => getFooter().props.onLayout({ nativeEvent: { layout: { height: 96 } } }));
-    const offset = renderer!.root.findByProps({ testID: 'form-scroll', bottomOffset: 112 }).props
-      .bottomOffset;
-
-    mockKeyboardHeight = -320;
-    act(() => renderer!.update(renderSheet()));
-    const translation = StyleSheet.flatten(getFooter().props.style).transform[0].translateY;
-    expect(translation).toBe(-320);
-    // The caret clearance includes the whole measured action area, plus the input gap.
-    expect(offset - 96).toBe(16);
-    expect(mockBottomSheetProps.index).toBe(1);
-
-    act(() => renderer!.update(renderSheet(false)));
-    expect(StyleSheet.flatten(getFooter().props.style).transform).toEqual([{ translateY: 0 }]);
-
-    mockKeyboardHeight = 0;
-    act(() => renderer!.update(renderSheet()));
-    expect(StyleSheet.flatten(getFooter().props.style)).toMatchObject({
-      paddingBottom: 34,
-      transform: [{ translateY: 0 }],
-    });
   });
 
   test('routes Android hardware back through the optional second-level action', () => {

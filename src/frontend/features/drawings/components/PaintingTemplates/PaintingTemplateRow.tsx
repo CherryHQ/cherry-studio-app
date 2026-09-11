@@ -11,10 +11,10 @@ import {
 } from './paintingTemplates';
 
 type PaintingTemplateRowProps = {
-  onPaintingCreated: (paintingId: string) => void;
+  onUseTemplate: (template: PaintingTemplate) => void;
 };
 
-export function PaintingTemplateRow({ onPaintingCreated }: PaintingTemplateRowProps) {
+export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps) {
   const { t, i18n } = useTranslation();
   const templates = getPaintingTemplates(i18n.resolvedLanguage ?? i18n.language);
   const [templateOrder] = useState(() =>
@@ -29,12 +29,12 @@ export function PaintingTemplateRow({ onPaintingCreated }: PaintingTemplateRowPr
     setSelectedTemplate(null);
   }, []);
 
-  const handleCreated = useCallback(
-    (paintingId: string) => {
+  const handleUse = useCallback(
+    (template: PaintingTemplate) => {
       setSelectedTemplate(null);
-      onPaintingCreated(paintingId);
+      onUseTemplate(template);
     },
-    [onPaintingCreated],
+    [onUseTemplate],
   );
 
   return (
@@ -71,9 +71,8 @@ export function PaintingTemplateRow({ onPaintingCreated }: PaintingTemplateRowPr
       </View>
       {selectedTemplate ? (
         <PaintingTemplateBottomSheet
-          key={selectedTemplate.id}
-          onCreated={handleCreated}
           onDismiss={handleDismiss}
+          onUse={handleUse}
           template={selectedTemplate}
         />
       ) : null}

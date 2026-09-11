@@ -57,7 +57,11 @@ import {
   type PhotoPreview,
   shouldRequestPhotoPreviewAccess,
 } from '../utils/photoLibrary';
-import { PaintingTemplateRow } from './PaintingTemplates';
+import {
+  type PaintingTemplate,
+  PaintingTemplateRow,
+  toPaintingTemplateDraft,
+} from './PaintingTemplates';
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
@@ -118,11 +122,11 @@ export function DrawingList() {
   const handleCreatePainting = useCallback(() => {
     router.push('/paintings');
   }, [router]);
-  const handleTemplateCreated = useCallback(
-    (paintingId: string) => {
-      router.push({ pathname: '/paintings', params: { paintingId } });
+  const handleTemplateUse = useCallback(
+    (template: PaintingTemplate) => {
+      openPainting(toPaintingTemplateDraft(template));
     },
-    [router],
+    [openPainting],
   );
   const handleRecentPhotoPress = useCallback(
     async (photo: PhotoPreview) => {
@@ -212,7 +216,7 @@ export function DrawingList() {
         photos={recentPhotos.photos}
         onRecentPhotoPress={handleRecentPhotoPress}
         onRequestPhotoAccess={handleRequestPhotoAccess}
-        onTemplateCreated={handleTemplateCreated}
+        onTemplateUse={handleTemplateUse}
         onViewAllPress={handleViewAllPress}
       />
     ),
@@ -220,7 +224,7 @@ export function DrawingList() {
       gallery.isLoading,
       handleRecentPhotoPress,
       handleRequestPhotoAccess,
-      handleTemplateCreated,
+      handleTemplateUse,
       handleViewAllPress,
       isEditing,
       paintings.isLoading,
@@ -340,7 +344,7 @@ type DrawingListHeaderProps = {
   isRecentPhotosLoading: boolean;
   onRecentPhotoPress: (photo: PhotoPreview) => Promise<void>;
   onRequestPhotoAccess: () => Promise<void>;
-  onTemplateCreated: (paintingId: string) => void;
+  onTemplateUse: (template: PaintingTemplate) => void;
   onViewAllPress: () => Promise<void>;
   photos: readonly PhotoPreview[];
 };
@@ -351,7 +355,7 @@ function DrawingListHeader({
   isRecentPhotosLoading,
   onRecentPhotoPress,
   onRequestPhotoAccess,
-  onTemplateCreated,
+  onTemplateUse,
   onViewAllPress,
   photos,
 }: DrawingListHeaderProps) {
@@ -422,7 +426,7 @@ function DrawingListHeader({
             )}
           </View>
 
-          <PaintingTemplateRow onPaintingCreated={onTemplateCreated} />
+          <PaintingTemplateRow onUseTemplate={onTemplateUse} />
         </>
       )}
 

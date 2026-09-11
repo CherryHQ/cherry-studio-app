@@ -62,14 +62,7 @@ export function imageParamsResolutionLabel(values: ParamValues | undefined): str
 }
 
 function parseRatio(value: unknown): number | undefined {
-  return typeof value === 'string'
-    ? toRatio(
-        value
-          .replace(/^ASPECT_/i, '')
-          .replace('_', ':')
-          .split(':'),
-      )
-    : undefined;
+  return typeof value === 'string' ? toRatio(value.split(':')) : undefined;
 }
 
 function parseSize(value: unknown): number | undefined {
@@ -95,42 +88,6 @@ export function getImageParamFields(
   return Object.entries(resolvedMode.definition.supports).flatMap(([key, spec]) =>
     spec ? [{ key: key as CanonicalParamKey, spec }] : [],
   );
-}
-
-/** Seed a requested composition using the selected mode's own ratio/size vocabulary. */
-export function createImageParamDraftForAspectRatio(
-  aspectRatio: string | undefined,
-  resolvedMode: ResolvedImageGenerationMode | undefined,
-): ImageParamDraft {
-  const draft = reconcileImageParamDraft({}, resolvedMode);
-  const targetRatio = parseRatio(aspectRatio);
-  if (targetRatio === undefined) return draft;
-
-  for (const { key, spec } of getImageParamFields(resolvedMode)) {
-    if (
-      spec.type !== 'enum' ||
-      (key !== 'aspectRatio' && key !== 'size' && key !== 'imageResolution')
-    ) {
-      continue;
-    }
-
-    const defaultRatio = key === 'aspectRatio' ? parseRatio(draft[key]) : parseSize(draft[key]);
-    let closest = typeof draft[key] === 'string' ? draft[key] : undefined;
-    let smallestDistance =
-      defaultRatio === undefined ? Infinity : Math.abs(Math.log(defaultRatio / targetRatio));
-    for (const option of spec.options) {
-      const ratio = key === 'aspectRatio' ? parseRatio(option) : parseSize(option);
-      if (ratio === undefined) continue;
-      // Compare proportional distance so portrait and landscape are treated symmetrically.
-      const distance = Math.abs(Math.log(ratio / targetRatio));
-      if (distance < smallestDistance) {
-        closest = option;
-        smallestDistance = distance;
-      }
-    }
-    if (closest !== undefined) draft[key] = closest;
-  }
-  return draft;
 }
 
 export function reconcileImageParamDraft(

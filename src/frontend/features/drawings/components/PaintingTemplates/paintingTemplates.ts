@@ -1,5 +1,7 @@
 import type { ImageProps } from 'expo-image';
 
+import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
+
 import catalog from '../../../../../../assets/paintings/templates/catalog.json';
 import englishTemplates from '../../../../../../assets/paintings/templates/locales/en-us.json';
 import chineseTemplates from '../../../../../../assets/paintings/templates/locales/zh-cn.json';
@@ -7,33 +9,11 @@ import chineseTemplates from '../../../../../../assets/paintings/templates/local
 type PaintingTemplateId = keyof typeof englishTemplates;
 
 export type PaintingTemplate = Readonly<{
-  aspectRatio?: `${number}:${number}`;
   id: PaintingTemplateId;
   preview: ImageProps['source'];
   prompt: string;
-  isReferenceImageRequired: boolean;
   title: string;
 }>;
-
-// Mobile-owned generation requirements, independent of the localized desktop prompts.
-const TEMPLATE_REQUIREMENTS: Partial<
-  Record<
-    PaintingTemplateId,
-    Partial<Pick<PaintingTemplate, 'aspectRatio' | 'isReferenceImageRequired'>>
-  >
-> = {
-  'human-fragments-motion': { aspectRatio: '9:16' },
-  'human-fragments-sport': { aspectRatio: '9:16' },
-  'underwater-editorial': { aspectRatio: '9:16' },
-  'wuxia-swordswoman': { aspectRatio: '9:16' },
-  'literary-art-poster': { aspectRatio: '9:16' },
-  'tuscan-residence': { aspectRatio: '4:5' },
-  'summer-hillside': { aspectRatio: '9:16' },
-  'slow-shutter-fashion': { aspectRatio: '9:16' },
-  'circular-cutout': { aspectRatio: '3:4' },
-  'doodle-shadow': { isReferenceImageRequired: true },
-  'birthday-poster': { aspectRatio: '3:4' },
-};
 
 const previews = {
   'human-fragments-motion': require('../../../../../../assets/paintings/templates/human-fragments-motion.webp'),
@@ -73,11 +53,9 @@ export function getPaintingTemplates(language: string): PaintingTemplate[] {
     const id = catalogId as PaintingTemplateId;
     const { label, prompt } = translations[id];
     return {
-      aspectRatio: TEMPLATE_REQUIREMENTS[id]?.aspectRatio,
       id,
       preview: previews[id],
       prompt,
-      isReferenceImageRequired: TEMPLATE_REQUIREMENTS[id]?.isReferenceImageRequired ?? false,
       title: label,
     };
   });
@@ -100,12 +78,9 @@ export function createPaintingTemplatePrompt(template: PaintingTemplate): string
     .trim();
 }
 
-export function isPaintingTemplateInputValid(
-  template: PaintingTemplate,
-  prompt: string,
-  referenceImageCount: number,
-): boolean {
-  return (
-    (!template.isReferenceImageRequired || referenceImageCount > 0) && prompt.trim().length > 0
-  );
+export function toPaintingTemplateDraft(template: PaintingTemplate): PaintingDraftHandoff {
+  return {
+    attachments: [],
+    draft: createPaintingTemplatePrompt(template),
+  };
 }

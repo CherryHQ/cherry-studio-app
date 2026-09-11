@@ -2,11 +2,10 @@ import catalog from '../../../../../../../assets/paintings/templates/catalog.jso
 import english from '../../../../../../../assets/paintings/templates/locales/en-us.json';
 import chinese from '../../../../../../../assets/paintings/templates/locales/zh-cn.json';
 import {
-  createPaintingTemplatePrompt,
   getPaintingTemplates,
-  isPaintingTemplateInputValid,
   type PaintingTemplate,
   shufflePaintingTemplates,
+  toPaintingTemplateDraft,
 } from '../paintingTemplates';
 
 describe('painting templates', () => {
@@ -26,8 +25,10 @@ describe('painting templates', () => {
         expect(template.title).toBe(translations[template.id].label);
         expect(template.prompt).toBe(translations[template.id].prompt);
         expect(template.preview).toBeDefined();
-        expect(createPaintingTemplatePrompt(template).length).toBeGreaterThan(0);
-        expect(createPaintingTemplatePrompt(template)).not.toContain('${');
+        const handoff = toPaintingTemplateDraft(template);
+        expect(handoff.draft?.length).toBeGreaterThan(0);
+        expect(handoff.draft).not.toContain('${');
+        expect(handoff.attachments).toEqual([]);
       }
     },
   );
@@ -41,11 +42,12 @@ describe('painting templates', () => {
     expect(getPaintingTemplates('zh-TW')).toEqual(getPaintingTemplates('en-US'));
   });
 
-  test('creates a concrete prompt without changing the template for the next creation', () => {
+  test('prefills an editable draft without changing the template for the next use', () => {
     const template = getPaintingTemplates('zh-CN').find((entry) => entry.id === 'birthday-poster')!;
-    const prompt = createPaintingTemplatePrompt(template);
-    expect(prompt).toContain('儿童姓名：MUNONYE。庆祝年龄：2。');
-    expect(prompt).not.toContain('${');
+    const handoff = toPaintingTemplateDraft(template);
+    expect(handoff.draft).toContain('儿童姓名：MUNONYE。庆祝年龄：2。');
+    handoff.draft = 'A different birthday poster';
+    expect(toPaintingTemplateDraft(template).draft).toContain('儿童姓名：MUNONYE。庆祝年龄：2。');
     expect(template.prompt).toContain('${MUNONYE}');
   });
 
@@ -54,7 +56,7 @@ describe('painting templates', () => {
       ...getPaintingTemplates('en-US')[0],
       prompt: '${Alex} meets ${Alex}. ${$&}',
     };
-    expect(createPaintingTemplatePrompt(template)).toBe('Alex meets Alex. $&');
+    expect(toPaintingTemplateDraft(template).draft).toBe('Alex meets Alex. $&');
   });
 
   test('randomizes a copy without dropping templates or changing the catalog', () => {
@@ -70,32 +72,4 @@ describe('painting templates', () => {
       random.mockRestore();
     }
   });
-
-  test.each(['en-US', 'zh-CN'])(
-    'keeps generation requirements independent of %s copy',
-    (language) => {
-      const templates = getPaintingTemplates(language);
-      expect(
-        templates.find((template) => template.id === 'human-fragments-motion')?.aspectRatio,
-      ).toBe('9:16');
-      expect(templates.find((template) => template.id === 'birthday-poster')?.aspectRatio).toBe(
-        '3:4',
-      );
-      expect(templates.find((template) => template.id === 'tuscan-residence')?.aspectRatio).toBe(
-        '4:5',
-      );
-
-      const referenceTemplate = templates.find((template) => template.id === 'doodle-shadow')!;
-      const prompt = createPaintingTemplatePrompt(referenceTemplate);
-      expect(isPaintingTemplateInputValid(referenceTemplate, prompt, 0)).toBe(false);
-      expect(isPaintingTemplateInputValid(referenceTemplate, prompt, 1)).toBe(true);
-
-      const textTemplate = templates.find((template) => template.id === 'birthday-poster')!;
-      expect(isPaintingTemplateInputValid(textTemplate, 'A completely rewritten prompt.', 0)).toBe(
-        true,
-      );
-      expect(isPaintingTemplateInputValid(textTemplate, '', 0)).toBe(false);
-      expect(isPaintingTemplateInputValid(textTemplate, '  \n  ', 1)).toBe(false);
-    },
-  );
 });

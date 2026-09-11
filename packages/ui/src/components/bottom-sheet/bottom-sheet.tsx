@@ -6,32 +6,16 @@ import {
   ModalBottomSheet,
   programmatic,
 } from '@swmansion/react-native-bottom-sheet';
-import {
-  createContext,
-  type ReactNode,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
   Keyboard,
-  type LayoutChangeEvent,
   Pressable,
-  type ScrollViewProps,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
-import {
-  KeyboardAwareScrollView,
-  useReanimatedKeyboardAnimation,
-} from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -41,7 +25,6 @@ const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
 const TOP_INSET = 12;
 const TOP_CORNER_RADIUS = 32;
-const BottomSheetFooterHeightContext = createContext(0);
 const HEIGHT_RATIOS = {
   compact: 0.4,
   full: 1,
@@ -98,7 +81,7 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  * owns presentation, dismissal, safe areas, and the same visual language on
  * iOS and Android.
  */
-function BottomSheetRoot(props: BottomSheetProps) {
+export function BottomSheet(props: BottomSheetProps) {
   const {
     backAction,
     children,
@@ -123,7 +106,6 @@ function BottomSheetRoot(props: BottomSheetProps) {
     [availableCardHeight, dismissible, height, size, sizes],
   );
   const hasFooter = footer != null;
-  const [footerHeight, setFooterHeight] = useState(0);
   const isCloseActionVisible = Boolean(closeAction && !backAction);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
@@ -253,68 +235,25 @@ function BottomSheetRoot(props: BottomSheetProps) {
               <View className="ml-2">{headerAction}</View>
             ) : null}
           </View>
-          <BottomSheetFooterHeightContext value={hasFooter ? footerHeight : 0}>
+          <View
+            className="min-h-0 flex-1"
+            style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
+          >
+            {children}
+          </View>
+          {hasFooter ? (
             <View
-              className="min-h-0 flex-1"
-              style={hasFooter ? undefined : { paddingBottom: insets.bottom }}
+              className="border-t border-border bg-background px-4 pt-3"
+              style={{ paddingBottom: Math.max(insets.bottom, 16) }}
             >
-              {children}
+              {footer}
             </View>
-            {hasFooter ? (
-              <BottomSheetFooter
-                bottomInset={insets.bottom}
-                onHeightChange={setFooterHeight}
-                open={open}
-              >
-                {footer}
-              </BottomSheetFooter>
-            ) : null}
-          </BottomSheetFooterHeightContext>
+          ) : null}
         </View>
       </View>
     </ModalBottomSheet>
   );
 }
-
-/** Move the footer itself so its hit target follows the keyboard on both platforms. */
-function BottomSheetFooter({
-  bottomInset,
-  children,
-  onHeightChange,
-  open,
-}: {
-  bottomInset: number;
-  children: ReactNode;
-  onHeightChange: (height: number) => void;
-  open: boolean;
-}) {
-  const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
-  const footerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: open ? Math.min(0, keyboardHeight.get()) : 0 }],
-  }));
-  const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => onHeightChange(event.nativeEvent.layout.height),
-    [onHeightChange],
-  );
-
-  return (
-    <Animated.View
-      className="shrink-0 border-t border-border bg-background px-4 pt-3"
-      onLayout={handleLayout}
-      style={[{ paddingBottom: Math.max(bottomInset, 16) }, footerStyle]}
-    >
-      {children}
-    </Animated.View>
-  );
-}
-
-/** Form scrolling accounts for the measured footer without duplicating its geometry in a feature. */
-function BottomSheetScrollView(props: ScrollViewProps) {
-  const footerHeight = use(BottomSheetFooterHeightContext);
-  return <KeyboardAwareScrollView {...props} bottomOffset={footerHeight + 16} />;
-}
-
-export const BottomSheet = Object.assign(BottomSheetRoot, { ScrollView: BottomSheetScrollView });
 
 function resolveSheetHeights(
   availableCardHeight: number,

@@ -22,27 +22,6 @@ and is clamped to the available screen height. Product components choose semanti
 fixed height, but do not receive detents, geometry, close reasons, or types from the underlying UI
 library.
 
-For forms, use `BottomSheet.ScrollView` for the body. It accepts React Native scroll-view props and
-keeps the focused input above both the keyboard and the measured footer, including large text.
-The footer follows the system keyboard coordinates on the UI thread; no independent animation is
-started, and hiding the keyboard or closing the sheet restores its resting position. The scroll
-view supplies the keyboard space, so callers must not add a second keyboard-avoiding container or
-hardcode the footer height. Sheets without a footer keep their existing layout.
-
-```tsx
-<BottomSheet
-  footer={<Button onPress={createItem}>Create item</Button>}
-  onClose={close}
-  open={isOpen}
-  size="large"
-  title="Create item"
->
-  <BottomSheet.ScrollView keyboardShouldPersistTaps="handled">
-    <TextField>{/* form input */}</TextField>
-  </BottomSheet.ScrollView>
-</BottomSheet>
-```
-
 ```tsx
 <BottomSheet
   footer={<Button onPress={createItem}>Create item</Button>}
