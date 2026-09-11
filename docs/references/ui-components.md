@@ -16,7 +16,11 @@ interfaces keep their own interaction contracts.
 Cherry-rendered menus share their row, bounded panel, and lifecycle owners. Their private
 `MenuOverlay` uses a transparent system modal for background accessibility isolation and native
 Back/Escape, while CherryUI owns content, focus, motion, and action dispatch after dismissal.
-The composer's trigger morph is a placement variant, not a separate menu interaction implementation.
+The composer's trigger morph uses the private `KeyboardMenuOverlay` variant, backed by
+`OverKeyboardView`, to preserve editor focus and the current keyboard state. Both variants share
+rows, accessibility focus, and action dispatch; the keyboard variant handles Back and waits for
+overlay removal before dispatch. Its placement follows the live trigger on the UI thread through
+opening and closing, including ongoing keyboard motion.
 
 One rule governs every platform decision:
 
