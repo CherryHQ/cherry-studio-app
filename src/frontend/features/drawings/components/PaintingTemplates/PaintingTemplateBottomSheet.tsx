@@ -73,8 +73,8 @@ export function PaintingTemplateBottomSheet({
   const [defaultModelId] = usePreference('feature.paintings.default_model_id');
   const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(null);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
-  const [values, setValues] = useState(() => template.fields.map((field) => field.value));
-  const [isPromptVisible, setIsPromptVisible] = useState(false);
+  const [prompt, setPrompt] = useState(() => createPaintingTemplatePrompt(template));
+  const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPickingImages, setIsPickingImages] = useState(false);
   const submitLock = useRef(false);
@@ -88,10 +88,9 @@ export function PaintingTemplateBottomSheet({
   const canCreate =
     Boolean(selectedModel) &&
     isModelCompatible &&
-    isPaintingTemplateInputValid(template, values, attachments.length) &&
+    isPaintingTemplateInputValid(template, prompt, attachments.length) &&
     attachments.every(isComposerAttachmentReady) &&
     !isPickingImages;
-  const prompt = createPaintingTemplatePrompt(template, values);
 
   async function createPainting() {
     if (submitLock.current || !canCreate || !selectedModel || !mode) return;
@@ -288,46 +287,40 @@ export function PaintingTemplateBottomSheet({
             ) : null}
           </View>
 
-          <View className="gap-4">
-            {template.fields.map((field, index) => (
-              <TextField key={field.label} invalid={values[index].trim().length === 0}>
-                <TextField.Label>{field.label}</TextField.Label>
+          <View className="gap-3">
+            <View className="items-start">
+              <Button
+                accessibilityState={{ expanded: isPromptEditorOpen }}
+                disabled={isSubmitting || isPickingImages}
+                onPress={() => {
+                  if (isPromptEditorOpen) Keyboard.dismiss();
+                  setIsPromptEditorOpen((open) => !open);
+                }}
+                size="inline"
+                testID="painting-template-edit-prompt"
+                variant="link"
+              >
+                {t(
+                  isPromptEditorOpen
+                    ? 'painting.templates.finishEditingPrompt'
+                    : 'painting.templates.editPrompt',
+                )}
+              </Button>
+            </View>
+            {isPromptEditorOpen ? (
+              <TextField invalid={prompt.trim().length === 0}>
+                <TextField.Label>{t('painting.templates.prompt')}</TextField.Label>
                 <Input
-                  accessibilityLabel={field.label}
+                  accessibilityLabel={t('painting.templates.prompt')}
+                  autoFocus
                   disabled={isSubmitting}
-                  multiline={field.value.length > 48}
-                  onChangeText={(value) =>
-                    setValues((current) =>
-                      current.map((item, itemIndex) => (itemIndex === index ? value : item)),
-                    )
-                  }
-                  placeholder={field.value}
-                  testID={`painting-template-field-${index}`}
-                  value={values[index]}
+                  multiline
+                  onChangeText={setPrompt}
+                  testID="painting-template-prompt"
+                  value={prompt}
                 />
                 <TextField.Error>{t('painting.templates.required')}</TextField.Error>
               </TextField>
-            ))}
-          </View>
-
-          <View className="items-start gap-3">
-            <Button
-              onPress={() => setIsPromptVisible((visible) => !visible)}
-              size="inline"
-              variant="link"
-            >
-              {t(
-                isPromptVisible ? 'painting.templates.hidePrompt' : 'painting.templates.showPrompt',
-              )}
-            </Button>
-            {isPromptVisible ? (
-              <Text
-                className="text-sm text-muted-foreground"
-                selectable
-                testID="painting-template-prompt"
-              >
-                {prompt}
-              </Text>
             ) : null}
           </View>
         </BottomSheet.ScrollView>

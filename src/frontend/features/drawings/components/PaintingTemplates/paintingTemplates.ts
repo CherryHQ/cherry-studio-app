@@ -2,15 +2,12 @@ import type { ImageProps } from 'expo-image';
 
 import catalog from '../../../../../../assets/paintings/templates/catalog.json';
 import englishTemplates from '../../../../../../assets/paintings/templates/locales/en-us.json';
-import englishFields from '../../../../../../assets/paintings/templates/locales/fields-en-us.json';
-import chineseFields from '../../../../../../assets/paintings/templates/locales/fields-zh-cn.json';
 import chineseTemplates from '../../../../../../assets/paintings/templates/locales/zh-cn.json';
 
 type PaintingTemplateId = keyof typeof englishTemplates;
 
 export type PaintingTemplate = Readonly<{
   aspectRatio?: `${number}:${number}`;
-  fields: readonly { label: string; value: string }[];
   id: PaintingTemplateId;
   preview: ImageProps['source'];
   prompt: string;
@@ -71,17 +68,12 @@ const variablePattern = /\$\{([^{}\r\n]+)\}/g;
 export function getPaintingTemplates(language: string): PaintingTemplate[] {
   const isChinese = language.toLowerCase() === 'zh-cn';
   const translations = isChinese ? chineseTemplates : englishTemplates;
-  const labels = isChinese ? chineseFields : englishFields;
 
   return catalog.map((catalogId) => {
     const id = catalogId as PaintingTemplateId;
     const { label, prompt } = translations[id];
     return {
       aspectRatio: TEMPLATE_REQUIREMENTS[id]?.aspectRatio,
-      fields: [...prompt.matchAll(variablePattern)].map((match, index) => ({
-        label: labels[id][index],
-        value: match[1],
-      })),
       id,
       preview: previews[id],
       prompt,
@@ -102,26 +94,18 @@ export function shufflePaintingTemplates(
   return shuffled;
 }
 
-export function createPaintingTemplatePrompt(
-  template: PaintingTemplate,
-  values: readonly string[],
-): string {
-  let index = 0;
+export function createPaintingTemplatePrompt(template: PaintingTemplate): string {
   return template.prompt
-    .replace(variablePattern, (_match, defaultValue: string) =>
-      (values[index++] ?? defaultValue).trim(),
-    )
+    .replace(variablePattern, (_match, defaultValue: string) => defaultValue.trim())
     .trim();
 }
 
 export function isPaintingTemplateInputValid(
   template: PaintingTemplate,
-  values: readonly string[],
+  prompt: string,
   referenceImageCount: number,
 ): boolean {
   return (
-    (!template.isReferenceImageRequired || referenceImageCount > 0) &&
-    values.length === template.fields.length &&
-    values.every((value) => value.trim().length > 0)
+    (!template.isReferenceImageRequired || referenceImageCount > 0) && prompt.trim().length > 0
   );
 }
