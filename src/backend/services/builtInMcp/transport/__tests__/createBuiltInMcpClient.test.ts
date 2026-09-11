@@ -1,7 +1,7 @@
 import * as mcp from '@ai-sdk/mcp';
 
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
-import { FEISHU_REQUIRED_SCOPES } from '../../plugins/feishu/feishuTools';
+import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
 import { validatePluginConnection } from '../validatePluginConnection';
 
@@ -131,7 +131,7 @@ const userCredential = {
     refreshToken: 'user-refresh',
     expiresAt: 7200000,
     refreshExpiresAt: 86400000,
-    scope: FEISHU_REQUIRED_SCOPES.join(' '),
+    scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
   },
 };
 
@@ -184,10 +184,25 @@ it('does not send a user token if its durable authorization is revoked during re
     mockGetGrant.mockRejectedValue(new Error('revoked'));
     return userCredential;
   });
-  await expect(
-    createBuiltInMcpClient('feishu', 'user-grant', new AbortController().signal),
-  ).rejects.toMatchObject({ reason: 'authorization' });
+  const client = await createBuiltInMcpClient('feishu', 'user-grant', new AbortController().signal);
+  try {
+    await expect(client.listTools()).rejects.toMatchObject({ reason: 'authorization' });
+  } finally {
+    await client.close();
+  }
   expect(mockFetch).not.toHaveBeenCalled();
+});
+
+it('validates a calendar-only Feishu grant without requiring hosted document access', async () => {
+  const calendarCredential = {
+    ...userCredential,
+    tokens: { ...userCredential.tokens, scope: 'calendar:calendar:read' },
+  };
+  await expect(validatePluginConnection('feishu', 'feishu_user', calendarCredential)).resolves.toBe(
+    'Feishu user',
+  );
+  expect(mockFetch).not.toHaveBeenCalled();
+  expect(toolRequests()).toEqual([]);
 });
 
 it('connects Feishu as the user without storing credentials in MCP configuration or calling business tools', async () => {
@@ -549,6 +564,29 @@ it('injects the latest GitHub user credential for each independent request witho
     expect(JSON.stringify(jest.mocked(mcp.createMCPClient).mock.calls[0][0])).not.toMatch(
       /github-access|github-refresh|public-client-secret/,
     );
+  } finally {
+    await client.close();
+  }
+});
+
+it('limits the hosted Feishu allowlist to tools covered by the current user grant', async () => {
+  mockGetGrant.mockResolvedValue({ id: 'grant-user', authMethod: 'feishu_user' });
+  mockResolveCredential.mockResolvedValue({
+    ...userCredential,
+    tokens: { ...userCredential.tokens, scope: 'calendar:calendar:read contact:user:search' },
+  });
+  const client = await createBuiltInMcpClient('feishu', 'grant-user', new AbortController().signal);
+  try {
+    const catalog = await client.listTools();
+    expect(catalog.tools.some((tool) => tool.name === 'calendar_get_primary')).toBe(true);
+    expect(mockFetch).toHaveBeenCalled();
+    for (const [, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+      expect(new Headers(init.headers).get('X-Lark-MCP-Allowed-Tools')).toBe('search-user');
+    }
+    await expect(client.callTool({ name: 'create-doc', args: {} })).rejects.toMatchObject({
+      reason: 'access',
+    });
+    expect(toolRequests()).toEqual([]);
   } finally {
     await client.close();
   }

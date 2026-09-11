@@ -23,7 +23,7 @@ Remote MCP servers remain in Settings; connected plugins also participate in Age
 | --- | --- | --- |
 | GitHub | Publisher-configured OAuth App authorization with account confirmation, or a personal access token; read-only `get_me` validation | `get_me`, `search_repositories`, `search_issues`, `search_pull_requests`, `get_file_contents`, `list_pull_requests`, `issue_read`, `pull_request_read`, `issue_write`, `add_issue_comment`, `create_pull_request` |
 | Amap | User-supplied Web Service key; read-only Beijing `maps_weather` validation | `maps_text_search`, `maps_around_search`, `maps_geo`, `maps_regeocode`, `maps_direction_driving`, `maps_direction_walking`, `maps_direction_transit_integrated`, `maps_weather` |
-| Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity, scopes and `fetch-doc` discovery without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
+| Feishu | Browser-confirmed user authorization with a new or existing application. Setup checks account identity and discovery of at least one authorized tool without a business-tool call | Nine hosted document/people tools and nineteen curated wiki, Base, task and calendar operations; see [Feishu Business Tools](#feishu-business-tools) |
 
 ### Official Cloud Coverage
 
@@ -180,12 +180,14 @@ accounts are supported; cross-brand Lark handoff is rejected.
 
 The requested scopes are generated from the admitted tool manifest plus `offline_access`.
 Chat, media and board scopes remain dependencies of document tools, without standalone messaging
-or file-transfer operations. Connection requires every declared scope and names the missing ones; renewal capability
-is proven by an issued refresh token rather than an echoed `offline_access` scope. Partial grants
-cannot connect and no partially enabled catalog is advertised. Profile lookup and MCP discovery
-follow authorization, so merely holding application credentials is not connection success.
-Existing document-only grants must reauthorize the saved application for the expanded scope set;
-token refresh does not silently expand consent. No database or credential-format migration is needed.
+or file-transfer operations. Discovery intersects each tool's declared scopes with the actual grant;
+partial grants retain their permitted tools. Renewal capability is proven by an issued refresh token
+rather than an echoed `offline_access` scope. Setup checks the account identity and at least one
+admitted tool, so calendar-only access does not depend on document permissions or hosted discovery.
+Existing grants keep their permitted capabilities; reauthorize the saved application only to add
+permissions. Refresh does not expand consent. The plugin screen checks credential expiry and whether
+any tools are permitted without making a network request. No database or credential-format migration
+is needed.
 
 One method queue serializes exchanges, renewal, persistence and grant commits. Explicit
 authorization cancellation invalidates the attempt before late work can commit. Ordinary tool-call
@@ -226,14 +228,22 @@ not an installable physical-device IPA.
 
 `plugins/feishu/feishuTools.ts` owns the combined policy and scope union. Each domain declaration
 owns its description, input schema, read/write classification, required scopes and fixed request
-mapping. `createFeishuClient` combines remote discovery with local definitions and routes exact
-tool names. Local definitions appear once on the first discovery page; remote cursors are retained.
-`feishuOpenApi` owns HTTP dispatch, safe error mapping, grant rechecks and cancellation. The shared
-plugin contract exposes only `serverInfo`, `listTools`, `callTool` and `close`; no in-process MCP
-server or general URL/request tool is introduced. Existing Agent binding, approval and result
+mapping. `createFeishuClient` filters discovery by the current grant and routes exact tool names.
+The hosted client initializes lazily. Its complete paginated discovery has a separate five-second
+deadline; failure preserves permitted local tools and reports a safe discovery warning. The combined
+tool catalog is returned as one page. `feishuOpenApi` owns HTTP dispatch, safe error mapping, grant
+rechecks and cancellation. The shared plugin client also exposes optional discovery warnings; no
+in-process MCP server or general URL/request tool is introduced. Existing Agent binding, approval and result
 handling own both routes, and client close cancels pending local calls.
 
-All lists return one bounded page and preserve continuation tokens. Base filtering/sorting overrides
+Each turn retains partial discovery warnings alongside its permitted tools. The Host supplies these
+status records to the model even if no MCP tools loaded, so it can explain unavailable capabilities
+without pretending the plugin was never connected. Unsupported individual parameter schemas are
+omitted with a warning rather than discarding the whole server. Tool search stays local to the frozen
+turn catalog; Chinese character-pair matching and Chinese domain descriptions support queries such
+as `飞书日历`. Search never expands authorization or bypasses invocation approval.
+
+Business API lists return one bounded page and preserve continuation tokens. Base filtering/sorting overrides
 the supplied view, so descriptions warn that it searches the whole table. Task timestamps are
 milliseconds; calendar timestamps are seconds, all-day end dates are exclusive, event queries use
 windows shorter than 40 days, and free/busy queries require explicit offsets and at most 90 days.

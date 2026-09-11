@@ -16,6 +16,8 @@ export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
 
 /** The tool-only boundary consumed by plugin setup and the existing MCP runtime. */
 export interface PluginClient extends Pick<MCPClient, 'serverInfo' | 'listTools' | 'close'> {
+  /** Safe partial-discovery failures for the current catalog; never raw upstream messages. */
+  readonly discoveryWarnings?: readonly string[];
   callTool(input: {
     name: string;
     args: Record<string, unknown>;
@@ -60,7 +62,8 @@ export interface PluginDefinition {
   readonly tools: PluginToolPolicy;
   createClient(context: PluginClientContext): Promise<PluginClient>;
   readonly validation: {
-    readonly tool: string;
+    /** Omit to accept any admitted discovered tool without executing a business operation. */
+    readonly tool?: string;
     /** Omit to validate discovery only. Never use a write tool for setup. */
     readonly args?: Record<string, unknown>;
     accountLabel(output: unknown): string;

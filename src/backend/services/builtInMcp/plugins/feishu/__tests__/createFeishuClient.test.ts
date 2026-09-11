@@ -1,9 +1,10 @@
 import { HttpError } from '@/backend/services/http';
+import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
 import { createFeishuClient } from '../createFeishuClient';
-import { FEISHU_REQUIRED_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
+import { FEISHU_REQUESTED_TOOL_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -24,7 +25,7 @@ const credential = {
     refreshToken: 'private-refresh',
     expiresAt: 3600000,
     refreshExpiresAt: 86400000,
-    scope: FEISHU_REQUIRED_SCOPES.join(' '),
+    scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
   },
 };
 const remoteTool = {
@@ -67,18 +68,18 @@ afterEach(async () => {
   await client.close();
 });
 
-it('combines only admitted remote tools and local operations while preserving remote pagination and schemas', async () => {
+it('collects admitted hosted pages and publishes them with local tools in one catalog', async () => {
   mockRemote.listTools.mockResolvedValueOnce({
     tools: [remoteTool, { name: 'fetch-file' }, { name: 'base_list_tables' }],
     nextCursor: 'remote-next',
   });
+  mockRemote.listTools.mockResolvedValueOnce({ tools: [{ ...remoteTool, name: 'get-user' }] });
   const first = await client.listTools();
-  expect(first.nextCursor).toBe('remote-next');
+  expect(first.nextCursor).toBeUndefined();
   expect(first.tools.find((tool) => tool.name === 'search-doc')).toEqual(remoteTool);
   expect(first.tools.filter((tool) => tool.name === 'base_list_tables')).toHaveLength(1);
   expect(first.tools.some((tool) => tool.name === 'fetch-file')).toBe(false);
-  const next = await client.listTools({ params: { cursor: 'remote-next' } });
-  expect(next.tools).toEqual([remoteTool]);
+  expect(first.tools.some((tool) => tool.name === 'get-user')).toBe(true);
   expect(mockRemote.listTools.mock.calls[1][0].params).toEqual({ cursor: 'remote-next' });
   expect(createOfficialMcpClient).toHaveBeenCalledWith(
     expect.objectContaining({ tools: expect.not.objectContaining({ base_list_tables: 'read' }) }),
@@ -225,7 +226,7 @@ it('closes in-flight local calls and refuses later calls without replaying an un
     client.callTool({ name: 'base_list_tables', args: { app_token: 'bascnOne' } }),
   ).rejects.toMatchObject({ reason: 'cancelled' });
   expect(mockRequest).toHaveBeenCalledTimes(1);
-  expect(mockRemote.close).toHaveBeenCalledTimes(1);
+  expect(mockRemote.close).not.toHaveBeenCalled();
 });
 
 it('keeps later calls independent of the initialization deadline', async () => {
@@ -302,4 +303,90 @@ it('treats a read-only POST failure as a read and an unreadable write result as 
     }),
   ).rejects.toMatchObject({ reason: 'unknown-write' });
   expect(mockRequest).toHaveBeenCalledTimes(2);
+});
+
+it('loads only the granted calendar tools and rechecks scope changes on later discovery and calls', async () => {
+  expect(createOfficialMcpClient).not.toHaveBeenCalled();
+  jest.mocked(context.getCredential).mockResolvedValue({
+    ...credential,
+    tokens: { ...credential.tokens, scope: 'calendar:calendar:read' },
+  });
+  const catalog = await client.listTools();
+  expect(catalog.tools.map((tool) => tool.name).sort()).toEqual([
+    'calendar_get_primary',
+    'calendar_list',
+  ]);
+  await client.callTool({ name: 'calendar_get_primary', args: {} });
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  expect(createOfficialMcpClient).not.toHaveBeenCalled();
+
+  jest.mocked(context.getCredential).mockResolvedValue({
+    ...credential,
+    tokens: { ...credential.tokens, scope: 'task:task:read' },
+  });
+  expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+    'task_get',
+    'task_list',
+  ]);
+  await expect(client.callTool({ name: 'calendar_get_primary', args: {} })).rejects.toMatchObject({
+    reason: 'authorization',
+  });
+  await expect(client.callTool({ name: 'search-doc', args: { query: 'x' } })).rejects.toMatchObject(
+    { reason: 'access' },
+  );
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  expect(createOfficialMcpClient).not.toHaveBeenCalled();
+});
+
+it.each(['initialization', 'listing'] as const)(
+  'keeps local tools usable and reports a safe warning after hosted %s fails',
+  async (stage) => {
+    const failure = new PluginError('network', 'private-access private-secret');
+    if (stage === 'initialization')
+      jest.mocked(createOfficialMcpClient).mockRejectedValueOnce(failure);
+    else mockRemote.listTools.mockRejectedValueOnce(failure);
+    const catalog = await client.listTools();
+    expect(catalog.tools).toHaveLength(19);
+    expect(catalog.tools.some((tool) => tool.name === 'calendar_get_primary')).toBe(true);
+    expect(catalog.tools.some((tool) => tool.name === 'search-doc')).toBe(false);
+    expect(client.discoveryWarnings).toEqual([expect.stringContaining('document tools')]);
+    expect(JSON.stringify(client.discoveryWarnings)).not.toMatch(/private-access|private-secret/);
+    await client.callTool({ name: 'calendar_get_primary', args: {} });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    await client.listTools();
+    expect(client.discoveryWarnings).toEqual([]);
+  },
+);
+
+it('bounds hosted discovery without cancelling the independent local catalog', async () => {
+  jest.useFakeTimers();
+  try {
+    mockRemote.listTools.mockImplementation(
+      ({ options }) =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+    );
+    const pending = client.listTools();
+    await jest.advanceTimersByTimeAsync(5_000);
+    const catalog = await pending;
+    expect(catalog.tools).toHaveLength(19);
+    expect(client.discoveryWarnings).toEqual([expect.stringContaining('timeout')]);
+    await client.callTool({ name: 'calendar_get_primary', args: {} });
+    expect(mockRequest.mock.calls[0][1].signal.aborted).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('does not disguise an aborted discovery as a successful partial catalog', async () => {
+  const caller = new AbortController();
+  mockRemote.listTools.mockImplementationOnce(async () => {
+    caller.abort();
+    throw new Error('private transport failure');
+  });
+  await expect(client.listTools({ options: { signal: caller.signal } })).rejects.toThrow();
+  expect(client.discoveryWarnings).toEqual([]);
 });

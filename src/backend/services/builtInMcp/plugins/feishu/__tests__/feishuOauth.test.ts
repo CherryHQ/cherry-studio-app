@@ -1,7 +1,7 @@
 import { HttpError } from '@/backend/services/http/HttpError';
 
-import { feishuOauth, missingFeishuScopes } from '../feishuOauth';
-import { FEISHU_REQUIRED_SCOPES } from '../feishuTools';
+import { feishuOauth } from '../feishuOauth';
+import { FEISHU_REQUESTED_TOOL_SCOPES } from '../feishuTools';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -60,7 +60,7 @@ it('requests the admitted tool scopes plus offline access, with application cred
   expect(request.headers.Authorization).toBe(`Basic ${btoa('cli_cherry:private-secret')}`);
   expect(new URLSearchParams(request.body).get('scope')?.split(' ')).toEqual([
     'offline_access',
-    ...FEISHU_REQUIRED_SCOPES,
+    ...FEISHU_REQUESTED_TOOL_SCOPES,
   ]);
   expect(request.body).not.toContain('private-secret');
 });
@@ -117,9 +117,7 @@ it('uses token response lifetimes and actual scopes rather than assuming request
   expect(result.status).toBe('approved');
   if (result.status !== 'approved') throw new Error('Expected a token response');
   expect(result.tokens).toMatchObject({ expiresAt: 301000, refreshExpiresAt: 601000 });
-  expect(missingFeishuScopes(result.tokens)).toEqual(
-    FEISHU_REQUIRED_SCOPES.filter((scope) => scope !== 'docx:document:readonly'),
-  );
+  expect(result.tokens.scope).toBe('docx:document:readonly');
 });
 
 it('rotates refresh tokens using JSON and preserves omitted scope/refresh-expiry metadata', async () => {
@@ -133,7 +131,7 @@ it('rotates refresh tokens using JSON and preserves omitted scope/refresh-expiry
       refreshToken: 'previous-refresh',
       expiresAt: 1000,
       refreshExpiresAt: 999999,
-      scope: FEISHU_REQUIRED_SCOPES.join(' '),
+      scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
     },
     signal,
   );
@@ -141,7 +139,7 @@ it('rotates refresh tokens using JSON and preserves omitted scope/refresh-expiry
     accessToken: 'next-access',
     refreshToken: 'next-refresh',
     refreshExpiresAt: 999999,
-    scope: FEISHU_REQUIRED_SCOPES.join(' '),
+    scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
   });
   expect(mockRequest.mock.calls[0]).toEqual([
     'https://open.feishu.cn',

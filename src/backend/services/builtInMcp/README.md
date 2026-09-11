@@ -56,16 +56,18 @@ observation, browser actions and form state; backend observers own polling and c
 - GitHub injects a Bearer token and `X-MCP-Tools`; Amap injects a key only into the outgoing URL.
   Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT`
   plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and
-  `fetch-doc` discovery without a business write. Each method owns credential injection.
+  at least one permitted tool without a business call. Each method owns credential injection.
 - `plugins/feishu/feishuCredentials` owns credential formats and field validation. `feishuOauth`
   implements personal-agent registration, device authorization and user-token renewal through the existing
-  HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, requires every admitted tool
-  scope and an issued refresh token, and retains application credentials across disconnect.
-- `plugins/feishu/feishuTools` derives discovery policy and the required scope union from the hosted
+  HTTP service. `FeishuAuthorizationRuntime` serializes authorization steps, accepts partial tool
+  grants with an issued refresh token, and retains application credentials across disconnect.
+- `plugins/feishu/feishuTools` derives per-grant discovery policy and the requested scope union from the hosted
   tool metadata and domain declarations. Each local declaration owns input validation and its fixed
   API operation. `createFeishuClient` routes the tool-only client contract to hosted MCP or
   `feishuOpenApi`, which shares credential resolution, rechecks the grant and sanitizes errors.
-  Its OpenAPI requests use the existing HTTP service; closing the client cancels local calls.
+  Hosted discovery initializes lazily with its own deadline; failure preserves local tools and
+  exposes safe discovery warnings. Its OpenAPI requests use the existing HTTP service; closing
+  the client cancels local calls.
 - Callers share one credential renewal, including its failure. A caller cancels only its wait;
   disconnect, successful replacement and host disposal invalidate the renewal owner. Saving replaces
   the complete native token bundle after checking the grant ID.
@@ -111,7 +113,9 @@ Every plugin tool keeps `source: 'mcp'`. Agent binding, disabled tools, approval
 transcript results, and runtime result limits remain owned by the existing agent/MCP pipeline.
 Connecting a plugin does not grant all Agents access. Upstream credentials never grant tool approval.
 Executable catalog descriptions include the saved server name and builtin id so deferred discovery
-can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`.
+can find tools by platform names such as `GitHub`, `github`, `高德地图`, and `amap`. Chinese domain
+descriptions and character-pair matching also support `飞书日历`. Partial discovery failures reach
+the current turn's availability instructions rather than silently disappearing.
 New upstream tools are not automatically admitted: discovery and invocation both enforce the
 allowlist. The existing runtime validates discovered input schemas and applies result-size limits.
 
@@ -122,7 +126,7 @@ and version objects inside each method.
 
 The current version supports one connection per bundled provider. Feishu combines nine hosted
 document/people tools with nineteen curated wiki, Base, task and calendar operations. Existing
-document-only grants require reauthorization. See [Feishu Business Tools](../../../../docs/references/agent/built-in-mcp-design.md#feishu-business-tools)
+grants retain permitted tools; adding permissions requires reauthorization. See [Feishu Business Tools](../../../../docs/references/agent/built-in-mcp-design.md#feishu-business-tools)
 for names, pagination, time/patch semantics and size limits. Feishu attachment transfer is outside
 the product scope. Broader API coverage, multiple accounts and other providers' OAuth remain future slices. Write requests
 are never replayed; an uncertain write outcome tells the caller to inspect the service before

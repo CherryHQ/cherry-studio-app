@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { FEISHU_API_TOOLS } from '../feishuTools';
+import { FEISHU_API_TOOLS, getFeishuToolPolicy } from '../feishuTools';
 
 function request(name: string, input: Record<string, unknown>) {
   const tool = FEISHU_API_TOOLS.get(name);
@@ -171,4 +171,19 @@ it.each([
   ],
 ])('rejects unsupported or unsafe %s arguments before sending a request', (name, input) => {
   expect(() => request(name as string, input as Record<string, unknown>)).toThrow();
+});
+
+it('admits a partial grant by tool, without exposing unrelated or write-only operations', () => {
+  expect(getFeishuToolPolicy('calendar:calendar:read task:task:read')).toEqual({
+    calendar_list: 'read',
+    calendar_get_primary: 'read',
+    task_list: 'read',
+    task_get: 'read',
+  });
+  expect(getFeishuToolPolicy('search:docs:read')).not.toHaveProperty('search-doc');
+  expect(getFeishuToolPolicy('search:docs:read wiki:wiki:readonly')).toHaveProperty(
+    'search-doc',
+    'read',
+  );
+  expect(getFeishuToolPolicy('offline_access')).toEqual({});
 });

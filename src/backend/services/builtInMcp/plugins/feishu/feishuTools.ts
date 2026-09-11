@@ -50,9 +50,19 @@ export const FEISHU_TOOL_POLICY: PluginToolPolicy = {
   ...FEISHU_REMOTE_TOOL_POLICY,
   ...Object.fromEntries([...FEISHU_API_TOOLS].map(([name, tool]) => [name, tool.access])),
 };
-export const FEISHU_REQUIRED_SCOPES = [
+export const FEISHU_REQUESTED_TOOL_SCOPES = [
   ...new Set([
     ...Object.values(FEISHU_REMOTE_TOOLS).flatMap((tool) => [...tool.scopes]),
     ...[...FEISHU_API_TOOLS.values()].flatMap((tool) => tool.scopes),
   ]),
 ];
+
+/** Scope declarations govern discovery as well as execution; partial grants stay usable. */
+export function getFeishuToolPolicy(scope: string): PluginToolPolicy {
+  const granted = new Set(scope.split(/\s+/));
+  return Object.fromEntries(
+    [...Object.entries(FEISHU_REMOTE_TOOLS), ...FEISHU_API_TOOLS.entries()]
+      .filter(([, tool]) => tool.scopes.every((required) => granted.has(required)))
+      .map(([name, tool]) => [name, tool.access]),
+  );
+}

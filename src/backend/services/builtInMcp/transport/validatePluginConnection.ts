@@ -42,14 +42,16 @@ export async function validatePluginConnection(
         options: { signal: operationSignal },
         ...(cursor ? { params: { cursor } } : {}),
       });
-      const definition = page.tools.find((tool) => tool.name === name);
+      const definition = page.tools.find((tool) =>
+        name ? tool.name === name : Object.hasOwn(plugin.tools, tool.name),
+      );
       if (definition) {
         if (!plugin.validation.args) {
           operationSignal.throwIfAborted();
           return plugin.validation.accountLabel(undefined);
         }
         const output = await client.callTool({
-          name,
+          name: definition.name,
           args: plugin.validation.args,
           options: { abortSignal: operationSignal },
         });

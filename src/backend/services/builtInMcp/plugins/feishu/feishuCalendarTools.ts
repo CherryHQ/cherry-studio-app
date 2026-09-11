@@ -82,7 +82,7 @@ export const feishuCalendarTools = [
     access: 'read',
     scopes: ['calendar:calendar:read'],
     description:
-      'List one page of calendars accessible to the authorized Feishu user, including IDs, roles and calendar types. Continue with page_token while has_more is true. Third-party calendars are read-only.',
+      '飞书日历、日程、忙闲、参会人。List one page of calendars accessible to the authorized Feishu user, including IDs, roles and calendar types. Continue with page_token while has_more is true. Third-party calendars are read-only.',
     input: z.strictObject({
       ...FeishuPageShape,
       page_size: z
@@ -104,7 +104,7 @@ export const feishuCalendarTools = [
     access: 'read',
     scopes: ['calendar:calendar:read'],
     description:
-      'Get the authorized Feishu user’s primary calendar and its actual calendar_id for subsequent event calls.',
+      '飞书日历、日程、忙闲、参会人。Get the authorized Feishu user’s primary calendar and its actual calendar_id for subsequent event calls.',
     input: z.strictObject({}),
     request: () => ({
       method: 'POST',
@@ -117,7 +117,7 @@ export const feishuCalendarTools = [
     access: 'read',
     scopes: ['calendar:calendar.event:read'],
     description:
-      'Query a Feishu calendar’s event instances in a time window shorter than 40 days, including occurrences of recurring events. Times are Unix seconds. Use narrower windows when results are large.',
+      '飞书日历、日程、忙闲、参会人。Query a Feishu calendar’s event instances in a time window shorter than 40 days, including occurrences of recurring events. Times are Unix seconds. Use narrower windows when results are large.',
     input: z
       .strictObject({
         ...calendarShape,
@@ -141,7 +141,7 @@ export const feishuCalendarTools = [
     access: 'read',
     scopes: ['calendar:calendar.event:read'],
     description:
-      'Read a Feishu event before changing its time, title or description. The event ID identifies either a series or a particular occurrence; preserve the intended ID.',
+      '飞书日历、日程、忙闲、参会人。Read a Feishu event before changing its time, title or description. The event ID identifies either a series or a particular occurrence; preserve the intended ID.',
     input: z.strictObject(eventShape),
     request: (input) => ({
       method: 'GET',
@@ -154,7 +154,7 @@ export const feishuCalendarTools = [
     access: 'write',
     scopes: ['calendar:calendar.event:create'],
     description:
-      'Create a Feishu event in the selected calendar. Supply matching start/end types; all-day end dates are exclusive. This creates the event only; invite people separately with calendar_add_attendees.',
+      '飞书日历、日程、忙闲、参会人。Create a Feishu event in the selected calendar. Supply matching start/end types; all-day end dates are exclusive. This creates the event only; invite people separately with calendar_add_attendees.',
     input: z
       .strictObject({
         ...calendarShape,
@@ -179,7 +179,7 @@ export const feishuCalendarTools = [
     access: 'write',
     scopes: ['calendar:calendar.event:update'],
     description:
-      'Update only supplied event fields. When rescheduling, supply both start_time and end_time from the intended occurrence; omission preserves fields. Read calendar_get_event first. Omit need_notification to preserve the existing setting, or set it explicitly to control notifications.',
+      '飞书日历、日程、忙闲、参会人。Update only supplied event fields. When rescheduling, supply both start_time and end_time from the intended occurrence; omission preserves fields. Read calendar_get_event first. Omit need_notification to preserve the existing setting, or set it explicitly to control notifications.',
     input: z.strictObject({
       ...eventShape,
       changes: z
@@ -206,7 +206,7 @@ export const feishuCalendarTools = [
     access: 'read',
     scopes: ['calendar:calendar.free_busy:read'],
     description:
-      'Query one user’s primary-calendar busy intervals using their open ID. Time bounds must include an explicit UTC offset or Z and span at most 90 days. Other users’ availability remains subject to Feishu permissions.',
+      '飞书日历、日程、忙闲、参会人。Query one user’s primary-calendar busy intervals using their open ID. Time bounds must include an explicit UTC offset or Z and span at most 90 days. Other users’ availability remains subject to Feishu permissions.',
     input: z
       .strictObject({
         user_id: FeishuOpenIdSchema,
@@ -231,7 +231,7 @@ export const feishuCalendarTools = [
     access: 'write',
     scopes: ['calendar:calendar.event:update'],
     description:
-      'Invite people to an existing Feishu event using verified open IDs. Existing attendees are preserved. This may send invitation notifications; rooms, groups and external email attendees are not supported by this tool.',
+      '飞书日历、日程、忙闲、参会人。Invite people to an existing Feishu event using verified open IDs. Existing attendees are preserved. This may send invitation notifications; rooms, groups and external email attendees are not supported by this tool.',
     input: z.strictObject({
       ...eventShape,
       attendees: z

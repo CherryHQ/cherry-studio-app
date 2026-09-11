@@ -8,7 +8,7 @@ import {
   type FeishuApplication,
   type FeishuTokens,
 } from './feishuCredentials';
-import { FEISHU_REQUIRED_SCOPES } from './feishuTools';
+import { FEISHU_REQUESTED_TOOL_SCOPES } from './feishuTools';
 
 // Protocol reference: larksuite/cli 9aaedb981b036ca94bd8ec9c630adf0ead9b6d1c,
 // internal/auth/{app_registration,device_flow,uat_client}.go. No CLI process or private web API.
@@ -18,7 +18,7 @@ const REGISTRATION_PATH = '/oauth/v1/app/registration';
 const TOKEN_PATH = '/open-apis/authen/v2/oauth/token';
 
 // Renewal capability is proven by an issued refresh token, not by an echoed scope name.
-const FEISHU_REQUESTED_SCOPES = ['offline_access', ...FEISHU_REQUIRED_SCOPES];
+const FEISHU_REQUESTED_SCOPES = ['offline_access', ...FEISHU_REQUESTED_TOOL_SCOPES];
 
 const secret = z.string().min(1).max(16_384);
 const OauthResponseSchema = z.looseObject({
@@ -171,12 +171,6 @@ function tokensFromResponse(
         : (previous?.refreshExpiresAt ?? 0),
     scope: response.scope ?? previous?.scope ?? '',
   };
-}
-
-/** Plugin scopes absent from the granted set; scope names are safe to display. */
-export function missingFeishuScopes(tokens: FeishuTokens): string[] {
-  const granted = new Set(tokens.scope.split(/\s+/));
-  return FEISHU_REQUIRED_SCOPES.filter((scope) => !granted.has(scope));
 }
 
 export const feishuOauth = {

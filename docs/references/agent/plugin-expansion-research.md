@@ -41,7 +41,7 @@ The connector admits nine hosted tools: `fetch-doc`, `list-docs`, `get-comments`
 `update-doc`, `add-comments`, `search-doc`, `search-user` and `get-user`. It discovers their schemas
 from the service and passes `X-Lark-MCP-UAT` plus `X-Lark-MCP-Allowed-Tools`. Attachment transfer,
 including `fetch-file`, is outside the Feishu plugin's product scope.
-Authorization requires every scope listed for the selected tools in the official guide. Connection
+Each tool is exposed only when its declared scopes are present in the actual grant. Connection
 setup checks account identity, granted scopes and tool discovery; document access remains subject
 to the user's permissions. [Developer tools and permissions](https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server)
 
@@ -53,8 +53,9 @@ client; they do not create a separate application-identity connection.
 
 Nineteen curated wiki, Base, task and calendar operations use official OpenAPI routes through the
 same plugin client and user grant. Domain declarations generate schemas, policy and required scopes;
-one Feishu-owned executor handles HTTP, cancellation and errors. Existing document-only grants must
-reauthorize. The full delivered scope and limits are in [Feishu Business Tools](./built-in-mcp-design.md#feishu-business-tools).
+one Feishu-owned executor handles HTTP, cancellation and errors. Existing grants retain their
+permitted tools; reauthorization adds permissions. Hosted discovery failures preserve local tools
+and report their limitation to the Agent. The full delivered scope and limits are in [Feishu Business Tools](./built-in-mcp-design.md#feishu-business-tools).
 
 Implementation ownership:
 

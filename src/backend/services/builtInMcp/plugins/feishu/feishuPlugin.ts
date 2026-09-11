@@ -2,7 +2,7 @@ import type { PluginDefinition } from '../../pluginDefinition';
 import { createFeishuClient } from './createFeishuClient';
 import { FeishuAuthorizationRuntime } from './FeishuAuthorizationRuntime';
 import { FEISHU_CREDENTIAL_FIELDS, FeishuUserCredentialSchema } from './feishuCredentials';
-import { FEISHU_REMOTE_TOOL_POLICY, FEISHU_TOOL_POLICY } from './feishuTools';
+import { FEISHU_REMOTE_TOOL_POLICY, FEISHU_TOOL_POLICY, getFeishuToolPolicy } from './feishuTools';
 
 export const feishuPlugin: PluginDefinition = {
   serverName: '飞书',
@@ -29,10 +29,14 @@ export const feishuPlugin: PluginDefinition = {
         apply(credential, { headers }) {
           const { tokens } = FeishuUserCredentialSchema.parse(credential);
           headers.set('X-Lark-MCP-UAT', tokens.accessToken);
+          const granted = getFeishuToolPolicy(tokens.scope);
           headers.set(
             'X-Lark-MCP-Allowed-Tools',
             Object.keys(tools)
-              .filter((name) => Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, name))
+              .filter(
+                (name) =>
+                  Object.hasOwn(FEISHU_REMOTE_TOOL_POLICY, name) && Object.hasOwn(granted, name),
+              )
               .join(','),
           );
         },
@@ -41,7 +45,6 @@ export const feishuPlugin: PluginDefinition = {
   ],
   createClient: createFeishuClient,
   validation: {
-    tool: 'fetch-doc',
     accountLabel: () => 'Feishu user',
   },
 };

@@ -48,7 +48,7 @@ export const feishuBaseTools = [
     access: 'read',
     scopes: ['wiki:node:read'],
     description:
-      'Resolve a Feishu /wiki/ node token to its actual resource token and type. For a Base requirement table, use the returned obj_token as app_token in base tools; fetch-doc cannot read Base records.',
+      '飞书多维表格、知识库。Resolve a Feishu /wiki/ node token to its actual resource token and type. For a Base requirement table, use the returned obj_token as app_token in base tools; fetch-doc cannot read Base records.',
     input: z.strictObject({ token: FeishuIdSchema.describe('Node token from the /wiki/ URL.') }),
     request: ({ token }) => ({
       method: 'GET',
@@ -61,7 +61,7 @@ export const feishuBaseTools = [
     access: 'read',
     scopes: ['base:table:read'],
     description:
-      'List one page of tables in a Feishu Base. Continue with page_token when has_more is true.',
+      '飞书多维表格、知识库。List one page of tables in a Feishu Base. Continue with page_token when has_more is true.',
     input: z.strictObject({ ...baseShape, ...FeishuPageShape }),
     request: ({ app_token, page_size = 20, page_token }) => ({
       method: 'GET',
@@ -74,7 +74,7 @@ export const feishuBaseTools = [
     access: 'read',
     scopes: ['base:field:read'],
     description:
-      'Read one page of Base field names, types and options before filtering or writing records. Continue while has_more is true.',
+      '飞书多维表格、知识库。Read one page of Base field names, types and options before filtering or writing records. Continue while has_more is true.',
     input: z.strictObject({ ...tableShape, ...FeishuPageShape }),
     request: (input) => ({
       method: 'GET',
@@ -87,7 +87,7 @@ export const feishuBaseTools = [
     access: 'read',
     scopes: ['base:record:retrieve'],
     description:
-      'Search one page of Feishu Base records with selected fields, conditions and sorting. A filter or sort overrides view_id: the search then covers the whole table. Results are incomplete while has_more is true; pass page_token to continue.',
+      '飞书多维表格、知识库。Search one page of Feishu Base records with selected fields, conditions and sorting. A filter or sort overrides view_id: the search then covers the whole table. Results are incomplete while has_more is true; pass page_token to continue.',
     input: z.strictObject({
       ...tableShape,
       ...FeishuPageShape,
@@ -137,7 +137,7 @@ export const feishuBaseTools = [
     access: 'write',
     scopes: ['base:record:create'],
     description:
-      'Create one record in an existing Feishu Base table. Read its field schema first. This does not create a table or upload files.',
+      '飞书多维表格、知识库。Create one record in an existing Feishu Base table. Read its field schema first. This does not create a table or upload files.',
     input: z.strictObject({
       ...tableShape,
       fields,
@@ -158,7 +158,7 @@ export const feishuBaseTools = [
     access: 'write',
     scopes: ['base:record:update'],
     description:
-      'Update only the supplied fields of one Feishu Base record. Get the record ID from base_search_records and inspect the field schema before writing. Omitted fields are preserved.',
+      '飞书多维表格、知识库。Update only the supplied fields of one Feishu Base record. Get the record ID from base_search_records and inspect the field schema before writing. Omitted fields are preserved.',
     input: z.strictObject({ ...tableShape, record_id: FeishuIdSchema, fields }),
     request: (input) => ({
       method: 'PUT',
