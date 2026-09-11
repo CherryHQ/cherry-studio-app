@@ -65,11 +65,14 @@ Each connection produces at most one frozen guide snapshot with `pluginId`, `ser
 and selected text. Connections are ordered by plugin id and server id; sections retain authored order.
 Tools from different connections cannot collectively satisfy a workflow's prerequisites.
 
-Feishu's guide covers its hosted document/people tools and curated wiki, Base, task and calendar
-operations. Sections remain small and independently gated so partial grants retain their usable
-workflows. When hosted discovery fails or one schema is unsupported, surviving tools still select
-their guides; the Host also retains the existing discovery warnings for the same turn. The section
-limit accommodates the expanded catalog without increasing the 8 KiB content budget.
+Keep guides focused on cross-tool workflows and provider-specific pitfalls, not one section per tool.
+Tool descriptions and input schemas own parameter formats, pagination and limits; shared prompt rules
+own target identification, preserving unrelated fields and uncertain writes. Only add guidance that
+helps select or sequence tools beyond those existing descriptions.
+
+Sections retain their own prerequisites so partial grants keep usable workflows. When hosted discovery
+fails or one schema is unsupported, surviving tools still select their guides; the Host also retains
+the existing discovery warnings for the same turn.
 
 The Host keeps these snapshots in `TurnPlan` beside the executable tools and includes them once in
 the application prompt. Pi receives prepared text only. Guides do not change saved Agent instructions,

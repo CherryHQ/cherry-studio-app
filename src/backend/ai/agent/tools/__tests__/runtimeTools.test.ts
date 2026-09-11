@@ -195,8 +195,7 @@ describe('Agent Runtime MCP tool resolution', () => {
     expect(pluginGuides).toHaveLength(1);
     const content = pluginGuides[0].content;
     expect(content).toContain('## Query Base records');
-    expect(content).toContain('## List my tasks');
-    expect(content).toContain('## Find my primary calendar');
+    expect(content).toContain('## Resolve a wiki link');
     expect(content).not.toContain('## Update a Base record');
     expect(content).not.toContain('fetch-doc');
     expect(content).not.toContain('search-user');

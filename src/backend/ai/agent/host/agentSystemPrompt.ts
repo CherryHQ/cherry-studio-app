@@ -85,9 +85,9 @@ Attachment envelopes state the parser, output format, and delivery status. AnyDo
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 
-These bundled guides describe workflows supported by this turn's selected plugin tools. The Runtime Rules, application capability rules, the user's current request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval, and never require duplicate confirmation.
-Use the raw tool names and platform keywords in each guide to discover the current tools and inspect their parameters before calling them. Raw names in a guide are search hints, not callable aliases. Follow the current tool schema and use the exact name returned by discovery; a guide is not evidence that a tool has been inspected. Stop or explain the limitation when a required tool is unavailable. Never infer additional plugin capabilities from the platform's name.
-For an uncertain write outcome, check the remote state with an available read tool before retrying. If that cannot establish the outcome, report the uncertainty rather than repeat the write.
+These bundled workflows apply to this turn's selected tools. The Runtime Rules, application capability rules, the user's current request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval, and never require duplicate confirmation.
+Raw names are search hints, not callable aliases; a guide is not evidence that a tool has been inspected. Discover tools and inspect their current parameters before using the exact returned name. Explain missing prerequisites instead of inferring capabilities.
+Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.
 
 ${pluginGuides
   .map(

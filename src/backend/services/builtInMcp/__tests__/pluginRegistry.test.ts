@@ -231,11 +231,11 @@ it('selects workflows for all three plugins without advertising unavailable Feis
   });
   const guides = resolveBuiltInPluginGuides([
     selection('github', 'issue_read'),
-    selection('amap', 'maps_direction_driving'),
+    selection('amap', 'maps_around_search'),
     selection('feishu', 'fetch-doc'),
   ]);
   expect(guides.map(({ pluginId }) => pluginId)).toEqual(['amap', 'feishu', 'github']);
-  expect(guides[0].content).toContain('## Driving directions');
+  expect(guides[0].content).toContain('## Search nearby');
   expect(guides[0].content).not.toContain('## Public transport');
   expect(guides[1].content).toContain('## Read a document');
   expect(guides[1].content).not.toContain('update-doc');
@@ -276,26 +276,22 @@ it('covers the expanded Feishu catalog while keeping write workflows out of a re
     selections.filter(({ effect }) => effect === 'read'),
   );
   const [complete] = resolveBuiltInPluginGuides(selections);
-  expect(complete.revision).toBe(2);
+  expect(complete.revision).toBe(3);
   for (const heading of [
-    'Search documents',
-    'Find people',
+    'Read a document',
     'Resolve a wiki link',
     'Query Base records',
-    'List my tasks',
-    'Read a calendar window',
     'Check availability',
   ]) {
     expect(readOnly.content).toContain(`## ${heading}`);
     expect(complete.content).toContain(`## ${heading}`);
   }
   for (const heading of [
+    'Modify an existing document',
+    'Comment on a document',
     'Create a Base record',
     'Update a Base record',
-    'Create a task',
     'Update or complete a task',
-    'Add task members',
-    'Create an event',
     'Update an event',
     'Invite event attendees',
   ]) {
