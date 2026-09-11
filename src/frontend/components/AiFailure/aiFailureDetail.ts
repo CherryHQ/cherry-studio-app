@@ -1,6 +1,6 @@
 export type AiFailureData = {
   code?: string;
-  message?: string;
+  message?: string | null;
   reasonCode?: unknown;
   source?: unknown;
   context?: unknown;

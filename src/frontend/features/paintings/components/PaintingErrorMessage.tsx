@@ -27,7 +27,7 @@ export function PaintingErrorMessage({
           message: message?.trim() ? message : t('painting.errorDetail.unavailable'),
         }}
         message={t('painting.status.failedHint')}
-        testID="painting-error-detail"
+        detailTestID="painting-error-detail"
         title={t('painting.status.failed')}
       />
       {onRetry ? (

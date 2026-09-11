@@ -42,12 +42,12 @@ export function AiFailureMessage({
   data,
   title: fallbackTitle,
   message: fallbackMessage,
-  testID = 'error-part-detail',
+  detailTestID = 'error-part-detail',
 }: {
   data: AiFailureData;
   title?: string;
   message?: string;
-  testID?: string;
+  detailTestID?: string;
 }) {
   const { t } = useTranslation();
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -75,7 +75,11 @@ export function AiFailureMessage({
         title={title}
       />
       {isDetailOpen ? (
-        <AiFailureDetailSheet data={data} testID={testID} onClose={() => setIsDetailOpen(false)} />
+        <AiFailureDetailSheet
+          data={data}
+          testID={detailTestID}
+          onClose={() => setIsDetailOpen(false)}
+        />
       ) : null}
     </>
   );
