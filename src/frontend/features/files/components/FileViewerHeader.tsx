@@ -1,17 +1,16 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { type MenuItem, useToast } from '@cherrystudio/ui/components';
-import * as Sharing from 'expo-sharing';
-import { useRef, useState } from 'react';
+import { type MenuItem } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
 import { useSaveImageToPhotos } from '@/frontend/components/ArtifactPreview';
-import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import { shareFile } from '@/frontend/utils/shareFile';
+import {
+  fileEntryPreviewKind,
+  useOpenFileEntry,
+  useShareFile,
+} from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 
-const logger = loggerService.withContext('FileViewer');
 const EMPTY_ITEMS: readonly MenuItem[] = [];
 
 export function FileViewerHeader({
@@ -22,32 +21,11 @@ export function FileViewerHeader({
   items?: readonly MenuItem[];
 }) {
   const { t } = useTranslation();
-  const { toast } = useToast();
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
   const saveToPhotos = useSaveImageToPhotos(file.uri);
-  const sharing = useRef(false);
-  const [isSharing, setIsSharing] = useState(false);
+  const { isSharing, share } = useShareFile(file);
   const isImage = fileEntryPreviewKind(file.entry) === 'image';
-
-  const share = async () => {
-    if (sharing.current) return;
-    sharing.current = true;
-    setIsSharing(true);
-    try {
-      if (await Sharing.isAvailableAsync()) {
-        await shareFile(file);
-      } else {
-        toast.show({ label: t('fileViewer.shareUnavailable'), variant: 'danger' });
-      }
-    } catch (error) {
-      logger.warn('File sharing failed', error as Error, { entryId: file.entry.id });
-      toast.show({ label: t('fileViewer.shareFailed'), variant: 'danger' });
-    } finally {
-      sharing.current = false;
-      setIsSharing(false);
-    }
-  };
 
   const menuItems: MenuItem[] = [
     ...items,

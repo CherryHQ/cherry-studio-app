@@ -58,6 +58,7 @@ import {
   type JobStatus,
 } from '@/shared/data/api/schemas/jobs';
 
+import { JobExecutionError } from './JobExecutionError';
 import type { JobHandlerRegistry } from './JobHandlerRegistry';
 import type { JobPayloadOf, JobType } from './jobRegistry';
 import { computeBackoff } from './runtime/backoff';
@@ -975,11 +976,13 @@ export class JobRuntime extends BaseService {
               message: cancelMessage || thrownMessage || 'Cancelled',
               retryable: false,
             }
-          : {
-              code: isTimeout ? JOB_ERROR_CODES.HANDLER_TIMEOUT : JOB_ERROR_CODES.HANDLER_THREW,
-              message: thrownMessage,
-              retryable: true,
-            };
+          : !isTimeout && err instanceof JobExecutionError
+            ? err.error
+            : {
+                code: isTimeout ? JOB_ERROR_CODES.HANDLER_TIMEOUT : JOB_ERROR_CODES.HANDLER_THREW,
+                message: thrownMessage,
+                retryable: true,
+              };
         const canRetry = !userCancel && error.retryable && row.attempt + 1 < row.maxAttempts;
         if (canRetry) {
           const retryPolicy = handler.defaultRetryPolicy ?? DEFAULT_RETRY_POLICY;

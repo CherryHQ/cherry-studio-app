@@ -26,6 +26,9 @@ describe('portal background accessibility', () => {
 
   function expectHidden(hidden: boolean) {
     const background = renderer!.root.findByType(View);
+    // This native contract prevents accessibility changes from flattening or
+    // unflattening an ancestor of the focused editor; Jest cannot model IME focus.
+    expect(background.props.collapsable).toBe(false);
     expect(background.props.accessibilityElementsHidden).toBe(hidden);
     expect(background.props.importantForAccessibility).toBe(
       hidden ? 'no-hide-descendants' : 'auto',
@@ -43,14 +46,20 @@ describe('portal background accessibility', () => {
     expectHidden(false);
   });
 
-  test('a new presentation can isolate the background after the previous one closes', () => {
+  test('retains the native boundary before, during, and after repeated presentations', () => {
     act(() => {
-      renderer = create(<Harness first second={false} />);
+      renderer = create(<Harness first={false} second={false} />);
+    });
+    expectHidden(false);
+    act(() => {
+      renderer?.update(<Harness first second={false} />);
     });
     expectHidden(true);
     act(() => renderer?.update(<Harness first={false} second={false} />));
     expectHidden(false);
     act(() => renderer?.update(<Harness first={false} second />));
     expectHidden(true);
+    act(() => renderer?.update(<Harness first={false} second={false} />));
+    expectHidden(false);
   });
 });

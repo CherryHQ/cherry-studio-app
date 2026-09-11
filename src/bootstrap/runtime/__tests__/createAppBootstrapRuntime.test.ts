@@ -43,6 +43,9 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
 }));
+jest.mock('@/frontend/appShell/backgroundActivity', () => ({
+  publishForegroundActivityAttention: jest.fn(),
+}));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
 }));
@@ -123,6 +126,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockBackgroundActivityEnvironment.configure).toHaveBeenCalledWith({
       assistantPresenter: expect.any(Object),
       getColorScheme: expect.any(Function),
+      onForegroundAttention: expect.any(Function),
       paintingPresenter: expect.any(Object),
       translate: expect.any(Function),
     });

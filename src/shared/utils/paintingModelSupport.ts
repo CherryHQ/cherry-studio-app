@@ -4,24 +4,26 @@ import type { Model } from '@/shared/data/types/model';
 
 import { isImageGenerationModel } from './modelPurpose';
 
-/**
- * Whether a model can serve the generic painting composer for the requested
- * text-to-image or image-edit interaction. Registry metadata is authoritative;
- * image endpoint declarations are the fallback for gateway models, followed by
- * legacy capability/modalities metadata.
- */
-export function supportsPaintingGenerationMode(
+/** Resolve the API mode separately from whether the user supplied reference images. */
+export function resolvePaintingGenerationMode(
   model: Model | undefined,
-  mode: Extract<ImageGenerationMode, 'edit' | 'generate'>,
-): boolean {
-  if (!model) {
-    return false;
+  hasInputImages: boolean,
+): Extract<ImageGenerationMode, 'edit' | 'generate'> | undefined {
+  if (!model) return undefined;
+
+  const modes = model.imageGeneration?.modes;
+  if (modes) {
+    if (!hasInputImages) return modes.generate ? 'generate' : undefined;
+    if (modes.edit && modes.edit.maxInputImages !== 0) return 'edit';
+    const generate = modes.generate;
+    const acceptsReferenceImages =
+      generate?.maxInputImages !== 0 &&
+      (model.inputModalities?.includes(MODALITY.IMAGE) === true ||
+        (generate?.maxInputImages ?? 0) > 0);
+    return generate && acceptsReferenceImages ? 'generate' : undefined;
   }
 
-  if (model.imageGeneration) {
-    return Boolean(model.imageGeneration.modes[mode]);
-  }
-
+  const mode = hasInputImages ? 'edit' : 'generate';
   const imageEndpointTypes =
     model.endpointTypes?.filter(
       (endpointType) =>
@@ -29,13 +31,22 @@ export function supportsPaintingGenerationMode(
         endpointType === ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
     ) ?? [];
   if (imageEndpointTypes.length > 0) {
-    const requiredEndpoint =
-      mode === 'edit' ? ENDPOINT_TYPE.OPENAI_IMAGE_EDIT : ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION;
-    return imageEndpointTypes.includes(requiredEndpoint);
+    const requiredEndpoint = hasInputImages
+      ? ENDPOINT_TYPE.OPENAI_IMAGE_EDIT
+      : ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION;
+    return imageEndpointTypes.includes(requiredEndpoint) ? mode : undefined;
   }
 
-  return (
-    isImageGenerationModel(model) &&
-    (mode === 'generate' || model.inputModalities?.includes(MODALITY.IMAGE) === true)
-  );
+  return isImageGenerationModel(model) &&
+    (!hasInputImages || model.inputModalities?.includes(MODALITY.IMAGE) === true)
+    ? mode
+    : undefined;
+}
+
+/** `edit` here describes an image-input interaction, including generate with references. */
+export function supportsPaintingGenerationMode(
+  model: Model | undefined,
+  mode: Extract<ImageGenerationMode, 'edit' | 'generate'>,
+): boolean {
+  return resolvePaintingGenerationMode(model, mode === 'edit') !== undefined;
 }

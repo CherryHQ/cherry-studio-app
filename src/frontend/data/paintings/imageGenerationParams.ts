@@ -22,24 +22,10 @@ export type ResolvedImageGenerationMode = {
 
 export function resolveImageGenerationMode(
   support: ImageGenerationSupport | undefined,
-  hasInputImages: boolean,
+  mode: ImageGenerationMode | undefined,
 ): ResolvedImageGenerationMode | undefined {
-  const modes = support?.modes;
-  if (!modes) {
-    return undefined;
-  }
-
-  const preferredMode: ImageGenerationMode = hasInputImages ? 'edit' : 'generate';
-  const preferredDefinition = modes[preferredMode];
-  if (preferredDefinition) {
-    return { definition: preferredDefinition, mode: preferredMode };
-  }
-
-  const fallbackMode = Object.keys(modes)[0] as ImageGenerationMode | undefined;
-  const fallbackDefinition = fallbackMode ? modes[fallbackMode] : undefined;
-  return fallbackMode && fallbackDefinition
-    ? { definition: fallbackDefinition, mode: fallbackMode }
-    : undefined;
+  const definition = mode ? support?.modes[mode] : undefined;
+  return mode && definition ? { definition, mode } : undefined;
 }
 
 /**

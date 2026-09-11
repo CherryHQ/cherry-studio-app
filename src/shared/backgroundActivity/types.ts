@@ -11,4 +11,7 @@ export type BackgroundActivityEndPolicy = 'default' | 'immediate';
  * resolved app `colorScheme` and `logoUri`, and stamps `finishedAtEpochMs`
  * when a session finishes; features own everything else.
  */
-export type BackgroundActivityBaseProps = BackgroundActivityBasePresentation;
+export type BackgroundActivityBaseProps = BackgroundActivityBasePresentation & {
+  /** Opaque domain phase; its entry time determines foreground notification policy. */
+  phase?: string;
+};

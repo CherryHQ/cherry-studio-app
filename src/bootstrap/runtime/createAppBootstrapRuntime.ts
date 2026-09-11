@@ -25,6 +25,7 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
+import { publishForegroundActivityAttention } from '@/frontend/appShell/backgroundActivity';
 import AssistantActivity from '@/frontend/appShell/backgroundActivity/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/appShell/backgroundActivity/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
@@ -62,6 +63,7 @@ export function createAppBootstrapRuntime(
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
+    onForegroundAttention: publishForegroundActivityAttention,
     paintingPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),

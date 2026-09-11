@@ -52,6 +52,7 @@ type SessionRecord = {
   lease?: KeepAliveLease;
   onInterrupt?: (reason: Error) => void | Promise<void>;
   presenter: BackgroundActivityPresenter<BackgroundActivityBaseProps>;
+  phaseStartedInBackground: boolean;
   props: BackgroundActivityBaseProps;
   surface: SurfaceState;
   tag: string;
@@ -117,6 +118,7 @@ export class BackgroundActivityManager extends BaseService {
       lastNativeUpdateAt: 0,
       onInterrupt: input.onInterrupt,
       presenter: input.presenter as BackgroundActivityPresenter<BackgroundActivityBaseProps>,
+      phaseStartedInBackground: this.appState === 'background',
       props: input.props,
       surface: { status: 'pending' },
       tag: input.tag,
@@ -132,6 +134,7 @@ export class BackgroundActivityManager extends BaseService {
       },
       finish: (props) => {
         if (record.surface.status === 'ended' || this.disposed) return Promise.resolve();
+        this.capturePhaseVisibility(record, props);
         record.props = {
           ...props,
           finishedAtEpochMs: props.finishedAtEpochMs ?? Date.now(),
@@ -184,6 +187,7 @@ export class BackgroundActivityManager extends BaseService {
     if (record.surface.status === 'ended' || this.disposed) return;
 
     const changed = !shallowEqualProps(record.props, props);
+    this.capturePhaseVisibility(record, props);
     record.props = props;
     if (options?.keepAlive !== undefined && options.keepAlive !== record.keepAlive) {
       record.keepAlive = options.keepAlive;
@@ -250,7 +254,9 @@ export class BackgroundActivityManager extends BaseService {
     if (this.disposed || record.surface.status !== 'active') return;
     const submittedProps = record.props;
     try {
-      await record.surface.handle.update(this.toNativeProps(record));
+      await record.surface.handle.update(this.toNativeProps(record), {
+        phaseStartedInBackground: record.phaseStartedInBackground,
+      });
       record.lastNativeUpdateAt = Date.now();
     } catch (error) {
       logger.warn('Background activity update failed', error as Error, { tag: record.tag });
@@ -272,7 +278,9 @@ export class BackgroundActivityManager extends BaseService {
     policy: 'default' | 'immediate',
   ): Promise<void> {
     try {
-      await handle.end(policy, this.toNativeProps(record));
+      await handle.end(policy, this.toNativeProps(record), {
+        phaseStartedInBackground: record.phaseStartedInBackground,
+      });
       logger.info('Background activity ended', { policy, tag: record.tag });
     } catch (error) {
       logger.warn('Background activity cleanup failed', error as Error, { tag: record.tag });
@@ -294,6 +302,12 @@ export class BackgroundActivityManager extends BaseService {
       ...record.props,
       finishedAtEpochMs: record.props.finishedAtEpochMs ?? Date.now(),
     };
+  }
+
+  private capturePhaseVisibility(record: SessionRecord, props: BackgroundActivityBaseProps): void {
+    if (record.props.phase !== props.phase) {
+      record.phaseStartedInBackground = this.appState === 'background';
+    }
   }
 
   /** Mirrors the session's keep-alive bit into a coordinator lease. */

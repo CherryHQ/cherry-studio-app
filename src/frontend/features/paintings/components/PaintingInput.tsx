@@ -18,6 +18,7 @@ import {
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
+  useModelPickerData,
   type ModelPickerModelItem,
 } from '@/frontend/components/ModelPicker';
 import { usePreference } from '@/frontend/data/hooks';
@@ -29,15 +30,16 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '@/frontend/data/paintings/imageGenerationParams';
-import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
+import type { PaintingGenerationStart } from '@/shared/contracts';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
-import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
-import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import {
+  resolvePaintingGenerationMode,
+  supportsPaintingGenerationMode,
+} from '@/shared/utils/paintingModelSupport';
 
 import type {
   PaintingGenerationInput,
-  PaintingGenerationResult,
   PaintingGenerationStatus,
 } from '../hooks/usePaintingGeneration';
 import { imageParamSummary } from '../utils/imageGenerationLabels';
@@ -51,8 +53,7 @@ type PaintingInputProps = {
    */
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
-  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
-  onGenerated?: (result: PaintingGenerationResult) => void;
+  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationStart | null>;
   painting?: Painting;
   status: PaintingGenerationStatus;
 };
@@ -61,7 +62,6 @@ export function PaintingInput({
   initialParamValues,
   onCancel,
   onGenerate,
-  onGenerated,
   painting,
   status,
 }: PaintingInputProps) {
@@ -86,36 +86,21 @@ export function PaintingInput({
   } | null>(null);
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
-  const { model: selectedModel } = useModelById(selectedModelId);
-  const { models: enabledModels } = useModels({
-    enabled: true,
-    isSystemSupported: true,
-  });
-  const enabledImageModels = enabledModels.filter(isImageGenerationModel);
-  const { providers: enabledProviders } = useProviders({ enabled: true });
-  const enabledProviderIds = new Set(enabledProviders.map((provider) => provider.id));
-  const isSelectedModelAvailable = enabledImageModels.some(
-    (model) =>
-      model.id === selectedModelId && !model.isHidden && enabledProviderIds.has(model.providerId),
-  );
-  const selectedProvider = selectedModel
-    ? enabledProviders.find((provider) => provider.id === selectedModel.providerId)
-    : undefined;
+  const modelPickerData = useModelPickerData({ modelType: 'image' });
+  const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
+  const selectedModel = selectedModelItem?.model;
+  const selectedProvider = selectedModelItem?.provider;
+  const isSelectedModelAvailable = selectedModelItem !== undefined;
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
   const attachmentCount = attachments.length;
   const requestedMode = attachmentCount > 0 ? 'edit' : 'generate';
-  const isSelectedModelModeCompatible = supportsPaintingGenerationMode(
-    selectedModel,
-    requestedMode,
-  );
+  const selectedMode = resolvePaintingGenerationMode(selectedModel, attachmentCount > 0);
+  const isSelectedModelModeCompatible = selectedMode !== undefined;
   const resolvedMode = useMemo(
-    () =>
-      isSelectedModelModeCompatible
-        ? resolveImageGenerationMode(selectedModel?.imageGeneration, attachmentCount > 0)
-        : undefined,
-    [attachmentCount, isSelectedModelModeCompatible, selectedModel?.imageGeneration],
+    () => resolveImageGenerationMode(selectedModel?.imageGeneration, selectedMode),
+    [selectedMode, selectedModel?.imageGeneration],
   );
-  const generationMode = resolvedMode?.mode ?? requestedMode;
+  const generationMode = selectedMode ?? requestedMode;
   const paramValues = reconcileImageParamDraft(paramState?.values ?? {}, resolvedMode);
   const paramFields = getImageParamFields(resolvedMode);
   const settingsSummary = imageParamSummary(t, paramFields, paramValues);
@@ -189,12 +174,9 @@ export function PaintingInput({
         throw new Error('Select an available image generation model');
       }
       const submittedAttachmentCount = attachments.length;
-      const requestedSubmittedMode = submittedAttachmentCount > 0 ? 'edit' : 'generate';
-      const submittedMode = resolveImageGenerationMode(
-        selectedModel?.imageGeneration,
-        submittedAttachmentCount > 0,
-      );
-      const mode = submittedMode?.mode ?? requestedSubmittedMode;
+      const mode = resolvePaintingGenerationMode(selectedModel, submittedAttachmentCount > 0);
+      if (!mode) throw new Error('The selected model does not support these image inputs');
+      const submittedMode = resolveImageGenerationMode(selectedModel?.imageGeneration, mode);
       if (submittedMode?.definition.requirePrompt !== false && text.trim().length === 0) {
         throw new Error('Image prompt is required');
       }
@@ -214,7 +196,7 @@ export function PaintingInput({
         selectedModel?.imageGeneration,
         submittedMode,
       );
-      const result = await onGenerate({
+      await onGenerate({
         attachments,
         mode,
         modelId: selectedModelId,
@@ -222,18 +204,8 @@ export function PaintingInput({
         paramValues: submittedValues,
         prompt: text,
       });
-      if (result) {
-        onGenerated?.(result);
-      }
     },
-    [
-      isSelectedModelAvailable,
-      onGenerate,
-      onGenerated,
-      paramValues,
-      selectedModel,
-      selectedModelId,
-    ],
+    [isSelectedModelAvailable, onGenerate, paramValues, selectedModel, selectedModelId],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) =>

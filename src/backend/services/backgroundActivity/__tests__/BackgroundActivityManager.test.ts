@@ -106,6 +106,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     expect(handles[0]?.end).toHaveBeenCalledWith(
       'immediate',
       expect.objectContaining({ finishedAtEpochMs: expect.any(Number) }),
+      expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
     await manager._doStop();
   });
@@ -277,6 +278,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     expect(handles[0]!.end).toHaveBeenCalledWith(
       'default',
       expect.objectContaining({ detail: 'completed' }),
+      expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
     await manager._doStop();
   });
@@ -339,10 +341,12 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     expect(handles[0]?.end).toHaveBeenCalledWith(
       'default',
       expect.objectContaining({ detail: 'done', finishedAtEpochMs: expect.any(Number) }),
+      expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
     expect(handles[0]?.end).not.toHaveBeenCalledWith(
       'default',
       expect.objectContaining({ detail: 'late-finish' }),
+      expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
 
     session.update(makeProps('after-finish'), { urgent: true });
@@ -428,6 +432,7 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
     expect(handles[0]?.end).toHaveBeenCalledWith(
       'immediate',
       expect.objectContaining({ finishedAtEpochMs: expect.any(Number) }),
+      expect.objectContaining({ phaseStartedInBackground: expect.any(Boolean) }),
     );
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
 
@@ -438,6 +443,37 @@ describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) 
       tag: 'chat.topic-2',
     });
     expect(mockAcquire).toHaveBeenCalledTimes(1);
+  });
+
+  test('preserves phase-entry visibility through the delivery queue and late title projection', async () => {
+    const { presenter, handles } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      presenter,
+      props: { ...makeProps('running'), phase: 'responding' },
+      tag: 'chat',
+    });
+    let releaseUpdate!: () => void;
+    handles[0]!.update.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseUpdate = resolve;
+        }),
+    );
+    session.update({ ...makeProps('streaming'), phase: 'responding' }, { urgent: true });
+    await flushMicrotasks();
+    session.update({ ...makeProps('done'), phase: 'completed' }, { urgent: true });
+    appStateListener?.('background');
+    session.update({ ...makeProps('final title'), phase: 'completed' }, { urgent: true });
+    const finished = session.finish({ ...makeProps('final title'), phase: 'completed' });
+    releaseUpdate();
+    await finished;
+    expect(handles[0]!.end).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ phase: 'completed' }),
+      { phaseStartedInBackground: false },
+    );
+    await manager._doStop();
   });
 
   async function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {

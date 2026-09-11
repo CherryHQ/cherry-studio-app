@@ -59,7 +59,7 @@
   /* Stable product domain: rich text and code (MarkdownText) */
   --code-block: var(--gray-100);
   --inline-code: var(--gray-alpha-100);
-  --inline-code-foreground: var(--red-900);
+  --inline-code-foreground: var(--primary);
 
   /* Fixed logo artwork color. Actions and content must use their semantic roles. */
   --brand: #ff5757;

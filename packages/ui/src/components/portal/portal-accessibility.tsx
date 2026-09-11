@@ -23,6 +23,10 @@ export function PortalAccessibilityBoundary({ children }: PropsWithChildren) {
       <View
         accessibilityElementsHidden={activeOverlays > 0}
         className="flex-1"
+        // Isolation toggles Fabric's view-flattening eligibility. Keep this
+        // ancestor mounted so opening/closing a popover cannot reparent the
+        // focused editor and detach it from the native responder chain.
+        collapsable={false}
         importantForAccessibility={activeOverlays > 0 ? 'no-hide-descendants' : 'auto'}
       >
         {children}

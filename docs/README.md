@@ -50,6 +50,7 @@ They are the source of truth for how the repository works today.
 | [Desktop AI Package Reuse](./references/ai/desktop-package-reuse.md) | Selective semantic ports, provider admission, Pi boundaries, and image-runtime reuse |
 | [Provider Serving Boundaries](./references/ai/provider-serving-boundaries.md) | Shared Provider connection facts and capability-specific language and image execution boundaries |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Agent Session streaming, message windows, persistence, and rendering boundaries |
+| [Chat Input Interaction](./references/chat/input-interaction.md) | Scoped keyboard and selection rules that preserve existing composer design and animations; native acceptance pending |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [File Preview And Viewer](./references/file-preview-and-viewer.md) | File kinds, open policy, in-app viewing and export; native acceptance pending |

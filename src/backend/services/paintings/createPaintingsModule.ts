@@ -12,7 +12,10 @@ import type { FileEntryId } from '@/shared/data/types/file';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
-import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import {
+  resolvePaintingGenerationMode,
+  supportsPaintingGenerationMode,
+} from '@/shared/utils/paintingModelSupport';
 
 import type {
   PaintingGenerateJobImage,
@@ -83,7 +86,8 @@ async function startGeneration(
   const signature = generationSignature({ ...input, prompt });
   const model = await dependencies.getModel(input.modelId);
   const hasImages = input.fileEntryIds.length > 0;
-  if (!model || !supportsPaintingGenerationMode(model, hasImages ? 'edit' : 'generate')) {
+  const mode = resolvePaintingGenerationMode(model ?? undefined, hasImages);
+  if (!model || !mode || input.mode !== mode) {
     throw new FileAttachmentError({ code: 'model-unsupported' });
   }
   const definition = model.imageGeneration?.modes[input.mode];

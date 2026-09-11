@@ -3,13 +3,14 @@ import {
   DASHSCOPE_PROVIDER_NAME,
   type DashScopeProviderSettings,
 } from './dashscope/dashscopeProvider';
+import { isDashScopeImageDescriptorSupported } from './dashscope/dashscopeTransport';
 import {
   buildDmxapiTransport,
   DMXAPI_PROVIDER_NAME,
   type DmxapiProviderSettings,
   dmxapiUsesCustomTransport,
 } from './dmxapi/dmxapiProvider';
-import type { ImageGenerationTransport } from './imageGenerationModel';
+import type { ImageGenerationTransport, ImageTransportDescriptor } from './imageGenerationModel';
 import {
   buildModelscopeTransport,
   MODELSCOPE_PROVIDER_NAME,
@@ -20,6 +21,13 @@ import {
   PPIO_PROVIDER_NAME,
   type PpioProviderSettings,
 } from './ppio/ppioProvider';
+import { isPpioImageDescriptorSupported } from './ppio/ppioTransport';
+import {
+  buildTokenhubTransport,
+  TOKENHUB_PROVIDER_NAME,
+  type TokenhubProviderSettings,
+} from './tokenhub/tokenhub-provider';
+import { isTokenhubImageDescriptorSupported } from './tokenhub/tokenhub-transport';
 
 /**
  * Resolve a poll-capable image transport for a custom provider. The side-effect
@@ -34,21 +42,29 @@ import {
  */
 interface TransportRegistration {
   supports: (modelId: string) => boolean;
+  supportsDescriptor?: (descriptor: ImageTransportDescriptor | undefined) => boolean;
   build: (providerSettings: unknown) => ImageGenerationTransport;
 }
 
 const TRANSPORTS: Record<string, TransportRegistration> = {
   [PPIO_PROVIDER_NAME]: {
     supports: () => true,
+    supportsDescriptor: isPpioImageDescriptorSupported,
     build: (settings) => buildPpioTransport(settings as PpioProviderSettings),
   },
   [DASHSCOPE_PROVIDER_NAME]: {
     supports: () => true,
+    supportsDescriptor: isDashScopeImageDescriptorSupported,
     build: (settings) => buildDashScopeTransport(settings as DashScopeProviderSettings),
   },
   [MODELSCOPE_PROVIDER_NAME]: {
     supports: () => true,
     build: (settings) => buildModelscopeTransport(settings as ModelscopeProviderSettings),
+  },
+  [TOKENHUB_PROVIDER_NAME]: {
+    supports: () => true,
+    supportsDescriptor: isTokenhubImageDescriptorSupported,
+    build: (settings) => buildTokenhubTransport(settings as TokenhubProviderSettings),
   },
   // DMXAPI is a multi-backend gateway — only its bespoke families use the
   // custom transport (the rest go through native / openai-compat SDK image
@@ -61,6 +77,14 @@ const TRANSPORTS: Record<string, TransportRegistration> = {
 
 export function hasImageTransport(providerId: string, modelId: string): boolean {
   return TRANSPORTS[providerId]?.supports(modelId) ?? false;
+}
+
+/** Catalog-driven transports must implement the requested model and endpoint before admission. */
+export function isImageTransportDescriptorSupported(
+  providerId: string,
+  descriptor: ImageTransportDescriptor | undefined,
+): boolean {
+  return TRANSPORTS[providerId]?.supportsDescriptor?.(descriptor) ?? true;
 }
 
 export function resolveImageTransport(

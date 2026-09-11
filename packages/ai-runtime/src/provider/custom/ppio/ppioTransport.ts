@@ -86,6 +86,30 @@ export interface PpioModelDescriptor {
   mode?: string;
 }
 
+// The endpoint is authoritative even when saved catalog IDs use hyphens instead of dots.
+const PPIO_IMAGE_MODELS_BY_ENDPOINT: Readonly<Record<string, string>> = {
+  '/v3/async/jimeng-txt2img-v3.1': 'jimeng-txt2img-v3.1',
+  '/v3/async/jimeng-txt2img-v3.0': 'jimeng-txt2img-v3.0',
+  '/v3/async/hunyuan-image-3': 'hunyuan-image-3',
+  '/v3/async/qwen-image-txt2img': 'qwen-image-txt2img',
+  '/v3/async/qwen-image-edit-2509': 'qwen-image-edit-2509',
+  '/v3/async/qwen-image-edit': 'qwen-image-edit',
+  '/v3/async/glm-image': 'glm-image',
+  '/v3/async/z-image-turbo': 'z-image-turbo',
+  '/v3/async/z-image-turbo-lora': 'z-image-turbo-lora',
+  '/v3/seedream-4.0': 'seedream-4.0',
+  '/v3/seedream-4.5': 'seedream-4.5',
+  '/v3/seedream-5.0-lite': 'seedream-5.0-lite',
+};
+
+export function isPpioImageDescriptorSupported(
+  descriptor: PpioModelDescriptor | undefined,
+): boolean {
+  return (
+    descriptor !== undefined && Object.hasOwn(PPIO_IMAGE_MODELS_BY_ENDPOINT, descriptor.endpoint)
+  );
+}
+
 /**
  * Painting fields forwarded through `providerOptions['ppio']`. Mirrors the
  * `PpioPaintingData` subset the legacy `buildRequestParams` consumed.
@@ -234,13 +258,7 @@ class PpioTransport implements ImageGenerationTransport {
     painting: PpioProviderParams,
     descriptor: PpioModelDescriptor,
   ): Record<string, unknown> {
-    const modelId = descriptor.id;
-    const params: Record<string, unknown> = {};
-
-    if (input.prompt) {
-      params.prompt = input.prompt;
-    }
-
+    const modelId = PPIO_IMAGE_MODELS_BY_ENDPOINT[descriptor.endpoint];
     switch (modelId) {
       case 'jimeng-txt2img-v3.1':
       case 'jimeng-txt2img-v3.0':
@@ -265,7 +283,7 @@ class PpioTransport implements ImageGenerationTransport {
           ? this.buildSeedreamEditParams(input, painting, modelId)
           : this.buildSeedreamDrawParams(input, painting);
       default:
-        return params;
+        throw new Error(`Unsupported PPIO image endpoint: ${descriptor.endpoint}`);
     }
   }
 

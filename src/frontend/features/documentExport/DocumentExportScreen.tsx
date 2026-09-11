@@ -23,10 +23,10 @@ import {
   type DocumentExportOption,
 } from '@/frontend/appShell/documentExport';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { shareFile } from '@/frontend/components/FileEntryPreview';
 import { usePreference } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import { shareFile } from '@/frontend/utils/shareFile';
 import type {
   DocumentExportArtifact,
   DocumentExportSession,

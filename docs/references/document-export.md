@@ -34,7 +34,7 @@ flowchart TD
     Normalize --> Resources[Prepare image resources]
     Resources --> HTML[Controlled HTML and MathML]
     HTML --> Capture[Page-owned bounded capture]
-    Markdown --> TextPreview[In-memory default preview]
+    Markdown --> TextPreview[In-memory text preview]
     HTML --> Preview[Temporary artifact and preview]
     Capture --> Preview
     TextPreview --> Materialize[Share creates Markdown file]
@@ -119,7 +119,7 @@ question attachments above the bubble, compact assistant labels, and full-width 
 the extra article title and section dividers. The page supplies CherryUI's resolved accessibility
 type scale and the existing chat/code/surface tokens for both light and dark themes. Paragraphs,
 headings, code blocks, tables and process disclosures follow the native message spacing and surfaces.
-The default native preview composes the same CherryUI `MessagePart.Process` and
+The native Markdown preview composes the same CherryUI `MessagePart.Process` and
 `MessagePart.Reasoning` components used in chat. Process summaries use the transcript's elapsed-time
 label; the nested reasoning row uses its completed-thinking label. HTML follows the same two
 initially collapsed levels, process separator, compact nested rows and reasoning rail. WebP captures
@@ -187,10 +187,11 @@ WebView rendering works on all devices; that requires the pending iOS/Android ac
 - The app-shell request has a 30-second deadline before route handoff. Missing requests after
   process death show an unavailable state. Route cleanup is deferred one task so development
   remounts can reclaim the same request, then it waits for disposal before admitting another.
-- Opening the page displays the structured document from memory, retaining native process/reasoning
-  disclosures and using Markdown only for leaf prose, without generating any output file. HTML
-  and WebP convert only when selected. A source can supply one initially checked option and an
-  alternate document; changing it renders only the current format. Both sessions close with the route.
+- Opening the page renders a WebP image by default. Selecting Markdown displays the structured
+  document from memory, retaining native process/reasoning disclosures and using Markdown only for
+  leaf prose, without generating any output file. A source can supply one initially unchecked option
+  and an alternate document; changing it renders only the current format. Both sessions close with
+  the route.
 - **Share first commits the final artifact into the existing managed file store.** It is the page’s
   only delivery action, including for Markdown. Repeated actions on the current artifact reuse its
   saved entry. Changing formats creates a new artifact; reopening an export is a new session and
@@ -204,7 +205,7 @@ WebView rendering works on all devices; that requires the pending iOS/Android ac
 - Permanent files follow the existing [file model](./data/file-model.md): only explicit user
   deletion removes them. Closing a preview, deleting a conversation, or dismissing a share sheet
   does not delete saved files.
-- System delivery uses the shared `frontend/utils/shareFile.ts` helper. It creates a readable cache
+- System delivery uses the shared `FileEntryPreview.shareFile` helper. It creates a readable cache
   copy and retains it after the sheet closes, since recipients can read later. Share-sheet
   completion does not claim delivery to another person. Cancelled sharing still leaves the saved
   file in Sharing. Existing file-viewer actions provide saving images to Photos and system opening.
@@ -216,14 +217,14 @@ attachment bundles, or multi-image sharing are introduced.
 
 The last action in the assistant message toolbar reads the clicked answer and its same-turn
 question and opens `/document-export` directly. There is no message selection page, history browsing,
-or timestamp option. Markdown is the default; a compact menu switches to HTML or WebP on demand.
+or timestamp option. WebP is the default; a compact menu switches to Markdown or HTML on demand.
 
 A single bounded around-message read (up to 200 neighbors) resolves the current exchange. It rejects
 missing or unsettled content instead of silently dropping the question. Messages without a turn ID
 can export their standalone answer. The toolbar shows pending feedback and blocks duplicate opens.
 
-Visible thinking content is included by default. When present, the source supplies two immutable
-document snapshots and a checkbox label so the preview can omit that content without acquiring chat
+Visible thinking content is omitted by default. When present, the source supplies two immutable
+document snapshots and a checkbox label so the preview can include that content without acquiring chat
 dependencies. Only the selected format is rendered for the selected snapshot.
 
 The adapter follows the chat article's final-answer boundary. Earlier prose and reasoning are

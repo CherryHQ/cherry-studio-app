@@ -1,11 +1,12 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
 import { ContentState, Spinner } from '@cherrystudio/ui/components';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
 import {
   type ResolvedPaintingAttachment,
@@ -36,6 +37,10 @@ export function PaintingViewerScreen() {
   const outputs = files.data?.outputs ?? [];
   const currentIndex = outputs.findIndex((output) => output.fileEntryId === fileEntryId);
   const current = currentIndex >= 0 ? outputs[currentIndex] : undefined;
+  useBackgroundTaskNotifications(
+    paintingId ? { kind: 'painting', paintingId } : undefined,
+    Boolean(painting.data && current),
+  );
   const constantWhite = useThemeColor('constant-white');
   const closeViewer = useCallback(() => {
     if (router.canGoBack()) {
@@ -44,6 +49,12 @@ export function PaintingViewerScreen() {
       router.replace('/drawings');
     }
   }, [router]);
+
+  // Old ongoing notifications use this path but have no selected output.
+  // A task can also be running or failed, so open its task surface.
+  if (paintingId && !fileEntryId) {
+    return <Redirect href={{ pathname: '/paintings', params: { paintingId } }} />;
+  }
 
   if (!painting.data || !current) {
     if (!painting.isLoading && !files.isLoading) {
@@ -111,6 +122,8 @@ function PaintingViewerContent({
     <>
       <PaintingViewerChrome
         aspectRatios={paintingViewer.aspectRatios}
+        canShare={actions.canShare}
+        onShare={() => void actions.share()}
         onDelete={() => void actions.remove()}
         onDownload={() => void actions.download()}
         onEdit={actions.edit}

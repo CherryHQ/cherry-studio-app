@@ -1,15 +1,12 @@
-import { Composer, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardController } from 'react-native-keyboard-controller';
 
-import {
-  fileAttachmentIssueDescription,
-  getFileAttachmentIssue,
-} from '@/frontend/utils/fileAttachmentFeedback';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerState } from '../context/ComposerProvider';
+import { useComposerSendError } from '../hooks/useComposerSendError';
 import {
   type ComposerAttachmentReady,
   hasComposerSendableContent,
@@ -62,7 +59,10 @@ export function ComposerSurface({
 }: ComposerSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { alert } = useAlert();
+  const reportSendError = useComposerSendError({
+    getSendErrorLabel,
+    sendFailedLabel: labels?.sendFailed,
+  });
   const { attachments, draft } = useComposerState();
   const { addAttachments, clearAttachments, setDraft } = useComposerActions();
   const activeSendAttemptIdRef = useRef<number | null>(null);
@@ -99,32 +99,11 @@ export function ComposerSurface({
     try {
       await onSend({ attachments: attachmentSnapshot, text: draftSnapshot.trim() });
     } catch (error) {
-      const issue = getFileAttachmentIssue(error);
-      const explainedLabel = issue
-        ? fileAttachmentIssueDescription(issue, t)
-        : getSendErrorLabel?.(error);
-      // The toast is deliberately vague, so without this the failure leaves no
-      // trace at all and there is nothing to go on when a send breaks on device.
-      // An explained rejection is an expected outcome, so it stays below the
-      // error level that raises the development overlay.
-      const errorDetail = error instanceof Error ? error : { error };
-      if (explainedLabel) {
-        logger.warn('Message send rejected', errorDetail, { attemptId });
-      } else {
-        logger.error('Message send failed', errorDetail, { attemptId });
-      }
+      reportSendError(error, attemptId);
       setDraft((current) =>
         current ? [draftSnapshot, current].filter(Boolean).join('\n') : draftSnapshot,
       );
       addAttachments([...attachmentSnapshot]);
-      if (issue) {
-        alert.show({ title: t('attachments.sendRejected'), description: explainedLabel });
-      } else {
-        toast.show({
-          label: explainedLabel ?? labels?.sendFailed ?? t('chat.input.sendFailed'),
-          variant: 'danger',
-        });
-      }
     } finally {
       activeSendAttemptIdRef.current = null;
     }
@@ -133,11 +112,10 @@ export function ComposerSurface({
     clearAttachments,
     dismissKeyboardOnSend,
     draft,
-    getSendErrorLabel,
+    reportSendError,
     labels?.sendFailed,
     onSend,
     addAttachments,
-    alert,
     setDraft,
     t,
     toast,
