@@ -2,7 +2,8 @@ import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
-import { FEISHU_DOCUMENT_SCOPES, feishuOauth } from '../feishuOauth';
+import { feishuOauth } from '../feishuOauth';
+import { FEISHU_REQUESTED_TOOL_SCOPES } from '../feishuTools';
 
 let mockNextId = 0;
 jest.mock('expo-crypto', () => ({
@@ -26,7 +27,7 @@ const tokens = {
   refreshToken: 'private-refresh',
   expiresAt: 3600000,
   refreshExpiresAt: 86400000,
-  scope: FEISHU_DOCUMENT_SCOPES.join(' '),
+  scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
 };
 const challenge = {
   deviceCode: 'private-device',
@@ -175,16 +176,15 @@ it('reports an application save failure so the user can start registration again
   expect(feishuOauth.beginRegistration).toHaveBeenCalledTimes(2);
 });
 
-it('names missing document scopes, requires a refresh token, and preserves the app for another authorization', async () => {
+it('accepts partial tool permissions, requires renewal, and preserves the app for another authorization', async () => {
   const runtime = createRuntime();
   jest.mocked(feishuOauth.pollUser).mockResolvedValue({
     status: 'approved',
-    tokens: { ...tokens, scope: 'docx:document:readonly' },
+    tokens: { ...tokens, scope: 'calendar:calendar:read' },
   });
   const id = await authorized(runtime);
-  await expect(runtime.prepare(id)).rejects.toMatchObject({
-    reason: 'access',
-    message: expect.stringContaining('wiki:node:read'),
+  await expect(runtime.prepare(id)).resolves.toMatchObject({
+    credential: { tokens: { scope: 'calendar:calendar:read' } },
   });
   expect(await runtime.cancel()).toEqual(applicationReady);
   jest.mocked(feishuOauth.pollUser).mockResolvedValue({
@@ -426,14 +426,37 @@ it('does not overwrite a replacement grant when the old renewal finishes', async
   expect(fixture.data.grant).toEqual(replacement);
 });
 
-it('saves rotated credentials before reporting reduced permissions', async () => {
+it('saves rotated credentials and keeps the remaining permissions usable after a reduction', async () => {
   const runtime = createRuntime();
   const grant = await connected(runtime);
   now.mockReturnValue(tokens.expiresAt);
-  const reduced = { ...rotatedTokens, scope: 'docx:document:readonly' };
+  const reduced = { ...rotatedTokens, scope: 'calendar:calendar:read' };
   jest.mocked(feishuOauth.refresh).mockResolvedValue(reduced);
-  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'access' });
+  await expect(runtime.resolveCredential(grant.id)).resolves.toMatchObject({ tokens: reduced });
   expect(fixture.data.grant?.credential.tokens).toEqual(reduced);
-  await expect(runtime.resolveCredential(grant.id)).rejects.toMatchObject({ reason: 'access' });
+  await expect(runtime.resolveCredential(grant.id)).resolves.toMatchObject({ tokens: reduced });
+  await expect(runtime.describeConnection(grant.id)).resolves.toEqual({ status: 'connected' });
   expect(feishuOauth.refresh).toHaveBeenCalledTimes(1);
+});
+
+it('reports expired or unusable grants locally without refreshing on the plugin screen', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  await expect(runtime.describeConnection(grant.id)).resolves.toEqual({ status: 'connected' });
+  now.mockReturnValue(tokens.refreshExpiresAt);
+  await expect(runtime.describeConnection(grant.id)).resolves.toEqual({
+    status: 'needs-reauthorization',
+    reason: 'authorization',
+  });
+  now.mockReturnValue(1000);
+  fixture.data.grant!.credential = {
+    version: 1,
+    application,
+    tokens: { ...tokens, scope: 'offline_access' },
+  };
+  await expect(runtime.describeConnection(grant.id)).resolves.toEqual({
+    status: 'needs-reauthorization',
+    reason: 'access',
+  });
+  expect(feishuOauth.refresh).not.toHaveBeenCalled();
 });

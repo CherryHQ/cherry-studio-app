@@ -15,17 +15,24 @@ type AgentToolBindingResolver = {
 
 type McpRuntimeToolCapability = {
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[];
-  listExecutableToolDescriptors(serverId: string): Promise<McpExecutableToolDescriptor[]>;
+  listExecutableToolDescriptors(
+    serverId: string,
+    onUnavailable?: (warning: string) => void,
+  ): Promise<McpExecutableToolDescriptor[]>;
 };
 
 export type AgentRuntimeToolResolver = {
-  resolve(agentId: string, pluginServerIds?: readonly string[]): Promise<RuntimeTool[]>;
+  resolve(
+    agentId: string,
+    pluginServerIds?: readonly string[],
+    onUnavailable?: (warning: string) => void,
+  ): Promise<RuntimeTool[]>;
 };
 
 /**
  * Combine remote MCP policy with explicitly selected plugins for this message.
  * Legacy Agent bindings never enable plugins; selecting a plugin does not write Agent policy.
- * Discovery failures remove that server from this turn without changing its bindings.
+ * Discovery failures report unavailable capabilities without changing durable bindings.
  */
 export function createAgentRuntimeToolResolver(input: {
   bindings: AgentToolBindingResolver;
@@ -33,7 +40,7 @@ export function createAgentRuntimeToolResolver(input: {
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    async resolve(agentId, pluginServerIds = []) {
+    async resolve(agentId, pluginServerIds = [], onUnavailable) {
       const { items } = await input.bindings.list(agentId);
       const boundServerIds = new Set(
         items.flatMap((binding) =>
@@ -68,11 +75,21 @@ export function createAgentRuntimeToolResolver(input: {
       const mcpRuntime = input.getMcpRuntime();
       const catalogs = await Promise.all(
         servers.map(async ({ id: serverId }) => {
+          let reported = false;
           try {
-            return await mcpRuntime.listExecutableToolDescriptors(serverId);
+            return await mcpRuntime.listExecutableToolDescriptors(serverId, (warning) => {
+              reported = true;
+              onUnavailable?.(warning);
+            });
           } catch {
-            // Disabled, deleted, unreachable, and otherwise undiscoverable servers
-            // fail closed for this snapshot while their durable bindings remain intact.
+            if (!reported) {
+              const name =
+                items.find((binding) => binding.source === 'mcp' && binding.serverId === serverId)
+                  ?.displayNameSnapshot ?? serverId;
+              onUnavailable?.(
+                `${name}: configured tools could not be loaded. Check the service connection and authorization.`,
+              );
+            }
             return [];
           }
         }),

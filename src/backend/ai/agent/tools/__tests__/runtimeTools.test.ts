@@ -112,6 +112,7 @@ describe('Agent Runtime MCP tool resolution', () => {
 
   test('fails closed per unavailable catalog without mutating durable bindings', async () => {
     const createRuntimeTools = jest.fn(() => []);
+    const onUnavailable = jest.fn();
     const resolver = createAgentRuntimeToolResolver({
       servers: remoteServers,
       bindings: {
@@ -127,11 +128,13 @@ describe('Agent Runtime MCP tool resolution', () => {
       }),
     });
 
-    await resolver.resolve(AGENT_ID);
+    await resolver.resolve(AGENT_ID, [], onUnavailable);
 
     expect(createRuntimeTools).toHaveBeenCalledWith([
       { descriptor: descriptor(SERVER_B, 'lookup'), approval: 'ask' },
     ]);
+    expect(onUnavailable).toHaveBeenCalledWith(expect.stringContaining(SERVER_A));
+    expect(JSON.stringify(onUnavailable.mock.calls)).not.toContain('private endpoint');
   });
 
   test('does not resolve MCP Runtime state when the Agent has no enabled MCP binding', async () => {
@@ -165,6 +168,7 @@ describe('Agent Runtime MCP tool resolution', () => {
 
   test('explicit plugin selection needs no Agent binding and is limited to that message', async () => {
     const selectedDescriptor = { ...descriptor(SERVER_A, 'search'), endpointUrl: null };
+    const onUnavailable = jest.fn();
     const createRuntimeTools = jest.fn(
       (selections: readonly McpRuntimeToolSelection[]) => selections as unknown as RuntimeTool[],
     );
@@ -174,15 +178,20 @@ describe('Agent Runtime MCP tool resolution', () => {
       servers: { getById: async (id) => pluginServer(id) },
       getMcpRuntime: () => ({
         createRuntimeTools,
-        listExecutableToolDescriptors: async () => [selectedDescriptor],
+        listExecutableToolDescriptors: async (_serverId, reportUnavailable) => {
+          reportUnavailable?.('Some plugin tools are unavailable.');
+          return [selectedDescriptor];
+        },
       }),
     });
 
-    await expect(resolver.resolve(AGENT_ID, [SERVER_A, SERVER_A])).resolves.toEqual([
+    await expect(resolver.resolve(AGENT_ID, [SERVER_A, SERVER_A], onUnavailable)).resolves.toEqual([
       { descriptor: selectedDescriptor, approval: 'ask' },
     ]);
     expect(resolveMcpTool).not.toHaveBeenCalled();
-    await expect(resolver.resolve(AGENT_ID)).resolves.toEqual([]);
+    expect(onUnavailable).toHaveBeenCalledWith('Some plugin tools are unavailable.');
+    await expect(resolver.resolve(AGENT_ID, [], onUnavailable)).resolves.toEqual([]);
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
     expect(createRuntimeTools).toHaveBeenCalledTimes(1);
   });
 

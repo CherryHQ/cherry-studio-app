@@ -269,7 +269,11 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, undefined);
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
+      AGENT_ID,
+      undefined,
+      expect.any(Function),
+    );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -418,6 +422,23 @@ describe('turn preparation', () => {
     expect(harness.preflightModel).not.toHaveBeenCalled();
   });
 
+  test('retains discovery failures for the current turn while keeping other capabilities usable', async () => {
+    const harness = createHarness();
+    harness.resolveRuntimeTools.mockImplementationOnce(
+      async (_agentId, _pluginServerIds, onUnavailable) => {
+        onUnavailable?.('Feishu document tools could not be loaded (network).');
+        return [];
+      },
+    );
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(plan.tools).toHaveLength(1);
+    expect(plan.toolDiscoveryWarnings).toEqual([
+      'Feishu document tools could not be loaded (network).',
+    ]);
+    const next = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+    expect(next.toolDiscoveryWarnings).toEqual([]);
+  });
+
   test('replays full history when a valid checkpoint anchor is no longer present', async () => {
     const harness = createHarness();
     const checkpoint = {
@@ -476,7 +497,13 @@ function createHarness() {
   const getSystemTools = jest.fn(
     async (_input: Parameters<SystemCapabilitySource['getTools']>[0]) => [systemTool],
   );
-  const resolveRuntimeTools = jest.fn(async (_agentId: string) => [configuredTool]);
+  const resolveRuntimeTools = jest.fn(
+    async (
+      _agentId: string,
+      _pluginServerIds?: readonly string[],
+      _onUnavailable?: (warning: string) => void,
+    ) => [configuredTool],
+  );
   const resolveInferenceModel = jest.fn(
     async (model: RuntimeModel): Promise<AgentInferenceModelSnapshot> => ({
       uniqueModelId: createUniqueModelId(model.providerId, model.modelId),
