@@ -326,7 +326,10 @@ describe('createSystemCapabilitySource', () => {
       toolCallId: 'call-3',
     });
 
-    expect(rewriteTextEntry).toHaveBeenCalledWith({ data: 'new', id: draftId });
+    expect(rewriteTextEntry).toHaveBeenCalledWith(
+      { data: 'new', id: draftId },
+      expect.any(AbortSignal),
+    );
     expect(createTextEntry).not.toHaveBeenCalled();
     expect(grantFile).not.toHaveBeenCalled();
     expect(result.artifacts).toEqual([]);

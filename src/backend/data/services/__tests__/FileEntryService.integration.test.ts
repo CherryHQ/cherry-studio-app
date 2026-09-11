@@ -79,6 +79,63 @@ describe('FileEntryService integration', () => {
     });
   });
 
+  it('does not insert an entry cancelled while waiting for its write transaction', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    let releaseQueue!: () => void;
+    const queued = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    const withWriteTx = testDatabase.dbService.withWriteTx.bind(testDatabase.dbService);
+    jest.spyOn(testDatabase.dbService, 'withWriteTx').mockImplementation(async (callback) => {
+      await queued;
+      return withWriteTx(callback);
+    });
+    const insert = jest.spyOn(service, 'createTx');
+    const creating = service.create(
+      {
+        filename: 'draft.txt',
+        id: id(4),
+        mediaType: 'text/plain',
+        provenance: 'generated',
+        size: 5,
+      },
+      controller.signal,
+    );
+
+    controller.abort(cancelled);
+    releaseQueue();
+
+    await expect(creating).rejects.toBe(cancelled);
+    expect(insert).not.toHaveBeenCalled();
+    await expect(service.findById(id(4))).resolves.toBeNull();
+  });
+
+  it('rolls back a new entry when cancellation arrives during its insert', async () => {
+    const controller = new AbortController();
+    const cancelled = new Error('cancelled');
+    const createTx = service.createTx.bind(service);
+    jest.spyOn(service, 'createTx').mockImplementation(async (tx, values) => {
+      const entry = await createTx(tx, values);
+      controller.abort(cancelled);
+      return entry;
+    });
+
+    await expect(
+      service.create(
+        {
+          filename: 'draft.txt',
+          id: id(4),
+          mediaType: 'text/plain',
+          provenance: 'generated',
+          size: 5,
+        },
+        controller.signal,
+      ),
+    ).rejects.toBe(cancelled);
+    await expect(service.findById(id(4))).resolves.toBeNull();
+  });
+
   it('distinguishes the nullable lookup from the throwing lookup for a missing id', async () => {
     await expect(service.findById(id(9))).resolves.toBeNull();
     await expect(service.getById(id(9))).rejects.toMatchObject({ code: 'NOT_FOUND' });
