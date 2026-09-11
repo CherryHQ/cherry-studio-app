@@ -42,12 +42,14 @@ const TOKEN_STORE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS
 @AppStatePolicy('continue')
 export class DesktopConnectionRuntime extends BaseService implements DesktopConnectionsModule {
   private store: ConnectionStore | undefined;
+  private ensureModelRegistryReady: (() => Promise<void>) | undefined;
   private stopped = false;
   private readonly controllers = new Set<AbortController>();
   private tail: Promise<unknown> = Promise.resolve();
 
-  configure(store: ConnectionStore): void {
+  configure(store: ConnectionStore, ensureModelRegistryReady: () => Promise<void>): void {
     this.store = store;
+    this.ensureModelRegistryReady = ensureModelRegistryReady;
   }
 
   pair(input: PairDesktopConnectionDto, signal: AbortSignal) {
@@ -114,6 +116,10 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
   import(id: string, input: DesktopImportSelectionsDto, signal: AbortSignal) {
     return this.run(signal, async (store, signal) => {
       const snapshot = await this.loadSnapshot(store, id, signal);
+      signal.throwIfAborted();
+      if (input.selections.some((selection) => selection.mode === 'provider-models')) {
+        await this.ensureModelRegistryReady!();
+      }
       signal.throwIfAborted();
       return store.import(id, snapshot, input, signal);
     });
