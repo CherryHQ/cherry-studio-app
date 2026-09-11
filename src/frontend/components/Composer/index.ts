@@ -19,5 +19,6 @@ export {
   useComposerActions,
   useComposerMeta,
   useComposerPresentationActions,
+  useComposerPresentationState,
   useComposerState,
 } from './context/ComposerProvider';

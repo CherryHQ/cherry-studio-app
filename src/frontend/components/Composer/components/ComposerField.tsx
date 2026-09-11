@@ -27,7 +27,7 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
-  const { resumeKeyboardTracking } = useComposerPresentationActions();
+  const { activateInput } = useComposerPresentationActions();
   const linkColor = useThemeColor('primary');
 
   const handlePaste = useCallback(
@@ -54,9 +54,9 @@ export function ComposerField({ onBlur, onFocus, placeholder, style, testID }: C
   const handleFocus = useCallback<NonNullable<ComposerInputProps['onFocus']>>(() => {
     // Focus is the only event that is allowed to reconnect the dock after a
     // sheet or native picker has replaced the input context.
-    resumeKeyboardTracking();
+    activateInput();
     onFocus?.();
-  }, [onFocus, resumeKeyboardTracking]);
+  }, [activateInput, onFocus]);
 
   return (
     <Composer.Input

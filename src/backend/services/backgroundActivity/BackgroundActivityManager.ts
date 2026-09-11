@@ -1,5 +1,5 @@
 import type { BackgroundActivityNativePresentation } from '@cherrystudio/ui/background-activity';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import {
   AppStatePolicy,
@@ -25,6 +25,8 @@ export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseP
   deepLinkUrl?: string;
   /** Hold a keep-alive lease while the session runs. Defaults to false. */
   keepAlive?: boolean;
+  /** Stops domain work when Android's background execution budget expires. */
+  onInterrupt?: (reason: Error) => void | Promise<void>;
   presenter: BackgroundActivityPresenter<Props>;
   props: Props;
   /** Diagnostic label for keep-alive attribution and log correlation; not unique. */
@@ -38,8 +40,8 @@ export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseP
 export type BackgroundActivitySession<Props extends BackgroundActivityBaseProps> = {
   /** Terminal: ends the surface immediately (domain cleanup, deletions). */
   cancel(): void;
-  /** Terminal: shows `props` as the final content under the default dismissal. */
-  finish(props: Props): void;
+  /** Terminal: resolves after queued final delivery settles, on every platform. */
+  finish(props: Props): Promise<void>;
   update(props: Props, options?: { keepAlive?: boolean; urgent?: boolean }): void;
 };
 
@@ -48,6 +50,7 @@ type SessionRecord = {
   keepAlive: boolean;
   lastNativeUpdateAt: number;
   lease?: KeepAliveLease;
+  onInterrupt?: (reason: Error) => void | Promise<void>;
   presenter: BackgroundActivityPresenter<BackgroundActivityBaseProps>;
   props: BackgroundActivityBaseProps;
   surface: SurfaceState;
@@ -69,14 +72,14 @@ type BackgroundActivityEnvironmentPort = {
 };
 
 /**
- * Feature-agnostic driver for background activity surfaces: foreground starts
+ * Feature-agnostic driver for background activity surfaces: admitted starts
  * are synchronous, update/end operations ride one serial queue, updates are
  * throttled (urgent ones jump the throttle), foreground-created surfaces
  * survive AppState transitions, orphans from a dead process are swept during
  * initialization, and each session's `keepAlive` bit is mirrored into a
- * KeepAliveCoordinator lease. Domain meaning (what a session represents, when
- * it is urgent, when to stay alive) belongs to the feature services driving
- * the sessions.
+ * KeepAliveCoordinator lease, with delivery protection declared by its presenter.
+ * Domain meaning (what a session represents, when it is urgent, when to stay
+ * alive) belongs to the feature services driving the sessions.
  */
 @Injectable('BackgroundActivityManager')
 @ServicePhase(Phase.PostReady)
@@ -97,13 +100,10 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   protected async onInit(): Promise<void> {
-    // The native surface (and the widget logo staging directory) is iOS-only
-    // today; session bookkeeping still works elsewhere via no-op presenters.
-    if (Platform.OS !== 'ios') return;
-
     this.appState = AppState.currentState;
     this.registerAppStateListener(this.handleAppStateChange);
     await this.clearOrphanedSurfaces();
+    // Environments without a logo surface resolve `undefined`; no platform check here.
     this.logoUri = await this.environment.prepareLogo();
   }
 
@@ -115,6 +115,7 @@ export class BackgroundActivityManager extends BaseService {
     const record: SessionRecord = {
       keepAlive: input.keepAlive ?? false,
       lastNativeUpdateAt: 0,
+      onInterrupt: input.onInterrupt,
       presenter: input.presenter as BackgroundActivityPresenter<BackgroundActivityBaseProps>,
       props: input.props,
       surface: { status: 'pending' },
@@ -126,14 +127,16 @@ export class BackgroundActivityManager extends BaseService {
     this.startNative(record);
 
     return {
-      cancel: () => this.settle(record, 'immediate'),
+      cancel: () => {
+        void this.settle(record, 'immediate');
+      },
       finish: (props) => {
-        if (record.surface.status === 'ended' || this.disposed) return;
+        if (record.surface.status === 'ended' || this.disposed) return Promise.resolve();
         record.props = {
           ...props,
           finishedAtEpochMs: props.finishedAtEpochMs ?? Date.now(),
         };
-        this.settle(record, 'default');
+        return this.settle(record, 'default');
       },
       update: (props, options) => this.updateSession(record, props, options),
     };
@@ -184,13 +187,20 @@ export class BackgroundActivityManager extends BaseService {
     record.props = props;
     if (options?.keepAlive !== undefined && options.keepAlive !== record.keepAlive) {
       record.keepAlive = options.keepAlive;
-      this.reconcileLease(record);
+      if (record.keepAlive || !record.presenter.shouldHoldLeaseUntilDelivery) {
+        this.reconcileLease(record);
+      }
     }
 
-    if (!changed || record.surface.status !== 'active') return;
+    const needsLeaseDrain =
+      record.presenter.shouldHoldLeaseUntilDelivery && !!record.lease && !record.keepAlive;
+    if ((!changed && !needsLeaseDrain) || record.surface.status !== 'active') {
+      this.reconcileLease(record);
+      return;
+    }
 
     const elapsed = Date.now() - record.lastNativeUpdateAt;
-    if (options?.urgent || elapsed >= NATIVE_UPDATE_INTERVAL_MS) {
+    if (needsLeaseDrain || options?.urgent || elapsed >= NATIVE_UPDATE_INTERVAL_MS) {
       this.clearUpdateTimer(record);
       void this.enqueue(() => this.updateNative(record));
       return;
@@ -204,19 +214,27 @@ export class BackgroundActivityManager extends BaseService {
     }
   }
 
-  private settle(record: SessionRecord, policy: 'default' | 'immediate'): void {
-    if (record.surface.status === 'ended' || this.disposed) return;
+  private settle(record: SessionRecord, policy: 'default' | 'immediate'): Promise<void> {
+    if (record.surface.status === 'ended' || this.disposed) return Promise.resolve();
     this.stampFinishedAt(record);
     const handle = record.surface.status === 'active' ? record.surface.handle : undefined;
     record.surface = { status: 'ended' };
     this.sessions.delete(record);
     this.clearUpdateTimer(record);
+    if (!record.presenter.shouldHoldLeaseUntilDelivery) this.reconcileLease(record);
+    if (handle) {
+      return this.enqueue(async () => {
+        await this.endNative(record, handle, policy);
+        this.reconcileLease(record);
+      });
+    }
     this.reconcileLease(record);
-    if (handle) void this.enqueue(() => this.endNative(record, handle, policy));
+    return Promise.resolve();
   }
 
   private startNative(record: SessionRecord): void {
-    if (this.disposed || this.appState !== 'active' || record.surface.status !== 'pending') return;
+    if (this.disposed || record.surface.status !== 'pending') return;
+    if (!record.presenter.canStartInBackground && this.appState !== 'active') return;
     try {
       const handle = record.presenter.start(this.toNativeProps(record), record.deepLinkUrl);
       record.surface = { handle, status: 'active' };
@@ -230,11 +248,21 @@ export class BackgroundActivityManager extends BaseService {
 
   private async updateNative(record: SessionRecord): Promise<void> {
     if (this.disposed || record.surface.status !== 'active') return;
+    const submittedProps = record.props;
     try {
       await record.surface.handle.update(this.toNativeProps(record));
       record.lastNativeUpdateAt = Date.now();
     } catch (error) {
       logger.warn('Background activity update failed', error as Error, { tag: record.tag });
+    } finally {
+      // A newer update or finish owns delivery of its content. An older pending
+      // update must not release that operation's execution protection.
+      if (
+        !record.presenter.shouldHoldLeaseUntilDelivery ||
+        (record.surface.status === 'active' && record.props === submittedProps)
+      ) {
+        this.reconcileLease(record);
+      }
     }
   }
 
@@ -272,7 +300,7 @@ export class BackgroundActivityManager extends BaseService {
   private reconcileLease(record: SessionRecord): void {
     const shouldHold = !this.disposed && record.surface.status !== 'ended' && record.keepAlive;
     if (shouldHold && !record.lease) {
-      record.lease = this.keepAlive.acquire(record.tag);
+      record.lease = this.keepAlive.acquire(record.tag, record.onInterrupt);
     } else if (!shouldHold && record.lease) {
       record.lease.release();
       record.lease = undefined;
@@ -307,7 +335,7 @@ function noOpSession<
 >(): BackgroundActivitySession<Props> {
   return {
     cancel: () => {},
-    finish: () => {},
+    finish: async () => {},
     update: () => {},
   };
 }

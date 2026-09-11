@@ -12,11 +12,15 @@ export type BackgroundActivityHandle<Props extends BackgroundActivityBaseProps> 
 };
 
 /**
- * Platform adapter for one feature's background surface. iOS wraps an
- * expo-widgets Live Activity factory; platforms without a surface use the
- * no-op presenter so sessions degrade gracefully.
+ * Platform adapter for one feature's background surface. The adapter declares
+ * its admission and delivery requirements; the manager owns their sequencing.
+ * These requirements concern presentation, not permission to start domain work.
  */
 export type BackgroundActivityPresenter<Props extends BackgroundActivityBaseProps> = {
+  /** Whether a surface can start before the app returns to the foreground. */
+  readonly canStartInBackground: boolean;
+  /** Keep the session's existing lease until its latest update/end has settled. */
+  readonly shouldHoldLeaseUntilDelivery: boolean;
   /** Ends every surface a previous process left behind; returns the count. */
   clearOrphans(): Promise<number>;
   start(props: Props, deepLinkUrl?: string): BackgroundActivityHandle<Props>;
@@ -26,6 +30,8 @@ export function noopBackgroundActivityPresenter<
   Props extends BackgroundActivityBaseProps,
 >(): BackgroundActivityPresenter<Props> {
   return {
+    canStartInBackground: true,
+    shouldHoldLeaseUntilDelivery: false,
     clearOrphans: async () => 0,
     start: () => ({ end: async () => {}, update: async () => {} }),
   };

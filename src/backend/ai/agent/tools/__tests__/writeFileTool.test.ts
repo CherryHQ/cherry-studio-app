@@ -14,12 +14,15 @@ describe('writeFileTool', () => {
 
     const output = await execute(tool, { content: '# Report\n', filename: 'report.md' });
 
-    expect(files.createTextEntry).toHaveBeenCalledWith({
-      data: '# Report\n',
-      mediaType: 'text/markdown',
-      name: 'report.md',
-      provenance: 'generated',
-    });
+    expect(files.createTextEntry).toHaveBeenCalledWith(
+      {
+        data: '# Report\n',
+        mediaType: 'text/markdown',
+        name: 'report.md',
+        provenance: 'generated',
+      },
+      expect.any(AbortSignal),
+    );
     expect(output).toEqual({
       value: {
         status: 'created',
@@ -58,6 +61,7 @@ describe('writeFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
       expect.objectContaining({ mediaType: 'text/plain', name: 'meeting notes.txt' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -68,6 +72,7 @@ describe('writeFileTool', () => {
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'draft.txt' }),
+      expect.any(AbortSignal),
     );
   });
 
@@ -84,7 +89,10 @@ describe('writeFileTool', () => {
 
     await execute(createWriteFileTool(files), { content: 'x', filename: `data.${extension}` });
 
-    expect(files.createTextEntry).toHaveBeenCalledWith(expect.objectContaining({ mediaType }));
+    expect(files.createTextEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ mediaType }),
+      expect.any(AbortSignal),
+    );
   });
 
   test.each([

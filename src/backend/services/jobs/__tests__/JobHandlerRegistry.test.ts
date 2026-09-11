@@ -7,6 +7,8 @@ describe('JobHandlerRegistry', () => {
       { startSession: jest.fn() } as never,
       {
         paintingPresenter: {
+          canStartInBackground: false,
+          shouldHoldLeaseUntilDelivery: false,
           clearOrphans: jest.fn(async () => 0),
           start: jest.fn(),
         },

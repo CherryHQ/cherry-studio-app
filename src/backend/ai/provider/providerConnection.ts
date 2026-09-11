@@ -23,6 +23,25 @@ interface ResolveProviderConnectionOptions {
   resolvedEndpoint?: ResolvedEndpoint;
 }
 
+const providersWithoutApiVersion = new Set([
+  'github',
+  'copilot',
+  'perplexity',
+  'newapi',
+  'new-api',
+  'azure-openai',
+]);
+
+/** Shared by Pi and AI SDK requests, including copies of a preset provider. */
+export function shouldAppendProviderApiVersion(
+  provider: Pick<Provider, 'id' | 'presetProviderId'>,
+): boolean {
+  return (
+    !providersWithoutApiVersion.has(provider.id) &&
+    !providersWithoutApiVersion.has(provider.presetProviderId ?? '')
+  );
+}
+
 /**
  * Resolve the Provider connection facts shared by capability executors.
  *

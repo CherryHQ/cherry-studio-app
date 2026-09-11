@@ -78,7 +78,10 @@
       },
       "package": "com.cherryai.cherrystudio_app",
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": ["android.permission.RECORD_AUDIO"],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ],
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -92,7 +95,11 @@
         "android.permission.health.READ_HEART_RATE_VARIABILITY",
         "android.permission.health.READ_RESTING_HEART_RATE",
         "android.permission.health.READ_SLEEP",
-        "android.permission.health.READ_STEPS"
+        "android.permission.health.READ_STEPS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.WAKE_LOCK",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -102,6 +109,13 @@
     "plugins": [
       "expo-router",
       "expo-dev-client",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/cherry-studio-logo.png"
+        }
+      ],
+      "./scripts/withAndroidBackgroundGeneration.js",
       [
         "@sentry/react-native/expo",
         {

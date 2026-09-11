@@ -5,6 +5,7 @@ import type {
   AgentTool as PiAgentTool,
 } from '@earendil-works/pi-agent-core';
 import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
+import { estimateTokens } from '@earendil-works/pi-agent-core/compaction';
 import type {
   Api as PiApi,
   AssistantMessage,
@@ -1091,7 +1092,8 @@ class PiRuntimeSession implements AgentRuntimeSession {
         if (event.message.role === 'assistant') {
           this.recordInvocation(turn, event.message);
           turn.currentMessageOrdinal = undefined;
-          turn.modelContextHeadroomTokens -= estimatePiMessagesTokens([event.message]);
+          // Input was already budgeted before the request; only add this response's content.
+          turn.modelContextHeadroomTokens -= estimateTokens(event.message);
         }
         break;
       case 'turn_end':

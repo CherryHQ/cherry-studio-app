@@ -12,6 +12,7 @@ import type {
   PaintingActivityPhase,
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
+import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import type { PaintingGenerationResult } from '@/shared/contracts';
 import { type FileEntry, type FileEntryId, readableFilename } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -79,11 +80,15 @@ export type PaintingActivityDriver = {
 };
 
 export type PaintingGenerateJobDependencies = {
-  /** Dynamic-island progress surface; omitted in tests and off iOS. */
+  /** Platform task progress surface; omitted by callers without presentation. */
   activities?: PaintingActivityDriver;
   ai: PaintingAi;
   paintings: {
-    replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting>;
+    replaceOutputs(
+      id: string,
+      outputFileIds: readonly FileEntryId[],
+      signal: AbortSignal,
+    ): Promise<Painting>;
   };
   storage: PaintingFileStorage;
   translate?: (key: string) => string;
@@ -118,7 +123,7 @@ export function createPaintingGenerateJobHandler(
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
       const session = dependencies.activities?.startSession({
-        deepLinkUrl: `${resolveScheme({})}://paintings/${encodeURIComponent(paintingId)}`,
+        deepLinkUrl: createBackgroundTaskUrl(resolveScheme({}), { kind: 'painting', paintingId }),
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
         props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),
@@ -148,6 +153,7 @@ export function createPaintingGenerateJobHandler(
         let outputRefsCommitted = false;
         try {
           for (const [index, image] of result.images.entries()) {
+            throwIfAborted(ctx.signal);
             createdOutputs.push(
               await storage.createInternalEntry({
                 data: image.base64,
@@ -162,9 +168,11 @@ export function createPaintingGenerateJobHandler(
               }),
             );
           }
+          throwIfAborted(ctx.signal);
           const painting = await paintings.replaceOutputs(
             paintingId,
             createdOutputs.map((entry) => entry.id),
+            ctx.signal,
           );
           outputRefsCommitted = true;
           throwIfAborted(ctx.signal);
@@ -186,7 +194,7 @@ export function createPaintingGenerateJobHandler(
             };
           });
 
-          session?.finish(
+          await session?.finish(
             paintingActivityProps(translate, 'completed', modelName, prompt, startedAtEpochMs),
           );
           return { outputs, painting };
@@ -204,7 +212,7 @@ export function createPaintingGenerateJobHandler(
         }
       } catch (error) {
         const phase: PaintingActivityPhase = ctx.signal.aborted ? 'cancelled' : 'failed';
-        session?.finish(
+        await session?.finish(
           paintingActivityProps(translate, phase, modelName, prompt, startedAtEpochMs),
         );
         throw error;

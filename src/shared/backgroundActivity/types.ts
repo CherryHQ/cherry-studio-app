@@ -2,6 +2,8 @@ import type { BackgroundActivityBasePresentation } from '@cherrystudio/ui/backgr
 
 /** Platform-neutral contracts for background activity surfaces. */
 
+export const BACKGROUND_NOTIFICATION_OWNER = 'cherry-background-activity';
+
 export type BackgroundActivityEndPolicy = 'default' | 'immediate';
 
 /**

@@ -677,7 +677,9 @@ export class ProviderRegistryService {
     modelId: string,
     providerConfig?: Omit<ReasoningProviderContext, 'id'>,
   ): ModelRegistryLookup {
-    const registryOverride = this.loader.findOverride(providerId, modelId);
+    const sourceProviderId =
+      this.loader.findProvider(providerId)?.id ?? providerConfig?.presetProviderId ?? providerId;
+    const registryOverride = this.loader.findOverride(sourceProviderId, modelId);
     const presetModel =
       this.loader.findModel(registryOverride?.modelId ?? modelId) ??
       (registryOverride ? synthesizePresetFromOverride(registryOverride) : null);
@@ -705,7 +707,6 @@ export class ProviderRegistryService {
   ): Model[] {
     const results: Model[] = [];
     const seen = new Set<string>();
-    const context: ReasoningProviderContext = { ...providerConfig, id: providerId };
 
     for (const modelId of modelIds) {
       if (!modelId || seen.has(modelId)) {
@@ -713,20 +714,8 @@ export class ProviderRegistryService {
       }
       seen.add(modelId);
 
-      const registryOverride = this.loader.findOverride(providerId, modelId);
-      const presetModel =
-        this.loader.findModel(registryOverride?.modelId ?? modelId) ??
-        (registryOverride ? synthesizePresetFromOverride(registryOverride) : null);
-      const reasoningProfile = this.resolveProfileForModelData(
-        context,
-        presetModel,
-        registryOverride,
-        modelId,
-      );
-      const serviceTierControl = this.resolveServiceTierControlForModelData(
-        context,
-        registryOverride,
-      );
+      const { presetModel, registryOverride, reasoningProfile, serviceTierControl } =
+        this.lookupModel(providerId, modelId, providerConfig);
 
       if (!presetModel) {
         results.push(

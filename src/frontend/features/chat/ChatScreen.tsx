@@ -24,7 +24,7 @@ import {
 } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
-import { ChatInput } from './components/ChatInput';
+import { ChatInput, type ChatInputHandle } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
@@ -59,6 +59,7 @@ function ChatRouteContent() {
 
 function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { t } = useTranslation();
+  const inputRef = useRef<ChatInputHandle>(null);
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
@@ -102,7 +103,13 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ) : null}
       {/* Dismiss after the outside touch ends so the keyboard cannot move a
           message action before release. The composer is outside this boundary. */}
-      <View className="flex-1" onTouchEnd={Keyboard.dismiss}>
+      <View
+        className="flex-1"
+        onTouchEnd={() => {
+          inputRef.current?.dismiss();
+          Keyboard.dismiss();
+        }}
+      >
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
             <ContentState.Error
@@ -141,6 +148,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               agentId={resolvedAgentId}
               controls={controls}
               dismissKeyboardOnSend={false}
+              ref={inputRef}
               sessionId={sessionId}
             />
           </ComposerDock>

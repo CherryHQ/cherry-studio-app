@@ -7,9 +7,19 @@ import type { BackgroundActivityPresenter } from '../presenter';
 
 type TestProps = BackgroundActivityBaseProps & { detail: string };
 
-function createMockPresenter() {
+function createMockPresenter(
+  capabilities: Partial<
+    Pick<
+      BackgroundActivityPresenter<TestProps>,
+      'canStartInBackground' | 'shouldHoldLeaseUntilDelivery'
+    >
+  > = {},
+) {
   const handles: { end: jest.Mock; update: jest.Mock }[] = [];
   const presenter = {
+    canStartInBackground: false,
+    shouldHoldLeaseUntilDelivery: false,
+    ...capabilities,
     clearOrphans: jest.fn(async () => 0),
     start: jest.fn((_props: TestProps, _deepLinkUrl?: string) => {
       const handle = { end: jest.fn(async () => {}), update: jest.fn(async () => {}) };
@@ -23,7 +33,7 @@ function createMockPresenter() {
   return { handles, presenter };
 }
 
-describe('BackgroundActivityManager', () => {
+describe.each(['ios', 'android'])('BackgroundActivityManager on %s', (platform) => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   const mockLeases: { release: jest.Mock }[] = [];
   const mockPrepareLogo = jest.fn(async () => 'file:///widgets/cherry-studio-logo.png');
@@ -37,7 +47,7 @@ describe('BackgroundActivityManager', () => {
     appStateListener = undefined;
     mockLeases.length = 0;
     jest.clearAllMocks();
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
       appStateListener = listener;
@@ -53,7 +63,7 @@ describe('BackgroundActivityManager', () => {
     jest.restoreAllMocks();
   });
 
-  test('sweeps orphaned surfaces and prepares the shared logo at initialization', async () => {
+  test('sweeps orphaned surfaces and prepares the environment logo at initialization', async () => {
     const first = createMockPresenter();
     const second = createMockPresenter();
     first.presenter.clearOrphans.mockResolvedValueOnce(2);
@@ -165,7 +175,7 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     expect(mockAcquire).toHaveBeenCalledTimes(1);
-    expect(mockAcquire).toHaveBeenCalledWith('chat.topic-1');
+    expect(mockAcquire).toHaveBeenCalledWith('chat.topic-1', undefined);
 
     session.update(makeProps('awaiting-approval'), { keepAlive: false });
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
@@ -175,6 +185,99 @@ describe('BackgroundActivityManager', () => {
 
     session.cancel();
     expect(mockLeases[1]?.release).toHaveBeenCalledTimes(1);
+    await manager._doStop();
+  });
+
+  test('protects approval delivery when the presenter requires an execution lease', async () => {
+    const { presenter, handles } = createMockPresenter({ shouldHoldLeaseUntilDelivery: true });
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      keepAlive: true,
+      presenter,
+      props: makeProps('generating'),
+      tag: 'chat',
+    });
+    let finishUpdate!: () => void;
+    handles[0]!.update.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUpdate = resolve;
+        }),
+    );
+    session.update(makeProps('awaiting-approval'), { keepAlive: false, urgent: true });
+    await flushOperations();
+    expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+    finishUpdate();
+    await flushOperations();
+    expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+    session.cancel();
+    await manager._doStop();
+  });
+
+  test.each(['update', 'finish', 'cancel'] as const)(
+    'protects %s delivery when an older progress update is pending',
+    async (terminalAction) => {
+      const { presenter, handles } = createMockPresenter({ shouldHoldLeaseUntilDelivery: true });
+      const manager = await createManager([presenter]);
+      const session = manager.startSession({
+        keepAlive: true,
+        presenter,
+        props: makeProps('starting'),
+        tag: 'chat',
+      });
+      let releaseProgress!: () => void;
+      handles[0]!.update.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            releaseProgress = resolve;
+          }),
+      );
+      session.update(makeProps('responding'), { urgent: true });
+      await flushOperations();
+
+      let releaseTerminal!: () => void;
+      const pendingTerminal = () =>
+        new Promise<void>((resolve) => {
+          releaseTerminal = resolve;
+        });
+      if (terminalAction === 'update') {
+        handles[0]!.update.mockImplementationOnce(pendingTerminal);
+        session.update(makeProps('awaiting-approval'), { keepAlive: false, urgent: true });
+        // A repeated projection with identical content must also await delivery.
+        session.update(makeProps('awaiting-approval'), { keepAlive: false });
+      } else {
+        handles[0]!.end.mockImplementationOnce(pendingTerminal);
+        if (terminalAction === 'finish') void session.finish(makeProps('completed'));
+        else session.cancel();
+      }
+      expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+      releaseProgress();
+      await flushOperations();
+      expect(mockLeases[0]!.release).not.toHaveBeenCalled();
+      releaseTerminal();
+      await flushOperations();
+      expect(mockLeases[0]!.release).toHaveBeenCalledTimes(1);
+      session.cancel();
+      await manager._doStop();
+    },
+  );
+
+  test('starts a background surface when its presenter supports it', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const { presenter, handles } = createMockPresenter({ canStartInBackground: true });
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      presenter,
+      props: makeProps('generating'),
+      tag: 'painting',
+    });
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    session.finish(makeProps('completed'));
+    await flushOperations();
+    expect(handles[0]!.end).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ detail: 'completed' }),
+    );
     await manager._doStop();
   });
 
@@ -267,6 +370,48 @@ describe('BackgroundActivityManager', () => {
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
     session.cancel();
+    await manager._doStop();
+  });
+
+  test('finish waits for queued platform delivery even when the caller owns the execution lease', async () => {
+    const { handles, presenter } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      keepAlive: false,
+      presenter,
+      props: makeProps('preparing'),
+      tag: 'painting',
+    });
+    let releaseUpdate!: () => void;
+    handles[0]!.update.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseUpdate = resolve;
+        }),
+    );
+    session.update(makeProps('responding'), { urgent: true });
+    await flushOperations();
+    let releaseEnd!: () => void;
+    handles[0]!.end.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseEnd = resolve;
+        }),
+    );
+    let finished = false;
+    const finish = session.finish(makeProps('completed')).then(() => {
+      finished = true;
+    });
+    await flushOperations();
+    expect(finished).toBe(false);
+    expect(handles[0]!.end).not.toHaveBeenCalled();
+    releaseUpdate();
+    await flushOperations();
+    expect(handles[0]!.end).toHaveBeenCalled();
+    expect(finished).toBe(false);
+    releaseEnd();
+    await finish;
+    expect(finished).toBe(true);
     await manager._doStop();
   });
 

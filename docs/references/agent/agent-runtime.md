@@ -352,8 +352,8 @@ checkpoint, the request carries complete Turn groups after the anchor. With no c
 invalid, incompatible, oversized, or orphaned candidate—the Host supplies the entire grouped
 history. Pi owns all later selection, formatting, and compaction policy.
 
-Pi estimates history with `pi-agent-core` provider usage when the last persisted assistant usage is
-available and otherwise uses its conservative message estimator. The adapter adds system
+Pi estimates reconstructed history with `pi-agent-core`'s content estimator. Persisted assistant
+usage aggregates multiple requests for analytics and is never a context-size measurement. The adapter adds system
 instructions, current input, tool schemas, image reserves, requested output, and a fixed safety
 margin before calling Pi's `shouldCompact`. A current input whose fixed costs alone exceed the
 window fails before the first model call.
@@ -369,7 +369,8 @@ Initial compaction is not the last admission check. Before Pi continues after a 
 Runtime re-estimates the live assistant request and tool-result messages together with system,
 tool-schema, attachment, output, and safety reserves. A continuation that no longer fits stops as
 `context_window_exceeded` before another provider request. Model-only catalog results additionally
-consume this live headroom while they are produced.
+consume this live headroom while they are produced. At assistant response completion, only the new
+response content is deducted; that request's input was already budgeted before execution.
 
 ### Tools
 

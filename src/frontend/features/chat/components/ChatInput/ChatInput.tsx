@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
 import Animated, {
@@ -21,7 +21,8 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerMeta,
+  useComposerPresentationActions,
+  useComposerPresentationState,
   useComposerState,
 } from '@/frontend/components/Composer';
 import {
@@ -38,7 +39,6 @@ import type { useAgentChatControls } from '../../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
-import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
@@ -52,7 +52,13 @@ type ChatInputProps = {
   agentId?: string;
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
+  ref?: Ref<ChatInputHandle>;
   sessionId?: string;
+};
+
+export type ChatInputHandle = {
+  /** Ends editing from the chat's outside-touch boundary, even without a keyboard. */
+  dismiss: () => void;
 };
 
 const logger = loggerService.withContext('ChatInput');
@@ -66,7 +72,13 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId }: ChatInputProps) {
+export function ChatInput({
+  agentId,
+  controls,
+  dismissKeyboardOnSend,
+  ref,
+  sessionId,
+}: ChatInputProps) {
   const { t } = useTranslation();
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const { agent } = useAgentApiById(agentId);
@@ -123,12 +135,12 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
   const compactInputStyle = {
     maxHeight: Math.max(restingInputHeight, (inputTextStyle.fontSize ?? 16) * fontScale * 2),
   };
-  const [isInputFocused, setIsInputFocused] = useState(false);
+  const { isEditing } = useComposerPresentationState();
+  const { dismissInput } = useComposerPresentationActions();
+  useImperativeHandle(ref, () => ({ dismiss: dismissInput }), [dismissInput]);
   const { attachments, draft } = useComposerState();
-  const isInputActive = isInputFocused || draft.length > 0 || attachments.length > 0;
+  const isInputActive = isEditing || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
-  const { inputRef } = useComposerMeta();
-  useBlurComposerOnVisibleKeyboardHide(inputRef);
   const activeProgress = useSharedValue(isInputActive ? 1 : 0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
 
@@ -205,12 +217,6 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
     },
     [fieldFrameHeight, isInputActive],
   );
-  const handleInputBlur = useCallback(() => {
-    setIsInputFocused(false);
-  }, []);
-  const handleInputFocus = useCallback(() => {
-    setIsInputFocused(true);
-  }, []);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setIsModelPickerOpen(false);
@@ -296,8 +302,6 @@ export function ChatInput({ agentId, controls, dismissKeyboardOnSend, sessionId 
                   <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
                     <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
                       <ComposerField
-                        onBlur={handleInputBlur}
-                        onFocus={handleInputFocus}
                         style={isPluginPickerVisible ? compactInputStyle : undefined}
                         testID="chat-composer-input"
                       />

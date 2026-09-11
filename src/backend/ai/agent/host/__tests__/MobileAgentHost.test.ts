@@ -6,6 +6,7 @@
 
 import { v7 as uuidv7 } from 'uuid';
 
+import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -93,7 +94,7 @@ const backgroundReplyTurn = {
 };
 const backgroundReply = {
   clearSession: jest.fn(),
-  startTurn: jest.fn(() => backgroundReplyTurn),
+  startTurn: jest.fn((_input: BackgroundReplyTurnInput) => backgroundReplyTurn),
   updateSessionTitle: jest.fn(),
 };
 const usage = {
@@ -567,6 +568,7 @@ describe('MobileAgentHost', () => {
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       agentName: 'Test Agent',
+      onInterrupt: expect.any(Function),
       sessionId: session.id,
       sessionTitle: '',
     });
@@ -1826,6 +1828,46 @@ describe('MobileAgentHost', () => {
     // The session is idle again.
     const observation = await host.observeSession(session.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();
+  });
+
+  test('background interruption waits for cancelled turn persistence', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      if (!controller.signal.aborted) {
+        await new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    });
+    const persist = store.finalizeAssistantMessage.bind(store);
+    const persistence = createDeferred();
+    const finalize = jest
+      .spyOn(store, 'finalizeAssistantMessage')
+      .mockImplementation(async (input) => {
+        await persistence.promise;
+        return persist(input);
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Keep working.' }],
+    });
+    await started.promise;
+
+    let drained = false;
+    const interrupt = backgroundReply.startTurn.mock.calls[0]![0].onInterrupt!;
+    const interrupted = Promise.resolve(interrupt(new Error('Background time limit'))).then(() => {
+      drained = true;
+    });
+    await waitFor(() => finalize.mock.calls.length > 0, 'cancelled message persistence to start');
+    expect(drained).toBe(false);
+    persistence.resolve();
+    await interrupted;
+    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
+    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {
