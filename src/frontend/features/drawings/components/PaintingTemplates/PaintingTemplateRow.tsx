@@ -4,26 +4,37 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { PaintingTemplateBottomSheet } from './PaintingTemplateBottomSheet';
-import { type PaintingTemplate, paintingTemplates } from './paintingTemplates';
+import {
+  getPaintingTemplates,
+  type PaintingTemplate,
+  shufflePaintingTemplates,
+} from './paintingTemplates';
 
 type PaintingTemplateRowProps = {
-  onUseTemplate: (template: PaintingTemplate) => void;
+  onPaintingCreated: (paintingId: string) => void;
 };
 
-export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps) {
-  const { t } = useTranslation();
+export function PaintingTemplateRow({ onPaintingCreated }: PaintingTemplateRowProps) {
+  const { t, i18n } = useTranslation();
+  const templates = getPaintingTemplates(i18n.resolvedLanguage ?? i18n.language);
+  const [templateOrder] = useState(() =>
+    shufflePaintingTemplates(templates).map((template) => template.id),
+  );
+  const orderedTemplates = templates.toSorted(
+    (left, right) => templateOrder.indexOf(left.id) - templateOrder.indexOf(right.id),
+  );
   const [selectedTemplate, setSelectedTemplate] = useState<PaintingTemplate | null>(null);
 
   const handleDismiss = useCallback(() => {
     setSelectedTemplate(null);
   }, []);
 
-  const handleUse = useCallback(
-    (template: PaintingTemplate) => {
+  const handleCreated = useCallback(
+    (paintingId: string) => {
       setSelectedTemplate(null);
-      onUseTemplate(template);
+      onPaintingCreated(paintingId);
     },
-    [onUseTemplate],
+    [onPaintingCreated],
   );
 
   return (
@@ -37,11 +48,11 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
           horizontal
           showsHorizontalScrollIndicator={false}
         >
-          {paintingTemplates.map((template) => (
+          {orderedTemplates.map((template) => (
             <Pressable
               accessibilityLabel={t('painting.templates.item', { title: template.title })}
               accessibilityRole="button"
-              className="overflow-hidden bg-secondary active:opacity-70"
+              className="overflow-hidden rounded-lg border-continuous bg-secondary active:opacity-70"
               key={template.id}
               onPress={() => setSelectedTemplate(template)}
               style={styles.card}
@@ -60,8 +71,9 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
       </View>
       {selectedTemplate ? (
         <PaintingTemplateBottomSheet
+          key={selectedTemplate.id}
+          onCreated={handleCreated}
           onDismiss={handleDismiss}
-          onUse={handleUse}
           template={selectedTemplate}
         />
       ) : null}
@@ -71,8 +83,6 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
 
 const styles = StyleSheet.create({
   card: {
-    borderCurve: 'continuous',
-    borderRadius: 8,
     height: 148,
     width: 112,
   },

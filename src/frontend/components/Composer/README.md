@@ -46,6 +46,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   end editing, since a composer control may be taking over the interaction.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them.
+- `ComposerAttachmentStrip` / `useManagedComposerAttachments` — the same attachment previews and
+  managed-file imports for creation forms that do not use a composer, including painting templates.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator. `onPickFiles` can replace the files destination;
   the menu still settles input dismissal before calling it.
