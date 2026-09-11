@@ -30,6 +30,7 @@ function build(
   const { vendorBag } = splitImageParamValues(paramValues);
   return buildImageProviderOptions({
     aiSdkProviderId,
+    modelId: 'test-image',
     paramValues,
     provider: currentProvider,
     vendorBag,
@@ -37,6 +38,71 @@ function build(
 }
 
 describe('image provider option routing', () => {
+  it('delivers CherryIN chat-variant image options to the key its image wrapper reads', () => {
+    expect(
+      build(
+        'cherryin-chat',
+        {
+          imageResolution: '4K',
+          personGeneration: 'ALLOW_ADULT',
+        },
+        provider('custom-cherryin', 'cherryin'),
+      ),
+    ).toEqual({
+      cherryin: { imageResolution: '4K', personGeneration: 'ALLOW_ADULT' },
+    });
+  });
+
+  it.each(['dashscope', 'modelscope', 'ppio', 'tokenhub'])(
+    'preserves canonical parameters for %s transports',
+    (providerId) => {
+      expect(
+        build(
+          providerId,
+          {
+            negativePrompt: 'blur',
+            numInferenceSteps: 25,
+            guidanceScale: 7,
+            promptEnhancement: false,
+            sequentialImageGeneration: 'auto',
+          },
+          provider(`copy-${providerId}`, providerId),
+        ),
+      ).toEqual({
+        [providerId]: {
+          negativePrompt: 'blur',
+          numInferenceSteps: 25,
+          guidanceScale: 7,
+          promptEnhancement: false,
+          sequentialImageGeneration: 'auto',
+        },
+      });
+    },
+  );
+
+  it('keeps DMXAPI custom-image fields canonical while retaining native Gemini delivery', () => {
+    const paramValues = { negativePrompt: 'blur', imageResolution: '2K' };
+    const { vendorBag } = splitImageParamValues(paramValues);
+    expect(
+      buildImageProviderOptions({
+        aiSdkProviderId: 'dmxapi',
+        modelId: 'wan2.2-t2i',
+        paramValues,
+        provider: provider('custom-dmxapi', 'dmxapi'),
+        vendorBag,
+      }),
+    ).toEqual({ dmxapi: { negativePrompt: 'blur', imageResolution: '2K' } });
+    expect(
+      buildImageProviderOptions({
+        aiSdkProviderId: 'dmxapi',
+        modelId: 'gemini-2.5-flash-image',
+        paramValues,
+        provider: provider('custom-dmxapi', 'dmxapi'),
+        vendorBag,
+      }),
+    ).toMatchObject({ google: { imageConfig: { imageSize: '2K' } } });
+  });
+
   it('routes OpenRouter image fields and only sends compression for JPEG or WebP', () => {
     expect(
       build('openrouter', {

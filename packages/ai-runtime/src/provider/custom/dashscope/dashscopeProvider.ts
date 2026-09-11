@@ -21,6 +21,22 @@ export const DASHSCOPE_PROVIDER_NAME = 'dashscope' as const;
 const DASHSCOPE_CHAT_BASE_PATH = '/compatible-mode/v1';
 const DASHSCOPE_RERANK_BASE_PATH = '/compatible-api/v1';
 
+// Only admitted models whose native request supports `parameters.n` may batch.
+const DASHSCOPE_IMAGE_BATCH_LIMITS: Readonly<Record<string, number>> = {
+  'qwen-image': 4,
+  'qwen-image-3.0': 6,
+  'qwen-image-3.0-pro': 6,
+  'wan2.5-i2i-preview': 4,
+  'wan2.6-image': 4,
+  'wan2.7-image': 4,
+  'wan2.7-image-pro': 4,
+  'wanx-v1': 4,
+  'wanx2.0-t2i-turbo': 4,
+  'wanx2.1-imageedit': 4,
+  'wanx2.1-t2i-plus': 4,
+  'wanx2.1-t2i-turbo': 4,
+};
+
 export interface DashScopeProviderSettings {
   apiKey?: string;
   /** Chat / embedding endpoint, e.g. `https://dashscope.aliyuncs.com/compatible-mode/v1/`. */
@@ -127,7 +143,11 @@ export function createDashScopeProvider(
       fetch: customFetch,
     });
   provider.imageModel = (modelId: string) =>
-    createImageGenerationModel(modelId, { provider: DASHSCOPE_PROVIDER_NAME, transport });
+    createImageGenerationModel(modelId, {
+      maxImagesPerCall: DASHSCOPE_IMAGE_BATCH_LIMITS[modelId] ?? 1,
+      provider: DASHSCOPE_PROVIDER_NAME,
+      transport,
+    });
   provider.rerankingModel = (modelId: string) =>
     new OpenAICompatibleRerankingModel(modelId, {
       provider: `${DASHSCOPE_PROVIDER_NAME}.rerank`,

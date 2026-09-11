@@ -6,6 +6,7 @@ import {
 } from '@cherrystudio/ai-core';
 import {
   buildImageProviderOptions,
+  isImageTransportDescriptorSupported,
   mergeImageProviderOptions,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
@@ -295,19 +296,23 @@ export class AiService extends BaseService {
       registryProviderId,
       model.apiModelId ?? model.modelId,
     )?.modes?.[request.mode]?.vendorTransport;
+    const modelDescriptor = vendorTransport?.endpoint
+      ? { ...vendorTransport, id: sdkConfig.modelId, mode: request.mode }
+      : undefined;
+    if (!isImageTransportDescriptorSupported(sdkConfig.providerId, modelDescriptor)) {
+      throw new Error(
+        `Unsupported image generation route for ${registryProviderId}: ${sdkConfig.modelId}`,
+      );
+    }
     const transportVendorBag = vendorTransport?.endpoint
       ? {
           ...vendorBag,
-          modelDescriptor: {
-            endpoint: vendorTransport.endpoint,
-            id: sdkConfig.modelId,
-            mode: request.mode,
-            ...(vendorTransport.isSync !== undefined && { isSync: vendorTransport.isSync }),
-          },
+          modelDescriptor,
         }
       : vendorBag;
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
+      modelId: sdkConfig.modelId,
       paramValues: request.paramValues,
       provider,
       vendorBag: transportVendorBag,

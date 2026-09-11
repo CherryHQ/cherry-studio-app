@@ -43,7 +43,7 @@ import {
 } from '@/frontend/utils/fileAttachmentFeedback';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { UniqueModelId } from '@/shared/data/types/model';
-import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import { resolvePaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
 
 import { createPaintingTemplatePrompt, type PaintingTemplate } from './paintingTemplates';
 
@@ -61,7 +61,7 @@ export function PaintingTemplateBottomSheet({
   template,
 }: PaintingTemplateBottomSheetProps) {
   const { t } = useTranslation();
-  const alert = useAlert();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const paintings = useBackendModule('paintings');
   const queryClient = useQueryClient();
@@ -78,8 +78,8 @@ export function PaintingTemplateBottomSheet({
   const { attachments, addAttachments, removeAttachment } = useManagedComposerAttachments();
   const { getModelItem } = useModelPickerData({ modelType: 'image' });
   const selectedModel = getModelItem(selectedModelId ?? defaultModelId);
-  const mode = attachments.length > 0 ? 'edit' : 'generate';
-  const isModelCompatible = supportsPaintingGenerationMode(selectedModel?.model, mode);
+  const mode = resolvePaintingGenerationMode(selectedModel?.model, attachments.length > 0);
+  const isModelCompatible = mode !== undefined;
   const canCreate =
     Boolean(selectedModel) &&
     isModelCompatible &&
@@ -89,14 +89,14 @@ export function PaintingTemplateBottomSheet({
   const prompt = createPaintingTemplatePrompt(template, values);
 
   async function createPainting() {
-    if (submitLock.current || !canCreate || !selectedModel) return;
+    if (submitLock.current || !canCreate || !selectedModel || !mode) return;
     submitLock.current = true;
     setIsSubmitting(true);
     Keyboard.dismiss();
 
     try {
       const support = selectedModel.model.imageGeneration;
-      const resolvedMode = resolveImageGenerationMode(support, attachments.length > 0);
+      const resolvedMode = resolveImageGenerationMode(support, mode);
       const started = await paintings.startGeneration({
         fileEntryIds: attachments.filter(isComposerAttachmentReady).map((file) => file.fileEntryId),
         mode,
@@ -322,7 +322,9 @@ export function PaintingTemplateBottomSheet({
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           emptyText={t('painting.input.noCompatibleModels')}
-          isModelVisible={(item) => supportsPaintingGenerationMode(item.model, mode)}
+          isModelVisible={(item) =>
+            resolvePaintingGenerationMode(item.model, attachments.length > 0) !== undefined
+          }
           modelType="image"
           onAddProvider={() => {
             onDismiss();

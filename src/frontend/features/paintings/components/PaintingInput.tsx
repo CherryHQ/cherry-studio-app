@@ -33,7 +33,10 @@ import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
-import { supportsPaintingGenerationMode } from '@/shared/utils/paintingModelSupport';
+import {
+  resolvePaintingGenerationMode,
+  supportsPaintingGenerationMode,
+} from '@/shared/utils/paintingModelSupport';
 
 import type {
   PaintingGenerationInput,
@@ -104,18 +107,13 @@ export function PaintingInput({
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
   const attachmentCount = attachments.length;
   const requestedMode = attachmentCount > 0 ? 'edit' : 'generate';
-  const isSelectedModelModeCompatible = supportsPaintingGenerationMode(
-    selectedModel,
-    requestedMode,
-  );
+  const selectedMode = resolvePaintingGenerationMode(selectedModel, attachmentCount > 0);
+  const isSelectedModelModeCompatible = selectedMode !== undefined;
   const resolvedMode = useMemo(
-    () =>
-      isSelectedModelModeCompatible
-        ? resolveImageGenerationMode(selectedModel?.imageGeneration, attachmentCount > 0)
-        : undefined,
-    [attachmentCount, isSelectedModelModeCompatible, selectedModel?.imageGeneration],
+    () => resolveImageGenerationMode(selectedModel?.imageGeneration, selectedMode),
+    [selectedMode, selectedModel?.imageGeneration],
   );
-  const generationMode = resolvedMode?.mode ?? requestedMode;
+  const generationMode = selectedMode ?? requestedMode;
   const paramValues = reconcileImageParamDraft(paramState?.values ?? {}, resolvedMode);
   const paramFields = getImageParamFields(resolvedMode);
   const settingsSummary = imageParamSummary(t, paramFields, paramValues);
@@ -189,12 +187,9 @@ export function PaintingInput({
         throw new Error('Select an available image generation model');
       }
       const submittedAttachmentCount = attachments.length;
-      const requestedSubmittedMode = submittedAttachmentCount > 0 ? 'edit' : 'generate';
-      const submittedMode = resolveImageGenerationMode(
-        selectedModel?.imageGeneration,
-        submittedAttachmentCount > 0,
-      );
-      const mode = submittedMode?.mode ?? requestedSubmittedMode;
+      const mode = resolvePaintingGenerationMode(selectedModel, submittedAttachmentCount > 0);
+      if (!mode) throw new Error('The selected model does not support these image inputs');
+      const submittedMode = resolveImageGenerationMode(selectedModel?.imageGeneration, mode);
       if (submittedMode?.definition.requirePrompt !== false && text.trim().length === 0) {
         throw new Error('Image prompt is required');
       }
