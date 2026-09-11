@@ -11,6 +11,8 @@ jest.mock('react-native-background-actions', () => ({
   __esModule: true,
   default: {
     isRunning: jest.fn(),
+    on: jest.fn(),
+    off: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
     updateNotification: jest.fn(),
@@ -34,12 +36,14 @@ const environment = { translate: (key: string) => key, onForegroundAttention: fo
 let running: boolean;
 let runtime: AndroidBackgroundActivityRuntime;
 const listeners = new Set<(state: AppStateStatus) => void>();
+const serviceStoppedListeners = new Set<() => void>();
 
 beforeEach(async () => {
   jest.clearAllMocks();
   jest.useFakeTimers();
   running = false;
   listeners.clear();
+  serviceStoppedListeners.clear();
   Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
   setAppState('active');
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
@@ -48,6 +52,14 @@ beforeEach(async () => {
   });
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   native.isRunning.mockImplementation(() => running);
+  native.on.mockImplementation((_event, listener) => {
+    serviceStoppedListeners.add(listener);
+    return background;
+  });
+  native.off.mockImplementation((_event, listener) => {
+    if (listener) serviceStoppedListeners.delete(listener);
+    return background;
+  });
   native.start.mockImplementation(async () => {
     running = true;
   });
@@ -267,6 +279,52 @@ test('returning to the foreground resets the Android background budget', async (
   expect(interrupted).not.toHaveBeenCalled();
 });
 
+test('unexpected native destruction interrupts every protected task without restarting in background', async () => {
+  const chatInterrupted = jest.fn();
+  const paintingInterrupted = jest.fn();
+  runtime.acquire('chat', chatInterrupted);
+  runtime.acquire('painting', paintingInterrupted);
+  await flush();
+  setAppState('background');
+  running = false;
+  for (const listener of serviceStoppedListeners) listener();
+  await flush();
+  expect(chatInterrupted).toHaveBeenCalledWith(expect.any(Error));
+  expect(paintingInterrupted).toHaveBeenCalledWith(expect.any(Error));
+  expect(native.start).toHaveBeenCalledTimes(1);
+  setAppState('active');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  runtime.acquire('new-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+});
+
+test('a new foreground task survives cancellation draining after native service loss', async () => {
+  let finishCancellation!: () => void;
+  const cancellation = new Promise<void>((resolve) => {
+    finishCancellation = resolve;
+  });
+  const oldLease = runtime.acquire('old-task', () => cancellation);
+  await flush();
+  setAppState('background');
+  running = false;
+  for (const listener of serviceStoppedListeners) listener();
+  await flush();
+  setAppState('active');
+  runtime.acquire('new-task');
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(1);
+  finishCancellation();
+  await flush();
+  oldLease.release();
+  await flush();
+  expect(native.start).toHaveBeenCalledTimes(2);
+  expect(running).toBe(true);
+  await runtime._doStop();
+  expect(serviceStoppedListeners.size).toBe(0);
+});
+
 test('foreground approvals and failures use in-app attention while completion stays silent', async () => {
   const surface = runtime
     .createPresenter<BackgroundReplyActivityProps>()
@@ -300,6 +358,26 @@ test('a queued foreground completion is not announced after the app backgrounds'
   await surface.end('default', props('completed'));
   expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
+
+test.each(['awaiting-approval', 'failed'] as const)(
+  'a queued foreground %s still notifies when delivered in the background',
+  async (phase) => {
+    const surface = runtime
+      .createPresenter<BackgroundReplyActivityProps>()
+      .start(props('responding'));
+    const delivery = surface.update(props(phase), { phaseStartedInBackground: false });
+    setAppState('background');
+    await delivery;
+    expect(foregroundAttention).not.toHaveBeenCalled();
+    expect(notices.scheduleNotificationAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.objectContaining({ body: phase }) }),
+    );
+    if (phase === 'failed') {
+      await surface.end('default', props(phase), { phaseStartedInBackground: false });
+      expect(notices.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    }
+  },
+);
 
 test('returning before queued background delivery suppresses the system alert', async () => {
   const surface = runtime

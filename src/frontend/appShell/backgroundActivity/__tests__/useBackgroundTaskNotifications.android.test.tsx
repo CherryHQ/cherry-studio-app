@@ -12,6 +12,7 @@ let mockFocused = true;
 const mockPresented = jest.fn<Promise<Notification[]>, []>();
 const mockDismiss = jest.fn(async (_id: string) => {});
 const mockNotificationListeners = new Set<(notification: Notification) => void>();
+const mockPresentationListeners = new Set<(notification: Notification) => void>();
 const appStateListeners = new Set<(state: AppStateStatus) => void>();
 const task = { kind: 'chat', sessionId: 's' } as const;
 let renderer: ReactTestRenderer | undefined;
@@ -23,6 +24,10 @@ jest.mock('expo-notifications', () => ({
   addNotificationReceivedListener: (listener: (notification: Notification) => void) => {
     mockNotificationListeners.add(listener);
     return { remove: () => mockNotificationListeners.delete(listener) };
+  },
+  addNotificationPresentedListener: (listener: (notification: Notification) => void) => {
+    mockPresentationListeners.add(listener);
+    return { remove: () => mockPresentationListeners.delete(listener) };
   },
 }));
 jest.mock('expo-router', () => ({
@@ -91,6 +96,7 @@ test('acknowledges only a foreground focused page and releases subscriptions on 
   expect(isBackgroundTaskVisible(task)).toBe(false);
   expect(appStateListeners.size).toBe(0);
   expect(mockNotificationListeners.size).toBe(0);
+  expect(mockPresentationListeners.size).toBe(0);
 });
 
 test('a drawer-covered or unloaded surface does not acknowledge its task', async () => {
@@ -122,12 +128,43 @@ test('clears a matching late delivery while preserving unrelated task notificati
     renderer = create(<Probe target={{ kind: 'painting', paintingId: 'p' }} />);
   });
   await act(async () => {
-    for (const listener of mockNotificationListeners) {
+    for (const listener of mockPresentationListeners) {
       listener(notice('paint', 'cherrystudio://paintings/p'));
       listener(notice('chat', 'cherrystudio:///?sessionId=p'));
     }
   });
   expect(mockDismiss.mock.calls).toEqual([['paint']]);
+});
+
+test('clears a background post that lands after the foreground snapshot without any receipt event', async () => {
+  setAppState('background');
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  // Native background handling skips the received event and starts asynchronous
+  // presentation. The user returns before that work calls the system notify API.
+  await act(async () => setAppState('active'));
+  expect(mockPresented).toHaveBeenCalledTimes(1);
+  expect(mockDismiss).not.toHaveBeenCalled();
+  await act(async () => {
+    for (const listener of mockPresentationListeners) {
+      listener(notice('late-post', 'cherrystudio:///?sessionId=s'));
+    }
+  });
+  expect(mockDismiss.mock.calls).toEqual([['late-post']]);
+});
+
+test('presentation events preserve notifications when the task is in the background', async () => {
+  setAppState('background');
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  await act(async () => {
+    for (const listener of mockPresentationListeners) {
+      listener(notice('unread', 'cherrystudio:///?sessionId=s'));
+    }
+  });
+  expect(mockDismiss).not.toHaveBeenCalled();
 });
 
 function setAppState(state: AppStateStatus) {

@@ -1,6 +1,6 @@
 import { resolveScheme } from 'expo-linking';
 import {
-  addNotificationReceivedListener,
+  addNotificationPresentedListener,
   dismissNotificationAsync,
   getPresentedNotificationsAsync,
   type Notification,
@@ -59,9 +59,9 @@ export function useBackgroundTaskNotifications(
           .catch(reportError);
       };
 
-      // Delivery can finish after the initial drawer snapshot. Only this task
-      // is acknowledged, and pending reads cannot acknowledge a blurred page.
-      const received = addNotificationReceivedListener((notification) => {
+      // The native presentation event follows the actual post, including background
+      // delivery. Receipt alone can happen before posting or never reach JS at all.
+      const presented = addNotificationPresentedListener((notification) => {
         void dismissViewed(notification).catch(reportError);
       });
       const appState = AppState.addEventListener('change', updateVisibility);
@@ -70,7 +70,7 @@ export function useBackgroundTaskNotifications(
         focused = false;
         releaseVisibility?.();
         appState.remove();
-        received.remove();
+        presented.remove();
       };
     }, [enabled, scheme, url]),
   );

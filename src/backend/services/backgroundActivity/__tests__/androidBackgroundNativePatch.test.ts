@@ -32,3 +32,8 @@ test('ongoing notification updates stay silent and route taps to the existing ap
   expect(service).toContain('notificationIntent.setPackage(context.getPackageName())');
   expect(service).toContain('Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP');
 });
+
+test('native destruction reports the admitted task name instead of changing notification options', () => {
+  expect(service).toContain('taskName = extras.getString("taskName")');
+  expect(service).toMatch(/void onDestroy\(\)[\s\S]*?\.emit\("stopped", taskName\)/);
+});

@@ -81,6 +81,13 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     const notifications = require('expo-notifications') as Notifications;
     this.background = background;
     this.notifications = notifications;
+    const handleServiceStopped = () => {
+      void this.interruptLeases(new Error('Android background execution service stopped.')).catch(
+        (error: unknown) => logger.warn('Background service interruption failed', { error }),
+      );
+    };
+    background.on('stopped', handleServiceStopped);
+    this.registerDisposable(() => background.off('stopped', handleServiceStopped));
     notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldPlaySound: AppState.currentState === 'background',
@@ -291,14 +298,15 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     // One terminal notification per turn; late title projection must not repost
     // a notification that the user has already opened or dismissed.
     if (terminal) record.terminalNotified = true;
-    if (!occurredInBackground || AppState.currentState !== 'background') {
-      if (
-        AppState.currentState === 'active' &&
-        (record.props.phase === 'awaiting-approval' || record.props.phase === 'failed')
-      ) {
+    const phase = record.props.phase;
+    const requiresAttention = phase === 'awaiting-approval' || phase === 'failed';
+    // Only successful foreground completion stays silent after a queued delivery.
+    // Approval and failure must still reach the user if they have since left.
+    if ((!occurredInBackground && !requiresAttention) || AppState.currentState !== 'background') {
+      if (AppState.currentState === 'active' && requiresAttention) {
         this.environment.onForegroundAttention({
           detail: record.props.detail,
-          phase: record.props.phase,
+          phase,
           title: record.props.title,
           url: record.deepLinkUrl,
         });
@@ -335,11 +343,16 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   private async interruptAtDeadline(): Promise<void> {
     if (this.disposed || AppState.currentState === 'active') return;
     this.backgroundLimitReached = true;
+    await this.interruptLeases(backgroundLimitError());
+  }
+
+  private async interruptLeases(reason: Error): Promise<void> {
+    if (this.disposed || this.interrupting) return;
+    this.clearDeadline();
     this.interrupting = true;
     const leases = [...this.leases];
     this.leases.clear();
     try {
-      const reason = backgroundLimitError();
       for (const result of await Promise.allSettled(
         leases.map((lease) => Promise.resolve().then(() => lease.onInterrupt?.(reason))),
       )) {

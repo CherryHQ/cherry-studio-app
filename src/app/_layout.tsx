@@ -22,6 +22,7 @@ import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
   NavigationThemeProvider,
+  paintingRouteId,
   paintingViewerHeaderShown,
 } from '@/frontend/appShell/navigation';
 import { configureObserve, configureSentry } from '@/frontend/appShell/observability';
@@ -142,11 +143,8 @@ function RootStack() {
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen
-        // Each task owns its composer's draft and generation state. Navigating
-        // to another notification must not reuse an unrelated mounted composer.
-        getId={({ params }) =>
-          typeof params?.paintingId === 'string' ? params.paintingId : undefined
-        }
+        // Task notifications reuse their task; each edit/resize starts a separate draft.
+        getId={({ params }) => paintingRouteId(params)}
         name="paintings/index"
         options={{
           contentStyle: { backgroundColor },

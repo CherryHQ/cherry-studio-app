@@ -71,6 +71,7 @@ patchedDependencies:
   react-native-drawer-layout@4.2.4: patches/react-native-drawer-layout@4.2.4.patch
   expo-calendar@57.0.1: patches/expo-calendar@57.0.1.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
+  expo-notifications@57.0.5: patches/expo-notifications@57.0.5.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
