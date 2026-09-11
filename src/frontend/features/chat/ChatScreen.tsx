@@ -7,7 +7,7 @@ import { BlurTargetView } from 'expo-blur';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MainHeader } from '@/frontend/appShell/header';
@@ -24,7 +24,7 @@ import {
 } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
-import { ChatInput } from './components/ChatInput';
+import { ChatInput, type ChatInputHandle } from './components/ChatInput';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
@@ -59,6 +59,7 @@ function ChatRouteContent() {
 
 function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const { t } = useTranslation();
+  const inputRef = useRef<ChatInputHandle>(null);
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
@@ -100,7 +101,13 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      <View className="flex-1">
+      <Pressable
+        accessible={false}
+        className="flex-1"
+        disabled={!hasComposer}
+        onPress={() => inputRef.current?.dismiss()}
+        testID="chat-background"
+      >
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
             <ContentState.Error
@@ -131,7 +138,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         ) : (
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
-      </View>
+      </Pressable>
       {hasComposer ? (
         <ComposerSessionProvider key={composerSession.key}>
           <ComposerDock layoutMode="flow">
@@ -139,6 +146,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               agentId={resolvedAgentId}
               controls={controls}
               dismissKeyboardOnSend={false}
+              ref={inputRef}
               sessionId={sessionId}
             />
           </ComposerDock>

@@ -37,6 +37,7 @@ export function MessageList({
   initialScrollTarget,
   hasNewerMessages = false,
   keyboardOffset,
+  keyboardShouldPersistTaps = 'handled',
   messages,
   onLoadOlder,
   onLoadNewer,
@@ -180,7 +181,7 @@ export function MessageList({
               keyboardDismissMode="none"
               keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
               keyboardOffset={keyboardOffset}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps={keyboardShouldPersistTaps}
               ListHeaderComponent={listHeader}
               {...(!dataKey ? { initialScrollAtEnd: true } : {})}
               maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}

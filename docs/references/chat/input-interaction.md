@@ -11,8 +11,9 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 - Send submits the draft. The chat's existing `dismissKeyboardOnSend={false}` also applies to
   list scrolling after submission; the list must not issue a second keyboard-dismiss command.
 - Scrolling, selecting text, copying, and pressing message actions perform their own operation.
-  A parent `onTouchEnd` must not turn all of them into an input-dismiss action. Keep native scroll
-  tap handling separate from drag dismissal.
+  A parent `onTouchEnd` must not turn all of them into an input-dismiss action. A completed,
+  unhandled tap on the chat background explicitly blurs the input and ends composer editing.
+  The list lets that press reach the background owner; scrolling can cancel the press.
 - Keyboard show/hide notifications describe native state. They do not establish that the user
   ended editing and must not trigger an additional composer blur or layout transition.
 - The complete add-menu → plugin picker → select/reselect or cancel flow preserves the keyboard's
@@ -30,6 +31,7 @@ A keyboard-stability fix preserves these visuals and changes only the conflictin
 | --- | --- |
 | Tap to edit, type, delete, paste, undo, or move the caret | Native editor; retain existing content growth and composer motion |
 | Select content, drag handles, copy, or dismiss the editing menu | Native selection; no added focus, blur, panel close, or outer layout change |
+| Tap chat background outside the composer | Blur the editor and end editing through the existing composer transition |
 | Open/close add or reasoning controls | Existing control and animation; no new global keyboard policy |
 | Choose a plugin | Insert once or retain the existing reference; no forced text focus |
 | Select a model or choose media/files | Existing picker and input-transfer path |
@@ -52,6 +54,9 @@ or selection conformance. With explicit device-verification authorization, check
   dismiss the editing menu. The selected range may change; the outer composer and keyboard state
   remain stable without a brief hide/show cycle.
 - Send, scroll, and use message actions without unintended keyboard dismissal.
+- Tap the empty chat or unused message-list area to blur the input and dismiss its keyboard.
+  An empty composer follows its existing collapse animation; dragging or child actions do not
+  count as background presses.
 - With the keyboard open and then closed, open the add menu and plugin picker, scroll the plugins,
   select/reselect a plugin, and cancel through the backdrop or Back. The keyboard stays in its
   original state throughout, without a brief hide/show cycle.

@@ -30,6 +30,7 @@ type MockLegendListProps = {
   getItemType?: (item: MessageListItem) => string;
   initialScrollAtEnd?: boolean;
   keyboardDismissMode?: string;
+  keyboardShouldPersistTaps?: string;
   keyboardLiftBehavior?: string;
   keyboardOffset?: number;
   keyExtractor?: (item: MessageListItem) => string;
@@ -964,7 +965,11 @@ describe('MessageList scroll-controller ownership', () => {
 
     try {
       act(() => {
-        renderer = create(<MessageList {...listProps(messages, { onLoadOlder })} />);
+        renderer = create(
+          <MessageList
+            {...listProps(messages, { keyboardShouldPersistTaps: 'always', onLoadOlder })}
+          />,
+        );
       });
       act(() => mockLatestListProps?.onStartReached?.());
 
@@ -973,6 +978,7 @@ describe('MessageList scroll-controller ownership', () => {
       expect(mockLatestListProps?.getItemType?.(messages[0])).toBe('user');
       expect(mockLatestListProps?.getItemType?.(messages[1])).toBe('assistant');
       expect(mockLatestListProps?.keyboardDismissMode).toBe('none');
+      expect(mockLatestListProps?.keyboardShouldPersistTaps).toBe('always');
       expect(mockLatestListProps?.contentContainerStyle).toEqual({
         paddingBottom: 80,
         paddingTop: 12,

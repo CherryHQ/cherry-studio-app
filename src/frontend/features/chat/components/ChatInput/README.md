@@ -27,8 +27,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   it down.
 - Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
   menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
-  Native field blur and keyboard-hide notifications do not end editing. Message touches and list
-  scrolling do not dispatch the composer's `dismiss` action. Draft text and attachments still keep
+  Native field blur and keyboard-hide notifications do not end editing. A completed background
+  press outside the composer calls `dismiss`, blurring the field and ending editing. List scrolling
+  and handled child actions do not count as background presses. Draft text and attachments still keep
   the surface expanded. Closing an overlay by its backdrop only closes that overlay. The original
   layout and motion remain in place; the [interaction contract](../../../../../../docs/references/chat/input-interaction.md)
   limits this change to keyboard and selection side effects.
