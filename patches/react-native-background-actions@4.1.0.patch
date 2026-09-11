@@ -1,0 +1,273 @@
+diff --git a/android/build.gradle b/android/build.gradle
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -19,6 +19,8 @@
+ }
+ 
+ dependencies {
++    // Matches Expo Notifications; owns process visibility across activity switches.
++    implementation 'androidx.lifecycle:lifecycle-process:2.9.3'
+     //noinspection GradleDynamicVersion
+     implementation 'com.facebook.react:react-native:+'  // From node_modules
+ }
+diff --git a/android/src/main/java/com/asterinet/react/bgactions/BackgroundActionsModule.java b/android/src/main/java/com/asterinet/react/bgactions/BackgroundActionsModule.java
+--- a/android/src/main/java/com/asterinet/react/bgactions/BackgroundActionsModule.java
++++ b/android/src/main/java/com/asterinet/react/bgactions/BackgroundActionsModule.java
+@@ -1,12 +1,8 @@
+ package com.asterinet.react.bgactions;
+ 
+-import android.app.Notification;
+-import android.app.NotificationManager;
+-import android.content.Context;
+ import android.content.Intent;
+ 
+ import androidx.annotation.NonNull;
+-import androidx.core.content.ContextCompat;
+ 
+ import com.facebook.react.bridge.Promise;
+ import com.facebook.react.bridge.ReactApplicationContext;
+@@ -14,6 +10,7 @@
+ import com.facebook.react.bridge.ReactContextBaseJavaModule;
+ import com.facebook.react.bridge.ReactMethod;
+ import com.facebook.react.bridge.ReadableMap;
++import com.facebook.react.bridge.UiThreadUtil;
+ 
+ @SuppressWarnings("WeakerAccess")
+ public class BackgroundActionsModule extends ReactContextBaseJavaModule {
+@@ -38,49 +35,63 @@
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void start(@NonNull final ReadableMap options, @NonNull final Promise promise) {
+-        try {
+-            // Stop any other intent
+-            if (currentServiceIntent != null) {
+-                reactContext.stopService(currentServiceIntent);
++        UiThreadUtil.runOnUiThread(() -> {
++            try {
++                if (!RNBackgroundActionsTask.isAppVisible()) {
++                    throw new IllegalStateException("Background tasks must be admitted while the app is visible");
++                }
++                // Stop any other intent
++                if (currentServiceIntent != null) {
++                    reactContext.stopService(currentServiceIntent);
++                }
++                // Create the service
++                currentServiceIntent = new Intent(reactContext, RNBackgroundActionsTask.class);
++                // Get the task info from the options
++                final BackgroundTaskOptions bgOptions = new BackgroundTaskOptions(reactContext, options);
++                currentServiceIntent.putExtras(bgOptions.getExtras());
++                // The visible app owns execution. The service promotes itself at
++                // the native visibility boundary without restarting Headless JS.
++                reactContext.startService(currentServiceIntent);
++                promise.resolve(null);
++            } catch (Exception e) {
++                currentServiceIntent = null;
++                promise.reject(e);
+             }
+-            // Create the service
+-            currentServiceIntent = new Intent(reactContext, RNBackgroundActionsTask.class);
+-            // Get the task info from the options
+-            final BackgroundTaskOptions bgOptions = new BackgroundTaskOptions(reactContext, options);
+-            currentServiceIntent.putExtras(bgOptions.getExtras());
+-            // Start the task
+-            // startForegroundService on Android 8+ (API 26+), startService below
+-            ContextCompat.startForegroundService(reactContext, currentServiceIntent);
+-            promise.resolve(null);
+-        } catch (Exception e) {
+-            promise.reject(e);
+-        }
++        });
+     }
+ 
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void stop(@NonNull final Promise promise) {
+-        if (currentServiceIntent != null) {
+-            reactContext.stopService(currentServiceIntent);
+-            currentServiceIntent = null;
+-        }
+-        promise.resolve(null);
++        UiThreadUtil.runOnUiThread(() -> {
++            if (currentServiceIntent != null) {
++                reactContext.stopService(currentServiceIntent);
++                currentServiceIntent = null;
++            }
++            promise.resolve(null);
++        });
+     }
+ 
+     @SuppressWarnings("unused")
+     @ReactMethod
+     public void updateNotification(@NonNull final ReadableMap options, @NonNull final Promise promise) {
+-        // Get the task info from the options
+-        try {
+-            final BackgroundTaskOptions bgOptions = new BackgroundTaskOptions(reactContext, options);
+-            final Notification notification = RNBackgroundActionsTask.buildNotification(reactContext, bgOptions);
+-            final NotificationManager notificationManager = (NotificationManager) reactContext.getSystemService(Context.NOTIFICATION_SERVICE);
+-            notificationManager.notify(RNBackgroundActionsTask.SERVICE_NOTIFICATION_ID, notification);
+-        } catch (Exception e) {
+-            promise.reject(e);
+-            return;
+-        }
+-        promise.resolve(null);
++        UiThreadUtil.runOnUiThread(() -> {
++            try {
++                if (currentServiceIntent != null) {
++                    final BackgroundTaskOptions bgOptions = new BackgroundTaskOptions(reactContext, options);
++                    final Intent update = new Intent(reactContext, RNBackgroundActionsTask.class);
++                    update.setAction(RNBackgroundActionsTask.ACTION_UPDATE);
++                    update.putExtras(bgOptions.getExtras());
++                    // Only the service may post: delayed JS updates must not
++                    // recreate the notification after native foreground entry.
++                    reactContext.startService(update);
++                }
++            } catch (Exception e) {
++                promise.reject(e);
++                return;
++            }
++            promise.resolve(null);
++        });
+     }
+ 
+     @SuppressWarnings("unused")
+diff --git a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
+--- a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
++++ b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
+@@ -15,15 +15,52 @@
+ import androidx.annotation.Nullable;
+ import androidx.core.app.NotificationCompat;
+ import androidx.core.app.ServiceCompat;
++import androidx.lifecycle.DefaultLifecycleObserver;
++import androidx.lifecycle.Lifecycle;
++import androidx.lifecycle.LifecycleOwner;
++import androidx.lifecycle.ProcessLifecycleOwner;
+ 
+ import com.facebook.react.HeadlessJsTaskService;
+ import com.facebook.react.bridge.Arguments;
+ import com.facebook.react.jstasks.HeadlessJsTaskConfig;
+ 
+-final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
++final public class RNBackgroundActionsTask extends HeadlessJsTaskService implements DefaultLifecycleObserver {
+ 
+     public static final int SERVICE_NOTIFICATION_ID = 92901;
+     private static final String CHANNEL_ID = "RN_BACKGROUND_ACTIONS_CHANNEL";
++    static final String ACTION_UPDATE = "com.asterinet.react.bgactions.UPDATE";
++    private BackgroundTaskOptions currentOptions;
++    private boolean foreground = false;
++
++    static boolean isAppVisible() {
++        return ProcessLifecycleOwner.get().getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.STARTED);
++    }
++
++    @Override
++    public void onCreate() {
++        super.onCreate();
++        ProcessLifecycleOwner.get().getLifecycle().addObserver(this);
++    }
++
++    @Override
++    public void onStart(@NonNull LifecycleOwner owner) {
++        updateForeground();
++    }
++
++    @Override
++    public void onStop(@NonNull LifecycleOwner owner) {
++        // Native delivery uses Android's visible-to-background exemption,
++        // independently of how busy the JS thread is.
++        updateForeground();
++    }
++
++    @Override
++    public void onDestroy() {
++        ProcessLifecycleOwner.get().getLifecycle().removeObserver(this);
++        currentOptions = null;
++        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
++        super.onDestroy();
++    }
+ 
+     @SuppressLint("UnspecifiedImmutableFlag")
+     @NonNull
+@@ -37,6 +74,8 @@
+         Intent notificationIntent;
+         if (linkingURI != null) {
+             notificationIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(linkingURI));
++            notificationIntent.setPackage(context.getPackageName());
++            notificationIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+         } else {
+             //as RN works on single activity architecture - we don't need to find current activity on behalf of react context
+             notificationIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+@@ -59,7 +98,9 @@
+                 .setSmallIcon(iconInt)
+                 .setContentIntent(contentIntent)
+                 .setOngoing(true)
+-                .setPriority(NotificationCompat.PRIORITY_MIN)
++                .setOnlyAlertOnce(true)
++                .setSilent(true)
++                .setPriority(NotificationCompat.PRIORITY_LOW)
+                 .setColor(color);
+ 
+         final Bundle progressBarBundle = bgOptions.getProgressBar();
+@@ -92,28 +133,49 @@
+         if (extras == null) {
+             throw new IllegalArgumentException("Extras cannot be null");
+         }
+-        final BackgroundTaskOptions bgOptions = new BackgroundTaskOptions(extras);
+-        createNotificationChannel(bgOptions.getTaskTitle(), bgOptions.getTaskDesc()); // Necessary creating channel for API 26+
+-        // Create the notification
+-        final Notification notification = buildNotification(this, bgOptions);
+-
++        final boolean update = ACTION_UPDATE.equals(intent.getAction());
++        if (update && currentOptions == null) {
++            // A late update may never revive a stopped task.
++            stopSelf(startId);
++            return START_NOT_STICKY;
++        }
++        currentOptions = new BackgroundTaskOptions(extras);
++        if (!update) {
++            createNotificationChannel(currentOptions.getTaskTitle(), currentOptions.getTaskDesc());
++        }
++        if (!updateForeground()) return START_NOT_STICKY;
++        // Content and visibility changes do not create another Headless JS task.
++        if (!update) super.onStartCommand(intent, flags, startId);
++        return START_NOT_STICKY;
++    }
++
++    private boolean updateForeground() {
++        if (currentOptions == null) return true;
++        if (isAppVisible()) {
++            if (foreground) {
++                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
++                foreground = false;
++            }
++            return true;
++        }
++        final Notification notification = buildNotification(this, currentOptions);
+         try {
+-            ServiceCompat.startForeground(
+-                this,
+-                SERVICE_NOTIFICATION_ID,
+-                notification,
+-                bgOptions.getForegroundServiceType()
+-            );
++            if (foreground) {
++                getSystemService(NotificationManager.class).notify(SERVICE_NOTIFICATION_ID, notification);
++            } else {
++                ServiceCompat.startForeground(this, SERVICE_NOTIFICATION_ID, notification, currentOptions.getForegroundServiceType());
++                foreground = true;
++            }
+         } catch (RuntimeException e) {
+             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                     && e instanceof android.app.ForegroundServiceStartNotAllowedException) {
+                 // Android 12+: not allowed to start foreground service from background
+-                stopSelf(startId);
+-                return START_NOT_STICKY;
++                stopSelf();
++                return false;
+             }
+             throw e;
+         }
+-        return super.onStartCommand(intent, flags, startId);
++        return true;
+     }
+ 
+     @Override

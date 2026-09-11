@@ -74,7 +74,7 @@ describe('BackgroundReplyRuntime', () => {
       expect(first).not.toBe(second);
       expect(mockStartSession).toHaveBeenCalledTimes(2);
       expect(mockSessions[0]?.input).toMatchObject({
-        deepLinkUrl: `${scheme}:///?agentId=agent-1&sessionId=session-1`,
+        deepLinkUrl: `${scheme}:///?sessionId=session-1`,
         keepAlive: true,
         props: expect.objectContaining({
           attribution: 'Alpha',
@@ -87,7 +87,7 @@ describe('BackgroundReplyRuntime', () => {
         tag: 'chat.backgroundReply',
       });
       expect(mockSessions[1]?.input).toMatchObject({
-        deepLinkUrl: `${scheme}:///?agentId=agent-2&sessionId=session-2`,
+        deepLinkUrl: `${scheme}:///?sessionId=session-2`,
         props: expect.objectContaining({
           attribution: 'Beta',
           detail: 'chat.backgroundReply.preparing',

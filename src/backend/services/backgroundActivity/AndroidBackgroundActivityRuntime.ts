@@ -61,7 +61,12 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
   private operationTail: Promise<void> = Promise.resolve();
   private permissionRequested = false;
 
-  constructor(private readonly environment: Pick<BackgroundActivityEnvironment, 'translate'>) {
+  constructor(
+    private readonly environment: Pick<
+      BackgroundActivityEnvironment,
+      'translate' | 'onForegroundAttention'
+    >,
+  ) {
     super();
   }
 
@@ -78,10 +83,10 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.notifications = notifications;
     notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldPlaySound: AppState.currentState !== 'active',
+        shouldPlaySound: AppState.currentState === 'background',
         shouldSetBadge: false,
-        shouldShowBanner: AppState.currentState !== 'active',
-        shouldShowList: AppState.currentState !== 'active',
+        shouldShowBanner: AppState.currentState === 'background',
+        shouldShowList: AppState.currentState === 'background',
       }),
     });
     this.registerDisposable(() => notifications.setNotificationHandler(null));
@@ -145,8 +150,10 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (!this.disposed) this.activities.add(record);
         this.scheduleReconcile();
         return {
-          update: (nextProps) =>
-            this.enqueue(async () => {
+          update: (nextProps, context) => {
+            const occurredInBackground =
+              context?.phaseStartedInBackground ?? AppState.currentState === 'background';
+            return this.enqueue(async () => {
               if (!this.activities.has(record) || this.disposed) return;
               const previousPhase = record.props.phase;
               record.props = nextProps;
@@ -158,26 +165,30 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
                 await this.notifications?.dismissNotificationAsync(record.id);
               }
               if (isTerminal(nextProps.phase)) {
-                await this.showAttention(record, true);
+                await this.showAttention(record, true, occurredInBackground);
               } else if (
                 nextProps.phase === 'awaiting-approval' &&
                 previousPhase !== nextProps.phase
               ) {
-                await this.showAttention(record, false);
+                await this.showAttention(record, false, occurredInBackground);
               }
               await this.reconcile();
-            }),
-          end: (policy, finalProps) =>
-            this.enqueue(async () => {
+            });
+          },
+          end: (policy, finalProps, context) => {
+            const occurredInBackground =
+              context?.phaseStartedInBackground ?? AppState.currentState === 'background';
+            return this.enqueue(async () => {
               if (!this.activities.delete(record) || this.disposed) return;
               record.props = finalProps;
               if (policy === 'default' && finalProps.phase !== 'cancelled') {
-                await this.showAttention(record, true);
+                await this.showAttention(record, true, occurredInBackground);
               } else {
                 await this.notifications?.dismissNotificationAsync(record.id);
               }
               await this.reconcile();
-            }),
+            });
+          },
         };
       },
     };
@@ -219,6 +230,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     if (AppState.currentState !== 'active' || this.backgroundLimitReached) return;
     await background.start(holdBackgroundExecution, {
       ...content,
+      // The native service starts without a notification while visible and
+      // promotes itself when the app backgrounds, without restarting its task.
       // The library also uses these initial strings as the persistent channel
       // name/description. Keep conversation content out of system settings.
       taskTitle: this.environment.translate('notifications.android.runningTitle'),
@@ -261,18 +274,37 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
           ? [first.props.detail, first.props.preview].filter(Boolean).join('\n')
           : this.environment.translate('notifications.android.preparing')
       ).slice(0, 600),
-      linkingURI: first?.deepLinkUrl,
+      // An aggregate has no single task destination. Restore the app instead
+      // of choosing whichever task happened to enter the Set first.
+      linkingURI: multiple ? undefined : first?.deepLinkUrl,
     };
   }
 
-  private async showAttention(record: ActivityRecord, terminal: boolean): Promise<void> {
+  private async showAttention(
+    record: ActivityRecord,
+    terminal: boolean,
+    occurredInBackground: boolean,
+  ): Promise<void> {
     const notifications = this.notifications;
     if (!notifications || this.disposed || record.props.phase === 'cancelled') return;
     if (terminal && record.terminalNotified) return;
     // One terminal notification per turn; late title projection must not repost
     // a notification that the user has already opened or dismissed.
     if (terminal) record.terminalNotified = true;
-    if (AppState.currentState === 'active') return;
+    if (!occurredInBackground || AppState.currentState !== 'background') {
+      if (
+        AppState.currentState === 'active' &&
+        (record.props.phase === 'awaiting-approval' || record.props.phase === 'failed')
+      ) {
+        this.environment.onForegroundAttention({
+          detail: record.props.detail,
+          phase: record.props.phase,
+          title: record.props.title,
+          url: record.deepLinkUrl,
+        });
+      }
+      return;
+    }
     await notifications.scheduleNotificationAsync({
       identifier: record.id,
       content: {

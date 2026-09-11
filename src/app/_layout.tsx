@@ -16,7 +16,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { useBackgroundActivityNavigation } from '@/frontend/appShell/backgroundActivity/useBackgroundActivityNavigation';
+import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -58,6 +58,7 @@ function RootLayout() {
                           <AppAlertProvider>
                             <BottomSheetProvider>
                               <RouteHeaderProvider rootAction="back">
+                                <BackgroundActivityBridge />
                                 <RootStack />
                               </RouteHeaderProvider>
                             </BottomSheetProvider>
@@ -105,7 +106,6 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 }
 
 function RootStack() {
-  useBackgroundActivityNavigation();
   const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
     'background',
     'foreground',
@@ -142,6 +142,11 @@ function RootStack() {
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen
+        // Each task owns its composer's draft and generation state. Navigating
+        // to another notification must not reuse an unrelated mounted composer.
+        getId={({ params }) =>
+          typeof params?.paintingId === 'string' ? params.paintingId : undefined
+        }
         name="paintings/index"
         options={{
           contentStyle: { backgroundColor },

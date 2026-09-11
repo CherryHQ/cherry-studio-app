@@ -29,6 +29,8 @@ jest.mock('expo-notifications', () => ({
 
 const native = jest.mocked(background);
 const notices = jest.mocked(notifications);
+const foregroundAttention = jest.fn();
+const environment = { translate: (key: string) => key, onForegroundAttention: foregroundAttention };
 let running: boolean;
 let runtime: AndroidBackgroundActivityRuntime;
 const listeners = new Set<(state: AppStateStatus) => void>();
@@ -57,7 +59,7 @@ beforeEach(async () => {
   notices.requestPermissionsAsync.mockResolvedValue({
     granted: false,
   } as notifications.NotificationPermissionsStatus);
-  runtime = new AndroidBackgroundActivityRuntime({ translate: (key) => key });
+  runtime = new AndroidBackgroundActivityRuntime(environment);
   await runtime._doInit();
 });
 
@@ -187,7 +189,7 @@ test('cleans abandoned approval notifications while retaining completed and unre
     notice('completed', { owner: BACKGROUND_NOTIFICATION_OWNER, terminal: true }),
     notice('unrelated', {}),
   ]);
-  runtime = new AndroidBackgroundActivityRuntime({ translate: (key) => key });
+  runtime = new AndroidBackgroundActivityRuntime(environment);
   await runtime._doInit();
   expect(notices.dismissNotificationAsync).toHaveBeenCalledWith('approval');
   expect(notices.dismissNotificationAsync).not.toHaveBeenCalledWith('completed');
@@ -263,6 +265,79 @@ test('returning to the foreground resets the Android background budget', async (
   jest.advanceTimersByTime(100 * 60_000);
   await flush();
   expect(interrupted).not.toHaveBeenCalled();
+});
+
+test('foreground approvals and failures use in-app attention while completion stays silent', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=s');
+  await surface.update(props('awaiting-approval'));
+  expect(foregroundAttention).toHaveBeenLastCalledWith(
+    expect.objectContaining({ phase: 'awaiting-approval', url: 'cherrystudio:///?sessionId=s' }),
+  );
+  await surface.update(props('responding'));
+  await surface.update(props('failed'));
+  await surface.end('default', { ...props('failed'), title: 'Late title' });
+  expect(foregroundAttention).toHaveBeenCalledTimes(2);
+  expect(foregroundAttention).toHaveBeenLastCalledWith(
+    expect.objectContaining({ phase: 'failed' }),
+  );
+  const completed = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  await completed.end('default', props('completed'));
+  expect(foregroundAttention).toHaveBeenCalledTimes(2);
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('a queued foreground completion is not announced after the app backgrounds', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  const delivery = surface.update(props('completed'));
+  setAppState('background');
+  await delivery;
+  await surface.end('default', props('completed'));
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('returning before queued background delivery suppresses the system alert', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  const delivery = surface.end('default', props('completed'));
+  setAppState('active');
+  await delivery;
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('honors foreground phase entry even when the manager invokes delivery from the background', async () => {
+  const surface = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'));
+  setAppState('background');
+  await surface.end('default', props('completed'), { phaseStartedInBackground: false });
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
+});
+
+test('an aggregate restores the app and becomes task-specific again when one task remains', async () => {
+  const first = runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=first');
+  runtime
+    .createPresenter<BackgroundReplyActivityProps>()
+    .start(props('responding'), 'cherrystudio:///?sessionId=second');
+  runtime.acquire('tasks');
+  await flush();
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({ linkingURI: undefined }),
+  );
+  await first.end('immediate', props('cancelled'));
+  expect(native.updateNotification).toHaveBeenLastCalledWith(
+    expect.objectContaining({ linkingURI: 'cherrystudio:///?sessionId=second' }),
+  );
+  expect(notices.scheduleNotificationAsync).not.toHaveBeenCalled();
 });
 
 function props(phase: BackgroundReplyActivityProps['phase']): BackgroundReplyActivityProps {

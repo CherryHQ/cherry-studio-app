@@ -3,6 +3,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 
+import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePainting, useResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
@@ -42,6 +43,10 @@ export function PaintingScreen() {
     openedPaintingId !== undefined &&
     paintingId === openedPaintingId &&
     (paintingQuery.isLoading || filesQuery.isLoading);
+  useBackgroundTaskNotifications(
+    paintingId ? { kind: 'painting', paintingId } : undefined,
+    Boolean(painting) && !isLoading,
+  );
   const handleReceipt = useCallback(
     (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
     [navigation],
