@@ -16,7 +16,7 @@ type EffortSliderGestureConfig = {
   disabled: boolean;
   reducedMotion: boolean;
   thumbCenterInset: number;
-  /** Called on the JS thread whenever the drag crosses onto a new stop. */
+  /** Called on the JS thread when a gesture completes with a new stop. */
   onCommit: (index: number) => void;
 };
 
@@ -32,8 +32,8 @@ export type EffortSliderGesture = {
 };
 
 /**
- * Pan gesture with tap-to-seek, drag magnetism toward stops, commit on stop
- * crossing, and an ease-out snap to the nearest stop on release.
+ * Pan gesture with tap-to-seek, drag magnetism toward stops, commit on successful
+ * release, and an ease-out snap to the nearest stop on release.
  */
 export function useEffortSliderGesture({
   stopCount,
@@ -46,6 +46,7 @@ export function useEffortSliderGesture({
   const position = useSharedValue(stopFraction(initialIndex, stopCount));
   const activeStopIndex = useSharedValue(initialIndex);
   const isPressed = useSharedValue(false);
+  const startIndex = useSharedValue(initialIndex);
   const trackWidth = useSharedValue(0);
 
   const gesture = useMemo(() => {
@@ -57,7 +58,6 @@ export function useEffortSliderGesture({
       position.value = magnetize(raw, stopCount, effortSliderMagnetRadius);
       if (snapIndex !== activeStopIndex.value) {
         activeStopIndex.value = snapIndex;
-        runOnJS(onCommit)(snapIndex);
       }
     };
 
@@ -66,6 +66,7 @@ export function useEffortSliderGesture({
       .minDistance(0)
       .onBegin((event) => {
         'worklet';
+        startIndex.value = activeStopIndex.value;
         isPressed.value = true;
         seek(event.x);
       })
@@ -73,20 +74,18 @@ export function useEffortSliderGesture({
         'worklet';
         seek(event.x);
       })
-      .onFinalize(() => {
+      .onFinalize((_event, success) => {
         'worklet';
         isPressed.value = false;
-        const target = nearestStopIndex(position.value, stopCount);
+        const target = success ? nearestStopIndex(position.value, stopCount) : startIndex.value;
         const targetFraction = stopFraction(target, stopCount);
         if (reducedMotion) {
           position.value = targetFraction;
         } else {
           position.value = withTiming(targetFraction, effortSliderSnapTiming);
         }
-        if (target !== activeStopIndex.value) {
-          activeStopIndex.value = target;
-          runOnJS(onCommit)(target);
-        }
+        activeStopIndex.value = target;
+        if (success && target !== startIndex.value) runOnJS(onCommit)(target);
       });
   }, [
     activeStopIndex,
@@ -96,6 +95,7 @@ export function useEffortSliderGesture({
     position,
     reducedMotion,
     stopCount,
+    startIndex,
     thumbCenterInset,
     trackWidth,
   ]);

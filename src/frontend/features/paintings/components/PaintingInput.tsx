@@ -12,7 +12,7 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerPresentationActions,
+  useComposerSheet,
   useComposerState,
 } from '@/frontend/components/Composer';
 import {
@@ -74,11 +74,15 @@ export function PaintingInput({
         ? defaultPaintingModelId
         : null;
   const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(initialModelId);
-  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const {
+    isOpen: isModelPickerOpen,
+    open: openModelPicker,
+    close: closeModelPicker,
+  } = useComposerSheet();
   const openProviderSetup = useOpenProviderSetup(
     painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings',
   );
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { isOpen: isSettingsOpen, open: openSettings, close: closeSettings } = useComposerSheet();
   const [paramState, setParamState] = useState<{
     mode: ImageGenerationMode;
     modelId: UniqueModelId;
@@ -152,24 +156,21 @@ export function PaintingInput({
     setParamState({ mode: generationMode, modelId: selectedModelId, values: paramValues });
   }
 
-  const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
-  const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
-    setSelectedModelId(item.modelId);
-    setIsModelPickerOpen(false);
-  }, []);
+  const handleModelSelect = useCallback(
+    (item: ModelPickerModelItem) => {
+      setSelectedModelId(item.modelId);
+      closeModelPicker();
+    },
+    [closeModelPicker],
+  );
   const isModelVisible = useCallback(
     (item: ModelPickerModelItem) => supportsPaintingGenerationMode(item.model, requestedMode),
     [requestedMode],
   );
   const handleAddProvider = useCallback(() => {
-    setIsModelPickerOpen(false);
+    closeModelPicker();
     openProviderSetup();
-  }, [openProviderSetup]);
-  const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
-  const { runInputReplacement } = useComposerPresentationActions();
-  const openSettings = useCallback(() => {
-    void runInputReplacement(() => setIsSettingsOpen(true));
-  }, [runInputReplacement]);
+  }, [closeModelPicker, openProviderSetup]);
   const handleParamValueChange = useCallback(
     (key: string, value: unknown) => {
       if (!selectedModelId) {
@@ -289,7 +290,7 @@ export function PaintingInput({
                 ? t('painting.input.selectCompatibleModel')
                 : selectedModelLabel
             }
-            onPress={() => setIsModelPickerOpen(true)}
+            onPress={openModelPicker}
           />
           <Composer.Send />
         </Composer.Toolbar>

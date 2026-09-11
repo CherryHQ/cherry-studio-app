@@ -29,7 +29,8 @@ export function ComposerAttachmentStrip({
       alwaysBounceHorizontal={false}
       contentContainerClassName="gap-2 pr-1"
       horizontal
-      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="none"
+      keyboardShouldPersistTaps="always"
       showsHorizontalScrollIndicator={false}
     >
       {attachments.map((attachment) =>
@@ -73,19 +74,27 @@ function ImportingAttachmentTile({
   attachment: ComposerAttachmentDraft;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation();
+  const failed = attachment.status === 'failed';
   return (
     <View>
       <View
-        accessibilityLabel={attachment.name}
-        accessibilityState={{ busy: true }}
+        accessibilityLabel={
+          failed ? `${attachment.name}: ${t('chat.attachments.failed')}` : attachment.name
+        }
+        accessibilityState={{ busy: !failed }}
         accessible
         className="size-28 items-start justify-between gap-1 overflow-hidden rounded-2xl bg-secondary p-3"
       >
-        <Spinner
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          size="sm"
-        />
+        {failed ? (
+          <Text className="text-sm text-destructive">{t('chat.attachments.failed')}</Text>
+        ) : (
+          <Spinner
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            size="sm"
+          />
+        )}
         <Text className="w-full shrink text-sm text-muted-foreground" numberOfLines={3}>
           {attachment.name}
         </Text>

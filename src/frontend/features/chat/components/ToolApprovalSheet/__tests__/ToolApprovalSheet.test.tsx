@@ -1,6 +1,6 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { ScrollView, Text } from 'react-native';
+import { Keyboard, ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { type PendingToolApproval, ToolApprovalSheet } from '../ToolApprovalSheet';
@@ -71,6 +71,7 @@ describe('ToolApprovalSheet', () => {
       approvals?: readonly PendingToolApproval[];
       onCancel?: () => Promise<void>;
       onRespond?: () => Promise<void>;
+      review?: boolean;
     } = {},
   ) {
     const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
@@ -82,6 +83,10 @@ describe('ToolApprovalSheet', () => {
     act(() => {
       renderer = create(element(overrides.approvals ?? [makeApproval()]));
     });
+
+    if (overrides.review !== false) {
+      act(() => renderer.root.findByProps({ testID: 'chat-review-tool-approval' }).props.onPress());
+    }
 
     return {
       onCancel,
@@ -130,10 +135,20 @@ describe('ToolApprovalSheet', () => {
     });
   });
 
-  test('cannot be dismissed while an approval is pending', () => {
-    render();
-
-    expect(renderer.root.findByType(BottomSheet).props.dismissible).toBe(false);
+  test('shows incoming approval without taking the keyboard and closes without responding', () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss');
+    dismiss.mockClear();
+    const { onRespond, onCancel } = render({ review: false });
+    const sheet = () => renderer.root.findByType(BottomSheet);
+    expect(sheet().props.open).toBe(false);
+    expect(dismiss).not.toHaveBeenCalled();
+    act(() => renderer.root.findByProps({ testID: 'chat-review-tool-approval' }).props.onPress());
+    expect(sheet().props.open).toBe(true);
+    act(() => sheet().props.onClose());
+    expect(sheet().props.open).toBe(false);
+    expect(onRespond).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    dismiss.mockRestore();
   });
 
   test('does not mount a sheet before an approval exists', () => {
@@ -263,7 +278,7 @@ describe('ToolApprovalSheet', () => {
     expect(renderedTexts()).toContain('chat.tool.approval.pendingCount {"count":2}');
   });
 
-  test('advances to the next approval without closing the sheet', () => {
+  test('requires opening each newly shown approval explicitly', () => {
     const { rerender } = render({
       approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
     });
@@ -277,7 +292,7 @@ describe('ToolApprovalSheet', () => {
     ]);
 
     expect(renderedTexts()).toContain('Server Two: Create file');
-    expect(renderer.root.findByType(BottomSheet).props.open).toBe(true);
+    expect(renderer.root.findByType(BottomSheet).props.open).toBe(false);
   });
 
   test('renders the snapshotted display name without exposing the provider alias', () => {

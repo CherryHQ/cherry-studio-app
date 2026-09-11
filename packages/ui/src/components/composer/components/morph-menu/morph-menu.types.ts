@@ -6,6 +6,8 @@ export type MorphMenuProps = {
   children: ReactNode;
   /** Label of the closed trigger, and of the open panel for screen readers. */
   accessibilityLabel: string;
+  /** Runs on an explicit opening gesture, before presentation. */
+  onOpen?: () => void;
   /**
    * Floor for the panel's width. Both axes are measured from the children, so
    * content wider than this drives the panel, bounded by the viewport.

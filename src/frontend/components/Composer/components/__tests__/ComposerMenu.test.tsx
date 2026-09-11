@@ -220,7 +220,7 @@ describe('ComposerMenu', () => {
     ]);
     expect(mockBlur).toHaveBeenCalledTimes(1);
     expect(mockFocus).not.toHaveBeenCalled();
-    expect(mockDockProps?.keyboardTrackingEnabled).toBe(false);
+    expect(mockDockProps?.keyboardTrackingEnabled).toBe(true);
   });
 
   it('does not open the camera after a denial that can still be requested again', async () => {
@@ -269,6 +269,20 @@ describe('ComposerMenu', () => {
     expect(mockLaunchCamera).not.toHaveBeenCalled();
     expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
     expect(mockPickDocument).not.toHaveBeenCalled();
+  });
+
+  it('explains native picker failure and releases the dock without requesting focus', async () => {
+    mockLaunchImageLibrary.mockRejectedValueOnce(new Error('presentation failed'));
+    render();
+    act(() => press('chat.media.photos'));
+    await act(flushInputReplacement);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'chat.input.pickerFailed',
+      variant: 'danger',
+    });
+    expect(mockDockProps?.keyboardTrackingEnabled).toBe(true);
+    expect(mockFocus).not.toHaveBeenCalled();
+    expect(mockComposerState?.attachments).toEqual([]);
   });
 
   it('does not offer documents when the caller accepts images only', () => {

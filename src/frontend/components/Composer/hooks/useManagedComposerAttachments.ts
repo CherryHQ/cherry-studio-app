@@ -82,7 +82,11 @@ export function useManagedComposerAttachments(
         if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current)
           return 'ignored';
         importTokensRef.current.delete(source.id);
-        commitAttachments(removeComposerAttachment(attachmentsRef.current, source.id));
+        commitAttachments(
+          attachmentsRef.current.map((attachment) =>
+            attachment.id === source.id ? { ...source, status: 'failed' } : attachment,
+          ),
+        );
         logger.warn('Failed to import an attachment', {
           kind: source.kind,
           size: source.size ?? null,

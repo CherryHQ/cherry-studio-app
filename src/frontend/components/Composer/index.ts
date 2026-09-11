@@ -14,6 +14,7 @@ export { ComposerModelPill } from './components/ComposerModelPill';
 export { ComposerSessionProvider } from './components/ComposerSessionProvider';
 export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
 export { useComposerDocumentPicker } from './hooks/useComposerDocumentPicker';
+export { useComposerSheet } from './hooks/useComposerSheet';
 export {
   type ComposerAttachmentStore,
   useComposerActions,

@@ -69,7 +69,6 @@ export function ChatInputPluginPopover({
       );
       inputRef.current?.insertText(' ');
     }
-    inputRef.current?.focus();
     onClose();
   }
 
@@ -82,6 +81,11 @@ export function ChatInputPluginPopover({
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
+      {plugins.length === 0 ? (
+        <Text className="p-3 text-sm text-muted-foreground">
+          {t('chat.input.pluginsUnavailable')}
+        </Text>
+      ) : null}
       {plugins.map((plugin, index) => {
         const isSelected = selectedIds.has(plugin.serverId);
         const name = t(`plugins.catalog.${plugin.id}.name`);

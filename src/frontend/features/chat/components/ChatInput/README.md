@@ -1,62 +1,55 @@
 # Chat Input Behavior
 
-This directory owns the Agent Session composer at the bottom of the chat surface. `ChatInput` is
-exported through `index.ts` and receives the current Agent/Session and the content leaf’s chat controls.
+`ChatInput` owns the Agent/Session composer controls. The
+[Chat Input Interaction contract](../../../../../../docs/references/chat/input-interaction.md)
+contains the operation matrix and remaining acceptance targets.
 
 ## Current Contract
 
-- An Agent selection owns an isolated Draft composer. Its first send uses `startSession`, which
-  admits the message before atomically creating the Session and first message pair; observation and
-  navigation begin only after that succeeds.
-- Existing Sessions submit through the live `AgentProtocol` client owned by `ChatProvider`.
-- Clearing the composer synchronously hands text and attachments to local message rows. During
-  admission the send action is disabled and the assistant row shows waiting feedback. Persistence and events
-  reuse the IDs allocated by the send action; rejected sends restore the draft and attachments,
-  including content added while waiting. Draft-to-Session handoff preserves the list and composer.
-- The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
-  presentation. Draft and existing-Session composers use separate keyed sessions, so navigation
-  cannot reuse one Session's draft in another.
-- Image attachments are imported into managed storage before send. The Host revalidates their
-  authoritative metadata, model capability, provider endpoint, and request limits before admission.
-- While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
-  action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
-  full width, the action row moves below it, and
-  the model pill and reasoning-effort gauge slide and scale in without animating their glass
-  opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
-  it down.
-- Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
-  menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
-  A native field blur does not end editing. Touching chat content ends editing even if a picker
-  already hid the keyboard; `ChatInput` exposes only a `dismiss` ref action for that outside boundary.
-  Hiding the composer's visible keyboard also ends editing. Draft text and attachments still keep
-  the surface expanded. Closing an overlay by its backdrop only closes that overlay.
-- Native media pickers and model/settings Sheets replace the live input context: the shared
-  composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
-  It reconnects keyboard tracking only when the field receives focus again. Menu and effort
-  overlays preserve the existing keyboard context instead.
-- Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
-  model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
-  persisted serially and coalesced to the latest visible selection.
-- The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
-  `xhigh` and `max` as distinct values. It starts at the provider default. A pick is local to the
-  current Agent composer and is snapshotted into each submission; it never updates Agent
-  configuration. Switching models projects that pick to the closest supported stop. `default`
-  bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
-- The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
-  reference that expresses the user's intent for that message. Connected plugins remain available
-  to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
-- The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
-  and batched previews with the library screen. Selection stays local until Add is pressed; the
-  action appears only for newly selected, available attachments. Already attached files are marked
-  and cannot be added twice. Close discards the selection. Search is not offered.
-  The app-wide file-change subscription keeps these shared pages current; opening the picker
-  reuses fresh pages without forcing another fetch.
-- Upload files closes the library picker and presents the system document picker from chat. Each
-  chosen file appears in the composer's attachment strip at once with its upload progress, and is
-  uploaded to the library from there: the entry belongs to the library as soon as it lands, so
-  removing the attachment afterwards or leaving the chat keeps the file, and the picker lists it
-  under Recent next time. Removing the tile while it is still uploading cancels that upload.
-- Library selections are ready attachments borrowed by entry ID, so removing one from the composer
-  leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
+- Keep a stable attachment row, full-width text area, and toolbar. Empty content, focus, blur,
+  keyboard hiding, and lightweight panels do not switch layout modes or remount the native editor.
+- Add, plugins, and reasoning effort preserve the current keyboard state. Plugin insertion does
+  not call `focus()`. The plugin and effort panels occupy a shared popover above the composer;
+  they neither compress text nor hide attachments. Raw anchor touches do not close panels, so
+  selection handles and native editing-menu gestures do not become outside-dismiss commands.
+- Model and library sheets use the shared transfer lifecycle. Native media/document pickers use
+  the same policy. Returning releases dock tracking without reopening the keyboard. Model search
+  retains its expanded size after blur or clearing during the same opening.
+- Message touches, list scrolling, and local-send scrolling do not dismiss the composer. There is
+  currently no chat-wide blank-area dismissal handler. System keyboard-hide controls remain native.
+- Native text selection changes no application editing/layout state. Selection with an already
+  closed keyboard and native insertion at a retained range still require iOS/Android acceptance.
+- An Agent draft first sends through `startSession`, which admits content before creating the
+  Session/message pair. Existing Sessions send through the live `AgentProtocol` client. The
+  Draft-to-Session handoff keeps the composer and native editor mounted.
+- Sending captures the visible model, effort, text, and ready attachments. It clears only that
+  submitted draft without dismissing the keyboard. A synchronous lock rejects duplicate admission.
+  Active turns use Stop; users may continue editing the next draft without queueing a turn.
+- Admission failure restores the submitted content only when the cleared draft has not been
+  edited. Otherwise the failure has its own Restore/Discard controls; replacing newer content
+  requires confirmation. Failure feedback is nonmodal and late completion cannot change another
+  mounted context.
+- Model selection updates the Agent default. The visible pick is used for immediate sends, and
+  rapid persistence is serial/coalesced. A current failure shows rollback feedback; an old failed
+  request cannot overwrite a newer choice or show feedback in another context.
+- Reasoning effort is local to subsequent sends. Supported values are retained across models;
+  an unsupported choice resets to the model default with a visible explanation. `xhigh`, `max`,
+  provider default, and `auto` remain distinct. Slider movement previews a value; successful release
+  commits it, while cancellation restores the starting stop.
+- Plugins insert one inline reference at the native insertion range. An existing reference is not
+  duplicated. Catalog failure leaves an open panel with unavailable feedback. No plugin is
+  automatically authorized or connected.
+- Files opens a fresh library selection. Add stages available entries once; Close discards pending
+  selection. Upload closes the library and opens the document picker. Imports preserve library
+  ownership; a removed tile cannot reappear from late completion. Failed imports stay visible and
+  block sending until removed/reselected.
+- Incoming tool approvals expose a pending review action without opening a sheet or disabling
+  draft editing. Explicit review opens details. Closing leaves permission pending; only Allow,
+  Deny, or Stop submits a decision. Each next request requires explicit review.
+
+## Remaining Targets
+
+Mounted sessions isolate drafts, but retaining drafts/failed submissions across screen unmounts
+and allocating a fresh same-Agent New Chat identity remain separate navigation work. Recognized
+blank-area taps, complete Back/Escape arbitration across all destinations, and native selection
+acceptance are also still outstanding. The contract is not a claim that these targets passed.

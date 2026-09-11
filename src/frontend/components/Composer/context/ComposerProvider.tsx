@@ -36,7 +36,7 @@ type ComposerActionsContextValue = {
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
   /**
    * Replaces the whole draft. Only for the cases that own it wholesale — send
-   * clearing it, a failed send restoring it with a functional update to preserve newer text. Anything that *adds* to what the
+   * clearing it or explicitly restoring a rejected submission. Anything that *adds* to what the
    * user wrote goes through `inputRef` instead: the field owns the buffer and
    * the caret, and a string handed in here would land at neither.
    */
@@ -57,6 +57,7 @@ type ComposerMetaContextValue = {
    * handed to `setDraft` would carry its URL.
    */
   inputRef: RefObject<ComposerInputHandle | null>;
+  contentRevision: RefObject<number>;
 };
 
 type ComposerPresentationStateContextValue = ReturnType<typeof useComposerPresentation>['state'];
@@ -71,6 +72,8 @@ const ComposerPresentationStateContext =
   createContext<ComposerPresentationStateContextValue | null>(null);
 const ComposerPresentationActionsContext =
   createContext<ComposerPresentationActionsContextValue | null>(null);
+
+const emptyAttachments: readonly ComposerAttachmentDraft[] = [];
 
 type ComposerProviderProps = PropsWithChildren<{
   attachmentStore?: ComposerAttachmentStore;
@@ -87,11 +90,16 @@ type ComposerProviderProps = PropsWithChildren<{
 export function ComposerProvider({
   attachmentStore,
   children,
-  initialAttachments = [],
+  initialAttachments = emptyAttachments,
   initialDraft = '',
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
-  const [draft, setDraft] = useState(initialDraft);
+  const [draft, setDraftState] = useState(initialDraft);
+  const contentRevision = useRef(0);
+  const setDraft = useCallback((next: SetStateAction<string>) => {
+    contentRevision.current += 1;
+    setDraftState(next);
+  }, []);
   const presentation = useComposerPresentation(inputRef);
   const [localAttachments, setLocalAttachments] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,
@@ -119,16 +127,28 @@ export function ComposerProvider({
 
   const actionsValue = useMemo(
     () => ({
-      addAttachments,
-      clearAttachments,
-      removeAttachment,
-      setAttachments,
+      addAttachments: (next: ComposerAttachmentDraft[]) => {
+        contentRevision.current += 1;
+        addAttachments(next);
+      },
+      clearAttachments: () => {
+        contentRevision.current += 1;
+        clearAttachments();
+      },
+      removeAttachment: (id: string) => {
+        contentRevision.current += 1;
+        removeAttachment(id);
+      },
+      setAttachments: (next: ComposerAttachmentDraft[]) => {
+        contentRevision.current += 1;
+        setAttachments(next);
+      },
       setDraft,
     }),
-    [addAttachments, clearAttachments, removeAttachment, setAttachments],
+    [addAttachments, clearAttachments, removeAttachment, setAttachments, setDraft],
   );
 
-  const metaValue = useMemo(() => ({ inputRef }), []);
+  const metaValue = useMemo(() => ({ inputRef, contentRevision }), []);
 
   return (
     <ComposerStateContext value={stateValue}>

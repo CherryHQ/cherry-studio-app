@@ -5,146 +5,128 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useComposerPresentation } from '../useComposerPresentation';
 
-const mockBlur = jest.fn();
-const mockRemove = jest.fn();
-const mockIsKeyboardVisible = KeyboardController.isVisible as jest.MockedFunction<
-  typeof KeyboardController.isVisible
->;
-const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
+const blur = jest.fn();
+const focus = jest.fn();
+const dismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
-const mockAddKeyboardListener = KeyboardEvents.addListener as jest.MockedFunction<
-  typeof KeyboardEvents.addListener
->;
-const inputRef = { current: { blur: mockBlur } as unknown as ComposerInputHandle };
+const listen = KeyboardEvents.addListener as jest.MockedFunction<typeof KeyboardEvents.addListener>;
+const inputRef = { current: { blur, focus } as unknown as ComposerInputHandle };
 let presentation: ReturnType<typeof useComposerPresentation>;
-let handleKeyboardWillHide: (() => void) | undefined;
 let renderer: ReactTestRenderer | undefined;
-let frameCallbacks: FrameRequestCallback[];
-let requestAnimationFrameSpy: jest.SpyInstance;
+let frames: FrameRequestCallback[];
+let frameSpy: jest.SpyInstance;
 
-describe('useComposerPresentation', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockBlur.mockReset();
-    mockIsKeyboardVisible.mockReturnValue(true);
-    mockKeyboardDismiss.mockResolvedValue(undefined);
-    handleKeyboardWillHide = undefined;
-    frameCallbacks = [];
-    requestAnimationFrameSpy = jest
-      .spyOn(global, 'requestAnimationFrame')
-      .mockImplementation((callback) => {
-        frameCallbacks.push(callback);
-        return frameCallbacks.length;
-      });
-    mockAddKeyboardListener.mockImplementation((event, listener) => {
-      if (event === 'keyboardWillHide') {
-        handleKeyboardWillHide = () => listener(KeyboardController.state());
+beforeEach(() => {
+  jest.clearAllMocks();
+  dismiss.mockResolvedValue(undefined);
+  frames = [];
+  frameSpy = jest.spyOn(global, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  act(() => {
+    renderer = create(<Harness />);
+  });
+});
+
+afterEach(() => {
+  act(() => renderer?.unmount());
+  renderer = undefined;
+  frameSpy.mockRestore();
+});
+
+test.each([true, false])(
+  'keyboard hide notifications do not request text focus changes (visible: %s)',
+  (visible) => {
+    (KeyboardController.isVisible as jest.Mock).mockReturnValue(visible);
+    act(() => {
+      for (const [event, listener] of listen.mock.calls) {
+        if (event === 'keyboardWillHide') listener(KeyboardController.state());
       }
-
-      return { remove: mockRemove } as unknown as ReturnType<typeof KeyboardEvents.addListener>;
     });
+    expect(blur).not.toHaveBeenCalled();
+    expect(focus).not.toHaveBeenCalled();
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(presentation.state.isKeyboardTrackingEnabled).toBe(true);
+  },
+);
 
+test.each(['selected', 'cancelled', 'failed'] as const)(
+  'releases a %s picker without refocusing',
+  async (result) => {
+    const picker = deferred<string>();
+    const present = jest.fn(() => picker.promise);
+    let operation!: Promise<unknown>;
     act(() => {
-      renderer = create(<Harness />);
+      operation = presentation.actions.runInputReplacement(present).catch(() => 'failed');
     });
-  });
-
-  afterEach(() => {
-    act(() => renderer?.unmount());
-    renderer = undefined;
-    requestAnimationFrameSpy.mockRestore();
-  });
-
-  test('ignores an unmatched keyboard hide while focus is being established', () => {
-    mockIsKeyboardVisible.mockReturnValue(false);
-
-    act(() => {
-      presentation.actions.activateInput();
-      handleKeyboardWillHide?.();
-    });
-
-    expect(presentation.state.isEditing).toBe(true);
-    expect(mockBlur).not.toHaveBeenCalled();
-  });
-
-  test('ends editing when the user hides a visible keyboard', () => {
-    act(() => presentation.actions.activateInput());
-    act(() => handleKeyboardWillHide?.());
-
-    expect(presentation.state.isEditing).toBe(false);
-    expect(mockBlur).toHaveBeenCalledTimes(1);
-  });
-
-  test.each(['selected', 'cancelled', 'failed'] as const)(
-    'preserves editing through a replacement that is %s',
-    async (result) => {
-      act(() => presentation.actions.activateInput());
-      // Reproduce native blur delivering a hide before the next React commit.
-      mockBlur.mockImplementationOnce(() => handleKeyboardWillHide?.());
-      const error = new Error('Picker failed');
-      const present = jest.fn(() => {
-        if (result === 'failed') throw error;
-        return result;
-      });
-      let replacement!: Promise<unknown>;
-      act(() => {
-        replacement = presentation.actions.runInputReplacement(present).catch((error) => error);
-      });
-
-      expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: false });
-      expect(present).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await flushInputReplacement();
-        expect(await replacement).toBe(result === 'failed' ? error : result);
-      });
-      expect(present).toHaveBeenCalledTimes(1);
-      expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: false });
-
-      // Search inside the model/file sheet must not end composer editing either.
-      act(() => handleKeyboardWillHide?.());
-      expect(presentation.state.isEditing).toBe(true);
-      expect(mockBlur).toHaveBeenCalledTimes(1);
-
-      // Outside dismissal still works after cancellation with no keyboard left.
-      mockIsKeyboardVisible.mockReturnValue(false);
-      act(() => presentation.actions.dismissInput());
-      expect(presentation.state.isEditing).toBe(false);
-    },
-  );
-
-  test('preserves a resting composer when a picker is opened without editing', async () => {
+    expect(present).not.toHaveBeenCalled();
+    expect(presentation.state.isKeyboardTrackingEnabled).toBe(false);
+    await act(flushPresentation);
+    expect(present).toHaveBeenCalledTimes(1);
+    expect(presentation.state.isKeyboardTrackingEnabled).toBe(false);
     await act(async () => {
-      const replacement = presentation.actions.runInputReplacement(() => undefined);
-      await flushInputReplacement();
-      await replacement;
+      if (result === 'failed') picker.reject(new Error('picker failed'));
+      else picker.resolve(result);
+      expect(await operation).toBe(result);
     });
+    expect(presentation.state.isKeyboardTrackingEnabled).toBe(true);
+    expect(blur).toHaveBeenCalledTimes(1);
+    expect(focus).not.toHaveBeenCalled();
+  },
+);
 
-    expect(presentation.state).toEqual({ isEditing: false, isKeyboardTrackingEnabled: false });
+test('ignores a competing picker until the active replacement has closed', async () => {
+  const sheet = deferred<void>();
+  const nextPicker = jest.fn(async () => 'selected');
+  let first!: Promise<unknown>;
+  act(() => {
+    first = presentation.actions.runInputReplacement(() => sheet.promise);
   });
-
-  test('reconnects keyboard dismissal only when the composer field regains focus', async () => {
-    act(() => presentation.actions.activateInput());
-    await act(async () => {
-      const replacement = presentation.actions.runInputReplacement(() => undefined);
-      await flushInputReplacement();
-      await replacement;
-    });
-
-    act(() => presentation.actions.activateInput());
-    expect(presentation.state).toEqual({ isEditing: true, isKeyboardTrackingEnabled: true });
-
-    act(() => handleKeyboardWillHide?.());
-    expect(presentation.state.isEditing).toBe(false);
+  await act(flushPresentation);
+  await act(async () => {
+    await presentation.actions.runInputReplacement(nextPicker);
   });
+  expect(nextPicker).not.toHaveBeenCalled();
+  expect(dismiss).toHaveBeenCalledTimes(1);
+  expect(presentation.state.isKeyboardTrackingEnabled).toBe(false);
+  await act(async () => {
+    sheet.resolve();
+    await first;
+  });
+  expect(presentation.state.isKeyboardTrackingEnabled).toBe(true);
+  let next!: Promise<unknown>;
+  act(() => {
+    next = presentation.actions.runInputReplacement(nextPicker);
+  });
+  await act(async () => {
+    await flushPresentation();
+    await next;
+  });
+  expect(nextPicker).toHaveBeenCalledTimes(1);
+  expect(focus).not.toHaveBeenCalled();
+});
 
-  test('removes the keyboard listener on unmount', () => {
-    act(() => renderer?.unmount());
+test('does not present a late picker after leaving the composer', async () => {
+  const hidden = deferred<void>();
+  dismiss.mockReturnValueOnce(hidden.promise);
+  const present = jest.fn(async () => undefined);
+  let operation!: Promise<unknown>;
+  act(() => {
+    operation = presentation.actions.runInputReplacement(present);
+  });
+  act(() => {
+    renderer?.unmount();
     renderer = undefined;
-
-    expect(mockRemove).toHaveBeenCalledTimes(1);
   });
+  await act(async () => {
+    hidden.resolve();
+    await flushPresentation();
+    await operation;
+  });
+  expect(present).not.toHaveBeenCalled();
+  expect(focus).not.toHaveBeenCalled();
 });
 
 function Harness() {
@@ -154,11 +136,19 @@ function Harness() {
   }, [current]);
   return null;
 }
-
-async function flushInputReplacement() {
+async function flushPresentation() {
   await Promise.resolve();
-  const callbacks = frameCallbacks;
-  frameCallbacks = [];
-  callbacks.forEach((callback) => callback(0));
+  const pending = frames;
+  frames = [];
+  pending.forEach((callback) => callback(0));
   await Promise.resolve();
+}
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }

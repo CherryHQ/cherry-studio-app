@@ -10,7 +10,7 @@ import {
   createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
   hasComposerSendableContent,
-  hasImportingComposerAttachments,
+  hasUnreadyComposerAttachments,
   isComposerAttachmentReady,
   isComposerImageFileName,
   isComposerImageMediaType,
@@ -178,8 +178,9 @@ describe('composer attachments', () => {
 
     expect(isComposerAttachmentReady(readyFileAttachment)).toBe(true);
     expect(isComposerAttachmentReady(importing)).toBe(false);
-    expect(hasImportingComposerAttachments([readyFileAttachment, importing])).toBe(true);
-    expect(hasImportingComposerAttachments([readyFileAttachment])).toBe(false);
+    expect(hasUnreadyComposerAttachments([readyFileAttachment, importing])).toBe(true);
+    expect(hasUnreadyComposerAttachments([readyFileAttachment])).toBe(false);
+    expect(hasUnreadyComposerAttachments([{ ...importing, status: 'failed' }])).toBe(true);
   });
 
   test('detects sendable text or attachment content', () => {

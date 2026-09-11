@@ -84,6 +84,7 @@ describe('useManagedComposerAttachments', () => {
     });
 
     expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({ name: 'first.pdf', status: 'failed' }),
       expect.objectContaining({
         fileEntryId: '00000000-0000-7000-8000-000000000002',
         name: 'second.pdf',

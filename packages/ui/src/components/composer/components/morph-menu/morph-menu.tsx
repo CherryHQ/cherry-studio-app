@@ -68,6 +68,7 @@ export function useComposerMenu() {
 function MorphMenuRoot({
   accessibilityLabel,
   children,
+  onOpen,
   style,
   testID,
   triggerRef: providedTriggerRef,
@@ -131,6 +132,7 @@ function MorphMenuRoot({
       return;
     }
 
+    onOpen?.();
     const request = ++openRequest.current;
     // Seed the first floating frame, then keep following the mounted footprint.
     footprintRef.current?.measureInWindow((pageX, pageY, width, height) => {

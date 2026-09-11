@@ -831,17 +831,14 @@ describe('MessageList scroll-controller ownership', () => {
     });
   });
 
-  test('shows a local send before keyboard dismissal and corrects the settled viewport without replaying motion', async () => {
+  test('scrolls to a local send without changing keyboard state', async () => {
     const messages = [createMessage('user-1', 'user')];
     act(() => {
       renderer = create(<MessageList {...listProps(messages)} />);
     });
     await loadList();
     mockListScrollToEnd.mockClear();
-    let finishDismiss!: () => void;
-    mockKeyboardDismiss.mockImplementationOnce(
-      () => new Promise<void>((resolve) => (finishDismiss = resolve)),
-    );
+    mockKeyboardDismiss.mockClear();
 
     const nextMessages = [...messages, createMessage('user-2', 'user')];
     act(() => {
@@ -851,19 +848,13 @@ describe('MessageList scroll-controller ownership', () => {
     });
     await act(async () => flushAnimationFrames());
 
-    expect(mockLatestListProps?.freeze).toBeUndefined();
-    expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
+    expect(mockKeyboardDismiss).not.toHaveBeenCalled();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
-    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
-
-    await act(async () => finishDismiss());
-
-    expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
-    expect(mockListScrollToEnd).toHaveBeenLastCalledWith({ animated: false });
+    expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: true });
   });
 
   test.each(['drag', 'dataset switch'] as const)(
-    'cancels the pending send scroll when a %s occurs during keyboard dismissal',
+    'cancels the scheduled send scroll when a %s takes precedence',
     async (interruption) => {
       const messages = [createMessage('user-1', 'user')];
       act(() => {
@@ -871,21 +862,12 @@ describe('MessageList scroll-controller ownership', () => {
       });
       await loadList();
       mockListScrollToEnd.mockClear();
-      let finishDismiss!: () => void;
-      mockKeyboardDismiss.mockImplementationOnce(
-        () => new Promise<void>((resolve) => (finishDismiss = resolve)),
-      );
-
       const nextMessages = [...messages, createMessage('user-2', 'user')];
       act(() => {
         renderer?.update(
           <MessageList {...listProps(nextMessages, { enteringMessageId: 'user-2' })} />,
         );
       });
-      await act(async () => flushAnimationFrames());
-      expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
-      mockListScrollToEnd.mockClear();
-
       act(() => {
         if (interruption === 'drag') {
           mockLatestListProps?.onScrollBeginDrag?.();
@@ -900,9 +882,7 @@ describe('MessageList scroll-controller ownership', () => {
           );
         }
       });
-      await act(async () => finishDismiss());
-      act(flushAnimationFrames);
-
+      await act(async () => flushAnimationFrames());
       expect(mockListScrollToEnd).not.toHaveBeenCalled();
     },
   );
@@ -992,7 +972,7 @@ describe('MessageList scroll-controller ownership', () => {
       expect(mockRenderMessage).toHaveBeenNthCalledWith(2, messages[1]);
       expect(mockLatestListProps?.getItemType?.(messages[0])).toBe('user');
       expect(mockLatestListProps?.getItemType?.(messages[1])).toBe('assistant');
-      expect(mockLatestListProps?.keyboardDismissMode).toBe('on-drag');
+      expect(mockLatestListProps?.keyboardDismissMode).toBe('none');
       expect(mockLatestListProps?.contentContainerStyle).toEqual({
         paddingBottom: 80,
         paddingTop: 12,
