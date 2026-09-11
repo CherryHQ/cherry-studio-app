@@ -104,7 +104,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       !messageWindow.error ? (
         <SessionReadReceipt sessionId={sessionId} />
       ) : null}
-      <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+      <ComposerDismissArea disabled testID="chat-background">
         {sessionId && session.error ? (
           <View className="flex-1 justify-center px-8 py-16">
             <ContentState.Error
