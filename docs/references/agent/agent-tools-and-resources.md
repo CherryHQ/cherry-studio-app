@@ -155,10 +155,20 @@ The Pi binding consumes the Host-prepared application prompt, exposes system cap
 and translates eligible MCP tools into three catalog tools for the active model loop. When that
 catalog is present, Pi also appends its binding-specific catalog workflow guidance to the prompt:
 
-- `tool_search` ranks frozen MCP names and descriptions with BM25 and returns at most 20 matches,
-  including bounded TypeScript call signatures. Its complete serialized model result is capped by
-  both a 32,000-character ceiling and the live model-context headroom; a result that drops matches
-  reports `truncated: true`.
+- `tool_search` ranks frozen MCP names and descriptions by the number of distinct query terms a
+  tool matches, then by BM25 inside that tier, and returns only the top tier, at most 20 matches
+  with bounded TypeScript call signatures. Because the MCP layer prefixes every description with its
+  service name, a service-name query browses that service and a domain word narrows it, without
+  plugin-specific search rules. Each result leads with `catalogTotal` (the frozen catalog size),
+  `matched` (the top-tier count before limits), and `returned` (the count actually included), and
+  lists whole query words that matched nothing as `unmatchedTerms`. Unmatched words describe lexical
+  coverage, not whether a capability exists. For service overviews, the prompt asks for one initial
+  service-name search rather than parallel subdomain searches. `returned === catalogTotal` means
+  the whole catalog is in hand; `returned === matched` without truncation means this query is
+  complete. A service-name search can still be truncated and require narrower queries. The model
+  should not repeat successful searches merely to confirm coverage. The complete serialized model
+  result is capped by both a 32,000-character ceiling and the live model-context headroom; a result
+  that drops matches reports `truncated: true`.
 - `tool_describe` returns one description and signature bounded by the same live headroom.
 - `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
   `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.

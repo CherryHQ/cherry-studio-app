@@ -1,8 +1,14 @@
 import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 
+import {
+  getBuiltInPluginCatalog,
+  requirePluginDefinition,
+} from '@/backend/services/builtInMcp/pluginRegistry';
+
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../../types';
 import {
   createPiDeferredToolDiscoveryTools,
+  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
   PI_TOOL_CALL_TOOL_NAME,
   PI_TOOL_DESCRIBE_TOOL_NAME,
   PI_TOOL_SEARCH_TOOL_NAME,
@@ -52,6 +58,11 @@ function runMetaToolWithLimit(modelOutputCharacterLimit: number) {
       modelOutput: RuntimeToolResult;
     },
   ) => operation(modelOutputCharacterLimit).modelOutput;
+}
+
+function searchNames(result: RuntimeToolResult): string[] {
+  const value = result.value as { matchedNamespaces?: { tools: { name: string }[] }[] };
+  return (value.matchedNamespaces ?? []).flatMap((group) => group.tools.map((tool) => tool.name));
 }
 
 function execute(tool: PiAgentTool, input: RuntimeJsonValue, toolCallId = 'call-1') {
@@ -345,6 +356,152 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     };
 
     expect(value.matchedNamespaces[0]?.tools).toHaveLength(20);
+    expect(result.value).toMatchObject({
+      catalogTotal: 25,
+      matched: 25,
+      returned: 20,
+      truncated: true,
+    });
+  });
+
+  test('keeps only the tier that matches the most query terms', async () => {
+    const search = createPiDeferredToolDiscoveryTools(
+      [
+        mcpTool('mcp_calendar_list_1', '云桥 (cloudbridge): 云桥日历、日程。List calendars.'),
+        mcpTool('mcp_task_list_1', '云桥 (cloudbridge): 云桥任务、待办。List tasks.'),
+        mcpTool('mcp_fetch_doc_1', '云桥 (cloudbridge): 查看云文档。Read a document by link.'),
+        mcpTool('mcp_list_issues_1', 'Forge (forge): List repository issues.'),
+      ],
+      async () => ({ value: null, artifacts: [] }),
+      runMetaTool,
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+
+    const narrowed = (await execute(search, { query: '云桥 日历' })).details as RuntimeToolResult;
+    expect(searchNames(narrowed)).toEqual(['mcp_calendar_list_1']);
+
+    const service = (await execute(search, { query: '云桥' })).details as RuntimeToolResult;
+    expect(searchNames(service).sort()).toEqual([
+      'mcp_calendar_list_1',
+      'mcp_fetch_doc_1',
+      'mcp_task_list_1',
+    ]);
+    expect(service.value).toMatchObject({ catalogTotal: 4, matched: 3, returned: 3 });
+  });
+
+  test('reports catalog coverage and query words that matched nothing', async () => {
+    const search = createPiDeferredToolDiscoveryTools(
+      [
+        mcpTool('mcp_calendar_list_1', '云桥 (cloudbridge): 云桥日历、日程。List calendars.'),
+        mcpTool('mcp_task_list_1', '云桥 (cloudbridge): 云桥任务、待办。List tasks.'),
+      ],
+      async () => ({ value: null, artifacts: [] }),
+      runMetaTool,
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+
+    const browse = (await execute(search, {})).details as RuntimeToolResult;
+    expect(browse.value).toMatchObject({ catalogTotal: 2, matched: 2, returned: 2 });
+    expect(browse.value).not.toHaveProperty('unmatchedTerms');
+    expect(browse.value).not.toHaveProperty('truncated');
+    expect(Object.keys(browse.value as object).slice(0, 3)).toEqual([
+      'catalogTotal',
+      'matched',
+      'returned',
+    ]);
+
+    const missing = (await execute(search, { query: '云桥 消息' })).details as RuntimeToolResult;
+    expect(searchNames(missing)).toHaveLength(2);
+    expect(missing.value).toMatchObject({ matched: 2, returned: 2, unmatchedTerms: ['消息'] });
+  });
+
+  test('every registered plugin service name is a discriminative search key', async () => {
+    const plugins = getBuiltInPluginCatalog().map((entry) => requirePluginDefinition(entry.id));
+    // Hosted descriptions are discovered remotely. This fixture protects the
+    // common service prefix using registered names, without inventing their text.
+    const toolsByPlugin = new Map(
+      plugins.map((plugin, pluginIndex) => [
+        plugin,
+        Object.keys(plugin.tools).map((toolName, toolIndex) =>
+          mcpTool(
+            `mcp_${pluginIndex}_${toolIndex}`,
+            `${plugin.serverName} (${plugin.catalog.id}): ${toolName}`,
+          ),
+        ),
+      ]),
+    );
+    const search = createPiDeferredToolDiscoveryTools(
+      [...toolsByPlugin.values()].flat(),
+      async () => ({ value: null, artifacts: [] }),
+      runMetaToolWithLimit(Number.MAX_SAFE_INTEGER),
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+
+    expect(plugins.length).toBeGreaterThan(1);
+    for (const [plugin, tools] of toolsByPlugin) {
+      const expected = tools.map((tool) => tool.providerName).sort();
+      for (const query of [plugin.serverName, plugin.catalog.id]) {
+        const result = (await execute(search, { query })).details as RuntimeToolResult;
+        const names = searchNames(result);
+        expect(result.value).toMatchObject({
+          catalogTotal: [...toolsByPlugin.values()].flat().length,
+          matched: expected.length,
+          returned: names.length,
+        });
+        expect(names.length).toBeGreaterThan(0);
+        expect(names.length).toBeLessThanOrEqual(20);
+        expect(expected).toEqual(expect.arrayContaining(names));
+        if (names.length < expected.length) {
+          expect(result.value).toHaveProperty('truncated', true);
+        } else {
+          expect(names.sort()).toEqual(expected);
+          expect(result.value).not.toHaveProperty('truncated');
+        }
+      }
+    }
+  });
+
+  test('repeated query words cannot outweigh a more specific match', async () => {
+    const search = createPiDeferredToolDiscoveryTools(
+      [mcpTool('mcp_1', 'Cloudbridge: calendars tasks'), mcpTool('mcp_2', 'Cloudbridge: messages')],
+      async () => ({ value: null, artifacts: [] }),
+      runMetaTool,
+    ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+
+    const result = (await execute(search, { query: 'messages messages messages calendars tasks' }))
+      .details as RuntimeToolResult;
+
+    expect(searchNames(result)).toEqual(['mcp_1']);
+    expect(result.value).toMatchObject({ catalogTotal: 2, matched: 1, returned: 1 });
+  });
+
+  test.each([{ catalog: [] }, { catalog: [mcpTool('mcp_1', 'Cloudbridge: calendars')] }])(
+    'distinguishes no keyword matches from catalog size: %j',
+    async ({ catalog }) => {
+      const search = createPiDeferredToolDiscoveryTools(
+        catalog,
+        async () => ({ value: null, artifacts: [] }),
+        runMetaTool,
+      ).find((tool) => tool.name === PI_TOOL_SEARCH_TOOL_NAME)!;
+
+      const result = (await execute(search, { query: 'unknown' })).details as RuntimeToolResult;
+
+      expect(result.value).toMatchObject({
+        catalogTotal: catalog.length,
+        matched: 0,
+        returned: 0,
+        unmatchedTerms: ['unknown'],
+        matchedNamespaces: [],
+      });
+      expect(result.value).not.toHaveProperty('truncated');
+    },
+  );
+
+  test('tells the model when a search already covers the whole catalog', () => {
+    expect(PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT).toContain(
+      'When `returned` equals `catalogTotal`, the result is the entire catalog',
+    );
+    expect(PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT).toContain(
+      'Do not repeat or rephrase a successful search within the same turn.',
+    );
+    expect(PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT).toContain('`unmatchedTerms`');
   });
 
   test('bounds oversized declarations with a valid generic signature', async () => {
@@ -390,6 +547,13 @@ describe('createPiDeferredToolDiscoveryTools', () => {
     const result = (await execute(search, {})).details as RuntimeToolResult;
 
     expect(JSON.stringify(result).length).toBeLessThanOrEqual(modelOutputCharacterLimit);
-    expect(result.value).toMatchObject({ truncated: true });
+    expect(result.value).toMatchObject({
+      catalogTotal: 20,
+      matched: 20,
+      returned: searchNames(result).length,
+      truncated: true,
+    });
+    expect(searchNames(result).length).toBeGreaterThan(0);
+    expect(searchNames(result).length).toBeLessThan(20);
   });
 });
